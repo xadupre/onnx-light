@@ -129,7 +129,7 @@ spelled out explicitly):
 
 Code that already uses the ``ONNX_NAMESPACE`` macro instead of a hard-coded
 ``onnx::`` qualifier needs only the include-path change.  Link against
-``onnx_light::onnx_light`` (schemas / checker / shape inference) or a lighter
+``onnx_light::lib_onnx_lib`` (schemas / checker / shape inference) or a lighter
 target — see :ref:`l-design-cpp-linking` for the full list of CMake targets and
 :epkg:`C++ onnx-light examples` for runnable programs.
 

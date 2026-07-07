@@ -58,12 +58,12 @@ can link only what it needs:
 - `onnx_light::lib_onnx_lib` – current ONNX C++ API
 - `onnx_light::lib_onnx_op` – lightweight `LightOpSchema` registrations for
   ONNX operator domains, with no shape inference.
-- `onnx_light::onnx_light` – full ONNX-compatible schemas (with history),
+- `onnx_light::lib_onnx_lib` – full ONNX-compatible schemas (with history),
   checker, inliner, shape inference and version converter.
 - `onnx_light::lib_onnx_optim` – shape-inference dispatch table, expression
   engine and graph optimization helpers.
-- `onnx_light::onnx_kernels` – C++ kernels used to generate the beckend
-- `onnx_light::onnx_backend_test` – C++ backend test infrastructure and
+- `onnx_light::lib_onnx_kernels` – C++ kernels used to generate the beckend
+- `onnx_light::lib_onnx_backend_test` – C++ backend test infrastructure and
   reference operator kernels.
 
 ## Kernels and Backend Tests
@@ -181,7 +181,7 @@ Once installed, any CMake project can locate and link the library with:
 
 ```cmake
 find_package(onnx_light REQUIRED)
-target_link_libraries(my_target PRIVATE onnx_light::onnx_light)
+target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_lib)
 ```
 
 If the code only needs protobuf-compatible message parsing/serialization and does

@@ -31,7 +31,7 @@ option(ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX
 option(ONNX_LIGHT_BUILD_PYTHON "Build Python extension." ON)
 option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
 option(ONNX_LIGHT_BUILD_KERNELS
-    "Build the operator-kernel runtime (lib_onnx_kernels) and the backend-test registry (lib_onnx_backend_test). Turn OFF to install only the schema / checker / shape-inference / version-converter libraries (useful for downstream projects that only need onnx_light::onnx_light or onnx_light::lib_onnx_proto)."
+    "Build the operator-kernel runtime (lib_onnx_kernels) and the backend-test registry (lib_onnx_backend_test). Turn OFF to install only the schema / checker / shape-inference / version-converter libraries (useful for downstream projects that only need onnx_light::lib_onnx_lib or onnx_light::lib_onnx_proto)."
     ON)
 option(ONNX_LIGHT_BUILD_IMAGE_CODECS
     "Build the TIFF, WebP and JPEG2000 decoders in the ImageDecoder kernel. Turn OFF to compile a lighter kernel library: those three formats then fall back to the empty-matrix path while BMP, JPEG, PNG and PNM remain decoded natively."
@@ -249,7 +249,6 @@ target_include_directories(lib_onnx_manipulations PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
 )
 set_property(TARGET lib_onnx_manipulations PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_target_properties(lib_onnx_manipulations PROPERTIES EXPORT_NAME onnx_manipulations)
 target_compile_features(lib_onnx_manipulations PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_manipulations PUBLIC lib_onnx_proto)
 
@@ -266,7 +265,6 @@ target_include_directories(lib_onnx_lib PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
 )
 set_property(TARGET lib_onnx_lib PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_target_properties(lib_onnx_lib PROPERTIES EXPORT_NAME onnx_light)
 target_compile_features(lib_onnx_lib PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_lib PUBLIC lib_onnx_proto lib_onnx_manipulations)
 if(ONNX_ML)
@@ -342,7 +340,6 @@ target_include_directories(lib_onnx_kernels PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
 )
 set_property(TARGET lib_onnx_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_target_properties(lib_onnx_kernels PROPERTIES EXPORT_NAME onnx_kernels)
 target_compile_features(lib_onnx_kernels PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_proto lib_onnx_manipulations)
 # Optional heavier image decoders (TIFF, WebP, JPEG2000). When
@@ -393,7 +390,6 @@ target_include_directories(lib_onnx_backend_test PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
 )
 set_property(TARGET lib_onnx_backend_test PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_target_properties(lib_onnx_backend_test PROPERTIES EXPORT_NAME onnx_backend_test)
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto lib_onnx_kernels)
 

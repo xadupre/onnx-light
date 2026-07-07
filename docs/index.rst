@@ -91,17 +91,17 @@ projects can link only what they need:
   (AES-256-CBC or ChaCha20-Poly1305).
 - ``onnx_light::lib_onnx_op`` – lightweight ``LightOpSchema``
   registrations for ONNX operator domains, with no shape inference.
-- ``onnx_light::onnx_manipulations`` – graph-manipulation helpers
+- ``onnx_light::lib_onnx_manipulations`` – graph-manipulation helpers
   (text parser / printer, attribute and tensor proto helpers, data-type
   name utilities, graph-input collection); depends only on
   ``lib_onnx_proto``.
-- ``onnx_light::onnx_light`` – full ONNX-compatible schemas (with
+- ``onnx_light::lib_onnx_lib`` – full ONNX-compatible schemas (with
   history), checker, inliner, shape inference and version converter.
 - ``onnx_light::lib_onnx_optim`` – shape-inference dispatch table,
   expression engine and graph optimization helpers.
-- ``onnx_light::onnx_kernels`` – C++ kernels, a C++ reference implementation,
+- ``onnx_light::lib_onnx_kernels`` – C++ kernels, a C++ reference implementation,
   it is used to generate the expected outputs for the backend test.
-- ``onnx_light::onnx_backend_test`` – C++ backend test
+- ``onnx_light::lib_onnx_backend_test`` – C++ backend test
   infrastructure and reference operator kernels.
 
 In addition, ``onnx_light::onnx_lib`` replicates the current C++ API

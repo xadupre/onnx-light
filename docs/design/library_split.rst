@@ -75,7 +75,7 @@ Summary of each library
         Does not depend on shape inference and does not pull in the
         full ONNX defs.  Useful when only the operator catalogue is
         needed.  Depends publicly on ``lib_onnx_proto``.
-    * - ``onnx_light::onnx_manipulations`` (in-tree target
+    * - ``onnx_light::lib_onnx_manipulations`` (in-tree target
         ``lib_onnx_manipulations``):
         ``onnx_light/onnx_manipulations/``,
         ``onnx_light/onnx_lib/common/``
@@ -89,7 +89,7 @@ Summary of each library
         ``onnx_proto/common_functions``).  Depends publicly on
         ``lib_onnx_proto``.  Both ``lib_onnx_lib`` and ``lib_onnx_kernels``
         depend on it.
-    * - ``onnx_light::onnx_light`` (in-tree target ``lib_onnx_lib``):
+    * - ``onnx_light::lib_onnx_lib`` (in-tree target ``lib_onnx_lib``):
         ``onnx_light/onnx_lib/defs/``,
         ``onnx_light/onnx_lib/checker.cc``,
         ``onnx_light/onnx_lib/inliner/``,
@@ -105,7 +105,7 @@ Summary of each library
       - Shape-inference dispatch table, expression engine for small
         tensor / backward-propagation shape inference, and graph
         optimization helpers.  Depends publicly on ``lib_onnx_op``.
-    * - ``onnx_light::onnx_kernels`` (in-tree target ``lib_onnx_kernels``):
+    * - ``onnx_light::lib_onnx_kernels`` (in-tree target ``lib_onnx_kernels``):
         ``onnx_light/onnx_kernels/``
       - C++ **reference implementation** of the ONNX operators used to
         evaluate models in-process.  Contains the runtime data model
@@ -120,7 +120,7 @@ Summary of each library
         **independent** from ``lib_onnx_lib`` / ``lib_onnx_op``;
         depends publicly on ``lib_onnx_manipulations`` (for the graph
         manipulation helpers) and transitively on ``lib_onnx_proto``.
-    * - ``onnx_light::onnx_backend_test`` (in-tree target
+    * - ``onnx_light::lib_onnx_backend_test`` (in-tree target
         ``lib_onnx_backend_test``):
         ``onnx_light/onnx_backend_test/``
       - Backend test infrastructure (``struct TestCase``, the
@@ -147,9 +147,9 @@ smallest set** that covers its needs.  The most common scenarios are:
 * **Parse / print ONNX text models and manipulate ``ModelProto`` /
   ``GraphProto``** (attribute and tensor proto helpers, data-type name
   utilities, graph-input collection) without pulling in the operator
-  schemas — link ``onnx_light::onnx_manipulations``.
+  schemas — link ``onnx_light::lib_onnx_manipulations``.
 * **Full ONNX feature set** (schemas with history, checker, inliner,
-  shape inference, version conversion) — link ``onnx_light::onnx_light``.
+  shape inference, version conversion) — link ``onnx_light::lib_onnx_lib``.
 * **Shape inference and graph optimization passes** — link
   ``onnx_light::lib_onnx_optim`` (which transitively pulls
   ``lib_onnx_op`` and ``lib_onnx_proto``).
@@ -157,11 +157,11 @@ smallest set** that covers its needs.  The most common scenarios are:
   reference kernels (runtime ``struct Tensor``, ``RunGraph`` /
   ``RunFunction`` / ``RunModel``, ``SplitMix64`` RNG, ...) without
   pulling in any backend-test fixtures — link
-  ``onnx_light::onnx_kernels``.
+  ``onnx_light::lib_onnx_kernels``.
 * **Run backend tests / evaluate models in C++** using the built-in
-  reference kernels — link ``onnx_light::onnx_backend_test`` (which
+  reference kernels — link ``onnx_light::lib_onnx_backend_test`` (which
   transitively pulls ``lib_onnx_kernels`` and ``lib_onnx_proto``).  It
-  can be combined with ``onnx_light::onnx_light`` when both schema
+  can be combined with ``onnx_light::lib_onnx_lib`` when both schema
   validation and execution are needed.
 
 The Python extensions follow the same split and each link to the

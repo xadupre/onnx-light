@@ -28,7 +28,7 @@ dependency on protobuf at compile time or at runtime**.
   that can be consumed by other C++ projects without installing protobuf
   (see :epkg:`C++ onnx-light examples`).
 * C++ projects that only need protobuf-compatible message types can link
-  ``onnx_light::lib_onnx_proto`` directly; ``onnx_light::onnx_light`` is only
+  ``onnx_light::lib_onnx_proto`` directly; ``onnx_light::lib_onnx_lib`` is only
   needed when features tied to operator notions are required (checker, schema
   lookup, shape inference, version conversion, ...).
 * The wire format produced by ``onnx_light`` is 100 % compatible with the
@@ -508,7 +508,7 @@ Summary
    * - Standalone C++ library
      - Yes
      - Yes (``onnx_light::lib_onnx_proto`` for proto-only code,
-       ``onnx_light::onnx_light`` when operator-aware APIs are needed)
+       ``onnx_light::lib_onnx_lib`` when operator-aware APIs are needed)
    * - Wire format
      - ONNX binary protobuf
      - ONNX binary protobuf (identical)

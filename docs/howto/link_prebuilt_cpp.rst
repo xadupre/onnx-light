@@ -180,7 +180,7 @@ short.
     * - ``onnx_light::lib_onnx_proto``
       - Proto parsing / serialization only (``ModelProto``, ``GraphProto``,
         ``TensorProto``, …).  Lightest option.
-    * - ``onnx_light::onnx_manipulations``
+    * - ``onnx_light::lib_onnx_manipulations``
       - ModelProto/GraphProto manipulation helpers independent from operator
         schemas: textual proto parser/printer, attribute and tensor-proto
         utilities, data-type name helpers, and graph-analysis utilities
@@ -189,16 +189,16 @@ short.
     * - ``onnx_light::lib_onnx_op``
       - Lightweight ``LightOpSchema`` registrations, no shape inference.
         Transitively links ``lib_onnx_proto``.
-    * - ``onnx_light::onnx_light``
+    * - ``onnx_light::lib_onnx_lib``
       - Full ONNX-compatible schemas with history, checker, inliner, shape
         inference and version converter.  Transitively links ``lib_onnx_proto``.
     * - ``onnx_light::lib_onnx_optim``
       - Shape-inference dispatch table, expression engine and graph
         optimization helpers.  Transitively links ``lib_onnx_op``.
-    * - ``onnx_light::onnx_kernels``
+    * - ``onnx_light::lib_onnx_kernels``
       - C++ reference implementation of ONNX operators (``RunGraph``,
         ``RunModel``, ``struct Tensor``, …).  Depends on ``lib_onnx_proto``.
-    * - ``onnx_light::onnx_backend_test``
+    * - ``onnx_light::lib_onnx_backend_test``
       - Backend-test infrastructure and per-operator case registries.
         Transitively links ``onnx_kernels``.
 
@@ -267,4 +267,4 @@ See also
   target and the ``add_subdirectory`` alternative.
 * :ref:`l-cpp-load-onnx-light-time-example` – a complete runnable example.
 * :ref:`l-howto-onnx-graph-manipulations` – how to use the graph-analysis
-  helpers from ``onnx_light::onnx_manipulations``.
+  helpers from ``onnx_light::lib_onnx_manipulations``.

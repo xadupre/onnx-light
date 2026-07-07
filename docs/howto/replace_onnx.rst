@@ -88,7 +88,7 @@ Build (CMake)
 
 Downstream CMake projects replace the ``onnx`` package and target with the
 ``onnx_light`` package and the equivalent ``onnx_light::...`` target.  Use
-``onnx_light::onnx_light`` for the schema / checker / shape-inference layer or a
+``onnx_light::lib_onnx_lib`` for the schema / checker / shape-inference layer or a
 lighter target such as ``onnx_light::lib_onnx_proto`` for proto-only parsing —
 see :ref:`l-design-cpp-linking` for the full list.
 
@@ -108,7 +108,7 @@ see :ref:`l-design-cpp-linking` for the full list.
 
           find_package(onnx_light REQUIRED)
           add_executable(my_target main.cc)
-          target_link_libraries(my_target PRIVATE onnx_light::onnx_light)
+          target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_lib)
 
 If *onnx-light* is installed to a non-standard prefix, configure the downstream
 project with ``-DCMAKE_PREFIX_PATH=<prefix>`` before calling

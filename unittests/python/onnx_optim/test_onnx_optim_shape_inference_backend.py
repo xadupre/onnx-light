@@ -371,7 +371,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
 
     def test_sub_backward_propagation_tags_mask_tensors(self):
         """Verifies that Sub backward propagation tags mask_float and mask_4d as
-        ``"weight"`` in the tiny-llm shape-inference case.
+        `"weight"` in the tiny-llm shape-inference case.
 
         The propagation chain is:
           Sub(mask_one:"weight", mask_4d:untagged) → mask_inv:"weight"

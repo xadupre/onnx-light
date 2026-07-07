@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.4] – 2026-07-07
 
+### Fixes
+
+- Fix Win32 narrowing in backend-test DLPack shape conversion ([#3223](https://github.com/xadupre/onnx-light/pull/3223))
+
 ## [0.1.3] – 2026-07-06
 
 ### New Features

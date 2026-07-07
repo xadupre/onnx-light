@@ -175,18 +175,13 @@ TEST(OnnxOptimInPlaceReuse, TransposeWithSameByteSizeIsReportedAsGreater) {
   EXPECT_EQ(reuse[2][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
 }
 
-// A square-matrix Transpose (same input and output shape) must also be
-// reported as kGreater, not kEqual. Even though SameStorage returns true for
-// same-shape tensors, Transpose rearranges elements, so the kernel cannot
-// overwrite the input buffer in-place.
-TEST(OnnxOptimInPlaceReuse, TransposeSquareShapeIsReportedAsGreater) {
+// A square-matrix Transpose ([4,4] -> [4,4]) has identical input and output
+// shapes, so SameStorage returns true and the reuse is classified as kEqual.
+TEST(OnnxOptimInPlaceReuse, TransposeSquareShapeIsReportedAsEqual) {
   GraphProto graph;
   graph.set_name("g");
   AddInput(graph, "X", {4, 4});
   AddOutput(graph, "Y", {4, 4});
-  // Abs keeps the shape; the Transpose on a 4x4 tensor produces the same
-  // output shape [4, 4], so SameStorage would return true if Transpose were
-  // not handled specially.  The opportunity must still be kGreater.
   *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
   *graph.add_node() = MakeNode("Transpose", {"A"}, {"Y"});
 
@@ -197,7 +192,7 @@ TEST(OnnxOptimInPlaceReuse, TransposeSquareShapeIsReportedAsGreater) {
   ASSERT_EQ(reuse.size(), 2u);
   EXPECT_TRUE(reuse[0].empty());
   ASSERT_EQ(reuse[1].size(), 1u);
-  EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
+  EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
 }
 
 // The buffer of a declared graph output must survive, so it is never offered

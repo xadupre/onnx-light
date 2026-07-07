@@ -300,6 +300,24 @@ class TestSerializeFormat(ExtTestCase):
         with self.assertRaisesRegex(RuntimeError, "max_serialized_size_bytes"):
             tp.SerializeToString(sopts)
 
+    def test_max_serialized_size_bytes_exact_limit_allowed(self) -> None:
+        # A cap equal to the exact serialized size must be accepted, while a cap
+        # one byte smaller must be rejected (boundary of the ``<=`` check).
+        import numpy as np
+
+        w = np.ones((5,), dtype=np.float32)
+        tp = onh.from_array(w, name="w")
+        exact = len(tp.SerializeToString())
+
+        sopts = onnxl.SerializeOptions()
+        sopts.max_serialized_size_bytes = exact
+        data = tp.SerializeToString(sopts)
+        self.assertEqual(len(data), exact)
+
+        sopts.max_serialized_size_bytes = exact - 1
+        with self.assertRaisesRegex(RuntimeError, "max_serialized_size_bytes"):
+            tp.SerializeToString(sopts)
+
     def test_max_tensor_size_bytes_raw_data_throws(self) -> None:
         # Parsing a TensorProto whose raw_data exceeds the limit must raise.
         import numpy as np

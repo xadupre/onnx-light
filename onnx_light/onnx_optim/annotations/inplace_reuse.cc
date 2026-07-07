@@ -453,6 +453,13 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       }
     }
 
+    // Transpose rearranges elements: even when input and output happen to
+    // share the same shape (e.g. a square-matrix transposition) the kernel
+    // cannot overwrite the input buffer in-place.  Demote kEqual to
+    // kGreater so the allocator may still reuse the buffer slot while
+    // keeping kEqual reserved for true element-wise-overwrite ops.
+    const bool is_transpose = node.op_type().as_string() == "Transpose";
+
     std::unordered_set<int> used_inputs;
     std::unordered_set<int> matched_outputs;
     // Two passes so that same-sized (kEqual) reuse is always preferred over a
@@ -494,12 +501,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
             continue;
           }
           std::optional<InPlaceReuseKind> match = ClassifyReuse(out_tensor, ctx.Get(in_name));
-          // Transpose rearranges elements: even when input and output happen to
-          // share the same shape (e.g. a square-matrix transposition) the kernel
-          // cannot overwrite the input buffer in-place.  Demote kEqual to
-          // kGreater so the allocator may still reuse the buffer slot while
-          // keeping kEqual reserved for true element-wise-overwrite ops.
-          if (match == InPlaceReuseKind::kEqual && node.op_type().as_string() == "Transpose") {
+          if (is_transpose && match == InPlaceReuseKind::kEqual) {
             match = InPlaceReuseKind::kGreater;
           }
           if (!match.has_value() || *match != kind) {

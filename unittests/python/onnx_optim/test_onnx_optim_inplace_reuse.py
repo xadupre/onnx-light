@@ -113,10 +113,13 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(raw[2][0].kind, si.InPlaceReuseKind.kGreater)
 
     def test_transpose_square_shape_reported_as_greater(self):
-        # For a square-matrix Transpose the output shape equals the input
-        # shape ([4, 4] -> [4, 4]).  SameStorage returns true in this case,
-        # but the inplace kind must still be kGreater, not kEqual, because
-        # Transpose rearranges elements and cannot overwrite its input in-place.
+        """Tests that a square-matrix Transpose is reported as kGreater, not kEqual.
+
+        For a square-matrix Transpose the output shape equals the input shape
+        ([4, 4] -> [4, 4]).  SameStorage returns true in this case, but the
+        inplace kind must still be kGreater, not kEqual, because Transpose
+        rearranges elements and cannot overwrite its input in-place.
+        """
         nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Transpose", ["A"], ["Y"])]
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [4, 4])
         y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [4, 4])

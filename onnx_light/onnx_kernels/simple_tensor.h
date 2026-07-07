@@ -122,7 +122,11 @@ struct Shape {
   /// Returns a pointer to the underlying dimension array.
   const int64_t *data() const noexcept { return dims_; }
 
+  /// Element access without bounds checking (matches ``std::vector`` semantics).
+  /// Behaviour is undefined when ``i >= size()``.
   int64_t &operator[](size_t i) noexcept { return dims_[i]; }
+  /// Element access without bounds checking (matches ``std::vector`` semantics).
+  /// Behaviour is undefined when ``i >= size()``.
   const int64_t &operator[](size_t i) const noexcept { return dims_[i]; }
 
   /// Appends a dimension. Throws ``std::invalid_argument`` when already at ``kMaxRank``.
@@ -145,9 +149,16 @@ struct Shape {
       dims_[i] = value;
   }
 
-  /// Returns a reference to the last dimension. Behaviour is undefined when the shape is empty.
-  int64_t &back() noexcept { return dims_[size_ - 1]; }
-  const int64_t &back() const noexcept { return dims_[size_ - 1]; }
+  /// Returns a reference to the last dimension.
+  /// Throws ``std::invalid_argument`` when the shape is empty.
+  int64_t &back() {
+    EXT_ENFORCE_INVALID(size_ > 0, "Cannot call back() on an empty Shape.");
+    return dims_[size_ - 1];
+  }
+  const int64_t &back() const {
+    EXT_ENFORCE_INVALID(size_ > 0, "Cannot call back() on an empty Shape.");
+    return dims_[size_ - 1];
+  }
 
   /// Inserts ``value`` before the element pointed to by ``pos``.
   /// Throws ``std::invalid_argument`` when already at ``kMaxRank``.

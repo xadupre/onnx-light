@@ -175,6 +175,26 @@ TEST(OnnxOptimInPlaceReuse, TransposeWithSameByteSizeIsReportedAsGreater) {
   EXPECT_EQ(reuse[2][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
 }
 
+// A square-matrix Transpose ([4,4] -> [4,4]) has identical input and output
+// shapes, so SameStorage returns true and the reuse is classified as kEqual.
+TEST(OnnxOptimInPlaceReuse, TransposeSquareShapeIsReportedAsEqual) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {4, 4});
+  AddOutput(graph, "Y", {4, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Transpose", {"A"}, {"Y"});
+
+  ShapesContext ctx;
+  ctx.ComputeShapeGraph(graph);
+
+  std::vector<std::vector<InPlaceReuse>> reuse = ComputeInPlaceReuse(graph, ctx);
+  ASSERT_EQ(reuse.size(), 2u);
+  EXPECT_TRUE(reuse[0].empty());
+  ASSERT_EQ(reuse[1].size(), 1u);
+  EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
+}
+
 // The buffer of a declared graph output must survive, so it is never offered
 // as a reusable input to a later node.
 TEST(OnnxOptimInPlaceReuse, GraphOutputInputIsNotReused) {

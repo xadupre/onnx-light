@@ -89,8 +89,9 @@ jobs:
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
 
       - name: Run clang-tidy
+        env:
+          FILES: ${{ steps.files.outputs.files }}
         run: |
-          FILES="${{ steps.files.outputs.files }}"
           if [[ -z "${FILES// /}" ]]; then
             echo "No C++ source files to check."
             exit 0

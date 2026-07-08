@@ -5,10 +5,10 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -71,7 +71,8 @@ constexpr auto kRightShiftFn = [](auto a, auto b) { return a >> static_cast<int>
 
 } // namespace
 
-Tensor BitShift::operator()(const Tensor &x, const Tensor &y, Direction direction, RuntimeContext *rt) const {
+Tensor BitShift::operator()(const Tensor &x, const Tensor &y, Direction direction,
+                            RuntimeContext *rt) const {
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   if (direction == Direction::kLeft) {
     return BitShiftAllocDispatch(x, y, kLeftShiftFn, allocator);

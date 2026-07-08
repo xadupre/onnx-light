@@ -5,12 +5,12 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include "onnx_light_helpers.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -36,7 +36,8 @@ constexpr const char *kBitwiseNotName = "kernel::BitwiseNot";
 // Allocating binary bitwise dispatcher: routes ``x.data_type`` to a
 // typed ``BinaryElementwiseAlloc<T, T>`` call.
 template <typename Op>
-Tensor BitwiseBinAllocDispatch(const char *op_name, const Tensor &x, const Tensor &y, Op op, RawBufferAllocator *allocator = nullptr) {
+Tensor BitwiseBinAllocDispatch(const char *op_name, const Tensor &x, const Tensor &y, Op op,
+                               RawBufferAllocator *allocator = nullptr) {
 #define ONNX_LIGHT_BITWISE_DISPATCH_CASE(ENUM, NAME, CTYPE)                                        \
   case DataType::ENUM:                                                                             \
     return detail::BinaryElementwiseAlloc<CTYPE, CTYPE>(                                           \
@@ -113,7 +114,8 @@ void BitwiseNotImpl(const char *dtype_name, int32_t dtype, const Tensor &x, Tens
 }
 
 template <typename T>
-Tensor BitwiseNotAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, RawBufferAllocator *allocator = nullptr) {
+Tensor BitwiseNotAlloc(const char *dtype_name, int32_t dtype, const Tensor &x,
+                       RawBufferAllocator *allocator = nullptr) {
   Tensor y("", dtype, x.shape,
            std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(T)));
   BitwiseNotImpl<T>(dtype_name, dtype, x, y);

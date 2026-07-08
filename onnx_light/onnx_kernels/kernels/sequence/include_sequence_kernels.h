@@ -99,7 +99,8 @@ public:
 
   /// Returning overload. ``axis`` follows the ONNX convention and may
   /// be negative; ``new_axis`` must be 0 (concat) or 1 (stack).
-  Tensor operator()(const std::vector<Tensor> &inputs, int64_t axis, int64_t new_axis = 0, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const std::vector<Tensor> &inputs, int64_t axis, int64_t new_axis = 0,
+                    RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``output`` must already carry the expected
   /// ``data_type``, ``shape`` and sufficiently-sized ``data`` buffer.
@@ -173,7 +174,8 @@ public:
   using KernelBase::KernelBase;
 
   /// Returns a copy of the tensor at ``position``.
-  Tensor operator()(const Sequence &input_sequence, const Tensor &position, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Sequence &input_sequence, const Tensor &position,
+                    RuntimeContext *rt = nullptr) const;
 };
 
 /// Reference implementation of the ONNX ``SequenceMap`` operator (since

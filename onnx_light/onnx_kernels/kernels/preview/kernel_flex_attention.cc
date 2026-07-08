@@ -6,13 +6,13 @@
 
 #include "onnx_kernels/kernels/_helpers/float16_promote.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -252,7 +252,8 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
 
 } // namespace
 
-Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, RuntimeContext *rt) const {
+Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
+                                 RuntimeContext *rt) const {
   CheckRank4Float(Q, "Q");
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::FlexAttention: 'head_size' must be positive.");
@@ -260,8 +261,8 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
   return (*this)(Q, K, V, scale);
 }
 
-Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
-                                 float scale, RuntimeContext *rt) const {
+Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                                 RuntimeContext *rt) const {
   return (*this)(Q, K, V, scale, ScoreModFn{}, ProbModFn{});
 }
 
@@ -271,7 +272,8 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
 }
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                                 const ScoreModFn &score_mod, const ProbModFn &prob_mod, RuntimeContext *rt) const {
+                                 const ScoreModFn &score_mod, const ProbModFn &prob_mod,
+                                 RuntimeContext *rt) const {
   CheckRank4Float(Q, "Q");
   CheckRank4Float(V, "V");
   const int64_t batch_size = Q.shape[0];

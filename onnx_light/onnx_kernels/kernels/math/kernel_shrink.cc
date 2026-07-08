@@ -4,11 +4,11 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -53,7 +53,8 @@ void ValidateOutput(const Tensor &x, const Tensor &output) {
   EXT_ENFORCE_INVALID(output.data_type == x.data_type, kName,
                       ": output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(), kName, ": output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(), kName,
+                      ": output buffer size mismatch.");
 }
 
 } // namespace

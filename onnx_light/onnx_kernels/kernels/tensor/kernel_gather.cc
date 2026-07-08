@@ -4,11 +4,11 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -49,7 +49,8 @@ int64_t NormalizeAxis(int64_t axis, int64_t rank) {
 
 } // namespace
 
-Tensor Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis, RuntimeContext *rt) const {
+Tensor Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
+                          RuntimeContext *rt) const {
   const int64_t r = static_cast<int64_t>(data.shape.size());
   const int64_t a = NormalizeAxis(axis, r);
   std::vector<int64_t> out_shape;

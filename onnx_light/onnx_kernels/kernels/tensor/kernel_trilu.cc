@@ -4,11 +4,11 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -31,8 +31,8 @@ int64_t ReadK(const Tensor *k) {
 
 } // namespace
 
-Tensor Trilu::operator()(const Tensor &input, const Tensor *k,
-                         const Trilu::Attributes &attrs, RuntimeContext *rt) const {
+Tensor Trilu::operator()(const Tensor &input, const Tensor *k, const Trilu::Attributes &attrs,
+                         RuntimeContext *rt) const {
   Tensor output;
   output.name = "";
   output.data_type = input.data_type;

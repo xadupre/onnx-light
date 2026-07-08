@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include "onnx_light_helpers.h"
 #include <algorithm>
 #include <cmath>
@@ -12,7 +13,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -684,7 +684,8 @@ void RunResize(const Tensor &X, const std::vector<float> &scales_vec,
 
 } // namespace
 
-Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs, RuntimeContext *rt) const {
+Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
+                          RuntimeContext *rt) const {
   const std::size_t rank = X.shape.size();
   const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
   const std::vector<float> scales_in = ReadResizeScales(scales, axes.size());

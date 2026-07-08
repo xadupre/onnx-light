@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -13,7 +14,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -217,7 +217,8 @@ void RunQLinearMatMul(const Tensor &a, int32_t a_zp, float a_scale, const Tensor
 
 Tensor QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const Tensor &a_zero_point,
                                  const Tensor &b, const Tensor &b_scale, const Tensor &b_zero_point,
-                                 const Tensor &y_scale, const Tensor &y_zero_point, RuntimeContext *rt) const {
+                                 const Tensor &y_scale, const Tensor &y_zero_point,
+                                 RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": a must be INT8 or UINT8.");
   EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": b must be INT8 or UINT8.");
   EXT_ENFORCE_INVALID(IsInt8OrUint8(y_zero_point.data_type), kName,

@@ -4,11 +4,11 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -30,7 +30,8 @@ std::vector<int64_t> ComputeSpaceToDepthOutputShape(const std::vector<int64_t> &
 
 } // namespace
 
-Tensor SpaceToDepth::operator()(const Tensor &input, const Attributes &attrs, RuntimeContext *rt) const {
+Tensor SpaceToDepth::operator()(const Tensor &input, const Attributes &attrs,
+                                RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape =
       ComputeSpaceToDepthOutputShape(input.shape, attrs.blocksize);
   Tensor output("", input.data_type, out_shape,

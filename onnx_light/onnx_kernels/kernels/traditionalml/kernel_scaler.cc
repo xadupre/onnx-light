@@ -4,10 +4,10 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -84,8 +84,7 @@ void Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_SCALER(T)                                                           \
   template Tensor Scaler::operator()<T>(const Tensor &, const std::vector<float> &,                \
-                                        const std::vector<float> &,                                \
-                                        RuntimeContext *) const;                         \
+                                        const std::vector<float> &, RuntimeContext *) const;       \
   template void Scaler::operator()<T>(const Tensor &, const std::vector<float> &,                  \
                                       const std::vector<float> &, Tensor &) const
 

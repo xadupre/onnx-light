@@ -4,10 +4,10 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -126,7 +126,8 @@ void Compute(const std::vector<Tensor> &inputs, const std::vector<int64_t> &inpu
 } // namespace
 
 Tensor FeatureVectorizer::operator()(const std::vector<Tensor> &inputs,
-                                     const std::vector<int64_t> &inputdimensions, RuntimeContext *rt) const {
+                                     const std::vector<int64_t> &inputdimensions,
+                                     RuntimeContext *rt) const {
   ValidateInputs(inputs, inputdimensions);
   const std::vector<int64_t> input_dims = ResolveInputDims(inputs, inputdimensions);
   const int64_t n = ResolveBatchSize(inputs);
@@ -154,7 +155,8 @@ void FeatureVectorizer::operator()(const std::vector<Tensor> &inputs,
   EXT_ENFORCE_INVALID(output.shape == (std::vector<int64_t>{n, total_features}),
                       "kernel::FeatureVectorizer preallocated output shape must be "
                       "[batch, sum(input_dims)].");
-  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(n * total_features) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() ==
+                          static_cast<size_t>(n * total_features) * sizeof(float),
                       "kernel::FeatureVectorizer preallocated output buffer is incorrectly sized.");
   std::fill(output.data.begin(), output.data.end(), uint8_t{0u});
   Compute(inputs, input_dims, n, total_features, reinterpret_cast<float *>(output.mutable_bytes()));

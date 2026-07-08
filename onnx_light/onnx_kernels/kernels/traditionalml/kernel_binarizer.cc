@@ -4,10 +4,10 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -30,7 +30,8 @@ template <typename T> void ValidateInput(const Tensor &x) {
 
 } // namespace
 
-template <typename T> Tensor Binarizer::operator()(const Tensor &x, T threshold, RuntimeContext *rt) const {
+template <typename T>
+Tensor Binarizer::operator()(const Tensor &x, T threshold, RuntimeContext *rt) const {
   ValidateInput<T>(x);
   const int64_t n = x.element_count();
   std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(T));
@@ -53,7 +54,7 @@ void Binarizer::operator()(const Tensor &x, T threshold, Tensor &output) const {
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_BINARIZER(T)                                                        \
-  template Tensor Binarizer::operator()(const Tensor &, T, RuntimeContext *) const;                                  \
+  template Tensor Binarizer::operator()(const Tensor &, T, RuntimeContext *) const;                \
   template void Binarizer::operator()(const Tensor &, T, Tensor &) const
 
 ONNX_LIGHT_INSTANTIATE_BINARIZER(float);

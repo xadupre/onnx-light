@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -11,7 +12,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -144,8 +144,8 @@ void MinMaxReduce(const Tensor &data, const std::vector<bool> &is_reduced,
 
 } // namespace
 
-Tensor ReduceMinMax::operator()(const Tensor &data, bool keepdims,
-                                bool noop_with_empty_axes, RuntimeContext *rt) const {
+Tensor ReduceMinMax::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                                RuntimeContext *rt) const {
   ValidateFloatOrBool(data, "data");
   const bool is_bool = data.data_type == static_cast<int32_t>(DataType::BOOL);
   const int64_t rank = static_cast<int64_t>(data.shape.size());

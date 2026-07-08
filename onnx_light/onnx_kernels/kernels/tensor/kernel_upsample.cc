@@ -4,13 +4,13 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -222,7 +222,8 @@ bool IsLinearMode(const std::string &mode) { return mode == "linear" || mode == 
 
 } // namespace
 
-Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs, RuntimeContext *rt) const {
+Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
+                            RuntimeContext *rt) const {
   const std::vector<float> scales_vec = ReadUpsampleScales(scales, X.shape.size());
   const std::vector<int64_t> out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec);
   int64_t total_elements = 1;

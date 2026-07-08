@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -12,7 +13,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -168,10 +168,9 @@ void CastMap::operator()(const std::vector<int64_t> &input_keys, const std::vect
 
 // Explicit instantiations for all supported (V, OutT) pairs.
 #define ONNX_LIGHT_INSTANTIATE_CAST_MAP(V, OutT)                                                   \
-  template Tensor CastMap::operator()<V, OutT>(const std::vector<int64_t> &,                       \
-                                               const std::vector<V> &, const std::string &,        \
-                                               const std::string &, int64_t,                       \
-                                               RuntimeContext *) const;                            \
+  template Tensor CastMap::operator()<V, OutT>(                                                    \
+      const std::vector<int64_t> &, const std::vector<V> &, const std::string &,                   \
+      const std::string &, int64_t, RuntimeContext *) const;                                       \
   template void CastMap::operator()<V, OutT>(const std::vector<int64_t> &, const std::vector<V> &, \
                                              const std::string &, const std::string &, int64_t,    \
                                              Tensor &) const

@@ -102,8 +102,8 @@ public:
   /// ``axes`` omitted: reduces over all dimensions of ``data`` (the default
   /// when ``noop_with_empty_axes`` is false) or returns a copy of ``data``
   /// when ``noop_with_empty_axes`` is true.
-  Tensor operator()(const Tensor &data, bool keepdims = true,
-                    bool noop_with_empty_axes = false, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                   Tensor &output) const;
 
@@ -127,8 +127,8 @@ public:
 
   ReduceMinMax(const KernelContext &ctx, Mode mode) : KernelBase(ctx), mode_(mode) {}
 
-  Tensor operator()(const Tensor &data, bool keepdims = true,
-                    bool noop_with_empty_axes = false, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                   Tensor &output) const;
 
@@ -173,8 +173,8 @@ public:
 
   ReduceL1L2(const KernelContext &ctx, Mode mode) : KernelBase(ctx), mode_(mode) {}
 
-  Tensor operator()(const Tensor &data, bool keepdims = true,
-                    bool noop_with_empty_axes = false, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                   Tensor &output) const;
 
@@ -227,8 +227,8 @@ public:
 
   ReduceLogSumOp(const KernelContext &ctx, Mode mode) : KernelBase(ctx), mode_(mode) {}
 
-  Tensor operator()(const Tensor &data, bool keepdims = true,
-                    bool noop_with_empty_axes = false, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                   Tensor &output) const;
 
@@ -274,8 +274,8 @@ class ReduceMean : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &data, bool keepdims = true,
-                    bool noop_with_empty_axes = false, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                   Tensor &output) const;
 
@@ -301,8 +301,8 @@ class ReduceProd : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &data, bool keepdims = true,
-                    bool noop_with_empty_axes = false, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                   Tensor &output) const;
 

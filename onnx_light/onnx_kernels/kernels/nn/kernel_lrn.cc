@@ -4,17 +4,18 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor LRN::operator()(const Tensor &x, int64_t size, float alpha, float beta, float bias, RuntimeContext *rt) const {
+Tensor LRN::operator()(const Tensor &x, int64_t size, float alpha, float beta, float bias,
+                       RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LRN: x must be FLOAT.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2, "kernel::LRN: x must have rank >= 2 (N, C, D1, ...).");

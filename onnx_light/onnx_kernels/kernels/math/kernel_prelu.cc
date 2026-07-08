@@ -5,10 +5,10 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -28,10 +28,11 @@ template <typename T> inline T PReluOp(T x, T slope) {
 }
 
 template <typename T>
-Tensor PReluAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &slope, RawBufferAllocator *allocator = nullptr) {
-  return detail::BinaryElementwiseAlloc<T, T>(kPReluName, dtype_name, dtype, x, slope,
-                                              [](T a, T b) -> T { return PReluOp<T>(a, b); },
-                                              allocator);
+Tensor PReluAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &slope,
+                  RawBufferAllocator *allocator = nullptr) {
+  return detail::BinaryElementwiseAlloc<T, T>(
+      kPReluName, dtype_name, dtype, x, slope, [](T a, T b) -> T { return PReluOp<T>(a, b); },
+      allocator);
 }
 
 template <typename T>
@@ -56,9 +57,11 @@ Tensor PRelu::operator()(const Tensor &x, const Tensor &slope, RuntimeContext *r
   case DataType::INT64:
     return PReluAlloc<int64_t>("INT64", DataType::INT64, x, slope, rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return PReluAlloc<uint32_t>("UINT32", DataType::UINT32, x, slope, rt ? rt->allocator() : nullptr);
+    return PReluAlloc<uint32_t>("UINT32", DataType::UINT32, x, slope,
+                                rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return PReluAlloc<uint64_t>("UINT64", DataType::UINT64, x, slope, rt ? rt->allocator() : nullptr);
+    return PReluAlloc<uint64_t>("UINT64", DataType::UINT64, x, slope,
+                                rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kPReluName, ": unsupported data type ", x.data_type, kSupportedPReluTypesMsg);
   }

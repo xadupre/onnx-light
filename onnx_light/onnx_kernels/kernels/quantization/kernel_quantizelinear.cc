@@ -8,6 +8,7 @@
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -15,7 +16,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -387,7 +387,8 @@ void QuantizeBlockFloat8Loop(const Tensor &x, const float *scales, const std::ui
 
 } // namespace
 
-Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, RuntimeContext *rt) const {
+Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
+                                  RuntimeContext *rt) const {
   Tensor out("", static_cast<int32_t>(DataType::UINT8), x.shape,
              std::vector<uint8_t>(static_cast<size_t>(x.element_count())));
   (*this)(x, y_scale, out);
@@ -539,7 +540,8 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
 }
 
 Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
-                                  const Tensor &y_zero_point, int64_t axis, RuntimeContext *rt) const {
+                                  const Tensor &y_zero_point, int64_t axis,
+                                  RuntimeContext *rt) const {
   // Scalar scale: delegate to the per-tensor overload.
   if (y_scale.element_count() == 1) {
     return (*this)(x, y_scale, y_zero_point);

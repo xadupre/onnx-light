@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -12,7 +13,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -212,8 +212,8 @@ void LogSumNoopElementwise(const Tensor &data, ReduceLogSumOp::Mode mode, Tensor
 
 } // namespace
 
-Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims,
-                                  bool noop_with_empty_axes, RuntimeContext *rt) const {
+Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                                  RuntimeContext *rt) const {
   ValidateFloatOrDouble(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);

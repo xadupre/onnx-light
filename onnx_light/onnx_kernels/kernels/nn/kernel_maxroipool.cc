@@ -4,12 +4,12 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -33,7 +33,8 @@ void ValidateInputs(const Tensor &x, const Tensor &rois, const MaxRoiPool::Attri
 
 } // namespace
 
-Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs, RuntimeContext *rt) const {
+Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs,
+                              RuntimeContext *rt) const {
   ValidateInputs(x, rois, attrs);
   const int64_t num_rois = rois.shape[0];
   const int64_t C = x.shape[1];

@@ -4,12 +4,12 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -162,7 +162,8 @@ struct ProdOp {
 
 } // namespace
 
-Tensor CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse, RuntimeContext *rt) const {
+Tensor CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
+                          RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, kCumSumName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumSumName, ReadAxisScalar(kCumSumName, axis), rank);
@@ -197,8 +198,8 @@ void CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, boo
   DispatchCumulative(kCumSumName, x, a, exclusive, reverse, output, SumOp{});
 }
 
-Tensor CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive,
-                           bool reverse, RuntimeContext *rt) const {
+Tensor CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
+                           RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, kCumProdName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumProdName, ReadAxisScalar(kCumProdName, axis), rank);

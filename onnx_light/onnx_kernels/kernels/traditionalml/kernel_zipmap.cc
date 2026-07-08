@@ -4,10 +4,10 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstring>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -63,11 +63,13 @@ void ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels, Te
 
 } // namespace
 
-Tensor ZipMap::operator()(const Tensor &x, const std::vector<int64_t> &class_labels, RuntimeContext *rt) const {
+Tensor ZipMap::operator()(const Tensor &x, const std::vector<int64_t> &class_labels,
+                          RuntimeContext *rt) const {
   return ComputeZipMapOutput(x, class_labels);
 }
 
-Tensor ZipMap::operator()(const Tensor &x, const std::vector<std::string> &class_labels, RuntimeContext *rt) const {
+Tensor ZipMap::operator()(const Tensor &x, const std::vector<std::string> &class_labels,
+                          RuntimeContext *rt) const {
   return ComputeZipMapOutput(x, class_labels);
 }
 

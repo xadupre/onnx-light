@@ -4,11 +4,11 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -143,7 +143,8 @@ void OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor
   const int64_t out_count = output.element_count();
 
   // Initialise the whole buffer with ``off_value``.
-  FillScalarRepeat(off_value, elem_size, static_cast<std::size_t>(out_count), output.mutable_bytes());
+  FillScalarRepeat(off_value, elem_size, static_cast<std::size_t>(out_count),
+                   output.mutable_bytes());
 
   // Compute strides for the output and for the "indices half" of the output
   // (i.e. the output without the axis dimension). ``inner_size`` is the

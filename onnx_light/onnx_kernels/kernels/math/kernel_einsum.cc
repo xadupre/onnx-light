@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_light_helpers.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <set>
@@ -12,7 +13,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -400,7 +400,8 @@ void RequireHomogeneous(const std::vector<Tensor> &inputs) {
 
 } // namespace
 
-Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation, RuntimeContext *rt) const {
+Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation,
+                          RuntimeContext *rt) const {
   RequireHomogeneous(inputs);
   switch (inputs[0].data_type) {
   case DataType::FLOAT:

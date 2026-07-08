@@ -4,13 +4,13 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -99,8 +99,7 @@ void DictVectorizer::operator()(const std::vector<K> &input_keys,
 // Explicit instantiations for the supported (K, V) pairs.
 #define ONNX_LIGHT_INSTANTIATE_DICT_VECTORIZER(K, V)                                               \
   template Tensor DictVectorizer::operator()(const std::vector<K> &, const std::vector<V> &,       \
-                                             const std::vector<K> &,                               \
-                                             RuntimeContext *) const;                        \
+                                             const std::vector<K> &, RuntimeContext *) const;      \
   template void DictVectorizer::operator()(const std::vector<K> &, const std::vector<V> &,         \
                                            const std::vector<K> &, Tensor &) const
 

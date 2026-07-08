@@ -91,12 +91,14 @@ public:
 
   /// Computes the attention output for the given Q, K, V tensors using the
   /// default scaling factor ``1 / sqrt(head_size)``.
-  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
+                    RuntimeContext *rt = nullptr) const;
 
   /// Computes the attention output for the given Q, K, V tensors using an
   /// explicit ``scale`` value (matching the ``scale`` attribute of the
   /// operator).
-  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                    RuntimeContext *rt = nullptr) const;
 
   /// Computes the attention output and applies the ``prob_mod`` callback
   /// to the post-softmax probability tensor before computing
@@ -112,7 +114,8 @@ public:
   /// computing ``Y = probs @ V``. When either callback is an empty
   /// ``std::function`` it is treated as identity.
   Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                    const ScoreModFn &score_mod, const ProbModFn &prob_mod, RuntimeContext *rt = nullptr) const;
+                    const ScoreModFn &score_mod, const ProbModFn &prob_mod,
+                    RuntimeContext *rt = nullptr) const;
 
   /// In-place overload writing into a caller-allocated ``output`` tensor.
   /// ``output`` must already share ``Q``'s element type and have shape

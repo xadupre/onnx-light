@@ -6,9 +6,9 @@
 
 #include "onnx_kernels/kernels/traditionalml/kernel_svm_common.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

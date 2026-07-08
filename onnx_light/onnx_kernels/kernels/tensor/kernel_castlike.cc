@@ -17,7 +17,8 @@ Tensor CastLike::operator()(const Tensor &x, const Tensor &target_type, RuntimeC
   return cast_kernel(x, target_type.data_type);
 }
 
-Tensor CastLike::operator()(const Tensor &x, const Tensor &target_type, bool saturate, RuntimeContext *rt) const {
+Tensor CastLike::operator()(const Tensor &x, const Tensor &target_type, bool saturate,
+                            RuntimeContext *rt) const {
   const Cast cast_kernel{ctx_};
   return cast_kernel(x, target_type.data_type, saturate);
 }

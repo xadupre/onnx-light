@@ -6,6 +6,7 @@
 
 #include "onnx_kernels/kernels/_helpers/float16_promote.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -15,7 +16,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -196,7 +196,8 @@ double MaskValuePadded(const Tensor *mask, int64_t batch_size, int64_t q_num_hea
 
 } // namespace
 
-Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, RuntimeContext *rt) const {
+Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
+                             RuntimeContext *rt) const {
   CheckRank4Float(Q, "Q");
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::Attention: 'head_size' must be positive.");
@@ -204,7 +205,8 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, 
   return (*this)(Q, K, V, scale);
 }
 
-Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale, RuntimeContext *rt) const {
+Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                             RuntimeContext *rt) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;

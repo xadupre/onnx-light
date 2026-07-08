@@ -4,13 +4,13 @@
 
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <random>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -183,7 +183,8 @@ void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int32_t sa
 
 } // namespace
 
-Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, RuntimeContext *rt) const {
+Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
+                             RuntimeContext *rt) const {
   const std::vector<double> probs = ReadProbabilities(input);
 
   const int32_t out_dtype = (dtype == 0) ? input.data_type : dtype;

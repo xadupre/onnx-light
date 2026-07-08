@@ -4,12 +4,12 @@
 
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -71,7 +71,8 @@ std::vector<int64_t> ReadShapeInput(const Tensor &shape) {
 
 } // namespace
 
-Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value, RuntimeContext *rt) const {
+Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value,
+                                   RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape = ReadShapeInput(shape);
 
   // Default fill: a single FLOAT 0.0 (per the ONNX schema).

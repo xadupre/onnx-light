@@ -6,12 +6,12 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -131,8 +131,7 @@ Tensor MinFloat16Alloc(const std::vector<Tensor> &inputs, RawBufferAllocator *al
   }
   Tensor z = detail::BinaryHalfElementwiseAlloc(kMinName, "FLOAT16", DataType::FLOAT16, inputs[0],
                                                 inputs[1], Float16BitsToFloat, FloatToFloat16Bits,
-                                                MinOf<float>,
-          allocator);
+                                                MinOf<float>, allocator);
   for (size_t i = 2; i < inputs.size(); ++i) {
     Tensor partial = z;
     detail::BinaryHalfElementwise(kMinName, "FLOAT16", DataType::FLOAT16, partial, inputs[i], z,

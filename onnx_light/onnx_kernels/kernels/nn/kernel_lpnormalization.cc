@@ -4,16 +4,17 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p, RuntimeContext *rt) const {
+Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p,
+                                   RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LpNormalization: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!x.shape.empty(), "kernel::LpNormalization: x must have rank >= 1.");

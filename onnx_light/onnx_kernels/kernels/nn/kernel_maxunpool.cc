@@ -4,13 +4,13 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -141,15 +141,15 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
 
 Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices,
                              const std::vector<int64_t> &kernel_shape,
-                             const std::vector<int64_t> &strides,
-                             const std::vector<int64_t> &pads, RuntimeContext *rt) const {
+                             const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
+                             RuntimeContext *rt) const {
   return RunMaxUnpool(x, indices, kernel_shape, strides, pads, /*explicit_output_shape=*/nullptr);
 }
 
 Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Tensor &output_shape,
                              const std::vector<int64_t> &kernel_shape,
-                             const std::vector<int64_t> &strides,
-                             const std::vector<int64_t> &pads, RuntimeContext *rt) const {
+                             const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
+                             RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(output_shape.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::MaxUnpool: output_shape must be INT64.");
   EXT_ENFORCE_INVALID(output_shape.shape.size() == 1,

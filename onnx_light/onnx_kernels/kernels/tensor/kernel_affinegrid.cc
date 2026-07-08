@@ -4,12 +4,12 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -115,8 +115,8 @@ void ApplyAffine(const float *theta, int64_t out_dim, int64_t in_dim, const floa
 
 } // namespace
 
-Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size,
-                              const Attributes &attrs, RuntimeContext *rt) const {
+Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
+                              RuntimeContext *rt) const {
   ValidateInputs(theta, size);
   Tensor out;
   out.data_type = static_cast<int32_t>(DataType::FLOAT);

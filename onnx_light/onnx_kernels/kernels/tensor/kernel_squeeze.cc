@@ -4,11 +4,11 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -59,7 +59,8 @@ std::vector<int64_t> ComputeSqueezedShape(const Tensor &data, const std::vector<
 
 } // namespace
 
-Tensor Squeeze::operator()(const Tensor &data, const std::vector<int64_t> &axes, RuntimeContext *rt) const {
+Tensor Squeeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
+                           RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape = ComputeSqueezedShape(data, axes);
   Tensor output = data;
   output.name.clear();

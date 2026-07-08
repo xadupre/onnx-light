@@ -4,11 +4,11 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -39,7 +39,8 @@ std::vector<int64_t> ReadGatherElementsIndices(const Tensor &indices) {
 
 } // namespace
 
-Tensor GatherElements::operator()(const Tensor &data, const Tensor &indices, int64_t axis, RuntimeContext *rt) const {
+Tensor GatherElements::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
+                                  RuntimeContext *rt) const {
   const std::size_t elem_size = ElementSize(data.data_type);
   int64_t total = indices.element_count();
   Tensor out("", data.data_type, indices.shape,

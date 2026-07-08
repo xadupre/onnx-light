@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -12,7 +13,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -286,9 +286,9 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
 
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
-    MaxPoolLoop<float>(x.AsFloat(), reinterpret_cast<float *>(y.mutable_bytes()), pi, produce_indices,
-                       N, C, x.shape, in_strides, out_strides, out_spatial, kernel_shape, strides,
-                       dilations, pads, index_spatial_strides);
+    MaxPoolLoop<float>(x.AsFloat(), reinterpret_cast<float *>(y.mutable_bytes()), pi,
+                       produce_indices, N, C, x.shape, in_strides, out_strides, out_spatial,
+                       kernel_shape, strides, dilations, pads, index_spatial_strides);
     break;
   case DataType::DOUBLE:
     MaxPoolLoop<double>(x.AsDouble(), reinterpret_cast<double *>(y.mutable_bytes()), pi,
@@ -296,9 +296,9 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
                         kernel_shape, strides, dilations, pads, index_spatial_strides);
     break;
   case DataType::INT8:
-    MaxPoolLoop<int8_t>(x.AsInt8(), reinterpret_cast<int8_t *>(y.mutable_bytes()), pi, produce_indices,
-                        N, C, x.shape, in_strides, out_strides, out_spatial, kernel_shape, strides,
-                        dilations, pads, index_spatial_strides);
+    MaxPoolLoop<int8_t>(x.AsInt8(), reinterpret_cast<int8_t *>(y.mutable_bytes()), pi,
+                        produce_indices, N, C, x.shape, in_strides, out_strides, out_spatial,
+                        kernel_shape, strides, dilations, pads, index_spatial_strides);
     break;
   case DataType::UINT8:
     MaxPoolLoop<uint8_t>(x.AsUint8(), reinterpret_cast<uint8_t *>(y.mutable_bytes()), pi,
@@ -316,7 +316,8 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
 Tensor MaxPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                            const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
                            bool ceil_mode, const std::vector<int64_t> &dilations,
-                           int64_t storage_order, const std::string &auto_pad, RuntimeContext *rt) const {
+                           int64_t storage_order, const std::string &auto_pad,
+                           RuntimeContext *rt) const {
   auto result = RunMaxPool(x, kernel_shape, strides, pads, ceil_mode, dilations, storage_order,
                            auto_pad, /*produce_indices=*/false);
   return std::move(result.first);

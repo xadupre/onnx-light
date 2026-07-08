@@ -6,10 +6,10 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -25,7 +25,8 @@ constexpr const char *kBoolName = "BOOL";
 // resulting "kernel::Greater only supports <DTYPE> inputs." message is
 // self-explanatory.
 template <typename TIn>
-Tensor GreaterAlloc(const char *in_dtype_name, int32_t in_dtype, const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
+Tensor GreaterAlloc(const char *in_dtype_name, int32_t in_dtype, const Tensor &x, const Tensor &y,
+                    RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAllocInOut<TIn, uint8_t>(
       kGreaterName, in_dtype_name, in_dtype, kBoolName, DataType::BOOL, x, y,
       [](TIn a, TIn b) -> uint8_t { return a > b ? 1 : 0; }, allocator);
@@ -47,13 +48,11 @@ Tensor Greater::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt)
   case DataType::FLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kGreaterName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; },
-          rt ? rt->allocator() : nullptr);
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; }, rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kGreaterName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; },
-          rt ? rt->allocator() : nullptr);
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; }, rt ? rt->allocator() : nullptr);
   case DataType::INT8:
     return GreaterAlloc<int8_t>("INT8", DataType::INT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT16:

@@ -7,12 +7,12 @@
 #include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -295,7 +295,8 @@ void DequantizeBlockFloat4E2M1Loop(const Tensor &x, const float *scales,
 
 } // namespace
 
-Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, RuntimeContext *rt) const {
+Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
+                                    RuntimeContext *rt) const {
   // The output element type matches ``x_scale``'s element type (FLOAT or
   // FLOAT16). Both encodings occupy known fixed-size storage so the buffer
   // can be sized up-front.
@@ -457,7 +458,8 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
 }
 
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
-                                    const Tensor &x_zero_point, int64_t axis, RuntimeContext *rt) const {
+                                    const Tensor &x_zero_point, int64_t axis,
+                                    RuntimeContext *rt) const {
   if (x_scale.element_count() == 1) {
     return (*this)(x, x_scale, x_zero_point);
   }
@@ -581,7 +583,8 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   }
 }
 
-Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis, RuntimeContext *rt) const {
+Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis,
+                                    RuntimeContext *rt) const {
   if (x_scale.element_count() == 1) {
     return (*this)(x, x_scale);
   }

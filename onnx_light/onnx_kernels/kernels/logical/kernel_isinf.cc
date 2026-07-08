@@ -5,17 +5,18 @@
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor IsInf::operator()(const Tensor &x, int64_t detect_positive, int64_t detect_negative, RuntimeContext *rt) const {
+Tensor IsInf::operator()(const Tensor &x, int64_t detect_positive, int64_t detect_negative,
+                         RuntimeContext *rt) const {
   Tensor y("", DataType::BOOL, x.shape,
            std::vector<uint8_t>(static_cast<size_t>(x.element_count())));
   (*this)(x, detect_positive, detect_negative, y);

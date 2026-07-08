@@ -111,8 +111,8 @@ public:
 class IsInf : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, int64_t detect_positive = 1,
-                    int64_t detect_negative = 1, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, int64_t detect_positive = 1, int64_t detect_negative = 1,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, int64_t detect_positive, int64_t detect_negative,
                   Tensor &output) const;
 
@@ -200,7 +200,8 @@ public:
 class Where : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &condition, const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &condition, const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -273,7 +274,8 @@ public:
   enum class Direction { kLeft, kRight };
 
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &y, Direction direction, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, Direction direction,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Direction direction, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }

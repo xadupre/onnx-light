@@ -4,12 +4,12 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -11,7 +12,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -386,7 +386,8 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
 
 } // namespace
 
-Tensor GridSample::operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs, RuntimeContext *rt) const {
+Tensor GridSample::operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
+                              RuntimeContext *rt) const {
   ValidateInputs(X, grid);
   Tensor out;
   out.data_type = X.data_type;

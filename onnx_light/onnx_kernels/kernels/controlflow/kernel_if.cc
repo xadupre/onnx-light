@@ -16,8 +16,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor If::operator()(const Tensor &cond, const Tensor &then_value,
-                      const Tensor &else_value, RuntimeContext *rt) const {
+Tensor If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
+                      RuntimeContext *rt) const {
   // Allocate an output matching either branch's type/shape (both must agree;
   // the in-place overload enforces this); the in-place overload writes into
   // ``out.data`` below.

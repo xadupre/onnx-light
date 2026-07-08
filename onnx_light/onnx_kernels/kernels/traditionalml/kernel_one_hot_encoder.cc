@@ -4,13 +4,13 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include "onnx_light_helpers.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -102,8 +102,8 @@ void ValidatePreallocatedOutput(const Tensor &output, const std::vector<int64_t>
 } // namespace
 
 template <typename T>
-Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats,
-                                 bool zeros, RuntimeContext *rt) const {
+Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
+                                 RuntimeContext *rt) const {
   ValidateNumericInput<T>(x, cats);
   const std::vector<int64_t> out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
@@ -113,8 +113,8 @@ Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &ca
   return out;
 }
 
-Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &cats,
-                                 bool zeros, RuntimeContext *rt) const {
+Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
+                                 RuntimeContext *rt) const {
   ValidateStringInput(x, cats);
   const std::vector<int64_t> out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());

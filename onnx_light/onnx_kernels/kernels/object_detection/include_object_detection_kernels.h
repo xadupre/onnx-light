@@ -122,7 +122,8 @@ public:
   /// defaults apply).
   Tensor operator()(const Tensor &boxes, const Tensor &scores,
                     const Tensor *max_output_boxes_per_class, const Tensor *iou_threshold,
-                    const Tensor *score_threshold, const Attributes &attrs, RuntimeContext *rt = nullptr) const;
+                    const Tensor *score_threshold, const Attributes &attrs,
+                    RuntimeContext *rt = nullptr) const;
 
   /// Output element layout differs fundamentally from any input
   /// (FLOAT/INT64 mix, distinct rank and shape), so storage cannot be shared.

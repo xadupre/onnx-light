@@ -4,13 +4,13 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -134,7 +134,8 @@ void Normalizer::operator()(const Tensor &x, const std::string &norm, Tensor &ou
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_NORMALIZER(T)                                                       \
-  template Tensor Normalizer::operator()<T>(const Tensor &, const std::string &, RuntimeContext *) const;            \
+  template Tensor Normalizer::operator()<T>(const Tensor &, const std::string &, RuntimeContext *) \
+      const;                                                                                       \
   template void Normalizer::operator()<T>(const Tensor &, const std::string &, Tensor &) const
 
 ONNX_LIGHT_INSTANTIATE_NORMALIZER(float);

@@ -4,10 +4,10 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -59,7 +59,9 @@ std::vector<int64_t> ComputeShapeSlice(const Tensor &data, const Shape::Attribut
 
 } // namespace
 
-Tensor Shape::operator()(const Tensor &data, RuntimeContext *rt) const { return (*this)(data, Attributes{}); }
+Tensor Shape::operator()(const Tensor &data, RuntimeContext *rt) const {
+  return (*this)(data, Attributes{});
+}
 
 Tensor Shape::operator()(const Tensor &data, const Attributes &attrs, RuntimeContext *rt) const {
   const std::vector<int64_t> values = ComputeShapeSlice(data, attrs);

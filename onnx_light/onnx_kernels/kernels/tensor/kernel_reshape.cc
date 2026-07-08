@@ -4,11 +4,11 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -90,7 +90,8 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &data, const std::vector<in
 
 } // namespace
 
-Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowzero, RuntimeContext *rt) const {
+Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowzero,
+                           RuntimeContext *rt) const {
   const std::vector<int64_t> target = ReadShapeTensor(shape);
   const std::vector<int64_t> out_shape = ComputeOutputShape(data, target, allowzero);
   const std::size_t elem_size = ElementSize(data.data_type);

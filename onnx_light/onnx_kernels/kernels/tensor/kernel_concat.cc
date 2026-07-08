@@ -4,10 +4,10 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -59,7 +59,8 @@ ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t
 
 } // namespace
 
-Tensor Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis, RuntimeContext *rt) const {
+Tensor Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis,
+                          RuntimeContext *rt) const {
   const ConcatLayout layout = ValidateAndComputeLayout(inputs, axis);
   int64_t total = 1;
   for (int64_t d : layout.shape) {

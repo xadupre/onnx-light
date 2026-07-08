@@ -4,11 +4,11 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -72,8 +72,8 @@ void ApplyImputer(const Tensor &x, const std::vector<T> &imputed_values, T repla
 } // namespace
 
 template <typename T>
-Tensor Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values,
-                           T replaced_value, RuntimeContext *rt) const {
+Tensor Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value,
+                           RuntimeContext *rt) const {
   ValidateInput<T>(x);
   ValidateImputedValues<T>(imputed_values, LastDim(x.shape));
   const int64_t n = x.element_count();
@@ -99,7 +99,8 @@ void Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values, 
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_IMPUTER(T)                                                          \
-  template Tensor Imputer::operator()(const Tensor &, const std::vector<T> &, T, RuntimeContext *) const;            \
+  template Tensor Imputer::operator()(const Tensor &, const std::vector<T> &, T, RuntimeContext *) \
+      const;                                                                                       \
   template void Imputer::operator()(const Tensor &, const std::vector<T> &, T, Tensor &) const
 
 ONNX_LIGHT_INSTANTIATE_IMPUTER(float);

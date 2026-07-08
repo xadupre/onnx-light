@@ -6,10 +6,10 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -19,9 +19,10 @@ namespace {
 constexpr const char *kAddName = "kernel::Add";
 
 template <typename T>
-Tensor AddAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
-  return detail::BinaryElementwiseAlloc<T, T>(kAddName, dtype_name, dtype, x, y,
-                                              [](T a, T b) -> T { return a + b; }, allocator);
+Tensor AddAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y,
+                RawBufferAllocator *allocator = nullptr) {
+  return detail::BinaryElementwiseAlloc<T, T>(
+      kAddName, dtype_name, dtype, x, y, [](T a, T b) -> T { return a + b; }, allocator);
 }
 
 template <typename T>
@@ -59,15 +60,13 @@ Tensor Add::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) con
   case DataType::UINT64:
     return AddAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::FLOAT16:
-    return detail::BinaryHalfElementwiseAlloc(kAddName, "FLOAT16", DataType::FLOAT16, x, y,
-                                              Float16BitsToFloat, FloatToFloat16Bits,
-                                              [](float a, float b) { return a + b; },
-                                              rt ? rt->allocator() : nullptr);
+    return detail::BinaryHalfElementwiseAlloc(
+        kAddName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat, FloatToFloat16Bits,
+        [](float a, float b) { return a + b; }, rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
-    return detail::BinaryHalfElementwiseAlloc(kAddName, "BFLOAT16", DataType::BFLOAT16, x, y,
-                                              Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                              [](float a, float b) { return a + b; },
-                                              rt ? rt->allocator() : nullptr);
+    return detail::BinaryHalfElementwiseAlloc(
+        kAddName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat, FloatToBfloat16Bits,
+        [](float a, float b) { return a + b; }, rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kAddName, ": unsupported data type ", x.data_type, kSupportedAddTypesMsg);
   }

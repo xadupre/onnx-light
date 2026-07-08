@@ -66,7 +66,8 @@ class Binarizer : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  template <typename T> Tensor operator()(const Tensor &x, T threshold, RuntimeContext *rt = nullptr) const;
+  template <typename T>
+  Tensor operator()(const Tensor &x, T threshold, RuntimeContext *rt = nullptr) const;
 
   template <typename T> void operator()(const Tensor &x, T threshold, Tensor &output) const;
 
@@ -103,7 +104,8 @@ public:
 
   template <typename InT, typename OutT>
   Tensor operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
-                    const std::vector<int64_t> &cats_int64s, OutT default_value, RuntimeContext *rt = nullptr) const;
+                    const std::vector<int64_t> &cats_int64s, OutT default_value,
+                    RuntimeContext *rt = nullptr) const;
 
   template <typename InT, typename OutT>
   void operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
@@ -138,7 +140,8 @@ public:
   using KernelBase::KernelBase;
 
   template <typename T>
-  Tensor operator()(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value,
+                    RuntimeContext *rt = nullptr) const;
 
   template <typename T>
   void operator()(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value,
@@ -158,7 +161,8 @@ class ArrayFeatureExtractor : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  template <typename T> Tensor operator()(const Tensor &x, const Tensor &indices, RuntimeContext *rt = nullptr) const;
+  template <typename T>
+  Tensor operator()(const Tensor &x, const Tensor &indices, RuntimeContext *rt = nullptr) const;
 
   template <typename T>
   void operator()(const Tensor &x, const Tensor &indices, Tensor &output) const;
@@ -195,7 +199,8 @@ public:
 
   template <typename KeyT, typename ValueT>
   Tensor operator()(const Tensor &x, const std::vector<KeyT> &keys,
-                    const std::vector<ValueT> &values, ValueT default_value, RuntimeContext *rt = nullptr) const;
+                    const std::vector<ValueT> &values, ValueT default_value,
+                    RuntimeContext *rt = nullptr) const;
 
   template <typename KeyT, typename ValueT>
   void operator()(const Tensor &x, const std::vector<KeyT> &keys, const std::vector<ValueT> &values,
@@ -229,9 +234,11 @@ public:
   using KernelBase::KernelBase;
 
   template <typename T>
-  Tensor operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
+                    RuntimeContext *rt = nullptr) const;
 
-  Tensor operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
+                    RuntimeContext *rt = nullptr) const;
 
   template <typename T>
   void operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
@@ -329,7 +336,8 @@ public:
   template <typename T>
   Tensor operator()(const Tensor &x, const std::vector<float> &support_vectors,
                     const std::vector<float> &coefficients, const std::vector<float> &rho,
-                    const char *kernel_type, float gamma, float coef0, float degree, RuntimeContext *rt = nullptr) const;
+                    const char *kernel_type, float gamma, float coef0, float degree,
+                    RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -401,7 +409,8 @@ class Normalizer : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  template <typename T> Tensor operator()(const Tensor &x, const std::string &norm, RuntimeContext *rt = nullptr) const;
+  template <typename T>
+  Tensor operator()(const Tensor &x, const std::string &norm, RuntimeContext *rt = nullptr) const;
 
   template <typename T>
   void operator()(const Tensor &x, const std::string &norm, Tensor &output) const;
@@ -425,8 +434,10 @@ class ZipMap : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &x, const std::vector<int64_t> &class_labels, RuntimeContext *rt = nullptr) const;
-  Tensor operator()(const Tensor &x, const std::vector<std::string> &class_labels, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const std::vector<int64_t> &class_labels,
+                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const std::vector<std::string> &class_labels,
+                    RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const std::vector<int64_t> &class_labels, Tensor &output) const;
   void operator()(const Tensor &x, const std::vector<std::string> &class_labels,
@@ -551,17 +562,15 @@ public:
   /// @param aggregate_function   0=AVERAGE, 1=SUM (default), 2=MIN, 3=MAX.
   /// @param post_transform       0=NONE (default), 1=SOFTMAX.
   template <typename T>
-  Tensor
-  operator()(const Tensor &x, const std::vector<int64_t> &tree_roots,
-             const std::vector<int64_t> &nodes_featureids, const std::vector<T> &nodes_splits,
-             const std::vector<uint8_t> &nodes_modes, const std::vector<int64_t> &nodes_truenodeids,
-             const std::vector<int64_t> &nodes_falsenodeids,
-             const std::vector<int64_t> &nodes_trueleafs,
-             const std::vector<int64_t> &nodes_falseleafs,
-             const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &leaf_targetids,
-             const std::vector<T> &leaf_weights, const std::vector<T> &membership_values,
-             int64_t n_targets, int64_t aggregate_function, int64_t post_transform,
-             RuntimeContext *rt = nullptr) const;
+  Tensor operator()(
+      const Tensor &x, const std::vector<int64_t> &tree_roots,
+      const std::vector<int64_t> &nodes_featureids, const std::vector<T> &nodes_splits,
+      const std::vector<uint8_t> &nodes_modes, const std::vector<int64_t> &nodes_truenodeids,
+      const std::vector<int64_t> &nodes_falsenodeids, const std::vector<int64_t> &nodes_trueleafs,
+      const std::vector<int64_t> &nodes_falseleafs, const std::vector<int64_t> &nodes_missing,
+      const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
+      const std::vector<T> &membership_values, int64_t n_targets, int64_t aggregate_function,
+      int64_t post_transform, RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -634,7 +643,8 @@ public:
 
   template <typename V, typename OutT>
   Tensor operator()(const std::vector<int64_t> &input_keys, const std::vector<V> &input_values,
-                    const std::string &cast_to, const std::string &map_form, int64_t max_map, RuntimeContext *rt = nullptr) const;
+                    const std::string &cast_to, const std::string &map_form, int64_t max_map,
+                    RuntimeContext *rt = nullptr) const;
 
   template <typename V, typename OutT>
   void operator()(const std::vector<int64_t> &input_keys, const std::vector<V> &input_values,
@@ -678,8 +688,8 @@ public:
   /// have the same length as ``inputs`` and gives the declared feature width
   /// per input. When empty the feature width is taken from each input's last
   /// dimension.
-  Tensor operator()(const std::vector<Tensor> &inputs,
-                    const std::vector<int64_t> &inputdimensions, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const std::vector<Tensor> &inputs, const std::vector<int64_t> &inputdimensions,
+                    RuntimeContext *rt = nullptr) const;
 
   void operator()(const std::vector<Tensor> &inputs, const std::vector<int64_t> &inputdimensions,
                   Tensor &output) const;

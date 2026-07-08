@@ -4,13 +4,13 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -155,7 +155,8 @@ std::vector<int64_t> InferOutputShape(const Tensor &x, const Tensor &w, const Te
 } // namespace
 
 Tensor DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &offset,
-                              const Tensor &b, const Tensor &mask, const Attributes &attrs, RuntimeContext *rt) const {
+                              const Tensor &b, const Tensor &mask, const Attributes &attrs,
+                              RuntimeContext *rt) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, offset, b, mask, resolved);

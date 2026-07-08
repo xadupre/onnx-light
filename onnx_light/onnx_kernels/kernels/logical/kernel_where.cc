@@ -5,13 +5,13 @@
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_light_helpers.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -236,7 +236,8 @@ void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &
 
 } // namespace
 
-Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
+                         RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::BOOL:
     return WhereAllocTyped<uint8_t>(condition, x, y);

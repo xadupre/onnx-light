@@ -4,13 +4,13 @@
 
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -113,7 +113,8 @@ void ValidateFloatOrDouble(const Tensor &t, const char *name) {
 
 } // namespace
 
-Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes, RuntimeContext *rt) const {
+Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                             RuntimeContext *rt) const {
   ValidateFloatOrDouble(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   const size_t elem_size =

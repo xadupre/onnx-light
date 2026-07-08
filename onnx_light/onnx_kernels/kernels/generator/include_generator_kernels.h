@@ -95,7 +95,8 @@ public:
 class EyeLike : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &input, int64_t k = 0, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &input, int64_t k = 0, int32_t dtype = 0,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -129,7 +130,8 @@ public:
   /// ``dtype`` is the value of the ``dtype`` attribute when present (a
   /// :cpp:class:`DataType` value); pass ``0`` to keep the
   /// output dtype identical to ``input.data_type``.
-  Tensor operator()(const Tensor &input, int64_t seed = kNoSeed, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &input, int64_t seed = kNoSeed, int32_t dtype = 0,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, int64_t seed, int32_t dtype, Tensor &output) const;
 
   /// Sentinel value indicating the ``seed`` attribute is absent. Picked
@@ -293,7 +295,8 @@ public:
 class Range : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &start, const Tensor &limit, const Tensor &delta, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
                   Tensor &output) const;
 

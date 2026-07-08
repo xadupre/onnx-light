@@ -8,6 +8,7 @@
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -16,7 +17,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -352,7 +352,9 @@ double ParseAsDouble(const std::string &s) {
 
 } // namespace
 
-Tensor Cast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) const { return (*this)(x, to, true); }
+Tensor Cast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) const {
+  return (*this)(x, to, true);
+}
 
 Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(

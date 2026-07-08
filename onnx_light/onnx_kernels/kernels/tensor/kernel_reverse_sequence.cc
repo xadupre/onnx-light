@@ -4,18 +4,19 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <vector>
-#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
 Tensor ReverseSequence::operator()(const Tensor &input, const Tensor &sequence_lens,
-                                   const ReverseSequence::Attributes &attrs, RuntimeContext *rt) const {
+                                   const ReverseSequence::Attributes &attrs,
+                                   RuntimeContext *rt) const {
   Tensor output;
   output.name = "";
   output.data_type = input.data_type;

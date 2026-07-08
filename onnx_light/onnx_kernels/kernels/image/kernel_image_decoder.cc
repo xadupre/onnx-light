@@ -18,8 +18,8 @@
 #if defined(_WIN32)
 #include <windows.h>
 #elif defined(__APPLE__) || defined(__linux__) || defined(__unix__)
-#include <dlfcn.h>
 #include "onnx_kernels/runtime_context.h"
+#include <dlfcn.h>
 #endif
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -2174,8 +2174,8 @@ int64_t ImageDecoder::ChannelCount(const std::string &pixel_format) {
                     "\" (expected \"RGB\", \"BGR\" or \"Grayscale\").");
 }
 
-Tensor ImageDecoder::operator()(const Tensor &encoded_stream,
-                                const std::string &pixel_format, RuntimeContext *rt) const {
+Tensor ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &pixel_format,
+                                RuntimeContext *rt) const {
   CheckImageDecoderInput(encoded_stream);
   const int64_t channels = ChannelCount(pixel_format);
 

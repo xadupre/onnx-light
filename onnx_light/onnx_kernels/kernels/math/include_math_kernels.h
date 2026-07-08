@@ -198,8 +198,8 @@ public:
   /// Computes ``y = clip(x, min, max)``. ``min``/``max`` may be ``nullptr``
   /// to use the dtype-specific default bound. When provided, each must be a
   /// 0-D (scalar) tensor whose dtype matches ``x``.
-  Tensor operator()(const Tensor &x, const Tensor *min = nullptr,
-                    const Tensor *max = nullptr, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const Tensor *min = nullptr, const Tensor *max = nullptr,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -444,8 +444,8 @@ public:
   /// @return Loss tensor whose shape depends on ``reduction``: matches the
   ///         shape of ``target`` for ``"none"``; scalar otherwise.
   Tensor operator()(const Tensor &input, const Tensor &target, const Tensor *weight,
-                    const std::string &reduction, bool has_ignore_index,
-                    int64_t ignore_index, RuntimeContext *rt = nullptr) const;
+                    const std::string &reduction, bool has_ignore_index, int64_t ignore_index,
+                    RuntimeContext *rt = nullptr) const;
 
   /// The kernel allocates new outputs; it does not support input/output aliasing.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -530,7 +530,8 @@ public:
 class Gelu : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const std::string &approximate = "none", RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const std::string &approximate = "none",
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const std::string &approximate, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -580,7 +581,8 @@ public:
 class Shrink : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, float bias = 0.0f, float lambd = 0.5f, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, float bias = 0.0f, float lambd = 0.5f,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, float bias, float lambd, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -685,7 +687,8 @@ public:
 class Mod : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &y, int64_t fmod = 0, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, int64_t fmod = 0,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &output) const;
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
@@ -961,7 +964,8 @@ public:
 class Einsum : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, const std::string &equation, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const std::vector<Tensor> &inputs, const std::string &equation,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const std::vector<Tensor> &inputs, const std::string &equation,
                   Tensor &output) const;
 
@@ -989,7 +993,8 @@ public:
   /// -1`` and ``axis < rank - 1``). ``dft_length`` is a pointer to a 0-D
   /// INT32/INT64 tensor; pass ``nullptr`` to use the default.
   Tensor operator()(const Tensor &input, const Tensor *dft_length, int64_t axis,
-                    bool onesided = false, bool inverse = false, RuntimeContext *rt = nullptr) const;
+                    bool onesided = false, bool inverse = false,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
                   bool inverse, Tensor &output) const;
 
@@ -1019,7 +1024,8 @@ class STFT : public KernelBase {
 public:
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
-                    const Tensor *frame_length, bool onesided = true, RuntimeContext *rt = nullptr) const;
+                    const Tensor *frame_length, bool onesided = true,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
                   const Tensor *frame_length, bool onesided, Tensor &output) const;
 

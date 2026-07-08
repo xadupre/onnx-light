@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -48,7 +49,7 @@ int64_t NormalizeAxis(int64_t axis, int64_t rank) {
 
 } // namespace
 
-Tensor Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis) const {
+Tensor Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis, RuntimeContext *rt) const {
   const int64_t r = static_cast<int64_t>(data.shape.size());
   const int64_t a = NormalizeAxis(axis, r);
   std::vector<int64_t> out_shape;
@@ -103,7 +104,7 @@ void Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
 
   for (int64_t o = 0; o < outer; ++o) {
     const uint8_t *data_outer = data.bytes() + static_cast<std::size_t>(o * data_axis_stride_bytes);
-    uint8_t *out_outer = output.data.data() + static_cast<std::size_t>(o * out_outer_bytes);
+    uint8_t *out_outer = output.mutable_bytes() + static_cast<std::size_t>(o * out_outer_bytes);
     for (int64_t qi = 0; qi < q_count; ++qi) {
       int64_t idx = idx_values[static_cast<std::size_t>(qi)];
       if (idx < 0) {

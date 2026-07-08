@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -19,7 +20,7 @@ constexpr float kHardSwishBeta = 0.5f;
 
 } // namespace
 
-Tensor HardSwish::operator()(const Tensor &x) const {
+Tensor HardSwish::operator()(const Tensor &x, RuntimeContext *rt) const {
   Tensor y("", DataType::FLOAT, x.shape,
            std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
   (*this)(x, y);
@@ -35,7 +36,7 @@ void HardSwish::operator()(const Tensor &x, Tensor &output) const {
                       "kernel::HardSwish preallocated output shape must match input shape.");
   const int64_t n = x.element_count();
   const size_t expected_bytes = static_cast<size_t>(n) * sizeof(float);
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::HardSwish preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();

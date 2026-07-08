@@ -9,6 +9,7 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -71,13 +72,13 @@ void ValidateInputs(const Tensor &x, const std::vector<KeyT> &keys,
 
 template <typename KeyT, typename ValueT>
 Tensor LabelEncoder::operator()(const Tensor &x, const std::vector<KeyT> &keys,
-                                const std::vector<ValueT> &values, ValueT default_value) const {
+                                const std::vector<ValueT> &values, ValueT default_value, RuntimeContext *rt) const {
   ValidateInputs<KeyT, ValueT>(x, keys, values);
   const int64_t n = x.element_count();
   std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(ValueT));
   Tensor out("", TensorElementType<ValueT>::value, x.shape, std::move(bytes));
   LookupAndFill<KeyT, ValueT>(x, keys, values, default_value,
-                              reinterpret_cast<ValueT *>(out.data.data()));
+                              reinterpret_cast<ValueT *>(out.mutable_bytes()));
   return out;
 }
 
@@ -91,7 +92,7 @@ void LabelEncoder::operator()(const Tensor &x, const std::vector<KeyT> &keys,
       "kernel::LabelEncoder preallocated output dtype must match the requested ValueT.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::LabelEncoder preallocated output shape must match the input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(x.element_count()) * sizeof(ValueT),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(x.element_count()) * sizeof(ValueT),
                       "kernel::LabelEncoder preallocated output buffer is incorrectly sized.");
   LookupAndFill<KeyT, ValueT>(x, keys, values, default_value, output.As<ValueT>());
 }
@@ -99,7 +100,8 @@ void LabelEncoder::operator()(const Tensor &x, const std::vector<KeyT> &keys,
 // Explicit instantiations for the supported (KeyT, ValueT) combinations.
 #define ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(KEY_T, VALUE_T)                                       \
   template Tensor LabelEncoder::operator()(const Tensor &, const std::vector<KEY_T> &,             \
-                                           const std::vector<VALUE_T> &, VALUE_T) const;           \
+                                           const std::vector<VALUE_T> &, VALUE_T,                  \
+                                           RuntimeContext *) const;           \
   template void LabelEncoder::operator()(const Tensor &, const std::vector<KEY_T> &,               \
                                          const std::vector<VALUE_T> &, VALUE_T, Tensor &) const
 

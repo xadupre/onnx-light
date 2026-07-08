@@ -8,6 +8,7 @@
 #include <fstream>
 #include <limits>
 #include <utility>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -42,7 +43,7 @@ DelayedInitializer::DelayedInitializer(const KernelContext &ctx, Attributes attr
   }
 }
 
-Tensor DelayedInitializer::operator()() const {
+Tensor DelayedInitializer::operator()(RuntimeContext *rt) const {
   if (attrs_.load_device == "cpu") {
     return Tensor("", attrs_.dtype, attrs_.shape, loaded_bytes_);
   }

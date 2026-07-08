@@ -7,12 +7,13 @@
 #include <cmath>
 #include <cstdint>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p) const {
+Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LpNormalization: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!x.shape.empty(), "kernel::LpNormalization: x must have rank >= 1.");
@@ -42,7 +43,7 @@ Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p) con
              std::vector<uint8_t>(static_cast<size_t>(total) * sizeof(float)));
 
   const float *px = x.AsFloat();
-  float *py = reinterpret_cast<float *>(out.data.data());
+  float *py = reinterpret_cast<float *>(out.mutable_bytes());
 
   for (int64_t o = 0; o < outer; ++o) {
     for (int64_t s = 0; s < inner; ++s) {

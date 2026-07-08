@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -66,7 +67,7 @@ void MinMaxReduce(const Tensor &data, const std::vector<bool> &is_reduced,
   // BOOL path: ReduceMax = OR, ReduceMin = AND.
   if (data.data_type == static_cast<int32_t>(DataType::BOOL)) {
     const std::vector<int64_t> out_strides = RowMajorStrides(output_shape_noreduce);
-    uint8_t *py = output.data.data();
+    uint8_t *py = output.mutable_bytes();
     const int64_t out_count = output.element_count();
     const uint8_t init =
         mode == ReduceMinMax::Mode::kMax ? static_cast<uint8_t>(0) : static_cast<uint8_t>(1);
@@ -144,7 +145,7 @@ void MinMaxReduce(const Tensor &data, const std::vector<bool> &is_reduced,
 } // namespace
 
 Tensor ReduceMinMax::operator()(const Tensor &data, bool keepdims,
-                                bool noop_with_empty_axes) const {
+                                bool noop_with_empty_axes, RuntimeContext *rt) const {
   ValidateFloatOrBool(data, "data");
   const bool is_bool = data.data_type == static_cast<int32_t>(DataType::BOOL);
   const int64_t rank = static_cast<int64_t>(data.shape.size());
@@ -181,7 +182,7 @@ void ReduceMinMax::operator()(const Tensor &data, bool keepdims, bool noop_with_
       "kernel::ReduceMinMax preallocated output shape does not match expected shape.");
 
   if (noop_with_empty_axes) {
-    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
+    std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
     return;
   }
   const std::vector<int64_t> out_shape_noreduce =
@@ -190,7 +191,7 @@ void ReduceMinMax::operator()(const Tensor &data, bool keepdims, bool noop_with_
 }
 
 Tensor ReduceMinMax::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
-                                bool noop_with_empty_axes) const {
+                                bool noop_with_empty_axes, RuntimeContext *rt) const {
   ValidateFloatOrBool(data, "data");
   const bool is_bool = data.data_type == static_cast<int32_t>(DataType::BOOL);
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
@@ -250,7 +251,7 @@ void ReduceMinMax::operator()(const Tensor &data, const Tensor &axes, bool keepd
       "kernel::ReduceMinMax preallocated output shape does not match expected shape.");
 
   if (naxes == 0 && noop_with_empty_axes) {
-    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
+    std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
     return;
   }
   const std::vector<int64_t> out_shape_noreduce =

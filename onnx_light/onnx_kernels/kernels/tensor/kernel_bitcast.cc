@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -71,7 +72,7 @@ void ValidateBitCast(int32_t from, int32_t to) {
 
 } // namespace
 
-Tensor BitCast::operator()(const Tensor &x, int32_t to) const {
+Tensor BitCast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) const {
   ValidateBitCast(x.data_type, to);
   // BitCast preserves the exact bit pattern and the shape: same packed
   // byte size for both input and output. Copy the underlying bytes and
@@ -86,11 +87,11 @@ void BitCast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
                       output.data_type, " must match ``to`` (", to, ").");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::BitCast: preallocated output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.size_bytes(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(),
                       "kernel::BitCast: preallocated output buffer has unexpected size in bytes.");
   // Byte-wise copy keeps the bit pattern intact on little-endian hosts
   // (the only ABI exercised by the backend test library).
-  std::memcpy(output.data.data(), x.bytes(), x.size_bytes());
+  std::memcpy(output.mutable_bytes(), x.bytes(), x.size_bytes());
 }
 
 } // namespace kernel

@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -70,7 +71,7 @@ std::vector<int64_t> ReadShapeInput(const Tensor &shape) {
 
 } // namespace
 
-Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value) const {
+Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value, RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape = ReadShapeInput(shape);
 
   // Default fill: a single FLOAT 0.0 (per the ONNX schema).
@@ -105,11 +106,11 @@ void ConstantOfShape::operator()(const Tensor &shape, const Tensor &value, Tenso
   EXT_ENFORCE_INVALID(output.shape == produced.shape,
                       "kernel::ConstantOfShape preallocated output shape must match the produced "
                       "tensor shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
                       "kernel::ConstantOfShape preallocated output buffer has unexpected size in "
                       "bytes.");
   if (!produced.data.empty()) {
-    std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
+    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

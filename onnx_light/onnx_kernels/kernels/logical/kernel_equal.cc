@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -21,10 +22,10 @@ constexpr const char *kEqualName = "kernel::Equal";
 constexpr const char *kBoolName = "BOOL";
 
 template <typename TIn>
-Tensor EqualAlloc(const char *in_dtype_name, int32_t in_dtype, const Tensor &x, const Tensor &y) {
+Tensor EqualAlloc(const char *in_dtype_name, int32_t in_dtype, const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAllocInOut<TIn, uint8_t>(
       kEqualName, in_dtype_name, in_dtype, kBoolName, DataType::BOOL, x, y,
-      [](TIn a, TIn b) -> uint8_t { return a == b ? 1 : 0; });
+      [](TIn a, TIn b) -> uint8_t { return a == b ? 1 : 0; }, allocator);
 }
 
 template <typename TIn>
@@ -84,7 +85,7 @@ void EqualStringInPlace(const Tensor &x, const Tensor &y, Tensor &output) {
   EXT_ENFORCE_INVALID(
       output.shape == bi.shape,
       "kernel::Equal preallocated output shape must match the broadcasted input shape.");
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(output.data.size()) == bi.element_count,
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(output.size_bytes()) == bi.element_count,
                       "kernel::Equal preallocated output ``data`` has unexpected size.");
   for (int64_t i = 0; i < bi.element_count; ++i) {
     const std::string &a = x.string_data[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
@@ -94,38 +95,40 @@ void EqualStringInPlace(const Tensor &x, const Tensor &y, Tensor &output) {
 }
 } // namespace
 
-Tensor Equal::operator()(const Tensor &x, const Tensor &y) const {
+Tensor Equal::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::BOOL:
-    return EqualAlloc<uint8_t>("BOOL", DataType::BOOL, x, y);
+    return EqualAlloc<uint8_t>("BOOL", DataType::BOOL, x, y, rt ? rt->allocator() : nullptr);
   case DataType::FLOAT:
-    return EqualAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+    return EqualAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);
   case DataType::DOUBLE:
-    return EqualAlloc<double>("DOUBLE", DataType::DOUBLE, x, y);
+    return EqualAlloc<double>("DOUBLE", DataType::DOUBLE, x, y, rt ? rt->allocator() : nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
+        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; },
+          rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
+        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; },
+          rt ? rt->allocator() : nullptr);
   case DataType::INT8:
-    return EqualAlloc<int8_t>("INT8", DataType::INT8, x, y);
+    return EqualAlloc<int8_t>("INT8", DataType::INT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT16:
-    return EqualAlloc<int16_t>("INT16", DataType::INT16, x, y);
+    return EqualAlloc<int16_t>("INT16", DataType::INT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return EqualAlloc<int32_t>("INT32", DataType::INT32, x, y);
+    return EqualAlloc<int32_t>("INT32", DataType::INT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return EqualAlloc<int64_t>("INT64", DataType::INT64, x, y);
+    return EqualAlloc<int64_t>("INT64", DataType::INT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT8:
-    return EqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
+    return EqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT16:
-    return EqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y);
+    return EqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return EqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
+    return EqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return EqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+    return EqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::STRING:
     EXT_ENFORCE_INVALID(y.data_type == static_cast<int32_t>(DataType::STRING),
                         "kernel::Equal inputs must share the same dtype.");

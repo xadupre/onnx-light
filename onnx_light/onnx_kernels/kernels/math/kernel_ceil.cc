@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -21,7 +22,7 @@ constexpr const char *kName = "kernel::Ceil";
 
 } // namespace
 
-Tensor Ceil::operator()(const Tensor &x) const {
+Tensor Ceil::operator()(const Tensor &x, RuntimeContext *rt) const {
   Tensor y("", x.data_type, x.shape,
            std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * x.element_size()));
   (*this)(x, y);

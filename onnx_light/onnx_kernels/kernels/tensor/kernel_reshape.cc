@@ -8,6 +8,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -89,7 +90,7 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &data, const std::vector<in
 
 } // namespace
 
-Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowzero) const {
+Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowzero, RuntimeContext *rt) const {
   const std::vector<int64_t> target = ReadShapeTensor(shape);
   const std::vector<int64_t> out_shape = ComputeOutputShape(data, target, allowzero);
   const std::size_t elem_size = ElementSize(data.data_type);
@@ -111,9 +112,9 @@ void Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowz
                       "kernel::Reshape: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::Reshape: preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == data.size_bytes(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == data.size_bytes(),
                       "kernel::Reshape: preallocated output byte-size mismatch.");
-  std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
+  std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
 }
 
 } // namespace kernel

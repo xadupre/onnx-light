@@ -9,6 +9,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -16,7 +17,7 @@ namespace kernel {
 
 Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &target,
                                              const Tensor *weight, const std::string &reduction,
-                                             bool has_ignore_index, int64_t ignore_index) const {
+                                             bool has_ignore_index, int64_t ignore_index, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(input.data_type == DataType::FLOAT,
                       "kernel::NegativeLogLikelihoodLoss only supports FLOAT input.");
   EXT_ENFORCE_INVALID(target.data_type == DataType::INT32 || target.data_type == DataType::INT64,

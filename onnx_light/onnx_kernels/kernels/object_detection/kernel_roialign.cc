@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -116,7 +117,7 @@ void ValidateInputs(const Tensor &x, const Tensor &rois, const Tensor &batch_ind
 } // namespace
 
 Tensor RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &batch_indices,
-                            const Attributes &attrs) const {
+                            const Attributes &attrs, RuntimeContext *rt) const {
   ValidateInputs(x, rois, batch_indices, attrs);
   const int64_t num_rois = rois.shape[0];
   const int64_t C = x.shape[1];
@@ -150,7 +151,7 @@ void RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &bat
                       "kernel::RoiAlign preallocated output shape must be "
                       "(num_rois, C, output_height, output_width).");
   const size_t expected_bytes = static_cast<size_t>(num_rois * C * out_h * out_w) * sizeof(float);
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::RoiAlign preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();

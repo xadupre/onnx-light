@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -37,7 +38,7 @@ std::vector<int64_t> ComputeFlattenOutputShape(const std::vector<int64_t> &in_sh
 
 } // namespace
 
-Tensor Flatten::operator()(const Tensor &input, int64_t axis) const {
+Tensor Flatten::operator()(const Tensor &input, int64_t axis, RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape = ComputeFlattenOutputShape(input.shape, axis);
   Tensor output("", input.data_type, out_shape,
                 std::vector<uint8_t>(PackedByteSize(input.data_type, input.element_count())));
@@ -51,10 +52,10 @@ void Flatten::operator()(const Tensor &input, int64_t axis, Tensor &output) cons
                       "kernel::Flatten: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::Flatten: preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == input.size_bytes(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == input.size_bytes(),
                       "kernel::Flatten: preallocated output byte-size mismatch.");
   if (input.size_bytes() > 0) {
-    std::memcpy(output.data.data(), input.bytes(), input.size_bytes());
+    std::memcpy(output.mutable_bytes(), input.bytes(), input.size_bytes());
   }
 }
 

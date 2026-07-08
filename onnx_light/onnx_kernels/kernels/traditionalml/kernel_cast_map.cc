@@ -12,6 +12,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -115,7 +116,7 @@ void FillStringOutput(const std::vector<int64_t> &input_keys, const std::vector<
 template <typename V, typename OutT>
 Tensor CastMap::operator()(const std::vector<int64_t> &input_keys,
                            const std::vector<V> &input_values, const std::string &cast_to,
-                           const std::string &map_form, int64_t max_map) const {
+                           const std::string &map_form, int64_t max_map, RuntimeContext *rt) const {
   ValidateAttributes(input_keys, input_values.size(), map_form, max_map);
   (void)cast_to; // cast_to is encoded in OutT; only validated by the caller.
 
@@ -131,7 +132,7 @@ Tensor CastMap::operator()(const std::vector<int64_t> &input_keys,
     std::vector<uint8_t> bytes(static_cast<std::size_t>(n) * sizeof(OutT), 0u);
     Tensor out("", static_cast<int32_t>(TensorElementType<OutT>::value), shape, std::move(bytes));
     FillNumericOutput<V, OutT>(input_keys, input_values, map_form,
-                               reinterpret_cast<OutT *>(out.data.data()));
+                               reinterpret_cast<OutT *>(out.mutable_bytes()));
     return out;
   }
 }
@@ -157,11 +158,11 @@ void CastMap::operator()(const std::vector<int64_t> &input_keys, const std::vect
                         "kernel::CastMap preallocated output dtype must match 'cast_to'.");
     EXT_ENFORCE_INVALID(output.shape == std::vector<int64_t>{n},
                         "kernel::CastMap preallocated output shape must be [N].");
-    EXT_ENFORCE_INVALID(output.data.size() == static_cast<std::size_t>(n) * sizeof(OutT),
+    EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(n) * sizeof(OutT),
                         "kernel::CastMap preallocated output buffer is incorrectly sized.");
     std::fill(output.data.begin(), output.data.end(), uint8_t{0u});
     FillNumericOutput<V, OutT>(input_keys, input_values, map_form,
-                               reinterpret_cast<OutT *>(output.data.data()));
+                               reinterpret_cast<OutT *>(output.mutable_bytes()));
   }
 }
 
@@ -169,7 +170,8 @@ void CastMap::operator()(const std::vector<int64_t> &input_keys, const std::vect
 #define ONNX_LIGHT_INSTANTIATE_CAST_MAP(V, OutT)                                                   \
   template Tensor CastMap::operator()<V, OutT>(const std::vector<int64_t> &,                       \
                                                const std::vector<V> &, const std::string &,        \
-                                               const std::string &, int64_t) const;                \
+                                               const std::string &, int64_t,                       \
+                                               RuntimeContext *) const;                            \
   template void CastMap::operator()<V, OutT>(const std::vector<int64_t> &, const std::vector<V> &, \
                                              const std::string &, const std::string &, int64_t,    \
                                              Tensor &) const

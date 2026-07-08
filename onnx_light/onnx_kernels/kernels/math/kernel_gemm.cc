@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -105,7 +106,7 @@ void GemmInPlace(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
                       std::to_string(n), "].");
   std::vector<T> result;
   GemmCompute<T>(a, b, c, alpha, beta, transA, transB, result);
-  std::memcpy(output.data.data(), result.data(), result.size() * sizeof(T));
+  std::memcpy(output.mutable_bytes(), result.data(), result.size() * sizeof(T));
 }
 
 constexpr const char *kSupportedGemmTypesMsg =
@@ -119,7 +120,7 @@ Tensor PromoteGemmInput(const Tensor &t) { return PromoteToFloat32(t); }
 } // namespace
 
 Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
-                        int64_t transA, int64_t transB) const {
+                        int64_t transA, int64_t transB, RuntimeContext *rt) const {
   switch (a.data_type) {
   case DataType::FLOAT:
     return GemmAlloc<float>(a, b, c, alpha, beta, transA, transB);
@@ -161,9 +162,9 @@ void Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float a
     Tensor y = (*this)(a, b, c, alpha, beta, transA, transB);
     EXT_ENFORCE_INVALID(output.shape == y.shape, kGemmName,
                         " preallocated output has an invalid shape.");
-    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(), kGemmName,
+    EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(), kGemmName,
                         " preallocated output buffer size does not match its shape.");
-    std::memcpy(output.data.data(), y.data.data(), y.data.size());
+    std::memcpy(output.mutable_bytes(), y.bytes(), y.size_bytes());
     return;
   }
   default:

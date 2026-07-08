@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -140,7 +141,7 @@ void CopyConcatenated(const std::vector<Tensor> &inputs, int resolved_axis,
 } // namespace
 
 Tensor ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t axis,
-                                      int64_t new_axis) const {
+                                      int64_t new_axis, RuntimeContext *rt) const {
   int resolved_axis = 0;
   std::vector<int64_t> out_shape;
   size_t elem_size = 0;
@@ -182,7 +183,7 @@ void ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t a
   const size_t total_bytes = static_cast<size_t>(elem_size) *
                              static_cast<size_t>(PrefixProduct(out_shape, out_shape.size()));
   EXT_ENFORCE_INVALID(
-      output.data.size() == total_bytes,
+      output.size_bytes() == total_bytes,
       "kernel::ConcatFromSequence preallocated output buffer has unexpected size in bytes.");
   if (new_axis == 1) {
     std::vector<Tensor> reshaped;

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -30,7 +31,7 @@ const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
 } // namespace
 
 Tensor GroupNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
-                                      int64_t num_groups, float epsilon) const {
+                                      int64_t num_groups, float epsilon, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GroupNormalization: X must be FLOAT.");
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
@@ -49,7 +50,7 @@ void GroupNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::GroupNormalization: output must have the same shape as X.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == x.size_bytes(),
+      output.size_bytes() == x.size_bytes(),
       "kernel::GroupNormalization: output buffer must have the same byte size as X.");
   EXT_ENFORCE_INVALID(num_groups > 0, "kernel::GroupNormalization: num_groups must be > 0.");
 

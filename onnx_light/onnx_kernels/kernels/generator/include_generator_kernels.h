@@ -12,6 +12,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
+// Forward declaration for allocator-aware operator() overloads.
+class RuntimeContext;
+
 namespace kernel {
 
 // ---------------------------------------------------------------------------
@@ -51,7 +54,7 @@ namespace kernel {
 class Constant : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &value) const;
+  Tensor operator()(const Tensor &value, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &value, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -78,7 +81,7 @@ public:
   /// taken from the operator's ``value`` attribute; pass a
   /// default-constructed ``Tensor`` to use the schema default
   /// (FLOAT 0.0).
-  Tensor operator()(const Tensor &shape, const Tensor &value) const;
+  Tensor operator()(const Tensor &shape, const Tensor &value, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &shape, const Tensor &value, Tensor &output) const;
 
   /// The output buffer has a different size than the inputs, so storage
@@ -92,7 +95,7 @@ public:
 class EyeLike : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &input, int64_t k = 0, int32_t dtype = 0) const;
+  Tensor operator()(const Tensor &input, int64_t k = 0, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -126,7 +129,7 @@ public:
   /// ``dtype`` is the value of the ``dtype`` attribute when present (a
   /// :cpp:class:`DataType` value); pass ``0`` to keep the
   /// output dtype identical to ``input.data_type``.
-  Tensor operator()(const Tensor &input, int64_t seed = kNoSeed, int32_t dtype = 0) const;
+  Tensor operator()(const Tensor &input, int64_t seed = kNoSeed, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, int64_t seed, int32_t dtype, Tensor &output) const;
 
   /// Sentinel value indicating the ``seed`` attribute is absent. Picked
@@ -163,7 +166,7 @@ public:
   /// schema default. ``seed`` selects the RNG seed; pass ``kNoSeed`` to
   /// use the kernel's default.
   Tensor operator()(const std::vector<int64_t> &shape, double mean = 0.0, double scale = 1.0,
-                    int64_t seed = kNoSeed, int32_t dtype = 0) const;
+                    int64_t seed = kNoSeed, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
   void operator()(const std::vector<int64_t> &shape, double mean, double scale, int64_t seed,
                   int32_t dtype, Tensor &output) const;
 
@@ -190,7 +193,7 @@ public:
   /// ``DataType::FLOAT``. ``seed`` selects the RNG seed; pass ``kNoSeed``
   /// to use the kernel's default.
   Tensor operator()(const std::vector<int64_t> &shape, double low = 0.0, double high = 1.0,
-                    int64_t seed = kNoSeed, int32_t dtype = 0) const;
+                    int64_t seed = kNoSeed, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
   void operator()(const std::vector<int64_t> &shape, double low, double high, int64_t seed,
                   int32_t dtype, Tensor &output) const;
 
@@ -209,7 +212,7 @@ class RandomNormalLike : public KernelBase {
 public:
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, double mean = 0.0, double scale = 1.0,
-                    int64_t seed = kNoSeed, int32_t dtype = 0) const;
+                    int64_t seed = kNoSeed, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, double mean, double scale, int64_t seed, int32_t dtype,
                   Tensor &output) const;
 
@@ -225,7 +228,7 @@ class RandomUniformLike : public KernelBase {
 public:
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, double low = 0.0, double high = 1.0,
-                    int64_t seed = kNoSeed, int32_t dtype = 0) const;
+                    int64_t seed = kNoSeed, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, double low, double high, int64_t seed, int32_t dtype,
                   Tensor &output) const;
 
@@ -258,7 +261,7 @@ public:
   /// :cpp:enumerator:`DataType::INT32`) to produce ``INT32`` output, or
   /// :cpp:enumerator:`DataType::INT64` for ``INT64`` output.
   Tensor operator()(const Tensor &input, int64_t sample_size = 1, int64_t seed = kNoSeed,
-                    int32_t dtype = 0) const;
+                    int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, int64_t sample_size, int64_t seed, int32_t dtype,
                   Tensor &output) const;
 
@@ -290,7 +293,7 @@ public:
 class Range : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &start, const Tensor &limit, const Tensor &delta) const;
+  Tensor operator()(const Tensor &start, const Tensor &limit, const Tensor &delta, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
                   Tensor &output) const;
 

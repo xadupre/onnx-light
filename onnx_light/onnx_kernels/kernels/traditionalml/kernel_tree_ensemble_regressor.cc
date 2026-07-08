@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -26,7 +27,7 @@ Tensor TreeEnsembleRegressor::operator()(
     const std::vector<int64_t> &target_nodeids, const std::vector<int64_t> &target_ids,
     const std::vector<float> &target_weights, int64_t n_targets,
     const std::string &aggregate_function, const std::string &post_transform,
-    const std::vector<float> &base_values) const {
+    const std::vector<float> &base_values, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(n_targets >= 1, "kernel::TreeEnsembleRegressor: n_targets must be >= 1.");
   EXT_ENFORCE_INVALID(post_transform == "NONE",
                       "kernel::TreeEnsembleRegressor: only post_transform 'NONE' is supported.");
@@ -111,7 +112,7 @@ Tensor TreeEnsembleRegressor::operator()(
       const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
       const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
       const std::vector<float> &, int64_t, const std::string &, const std::string &,               \
-      const std::vector<float> &) const
+      const std::vector<float> &, RuntimeContext *) const
 
 ONNX_LIGHT_INSTANTIATE_TREE_REGRESSOR(float);
 ONNX_LIGHT_INSTANTIATE_TREE_REGRESSOR(double);

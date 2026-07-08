@@ -9,6 +9,7 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -80,7 +81,7 @@ void LookupAndFill(const Tensor &x, const std::vector<std::string> &cats_strings
 template <typename InT, typename OutT>
 Tensor CategoryMapper::operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
                                   const std::vector<int64_t> &cats_int64s,
-                                  OutT default_value) const {
+                                  OutT default_value, RuntimeContext *rt) const {
   ValidateInputs<InT, OutT>(x, cats_strings, cats_int64s);
   const int64_t n = x.element_count();
   if constexpr (std::is_same_v<OutT, std::string>) {
@@ -92,7 +93,7 @@ Tensor CategoryMapper::operator()(const Tensor &x, const std::vector<std::string
   } else {
     std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(OutT));
     Tensor out("", TensorElementType<OutT>::value, x.shape, std::move(bytes));
-    OutT *po = reinterpret_cast<OutT *>(out.data.data());
+    OutT *po = reinterpret_cast<OutT *>(out.mutable_bytes());
     LookupAndFill<InT, OutT>(x, cats_strings, cats_int64s, default_value,
                              [po](int64_t i, OutT v) { po[i] = v; });
     return out;
@@ -120,7 +121,7 @@ void CategoryMapper::operator()(const Tensor &x, const std::vector<std::string> 
     EXT_ENFORCE_INVALID(output.data_type == TensorElementType<OutT>::value,
                         "kernel::CategoryMapper preallocated output dtype must be INT64 for "
                         "string → int64 mapping.");
-    EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(x.element_count()) * sizeof(OutT),
+    EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(x.element_count()) * sizeof(OutT),
                         "kernel::CategoryMapper preallocated output buffer is incorrectly sized.");
     OutT *po = output.As<OutT>();
     LookupAndFill<InT, OutT>(x, cats_strings, cats_int64s, default_value,
@@ -133,7 +134,7 @@ void CategoryMapper::operator()(const Tensor &x, const std::vector<std::string> 
 template Tensor CategoryMapper::operator()<std::string, int64_t>(const Tensor &,
                                                                  const std::vector<std::string> &,
                                                                  const std::vector<int64_t> &,
-                                                                 int64_t) const;
+                                                                 int64_t, RuntimeContext *) const;
 template void CategoryMapper::operator()<std::string, int64_t>(const Tensor &,
                                                                const std::vector<std::string> &,
                                                                const std::vector<int64_t> &,
@@ -141,7 +142,7 @@ template void CategoryMapper::operator()<std::string, int64_t>(const Tensor &,
 template Tensor CategoryMapper::operator()<int64_t, std::string>(const Tensor &,
                                                                  const std::vector<std::string> &,
                                                                  const std::vector<int64_t> &,
-                                                                 std::string) const;
+                                                                 std::string, RuntimeContext *) const;
 template void CategoryMapper::operator()<int64_t, std::string>(const Tensor &,
                                                                const std::vector<std::string> &,
                                                                const std::vector<int64_t> &,

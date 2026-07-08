@@ -8,6 +8,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -31,7 +32,7 @@ int64_t ReadK(const Tensor *k) {
 } // namespace
 
 Tensor Trilu::operator()(const Tensor &input, const Tensor *k,
-                         const Trilu::Attributes &attrs) const {
+                         const Trilu::Attributes &attrs, RuntimeContext *rt) const {
   Tensor output;
   output.name = "";
   output.data_type = input.data_type;
@@ -78,7 +79,7 @@ void Trilu::operator()(const Tensor &input, const Tensor *k, const Trilu::Attrib
     EXT_ENFORCE_INVALID(static_cast<int64_t>(input.size_bytes()) ==
                             static_cast<int64_t>(PackedByteSize(input.data_type, total)),
                         "kernel::Trilu: input data size does not match shape.");
-    EXT_ENFORCE_INVALID(static_cast<int64_t>(output.data.size()) ==
+    EXT_ENFORCE_INVALID(static_cast<int64_t>(output.size_bytes()) ==
                             static_cast<int64_t>(PackedByteSize(input.data_type, total)),
                         "kernel::Trilu: output data size does not match shape.");
   }
@@ -98,10 +99,10 @@ void Trilu::operator()(const Tensor &input, const Tensor *k, const Trilu::Attrib
           output.string_data[static_cast<std::size_t>(flat)] =
               keep ? input.string_data[static_cast<std::size_t>(flat)] : std::string();
         } else if (keep) {
-          std::memcpy(output.data.data() + static_cast<std::size_t>(flat) * elem_size,
+          std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(flat) * elem_size,
                       input.bytes() + static_cast<std::size_t>(flat) * elem_size, elem_size);
         } else {
-          std::memset(output.data.data() + static_cast<std::size_t>(flat) * elem_size, 0,
+          std::memset(output.mutable_bytes() + static_cast<std::size_t>(flat) * elem_size, 0,
                       elem_size);
         }
       }

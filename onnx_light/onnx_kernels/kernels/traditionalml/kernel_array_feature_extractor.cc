@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -69,7 +70,7 @@ void GatherLastAxis(const Tensor &x, const Tensor &indices, const std::vector<in
 } // namespace
 
 template <typename T>
-Tensor ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices) const {
+Tensor ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices, RuntimeContext *rt) const {
   ValidateInput<T>(x);
   ValidateIndices(x, indices);
   const std::vector<int64_t> out_shape = ComputeOutputShape(x, indices);
@@ -93,13 +94,14 @@ void ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices,
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
                       "kernel::ArrayFeatureExtractor preallocated output shape is incorrect.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(indices.element_count() * outer) * sizeof(T),
+      output.size_bytes() == static_cast<size_t>(indices.element_count() * outer) * sizeof(T),
       "kernel::ArrayFeatureExtractor preallocated output buffer is incorrectly sized.");
   GatherLastAxis<T>(x, indices, expected_shape, output.As<T>());
 }
 
 #define ONNX_LIGHT_INSTANTIATE_ARRAY_FEATURE_EXTRACTOR(T)                                          \
-  template Tensor ArrayFeatureExtractor::operator()<T>(const Tensor &, const Tensor &) const;      \
+  template Tensor ArrayFeatureExtractor::operator()<T>(const Tensor &, const Tensor &,            \
+                                                       RuntimeContext *) const;                    \
   template void ArrayFeatureExtractor::operator()<T>(const Tensor &, const Tensor &, Tensor &) const
 
 ONNX_LIGHT_INSTANTIATE_ARRAY_FEATURE_EXTRACTOR(float);

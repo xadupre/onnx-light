@@ -13,6 +13,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
+// Forward declaration for allocator-aware operator() overloads.
+class RuntimeContext;
+
 namespace kernel {
 
 /// Reference implementation of the light-only ``ai.rt::DelayedInitializer`` op.
@@ -31,7 +34,7 @@ public:
   DelayedInitializer(const KernelContext &ctx, Attributes attrs);
 
   /// Returns the initialized tensor, loading bytes at execution time when needed.
-  Tensor operator()() const;
+  Tensor operator()(RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 

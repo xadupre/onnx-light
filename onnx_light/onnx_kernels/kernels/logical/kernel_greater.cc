@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -24,10 +25,10 @@ constexpr const char *kBoolName = "BOOL";
 // resulting "kernel::Greater only supports <DTYPE> inputs." message is
 // self-explanatory.
 template <typename TIn>
-Tensor GreaterAlloc(const char *in_dtype_name, int32_t in_dtype, const Tensor &x, const Tensor &y) {
+Tensor GreaterAlloc(const char *in_dtype_name, int32_t in_dtype, const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAllocInOut<TIn, uint8_t>(
       kGreaterName, in_dtype_name, in_dtype, kBoolName, DataType::BOOL, x, y,
-      [](TIn a, TIn b) -> uint8_t { return a > b ? 1 : 0; });
+      [](TIn a, TIn b) -> uint8_t { return a > b ? 1 : 0; }, allocator);
 }
 
 template <typename TIn>
@@ -39,34 +40,36 @@ void GreaterInPlace(const char *in_dtype_name, int32_t in_dtype, const Tensor &x
 }
 } // namespace
 
-Tensor Greater::operator()(const Tensor &x, const Tensor &y) const {
+Tensor Greater::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT:
-    return GreaterAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+    return GreaterAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kGreaterName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; });
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; },
+          rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kGreaterName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; });
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; },
+          rt ? rt->allocator() : nullptr);
   case DataType::INT8:
-    return GreaterAlloc<int8_t>("INT8", DataType::INT8, x, y);
+    return GreaterAlloc<int8_t>("INT8", DataType::INT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT16:
-    return GreaterAlloc<int16_t>("INT16", DataType::INT16, x, y);
+    return GreaterAlloc<int16_t>("INT16", DataType::INT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return GreaterAlloc<int32_t>("INT32", DataType::INT32, x, y);
+    return GreaterAlloc<int32_t>("INT32", DataType::INT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return GreaterAlloc<int64_t>("INT64", DataType::INT64, x, y);
+    return GreaterAlloc<int64_t>("INT64", DataType::INT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT8:
-    return GreaterAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
+    return GreaterAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT16:
-    return GreaterAlloc<uint16_t>("UINT16", DataType::UINT16, x, y);
+    return GreaterAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return GreaterAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
+    return GreaterAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return GreaterAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+    return GreaterAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kGreaterName, ": unsupported data type ", x.data_type,
                       ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "

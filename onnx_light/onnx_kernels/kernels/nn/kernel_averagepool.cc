@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -89,7 +90,7 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
                                const std::vector<int64_t> &strides,
                                const std::vector<int64_t> &pads, bool ceil_mode,
                                bool count_include_pad, const std::vector<int64_t> &dilations,
-                               const std::string &auto_pad) const {
+                               const std::string &auto_pad, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(),
@@ -232,11 +233,11 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
     n_out *= d;
   }
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(n_out) * sizeof(float),
+      output.size_bytes() == static_cast<size_t>(n_out) * sizeof(float),
       "kernel::AveragePool preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();
-  float *py = reinterpret_cast<float *>(output.data.data());
+  float *py = reinterpret_cast<float *>(output.mutable_bytes());
 
   const std::vector<int64_t> in_strides = RowMajorStrides(x.shape);
   const std::vector<int64_t> out_strides = RowMajorStrides(output.shape);

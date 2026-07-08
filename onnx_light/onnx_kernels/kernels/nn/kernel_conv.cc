@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -116,7 +117,7 @@ std::vector<int64_t> ComputeOutputSpatial(const Tensor &x, Conv::Attributes &att
 } // namespace
 
 Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b,
-                        const Attributes &attrs) const {
+                        const Attributes &attrs, RuntimeContext *rt) const {
   // FLOAT16/BFLOAT16 are computed in float32 and demoted back; this mirrors
   // the half-precision dispatch used by kernel::MatMul and lets the expanded
   // ``CausalConvWithState`` function (which lowers to a half-precision Conv)
@@ -157,9 +158,9 @@ void Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const A
     Tensor y = (*this)(x, w, b, attrs);
     EXT_ENFORCE_INVALID(output.shape == y.shape,
                         "kernel::Conv preallocated output shape must equal (N, M, oD1, ..., oDk).");
-    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(),
+    EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(),
                         "kernel::Conv preallocated output buffer has unexpected size.");
-    std::memcpy(output.data.data(), y.data.data(), y.data.size());
+    std::memcpy(output.mutable_bytes(), y.bytes(), y.size_bytes());
     return;
   }
   Attributes resolved = attrs;
@@ -181,7 +182,7 @@ void Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const A
   for (int64_t d : expected_shape) {
     total *= d;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(float),
                       "kernel::Conv preallocated output buffer has unexpected size.");
 
   const size_t spatial_rank = x.shape.size() - 2;

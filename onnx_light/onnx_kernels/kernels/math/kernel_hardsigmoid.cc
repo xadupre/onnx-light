@@ -6,12 +6,13 @@
 
 #include <algorithm>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor HardSigmoid::operator()(const Tensor &x, float alpha, float beta) const {
+Tensor HardSigmoid::operator()(const Tensor &x, float alpha, float beta, RuntimeContext *rt) const {
   Tensor y("", DataType::FLOAT, x.shape,
            std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
   (*this)(x, alpha, beta, y);
@@ -28,7 +29,7 @@ void HardSigmoid::operator()(const Tensor &x, float alpha, float beta, Tensor &o
   const int64_t n = x.element_count();
   const size_t expected_bytes = static_cast<size_t>(n) * sizeof(float);
   EXT_ENFORCE_INVALID(
-      output.data.size() == expected_bytes,
+      output.size_bytes() == expected_bytes,
       "kernel::HardSigmoid preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();

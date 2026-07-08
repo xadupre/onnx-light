@@ -6,12 +6,13 @@
 
 #include <cstring>
 #include <stdexcept>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor Constant::operator()(const Tensor &value) const {
+Tensor Constant::operator()(const Tensor &value, RuntimeContext *rt) const {
   Tensor out("", value.data_type, value.shape, std::vector<uint8_t>(value.size_bytes()));
   (*this)(value, out);
   return out;
@@ -23,10 +24,10 @@ void Constant::operator()(const Tensor &value, Tensor &output) const {
       "kernel::Constant preallocated output must have the same data type as the value.");
   EXT_ENFORCE_INVALID(output.shape == value.shape,
                       "kernel::Constant preallocated output shape must match the value shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == value.size_bytes(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == value.size_bytes(),
                       "kernel::Constant preallocated output buffer has unexpected size in bytes.");
   if (value.size_bytes() > 0) {
-    std::memcpy(output.data.data(), value.bytes(), value.size_bytes());
+    std::memcpy(output.mutable_bytes(), value.bytes(), value.size_bytes());
   }
 }
 

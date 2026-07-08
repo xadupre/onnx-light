@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -206,7 +207,7 @@ void RunMatMulInteger(const Tensor &a, const std::vector<int32_t> &a_zps, const 
 } // namespace
 
 Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
-                                 const Tensor &b_zero_point) const {
+                                 const Tensor &b_zero_point, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": A must be INT8 or UINT8.");
   EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": B must be INT8 or UINT8.");
 
@@ -234,7 +235,7 @@ void MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a
   for (int64_t d : out_shape) {
     total *= d;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * sizeof(int32_t), kName,
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(int32_t), kName,
                       ": preallocated output buffer size does not match its shape.");
 
   const std::vector<int64_t> a2 = PromoteMatMulShape(a.shape, true);

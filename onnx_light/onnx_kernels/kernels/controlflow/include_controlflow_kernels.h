@@ -68,7 +68,8 @@ namespace kernel {
 class If : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value) const;
+  Tensor operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
                   Tensor &output) const;
 

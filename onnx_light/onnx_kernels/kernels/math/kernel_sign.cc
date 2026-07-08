@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -23,7 +24,7 @@ constexpr const char *kName = "kernel::Sign";
 template <typename T> void SignUnsigned(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
-  T *py = reinterpret_cast<T *>(output.data.data());
+  T *py = reinterpret_cast<T *>(output.mutable_bytes());
   for (int64_t i = 0; i < n; ++i) {
     py[i] = px[i] > T{0} ? T{1} : T{0};
   }
@@ -33,7 +34,7 @@ template <typename T> void SignUnsigned(const Tensor &x, Tensor &output) {
 template <typename T> void SignSigned(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
-  T *py = reinterpret_cast<T *>(output.data.data());
+  T *py = reinterpret_cast<T *>(output.mutable_bytes());
   for (int64_t i = 0; i < n; ++i) {
     py[i] = px[i] > T{0} ? T{1} : (px[i] < T{0} ? T{-1} : T{0});
   }
@@ -41,7 +42,7 @@ template <typename T> void SignSigned(const Tensor &x, Tensor &output) {
 
 } // namespace
 
-Tensor Sign::operator()(const Tensor &x) const {
+Tensor Sign::operator()(const Tensor &x, RuntimeContext *rt) const {
   Tensor y("", x.data_type, x.shape,
            std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * x.element_size()));
   (*this)(x, y);
@@ -52,7 +53,7 @@ void Sign::operator()(const Tensor &x, Tensor &output) const {
   EXT_ENFORCE_INVALID(output.data_type == x.data_type, kName,
                       ": output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), kName, ": output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(), kName, ": output buffer size mismatch.");
   const int64_t n = x.element_count();
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT: {

@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -67,7 +68,7 @@ Tensor MinAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
   }
   Tensor z("", dtype, out_shape, std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(T)));
   if (inputs.size() == 1) {
-    std::memcpy(z.data.data(), inputs[0].bytes(),
+    std::memcpy(z.mutable_bytes(), inputs[0].bytes(),
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
     return z;
   }
@@ -92,7 +93,7 @@ void MinInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
   }();
   detail::CheckPreallocatedOutput(kMinName, dtype_name, dtype, out_shape, expected_bytes, output);
   if (inputs.size() == 1) {
-    std::memcpy(output.data.data(), inputs[0].bytes(),
+    std::memcpy(output.mutable_bytes(), inputs[0].bytes(),
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
     return;
   }
@@ -117,7 +118,7 @@ void MinInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
   MACRO(UINT32, uint32_t, "UINT32")                                                                \
   MACRO(UINT64, uint64_t, "UINT64")
 
-Tensor MinFloat16Alloc(const std::vector<Tensor> &inputs) {
+Tensor MinFloat16Alloc(const std::vector<Tensor> &inputs, RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
     EXT_ENFORCE_INVALID(inputs[i].data_type == DataType::FLOAT16, kMinName,
@@ -130,7 +131,8 @@ Tensor MinFloat16Alloc(const std::vector<Tensor> &inputs) {
   }
   Tensor z = detail::BinaryHalfElementwiseAlloc(kMinName, "FLOAT16", DataType::FLOAT16, inputs[0],
                                                 inputs[1], Float16BitsToFloat, FloatToFloat16Bits,
-                                                MinOf<float>);
+                                                MinOf<float>,
+          allocator);
   for (size_t i = 2; i < inputs.size(); ++i) {
     Tensor partial = z;
     detail::BinaryHalfElementwise(kMinName, "FLOAT16", DataType::FLOAT16, partial, inputs[i], z,
@@ -146,7 +148,7 @@ void MinFloat16InPlace(const std::vector<Tensor> &inputs, Tensor &output) {
                         " only supports FLOAT16 tensors.");
   }
   if (inputs.size() == 1) {
-    std::memcpy(output.data.data(), inputs[0].bytes(), inputs[0].data.size());
+    std::memcpy(output.mutable_bytes(), inputs[0].bytes(), inputs[0].size_bytes());
     return;
   }
   detail::BinaryHalfElementwise(kMinName, "FLOAT16", DataType::FLOAT16, inputs[0], inputs[1],
@@ -160,7 +162,7 @@ void MinFloat16InPlace(const std::vector<Tensor> &inputs, Tensor &output) {
 
 } // namespace
 
-Tensor Min::operator()(const std::vector<Tensor> &inputs) const {
+Tensor Min::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   switch (inputs[0].data_type) {
 #define ONNX_LIGHT_MIN_CASE_ALLOC(ENUM, CPP, NAME)                                                 \
@@ -169,7 +171,7 @@ Tensor Min::operator()(const std::vector<Tensor> &inputs) const {
     ONNX_LIGHT_MIN_DISPATCH(ONNX_LIGHT_MIN_CASE_ALLOC)
 #undef ONNX_LIGHT_MIN_CASE_ALLOC
   case DataType::FLOAT16:
-    return MinFloat16Alloc(inputs);
+    return MinFloat16Alloc(inputs, rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kMinName, ": unsupported data type ", inputs[0].data_type,
                       kSupportedMinTypesMsg);

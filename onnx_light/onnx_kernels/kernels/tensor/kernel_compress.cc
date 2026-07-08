@@ -9,6 +9,7 @@
 #include <optional>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -42,7 +43,7 @@ std::vector<bool> ReadCondition(const Tensor &condition) {
 } // namespace
 
 Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
-                            std::optional<int64_t> axis) const {
+                            std::optional<int64_t> axis, RuntimeContext *rt) const {
   const std::vector<bool> cond = ReadCondition(condition);
   const std::size_t cond_len = cond.size();
   const std::size_t elem_size = ElementSize(input.data_type);
@@ -63,7 +64,7 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
       const std::size_t src_off =
           static_cast<std::size_t>(selected_indices[static_cast<std::size_t>(k)]) * elem_size;
       const std::size_t dst_off = static_cast<std::size_t>(k) * elem_size;
-      std::memcpy(output.data.data() + dst_off, input.data.data() + src_off, elem_size);
+      std::memcpy(output.mutable_bytes() + dst_off, input.bytes() + src_off, elem_size);
     }
     return output;
   }
@@ -133,7 +134,7 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
       // Source flat offset for this (outer, axis_idx) block.
       const int64_t src_base = (o * axis_dim + src_axis) * inner;
       const int64_t dst_base = (o * selected_count + s) * inner;
-      std::memcpy(output.data.data() + static_cast<std::size_t>(dst_base) * elem_size,
+      std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(dst_base) * elem_size,
                   input.bytes() + static_cast<std::size_t>(src_base) * elem_size,
                   static_cast<std::size_t>(inner) * elem_size);
     }
@@ -148,10 +149,10 @@ void Compress::operator()(const Tensor &input, const Tensor &condition, std::opt
                       "kernel::Compress: preallocated output dtype must match.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,
                       "kernel::Compress: preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
                       "kernel::Compress: preallocated output buffer size mismatch.");
   if (!produced.data.empty()) {
-    std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
+    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

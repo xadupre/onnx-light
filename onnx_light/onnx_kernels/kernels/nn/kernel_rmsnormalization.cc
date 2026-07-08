@@ -12,6 +12,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -49,7 +50,7 @@ void CheckScaleBroadcast(const std::vector<int64_t> &x_shape, int64_t axis,
 } // namespace
 
 Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_t axis,
-                                    float epsilon) const {
+                                    float epsilon, RuntimeContext *rt) const {
   // FLOAT16/BFLOAT16 are computed in float32 and demoted back, mirroring the
   // half-precision dispatch used by kernel::Conv and kernel::MatMul. This lets
   // half-precision language models (e.g. the tiny Llama-style decoder) run
@@ -76,9 +77,9 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
     Tensor y = (*this)(x, scale, axis, epsilon);
     EXT_ENFORCE_INVALID(output.shape == y.shape,
                         "kernel::RMSNormalization: output must have the same shape as X.");
-    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(),
+    EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(),
                         "kernel::RMSNormalization: output buffer has unexpected size.");
-    std::memcpy(output.data.data(), y.data.data(), y.data.size());
+    std::memcpy(output.mutable_bytes(), y.bytes(), y.size_bytes());
     return;
   }
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
@@ -89,7 +90,7 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
                       "kernel::RMSNormalization: output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::RMSNormalization: output must have the same shape as X.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.size_bytes(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(),
                       "kernel::RMSNormalization: output buffer must have the same byte size as X.");
 
   const int64_t rank = static_cast<int64_t>(x.shape.size());

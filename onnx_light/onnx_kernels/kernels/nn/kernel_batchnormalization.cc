@@ -10,6 +10,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -33,7 +34,7 @@ const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
 
 Tensor BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                                       const Tensor &input_mean, const Tensor &input_var,
-                                      float epsilon) const {
+                                      float epsilon, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::BatchNormalization: X must be FLOAT.");
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
@@ -53,7 +54,7 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::BatchNormalization: output must have the same shape as X.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == x.size_bytes(),
+      output.size_bytes() == x.size_bytes(),
       "kernel::BatchNormalization: output buffer must have the same byte size as X.");
 
   // Per the opset 9+ spec, when X is rank 1 it is interpreted as N values

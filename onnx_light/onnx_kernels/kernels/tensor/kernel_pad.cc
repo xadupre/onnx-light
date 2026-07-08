@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -149,7 +150,7 @@ int64_t MapCoord(int64_t out_coord, int64_t pad_begin, int64_t input_dim, const 
 } // namespace
 
 Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
-                       const Tensor *axes, const std::string &mode) const {
+                       const Tensor *axes, const std::string &mode, RuntimeContext *rt) const {
   const std::size_t rank = data.shape.size();
   const std::vector<int64_t> axes_vec = ResolveAxes(axes, rank);
   const std::vector<int64_t> pads_vec = ReadInt64Vector(pads, "pads");
@@ -244,7 +245,7 @@ void Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *const
       }
       in_idx += mapped * in_strides[k];
     }
-    uint8_t *const dst = output.data.data() + static_cast<std::size_t>(out_idx) * elem_size;
+    uint8_t *const dst = output.mutable_bytes() + static_cast<std::size_t>(out_idx) * elem_size;
     if (is_pad) {
       std::memcpy(dst, constant_bytes.data(), elem_size);
     } else {

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <limits>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -32,7 +33,7 @@ void ValidateInputs(const Tensor &x, const Tensor &rois, const MaxRoiPool::Attri
 
 } // namespace
 
-Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs) const {
+Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs, RuntimeContext *rt) const {
   ValidateInputs(x, rois, attrs);
   const int64_t num_rois = rois.shape[0];
   const int64_t C = x.shape[1];
@@ -69,7 +70,7 @@ void MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attribute
   const size_t expected_bytes =
       static_cast<size_t>(num_rois * C * pooled_h * pooled_w) * sizeof(float);
   EXT_ENFORCE_INVALID(
-      output.data.size() == expected_bytes,
+      output.size_bytes() == expected_bytes,
       "kernel::MaxRoiPool preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();

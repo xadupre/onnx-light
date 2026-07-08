@@ -11,6 +11,7 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -139,7 +140,7 @@ void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y
   EXT_ENFORCE_INVALID(
       output.shape == bi.shape,
       "kernel::Where preallocated output shape must match the broadcasted input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(bi.element_count) * sizeof(T),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(bi.element_count) * sizeof(T),
                       "kernel::Where preallocated output buffer has unexpected size in bytes.");
 
   const uint8_t *pc = condition.AsBool();
@@ -235,7 +236,7 @@ void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &
 
 } // namespace
 
-Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y) const {
+Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::BOOL:
     return WhereAllocTyped<uint8_t>(condition, x, y);

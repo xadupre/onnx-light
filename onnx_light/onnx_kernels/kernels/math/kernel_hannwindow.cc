@@ -7,12 +7,13 @@
 #include <cmath>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor HannWindow::operator()(const Tensor &size, bool periodic) const {
+Tensor HannWindow::operator()(const Tensor &size, bool periodic, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(size.data_type == DataType::INT32,
                       "kernel::HannWindow expects an INT32 size tensor.");
   EXT_ENFORCE_INVALID(size.element_count() == 1 && size.shape.empty(),
@@ -39,7 +40,7 @@ void HannWindow::operator()(const Tensor &size, bool periodic, Tensor &output) c
                       "kernel::HannWindow preallocated output shape must be {size}.");
   const size_t expected_bytes = static_cast<size_t>(n) * sizeof(float);
   EXT_ENFORCE_INVALID(
-      output.data.size() == expected_bytes,
+      output.size_bytes() == expected_bytes,
       "kernel::HannWindow preallocated output buffer has unexpected size in bytes.");
 
   constexpr double kPi = 3.14159265358979323846;

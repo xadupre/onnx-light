@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -67,7 +68,7 @@ Tensor SumAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
   if (inputs.size() == 1) {
     // Single input: copy verbatim. We still go through the broadcast check
     // above so a malformed input shape would have already thrown.
-    std::memcpy(z.data.data(), inputs[0].bytes(),
+    std::memcpy(z.mutable_bytes(), inputs[0].bytes(),
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
     return z;
   }
@@ -99,7 +100,7 @@ void SumInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
   }();
   detail::CheckPreallocatedOutput(kSumName, dtype_name, dtype, out_shape, expected_bytes, output);
   if (inputs.size() == 1) {
-    std::memcpy(output.data.data(), inputs[0].bytes(),
+    std::memcpy(output.mutable_bytes(), inputs[0].bytes(),
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
     return;
   }
@@ -114,7 +115,7 @@ void SumInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
 
 } // namespace
 
-Tensor Sum::operator()(const std::vector<Tensor> &inputs) const {
+Tensor Sum::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:

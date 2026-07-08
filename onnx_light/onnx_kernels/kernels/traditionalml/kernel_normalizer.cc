@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -108,13 +109,13 @@ template <typename T> void ApplyNormalizer(const Tensor &x, NormMode mode, float
 } // namespace
 
 template <typename T>
-Tensor Normalizer::operator()(const Tensor &x, const std::string &norm) const {
+Tensor Normalizer::operator()(const Tensor &x, const std::string &norm, RuntimeContext *rt) const {
   ValidateInput<T>(x);
   const NormMode mode = ParseNorm(norm);
   const int64_t n = x.element_count();
   std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(float));
   Tensor out("", TensorElementType<float>::value, x.shape, std::move(bytes));
-  ApplyNormalizer<T>(x, mode, reinterpret_cast<float *>(out.data.data()));
+  ApplyNormalizer<T>(x, mode, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }
 
@@ -126,14 +127,14 @@ void Normalizer::operator()(const Tensor &x, const std::string &norm, Tensor &ou
                       "kernel::Normalizer preallocated output dtype must be float.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::Normalizer preallocated output shape must match the input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(x.element_count()) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(x.element_count()) * sizeof(float),
                       "kernel::Normalizer preallocated output buffer is incorrectly sized.");
   ApplyNormalizer<T>(x, mode, output.As<float>());
 }
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_NORMALIZER(T)                                                       \
-  template Tensor Normalizer::operator()<T>(const Tensor &, const std::string &) const;            \
+  template Tensor Normalizer::operator()<T>(const Tensor &, const std::string &, RuntimeContext *) const;            \
   template void Normalizer::operator()<T>(const Tensor &, const std::string &, Tensor &) const
 
 ONNX_LIGHT_INSTANTIATE_NORMALIZER(float);

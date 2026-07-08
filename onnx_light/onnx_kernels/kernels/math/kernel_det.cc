@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -59,7 +60,7 @@ float DeterminantInPlace(float *a, int64_t m) {
 
 } // namespace
 
-Tensor Det::operator()(const Tensor &x) const {
+Tensor Det::operator()(const Tensor &x, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.shape.size() >= 2, "kernel::Det requires an input tensor of rank >= 2.");
   const int64_t m = x.shape[x.shape.size() - 1];
   const int64_t m2 = x.shape[x.shape.size() - 2];
@@ -91,7 +92,7 @@ void Det::operator()(const Tensor &x, Tensor &output) const {
   for (int64_t d : expected_out_shape)
     batch *= d;
   const size_t expected_bytes = static_cast<size_t>(batch) * sizeof(float);
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::Det preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();

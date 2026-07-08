@@ -12,6 +12,7 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -165,7 +166,7 @@ void PowDispatchExp(const Tensor &x, const Tensor &y, Tensor &output,
                     const detail::BroadcastInfo &bi) {
   const TBase *px = reinterpret_cast<const TBase *>(x.bytes());
   const TExp *py = reinterpret_cast<const TExp *>(y.bytes());
-  TBase *pz = reinterpret_cast<TBase *>(output.data.data());
+  TBase *pz = reinterpret_cast<TBase *>(output.mutable_bytes());
   PowLoop<TBase, TExp>(bi, px, py, pz);
 }
 
@@ -195,7 +196,7 @@ void PowDispatchHalfExp(const Tensor &x, const Tensor &y, Tensor &output,
                         detail::HalfEncodeFunc encode) {
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   const TExp *py = reinterpret_cast<const TExp *>(y.bytes());
-  uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
+  uint16_t *pz = reinterpret_cast<uint16_t *>(output.mutable_bytes());
   PowHalfLoop<TExp>(bi, px, py, pz, decode, encode);
 }
 
@@ -212,7 +213,7 @@ void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
     for (int64_t i = 0; i < ny; ++i)
       fy[static_cast<size_t>(i)] = Float16BitsToFloat(raw_py[i]);
     const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
-    uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
+    uint16_t *pz = reinterpret_cast<uint16_t *>(output.mutable_bytes());
     return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
   }
   case DataType::BFLOAT16: {
@@ -222,7 +223,7 @@ void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
     for (int64_t i = 0; i < ny; ++i)
       fy[static_cast<size_t>(i)] = Bfloat16BitsToFloat(raw_py[i]);
     const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
-    uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
+    uint16_t *pz = reinterpret_cast<uint16_t *>(output.mutable_bytes());
     return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
   }
   case DataType::INT32:
@@ -292,7 +293,7 @@ void PowDispatch(const Tensor &x, const Tensor &y, Tensor &output,
 }
 } // namespace
 
-Tensor Pow::operator()(const Tensor &x, const Tensor &y) const {
+Tensor Pow::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   const detail::BroadcastInfo bi = BroadcastShape(x, y);
   const size_t elem_size = BaseDtypeSize(x.data_type);
   Tensor z("", x.data_type, bi.shape,

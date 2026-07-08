@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -81,7 +82,7 @@ std::vector<int64_t> StringNormalizer::ComputeOutputShape(const std::vector<int6
 
 Tensor StringNormalizer::operator()(const Tensor &x, CaseChangeAction case_change_action,
                                     bool is_case_sensitive,
-                                    const std::vector<std::string> &stopwords) const {
+                                    const std::vector<std::string> &stopwords, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::StringNormalizer only supports STRING tensors.");
   const int64_t c = ExtractC(x.shape);

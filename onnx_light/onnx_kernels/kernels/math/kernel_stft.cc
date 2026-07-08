@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -84,7 +85,7 @@ void StftCompute(const T *signal, const T *window, T *out, int64_t batch_size,
 } // namespace
 
 Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
-                        const Tensor *frame_length, bool onesided) const {
+                        const Tensor *frame_length, bool onesided, RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(signal.shape.size());
   EXT_ENFORCE_INVALID(rank == 3, kSTFTName,
                       ": signal must have rank 3 ([batch_size, signal_length, 1]"
@@ -162,10 +163,10 @@ void STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tens
                       ": preallocated output dtype must match.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape, kSTFTName,
                       ": preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(), kSTFTName,
+  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(), kSTFTName,
                       ": preallocated output buffer size mismatch.");
   if (!produced.data.empty()) {
-    std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
+    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

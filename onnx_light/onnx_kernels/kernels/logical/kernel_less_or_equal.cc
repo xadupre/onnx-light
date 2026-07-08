@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -25,10 +26,10 @@ constexpr const char *kBoolName = "BOOL";
 // self-explanatory.
 template <typename TIn>
 Tensor LessOrEqualAlloc(const char *in_dtype_name, int32_t in_dtype, const Tensor &x,
-                        const Tensor &y) {
+                        const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAllocInOut<TIn, uint8_t>(
       kLessOrEqualName, in_dtype_name, in_dtype, kBoolName, DataType::BOOL, x, y,
-      [](TIn a, TIn b) -> uint8_t { return a <= b ? 1 : 0; });
+      [](TIn a, TIn b) -> uint8_t { return a <= b ? 1 : 0; }, allocator);
 }
 
 template <typename TIn>
@@ -40,34 +41,36 @@ void LessOrEqualInPlace(const char *in_dtype_name, int32_t in_dtype, const Tenso
 }
 } // namespace
 
-Tensor LessOrEqual::operator()(const Tensor &x, const Tensor &y) const {
+Tensor LessOrEqual::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT:
-    return LessOrEqualAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+    return LessOrEqualAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kLessOrEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; });
+        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; },
+          rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kLessOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; });
+        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; },
+          rt ? rt->allocator() : nullptr);
   case DataType::INT8:
-    return LessOrEqualAlloc<int8_t>("INT8", DataType::INT8, x, y);
+    return LessOrEqualAlloc<int8_t>("INT8", DataType::INT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT16:
-    return LessOrEqualAlloc<int16_t>("INT16", DataType::INT16, x, y);
+    return LessOrEqualAlloc<int16_t>("INT16", DataType::INT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return LessOrEqualAlloc<int32_t>("INT32", DataType::INT32, x, y);
+    return LessOrEqualAlloc<int32_t>("INT32", DataType::INT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return LessOrEqualAlloc<int64_t>("INT64", DataType::INT64, x, y);
+    return LessOrEqualAlloc<int64_t>("INT64", DataType::INT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT8:
-    return LessOrEqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
+    return LessOrEqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT16:
-    return LessOrEqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y);
+    return LessOrEqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return LessOrEqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
+    return LessOrEqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return LessOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+    return LessOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kLessOrEqualName, ": unsupported data type ", x.data_type,
                       ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -53,7 +54,7 @@ std::vector<int64_t> ComputeUnsqueezedShape(const Tensor &data, const std::vecto
 
 } // namespace
 
-Tensor Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axes) const {
+Tensor Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axes, RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape = ComputeUnsqueezedShape(data, axes);
   Tensor output = data;
   output.name.clear();
@@ -72,9 +73,9 @@ void Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
     output.string_data = data.string_data;
     return;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == data.size_bytes(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == data.size_bytes(),
                       "kernel::Unsqueeze: preallocated output byte-size mismatch.");
-  std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
+  std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
 }
 
 } // namespace kernel

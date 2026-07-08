@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -36,7 +37,7 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 
 Tensor TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
                                  const Tensor *write_indices,
-                                 const TensorScatter::Attributes &attrs) const {
+                                 const TensorScatter::Attributes &attrs, RuntimeContext *rt) const {
   Tensor output;
   output.name = "";
   output.data_type = past_cache.data_type;
@@ -113,7 +114,7 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
     const std::size_t bytes = PackedByteSize(past_cache.data_type, past_cache.element_count());
     EXT_ENFORCE_INVALID(past_cache.size_bytes() == bytes,
                         "kernel::TensorScatter: 'past_cache' data size mismatch.");
-    std::memcpy(output.data.data(), past_cache.bytes(), bytes);
+    std::memcpy(output.mutable_bytes(), past_cache.bytes(), bytes);
   }
 
   // Strides for cache (output) and update tensors (in elements).
@@ -179,7 +180,7 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
               update.string_data[static_cast<std::size_t>(update_offset + e)];
         }
       } else {
-        std::memcpy(output.data.data() + static_cast<std::size_t>(cache_offset) * elem_size,
+        std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(cache_offset) * elem_size,
                     update.bytes() + static_cast<std::size_t>(update_offset) * elem_size,
                     slice_bytes);
       }

@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -288,7 +289,7 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
                                    const std::vector<int64_t> &ngram_indexes,
                                    const std::vector<int64_t> &pool_int64s,
                                    const std::vector<std::string> &pool_strings,
-                                   const std::vector<float> &weights) const {
+                                   const std::vector<float> &weights, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!ngram_indexes.empty(),
                       "kernel::TfIdfVectorizer: ngram_indexes must be non-empty.");
   EXT_ENFORCE_INVALID(min_gram_length >= 1,
@@ -357,7 +358,7 @@ void TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_le
   EXT_ENFORCE_INVALID(output.shape == computed.shape,
                       "kernel::TfIdfVectorizer preallocated output shape must match the "
                       "computed output shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == computed.data.size(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == computed.size_bytes(),
                       "kernel::TfIdfVectorizer preallocated output buffer has unexpected size.");
   output.data = std::move(computed.data);
 }

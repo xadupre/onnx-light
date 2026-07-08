@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -21,9 +22,9 @@ constexpr const char *kSubName = "kernel::Sub";
 // :class:`DataType` enumerator name so the resulting
 // "kernel::Sub only supports <DTYPE> inputs." message is self-explanatory.
 template <typename T>
-Tensor SubAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y) {
+Tensor SubAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAlloc<T, T>(kSubName, dtype_name, dtype, x, y,
-                                              [](T a, T b) -> T { return a - b; });
+                                              [](T a, T b) -> T { return a - b; }, allocator);
 }
 
 template <typename T>
@@ -38,36 +39,38 @@ constexpr const char *kSupportedSubTypesMsg =
     "UINT32 and UINT64 inputs.";
 } // namespace
 
-Tensor Sub::operator()(const Tensor &x, const Tensor &y) const {
+Tensor Sub::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT:
-    return SubAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+    return SubAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);
   case DataType::DOUBLE:
-    return SubAlloc<double>("DOUBLE", DataType::DOUBLE, x, y);
+    return SubAlloc<double>("DOUBLE", DataType::DOUBLE, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT8:
-    return SubAlloc<int8_t>("INT8", DataType::INT8, x, y);
+    return SubAlloc<int8_t>("INT8", DataType::INT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT16:
-    return SubAlloc<int16_t>("INT16", DataType::INT16, x, y);
+    return SubAlloc<int16_t>("INT16", DataType::INT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return SubAlloc<int32_t>("INT32", DataType::INT32, x, y);
+    return SubAlloc<int32_t>("INT32", DataType::INT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return SubAlloc<int64_t>("INT64", DataType::INT64, x, y);
+    return SubAlloc<int64_t>("INT64", DataType::INT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT8:
-    return SubAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
+    return SubAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT16:
-    return SubAlloc<uint16_t>("UINT16", DataType::UINT16, x, y);
+    return SubAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return SubAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
+    return SubAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return SubAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+    return SubAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfElementwiseAlloc(kSubName, "FLOAT16", DataType::FLOAT16, x, y,
                                               Float16BitsToFloat, FloatToFloat16Bits,
-                                              [](float a, float b) { return a - b; });
+                                              [](float a, float b) { return a - b; },
+          rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
     return detail::BinaryHalfElementwiseAlloc(kSubName, "BFLOAT16", DataType::BFLOAT16, x, y,
                                               Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                              [](float a, float b) { return a - b; });
+                                              [](float a, float b) { return a - b; },
+          rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kSubName, ": unsupported data type ", x.data_type, kSupportedSubTypesMsg);
   }

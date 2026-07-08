@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -154,7 +155,7 @@ std::vector<int64_t> InferOutputShape(const Tensor &x, const Tensor &w, const Te
 } // namespace
 
 Tensor DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &offset,
-                              const Tensor &b, const Tensor &mask, const Attributes &attrs) const {
+                              const Tensor &b, const Tensor &mask, const Attributes &attrs, RuntimeContext *rt) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, offset, b, mask, resolved);
@@ -183,7 +184,7 @@ void DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &offs
   for (int64_t d : expected_shape) {
     total *= d;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(float),
                       "kernel::DeformConv preallocated output buffer has unexpected size.");
 
   const int64_t N = x.shape[0];

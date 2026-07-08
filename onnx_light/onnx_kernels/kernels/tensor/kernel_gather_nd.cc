@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -56,7 +57,7 @@ std::vector<int64_t> ReadGatherNDIndices(const Tensor &indices) {
 
 } // namespace
 
-Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims) const {
+Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims, RuntimeContext *rt) const {
   std::vector<int64_t> out_shape =
       ComputeGatherNDOutputShape(data.shape, indices.shape, batch_dims);
   int64_t total = 1;
@@ -133,7 +134,7 @@ void GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t bat
       EXT_ENFORCE_INVALID(idx >= 0 && idx < dim, "kernel::GatherND: index out of range.");
       data_offset += idx * data_strides[static_cast<std::size_t>(batch_dims + k)];
     }
-    std::memcpy(output.data.data() + static_cast<std::size_t>(t * slice_bytes),
+    std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(t * slice_bytes),
                 data.bytes() +
                     static_cast<std::size_t>(data_offset) * static_cast<std::size_t>(elem_size),
                 static_cast<std::size_t>(slice_bytes));

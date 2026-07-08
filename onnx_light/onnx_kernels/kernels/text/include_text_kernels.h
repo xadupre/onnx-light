@@ -13,6 +13,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
+// Forward declaration for allocator-aware operator() overloads.
+class RuntimeContext;
+
 namespace kernel {
 
 // ---------------------------------------------------------------------------
@@ -56,7 +59,7 @@ class StringConcat : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   /// Output bytes depend on both inputs, so the output buffer cannot
@@ -118,7 +121,7 @@ public:
   /// Allocating overload. ``stopwords`` may be empty.
   Tensor operator()(const Tensor &x, CaseChangeAction case_change_action = CaseChangeAction::kNone,
                     bool is_case_sensitive = false,
-                    const std::vector<std::string> &stopwords = {}) const;
+                    const std::vector<std::string> &stopwords = {}, RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``output`` must be a ``tensor(string)`` with
   /// the shape returned by :cpp:func:`ComputeOutputShape` and with a
@@ -164,7 +167,7 @@ public:
   /// with the same shape as ``x``. Each output byte is ``1`` when the
   /// corresponding input string is fully matched by ``pattern`` and
   /// ``0`` otherwise.
-  Tensor operator()(const Tensor &x, const std::string &pattern) const;
+  Tensor operator()(const Tensor &x, const std::string &pattern, RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``output`` must already be a ``tensor(bool)``
   /// with the same shape as ``x`` and a pre-sized ``data`` buffer of
@@ -231,7 +234,7 @@ public:
                     const std::vector<int64_t> &ngram_indexes,
                     const std::vector<int64_t> &pool_int64s,
                     const std::vector<std::string> &pool_strings,
-                    const std::vector<float> &weights) const;
+                    const std::vector<float> &weights, RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``output`` must already be a ``tensor(float)``
   /// with the shape returned by :cpp:func:`ComputeOutputShape` and a

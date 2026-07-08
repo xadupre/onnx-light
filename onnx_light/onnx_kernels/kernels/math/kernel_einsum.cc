@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -383,7 +384,7 @@ void EinsumInPlace(const std::vector<Tensor> &inputs, const std::string &equatio
   }
   EXT_ENFORCE_INVALID(output.data_type == dtype, kEinsumName, ": output dtype mismatch.");
   EXT_ENFORCE_INVALID(output.shape == plan.output_shape, kEinsumName, ": output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<std::size_t>(out_count) * sizeof(T),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(out_count) * sizeof(T),
                       kEinsumName, ": output buffer size mismatch.");
   RunEinsum<T>(inputs, plan, output.As<T>());
 }
@@ -399,7 +400,7 @@ void RequireHomogeneous(const std::vector<Tensor> &inputs) {
 
 } // namespace
 
-Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation) const {
+Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation, RuntimeContext *rt) const {
   RequireHomogeneous(inputs);
   switch (inputs[0].data_type) {
   case DataType::FLOAT:

@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -26,7 +27,7 @@ int64_t ComputeNumElements(const std::vector<int64_t> &shape) {
 
 } // namespace
 
-Tensor Size::operator()(const Tensor &data) const {
+Tensor Size::operator()(const Tensor &data, RuntimeContext *rt) const {
   const int64_t n = ComputeNumElements(data.shape);
   return Tensor::FromInt64("", {}, {n});
 }
@@ -37,9 +38,9 @@ void Size::operator()(const Tensor &data, Tensor &output) const {
                       "kernel::Size: preallocated output dtype must be INT64.");
   EXT_ENFORCE_INVALID(output.shape == std::vector<int64_t>{},
                       "kernel::Size: preallocated output shape must be scalar.");
-  EXT_ENFORCE_INVALID(output.data.size() == sizeof(int64_t),
+  EXT_ENFORCE_INVALID(output.size_bytes() == sizeof(int64_t),
                       "kernel::Size: preallocated output byte-size mismatch.");
-  *reinterpret_cast<int64_t *>(output.data.data()) = n;
+  *reinterpret_cast<int64_t *>(output.mutable_bytes()) = n;
 }
 
 } // namespace kernel

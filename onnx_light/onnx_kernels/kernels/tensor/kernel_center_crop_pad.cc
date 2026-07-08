@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -52,7 +53,7 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes, int64_t ran
 } // namespace
 
 Tensor CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
-                                 const CenterCropPad::Attributes &attrs) const {
+                                 const CenterCropPad::Attributes &attrs, RuntimeContext *rt) const {
   // Resolve the output shape from the input shape, ``shape`` and ``axes``.
   const std::size_t rank = input_data.shape.size();
   std::vector<int64_t> out_shape = input_data.shape;
@@ -169,11 +170,11 @@ void CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
   for (int64_t d : output.shape) {
     total_out *= d;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<std::size_t>(total_out) * elem_size,
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(total_out) * elem_size,
                       "kernel::CenterCropPad: preallocated output buffer size mismatch.");
 
   // Zero-fill the output for the padding regions.
-  std::memset(output.data.data(), 0, output.data.size());
+  std::memset(output.mutable_bytes(), 0, output.size_bytes());
 
   // Bail out early when any copy_len is zero (no elements to copy).
   for (int64_t cl : copy_len) {
@@ -189,7 +190,7 @@ void CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
   const int64_t inner_in_off_base = in_start.back();
   const int64_t inner_out_off_base = out_start.back();
   const uint8_t *const in_ptr = input_data.bytes();
-  uint8_t *const out_ptr = output.data.data();
+  uint8_t *const out_ptr = output.mutable_bytes();
 
   while (true) {
     int64_t in_off = inner_in_off_base * in_strides.back();

@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -54,7 +55,7 @@ void ValidateInt64(const Tensor &t, const char *name) {
 } // namespace
 
 Tensor ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims,
-                             bool select_last_index) const {
+                             bool select_last_index, RuntimeContext *rt) const {
   ValidateFloat(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   EXT_ENFORCE_INVALID(rank > 0, "kernel::ArgReduce: data must have at least one dimension.");
@@ -84,7 +85,7 @@ void ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims, bool
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
                       "kernel::ArgReduce preallocated output shape does not match expected.");
   const int64_t out_count = output.element_count();
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(out_count) * sizeof(int64_t),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(out_count) * sizeof(int64_t),
                       "kernel::ArgReduce preallocated output buffer has unexpected size.");
 
   // Decompose the input layout into: outer (dims before axis), the reduced

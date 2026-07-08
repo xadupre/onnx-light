@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -40,7 +41,7 @@ double ReadFloatScalar(const Tensor &t, const char *what) {
 }
 
 template <typename T> void FillOutput(const std::vector<double> &values, Tensor &output) {
-  T *po = reinterpret_cast<T *>(output.data.data());
+  T *po = reinterpret_cast<T *>(output.mutable_bytes());
   for (size_t i = 0; i < values.size(); ++i) {
     po[i] = static_cast<T>(values[i]);
   }
@@ -50,7 +51,7 @@ template <typename T> void FillOutput(const std::vector<double> &values, Tensor 
 
 Tensor MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft_length,
                                    const Tensor &sample_rate, const Tensor &lower_edge_hertz,
-                                   const Tensor &upper_edge_hertz, DataType output_dtype) const {
+                                   const Tensor &upper_edge_hertz, DataType output_dtype, RuntimeContext *rt) const {
   const int64_t num_mel_bins_v = ReadIntScalar(num_mel_bins, "num_mel_bins");
   const int64_t dft_length_v = ReadIntScalar(dft_length, "dft_length");
   EXT_ENFORCE_INVALID(num_mel_bins_v > 0, "kernel::MelWeightMatrix num_mel_bins must be positive.");

@@ -8,12 +8,13 @@
 #include <cmath>
 #include <cstdint>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor LRN::operator()(const Tensor &x, int64_t size, float alpha, float beta, float bias) const {
+Tensor LRN::operator()(const Tensor &x, int64_t size, float alpha, float beta, float bias, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LRN: x must be FLOAT.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2, "kernel::LRN: x must have rank >= 2 (N, C, D1, ...).");
@@ -33,7 +34,7 @@ Tensor LRN::operator()(const Tensor &x, int64_t size, float alpha, float beta, f
              std::vector<uint8_t>(static_cast<size_t>(total) * sizeof(float)));
 
   const float *px = x.AsFloat();
-  float *py = reinterpret_cast<float *>(out.data.data());
+  float *py = reinterpret_cast<float *>(out.mutable_bytes());
 
   // For each (n, c, s) compute sum of squares over the channel window then
   // produce the normalized output. The window is centered on c with extent

@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -38,7 +39,7 @@ std::vector<int64_t> ReadGatherElementsIndices(const Tensor &indices) {
 
 } // namespace
 
-Tensor GatherElements::operator()(const Tensor &data, const Tensor &indices, int64_t axis) const {
+Tensor GatherElements::operator()(const Tensor &data, const Tensor &indices, int64_t axis, RuntimeContext *rt) const {
   const std::size_t elem_size = ElementSize(data.data_type);
   int64_t total = indices.element_count();
   Tensor out("", data.data_type, indices.shape,
@@ -98,7 +99,7 @@ void GatherElements::operator()(const Tensor &data, const Tensor &indices, int64
       const int64_t c = (k == axis) ? idx_value : coord[static_cast<std::size_t>(k)];
       data_idx += c * data_strides[static_cast<std::size_t>(k)];
     }
-    std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * elem_size,
+    std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(out_idx) * elem_size,
                 data.bytes() + static_cast<std::size_t>(data_idx) * elem_size, elem_size);
   }
 }

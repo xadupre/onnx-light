@@ -7,6 +7,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -53,20 +54,20 @@ void ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels, Te
                       "kernel::ZipMap preallocated output dtype must be float.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
                       "kernel::ZipMap preallocated output shape is incorrect.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.size_bytes(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(),
                       "kernel::ZipMap preallocated output buffer is incorrectly sized.");
   if (x.size_bytes() > 0) {
-    std::memcpy(output.data.data(), x.bytes(), x.size_bytes());
+    std::memcpy(output.mutable_bytes(), x.bytes(), x.size_bytes());
   }
 }
 
 } // namespace
 
-Tensor ZipMap::operator()(const Tensor &x, const std::vector<int64_t> &class_labels) const {
+Tensor ZipMap::operator()(const Tensor &x, const std::vector<int64_t> &class_labels, RuntimeContext *rt) const {
   return ComputeZipMapOutput(x, class_labels);
 }
 
-Tensor ZipMap::operator()(const Tensor &x, const std::vector<std::string> &class_labels) const {
+Tensor ZipMap::operator()(const Tensor &x, const std::vector<std::string> &class_labels, RuntimeContext *rt) const {
   return ComputeZipMapOutput(x, class_labels);
 }
 

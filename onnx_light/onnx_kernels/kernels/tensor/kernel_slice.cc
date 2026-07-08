@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -152,7 +153,7 @@ SliceLayout ComputeSliceLayout(const Tensor &data, const Tensor &starts_t, const
 } // namespace
 
 Tensor Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
-                         const Tensor *axes, const Tensor *steps) const {
+                         const Tensor *axes, const Tensor *steps, RuntimeContext *rt) const {
   const SliceLayout layout = ComputeSliceLayout(data, starts, ends, axes, steps);
   Tensor out(
       "", data.data_type, layout.out_shape,
@@ -168,7 +169,7 @@ void Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &e
                       "kernel::Slice: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == layout.out_shape,
                       "kernel::Slice: preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() ==
+  EXT_ENFORCE_INVALID(output.size_bytes() ==
                           static_cast<std::size_t>(layout.total_elements) * layout.elem_size,
                       "kernel::Slice: preallocated output byte-size mismatch.");
 
@@ -184,7 +185,7 @@ void Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &e
       const int64_t in_coord = layout.starts[axis] + coord * layout.steps[axis];
       in_idx += in_coord * layout.in_strides[axis];
     }
-    std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * layout.elem_size,
+    std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(out_idx) * layout.elem_size,
                 data.bytes() + static_cast<std::size_t>(in_idx) * layout.elem_size,
                 layout.elem_size);
   }

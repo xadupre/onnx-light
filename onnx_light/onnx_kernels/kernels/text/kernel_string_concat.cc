@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -51,7 +52,7 @@ StringBroadcast CheckStringConcatInputs(const Tensor &x, const Tensor &y) {
 
 } // namespace
 
-Tensor StringConcat::operator()(const Tensor &x, const Tensor &y) const {
+Tensor StringConcat::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   const StringBroadcast bi = CheckStringConcatInputs(x, y);
   Tensor out = Tensor::MakeString("", bi.shape,
                                   std::vector<std::string>(static_cast<size_t>(bi.element_count)));

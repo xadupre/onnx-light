@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -41,7 +42,7 @@ void CheckRegexFullMatchInput(const Tensor &x) {
 
 } // namespace
 
-Tensor RegexFullMatch::operator()(const Tensor &x, const std::string &pattern) const {
+Tensor RegexFullMatch::operator()(const Tensor &x, const std::string &pattern, RuntimeContext *rt) const {
   CheckRegexFullMatchInput(x);
   const int64_t n = x.element_count();
   Tensor out = Tensor::FromBool("", x.shape, std::vector<uint8_t>(static_cast<size_t>(n), 0));
@@ -57,7 +58,7 @@ void RegexFullMatch::operator()(const Tensor &x, const std::string &pattern, Ten
                       "kernel::RegexFullMatch preallocated output shape must match the input "
                       "shape.");
   const int64_t n = x.element_count();
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(output.data.size()) ==
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(output.size_bytes()) ==
                           n * static_cast<int64_t>(sizeof(uint8_t)),
                       "kernel::RegexFullMatch preallocated output data has unexpected size.");
   const std::regex re = CompileRegexPattern(pattern);

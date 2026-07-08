@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -195,7 +196,7 @@ double MaskValuePadded(const Tensor *mask, int64_t batch_size, int64_t q_num_hea
 
 } // namespace
 
-Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V) const {
+Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, RuntimeContext *rt) const {
   CheckRank4Float(Q, "Q");
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::Attention: 'head_size' must be positive.");
@@ -203,7 +204,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V) 
   return (*this)(Q, K, V, scale);
 }
 
-Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale) const {
+Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale, RuntimeContext *rt) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
@@ -211,7 +212,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, 
 }
 
 Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                             const Tensor &attn_mask) const {
+                             const Tensor &attn_mask, RuntimeContext *rt) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
@@ -233,7 +234,7 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
                       "q_num_heads, q_seq_len, v_head_size).");
   EXT_ENFORCE_INVALID(output.size_bytes() == r.Y.size_bytes(),
                       "kernel::Attention preallocated output buffer has unexpected size in bytes.");
-  std::memcpy(output.data.data(), r.Y.bytes(), r.Y.size_bytes());
+  std::memcpy(output.mutable_bytes(), r.Y.bytes(), r.Y.size_bytes());
 }
 
 Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,

@@ -142,7 +142,7 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
                       "kernel::LayerNormalization: InvStdDev must be FLOAT.");
   EXT_ENFORCE_INVALID(y.shape == x.shape,
                       "kernel::LayerNormalization: Y must have the same shape as X.");
-  EXT_ENFORCE_INVALID(y.data.size() == x.size_bytes(),
+  EXT_ENFORCE_INVALID(y.size_bytes() == x.size_bytes(),
                       "kernel::LayerNormalization: Y buffer must have the same byte size as X.");
 
   const bool has_bias = !b.shape.empty() || b.size_bytes() > 0;

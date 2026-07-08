@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -50,7 +51,7 @@ void DequantizeLoop(const Tensor &x, float x_scale, XT x_zero_point, Tensor &out
   const int64_t n = x.element_count();
   const float zp = static_cast<float>(x_zero_point);
   if (output.data_type == static_cast<int32_t>(DataType::FLOAT16)) {
-    uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+    uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
     for (int64_t i = 0; i < n; ++i) {
       py[i] = FloatToFloat16Bits((static_cast<float>(px[i]) - zp) * x_scale);
     }
@@ -87,7 +88,7 @@ inline void DequantizeFloat8Loop(const Tensor &x, float x_scale, float x_zero_po
   const std::uint8_t *px = x.bytes();
   const int64_t n = x.element_count();
   if (output.data_type == static_cast<int32_t>(DataType::FLOAT16)) {
-    uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+    uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
     for (int64_t i = 0; i < n; ++i) {
       py[i] = FloatToFloat16Bits((decode(px[i]) - x_zero_point) * x_scale);
     }
@@ -294,7 +295,7 @@ void DequantizeBlockFloat4E2M1Loop(const Tensor &x, const float *scales,
 
 } // namespace
 
-Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale) const {
+Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, RuntimeContext *rt) const {
   // The output element type matches ``x_scale``'s element type (FLOAT or
   // FLOAT16). Both encodings occupy known fixed-size storage so the buffer
   // can be sized up-front.
@@ -319,7 +320,7 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::DequantizeLinear preallocated output shape must match x shape.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(x.element_count()) * output.element_size(),
+      output.size_bytes() == static_cast<size_t>(x.element_count()) * output.element_size(),
       "kernel::DequantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = ReadScalarScale(x_scale);
   switch (x.data_type) {
@@ -369,7 +370,7 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
 }
 
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
-                                    const Tensor &x_zero_point) const {
+                                    const Tensor &x_zero_point, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
                       "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
   const size_t elem_size = x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)
@@ -394,7 +395,7 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::DequantizeLinear preallocated output shape must match x shape.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(x.element_count()) * output.element_size(),
+      output.size_bytes() == static_cast<size_t>(x.element_count()) * output.element_size(),
       "kernel::DequantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = ReadScalarScale(x_scale);
   switch (x.data_type) {
@@ -456,7 +457,7 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
 }
 
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
-                                    const Tensor &x_zero_point, int64_t axis) const {
+                                    const Tensor &x_zero_point, int64_t axis, RuntimeContext *rt) const {
   if (x_scale.element_count() == 1) {
     return (*this)(x, x_scale, x_zero_point);
   }
@@ -487,7 +488,7 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::DequantizeLinear preallocated output shape must match x shape.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(x.element_count()) * output.element_size(),
+      output.size_bytes() == static_cast<size_t>(x.element_count()) * output.element_size(),
       "kernel::DequantizeLinear preallocated output buffer has unexpected size in bytes.");
   EXT_ENFORCE_INVALID(axis >= 0 && axis < static_cast<int64_t>(x.shape.size()),
                       "kernel::DequantizeLinear: axis out of range.");
@@ -580,7 +581,7 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   }
 }
 
-Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis) const {
+Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis, RuntimeContext *rt) const {
   if (x_scale.element_count() == 1) {
     return (*this)(x, x_scale);
   }

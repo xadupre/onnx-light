@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -45,7 +46,7 @@ std::vector<int64_t> ComputeTileOutputShape(const std::vector<int64_t> &in_shape
 
 } // namespace
 
-Tensor Tile::operator()(const Tensor &input, const Tensor &repeats) const {
+Tensor Tile::operator()(const Tensor &input, const Tensor &repeats, RuntimeContext *rt) const {
   const std::vector<int64_t> reps = ReadTileRepeatsInput(repeats, input.shape.size());
   const std::vector<int64_t> out_shape = ComputeTileOutputShape(input.shape, reps);
   const std::size_t elem_size = ElementSize(input.data_type);
@@ -104,7 +105,7 @@ void Tile::operator()(const Tensor &input, const Tensor &repeats, Tensor &output
       const int64_t in_coord = input.shape[k] == 0 ? 0 : (out_coord % input.shape[k]);
       in_idx += in_coord * in_strides[k];
     }
-    std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * elem_size,
+    std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(out_idx) * elem_size,
                 input.bytes() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
   }
 }

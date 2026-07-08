@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -72,7 +73,7 @@ void UpsampleNearest(const Tensor &input, const std::vector<float> &scales,
   }
 
   const uint8_t *const in_ptr = input.bytes();
-  uint8_t *const out_ptr = output.data.data();
+  uint8_t *const out_ptr = output.mutable_bytes();
 
   for (int64_t out_idx = 0; out_idx < total_elements; ++out_idx) {
     int64_t in_idx = 0;
@@ -117,7 +118,7 @@ double LoadFloat(const Tensor &input, int64_t idx) {
 }
 
 void StoreFloat(Tensor &output, int64_t idx, double value) {
-  uint8_t *const base = output.data.data();
+  uint8_t *const base = output.mutable_bytes();
   switch (output.data_type) {
   case DataType::FLOAT: {
     float v = static_cast<float>(value);
@@ -221,7 +222,7 @@ bool IsLinearMode(const std::string &mode) { return mode == "linear" || mode == 
 
 } // namespace
 
-Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs) const {
+Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs, RuntimeContext *rt) const {
   const std::vector<float> scales_vec = ReadUpsampleScales(scales, X.shape.size());
   const std::vector<int64_t> out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec);
   int64_t total_elements = 1;

@@ -8,6 +8,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -103,7 +104,7 @@ ExpandLayout ComputeExpandLayout(const Tensor &input, const std::vector<int64_t>
 
 } // namespace
 
-Tensor Expand::operator()(const Tensor &input, const Tensor &shape) const {
+Tensor Expand::operator()(const Tensor &input, const Tensor &shape, RuntimeContext *rt) const {
   const std::vector<int64_t> target = ReadExpandShapeInput(shape);
   const ExpandLayout layout = ComputeExpandLayout(input, target);
   Tensor out(
@@ -138,7 +139,7 @@ void Expand::operator()(const Tensor &input, const Tensor &shape, Tensor &output
       // If in_shape_aligned[k] == 1, the input index for this axis is 0,
       // contributing nothing to in_idx.
     }
-    std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * layout.elem_size,
+    std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(out_idx) * layout.elem_size,
                 input.bytes() + static_cast<std::size_t>(in_idx) * layout.elem_size,
                 layout.elem_size);
   }

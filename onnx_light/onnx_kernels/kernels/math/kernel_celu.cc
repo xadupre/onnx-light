@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -24,7 +25,7 @@ constexpr const char *kName = "kernel::Celu";
 template <typename T> void ComputeInPlace(const Tensor &x, T alpha, Tensor &output) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
-  T *py = reinterpret_cast<T *>(output.data.data());
+  T *py = reinterpret_cast<T *>(output.mutable_bytes());
   for (int64_t i = 0; i < n; ++i) {
     const T v = px[i];
     // max(0, x) + min(0, alpha * (exp(x / alpha) - 1))
@@ -41,7 +42,7 @@ void ComputeHalf(const Tensor &x, float alpha, Tensor &output, DecodeFunc decode
                  EncodeFunc encode) {
   const int64_t n = x.element_count();
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
-  uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
   for (int64_t i = 0; i < n; ++i) {
     const float v = decode(px[i]);
     const float pos = std::max(0.0f, v);
@@ -74,12 +75,12 @@ void ValidateOutput(const Tensor &x, const Tensor &output) {
   EXT_ENFORCE_INVALID(output.data_type == x.data_type, kName,
                       ": output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), kName, ": output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(), kName, ": output buffer size mismatch.");
 }
 
 } // namespace
 
-Tensor Celu::operator()(const Tensor &x, float alpha) const {
+Tensor Celu::operator()(const Tensor &x, float alpha, RuntimeContext *rt) const {
   Tensor out("", x.data_type, x.shape,
              std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * x.element_size()));
   Dispatch(x, alpha, out);

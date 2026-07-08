@@ -11,6 +11,7 @@
 #include <limits>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -26,7 +27,7 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 } // namespace
 
-Tensor Softmax::operator()(const Tensor &x, int64_t axis) const {
+Tensor Softmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) const {
   // FLOAT16/BFLOAT16 inputs are computed in float32 and demoted back, mirroring
   // the half-precision handling in the other math kernels.
   if (IsHalfPrecision(x.data_type)) {
@@ -53,13 +54,13 @@ void Softmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const {
                       "kernel::Softmax preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::Softmax preallocated output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.data() != x.bytes(),
+  EXT_ENFORCE_INVALID(output.mutable_bytes() != x.bytes(),
                       "kernel::Softmax does not support aliasing input/output buffers.");
 
   const int64_t n = x.element_count();
   const size_t elem_size = is_double ? sizeof(double) : sizeof(float);
   const size_t expected_bytes = static_cast<size_t>(n) * elem_size;
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::Softmax preallocated output buffer has unexpected size in bytes.");
 
   const int64_t rank = static_cast<int64_t>(x.shape.size());

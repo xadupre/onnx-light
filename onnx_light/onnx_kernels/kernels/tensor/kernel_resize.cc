@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -196,7 +197,7 @@ void ResizeNearest(const Tensor &input, const std::vector<float> &scales,
   }
 
   const uint8_t *const in_ptr = input.bytes();
-  uint8_t *const out_ptr = output.data.data();
+  uint8_t *const out_ptr = output.mutable_bytes();
 
   // Pre-encoded ``extrapolation_value`` for FLOAT/DOUBLE outputs; for other
   // (whole-byte) types ``tf_crop_and_resize`` extrapolation is not defined
@@ -273,7 +274,7 @@ double LoadFloat(const Tensor &t, int64_t idx) {
 }
 
 void StoreFloat(Tensor &t, int64_t idx, double value) {
-  uint8_t *const base = t.data.data();
+  uint8_t *const base = t.mutable_bytes();
   switch (t.data_type) {
   case DataType::FLOAT: {
     float v = static_cast<float>(value);
@@ -683,7 +684,7 @@ void RunResize(const Tensor &X, const std::vector<float> &scales_vec,
 
 } // namespace
 
-Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs) const {
+Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs, RuntimeContext *rt) const {
   const std::size_t rank = X.shape.size();
   const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
   const std::vector<float> scales_in = ReadResizeScales(scales, axes.size());

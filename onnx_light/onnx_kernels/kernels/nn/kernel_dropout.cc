@@ -9,6 +9,7 @@
 #include <cstring>
 #include <random>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -56,7 +57,7 @@ std::pair<Tensor, Tensor> Dropout::operator()(const Tensor &data, float ratio, b
                                               int64_t seed) const {
   ValidateInput(data, ratio);
 
-  Tensor output("", data.data_type, data.shape, std::vector<uint8_t>(data.data.size()));
+  Tensor output("", data.data_type, data.shape, std::vector<uint8_t>(data.size_bytes()));
   Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
               std::vector<uint8_t>(static_cast<std::size_t>(data.element_count()), 1));
 
@@ -65,15 +66,15 @@ std::pair<Tensor, Tensor> Dropout::operator()(const Tensor &data, float ratio, b
 }
 
 Tensor Dropout::operator()(const Tensor &data, float ratio, bool training_mode, Tensor &mask,
-                           int64_t seed) const {
+                           int64_t seed, RuntimeContext *rt) const {
   ValidateInput(data, ratio);
   EXT_ENFORCE_INVALID(mask.data_type == static_cast<int32_t>(DataType::BOOL),
                       "kernel::Dropout: mask must have BOOL dtype.");
   EXT_ENFORCE_INVALID(mask.shape == data.shape, "kernel::Dropout: mask shape must match input.");
-  EXT_ENFORCE_INVALID(mask.data.size() == static_cast<std::size_t>(data.element_count()),
+  EXT_ENFORCE_INVALID(mask.size_bytes() == static_cast<std::size_t>(data.element_count()),
                       "kernel::Dropout: mask buffer must have one byte per input element.");
 
-  Tensor output("", data.data_type, data.shape, std::vector<uint8_t>(data.data.size()));
+  Tensor output("", data.data_type, data.shape, std::vector<uint8_t>(data.size_bytes()));
   const uint32_t engine_seed =
       (seed == kNoSeed) ? kDefaultDropoutSeed : static_cast<uint32_t>(seed);
 

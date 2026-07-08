@@ -12,6 +12,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
+// Forward declaration for allocator-aware operator() overloads.
+class RuntimeContext;
+
 namespace kernel {
 
 // ---------------------------------------------------------------------------
@@ -115,7 +118,7 @@ public:
   /// Allocating overload. ``pixel_format`` defaults to ``"RGB"`` (the
   /// schema default). Decodes BMP (24-bit uncompressed) to ``(H, W, C)``
   /// uint8. Falls back to ``(0, 0, C)`` for unsupported/unrecognised formats.
-  Tensor operator()(const Tensor &encoded_stream, const std::string &pixel_format = "RGB") const;
+  Tensor operator()(const Tensor &encoded_stream, const std::string &pixel_format = "RGB", RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``output`` must already be a ``tensor(uint8)``
   /// whose last dimension matches the channel count derived from

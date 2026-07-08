@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -59,13 +60,15 @@ template <typename T> T FloatFmod(T a, T b) {
 
 template <typename T>
 Tensor ModAllocInt(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y,
-                   int64_t fmod) {
+                   int64_t fmod, RawBufferAllocator *allocator = nullptr) {
   if (fmod == 0) {
     return detail::BinaryElementwiseAlloc<T, T>(kModName, dtype_name, dtype, x, y,
-                                                [](T a, T b) -> T { return PythonMod<T>(a, b); });
+                                                [](T a, T b) -> T { return PythonMod<T>(a, b); },
+                                                allocator);
   }
   return detail::BinaryElementwiseAlloc<T, T>(kModName, dtype_name, dtype, x, y,
-                                              [](T a, T b) -> T { return TruncMod<T>(a, b); });
+                                              [](T a, T b) -> T { return TruncMod<T>(a, b); },
+                                              allocator);
 }
 
 template <typename T>
@@ -81,9 +84,10 @@ void ModInPlaceInt(const char *dtype_name, int32_t dtype, const Tensor &x, const
 }
 
 template <typename T>
-Tensor ModAllocFloat(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y) {
+Tensor ModAllocFloat(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAlloc<T, T>(kModName, dtype_name, dtype, x, y,
-                                              [](T a, T b) -> T { return FloatFmod<T>(a, b); });
+                                              [](T a, T b) -> T { return FloatFmod<T>(a, b); },
+                                              allocator);
 }
 
 template <typename T>
@@ -99,11 +103,11 @@ void ModInPlaceFloat(const char *dtype_name, int32_t dtype, const Tensor &x, con
 // bit pattern as round-tripping through float32 fmod, so this conversion
 // path matches the upstream ``test_mod_mixed_sign_float16`` reference.
 
-Tensor ModAllocFloat16(const Tensor &x, const Tensor &y) {
+Tensor ModAllocFloat16(const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAlloc<uint16_t, uint16_t>(
       kModName, "FLOAT16", DataType::FLOAT16, x, y, [](uint16_t a, uint16_t b) -> uint16_t {
         return FloatToFloat16Bits(std::fmod(Float16BitsToFloat(a), Float16BitsToFloat(b)));
-      });
+      }, allocator);
 }
 
 void ModInPlaceFloat16(const Tensor &x, const Tensor &y, Tensor &output) {
@@ -113,11 +117,11 @@ void ModInPlaceFloat16(const Tensor &x, const Tensor &y, Tensor &output) {
       });
 }
 
-Tensor ModAllocBfloat16(const Tensor &x, const Tensor &y) {
+Tensor ModAllocBfloat16(const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAlloc<uint16_t, uint16_t>(
       kModName, "BFLOAT16", DataType::BFLOAT16, x, y, [](uint16_t a, uint16_t b) -> uint16_t {
         return FloatToBfloat16Bits(std::fmod(Bfloat16BitsToFloat(a), Bfloat16BitsToFloat(b)));
-      });
+      }, allocator);
 }
 
 void ModInPlaceBfloat16(const Tensor &x, const Tensor &y, Tensor &output) {
@@ -136,40 +140,40 @@ constexpr const char *kFmodRequiredForFloatMsg =
     " requires attribute ``fmod`` set to 1 for floating-point inputs.";
 } // namespace
 
-Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod) const {
+Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT16:
     EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
                         kFmodRequiredForFloatMsg);
-    return ModAllocFloat16(x, y);
+    return ModAllocFloat16(x, y, rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
     EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
                         kFmodRequiredForFloatMsg);
-    return ModAllocBfloat16(x, y);
+    return ModAllocBfloat16(x, y, rt ? rt->allocator() : nullptr);
   case DataType::FLOAT:
     EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
                         kFmodRequiredForFloatMsg);
-    return ModAllocFloat<float>("FLOAT", DataType::FLOAT, x, y);
+    return ModAllocFloat<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);
   case DataType::DOUBLE:
     EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
                         kFmodRequiredForFloatMsg);
-    return ModAllocFloat<double>("DOUBLE", DataType::DOUBLE, x, y);
+    return ModAllocFloat<double>("DOUBLE", DataType::DOUBLE, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT8:
-    return ModAllocInt<int8_t>("INT8", DataType::INT8, x, y, fmod);
+    return ModAllocInt<int8_t>("INT8", DataType::INT8, x, y, fmod, rt ? rt->allocator() : nullptr);
   case DataType::INT16:
-    return ModAllocInt<int16_t>("INT16", DataType::INT16, x, y, fmod);
+    return ModAllocInt<int16_t>("INT16", DataType::INT16, x, y, fmod, rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return ModAllocInt<int32_t>("INT32", DataType::INT32, x, y, fmod);
+    return ModAllocInt<int32_t>("INT32", DataType::INT32, x, y, fmod, rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return ModAllocInt<int64_t>("INT64", DataType::INT64, x, y, fmod);
+    return ModAllocInt<int64_t>("INT64", DataType::INT64, x, y, fmod, rt ? rt->allocator() : nullptr);
   case DataType::UINT8:
-    return ModAllocInt<uint8_t>("UINT8", DataType::UINT8, x, y, fmod);
+    return ModAllocInt<uint8_t>("UINT8", DataType::UINT8, x, y, fmod, rt ? rt->allocator() : nullptr);
   case DataType::UINT16:
-    return ModAllocInt<uint16_t>("UINT16", DataType::UINT16, x, y, fmod);
+    return ModAllocInt<uint16_t>("UINT16", DataType::UINT16, x, y, fmod, rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return ModAllocInt<uint32_t>("UINT32", DataType::UINT32, x, y, fmod);
+    return ModAllocInt<uint32_t>("UINT32", DataType::UINT32, x, y, fmod, rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return ModAllocInt<uint64_t>("UINT64", DataType::UINT64, x, y, fmod);
+    return ModAllocInt<uint64_t>("UINT64", DataType::UINT64, x, y, fmod, rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type, kSupportedModTypesMsg);
   }

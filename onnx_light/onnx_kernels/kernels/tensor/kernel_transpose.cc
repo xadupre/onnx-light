@@ -8,6 +8,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -48,7 +49,7 @@ std::vector<int64_t> ComputeStrides(const std::vector<int64_t> &shape) {
 
 } // namespace
 
-Tensor Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm) const {
+Tensor Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm, RuntimeContext *rt) const {
   const std::vector<int64_t> resolved_perm = ResolvePermOrDefault(perm, data.shape.size());
   std::vector<int64_t> out_shape(resolved_perm.size());
   for (std::size_t i = 0; i < resolved_perm.size(); ++i) {
@@ -87,7 +88,7 @@ void Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm,
       remaining %= out_strides[i];
       in_idx += coord * in_strides[static_cast<std::size_t>(resolved_perm[i])];
     }
-    std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * elem_size,
+    std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(out_idx) * elem_size,
                 data.bytes() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
   }
 }

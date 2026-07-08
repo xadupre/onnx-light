@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -82,7 +83,7 @@ void ResolveAutoPadAxisLpPool(const std::string &auto_pad, int64_t in_dim, int64
 Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                           const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
                           int64_t p, bool ceil_mode, const std::vector<int64_t> &dilations,
-                          const std::string &auto_pad) const {
+                          const std::string &auto_pad, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LpPool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(), "kernel::LpPool: kernel_shape must be non-empty.");
@@ -150,7 +151,7 @@ Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_sh
              std::vector<uint8_t>(static_cast<size_t>(n_out) * sizeof(float)));
 
   const float *px = x.AsFloat();
-  float *py = reinterpret_cast<float *>(out.data.data());
+  float *py = reinterpret_cast<float *>(out.mutable_bytes());
 
   const std::vector<int64_t> in_strides = RowMajorStridesLpPool(x.shape);
   const std::vector<int64_t> out_strides = RowMajorStridesLpPool(out.shape);

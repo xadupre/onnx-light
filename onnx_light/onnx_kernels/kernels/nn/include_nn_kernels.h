@@ -15,6 +15,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
+// Forward declaration for allocator-aware operator() overloads.
+class RuntimeContext;
+
 namespace kernel {
 
 // ---------------------------------------------------------------------------
@@ -73,7 +76,7 @@ public:
                     const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
                     bool ceil_mode = false, bool count_include_pad = false,
                     const std::vector<int64_t> &dilations = {},
-                    const std::string &auto_pad = "NOTSET") const;
+                    const std::string &auto_pad = "NOTSET", RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                   const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
@@ -94,7 +97,7 @@ public:
   using KernelBase::KernelBase;
 
   /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
-  Tensor operator()(const Tensor &x) const;
+  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
 
   /// Output shape differs from the input shape, so storage cannot be shared.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -108,7 +111,7 @@ public:
   using KernelBase::KernelBase;
 
   /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
-  Tensor operator()(const Tensor &x) const;
+  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
 
   /// Output shape differs from the input shape, so storage cannot be shared.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -125,7 +128,7 @@ public:
 
   /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
   /// ``p`` is the Lp norm exponent (default 2).
-  Tensor operator()(const Tensor &x, int64_t p = 2) const;
+  Tensor operator()(const Tensor &x, int64_t p = 2, RuntimeContext *rt = nullptr) const;
 
   /// Output shape differs from the input shape, so storage cannot be shared.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -156,7 +159,7 @@ public:
                     const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
                     int64_t p = 2, bool ceil_mode = false,
                     const std::vector<int64_t> &dilations = {},
-                    const std::string &auto_pad = "NOTSET") const;
+                    const std::string &auto_pad = "NOTSET", RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from the input shape, so the output
   /// buffer cannot in general alias the input buffer.
@@ -180,7 +183,7 @@ public:
   /// Returns the inference-mode primary output ``Y``. ``epsilon`` defaults
   /// to 1e-5f, the upstream default.
   Tensor operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
-                    const Tensor &input_mean, const Tensor &input_var, float epsilon = 1e-5f) const;
+                    const Tensor &input_mean, const Tensor &input_var, float epsilon = 1e-5f, RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                   const Tensor &input_mean, const Tensor &input_var, Tensor &output,
@@ -220,7 +223,7 @@ public:
   /// Returns the output ``Y``. ``epsilon`` defaults to 1e-5f, the upstream
   /// default.
   Tensor operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
-                    float epsilon = 1e-5f) const;
+                    float epsilon = 1e-5f, RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const Tensor &scale, const Tensor &bias, Tensor &output,
                   float epsilon = 1e-5f) const;
@@ -248,7 +251,7 @@ public:
   /// Returns the output ``Y``. ``epsilon`` defaults to 1e-5f, the upstream
   /// default.
   Tensor operator()(const Tensor &x, const Tensor &scale, const Tensor &bias, int64_t num_groups,
-                    float epsilon = 1e-5f) const;
+                    float epsilon = 1e-5f, RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const Tensor &scale, const Tensor &bias, int64_t num_groups,
                   Tensor &output, float epsilon = 1e-5f) const;
@@ -314,7 +317,7 @@ public:
   /// Returns the output ``Y``. ``axis`` defaults to ``-1`` and ``epsilon``
   /// to ``1e-5f`` to match the upstream defaults.
   Tensor operator()(const Tensor &x, const Tensor &scale, int64_t axis = -1,
-                    float epsilon = 1e-5f) const;
+                    float epsilon = 1e-5f, RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const Tensor &scale, Tensor &output, int64_t axis = -1,
                   float epsilon = 1e-5f) const;
@@ -333,7 +336,7 @@ class MeanVarianceNormalization : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &x, const std::vector<int64_t> &axes = {0, 2, 3}) const;
+  Tensor operator()(const Tensor &x, const std::vector<int64_t> &axes = {0, 2, 3}, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output,
                   const std::vector<int64_t> &axes = {0, 2, 3}) const;
 
@@ -360,7 +363,7 @@ public:
   using KernelBase::KernelBase;
 
   /// Returns the 2-D output tensor. ``axis`` follows ONNX semantics.
-  Tensor operator()(const Tensor &input, int64_t axis = 1) const;
+  Tensor operator()(const Tensor &input, int64_t axis = 1, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, int64_t axis, Tensor &output) const;
 
   /// Output element count equals the input element count, so storage can
@@ -386,7 +389,7 @@ public:
                                        bool training_mode = false, int64_t seed = kNoSeed) const;
 
   Tensor operator()(const Tensor &data, float ratio, bool training_mode, Tensor &mask,
-                    int64_t seed = kNoSeed) const;
+                    int64_t seed = kNoSeed, RuntimeContext *rt = nullptr) const;
 
   static constexpr int64_t kNoSeed = -1;
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -413,7 +416,7 @@ public:
 
   /// Returns a FLOAT output tensor whose shape matches ``x``.
   Tensor operator()(const Tensor &x, int64_t size, float alpha = 0.0001f, float beta = 0.75f,
-                    float bias = 1.0f) const;
+                    float bias = 1.0f, RuntimeContext *rt = nullptr) const;
 
   /// Output shape matches input shape, so storage may alias the input buffer.
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -435,7 +438,7 @@ public:
   using KernelBase::KernelBase;
 
   /// Returns a FLOAT output tensor whose shape matches ``x``.
-  Tensor operator()(const Tensor &x, int64_t axis = -1, int64_t p = 2) const;
+  Tensor operator()(const Tensor &x, int64_t axis = -1, int64_t p = 2, RuntimeContext *rt = nullptr) const;
 
   /// Output shape matches input shape, so storage may alias the input buffer.
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -465,7 +468,7 @@ public:
   Tensor operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                     const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
                     bool ceil_mode = false, const std::vector<int64_t> &dilations = {},
-                    int64_t storage_order = 0, const std::string &auto_pad = "NOTSET") const;
+                    int64_t storage_order = 0, const std::string &auto_pad = "NOTSET", RuntimeContext *rt = nullptr) const;
 
   /// Returns ``(Y, Indices)`` where ``Indices`` is an ``int64`` tensor with
   /// the same shape as ``Y`` containing the flat indices into the un-padded
@@ -500,14 +503,14 @@ public:
   Tensor operator()(const Tensor &x, const Tensor &indices,
                     const std::vector<int64_t> &kernel_shape,
                     const std::vector<int64_t> &strides = {},
-                    const std::vector<int64_t> &pads = {}) const;
+                    const std::vector<int64_t> &pads = {}, RuntimeContext *rt = nullptr) const;
 
   /// Three-input form: ``output_shape`` is a rank-1 ``int64`` tensor giving
   /// the full output shape ``(N, C, D1, ..., Dk)``.
   Tensor operator()(const Tensor &x, const Tensor &indices, const Tensor &output_shape,
                     const std::vector<int64_t> &kernel_shape,
                     const std::vector<int64_t> &strides = {},
-                    const std::vector<int64_t> &pads = {}) const;
+                    const std::vector<int64_t> &pads = {}, RuntimeContext *rt = nullptr) const;
 
   /// Output shape differs from input shape.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -537,7 +540,7 @@ public:
 
   /// Returns the pooled output ``Y`` of shape
   /// ``(num_rois, C, pooled_shape[0], pooled_shape[1])``.
-  Tensor operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs) const;
+  Tensor operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs, RuntimeContext *rt = nullptr) const;
 
   /// In-place variant that writes into a pre-allocated ``output`` tensor of
   /// the expected shape and FLOAT dtype.
@@ -780,16 +783,16 @@ public:
 
   /// Default-attribute overload. ``scale = 1 / sqrt(head_size)``, no mask,
   /// no causal, no softcap, no past KV.
-  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V) const;
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, RuntimeContext *rt = nullptr) const;
 
   /// Explicit ``scale`` overload, no mask.
-  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale) const;
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale, RuntimeContext *rt = nullptr) const;
 
   /// Explicit ``scale`` plus an optional FLOAT attention bias whose shape
   /// must broadcast to ``(batch, q_num_heads, q_seq_len, kv_seq_len)``.
   /// A default-constructed ``Tensor`` omits the mask.
   Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                    const Tensor &attn_mask) const;
+                    const Tensor &attn_mask, RuntimeContext *rt = nullptr) const;
 
   /// In-place overload writing into a caller-allocated ``output`` tensor.
   /// ``output`` must already be FLOAT and shape
@@ -857,7 +860,7 @@ public:
   using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &x, const Tensor &w, const Tensor &offset, const Tensor &b,
-                    const Tensor &mask, const Attributes &attrs) const;
+                    const Tensor &mask, const Attributes &attrs, RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const Tensor &w, const Tensor &offset, const Tensor &b,
                   const Tensor &mask, const Attributes &attrs, Tensor &output) const;
@@ -891,7 +894,7 @@ public:
   /// Returning overload. ``B`` may be a default-constructed (empty-shape)
   /// ``Tensor`` to indicate the optional bias is missing.
   Tensor operator()(const Tensor &x, const Tensor &w, const Tensor &b,
-                    const Attributes &attrs) const;
+                    const Attributes &attrs, RuntimeContext *rt = nullptr) const;
 
   /// In-place overload writing into a caller-allocated FLOAT ``output``.
   void operator()(const Tensor &x, const Tensor &w, const Tensor &b, const Attributes &attrs,
@@ -924,7 +927,7 @@ public:
 
   /// Returning overload.
   Tensor operator()(const Tensor &x, const Tensor &w, const Tensor &x_zero_point,
-                    const Tensor &w_zero_point, const Attributes &attrs) const;
+                    const Tensor &w_zero_point, const Attributes &attrs, RuntimeContext *rt = nullptr) const;
 
   /// In-place overload writing into a caller-allocated INT32 ``output``.
   void operator()(const Tensor &x, const Tensor &w, const Tensor &x_zero_point,
@@ -960,7 +963,7 @@ public:
 
   /// Returning overload.
   Tensor operator()(const Tensor &x, const Tensor &w, const Tensor &b,
-                    const Attributes &attrs) const;
+                    const Attributes &attrs, RuntimeContext *rt = nullptr) const;
 
   /// In-place overload writing into a caller-allocated FLOAT ``output``.
   void operator()(const Tensor &x, const Tensor &w, const Tensor &b, const Attributes &attrs,
@@ -1005,7 +1008,7 @@ public:
   using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &input, const Tensor &image_shape, const Tensor &block_shape,
-                    const Attributes &attrs) const;
+                    const Attributes &attrs, RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &input, const Tensor &image_shape, const Tensor &block_shape,
                   const Attributes &attrs, Tensor &output) const;
@@ -1051,7 +1054,7 @@ public:
   /// Returning overload. ``position_ids`` may be a default-constructed
   /// (empty-shape) ``Tensor`` to indicate the optional input is missing.
   Tensor operator()(const Tensor &X, const Tensor &cos_cache, const Tensor &sin_cache,
-                    const Tensor &position_ids, const Attributes &attrs) const;
+                    const Tensor &position_ids, const Attributes &attrs, RuntimeContext *rt = nullptr) const;
 
   /// In-place overload writing into a caller-allocated output of the same
   /// shape and dtype as ``X``.
@@ -1138,7 +1141,7 @@ public:
   using KernelBase::KernelBase;
 
   /// Default-attribute overload (update_rule="linear", scale=auto).
-  Tensor operator()(const Tensor &query, const Tensor &key, const Tensor &value) const;
+  Tensor operator()(const Tensor &query, const Tensor &key, const Tensor &value, RuntimeContext *rt = nullptr) const;
 
   /// Comprehensive overload covering every supported feature.
   Result operator()(const Tensor &query, const Tensor &key, const Tensor &value,

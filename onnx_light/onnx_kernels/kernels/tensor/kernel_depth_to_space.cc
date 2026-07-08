@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -29,7 +30,7 @@ std::vector<int64_t> ComputeDepthToSpaceOutputShape(const std::vector<int64_t> &
 
 } // namespace
 
-Tensor DepthToSpace::operator()(const Tensor &input, const Attributes &attrs) const {
+Tensor DepthToSpace::operator()(const Tensor &input, const Attributes &attrs, RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape =
       ComputeDepthToSpaceOutputShape(input.shape, attrs.blocksize);
   Tensor output("", input.data_type, out_shape,
@@ -71,7 +72,7 @@ void DepthToSpace::operator()(const Tensor &input, const Attributes &attrs, Tens
   const int64_t out_stride_h = W_out;
 
   const uint8_t *const in_ptr = input.bytes();
-  uint8_t *const out_ptr = output.data.data();
+  uint8_t *const out_ptr = output.mutable_bytes();
 
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c_out = 0; c_out < C_out; ++c_out) {

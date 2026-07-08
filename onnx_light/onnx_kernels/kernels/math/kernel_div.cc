@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -24,9 +25,9 @@ constexpr const char *kDivName = "kernel::Div";
 // unsigned dtypes used by the upstream ``test_div_uint{8,16,32,64}`` cases
 // truncation and floor division coincide (both operands are non-negative).
 template <typename T>
-Tensor DivAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y) {
+Tensor DivAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAlloc<T, T>(kDivName, dtype_name, dtype, x, y,
-                                              [](T a, T b) -> T { return a / b; });
+                                              [](T a, T b) -> T { return a / b; }, allocator);
 }
 
 template <typename T>
@@ -41,36 +42,38 @@ constexpr const char *kSupportedDivTypesMsg =
     "UINT32 and UINT64 inputs.";
 } // namespace
 
-Tensor Div::operator()(const Tensor &x, const Tensor &y) const {
+Tensor Div::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT:
-    return DivAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+    return DivAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);
   case DataType::DOUBLE:
-    return DivAlloc<double>("DOUBLE", DataType::DOUBLE, x, y);
+    return DivAlloc<double>("DOUBLE", DataType::DOUBLE, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT8:
-    return DivAlloc<int8_t>("INT8", DataType::INT8, x, y);
+    return DivAlloc<int8_t>("INT8", DataType::INT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT16:
-    return DivAlloc<int16_t>("INT16", DataType::INT16, x, y);
+    return DivAlloc<int16_t>("INT16", DataType::INT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return DivAlloc<int32_t>("INT32", DataType::INT32, x, y);
+    return DivAlloc<int32_t>("INT32", DataType::INT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return DivAlloc<int64_t>("INT64", DataType::INT64, x, y);
+    return DivAlloc<int64_t>("INT64", DataType::INT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT8:
-    return DivAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
+    return DivAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT16:
-    return DivAlloc<uint16_t>("UINT16", DataType::UINT16, x, y);
+    return DivAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return DivAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
+    return DivAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return DivAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+    return DivAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfElementwiseAlloc(kDivName, "FLOAT16", DataType::FLOAT16, x, y,
                                               Float16BitsToFloat, FloatToFloat16Bits,
-                                              [](float a, float b) { return a / b; });
+                                              [](float a, float b) { return a / b; },
+          rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
     return detail::BinaryHalfElementwiseAlloc(kDivName, "BFLOAT16", DataType::BFLOAT16, x, y,
                                               Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                              [](float a, float b) { return a / b; });
+                                              [](float a, float b) { return a / b; },
+          rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kDivName, ": unsupported data type ", x.data_type, kSupportedDivTypesMsg);
   }

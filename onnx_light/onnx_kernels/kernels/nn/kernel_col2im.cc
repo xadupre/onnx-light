@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -53,7 +54,7 @@ std::vector<int64_t> ReadInt64Vector(const Tensor &t, const char *name) {
 } // namespace
 
 Tensor Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Tensor &block_shape,
-                          const Attributes &attrs) const {
+                          const Attributes &attrs, RuntimeContext *rt) const {
   const std::vector<int64_t> image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
   const std::vector<int64_t> block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
   EXT_ENFORCE_INVALID(image_shape_vec.size() == block_shape_vec.size(),
@@ -146,7 +147,7 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
   for (int64_t d : expected_out_shape) {
     total *= d;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(float),
                       "kernel::Col2Im preallocated output buffer has unexpected size.");
 
   // Per-axis image stride into the output buffer.

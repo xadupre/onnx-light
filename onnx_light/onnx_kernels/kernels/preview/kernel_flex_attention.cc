@@ -12,6 +12,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <vector>
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -95,7 +96,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
       "q_seq_len, v_head_size).");
   const int64_t out_count = batch_size * q_num_heads * q_seq_len * v_head_size;
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(out_count) * sizeof(T),
+      output.size_bytes() == static_cast<size_t>(out_count) * sizeof(T),
       "kernel::FlexAttention preallocated output buffer has unexpected size in bytes.");
 
   const int64_t group_size = q_num_heads / kv_num_heads;
@@ -167,7 +168,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
                         "(batch_size, q_num_heads, q_seq_len, kv_seq_len) shape of the "
                         "score tensor.");
     EXT_ENFORCE_INVALID(
-        probs.data.size() == static_cast<size_t>(probs_count) * sizeof(T),
+        probs.size_bytes() == static_cast<size_t>(probs_count) * sizeof(T),
         "kernel::FlexAttention: 'score_mod' callback must preserve the byte size of the "
         "score tensor buffer.");
     pProbs = probs.As<T>();
@@ -222,7 +223,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
                         "(batch_size, q_num_heads, q_seq_len, kv_seq_len) shape of the "
                         "probability tensor.");
     EXT_ENFORCE_INVALID(
-        probs.data.size() == static_cast<size_t>(probs_count) * sizeof(T),
+        probs.size_bytes() == static_cast<size_t>(probs_count) * sizeof(T),
         "kernel::FlexAttention: 'prob_mod' callback must preserve the byte size of the "
         "probability tensor buffer.");
     pProbs = probs.As<T>();
@@ -251,7 +252,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
 
 } // namespace
 
-Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V) const {
+Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, RuntimeContext *rt) const {
   CheckRank4Float(Q, "Q");
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::FlexAttention: 'head_size' must be positive.");
@@ -260,17 +261,17 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
 }
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
-                                 float scale) const {
+                                 float scale, RuntimeContext *rt) const {
   return (*this)(Q, K, V, scale, ScoreModFn{}, ProbModFn{});
 }
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                                 const ProbModFn &prob_mod) const {
+                                 const ProbModFn &prob_mod, RuntimeContext *rt) const {
   return (*this)(Q, K, V, scale, ScoreModFn{}, prob_mod);
 }
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                                 const ScoreModFn &score_mod, const ProbModFn &prob_mod) const {
+                                 const ScoreModFn &score_mod, const ProbModFn &prob_mod, RuntimeContext *rt) const {
   CheckRank4Float(Q, "Q");
   CheckRank4Float(V, "V");
   const int64_t batch_size = Q.shape[0];
@@ -333,10 +334,10 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
     EXT_ENFORCE_INVALID(output.shape == demoted.shape,
                         "kernel::FlexAttention preallocated output shape must be (batch_size, "
                         "q_num_heads, q_seq_len, v_head_size).");
-    EXT_ENFORCE_INVALID(output.data.size() == demoted.data.size(),
+    EXT_ENFORCE_INVALID(output.size_bytes() == demoted.size_bytes(),
                         "kernel::FlexAttention preallocated output buffer has unexpected size "
                         "in bytes.");
-    std::memcpy(output.data.data(), demoted.data.data(), demoted.data.size());
+    std::memcpy(output.mutable_bytes(), demoted.bytes(), demoted.size_bytes());
     return;
   }
 

@@ -423,13 +423,15 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(mem0["outputs"], {"": "4*N"})
 
         mem1 = inplace.node_memory(1)
-        self.assertEqual(mem1["total_bytes"], "12*N+8")
+        # A (FLOAT [N]) and Y (INT32 [N]) have equal byte sizes (4*N each), so A's
+        # buffer is reused for Y — no extra output allocation for this node.
+        self.assertEqual(mem1["total_bytes"], "8*N+8")
         self.assertEqual(mem1["already_allocated_bytes"], "8*N+8")
-        self.assertEqual(mem1["output_allocation_bytes"], "4*N")
+        self.assertEqual(mem1["output_allocation_bytes"], 0)
         self.assertEqual(mem1["inputs"], {"": "4*N"})
         self.assertEqual(mem1["initializers"], {"shape": 8})
         self.assertEqual(mem1["intermediates"], {"": "4*N"})
-        self.assertEqual(mem1["outputs"], {"": "4*N"})
+        self.assertEqual(mem1["outputs"], {})
 
     def test_inplace_context_memory_simplifies_repeated_symbolic_sums(self):
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N"])

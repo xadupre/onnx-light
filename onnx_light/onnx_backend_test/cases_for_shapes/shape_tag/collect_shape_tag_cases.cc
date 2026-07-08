@@ -13,6 +13,9 @@ void CollectShapeTagTestCases(std::vector<TestCase> &registry, const std::string
     RegisterShapeTagAmbiguousCases(registry);
     RegisterShapeTagConstantMulConcatReshapeCases(registry);
     RegisterShapeTagOutputAsShapeCases(registry);
+    RegisterShapeTagConcatWeightWinsCases(registry);
+    RegisterShapeTagCastBackwardCases(registry);
+    RegisterShapeTagReshapeBackwardCases(registry);
   }
 }
 

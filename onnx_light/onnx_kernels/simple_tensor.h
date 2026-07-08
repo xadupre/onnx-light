@@ -379,7 +379,8 @@ struct Tensor {
   }
 
   /// Marks the tensor storage as allocator-backed.
-  void SetAllocation(RawBufferAllocator *allocator_owner, RawBuffer *allocation) noexcept {
+  /// Callers must release/clear any existing allocation first.
+  void SetAllocation(RawBufferAllocator *allocator_owner, RawBuffer *allocation) {
     EXT_ENFORCE(allocation_ == nullptr, "Tensor::SetAllocation: allocation is already set. Release "
                                         "the existing allocation before setting a new one.");
     allocation_owner_ = allocator_owner;
@@ -391,11 +392,11 @@ struct Tensor {
   }
 
   bool has_allocation() const noexcept { return allocation_ != nullptr; }
-  RawBuffer *allocation() const noexcept {
+  RawBuffer *allocation() const {
     EXT_ENFORCE(allocation_ != nullptr, "Tensor::allocation: tensor is not allocator-backed.");
     return allocation_;
   }
-  RawBufferAllocator *allocation_owner() const noexcept {
+  RawBufferAllocator *allocation_owner() const {
     EXT_ENFORCE(allocation_owner_ != nullptr,
                 "Tensor::allocation_owner: tensor is not allocator-backed.");
     return allocation_owner_;

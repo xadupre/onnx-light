@@ -32,7 +32,7 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return;
   }
-  EXT_ENFORCE(!(tensor.has_allocation()),
+  EXT_ENFORCE(!tensor.has_allocation(),
               "RuntimeContext: incoming tensor already has allocator-backed storage.");
   const size_t n_bytes = tensor.size_bytes();
   // Keep truly empty inline tensors as-is (no bytes and no allocator binding).

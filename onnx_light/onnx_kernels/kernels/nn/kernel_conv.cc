@@ -116,8 +116,8 @@ std::vector<int64_t> ComputeOutputSpatial(const Tensor &x, Conv::Attributes &att
 
 } // namespace
 
-Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const Attributes &attrs,
-                        RuntimeContext *rt) const {
+Tensor Conv::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &w, const Tensor &b,
+                        const Attributes &attrs) const {
   // FLOAT16/BFLOAT16 are computed in float32 and demoted back; this mirrors
   // the half-precision dispatch used by kernel::MatMul and lets the expanded
   // ``CausalConvWithState`` function (which lowers to a half-precision Conv)
@@ -126,7 +126,7 @@ Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const
     const Tensor x_f = PromoteToFloat32(x);
     const Tensor w_f = PromoteToFloat32(w);
     const Tensor b_f = b.shape.empty() ? b : PromoteToFloat32(b);
-    Tensor y = (*this)(x_f, w_f, b_f, attrs);
+    Tensor y = (*this)(rt, x_f, w_f, b_f, attrs);
     return DemoteFromFloat32(y, x.data_type);
   }
   Attributes resolved = attrs;
@@ -144,8 +144,9 @@ Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor out("", x.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(total) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(float);
+  Tensor out =
+      MakeOutputTensor(x.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, w, b, resolved, out);
   return out;
 }
@@ -155,7 +156,7 @@ void Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const A
   if (IsHalfPrecision(x.data_type)) {
     EXT_ENFORCE_INVALID(output.data_type == x.data_type,
                         "kernel::Conv preallocated output must match the input dtype.");
-    Tensor y = (*this)(x, w, b, attrs);
+    Tensor y = (*this)(nullptr, x, w, b, attrs);
     EXT_ENFORCE_INVALID(output.shape == y.shape,
                         "kernel::Conv preallocated output shape must equal (N, M, oD1, ..., oDk).");
     EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(),

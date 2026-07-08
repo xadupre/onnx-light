@@ -70,8 +70,8 @@ void GatherLastAxis(const Tensor &x, const Tensor &indices, const std::vector<in
 } // namespace
 
 template <typename T>
-Tensor ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices,
-                                         RuntimeContext *rt) const {
+Tensor ArrayFeatureExtractor::operator()(RuntimeContext *rt, const Tensor &x,
+                                         const Tensor &indices) const {
   ValidateInput<T>(x);
   ValidateIndices(x, indices);
   const std::vector<int64_t> out_shape = ComputeOutputShape(x, indices);
@@ -101,8 +101,8 @@ void ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices,
 }
 
 #define ONNX_LIGHT_INSTANTIATE_ARRAY_FEATURE_EXTRACTOR(T)                                          \
-  template Tensor ArrayFeatureExtractor::operator()<T>(const Tensor &, const Tensor &,             \
-                                                       RuntimeContext *) const;                    \
+  template Tensor ArrayFeatureExtractor::operator()<T>(RuntimeContext *, const Tensor &,           \
+                                                       const Tensor &, RuntimeContext *) const;    \
   template void ArrayFeatureExtractor::operator()<T>(const Tensor &, const Tensor &, Tensor &) const
 
 ONNX_LIGHT_INSTANTIATE_ARRAY_FEATURE_EXTRACTOR(float);

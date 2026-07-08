@@ -22,9 +22,9 @@ constexpr const char *kName = "kernel::Tanh";
 
 } // namespace
 
-Tensor Tanh::operator()(const Tensor &x, RuntimeContext *rt) const {
-  Tensor y("", x.data_type, x.shape,
-           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * x.element_size()));
+Tensor Tanh::operator()(RuntimeContext *rt, const Tensor &x) const {
+  const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
+  Tensor y = MakeOutputTensor(x.data_type, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, y);
   return y;
 }

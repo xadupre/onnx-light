@@ -92,7 +92,8 @@ Tensor MeanAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor z("", dtype, out_shape, std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(T)));
+  const size_t z_n_bytes = static_cast<size_t>(out_count) * sizeof(T);
+  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, rt ? rt->allocator() : nullptr);
   AccumulateAndScale<T>(dtype_name, dtype, inputs, z);
   return z;
 }
@@ -114,7 +115,7 @@ void MeanInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor
 
 } // namespace
 
-Tensor Mean::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
+Tensor Mean::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMeanName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:

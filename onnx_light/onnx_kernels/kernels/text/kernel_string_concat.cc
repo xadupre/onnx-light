@@ -52,7 +52,7 @@ StringBroadcast CheckStringConcatInputs(const Tensor &x, const Tensor &y) {
 
 } // namespace
 
-Tensor StringConcat::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+Tensor StringConcat::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
   const StringBroadcast bi = CheckStringConcatInputs(x, y);
   Tensor out = Tensor::MakeString("", bi.shape,
                                   std::vector<std::string>(static_cast<size_t>(bi.element_count)));

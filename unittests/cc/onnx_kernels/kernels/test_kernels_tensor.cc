@@ -35,7 +35,7 @@ TEST(KernelClass, ConcatClassConcatenatesAxis0) {
   Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
-  Tensor y = concat_kernel({x0, x1}, /*axis=*/0);
+  Tensor y = concat_kernel(nullptr, {x0, x1}, /*axis=*/0);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4, 2}));
   ASSERT_EQ(y.element_count(), 8);
   const float *py = y.AsFloat();
@@ -49,7 +49,7 @@ TEST(KernelClass, ConcatClassConcatenatesNegativeAxis) {
   Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 3}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
-  Tensor y = concat_kernel({x0, x1}, /*axis=*/-1);
+  Tensor y = concat_kernel(nullptr, {x0, x1}, /*axis=*/-1);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 5}));
   ASSERT_EQ(y.element_count(), 10);
   const float *py = y.AsFloat();
@@ -64,14 +64,14 @@ TEST(KernelClass, ConcatClassRejectsMismatchedShape) {
   Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {3, 2}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
-  EXPECT_THROW((void)concat_kernel({x0, x1}, /*axis=*/1), std::invalid_argument);
+  EXPECT_THROW((void)concat_kernel(nullptr, {x0, x1}, /*axis=*/1), std::invalid_argument);
 }
 
 TEST(KernelClass, ConcatClassRejectsScalar) {
   const KernelContext ctx{DefaultOpset(13)};
   Concat concat_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {}, {1.0f});
-  EXPECT_THROW((void)concat_kernel({x}, /*axis=*/0), std::invalid_argument);
+  EXPECT_THROW((void)concat_kernel(nullptr, {x}, /*axis=*/0), std::invalid_argument);
 }
 
 TEST(KernelClass, ConcatInPlaceWritesToPreallocatedOutput) {
@@ -105,7 +105,7 @@ TEST(KernelClass, ReshapeClassReordersDimensions) {
   Reshape reshape_kernel{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f});
   Tensor shape = Tensor::FromInt64("", {2}, {3, 2});
-  Tensor y = reshape_kernel(data, shape);
+  Tensor y = reshape_kernel(nullptr, data, shape);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
   ASSERT_EQ(y.element_count(), data.element_count());
   const float *py = y.AsFloat();
@@ -119,7 +119,7 @@ TEST(KernelClass, ReshapeClassAllowZeroHonoursLiteralZero) {
   Reshape reshape_kernel{ctx};
   Tensor data = Tensor::FromFloat("", {0, 2}, {});
   Tensor shape = Tensor::FromInt64("", {2}, {0, 2});
-  Tensor y = reshape_kernel(data, shape, /*allowzero=*/1);
+  Tensor y = reshape_kernel(nullptr, data, shape, /*allowzero=*/1);
   EXPECT_EQ(y.shape, (std::vector<int64_t>{0, 2}));
 }
 
@@ -131,7 +131,7 @@ TEST(KernelClass, SliceClassSlicesWithAxesAndSteps) {
   Tensor ends = Tensor::FromInt64("", {2}, {2, 3});
   Tensor axes = Tensor::FromInt64("", {2}, {0, 1});
   Tensor steps = Tensor::FromInt64("", {2}, {1, 2});
-  Tensor y = slice_kernel(data, starts, ends, &axes, &steps);
+  Tensor y = slice_kernel(nullptr, data, starts, ends, &axes, &steps);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 5.f);
@@ -144,7 +144,7 @@ TEST(KernelClass, SliceClassUsesDefaultAxesAndSteps) {
   Tensor data = Tensor::FromFloat("", {2, 4}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
   Tensor starts = Tensor::FromInt64("", {2}, {0, 1});
   Tensor ends = Tensor::FromInt64("", {2}, {-1, 1000});
-  Tensor y = slice_kernel(data, starts, ends);
+  Tensor y = slice_kernel(nullptr, data, starts, ends);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 2.f);
@@ -156,7 +156,7 @@ TEST(KernelClass, SqueezeClassRemovesSpecifiedAxes) {
   const KernelContext ctx{DefaultOpset(13)};
   Squeeze squeeze_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 1, 3, 1}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-  Tensor y = squeeze_kernel(x, {1, 3});
+  Tensor y = squeeze_kernel(nullptr, x, {1, 3});
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   for (int i = 0; i < 6; ++i) {
@@ -168,7 +168,7 @@ TEST(KernelClass, SqueezeClassWithEmptyAxesRemovesAllSingletonDims) {
   const KernelContext ctx{DefaultOpset(13)};
   Squeeze squeeze_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-  Tensor y = squeeze_kernel(x, {});
+  Tensor y = squeeze_kernel(nullptr, x, {});
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
 }
 
@@ -176,7 +176,7 @@ TEST(KernelClass, UnsqueezeClassInsertsSpecifiedAxes) {
   const KernelContext ctx{DefaultOpset(13)};
   Unsqueeze unsqueeze_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-  Tensor y = unsqueeze_kernel(x, {0, 2});
+  Tensor y = unsqueeze_kernel(nullptr, x, {0, 2});
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2, 1, 3}));
   const float *py = y.AsFloat();
   for (int i = 0; i < 6; ++i) {
@@ -188,14 +188,14 @@ TEST(KernelClass, UnsqueezeRejectsDuplicateAxes) {
   const KernelContext ctx{DefaultOpset(13)};
   Unsqueeze unsqueeze_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-  EXPECT_THROW((void)unsqueeze_kernel(x, {1, 1}), std::invalid_argument);
+  EXPECT_THROW((void)unsqueeze_kernel(nullptr, x, {1, 1}), std::invalid_argument);
 }
 
 TEST(KernelClass, CastClassFloatToDouble) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.5f, 0.0f, 2.25f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+  Tensor y = cast_kernel(nullptr, x, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
   ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const double *py = y.AsDouble();
@@ -208,7 +208,7 @@ TEST(KernelClass, CastClassFloatToInt32TruncatesTowardZero) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {-1.5f, 0.0f, 2.75f, 4.0f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  Tensor y = cast_kernel(nullptr, x, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   const int32_t *py = y.AsInt32();
   EXPECT_EQ(py[0], -1);
@@ -248,7 +248,7 @@ TEST(KernelClass, CastClassFloat16SubnormalToFloat8E5M2) {
   std::vector<std::uint8_t> bytes(bits.size() * sizeof(std::uint16_t));
   std::memcpy(bytes.data(), bits.data(), bytes.size());
   Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {3}, std::move(bytes));
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
+  Tensor y = cast_kernel(nullptr, x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
   ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
   ASSERT_EQ(y.data.size(), bits.size());
   EXPECT_EQ(y.data[0], 0x00u); // 2^-23 underflows to +0.
@@ -260,7 +260,7 @@ TEST(KernelClass, CastClassInt64ToFloat) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromInt64("", {4}, {-3, 0, 7, 42});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  Tensor y = cast_kernel(nullptr, x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], -3.0f);
@@ -273,7 +273,7 @@ TEST(KernelClass, CastClassIdentityCopiesBytes) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  Tensor y = cast_kernel(nullptr, x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, x.shape);
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 1.0f);
@@ -286,7 +286,7 @@ TEST(KernelClass, CastClassRejectsUnsupportedTo) {
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
   // UINT32 is not in the supported set for the kernel today.
-  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::UINT32)),
+  EXPECT_THROW((void)cast_kernel(nullptr, x, static_cast<int32_t>(onnx_kernels::DataType::UINT32)),
                std::invalid_argument);
 }
 
@@ -310,7 +310,7 @@ TEST(KernelClass, CastClassFloatToStringMatchesOrtFormat) {
                                {0.47892547f, 1000000.0f, 1e-7f, std::nanf(""),
                                 std::numeric_limits<float>::infinity(),
                                 -std::numeric_limits<float>::infinity(), 0.0f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  Tensor y = cast_kernel(nullptr, x, static_cast<int32_t>(onnx_kernels::DataType::STRING));
   ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
   const std::vector<std::string> &ys = y.AsStrings();
   ASSERT_EQ(ys.size(), 7u);
@@ -329,7 +329,7 @@ TEST(KernelClass, CastClassDoubleToStringMatchesOrtFormat) {
   Tensor x = Tensor::FromDouble("", {4},
                                 {0.123456789, std::nan(""), std::numeric_limits<double>::infinity(),
                                  -std::numeric_limits<double>::infinity()});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  Tensor y = cast_kernel(nullptr, x, static_cast<int32_t>(onnx_kernels::DataType::STRING));
   const std::vector<std::string> &ys = y.AsStrings();
   EXPECT_EQ(ys[0], "0.12345679");
   EXPECT_EQ(ys[1], "NaN");
@@ -352,7 +352,7 @@ TEST(KernelClass, CastLikeClassFloatToDouble) {
   Tensor x = Tensor::FromFloat("", {3}, {-1.5f, 0.0f, 2.25f});
   // target_type carries the destination dtype only; its value is ignored.
   Tensor target = Tensor::FromDouble("", {1}, {0.0});
-  Tensor y = castlike_kernel(x, target);
+  Tensor y = castlike_kernel(nullptr, x, target);
   ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const double *py = y.AsDouble();
@@ -369,8 +369,8 @@ TEST(KernelClass, CastLikeClassIgnoresTargetValues) {
   Tensor x = Tensor::FromFloat("", {4}, {-1.5f, 0.0f, 2.75f, 4.0f});
   Tensor t1 = Tensor::FromInt32("", {1}, {0});
   Tensor t2 = Tensor::FromInt32("", {2}, {12345, -67890});
-  Tensor y1 = castlike_kernel(x, t1);
-  Tensor y2 = castlike_kernel(x, t2);
+  Tensor y1 = castlike_kernel(nullptr, x, t1);
+  Tensor y2 = castlike_kernel(nullptr, x, t2);
   ASSERT_EQ(y1.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   ASSERT_EQ(y2.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   ASSERT_EQ(y1.shape, x.shape);
@@ -442,13 +442,13 @@ Tensor MakeUpstreamTheta3D() {
 TEST(KernelClass, AffineGrid2DMatchesUpstreamReference) {
   const KernelContext ctx{DefaultOpset(20)};
   AffineGrid ag_kernel{ctx};
-  Tensor theta = MakeUpstreamTheta2D();
+  Tensor theta = MakeUpstreamTheta2D(nullptr);
   Tensor size = Tensor::FromInt64("", {4}, {2, 3, 5, 6});
 
   // align_corners == 0 (the default in the ONNX schema).
   AffineGrid::Attributes attrs;
   attrs.align_corners = 0;
-  Tensor grid = ag_kernel(theta, size, attrs);
+  Tensor grid = ag_kernel(nullptr, theta, size, attrs);
   ASSERT_EQ(grid.shape, (std::vector<int64_t>{2, 5, 6, 2}));
   const float *g = grid.AsFloat();
   // Sample values pre-computed via the upstream Python reference
@@ -462,7 +462,7 @@ TEST(KernelClass, AffineGrid2DMatchesUpstreamReference) {
 
   // align_corners == 1.
   attrs.align_corners = 1;
-  Tensor grid_ac = ag_kernel(theta, size, attrs);
+  Tensor grid_ac = ag_kernel(nullptr, theta, size, attrs);
   ASSERT_EQ(grid_ac.shape, (std::vector<int64_t>{2, 5, 6, 2}));
   const float *gac = grid_ac.AsFloat();
   EXPECT_NEAR(gac[0], 7.1991024f, 1e-4f);
@@ -476,12 +476,12 @@ TEST(KernelClass, AffineGrid2DMatchesUpstreamReference) {
 TEST(KernelClass, AffineGrid3DMatchesUpstreamReference) {
   const KernelContext ctx{DefaultOpset(20)};
   AffineGrid ag_kernel{ctx};
-  Tensor theta = MakeUpstreamTheta3D();
+  Tensor theta = MakeUpstreamTheta3D(nullptr);
   Tensor size = Tensor::FromInt64("", {5}, {2, 3, 4, 5, 6});
 
   AffineGrid::Attributes attrs;
   attrs.align_corners = 0;
-  Tensor grid = ag_kernel(theta, size, attrs);
+  Tensor grid = ag_kernel(nullptr, theta, size, attrs);
   ASSERT_EQ(grid.shape, (std::vector<int64_t>{2, 4, 5, 6, 3}));
   const float *g = grid.AsFloat();
   EXPECT_NEAR(g[0], 3.2358518f, 1e-4f);  // [0, 0, 0, 0, 0]
@@ -494,7 +494,7 @@ TEST(KernelClass, AffineGrid3DMatchesUpstreamReference) {
   EXPECT_NEAR(g[last_idx + 2], 1.2608334f, 1e-4f);
 
   attrs.align_corners = 1;
-  Tensor grid_ac = ag_kernel(theta, size, attrs);
+  Tensor grid_ac = ag_kernel(nullptr, theta, size, attrs);
   ASSERT_EQ(grid_ac.shape, (std::vector<int64_t>{2, 4, 5, 6, 3}));
   const float *gac = grid_ac.AsFloat();
   EXPECT_NEAR(gac[0], 2.8929663f, 1e-4f);
@@ -511,21 +511,24 @@ TEST(KernelClass, AffineGridRejectsBadShapes) {
   // theta of rank 2 instead of 3.
   Tensor theta_bad = Tensor::FromFloat("", {2, 3}, {0, 0, 0, 0, 0, 0});
   Tensor size = Tensor::FromInt64("", {4}, {1, 1, 2, 2});
-  EXPECT_THROW((void)ag_kernel(theta_bad, size, AffineGrid::Attributes{}), std::invalid_argument);
+  EXPECT_THROW((void)ag_kernel(nullptr, theta_bad, size, AffineGrid::Attributes{}),
+               std::invalid_argument);
 
   // size of length 3 (neither 4 nor 5).
   Tensor theta = Tensor::FromFloat("", {1, 2, 3}, {1, 0, 0, 0, 1, 0});
   Tensor size_bad = Tensor::FromInt64("", {3}, {1, 2, 2});
-  EXPECT_THROW((void)ag_kernel(theta, size_bad, AffineGrid::Attributes{}), std::invalid_argument);
+  EXPECT_THROW((void)ag_kernel(nullptr, theta, size_bad, AffineGrid::Attributes{}),
+               std::invalid_argument);
 
   // size[0] != theta[0] (batch mismatch).
   Tensor size_mismatch = Tensor::FromInt64("", {4}, {2, 1, 2, 2});
-  EXPECT_THROW((void)ag_kernel(theta, size_mismatch, AffineGrid::Attributes{}),
+  EXPECT_THROW((void)ag_kernel(nullptr, theta, size_mismatch, AffineGrid::Attributes{}),
                std::invalid_argument);
 
   // theta inner dims (2,3) vs 3-D size of length 5.
   Tensor size3d = Tensor::FromInt64("", {5}, {1, 1, 2, 2, 2});
-  EXPECT_THROW((void)ag_kernel(theta, size3d, AffineGrid::Attributes{}), std::invalid_argument);
+  EXPECT_THROW((void)ag_kernel(nullptr, theta, size3d, AffineGrid::Attributes{}),
+               std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -546,7 +549,7 @@ TEST(KernelClass, GridSampleBilinearMatchesUpstream) {
   attrs.mode = "linear";
   attrs.padding_mode = "zeros";
   attrs.align_corners = 0;
-  Tensor Y = gs(X, Grid, attrs);
+  Tensor Y = gs(nullptr, X, Grid, attrs);
   ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 4}));
   const float expected[8] = {0.0f, 0.5f, 1.7f, 2.5f, 2.5f, 1.7f, 4.5f, 1.25f};
   const float *y = Y.AsFloat();
@@ -566,7 +569,7 @@ TEST(KernelClass, GridSampleNearestAndAlignCorners) {
 
   GridSample::Attributes nearest_attrs;
   nearest_attrs.mode = "nearest";
-  Tensor Y_nearest = gs(X, Grid, nearest_attrs);
+  Tensor Y_nearest = gs(nullptr, X, Grid, nearest_attrs);
   const float exp_nearest[8] = {0.0f, 0.0f, 2.0f, 2.0f, 2.0f, 2.0f, 5.0f, 0.0f};
   const float *yn = Y_nearest.AsFloat();
   for (size_t i = 0; i < 8; ++i) {
@@ -576,7 +579,7 @@ TEST(KernelClass, GridSampleNearestAndAlignCorners) {
   GridSample::Attributes ac_attrs;
   ac_attrs.mode = "linear";
   ac_attrs.align_corners = 1;
-  Tensor Y_ac = gs(X, Grid, ac_attrs);
+  Tensor Y_ac = gs(nullptr, X, Grid, ac_attrs);
   const float exp_ac[8] = {0.0f, 1.25f, 2.0f, 2.5f, 2.5f, 2.0f, 3.75f, 5.0f};
   const float *yac = Y_ac.AsFloat();
   for (size_t i = 0; i < 8; ++i) {
@@ -595,7 +598,7 @@ TEST(KernelClass, GridSamplePaddingModes) {
   GridSample::Attributes attrs;
   attrs.mode = "linear";
   attrs.padding_mode = "zeros";
-  Tensor Y_zeros = gs(X, Grid, attrs);
+  Tensor Y_zeros = gs(nullptr, X, Grid, attrs);
   const float exp_zeros[8] = {0.0f, 0.0f, 1.7f, 0.0f, 0.0f, 1.7f, 0.0f, 0.0f};
   const float *y0 = Y_zeros.AsFloat();
   for (size_t i = 0; i < 8; ++i) {
@@ -603,7 +606,7 @@ TEST(KernelClass, GridSamplePaddingModes) {
   }
 
   attrs.padding_mode = "border";
-  Tensor Y_border = gs(X, Grid, attrs);
+  Tensor Y_border = gs(nullptr, X, Grid, attrs);
   const float exp_border[8] = {0.0f, 0.0f, 1.7f, 5.0f, 5.0f, 1.7f, 5.0f, 5.0f};
   const float *yb = Y_border.AsFloat();
   for (size_t i = 0; i < 8; ++i) {
@@ -611,7 +614,7 @@ TEST(KernelClass, GridSamplePaddingModes) {
   }
 
   attrs.padding_mode = "reflection";
-  Tensor Y_reflect = gs(X, Grid, attrs);
+  Tensor Y_reflect = gs(nullptr, X, Grid, attrs);
   const float exp_reflect[8] = {2.5f, 0.0f, 1.7f, 2.5f, 2.5f, 1.7f, 5.0f, 2.5f};
   const float *yr = Y_reflect.AsFloat();
   for (size_t i = 0; i < 8; ++i) {
@@ -625,15 +628,15 @@ TEST(KernelClass, GridSampleRejectsBadInputs) {
   Tensor X = Tensor::FromFloat("", {1, 1, 3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
   // grid last-dim != rank - 2 (must be 2 for 2D, but here we pass 3).
   Tensor Grid_bad = Tensor::FromFloat("", {1, 2, 4, 3}, std::vector<float>(24, 0.0f));
-  EXPECT_THROW((void)gs(X, Grid_bad, GridSample::Attributes{}), std::invalid_argument);
+  EXPECT_THROW((void)gs(nullptr, X, Grid_bad, GridSample::Attributes{}), std::invalid_argument);
   // rank mismatch.
   Tensor Grid_rank = Tensor::FromFloat("", {1, 2, 2}, {0, 0, 0, 0});
-  EXPECT_THROW((void)gs(X, Grid_rank, GridSample::Attributes{}), std::invalid_argument);
+  EXPECT_THROW((void)gs(nullptr, X, Grid_rank, GridSample::Attributes{}), std::invalid_argument);
   // Unknown mode.
   Tensor Grid_ok = Tensor::FromFloat("", {1, 2, 4, 2}, std::vector<float>(16, 0.0f));
   GridSample::Attributes bad_attrs;
   bad_attrs.mode = "quintic";
-  EXPECT_THROW((void)gs(X, Grid_ok, bad_attrs), std::invalid_argument);
+  EXPECT_THROW((void)gs(nullptr, X, Grid_ok, bad_attrs), std::invalid_argument);
 }
 
 using onnx_kernels::kernel::NonZero;
@@ -644,7 +647,7 @@ TEST(KernelClass, NonZeroFloat2DReturnsRowMajorIndices) {
   // X = [[1, 0], [1, 1]]; non-zero in row-major order at (0,0),(1,0),(1,1).
   // Output is (rank=2, nnz=3) = [[0,1,1],[0,0,1]].
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 0.0f, 1.0f, 1.0f});
-  Tensor y = nonzero_kernel(x);
+  Tensor y = nonzero_kernel(nullptr, x);
   ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const int64_t *py = y.AsInt64();
@@ -660,7 +663,7 @@ TEST(KernelClass, NonZero1DReturnsSingleRow) {
   const KernelContext ctx{DefaultOpset(13)};
   NonZero nonzero_kernel{ctx};
   Tensor x = Tensor::FromInt64("", {5}, {0, 1, 0, -1, 2});
-  Tensor y = nonzero_kernel(x);
+  Tensor y = nonzero_kernel(nullptr, x);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 1);
@@ -672,7 +675,7 @@ TEST(KernelClass, NonZeroBoolRespectsTruthiness) {
   const KernelContext ctx{DefaultOpset(13)};
   NonZero nonzero_kernel{ctx};
   Tensor x = Tensor::FromBool("", {2, 3}, {1, 0, 1, 0, 1, 0});
-  Tensor y = nonzero_kernel(x);
+  Tensor y = nonzero_kernel(nullptr, x);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const int64_t *py = y.AsInt64();
   // Non-zero positions: (0,0),(0,2),(1,1) -> rows [0,0,1],[0,2,1].
@@ -690,7 +693,7 @@ TEST(KernelClass, ShapeDefaultReturnsFullShape) {
   const KernelContext ctx{DefaultOpset(15)};
   Shape shape_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3, 4}, std::vector<float>(24, 0.0f));
-  Tensor y = shape_kernel(x);
+  Tensor y = shape_kernel(nullptr, x);
   ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const int64_t *py = y.AsInt64();
@@ -707,14 +710,14 @@ TEST(KernelClass, ShapeStartEndAndNegativesAreClamped) {
   Shape::Attributes a;
   a.start = 1;
   a.end = 3;
-  Tensor y = shape_kernel(x, a);
+  Tensor y = shape_kernel(nullptr, x, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
   EXPECT_EQ(y.AsInt64()[0], 3);
   EXPECT_EQ(y.AsInt64()[1], 4);
 
   Shape::Attributes neg;
   neg.start = -2;
-  Tensor y2 = shape_kernel(x, neg);
+  Tensor y2 = shape_kernel(nullptr, x, neg);
   ASSERT_EQ(y2.shape, (std::vector<int64_t>{2}));
   EXPECT_EQ(y2.AsInt64()[0], 4);
   EXPECT_EQ(y2.AsInt64()[1], 5);
@@ -723,7 +726,7 @@ TEST(KernelClass, ShapeStartEndAndNegativesAreClamped) {
   Shape::Attributes inv;
   inv.start = 3;
   inv.end = 1;
-  Tensor y3 = shape_kernel(x, inv);
+  Tensor y3 = shape_kernel(nullptr, x, inv);
   EXPECT_EQ(y3.shape, (std::vector<int64_t>{0}));
 }
 
@@ -731,7 +734,7 @@ TEST(KernelClass, NonZeroScalarProducesShapeZeroByNnz) {
   const KernelContext ctx{DefaultOpset(13)};
   NonZero nonzero_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {}, {1.0f});
-  Tensor y = nonzero_kernel(x);
+  Tensor y = nonzero_kernel(nullptr, x);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{0, 1}));
 }
 
@@ -739,7 +742,7 @@ TEST(KernelClass, NonZeroAllZeroesProducesEmptyOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   NonZero nonzero_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
-  Tensor y = nonzero_kernel(x);
+  Tensor y = nonzero_kernel(nullptr, x);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 0}));
   EXPECT_EQ(y.element_count(), 0);
 }
@@ -748,7 +751,7 @@ TEST(KernelClass, NonZeroRejectsUnsupportedDtype) {
   const KernelContext ctx{DefaultOpset(13)};
   NonZero nonzero_kernel{ctx};
   Tensor x = Tensor::FromStrings("", {2}, {"foo", "bar"});
-  EXPECT_THROW((void)nonzero_kernel(x), std::invalid_argument);
+  EXPECT_THROW((void)nonzero_kernel(nullptr, x), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -771,7 +774,7 @@ TEST(KernelClass, DepthToSpaceDCRMatchesNumpyReference) {
   onnx_kernels::kernel::DepthToSpace::Attributes a;
   a.blocksize = 2;
   a.mode = "DCR";
-  Tensor y = d2s(x, a);
+  Tensor y = d2s(nullptr, x, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2, 2, 2}));
   // Reference computed by hand following the DCR rule:
   //   c_in = bh * blocksize * C_out + bw * C_out + c_out
@@ -792,7 +795,7 @@ TEST(KernelClass, DepthToSpaceCRDMatchesNumpyReference) {
   onnx_kernels::kernel::DepthToSpace::Attributes a;
   a.blocksize = 2;
   a.mode = "CRD";
-  Tensor y = d2s(x, a);
+  Tensor y = d2s(nullptr, x, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2, 2, 2}));
   // Reference computed by hand following the CRD rule:
   //   c_in = c_out * blocksize^2 + bh * blocksize + bw
@@ -809,7 +812,7 @@ TEST(KernelClass, DepthToSpaceRejectsNonRank4Input) {
   Tensor x = Tensor::FromFloat("", {1, 4}, {0.f, 1.f, 2.f, 3.f});
   onnx_kernels::kernel::DepthToSpace::Attributes a;
   a.blocksize = 2;
-  EXPECT_THROW((void)d2s(x, a), std::invalid_argument);
+  EXPECT_THROW((void)d2s(nullptr, x, a), std::invalid_argument);
 }
 
 TEST(KernelClass, DepthToSpaceRejectsChannelNotDivisible) {
@@ -820,7 +823,7 @@ TEST(KernelClass, DepthToSpaceRejectsChannelNotDivisible) {
                                 10.f, 11.f, 12.f, 13.f, 14.f, 15.f, 16.f, 17.f, 18.f, 19.f});
   onnx_kernels::kernel::DepthToSpace::Attributes a;
   a.blocksize = 2;
-  EXPECT_THROW((void)d2s(x, a), std::invalid_argument);
+  EXPECT_THROW((void)d2s(nullptr, x, a), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -842,7 +845,7 @@ TEST(KernelClass, SpaceToDepthMatchesNumpyReference) {
   Tensor x = Tensor::FromFloat("", {1, 2, 2, 2}, values);
   onnx_kernels::kernel::SpaceToDepth::Attributes a;
   a.blocksize = 2;
-  Tensor y = s2d(x, a);
+  Tensor y = s2d(nullptr, x, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 8, 1, 1}));
   // Reference computed by hand from the spec.
   // c_out: bh,bw,c -> (bh*bs*C + bw*C + c)
@@ -872,12 +875,12 @@ TEST(KernelClass, SpaceToDepthIsInverseOfDepthToSpaceDCR) {
   Tensor x = Tensor::FromFloat("", {2, 3, 4, 6}, values);
   onnx_kernels::kernel::SpaceToDepth::Attributes a;
   a.blocksize = 2;
-  Tensor y = s2d(x, a);
+  Tensor y = s2d(nullptr, x, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 12, 2, 3}));
   onnx_kernels::kernel::DepthToSpace::Attributes ad;
   ad.blocksize = 2;
   ad.mode = "DCR";
-  Tensor z = d2s(y, ad);
+  Tensor z = d2s(nullptr, y, ad);
   ASSERT_EQ(z.shape, x.shape);
   const float *pz = z.AsFloat();
   for (std::size_t i = 0; i < values.size(); ++i) {
@@ -891,7 +894,7 @@ TEST(KernelClass, SpaceToDepthRejectsNonRank4Input) {
   Tensor x = Tensor::FromFloat("", {1, 4}, {0.f, 1.f, 2.f, 3.f});
   onnx_kernels::kernel::SpaceToDepth::Attributes a;
   a.blocksize = 2;
-  EXPECT_THROW((void)s2d(x, a), std::invalid_argument);
+  EXPECT_THROW((void)s2d(nullptr, x, a), std::invalid_argument);
 }
 
 TEST(KernelClass, SpaceToDepthRejectsSpatialDimNotDivisible) {
@@ -901,7 +904,7 @@ TEST(KernelClass, SpaceToDepthRejectsSpatialDimNotDivisible) {
   Tensor x = Tensor::FromFloat("", {1, 1, 3, 2}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
   onnx_kernels::kernel::SpaceToDepth::Attributes a;
   a.blocksize = 2;
-  EXPECT_THROW((void)s2d(x, a), std::invalid_argument);
+  EXPECT_THROW((void)s2d(nullptr, x, a), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -921,10 +924,10 @@ TEST(KernelClass, UpsampleNearestMatchesUpstreamNCHWReference) {
   const KernelContext ctx{DefaultOpset(9)};
   onnx_kernels::kernel::Upsample upsample{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
-  Tensor scales = MakeUpsampleScales({1.f, 1.f, 2.f, 3.f});
+  Tensor scales = MakeUpsampleScales(nullptr, {1.f, 1.f, 2.f, 3.f});
   onnx_kernels::kernel::Upsample::Attributes a;
   a.mode = "nearest";
-  Tensor y = upsample(x, scales, a);
+  Tensor y = upsample(nullptr, x, scales, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 6}));
   const std::vector<float> expected{
       1.f, 1.f, 1.f, 2.f, 2.f, 2.f, 1.f, 1.f, 1.f, 2.f, 2.f, 2.f,
@@ -940,10 +943,10 @@ TEST(KernelClass, UpsampleNearest1DDoublesEachElement) {
   const KernelContext ctx{DefaultOpset(9)};
   onnx_kernels::kernel::Upsample upsample{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {10.f, 20.f, 30.f});
-  Tensor scales = MakeUpsampleScales({2.f});
+  Tensor scales = MakeUpsampleScales(nullptr, {2.f});
   onnx_kernels::kernel::Upsample::Attributes a;
   a.mode = "nearest";
-  Tensor y = upsample(x, scales, a);
+  Tensor y = upsample(nullptr, x, scales, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{6}));
   const std::vector<float> expected{10.f, 10.f, 20.f, 20.f, 30.f, 30.f};
   const float *py = y.AsFloat();
@@ -960,10 +963,10 @@ TEST(KernelClass, UpsampleLinear4DBilinearReference) {
   const KernelContext ctx{DefaultOpset(9)};
   onnx_kernels::kernel::Upsample upsample{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
-  Tensor scales = MakeUpsampleScales({1.f, 1.f, 2.f, 2.f});
+  Tensor scales = MakeUpsampleScales(nullptr, {1.f, 1.f, 2.f, 2.f});
   onnx_kernels::kernel::Upsample::Attributes a;
   a.mode = "linear";
-  Tensor y = upsample(x, scales, a);
+  Tensor y = upsample(nullptr, x, scales, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 4}));
   // Reference computed by hand from the bilinear formula on a 2x2 grid
   // with in_coord = out_coord / 2 (clamped).
@@ -981,10 +984,10 @@ TEST(KernelClass, UpsampleRejectsUnknownMode) {
   const KernelContext ctx{DefaultOpset(9)};
   onnx_kernels::kernel::Upsample upsample{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
-  Tensor scales = MakeUpsampleScales({1.f, 1.f, 2.f, 2.f});
+  Tensor scales = MakeUpsampleScales(nullptr, {1.f, 1.f, 2.f, 2.f});
   onnx_kernels::kernel::Upsample::Attributes a;
   a.mode = "cubic";
-  EXPECT_THROW((void)upsample(x, scales, a), std::invalid_argument);
+  EXPECT_THROW((void)upsample(nullptr, x, scales, a), std::invalid_argument);
 }
 
 TEST(KernelClass, UpsampleRejectsScalesLengthMismatch) {
@@ -992,9 +995,9 @@ TEST(KernelClass, UpsampleRejectsScalesLengthMismatch) {
   onnx_kernels::kernel::Upsample upsample{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
   // 3 scales for a rank-4 input.
-  Tensor scales = MakeUpsampleScales({1.f, 2.f, 2.f});
+  Tensor scales = MakeUpsampleScales(nullptr, {1.f, 2.f, 2.f});
   onnx_kernels::kernel::Upsample::Attributes a;
-  EXPECT_THROW((void)upsample(x, scales, a), std::invalid_argument);
+  EXPECT_THROW((void)upsample(nullptr, x, scales, a), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -1006,7 +1009,7 @@ TEST(KernelClass, TriluUpperDefaultKeepsUpperTriangle) {
   onnx_kernels::kernel::Trilu trilu{ctx};
   Tensor x = Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
   onnx_kernels::kernel::Trilu::Attributes attrs;
-  Tensor y = trilu(x, /*k=*/nullptr, attrs);
+  Tensor y = trilu(nullptr, x, /*k=*/nullptr, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 3}));
   const float *py = y.AsFloat();
   const std::vector<float> expected{1.0f, 2.0f, 3.0f, 0.0f, 5.0f, 6.0f, 0.0f, 0.0f, 9.0f};
@@ -1021,7 +1024,7 @@ TEST(KernelClass, TriluLowerKeepsLowerTriangle) {
   Tensor x = Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
   onnx_kernels::kernel::Trilu::Attributes attrs;
   attrs.upper = 0;
-  Tensor y = trilu(x, /*k=*/nullptr, attrs);
+  Tensor y = trilu(nullptr, x, /*k=*/nullptr, attrs);
   const float *py = y.AsFloat();
   const std::vector<float> expected{1.0f, 0.0f, 0.0f, 4.0f, 5.0f, 0.0f, 7.0f, 8.0f, 9.0f};
   for (std::size_t i = 0; i < expected.size(); ++i) {
@@ -1036,7 +1039,7 @@ TEST(KernelClass, TriluUpperWithPositiveK) {
   Tensor x = Tensor::FromInt64("", {3, 4}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
   Tensor k = Tensor::FromInt64("", {}, {1});
   onnx_kernels::kernel::Trilu::Attributes attrs;
-  Tensor y = trilu(x, &k, attrs);
+  Tensor y = trilu(nullptr, x, &k, attrs);
   const std::vector<int64_t> expected{0, 2, 3, 4, 0, 0, 7, 8, 0, 0, 0, 12};
   const int64_t *py = y.AsInt64();
   for (std::size_t i = 0; i < expected.size(); ++i) {
@@ -1052,7 +1055,7 @@ TEST(KernelClass, TriluLowerWithNegativeK) {
   Tensor k = Tensor::FromInt64("", {}, {-1});
   onnx_kernels::kernel::Trilu::Attributes attrs;
   attrs.upper = 0;
-  Tensor y = trilu(x, &k, attrs);
+  Tensor y = trilu(nullptr, x, &k, attrs);
   const std::vector<float> expected{0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 7.0f, 8.0f, 0.0f};
   const float *py = y.AsFloat();
   for (std::size_t i = 0; i < expected.size(); ++i) {
@@ -1066,7 +1069,7 @@ TEST(KernelClass, TriluBatchedAppliesPerMatrix) {
   // Two 2x2 matrices stacked along a leading batch dim.
   Tensor x = Tensor::FromFloat("", {2, 2, 2}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
   onnx_kernels::kernel::Trilu::Attributes attrs;
-  Tensor y = trilu(x, /*k=*/nullptr, attrs);
+  Tensor y = trilu(nullptr, x, /*k=*/nullptr, attrs);
   const std::vector<float> expected{1.f, 2.f, 0.f, 4.f, 5.f, 6.f, 0.f, 8.f};
   const float *py = y.AsFloat();
   for (std::size_t i = 0; i < expected.size(); ++i) {
@@ -1079,7 +1082,7 @@ TEST(KernelClass, TriluRejectsRankLessThanTwo) {
   onnx_kernels::kernel::Trilu trilu{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.f, 2.f, 3.f});
   onnx_kernels::kernel::Trilu::Attributes attrs;
-  EXPECT_THROW((void)trilu(x, /*k=*/nullptr, attrs), std::invalid_argument);
+  EXPECT_THROW((void)trilu(nullptr, x, /*k=*/nullptr, attrs), std::invalid_argument);
 }
 
 TEST(KernelClass, TriluRejectsNonInt64K) {
@@ -1088,7 +1091,7 @@ TEST(KernelClass, TriluRejectsNonInt64K) {
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.f, 2.f, 3.f, 4.f});
   Tensor k = Tensor::FromInt32("", {}, {1});
   onnx_kernels::kernel::Trilu::Attributes attrs;
-  EXPECT_THROW((void)trilu(x, &k, attrs), std::invalid_argument);
+  EXPECT_THROW((void)trilu(nullptr, x, &k, attrs), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -1105,7 +1108,7 @@ TEST(KernelClass, TensorScatterLinearWritesUpdateSlices) {
   Tensor update = Tensor::FromFloat("", {2, 1, 1, 5}, {5, 5, 5, 5, 5, 1, 1, 1, 1, 1});
   Tensor write = Tensor::FromInt64("", {2}, {1, 2});
   onnx_kernels::kernel::TensorScatter::Attributes attrs;
-  Tensor y = ts(past, update, &write, attrs);
+  Tensor y = ts(nullptr, past, update, &write, attrs);
   ASSERT_EQ(y.shape, past.shape);
   const float *py = y.AsFloat();
   // Batch 0: row 1 -> [5,5,5,5,5]. Batch 1: row 2 -> [1,1,1,1,1].
@@ -1126,7 +1129,7 @@ TEST(KernelClass, TensorScatterCircularWrapsWriteIndex) {
   onnx_kernels::kernel::TensorScatter::Attributes attrs;
   attrs.axis = 1;
   attrs.mode = "circular";
-  Tensor y = ts(past, update, &write, attrs);
+  Tensor y = ts(nullptr, past, update, &write, attrs);
   const float *py = y.AsFloat();
   // index 3 := 1 then (3+1) % 4 == 0 := 2.
   const std::vector<float> expected{2, 0, 0, 1};
@@ -1142,7 +1145,7 @@ TEST(KernelClass, TensorScatterDefaultsWriteIndicesToZero) {
   Tensor update = Tensor::FromFloat("", {2, 1}, {7, 9});
   onnx_kernels::kernel::TensorScatter::Attributes attrs;
   attrs.axis = 1;
-  Tensor y = ts(past, update, /*write_indices=*/nullptr, attrs);
+  Tensor y = ts(nullptr, past, update, /*write_indices=*/nullptr, attrs);
   const float *py = y.AsFloat();
   // write_indices defaults to all zeros, so update goes into column 0.
   const std::vector<float> expected{7, 0, 0, 9, 0, 0};
@@ -1159,7 +1162,7 @@ TEST(KernelClass, TensorScatterRejectsOutOfRangeLinearIndex) {
   Tensor write = Tensor::FromInt64("", {1}, {3}); // 3+2 > 4 in linear mode.
   onnx_kernels::kernel::TensorScatter::Attributes attrs;
   attrs.axis = 1;
-  EXPECT_THROW((void)ts(past, update, &write, attrs), std::invalid_argument);
+  EXPECT_THROW((void)ts(nullptr, past, update, &write, attrs), std::invalid_argument);
 }
 
 TEST(KernelClass, TensorScatterRejectsAxisOnBatchDim) {
@@ -1169,7 +1172,8 @@ TEST(KernelClass, TensorScatterRejectsAxisOnBatchDim) {
   Tensor update = Tensor::FromFloat("", {1, 3}, {1, 2, 3});
   onnx_kernels::kernel::TensorScatter::Attributes attrs;
   attrs.axis = 0; // batch axis is forbidden.
-  EXPECT_THROW((void)ts(past, update, /*write_indices=*/nullptr, attrs), std::invalid_argument);
+  EXPECT_THROW((void)ts(nullptr, past, update, /*write_indices=*/nullptr, attrs),
+               std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -1187,7 +1191,7 @@ TEST(KernelClass, ReverseSequenceTimeAxisMatchesSpecExample1) {
   onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   attrs.time_axis = 0;
   attrs.batch_axis = 1;
-  Tensor y = rs(x, seq, attrs);
+  Tensor y = rs(nullptr, x, seq, attrs);
   const std::vector<float> expected{3.0f, 6.0f, 9.0f,  12.0f, 2.0f, 5.0f, 8.0f,  13.0f,
                                     1.0f, 4.0f, 10.0f, 14.0f, 0.0f, 7.0f, 11.0f, 15.0f};
   const float *py = y.AsFloat();
@@ -1207,7 +1211,7 @@ TEST(KernelClass, ReverseSequenceBatchAxisMatchesSpecExample2) {
   onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   attrs.time_axis = 1;
   attrs.batch_axis = 0;
-  Tensor y = rs(x, seq, attrs);
+  Tensor y = rs(nullptr, x, seq, attrs);
   const std::vector<float> expected{0.0f,  1.0f, 2.0f, 3.0f,  5.0f,  4.0f,  6.0f,  7.0f,
                                     10.0f, 9.0f, 8.0f, 11.0f, 15.0f, 14.0f, 13.0f, 12.0f};
   const float *py = y.AsFloat();
@@ -1226,7 +1230,7 @@ TEST(KernelClass, ReverseSequenceRank3CopiesInnerDimension) {
   onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   attrs.time_axis = 0;
   attrs.batch_axis = 1;
-  Tensor y = rs(x, seq, attrs);
+  Tensor y = rs(nullptr, x, seq, attrs);
   // batch 0: full reverse along time -> (t=0:{8,9}, t=1:{4,5}, t=2:{0,1})
   // batch 1: only first 1 element reversed (identity) -> (t=0:{2,3}, t=1:{6,7}, t=2:{10,11})
   const std::vector<float> expected{8.f, 9.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 0.f, 1.f, 10.f, 11.f};
@@ -1242,7 +1246,7 @@ TEST(KernelClass, ReverseSequenceRejectsRankLessThanTwo) {
   Tensor x = Tensor::FromFloat("", {3}, {1.f, 2.f, 3.f});
   Tensor seq = Tensor::FromInt64("", {3}, {1, 1, 1});
   onnx_kernels::kernel::ReverseSequence::Attributes attrs;
-  EXPECT_THROW((void)rs(x, seq, attrs), std::invalid_argument);
+  EXPECT_THROW((void)rs(nullptr, x, seq, attrs), std::invalid_argument);
 }
 
 TEST(KernelClass, ReverseSequenceRejectsNonInt64SequenceLens) {
@@ -1251,7 +1255,7 @@ TEST(KernelClass, ReverseSequenceRejectsNonInt64SequenceLens) {
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.f, 2.f, 3.f, 4.f});
   Tensor seq = Tensor::FromInt32("", {2}, {2, 1});
   onnx_kernels::kernel::ReverseSequence::Attributes attrs;
-  EXPECT_THROW((void)rs(x, seq, attrs), std::invalid_argument);
+  EXPECT_THROW((void)rs(nullptr, x, seq, attrs), std::invalid_argument);
 }
 
 TEST(KernelClass, ReverseSequenceRejectsAxesEqual) {
@@ -1262,14 +1266,14 @@ TEST(KernelClass, ReverseSequenceRejectsAxesEqual) {
   onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   attrs.time_axis = 0;
   attrs.batch_axis = 0;
-  EXPECT_THROW((void)rs(x, seq, attrs), std::invalid_argument);
+  EXPECT_THROW((void)rs(nullptr, x, seq, attrs), std::invalid_argument);
 }
 
 TEST(KernelClass, SplitClassEqualPartsByNumOutputs) {
   const KernelContext ctx{DefaultOpset(18)};
   onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {6}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f});
-  std::vector<Tensor> outs = split(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
+  std::vector<Tensor> outs = split(nullptr, x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
   ASSERT_EQ(outs.size(), 3u);
   EXPECT_EQ(outs[0].shape, (std::vector<int64_t>{2}));
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], 1.f);
@@ -1282,7 +1286,7 @@ TEST(KernelClass, SplitClassVariablePartsBySplitSizes) {
   onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {2, 6},
                                {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f, 12.f});
-  std::vector<Tensor> outs = split(x, /*axis=*/1, /*split=*/{2, 4}, /*num_outputs=*/0);
+  std::vector<Tensor> outs = split(nullptr, x, /*axis=*/1, /*split=*/{2, 4}, /*num_outputs=*/0);
   ASSERT_EQ(outs.size(), 2u);
   EXPECT_EQ(outs[0].shape, (std::vector<int64_t>{2, 2}));
   EXPECT_EQ(outs[1].shape, (std::vector<int64_t>{2, 4}));
@@ -1298,7 +1302,7 @@ TEST(KernelClass, SplitClassUnevenLastChunkSmaller) {
   const KernelContext ctx{DefaultOpset(18)};
   onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {7}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f});
-  std::vector<Tensor> outs = split(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/4);
+  std::vector<Tensor> outs = split(nullptr, x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/4);
   ASSERT_EQ(outs.size(), 4u);
   EXPECT_EQ(outs[0].shape, (std::vector<int64_t>{2}));
   EXPECT_EQ(outs[1].shape, (std::vector<int64_t>{2}));
@@ -1311,7 +1315,7 @@ TEST(KernelClass, SplitClassNegativeAxis) {
   const KernelContext ctx{DefaultOpset(18)};
   onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {2, 4}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
-  std::vector<Tensor> outs = split(x, /*axis=*/-1, /*split=*/{}, /*num_outputs=*/2);
+  std::vector<Tensor> outs = split(nullptr, x, /*axis=*/-1, /*split=*/{}, /*num_outputs=*/2);
   ASSERT_EQ(outs.size(), 2u);
   EXPECT_EQ(outs[0].shape, (std::vector<int64_t>{2, 2}));
   EXPECT_EQ(outs[1].shape, (std::vector<int64_t>{2, 2}));
@@ -1322,14 +1326,15 @@ TEST(KernelClass, SplitClassRejectsBadAxis) {
   const KernelContext ctx{DefaultOpset(18)};
   onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {1.f, 2.f, 3.f, 4.f});
-  EXPECT_THROW((void)split(x, /*axis=*/2, /*split=*/{}, /*num_outputs=*/2), std::invalid_argument);
+  EXPECT_THROW((void)split(nullptr, x, /*axis=*/2, /*split=*/{}, /*num_outputs=*/2),
+               std::invalid_argument);
 }
 
 TEST(KernelClass, SplitClassRejectsSplitMismatch) {
   const KernelContext ctx{DefaultOpset(18)};
   onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {1.f, 2.f, 3.f, 4.f});
-  EXPECT_THROW((void)split(x, /*axis=*/0, /*split=*/{1, 1}, /*num_outputs=*/0),
+  EXPECT_THROW((void)split(nullptr, x, /*axis=*/0, /*split=*/{1, 1}, /*num_outputs=*/0),
                std::invalid_argument);
 }
 
@@ -1344,7 +1349,7 @@ TEST(KernelClass, OneHotDefaultAxisMatchesReference) {
   Tensor depth = Tensor::FromFloat("", {}, {12.0f});
   Tensor values = Tensor::FromInt32("", {2}, {2, 5});
   onnx_kernels::kernel::OneHot::Attributes attrs; // axis = -1
-  Tensor y = one_hot(indices, depth, values, attrs);
+  Tensor y = one_hot(nullptr, indices, depth, values, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 12}));
   EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   const int32_t *py = y.AsInt32();
@@ -1367,7 +1372,7 @@ TEST(KernelClass, OneHotWithAxisInsertsDimensionAtPosition) {
   Tensor values = Tensor::FromFloat("", {2}, {1.0f, 3.0f});
   onnx_kernels::kernel::OneHot::Attributes attrs;
   attrs.axis = 1;
-  Tensor y = one_hot(indices, depth, values, attrs);
+  Tensor y = one_hot(nullptr, indices, depth, values, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 10, 2}));
   const float *py = y.AsFloat();
   // For each (outer, inner) the entry is 3 at the slot corresponding to
@@ -1393,7 +1398,7 @@ TEST(KernelClass, OneHotNegativeIndicesWrapAroundDepth) {
   Tensor values = Tensor::FromFloat("", {2}, {1.0f, 3.0f});
   onnx_kernels::kernel::OneHot::Attributes attrs;
   attrs.axis = 1;
-  Tensor y = one_hot(indices, depth, values, attrs);
+  Tensor y = one_hot(nullptr, indices, depth, values, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 10}));
   const float *py = y.AsFloat();
   const std::vector<int64_t> selected{0, 3, 2};
@@ -1412,7 +1417,7 @@ TEST(KernelClass, OneHotOutOfRangeIndicesLeaveOffValue) {
   Tensor depth = Tensor::FromInt64("", {}, {3});
   Tensor values = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
   onnx_kernels::kernel::OneHot::Attributes attrs;
-  Tensor y = one_hot(indices, depth, values, attrs);
+  Tensor y = one_hot(nullptr, indices, depth, values, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   for (int64_t i = 0; i < 6; ++i) {
@@ -1434,7 +1439,7 @@ TEST(KernelClass, OneHotOutOfRangeIndicesIncludingNegativeLeaveOffValue) {
   Tensor values = Tensor::FromFloat("", {2}, {1.0f, 3.0f});
   onnx_kernels::kernel::OneHot::Attributes attrs;
   attrs.axis = 1;
-  Tensor y = one_hot(indices, depth, values, attrs);
+  Tensor y = one_hot(nullptr, indices, depth, values, attrs);
   // Output shape: (3 indices, depth=5) with axis=1 -> (3, 5).
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 5}));
   const float *py = y.AsFloat();
@@ -1460,7 +1465,7 @@ TEST(KernelClass, OneHotRejectsValuesNotRankOneOfTwo) {
   Tensor depth = Tensor::FromInt64("", {}, {3});
   Tensor bad_values = Tensor::FromFloat("", {3}, {0.0f, 1.0f, 2.0f});
   onnx_kernels::kernel::OneHot::Attributes attrs;
-  EXPECT_THROW((void)one_hot(indices, depth, bad_values, attrs), std::invalid_argument);
+  EXPECT_THROW((void)one_hot(nullptr, indices, depth, bad_values, attrs), std::invalid_argument);
 }
 
 TEST(KernelClass, OneHotRejectsZeroDepth) {
@@ -1470,7 +1475,7 @@ TEST(KernelClass, OneHotRejectsZeroDepth) {
   Tensor depth = Tensor::FromInt64("", {}, {0});
   Tensor values = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
   onnx_kernels::kernel::OneHot::Attributes attrs;
-  EXPECT_THROW((void)one_hot(indices, depth, values, attrs), std::invalid_argument);
+  EXPECT_THROW((void)one_hot(nullptr, indices, depth, values, attrs), std::invalid_argument);
 }
 
 TEST(KernelClass, OneHotRejectsAxisOutOfRange) {
@@ -1481,7 +1486,7 @@ TEST(KernelClass, OneHotRejectsAxisOutOfRange) {
   Tensor values = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
   onnx_kernels::kernel::OneHot::Attributes attrs;
   attrs.axis = 5;
-  EXPECT_THROW((void)one_hot(indices, depth, values, attrs), std::invalid_argument);
+  EXPECT_THROW((void)one_hot(nullptr, indices, depth, values, attrs), std::invalid_argument);
 }
 
 } // namespace Test

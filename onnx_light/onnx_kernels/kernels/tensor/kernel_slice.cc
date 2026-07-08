@@ -152,12 +152,12 @@ SliceLayout ComputeSliceLayout(const Tensor &data, const Tensor &starts_t, const
 
 } // namespace
 
-Tensor Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
-                         const Tensor *axes, const Tensor *steps, RuntimeContext *rt) const {
+Tensor Slice::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &starts,
+                         const Tensor &ends, const Tensor *axes, const Tensor *steps) const {
   const SliceLayout layout = ComputeSliceLayout(data, starts, ends, axes, steps);
-  Tensor out(
-      "", data.data_type, layout.out_shape,
-      std::vector<uint8_t>(static_cast<std::size_t>(layout.total_elements) * layout.elem_size));
+  const size_t out_n_bytes = static_cast<std::size_t>(layout.total_elements) * layout.elem_size;
+  Tensor out = MakeOutputTensor(data.data_type, layout.out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(data, starts, ends, axes, steps, out);
   return out;
 }

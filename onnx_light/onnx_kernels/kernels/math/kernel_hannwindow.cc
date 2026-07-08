@@ -13,14 +13,15 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor HannWindow::operator()(const Tensor &size, bool periodic, RuntimeContext *rt) const {
+Tensor HannWindow::operator()(RuntimeContext *rt, const Tensor &size, bool periodic) const {
   EXT_ENFORCE_INVALID(size.data_type == DataType::INT32,
                       "kernel::HannWindow expects an INT32 size tensor.");
   EXT_ENFORCE_INVALID(size.element_count() == 1 && size.shape.empty(),
                       "kernel::HannWindow expects a scalar size tensor.");
   const int32_t n = size.AsInt32()[0];
   EXT_ENFORCE_INVALID(n >= 0, "kernel::HannWindow size must be non-negative.");
-  Tensor y("", DataType::FLOAT, {n}, std::vector<uint8_t>(static_cast<size_t>(n) * sizeof(float)));
+  const size_t y_n_bytes = static_cast<size_t>(n) * sizeof(float);
+  Tensor y = MakeOutputTensor(DataType::FLOAT, {n}, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(size, periodic, y);
   return y;
 }

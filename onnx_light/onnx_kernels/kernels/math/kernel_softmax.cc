@@ -27,12 +27,12 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 } // namespace
 
-Tensor Softmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) const {
+Tensor Softmax::operator()(RuntimeContext *rt, const Tensor &x, int64_t axis) const {
   // FLOAT16/BFLOAT16 inputs are computed in float32 and demoted back, mirroring
   // the half-precision handling in the other math kernels.
   if (IsHalfPrecision(x.data_type)) {
     const Tensor x_f = PromoteToFloat32(x);
-    Tensor y_f = (*this)(x_f, axis);
+    Tensor y_f = (*this)(rt, x_f, axis);
     return DemoteFromFloat32(y_f, x.data_type);
   }
   const int32_t out_dtype = (static_cast<DataType>(x.data_type) == DataType::DOUBLE)
@@ -40,8 +40,8 @@ Tensor Softmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) co
                                 : static_cast<int32_t>(DataType::FLOAT);
   const size_t elem_size =
       (static_cast<DataType>(x.data_type) == DataType::DOUBLE) ? sizeof(double) : sizeof(float);
-  Tensor y("", out_dtype, x.shape,
-           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
+  const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
+  Tensor y = MakeOutputTensor(out_dtype, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, axis, y);
   return y;
 }

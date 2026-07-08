@@ -102,8 +102,8 @@ void ValidatePreallocatedOutput(const Tensor &output, const std::vector<int64_t>
 } // namespace
 
 template <typename T>
-Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
-                                 RuntimeContext *rt) const {
+Tensor OneHotEncoder::operator()(RuntimeContext *rt, const Tensor &x,
+                                 const std::vector<int64_t> &cats, bool zeros) const {
   ValidateNumericInput<T>(x, cats);
   const std::vector<int64_t> out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
@@ -113,8 +113,8 @@ Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &ca
   return out;
 }
 
-Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
-                                 RuntimeContext *rt) const {
+Tensor OneHotEncoder::operator()(RuntimeContext *rt, const Tensor &x,
+                                 const std::vector<std::string> &cats, bool zeros) const {
   ValidateStringInput(x, cats);
   const std::vector<int64_t> out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
@@ -145,7 +145,8 @@ void OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &
 
 // Explicit instantiations for the supported numeric element types.
 #define ONNX_LIGHT_INSTANTIATE_ONE_HOT_ENCODER(T)                                                  \
-  template Tensor OneHotEncoder::operator()<T>(const Tensor &, const std::vector<int64_t> &, bool, \
+  template Tensor OneHotEncoder::operator()<T>(RuntimeContext *, const Tensor &,                   \
+                                               const std::vector<int64_t> &, bool,                 \
                                                RuntimeContext *) const;                            \
   template void OneHotEncoder::operator()<T>(const Tensor &, const std::vector<int64_t> &, bool,   \
                                              Tensor &) const

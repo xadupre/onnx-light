@@ -9,8 +9,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor Scatter::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
-                           const Attributes &attrs, RuntimeContext *rt) const {
+Tensor Scatter::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
+                           const Tensor &updates, const Attributes &attrs) const {
   Tensor out("", data.data_type, data.shape, data.data);
   (*this)(data, indices, updates, attrs, out);
   return out;

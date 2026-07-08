@@ -125,14 +125,14 @@ void TraverseTreeV5(int64_t root_node_idx, const std::vector<int64_t> &nodes_fea
 
 template <typename T>
 Tensor TreeEnsemble::operator()(
-    const Tensor &x, const std::vector<int64_t> &tree_roots,
+    RuntimeContext *rt, const Tensor &x, const std::vector<int64_t> &tree_roots,
     const std::vector<int64_t> &nodes_featureids, const std::vector<T> &nodes_splits,
     const std::vector<uint8_t> &nodes_modes, const std::vector<int64_t> &nodes_truenodeids,
     const std::vector<int64_t> &nodes_falsenodeids, const std::vector<int64_t> &nodes_trueleafs,
     const std::vector<int64_t> &nodes_falseleafs, const std::vector<int64_t> &nodes_missing,
     const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
     const std::vector<T> &membership_values, int64_t n_targets, int64_t aggregate_function,
-    int64_t post_transform, RuntimeContext *rt) const {
+    int64_t post_transform) const {
   EXT_ENFORCE_INVALID(n_targets >= 1, "kernel::TreeEnsemble: n_targets must be >= 1.");
   EXT_ENFORCE_INVALID(post_transform == kPostNone || post_transform == kPostSoftmax,
                       "kernel::TreeEnsemble: only post_transform 0 (NONE) or 1 (SOFTMAX) "
@@ -218,11 +218,11 @@ Tensor TreeEnsemble::operator()(
 
 #define ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(T)                                                    \
   template Tensor TreeEnsemble::operator()<T>(                                                     \
-      const Tensor &, const std::vector<int64_t> &, const std::vector<int64_t> &,                  \
-      const std::vector<T> &, const std::vector<uint8_t> &, const std::vector<int64_t> &,          \
+      RuntimeContext *, const Tensor &, const std::vector<int64_t> &,                              \
+      const std::vector<int64_t> &, const std::vector<T> &, const std::vector<uint8_t> &,          \
       const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
-      const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<T> &,          \
-      const std::vector<T> &, int64_t, int64_t, int64_t, RuntimeContext *) const
+      const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
+      const std::vector<T> &, const std::vector<T> &, int64_t, int64_t, int64_t) const
 
 ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(float);
 ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(double);

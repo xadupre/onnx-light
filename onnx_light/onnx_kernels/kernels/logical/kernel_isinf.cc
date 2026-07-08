@@ -15,10 +15,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor IsInf::operator()(const Tensor &x, int64_t detect_positive, int64_t detect_negative,
-                         RuntimeContext *rt) const {
-  Tensor y("", DataType::BOOL, x.shape,
-           std::vector<uint8_t>(static_cast<size_t>(x.element_count())));
+Tensor IsInf::operator()(RuntimeContext *rt, const Tensor &x, int64_t detect_positive,
+                         int64_t detect_negative) const {
+  const size_t y_n_bytes = static_cast<size_t>(x.element_count());
+  Tensor y = MakeOutputTensor(DataType::BOOL, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, detect_positive, detect_negative, y);
   return y;
 }

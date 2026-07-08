@@ -293,11 +293,11 @@ void PowDispatch(const Tensor &x, const Tensor &y, Tensor &output,
 }
 } // namespace
 
-Tensor Pow::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+Tensor Pow::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
   const detail::BroadcastInfo bi = BroadcastShape(x, y);
   const size_t elem_size = BaseDtypeSize(x.data_type);
-  Tensor z("", x.data_type, bi.shape,
-           std::vector<uint8_t>(static_cast<size_t>(bi.element_count) * elem_size));
+  const size_t z_n_bytes = static_cast<size_t>(bi.element_count) * elem_size;
+  Tensor z = MakeOutputTensor(x.data_type, bi.shape, z_n_bytes, rt ? rt->allocator() : nullptr);
   PowDispatch(x, y, z, bi);
   return z;
 }

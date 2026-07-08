@@ -20,7 +20,7 @@ constexpr auto kXorOp = [](uint8_t a, uint8_t b) -> uint8_t {
 };
 } // namespace
 
-Tensor Xor::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+Tensor Xor::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
   return detail::BinaryElementwiseAlloc<uint8_t, uint8_t>(kXorName, kBoolName, DataType::BOOL, x, y,
                                                           kXorOp, rt ? rt->allocator() : nullptr);
 }

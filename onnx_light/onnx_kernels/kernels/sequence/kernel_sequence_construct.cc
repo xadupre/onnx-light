@@ -51,12 +51,14 @@ void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
 
 } // namespace
 
-Tensor SequenceConstruct::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
+Tensor SequenceConstruct::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const {
   std::vector<int64_t> stacked_shape;
   size_t total_bytes = 0;
   ValidateInputsAndComputeShape(inputs, stacked_shape, total_bytes);
   const int32_t out_dtype = inputs.empty() ? 0 : inputs[0].data_type;
-  Tensor out("", out_dtype, stacked_shape, std::vector<uint8_t>(total_bytes));
+  const size_t out_n_bytes = total_bytes;
+  Tensor out =
+      MakeOutputTensor(out_dtype, stacked_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(inputs, out);
   return out;
 }

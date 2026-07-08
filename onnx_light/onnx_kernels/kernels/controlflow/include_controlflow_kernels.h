@@ -68,8 +68,8 @@ namespace kernel {
 class If : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &cond, const Tensor &then_value,
+                    const Tensor &else_value) const;
   void operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
                   Tensor &output) const;
 
@@ -87,8 +87,9 @@ public:
   ///         declared subgraph output is missing, if ``then_branch`` and
   ///         ``else_branch`` declare a different number of outputs, or if
   ///         any node of the executed subgraph fails to dispatch.
-  std::vector<Tensor> operator()(const Tensor &cond, const GraphProto &then_branch,
-                                 const GraphProto &else_branch, RuntimeContext &rt) const;
+  std::vector<Tensor> operator()(RuntimeContext &rt, const Tensor &cond,
+                                 const GraphProto &then_branch,
+                                 const GraphProto &else_branch) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
@@ -257,8 +258,9 @@ public:
   ///                                stacking-only overload).
   /// @return ``N + K`` tensors: the final state values followed by the
   ///         stacked scan outputs.
-  std::vector<Tensor> operator()(const GraphProto &body, const std::vector<Tensor> &initial_state,
-                                 const std::vector<Tensor> &scan_inputs, RuntimeContext &rt,
+  std::vector<Tensor> operator()(RuntimeContext &rt, const GraphProto &body,
+                                 const std::vector<Tensor> &initial_state,
+                                 const std::vector<Tensor> &scan_inputs,
                                  const std::vector<int64_t> &scan_input_axes = {},
                                  const std::vector<int64_t> &scan_input_directions = {},
                                  const std::vector<int64_t> &scan_output_axes = {},

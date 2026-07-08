@@ -165,9 +165,9 @@ std::vector<Tensor> Scan::operator()(int64_t trip_count, const std::vector<Tenso
   return out;
 }
 
-std::vector<Tensor> Scan::operator()(const GraphProto &body,
+std::vector<Tensor> Scan::operator()(RuntimeContext &rt, const GraphProto &body,
                                      const std::vector<Tensor> &initial_state,
-                                     const std::vector<Tensor> &scan_inputs, RuntimeContext &rt,
+                                     const std::vector<Tensor> &scan_inputs,
                                      const std::vector<int64_t> &scan_input_axes_in,
                                      const std::vector<int64_t> &scan_input_directions_in,
                                      const std::vector<int64_t> &scan_output_axes,

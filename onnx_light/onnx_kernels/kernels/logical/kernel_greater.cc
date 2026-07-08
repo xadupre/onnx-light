@@ -41,7 +41,7 @@ void GreaterInPlace(const char *in_dtype_name, int32_t in_dtype, const Tensor &x
 }
 } // namespace
 
-Tensor Greater::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+Tensor Greater::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return GreaterAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);

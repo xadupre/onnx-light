@@ -71,8 +71,8 @@ std::vector<int64_t> ReadShapeInput(const Tensor &shape) {
 
 } // namespace
 
-Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value,
-                                   RuntimeContext *rt) const {
+Tensor ConstantOfShape::operator()(RuntimeContext *rt, const Tensor &shape,
+                                   const Tensor &value) const {
   const std::vector<int64_t> out_shape = ReadShapeInput(shape);
 
   // Default fill: a single FLOAT 0.0 (per the ONNX schema).
@@ -101,7 +101,7 @@ Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value,
 }
 
 void ConstantOfShape::operator()(const Tensor &shape, const Tensor &value, Tensor &output) const {
-  Tensor produced = (*this)(shape, value);
+  Tensor produced = (*this)(nullptr, shape, value);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::ConstantOfShape preallocated output must have the expected dtype.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

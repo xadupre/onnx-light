@@ -49,10 +49,10 @@ template <typename T> void FillOutput(const std::vector<double> &values, Tensor 
 
 } // namespace
 
-Tensor MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft_length,
-                                   const Tensor &sample_rate, const Tensor &lower_edge_hertz,
-                                   const Tensor &upper_edge_hertz, DataType output_dtype,
-                                   RuntimeContext *rt) const {
+Tensor MelWeightMatrix::operator()(RuntimeContext *rt, const Tensor &num_mel_bins,
+                                   const Tensor &dft_length, const Tensor &sample_rate,
+                                   const Tensor &lower_edge_hertz, const Tensor &upper_edge_hertz,
+                                   DataType output_dtype) const {
   const int64_t num_mel_bins_v = ReadIntScalar(num_mel_bins, "num_mel_bins");
   const int64_t dft_length_v = ReadIntScalar(dft_length, "dft_length");
   EXT_ENFORCE_INVALID(num_mel_bins_v > 0, "kernel::MelWeightMatrix num_mel_bins must be positive.");
@@ -71,8 +71,9 @@ Tensor MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft
     EXT_THROW("kernel::MelWeightMatrix output_dtype must be FLOAT or DOUBLE.");
   }
   const size_t total = static_cast<size_t>(num_spectrogram_bins * num_mel_bins_v);
-  Tensor y("", output_dtype, {num_spectrogram_bins, num_mel_bins_v},
-           std::vector<uint8_t>(total * element_bytes, 0));
+  const size_t y_n_bytes = total * element_bytes, 0;
+  Tensor y = MakeOutputTensor(output_dtype, {num_spectrogram_bins, num_mel_bins_v}, y_n_bytes,
+                              rt ? rt->allocator() : nullptr);
   (*this)(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz, output_dtype,
           y);
   return y;

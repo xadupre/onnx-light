@@ -72,12 +72,13 @@ void ValidateBitCast(int32_t from, int32_t to) {
 
 } // namespace
 
-Tensor BitCast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) const {
+Tensor BitCast::operator()(RuntimeContext *rt, const Tensor &x, int32_t to) const {
   ValidateBitCast(x.data_type, to);
   // BitCast preserves the exact bit pattern and the shape: same packed
   // byte size for both input and output. Copy the underlying bytes and
   // relabel the dtype.
-  Tensor y("", to, x.shape, std::vector<uint8_t>(x.bytes(), x.bytes() + x.size_bytes()));
+  const size_t y_n_bytes = x.bytes(), x.bytes() + x.size_bytes();
+  Tensor y = MakeOutputTensor(to, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   return y;
 }
 

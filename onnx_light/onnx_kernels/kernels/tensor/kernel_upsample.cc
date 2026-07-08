@@ -222,16 +222,17 @@ bool IsLinearMode(const std::string &mode) { return mode == "linear" || mode == 
 
 } // namespace
 
-Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
-                            RuntimeContext *rt) const {
+Tensor Upsample::operator()(RuntimeContext *rt, const Tensor &X, const Tensor &scales,
+                            const Attributes &attrs) const {
   const std::vector<float> scales_vec = ReadUpsampleScales(scales, X.shape.size());
   const std::vector<int64_t> out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec);
   int64_t total_elements = 1;
   for (int64_t d : out_shape) {
     total_elements *= d;
   }
-  Tensor output("", X.data_type, out_shape,
-                std::vector<uint8_t>(PackedByteSize(X.data_type, total_elements)));
+  const size_t output_n_bytes = PackedByteSize(X.data_type, total_elements);
+  Tensor output =
+      MakeOutputTensor(X.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(X, scales, attrs, output);
   return output;
 }

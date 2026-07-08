@@ -43,7 +43,7 @@ constexpr const char *kSupportedDivTypesMsg =
     "UINT32 and UINT64 inputs.";
 } // namespace
 
-Tensor Div::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+Tensor Div::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return DivAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);

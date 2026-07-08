@@ -125,8 +125,9 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   // softmax and the final ``probs @ V`` matmul, respectively.
   const std::vector<int64_t> probs_shape = {batch_size, q_num_heads, q_seq_len, kv_seq_len};
   const int64_t probs_count = batch_size * q_num_heads * q_seq_len * kv_seq_len;
-  Tensor probs("", kElementType, probs_shape,
-               std::vector<uint8_t>(static_cast<size_t>(probs_count) * sizeof(T)));
+  const size_t probs_n_bytes = static_cast<size_t>(probs_count) * sizeof(T);
+  Tensor probs =
+      MakeOutputTensor(kElementType, probs_shape, probs_n_bytes, rt ? rt->allocator() : nullptr);
   T *pProbs = probs.As<T>();
 
   const int64_t probs_head_stride = q_seq_len * kv_seq_len;
@@ -252,28 +253,28 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
 
 } // namespace
 
-Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
-                                 RuntimeContext *rt) const {
+Tensor FlexAttention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K,
+                                 const Tensor &V) const {
   CheckRank4Float(Q, "Q");
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::FlexAttention: 'head_size' must be positive.");
   const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
-  return (*this)(Q, K, V, scale);
+  return (*this)(nullptr, Q, K, V, scale);
 }
 
-Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                                 RuntimeContext *rt) const {
-  return (*this)(Q, K, V, scale, ScoreModFn{}, ProbModFn{});
+Tensor FlexAttention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K,
+                                 const Tensor &V, float scale) const {
+  return (*this)(rt, Q, K, V, scale, ScoreModFn{}, ProbModFn{});
 }
 
-Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                                 const ProbModFn &prob_mod, RuntimeContext *rt) const {
-  return (*this)(Q, K, V, scale, ScoreModFn{}, prob_mod);
+Tensor FlexAttention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K,
+                                 const Tensor &V, float scale, const ProbModFn &prob_mod) const {
+  return (*this)(rt, Q, K, V, scale, ScoreModFn{}, prob_mod);
 }
 
-Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                                 const ScoreModFn &score_mod, const ProbModFn &prob_mod,
-                                 RuntimeContext *rt) const {
+Tensor FlexAttention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K,
+                                 const Tensor &V, float scale, const ScoreModFn &score_mod,
+                                 const ProbModFn &prob_mod) const {
   CheckRank4Float(Q, "Q");
   CheckRank4Float(V, "V");
   const int64_t batch_size = Q.shape[0];
@@ -281,8 +282,9 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
   const int64_t q_seq_len = Q.shape[2];
   const int64_t v_head_size = V.shape[3];
   const int64_t out_count = batch_size * q_num_heads * q_seq_len * v_head_size;
-  Tensor out("", Q.data_type, {batch_size, q_num_heads, q_seq_len, v_head_size},
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * ElementBytes(Q.data_type)));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * ElementBytes(Q.data_type);
+  Tensor out = MakeOutputTensor(Q.data_type, {batch_size, q_num_heads, q_seq_len, v_head_size},
+                                out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(Q, K, V, scale, score_mod, prob_mod, out);
   return out;
 }
@@ -329,8 +331,9 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
 
     const std::vector<int64_t> out_shape = {Q.shape[0], Q.shape[1], Q.shape[2], V.shape[3]};
     const int64_t out_count = out_shape[0] * out_shape[1] * out_shape[2] * out_shape[3];
-    Tensor out_f("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-                 std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float), 0));
+    const size_t out_f_n_bytes = static_cast<size_t>(out_count) * sizeof(float), 0;
+    Tensor out_f = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_f_n_bytes,
+                                    rt ? rt->allocator() : nullptr);
     (*this)(Q_f, K_f, V_f, scale, score_mod_wrapped, prob_mod_wrapped, out_f);
     Tensor demoted = DemoteFromFloat32(out_f, target_dtype);
     EXT_ENFORCE_INVALID(output.shape == demoted.shape,

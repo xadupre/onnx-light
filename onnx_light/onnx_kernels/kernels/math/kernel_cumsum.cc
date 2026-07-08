@@ -162,8 +162,8 @@ struct ProdOp {
 
 } // namespace
 
-Tensor CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
-                          RuntimeContext *rt) const {
+Tensor CumSum::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &axis, bool exclusive,
+                          bool reverse) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, kCumSumName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumSumName, ReadAxisScalar(kCumSumName, axis), rank);
@@ -198,8 +198,8 @@ void CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, boo
   DispatchCumulative(kCumSumName, x, a, exclusive, reverse, output, SumOp{});
 }
 
-Tensor CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
-                           RuntimeContext *rt) const {
+Tensor CumProd::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &axis, bool exclusive,
+                           bool reverse) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, kCumProdName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumProdName, ReadAxisScalar(kCumProdName, axis), rank);

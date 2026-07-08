@@ -54,8 +54,8 @@ void ValidateInt64(const Tensor &t, const char *name) {
 
 } // namespace
 
-Tensor ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims,
-                             bool select_last_index, RuntimeContext *rt) const {
+Tensor ArgReduce::operator()(RuntimeContext *rt, const Tensor &data, int64_t axis, bool keepdims,
+                             bool select_last_index) const {
   ValidateFloat(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   EXT_ENFORCE_INVALID(rank > 0, "kernel::ArgReduce: data must have at least one dimension.");
@@ -66,8 +66,9 @@ Tensor ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims,
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor out("", static_cast<int32_t>(DataType::INT64), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(int64_t), 0u));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(int64_t), 0u;
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(data, axis, keepdims, select_last_index, out);
   return out;
 }

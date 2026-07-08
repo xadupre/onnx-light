@@ -59,8 +59,8 @@ std::vector<int64_t> ComputeSqueezedShape(const Tensor &data, const std::vector<
 
 } // namespace
 
-Tensor Squeeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
-                           RuntimeContext *rt) const {
+Tensor Squeeze::operator()(RuntimeContext *rt, const Tensor &data,
+                           const std::vector<int64_t> &axes) const {
   const std::vector<int64_t> out_shape = ComputeSqueezedShape(data, axes);
   Tensor output = data;
   output.name.clear();

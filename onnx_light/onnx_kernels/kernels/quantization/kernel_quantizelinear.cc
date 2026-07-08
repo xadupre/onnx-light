@@ -387,10 +387,11 @@ void QuantizeBlockFloat8Loop(const Tensor &x, const float *scales, const std::ui
 
 } // namespace
 
-Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
-                                  RuntimeContext *rt) const {
-  Tensor out("", static_cast<int32_t>(DataType::UINT8), x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count())));
+Tensor QuantizeLinear::operator()(RuntimeContext *rt, const Tensor &x,
+                                  const Tensor &y_scale) const {
+  const size_t out_n_bytes = static_cast<size_t>(x.element_count());
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), x.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(x, y_scale, out);
   return out;
 }
@@ -428,10 +429,11 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, Tensor &
   }
 }
 
-Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
-                                  const Tensor &y_zero_point, RuntimeContext *rt) const {
-  Tensor out("", y_zero_point.data_type, x.shape,
-             std::vector<uint8_t>(PackedByteSize(y_zero_point.data_type, x.element_count())));
+Tensor QuantizeLinear::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y_scale,
+                                  const Tensor &y_zero_point) const {
+  const size_t out_n_bytes = PackedByteSize(y_zero_point.data_type, x.element_count());
+  Tensor out = MakeOutputTensor(y_zero_point.data_type, x.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(x, y_scale, y_zero_point, out);
   return out;
 }
@@ -539,15 +541,15 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   }
 }
 
-Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
-                                  const Tensor &y_zero_point, int64_t axis,
-                                  RuntimeContext *rt) const {
+Tensor QuantizeLinear::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y_scale,
+                                  const Tensor &y_zero_point, int64_t axis) const {
   // Scalar scale: delegate to the per-tensor overload.
   if (y_scale.element_count() == 1) {
-    return (*this)(x, y_scale, y_zero_point);
+    return (*this)(rt, x, y_scale, y_zero_point);
   }
-  Tensor out("", y_zero_point.data_type, x.shape,
-             std::vector<uint8_t>(PackedByteSize(y_zero_point.data_type, x.element_count())));
+  const size_t out_n_bytes = PackedByteSize(y_zero_point.data_type, x.element_count());
+  Tensor out = MakeOutputTensor(y_zero_point.data_type, x.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(x, y_scale, y_zero_point, axis, out);
   return out;
 }
@@ -556,7 +558,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
                                 int64_t axis, Tensor &output) const {
   // Scalar scale: delegate to the per-tensor in-place overload.
   if (y_scale.element_count() == 1) {
-    return (*this)(x, y_scale, y_zero_point, output);
+    return (*this)(nullptr, x, y_scale, y_zero_point, output);
   }
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::QuantizeLinear: x must be FLOAT.");
@@ -641,10 +643,10 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   }
 }
 
-Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_t axis,
-                                  int32_t output_dtype, RuntimeContext *rt) const {
-  Tensor out("", output_dtype, x.shape,
-             std::vector<uint8_t>(PackedByteSize(output_dtype, x.element_count())));
+Tensor QuantizeLinear::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y_scale,
+                                  int64_t axis, int32_t output_dtype) const {
+  const size_t out_n_bytes = PackedByteSize(output_dtype, x.element_count());
+  Tensor out = MakeOutputTensor(output_dtype, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, y_scale, axis, output_dtype, out);
   return out;
 }
@@ -652,7 +654,7 @@ Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_
 void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_t axis,
                                 int32_t output_dtype, Tensor &output) const {
   if (y_scale.element_count() == 1) {
-    return (*this)(x, y_scale, output);
+    return (*this)(nullptr, x, y_scale, output);
   }
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::QuantizeLinear: x must be FLOAT.");

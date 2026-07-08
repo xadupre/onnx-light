@@ -215,10 +215,10 @@ void RunQLinearMatMul(const Tensor &a, int32_t a_zp, float a_scale, const Tensor
 
 } // namespace
 
-Tensor QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const Tensor &a_zero_point,
-                                 const Tensor &b, const Tensor &b_scale, const Tensor &b_zero_point,
-                                 const Tensor &y_scale, const Tensor &y_zero_point,
-                                 RuntimeContext *rt) const {
+Tensor QLinearMatMul::operator()(RuntimeContext *rt, const Tensor &a, const Tensor &a_scale,
+                                 const Tensor &a_zero_point, const Tensor &b, const Tensor &b_scale,
+                                 const Tensor &b_zero_point, const Tensor &y_scale,
+                                 const Tensor &y_zero_point) const {
   EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": a must be INT8 or UINT8.");
   EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": b must be INT8 or UINT8.");
   EXT_ENFORCE_INVALID(IsInt8OrUint8(y_zero_point.data_type), kName,
@@ -229,8 +229,9 @@ Tensor QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const T
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor out("", y_zero_point.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(total)));
+  const size_t out_n_bytes = static_cast<size_t>(total);
+  Tensor out = MakeOutputTensor(y_zero_point.data_type, out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(a, a_scale, a_zero_point, b, b_scale, b_zero_point, y_scale, y_zero_point, out);
   return out;
 }

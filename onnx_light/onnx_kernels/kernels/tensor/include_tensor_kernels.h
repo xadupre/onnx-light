@@ -50,8 +50,7 @@ namespace kernel {
 class Concat : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, int64_t axis,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs, int64_t axis) const;
   void operator()(const std::vector<Tensor> &inputs, int64_t axis, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -76,8 +75,8 @@ public:
 class Cast : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, int32_t to, RuntimeContext *rt = nullptr) const;
-  Tensor operator()(const Tensor &x, int32_t to, bool saturate, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, int32_t to) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, int32_t to, bool saturate) const;
   void operator()(const Tensor &x, int32_t to, Tensor &output) const;
   void operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output) const;
 
@@ -96,7 +95,7 @@ public:
 class BitCast : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, int32_t to, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, int32_t to) const;
   void operator()(const Tensor &x, int32_t to, Tensor &output) const;
 
   /// In-place execution is permitted only when ``to == x.data_type``; the
@@ -135,8 +134,8 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &theta, const Tensor &size,
+                    const Attributes &attrs) const;
   void operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                   Tensor &output) const;
 
@@ -181,8 +180,8 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &X, const Tensor &grid,
+                    const Attributes &attrs) const;
   void operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
                   Tensor &output) const;
 
@@ -202,9 +201,9 @@ public:
 class CastLike : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &target_type, RuntimeContext *rt = nullptr) const;
-  Tensor operator()(const Tensor &x, const Tensor &target_type, bool saturate,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &target_type) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &target_type,
+                    bool saturate) const;
   void operator()(const Tensor &x, const Tensor &target_type, Tensor &output) const;
   void operator()(const Tensor &x, const Tensor &target_type, bool saturate, Tensor &output) const;
 
@@ -229,7 +228,7 @@ public:
 class Expand : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &input, const Tensor &shape, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input, const Tensor &shape) const;
   void operator()(const Tensor &input, const Tensor &shape, Tensor &output) const;
 
   /// The output may be larger than either input, so storage cannot be
@@ -247,8 +246,8 @@ public:
 class Reshape : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const Tensor &shape, int64_t allowzero = 0,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const Tensor &shape,
+                    int64_t allowzero = 0) const;
   void operator()(const Tensor &data, const Tensor &shape, int64_t allowzero, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -262,9 +261,9 @@ public:
 class Slice : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
-                    const Tensor *axes = nullptr, const Tensor *steps = nullptr,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const Tensor &starts,
+                    const Tensor &ends, const Tensor *axes = nullptr,
+                    const Tensor *steps = nullptr) const;
   void operator()(const Tensor &data, const Tensor &starts, const Tensor &ends, const Tensor *axes,
                   const Tensor *steps, Tensor &output) const;
 
@@ -292,9 +291,9 @@ public:
 class Pad : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value = nullptr,
-                    const Tensor *axes = nullptr, const std::string &mode = "constant",
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const Tensor &pads,
+                    const Tensor *constant_value = nullptr, const Tensor *axes = nullptr,
+                    const std::string &mode = "constant") const;
   void operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
                   const Tensor *axes, const std::string &mode, Tensor &output) const;
 
@@ -316,7 +315,7 @@ public:
 class Tile : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &input, const Tensor &repeats, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input, const Tensor &repeats) const;
   void operator()(const Tensor &input, const Tensor &repeats, Tensor &output) const;
 
   /// The output is generally larger than the input, so storage cannot be
@@ -355,8 +354,7 @@ public:
 class Squeeze : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const std::vector<int64_t> &axes,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const std::vector<int64_t> &axes) const;
   void operator()(const Tensor &data, const std::vector<int64_t> &axes, Tensor &output) const;
 
   /// Rank may change after squeezing.
@@ -368,8 +366,7 @@ public:
 class Unsqueeze : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const std::vector<int64_t> &axes,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const std::vector<int64_t> &axes) const;
   void operator()(const Tensor &data, const std::vector<int64_t> &axes, Tensor &output) const;
 
   /// Rank changes after unsqueezing.
@@ -385,8 +382,7 @@ public:
 class Transpose : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const std::vector<int64_t> &perm,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const std::vector<int64_t> &perm) const;
   void operator()(const Tensor &data, const std::vector<int64_t> &perm, Tensor &output) const;
 
   /// Output shape differs from input shape in general.
@@ -407,7 +403,7 @@ public:
 class NonZero : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
 
   /// The output has a different dtype (INT64) and a different shape
   /// from the input, so storage cannot be shared.
@@ -445,8 +441,8 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &indices, const Tensor &depth, const Tensor &values,
-                    const Attributes &attrs, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &indices, const Tensor &depth,
+                    const Tensor &values, const Attributes &attrs) const;
   void operator()(const Tensor &indices, const Tensor &depth, const Tensor &values,
                   const Attributes &attrs, Tensor &output) const;
 
@@ -479,9 +475,8 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &data, RuntimeContext *rt = nullptr) const;
-  Tensor operator()(const Tensor &data, const Attributes &attrs,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const Attributes &attrs) const;
   void operator()(const Tensor &data, const Attributes &attrs, Tensor &output) const;
 
   /// Output has a different dtype (INT64) and shape from the input, so
@@ -500,7 +495,7 @@ class Size : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &data, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data) const;
   void operator()(const Tensor &data, Tensor &output) const;
 
   /// Output has a different dtype (INT64) and shape (scalar) from the input,
@@ -518,7 +513,7 @@ public:
 class Identity : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input) const;
   void operator()(const Tensor &input, Tensor &output) const;
 
   /// Output is a bit-for-bit copy of the input; storage may safely be shared
@@ -535,8 +530,8 @@ public:
 class Gather : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const Tensor &indices, int64_t axis = 0,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
+                    int64_t axis = 0) const;
   void operator()(const Tensor &data, const Tensor &indices, int64_t axis, Tensor &output) const;
 
   /// Output shape differs from input shape in general.
@@ -553,8 +548,8 @@ public:
 class GatherElements : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const Tensor &indices, int64_t axis = 0,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
+                    int64_t axis = 0) const;
   void operator()(const Tensor &data, const Tensor &indices, int64_t axis, Tensor &output) const;
 
   /// Output shape matches ``indices`` and differs from ``data`` in general.
@@ -572,8 +567,8 @@ public:
 class GatherND : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims = 0,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
+                    int64_t batch_dims = 0) const;
   void operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims,
                   Tensor &output) const;
 
@@ -614,8 +609,8 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &past_cache, const Tensor &update, const Tensor *write_indices,
-                    const Attributes &attrs, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &past_cache, const Tensor &update,
+                    const Tensor *write_indices, const Attributes &attrs) const;
   void operator()(const Tensor &past_cache, const Tensor &update, const Tensor *write_indices,
                   const Attributes &attrs, Tensor &output) const;
 
@@ -645,8 +640,8 @@ public:
   };
 
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
-                    const Attributes &attrs, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
+                    const Tensor &updates, const Attributes &attrs) const;
   void operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                   const Attributes &attrs, Tensor &output) const;
 
@@ -671,8 +666,8 @@ public:
   };
 
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
-                    const Attributes &attrs, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
+                    const Tensor &updates, const Attributes &attrs) const;
   void operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                   const Attributes &attrs, Tensor &output) const;
 
@@ -700,8 +695,8 @@ public:
   };
 
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
-                    const Attributes &attrs, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
+                    const Tensor &updates, const Attributes &attrs) const;
   void operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                   const Attributes &attrs, Tensor &output) const;
 
@@ -727,8 +722,8 @@ public:
   using KernelBase::KernelBase;
   /// ``axis`` is an ``std::optional<int64_t>``: pass ``std::nullopt`` to
   /// compress the flattened input, or the axis index to compress along.
-  Tensor operator()(const Tensor &input, const Tensor &condition, std::optional<int64_t> axis,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input, const Tensor &condition,
+                    std::optional<int64_t> axis) const;
   void operator()(const Tensor &input, const Tensor &condition, std::optional<int64_t> axis,
                   Tensor &output) const;
 
@@ -767,8 +762,8 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &input, const Tensor *k, const Attributes &attrs,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input, const Tensor *k,
+                    const Attributes &attrs) const;
   void operator()(const Tensor &input, const Tensor *k, const Attributes &attrs,
                   Tensor &output) const;
 
@@ -807,8 +802,8 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &input, const Tensor &sequence_lens, const Attributes &attrs,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input, const Tensor &sequence_lens,
+                    const Attributes &attrs) const;
   void operator()(const Tensor &input, const Tensor &sequence_lens, const Attributes &attrs,
                   Tensor &output) const;
 
@@ -841,8 +836,7 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &input, const Attributes &attrs,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input, const Attributes &attrs) const;
   void operator()(const Tensor &input, const Attributes &attrs, Tensor &output) const;
 
   /// Output shape differs from input shape in general.
@@ -867,8 +861,7 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &input, const Attributes &attrs,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input, const Attributes &attrs) const;
   void operator()(const Tensor &input, const Attributes &attrs, Tensor &output) const;
 
   /// Output shape differs from input shape in general.
@@ -901,8 +894,8 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &input_data, const Tensor &shape, const Attributes &attrs,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input_data, const Tensor &shape,
+                    const Attributes &attrs) const;
   void operator()(const Tensor &input_data, const Tensor &shape, const Attributes &attrs,
                   Tensor &output) const;
 
@@ -940,8 +933,8 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &X, const Tensor &scales,
+                    const Attributes &attrs) const;
   void operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
                   Tensor &output) const;
 
@@ -1031,8 +1024,8 @@ public:
 
   /// Resize using the ``scales`` input only. The ``sizes`` input is treated
   /// as absent (matching the ``Resize(X, scales)`` convenience form).
-  Tensor operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &X, const Tensor &scales,
+                    const Attributes &attrs) const;
   void operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
                   Tensor &output) const;
 

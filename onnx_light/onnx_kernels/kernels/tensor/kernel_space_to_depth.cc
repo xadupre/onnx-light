@@ -30,12 +30,13 @@ std::vector<int64_t> ComputeSpaceToDepthOutputShape(const std::vector<int64_t> &
 
 } // namespace
 
-Tensor SpaceToDepth::operator()(const Tensor &input, const Attributes &attrs,
-                                RuntimeContext *rt) const {
+Tensor SpaceToDepth::operator()(RuntimeContext *rt, const Tensor &input,
+                                const Attributes &attrs) const {
   const std::vector<int64_t> out_shape =
       ComputeSpaceToDepthOutputShape(input.shape, attrs.blocksize);
-  Tensor output("", input.data_type, out_shape,
-                std::vector<uint8_t>(PackedByteSize(input.data_type, input.element_count())));
+  const size_t output_n_bytes = PackedByteSize(input.data_type, input.element_count());
+  Tensor output =
+      MakeOutputTensor(input.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(input, attrs, output);
   return output;
 }

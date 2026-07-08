@@ -183,8 +183,8 @@ void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int32_t sa
 
 } // namespace
 
-Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
-                             RuntimeContext *rt) const {
+Tensor Bernoulli::operator()(RuntimeContext *rt, const Tensor &input, int64_t seed,
+                             int32_t dtype) const {
   const std::vector<double> probs = ReadProbabilities(input);
 
   const int32_t out_dtype = (dtype == 0) ? input.data_type : dtype;
@@ -210,7 +210,7 @@ Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
 }
 
 void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(input, seed, dtype);
+  Tensor produced = (*this)(nullptr, input, seed, dtype);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::Bernoulli preallocated output must have the expected dtype.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

@@ -35,9 +35,9 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 
 } // namespace
 
-Tensor TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
+Tensor TensorScatter::operator()(RuntimeContext *rt, const Tensor &past_cache, const Tensor &update,
                                  const Tensor *write_indices,
-                                 const TensorScatter::Attributes &attrs, RuntimeContext *rt) const {
+                                 const TensorScatter::Attributes &attrs) const {
   Tensor output;
   output.name = "";
   output.data_type = past_cache.data_type;

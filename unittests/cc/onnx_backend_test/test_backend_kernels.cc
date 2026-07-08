@@ -86,7 +86,7 @@ TEST(BackendKernels, SplitKernelRunsOnBackendTestCases) {
         num_outputs = static_cast<int64_t>(node.ref_output().size());
       }
 
-      const std::vector<Tensor> outputs = split_kernel(input, axis, split, num_outputs);
+      const std::vector<Tensor> outputs = split_kernel(nullptr, input, axis, split, num_outputs);
       ASSERT_EQ(outputs.size(), ds.outputs.size());
       for (size_t i = 0; i < outputs.size(); ++i) {
         ExpectTensorEqual(outputs[i], ds.outputs[i]);

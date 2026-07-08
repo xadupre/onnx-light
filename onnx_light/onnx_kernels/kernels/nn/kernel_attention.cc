@@ -54,8 +54,9 @@ Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label) {
   EXT_ENFORCE_INVALID(hidden % num_heads == 0, "kernel::Attention: '", label,
                       "' hidden_size must be a multiple of ``num_heads``.");
   const int64_t head_size = hidden / num_heads;
-  Tensor out("", DataType::FLOAT, {batch, num_heads, seq, head_size},
-             std::vector<uint8_t>(t.size_bytes()));
+  const size_t out_n_bytes = t.size_bytes();
+  Tensor out = MakeOutputTensor(DataType::FLOAT, {batch, num_heads, seq, head_size}, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   const float *src = t.AsFloat();
   float *dst = out.AsFloat();
   // src strides: (seq*hidden, hidden, 1) over (batch, seq, hidden).
@@ -86,7 +87,9 @@ Tensor CollapseToRank3(const Tensor &t) {
   const int64_t seq = t.shape[2];
   const int64_t head_size = t.shape[3];
   const int64_t hidden = num_heads * head_size;
-  Tensor out("", DataType::FLOAT, {batch, seq, hidden}, std::vector<uint8_t>(t.size_bytes()));
+  const size_t out_n_bytes = t.size_bytes();
+  Tensor out = MakeOutputTensor(DataType::FLOAT, {batch, seq, hidden}, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   const float *src = t.AsFloat();
   float *dst = out.AsFloat();
   for (int64_t b = 0; b < batch; ++b) {
@@ -117,8 +120,9 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b) {
   const int64_t lb = b.shape[2];
   const int64_t d = a.shape[3];
   const int64_t lc = la + lb;
-  Tensor out("", DataType::FLOAT, {batch, heads, lc, d},
-             std::vector<uint8_t>(static_cast<size_t>(batch * heads * lc * d) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(batch * heads * lc * d) * sizeof(float);
+  Tensor out = MakeOutputTensor(DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   const float *pa = a.AsFloat();
   const float *pb = b.AsFloat();
   float *po = out.AsFloat();
@@ -196,31 +200,31 @@ double MaskValuePadded(const Tensor *mask, int64_t batch_size, int64_t q_num_hea
 
 } // namespace
 
-Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
-                             RuntimeContext *rt) const {
+Tensor Attention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K,
+                             const Tensor &V) const {
   CheckRank4Float(Q, "Q");
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::Attention: 'head_size' must be positive.");
   const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
-  return (*this)(Q, K, V, scale);
+  return (*this)(nullptr, Q, K, V, scale);
 }
 
-Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                             RuntimeContext *rt) const {
+Tensor Attention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K, const Tensor &V,
+                             float scale) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
-  return (*this)(Q, K, V, attrs).Y;
+  return (*this)(rt, Q, K, V, attrs).Y;
 }
 
-Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                             const Tensor &attn_mask, RuntimeContext *rt) const {
+Tensor Attention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K, const Tensor &V,
+                             float scale, const Tensor &attn_mask) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
   const Tensor *const mask_ptr =
       attn_mask.shape.empty() && attn_mask.size_bytes() == 0 ? nullptr : &attn_mask;
-  return (*this)(Q, K, V, attrs, mask_ptr).Y;
+  return (*this)(rt, Q, K, V, attrs, mask_ptr).Y;
 }
 
 void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
@@ -228,7 +232,7 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
-  Result r = (*this)(Q, K, V, attrs, attn_mask);
+  Result r = (*this)(nullptr, Q, K, V, attrs, attn_mask);
   EXT_ENFORCE_INVALID(output.data_type == Q.data_type,
                       "kernel::Attention preallocated output must share Q's element type.");
   EXT_ENFORCE_INVALID(output.shape == r.Y.shape,
@@ -345,11 +349,14 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
 
   // ----- Allocate outputs ------------------------------------------------
   const int64_t out_count_y = batch_size * q_num_heads * q_seq_len * v_head_size;
-  Tensor Y("", DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
-           std::vector<uint8_t>(static_cast<size_t>(out_count_y) * sizeof(float)));
+  const size_t Y_n_bytes = static_cast<size_t>(out_count_y) * sizeof(float);
+  Tensor Y = MakeOutputTensor(DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
+                              Y_n_bytes, rt ? rt->allocator() : nullptr);
   const int64_t qk_count = batch_size * q_num_heads * q_seq_len * total_kv_seq_len;
-  Tensor qk_out("", DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, total_kv_seq_len},
-                std::vector<uint8_t>(static_cast<size_t>(qk_count) * sizeof(float)));
+  const size_t qk_out_n_bytes = static_cast<size_t>(qk_count) * sizeof(float);
+  Tensor qk_out =
+      MakeOutputTensor(DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, total_kv_seq_len},
+                       qk_out_n_bytes, rt ? rt->allocator() : nullptr);
 
   // ----- Compute ---------------------------------------------------------
   const int64_t group_size = q_num_heads / kv_num_heads;

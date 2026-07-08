@@ -60,7 +60,7 @@ float DeterminantInPlace(float *a, int64_t m) {
 
 } // namespace
 
-Tensor Det::operator()(const Tensor &x, RuntimeContext *rt) const {
+Tensor Det::operator()(RuntimeContext *rt, const Tensor &x) const {
   EXT_ENFORCE_INVALID(x.shape.size() >= 2, "kernel::Det requires an input tensor of rank >= 2.");
   const int64_t m = x.shape[x.shape.size() - 1];
   const int64_t m2 = x.shape[x.shape.size() - 2];
@@ -69,8 +69,9 @@ Tensor Det::operator()(const Tensor &x, RuntimeContext *rt) const {
   int64_t batch = 1;
   for (int64_t d : out_shape)
     batch *= d;
-  Tensor y("", DataType::FLOAT, out_shape,
-           std::vector<uint8_t>(static_cast<size_t>(batch) * sizeof(float)));
+  const size_t y_n_bytes = static_cast<size_t>(batch) * sizeof(float);
+  Tensor y =
+      MakeOutputTensor(DataType::FLOAT, out_shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, y);
   return y;
 }

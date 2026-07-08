@@ -149,8 +149,9 @@ int64_t MapCoord(int64_t out_coord, int64_t pad_begin, int64_t input_dim, const 
 
 } // namespace
 
-Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
-                       const Tensor *axes, const std::string &mode, RuntimeContext *rt) const {
+Tensor Pad::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &pads,
+                       const Tensor *constant_value, const Tensor *axes,
+                       const std::string &mode) const {
   const std::size_t rank = data.shape.size();
   const std::vector<int64_t> axes_vec = ResolveAxes(axes, rank);
   const std::vector<int64_t> pads_vec = ReadInt64Vector(pads, "pads");
@@ -180,8 +181,9 @@ Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *con
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<std::size_t>(total) * elem_size));
+  const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, pads, constant_value, axes, mode, out);
   return out;
 }

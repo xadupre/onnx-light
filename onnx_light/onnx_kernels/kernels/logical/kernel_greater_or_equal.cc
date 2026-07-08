@@ -41,7 +41,7 @@ void GreaterOrEqualInPlace(const char *in_dtype_name, int32_t in_dtype, const Te
 }
 } // namespace
 
-Tensor GreaterOrEqual::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+Tensor GreaterOrEqual::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return GreaterOrEqualAlloc<float>("FLOAT", DataType::FLOAT, x, y,

@@ -57,8 +57,8 @@ std::vector<int64_t> ReadGatherNDIndices(const Tensor &indices) {
 
 } // namespace
 
-Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims,
-                            RuntimeContext *rt) const {
+Tensor GatherND::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
+                            int64_t batch_dims) const {
   std::vector<int64_t> out_shape =
       ComputeGatherNDOutputShape(data.shape, indices.shape, batch_dims);
   int64_t total = 1;
@@ -66,8 +66,9 @@ Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t b
     total *= d;
   }
   const std::size_t elem_size = ElementSize(data.data_type);
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<std::size_t>(total) * elem_size));
+  const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, indices, batch_dims, out);
   return out;
 }

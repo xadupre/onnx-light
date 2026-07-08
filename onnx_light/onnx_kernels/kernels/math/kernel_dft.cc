@@ -125,8 +125,8 @@ void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out
 
 } // namespace
 
-Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
-                       bool inverse, RuntimeContext *rt) const {
+Tensor DFT::operator()(RuntimeContext *rt, const Tensor &input, const Tensor *dft_length,
+                       int64_t axis, bool onesided, bool inverse) const {
   const int64_t rank = static_cast<int64_t>(input.shape.size());
   EXT_ENFORCE_INVALID(rank >= 2, kDFTName,
                       ": input must have rank >= 2 (including the "
@@ -186,9 +186,9 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
     out_total *= d;
   }
 
-  Tensor output(
-      "", input.data_type, out_shape,
-      std::vector<uint8_t>(static_cast<std::size_t>(out_total) * ElementSize(input.data_type)));
+  const size_t output_n_bytes = static_cast<std::size_t>(out_total) * ElementSize(input.data_type);
+  Tensor output =
+      MakeOutputTensor(input.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
 
   switch (input.data_type) {
   case DataType::FLOAT:
@@ -208,7 +208,7 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
 
 void DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
                      bool inverse, Tensor &output) const {
-  Tensor produced = (*this)(input, dft_length, axis, onesided, inverse);
+  Tensor produced = (*this)(nullptr, input, dft_length, axis, onesided, inverse);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type, kDFTName,
                       ": preallocated output dtype must match.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape, kDFTName,

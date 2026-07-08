@@ -114,8 +114,8 @@ std::vector<uint8_t> OneElementBytes(int32_t dtype) {
 
 } // namespace
 
-Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
-                           RuntimeContext *rt) const {
+Tensor EyeLike::operator()(RuntimeContext *rt, const Tensor &input, int64_t k,
+                           int32_t dtype) const {
   EXT_ENFORCE_INVALID(input.shape.size() == 2, "kernel::EyeLike: input must be 2-dimensional.");
   const int64_t rows = input.shape[0];
   const int64_t cols = input.shape[1];
@@ -140,7 +140,7 @@ Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
 }
 
 void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(input, k, dtype);
+  Tensor produced = (*this)(nullptr, input, k, dtype);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::EyeLike preallocated output must have the expected dtype.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

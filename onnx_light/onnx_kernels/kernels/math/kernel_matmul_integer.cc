@@ -206,8 +206,8 @@ void RunMatMulInteger(const Tensor &a, const std::vector<int32_t> &a_zps, const 
 
 } // namespace
 
-Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
-                                 const Tensor &b_zero_point, RuntimeContext *rt) const {
+Tensor MatMulInteger::operator()(RuntimeContext *rt, const Tensor &a, const Tensor &b,
+                                 const Tensor &a_zero_point, const Tensor &b_zero_point) const {
   EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": A must be INT8 or UINT8.");
   EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": B must be INT8 or UINT8.");
 
@@ -216,8 +216,9 @@ Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor 
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor out("", static_cast<int32_t>(DataType::INT32), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(total) * sizeof(int32_t)));
+  const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(int32_t);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT32), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(a, b, a_zero_point, b_zero_point, out);
   return out;
 }

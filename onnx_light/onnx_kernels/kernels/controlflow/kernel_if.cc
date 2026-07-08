@@ -16,13 +16,14 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
-                      RuntimeContext *rt) const {
+Tensor If::operator()(RuntimeContext *rt, const Tensor &cond, const Tensor &then_value,
+                      const Tensor &else_value) const {
   // Allocate an output matching either branch's type/shape (both must agree;
   // the in-place overload enforces this); the in-place overload writes into
   // ``out.data`` below.
-  Tensor out("", then_value.data_type, then_value.shape,
-             std::vector<uint8_t>(then_value.size_bytes()));
+  const size_t out_n_bytes = then_value.size_bytes();
+  Tensor out = MakeOutputTensor(then_value.data_type, then_value.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(cond, then_value, else_value, out);
   return out;
 }
@@ -52,8 +53,9 @@ void If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &
   }
 }
 
-std::vector<Tensor> If::operator()(const Tensor &cond, const GraphProto &then_branch,
-                                   const GraphProto &else_branch, RuntimeContext &rt) const {
+std::vector<Tensor> If::operator()(RuntimeContext &rt, const Tensor &cond,
+                                   const GraphProto &then_branch,
+                                   const GraphProto &else_branch) const {
   EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL,
                       "kernel::If: 'cond' must be a BOOL tensor.");
   EXT_ENFORCE_INVALID(cond.element_count() == 1,

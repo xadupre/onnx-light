@@ -80,10 +80,11 @@ void ResolveAutoPadAxisLpPool(const std::string &auto_pad, int64_t in_dim, int64
 
 } // namespace
 
-Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
+Tensor LpPool::operator()(RuntimeContext *rt, const Tensor &x,
+                          const std::vector<int64_t> &kernel_shape,
                           const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
                           int64_t p, bool ceil_mode, const std::vector<int64_t> &dilations,
-                          const std::string &auto_pad, RuntimeContext *rt) const {
+                          const std::string &auto_pad) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LpPool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(), "kernel::LpPool: kernel_shape must be non-empty.");
@@ -147,8 +148,9 @@ Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_sh
   for (int64_t d : out_shape) {
     n_out *= d;
   }
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(n_out) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(n_out) * sizeof(float);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
 
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());

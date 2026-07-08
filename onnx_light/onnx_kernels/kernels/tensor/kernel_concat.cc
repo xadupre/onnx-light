@@ -59,15 +59,16 @@ ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t
 
 } // namespace
 
-Tensor Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis,
-                          RuntimeContext *rt) const {
+Tensor Concat::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs,
+                          int64_t axis) const {
   const ConcatLayout layout = ValidateAndComputeLayout(inputs, axis);
   int64_t total = 1;
   for (int64_t d : layout.shape) {
     total *= d;
   }
-  Tensor out("", inputs[0].data_type, layout.shape,
-             std::vector<uint8_t>(static_cast<size_t>(total) * layout.elem_size));
+  const size_t out_n_bytes = static_cast<size_t>(total) * layout.elem_size;
+  Tensor out = MakeOutputTensor(inputs[0].data_type, layout.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(inputs, axis, out);
   return out;
 }

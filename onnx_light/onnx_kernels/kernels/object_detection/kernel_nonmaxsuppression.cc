@@ -112,10 +112,10 @@ void ValidateInputs(const Tensor &boxes, const Tensor &scores,
 
 } // namespace
 
-Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
+Tensor NonMaxSuppression::operator()(RuntimeContext *rt, const Tensor &boxes, const Tensor &scores,
                                      const Tensor *max_output_boxes_per_class,
                                      const Tensor *iou_threshold, const Tensor *score_threshold,
-                                     const Attributes &attrs, RuntimeContext *rt) const {
+                                     const Attributes &attrs) const {
   ValidateInputs(boxes, scores, max_output_boxes_per_class, iou_threshold, score_threshold);
 
   const int64_t num_batches = boxes.shape[0];

@@ -13,8 +13,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor SequenceAt::operator()(const Sequence &input_sequence, const Tensor &position,
-                              RuntimeContext *rt) const {
+Tensor SequenceAt::operator()(RuntimeContext *rt, const Sequence &input_sequence,
+                              const Tensor &position) const {
   const int64_t n = static_cast<int64_t>(input_sequence.size());
   EXT_ENFORCE_INVALID(n > 0, "kernel::SequenceAt: cannot index into an empty sequence.");
   EXT_ENFORCE_INVALID(position.size_bytes() > 0 && position.shape.empty(),

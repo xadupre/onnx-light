@@ -139,17 +139,17 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
 
 } // namespace
 
-Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices,
+Tensor MaxUnpool::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &indices,
                              const std::vector<int64_t> &kernel_shape,
-                             const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                             RuntimeContext *rt) const {
+                             const std::vector<int64_t> &strides,
+                             const std::vector<int64_t> &pads) const {
   return RunMaxUnpool(x, indices, kernel_shape, strides, pads, /*explicit_output_shape=*/nullptr);
 }
 
-Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Tensor &output_shape,
-                             const std::vector<int64_t> &kernel_shape,
-                             const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                             RuntimeContext *rt) const {
+Tensor MaxUnpool::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &indices,
+                             const Tensor &output_shape, const std::vector<int64_t> &kernel_shape,
+                             const std::vector<int64_t> &strides,
+                             const std::vector<int64_t> &pads) const {
   EXT_ENFORCE_INVALID(output_shape.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::MaxUnpool: output_shape must be INT64.");
   EXT_ENFORCE_INVALID(output_shape.shape.size() == 1,

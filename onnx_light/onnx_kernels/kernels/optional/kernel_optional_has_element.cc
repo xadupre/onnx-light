@@ -17,14 +17,15 @@ namespace {
 
 // Materializes a scalar ``Tensor<bool, {}>`` carrying the given value.
 Tensor MakeScalarBool(bool value) {
-  Tensor out("", static_cast<int32_t>(DataType::BOOL), std::vector<int64_t>{},
-             std::vector<uint8_t>(1, value ? uint8_t{1} : uint8_t{0}));
+  const size_t out_n_bytes = 1, value ? uint8_t{1} : uint8_t{0};
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), std::vector<int64_t>{},
+                                out_n_bytes, rt ? rt->allocator() : nullptr);
   return out;
 }
 
 } // namespace
 
-Tensor OptionalHasElement::operator()(const Tensor &input, RuntimeContext *rt) const {
+Tensor OptionalHasElement::operator()(RuntimeContext *rt, const Tensor &input) const {
   EXT_ENFORCE_INVALID(input.data_type != 0,
                       "kernel::OptionalHasElement: input element type must be a defined DataType.");
   // The runtime Tensor type cannot represent an "empty optional", so any
@@ -33,7 +34,7 @@ Tensor OptionalHasElement::operator()(const Tensor &input, RuntimeContext *rt) c
   return MakeScalarBool(true);
 }
 
-Tensor OptionalHasElement::operator()(const Sequence &input, RuntimeContext *rt) const {
+Tensor OptionalHasElement::operator()(RuntimeContext *rt, const Sequence &input) const {
   EXT_ENFORCE_INVALID(
       input.elem_type != 0,
       "kernel::OptionalHasElement: input sequence elem_type must be a defined DataType.");

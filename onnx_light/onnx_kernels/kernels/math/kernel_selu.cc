@@ -53,9 +53,9 @@ void ValidateOutput(const Tensor &x, const Tensor &output) {
 
 } // namespace
 
-Tensor Selu::operator()(const Tensor &x, float alpha, float gamma, RuntimeContext *rt) const {
-  Tensor out("", x.data_type, x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * x.element_size()));
+Tensor Selu::operator()(RuntimeContext *rt, const Tensor &x, float alpha, float gamma) const {
+  const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
+  Tensor out = MakeOutputTensor(x.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   Dispatch(x, alpha, gamma, out);
   return out;
 }

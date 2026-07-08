@@ -46,7 +46,7 @@ constexpr const char *kSupportedPReluTypesMsg =
     " only supports FLOAT, DOUBLE, INT32, INT64, UINT32 and UINT64 inputs.";
 } // namespace
 
-Tensor PRelu::operator()(const Tensor &x, const Tensor &slope, RuntimeContext *rt) const {
+Tensor PRelu::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &slope) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return PReluAlloc<float>("FLOAT", DataType::FLOAT, x, slope, rt ? rt->allocator() : nullptr);

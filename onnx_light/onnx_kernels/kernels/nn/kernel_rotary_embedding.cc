@@ -49,9 +49,9 @@ void CheckCacheShape(const Tensor &cache, const char *which, int64_t batch, int6
 
 } // namespace
 
-Tensor RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache,
+Tensor RotaryEmbedding::operator()(RuntimeContext *rt, const Tensor &X, const Tensor &cos_cache,
                                    const Tensor &sin_cache, const Tensor &position_ids,
-                                   const Attributes &attrs, RuntimeContext *rt) const {
+                                   const Attributes &attrs) const {
   Tensor output;
   output.data_type = X.data_type;
   output.shape = X.shape;
@@ -81,8 +81,9 @@ void RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache, const
     const Tensor X_f = PromoteToFloat32(X);
     const Tensor cos_f = PromoteToFloat32(cos_cache);
     const Tensor sin_f = PromoteToFloat32(sin_cache);
-    Tensor out_f("", static_cast<int32_t>(DataType::FLOAT), X.shape,
-                 std::vector<uint8_t>(static_cast<size_t>(X.element_count()) * sizeof(float), 0));
+    const size_t out_f_n_bytes = static_cast<size_t>(X.element_count()) * sizeof(float), 0;
+    Tensor out_f = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), X.shape, out_f_n_bytes,
+                                    rt ? rt->allocator() : nullptr);
     (*this)(X_f, cos_f, sin_f, position_ids, attrs, out_f);
     Tensor demoted = DemoteFromFloat32(out_f, target_dtype);
     EXT_ENFORCE_INVALID(output.size_bytes() == demoted.size_bytes(),

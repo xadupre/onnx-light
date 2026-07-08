@@ -79,9 +79,10 @@ void LookupAndFill(const Tensor &x, const std::vector<std::string> &cats_strings
 } // namespace
 
 template <typename InT, typename OutT>
-Tensor CategoryMapper::operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
-                                  const std::vector<int64_t> &cats_int64s, OutT default_value,
-                                  RuntimeContext *rt) const {
+Tensor CategoryMapper::operator()(RuntimeContext *rt, const Tensor &x,
+                                  const std::vector<std::string> &cats_strings,
+                                  const std::vector<int64_t> &cats_int64s,
+                                  OutT default_value) const {
   ValidateInputs<InT, OutT>(x, cats_strings, cats_int64s);
   const int64_t n = x.element_count();
   if constexpr (std::is_same_v<OutT, std::string>) {
@@ -132,19 +133,18 @@ void CategoryMapper::operator()(const Tensor &x, const std::vector<std::string> 
 
 // Explicit instantiations for the two element-type combinations defined by the
 // ``ai.onnx.ml::CategoryMapper`` schema.
-template Tensor CategoryMapper::operator()<std::string, int64_t>(const Tensor &,
+template Tensor CategoryMapper::operator()<std::string, int64_t>(RuntimeContext *, const Tensor &,
                                                                  const std::vector<std::string> &,
                                                                  const std::vector<int64_t> &,
-                                                                 int64_t, RuntimeContext *) const;
+                                                                 int64_t) const;
 template void CategoryMapper::operator()<std::string, int64_t>(const Tensor &,
                                                                const std::vector<std::string> &,
                                                                const std::vector<int64_t> &,
                                                                int64_t, Tensor &) const;
-template Tensor CategoryMapper::operator()<int64_t, std::string>(const Tensor &,
+template Tensor CategoryMapper::operator()<int64_t, std::string>(RuntimeContext *, const Tensor &,
                                                                  const std::vector<std::string> &,
                                                                  const std::vector<int64_t> &,
-                                                                 std::string,
-                                                                 RuntimeContext *) const;
+                                                                 std::string) const;
 template void CategoryMapper::operator()<int64_t, std::string>(const Tensor &,
                                                                const std::vector<std::string> &,
                                                                const std::vector<int64_t> &,

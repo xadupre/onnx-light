@@ -52,8 +52,8 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes, int64_t ran
 
 } // namespace
 
-Tensor CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
-                                 const CenterCropPad::Attributes &attrs, RuntimeContext *rt) const {
+Tensor CenterCropPad::operator()(RuntimeContext *rt, const Tensor &input_data, const Tensor &shape,
+                                 const CenterCropPad::Attributes &attrs) const {
   // Resolve the output shape from the input shape, ``shape`` and ``axes``.
   const std::size_t rank = input_data.shape.size();
   std::vector<int64_t> out_shape = input_data.shape;
@@ -79,9 +79,10 @@ Tensor CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor output(
-      "", input_data.data_type, out_shape,
-      std::vector<uint8_t>(PackedByteSize(input_data.data_type, total), static_cast<uint8_t>(0)));
+  const size_t output_n_bytes = PackedByteSize(input_data.data_type, total),
+               static_cast<uint8_t>(0);
+  Tensor output = MakeOutputTensor(input_data.data_type, out_shape, output_n_bytes,
+                                   rt ? rt->allocator() : nullptr);
   (*this)(input_data, shape, attrs, output);
   return output;
 }

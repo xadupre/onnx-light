@@ -57,16 +57,19 @@ std::pair<Tensor, Tensor> Dropout::operator()(const Tensor &data, float ratio, b
                                               int64_t seed) const {
   ValidateInput(data, ratio);
 
-  Tensor output("", data.data_type, data.shape, std::vector<uint8_t>(data.size_bytes()));
-  Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
-              std::vector<uint8_t>(static_cast<std::size_t>(data.element_count()), 1));
+  const size_t output_n_bytes = data.size_bytes();
+  Tensor output =
+      MakeOutputTensor(data.data_type, data.shape, output_n_bytes, rt ? rt->allocator() : nullptr);
+  const size_t mask_n_bytes = static_cast<std::size_t>(data.element_count()), 1;
+  Tensor mask = MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), data.shape, mask_n_bytes,
+                                 rt ? rt->allocator() : nullptr);
 
-  output = (*this)(data, ratio, training_mode, mask, seed);
+  output = (*this)(nullptr, data, ratio, training_mode, mask, seed);
   return {std::move(output), std::move(mask)};
 }
 
-Tensor Dropout::operator()(const Tensor &data, float ratio, bool training_mode, Tensor &mask,
-                           int64_t seed, RuntimeContext *rt) const {
+Tensor Dropout::operator()(RuntimeContext *rt, const Tensor &data, float ratio, bool training_mode,
+                           Tensor &mask, int64_t seed) const {
   ValidateInput(data, ratio);
   EXT_ENFORCE_INVALID(mask.data_type == static_cast<int32_t>(DataType::BOOL),
                       "kernel::Dropout: mask must have BOOL dtype.");
@@ -74,7 +77,9 @@ Tensor Dropout::operator()(const Tensor &data, float ratio, bool training_mode, 
   EXT_ENFORCE_INVALID(mask.size_bytes() == static_cast<std::size_t>(data.element_count()),
                       "kernel::Dropout: mask buffer must have one byte per input element.");
 
-  Tensor output("", data.data_type, data.shape, std::vector<uint8_t>(data.size_bytes()));
+  const size_t output_n_bytes = data.size_bytes();
+  Tensor output =
+      MakeOutputTensor(data.data_type, data.shape, output_n_bytes, rt ? rt->allocator() : nullptr);
   const uint32_t engine_seed =
       (seed == kNoSeed) ? kDefaultDropoutSeed : static_cast<uint32_t>(seed);
 

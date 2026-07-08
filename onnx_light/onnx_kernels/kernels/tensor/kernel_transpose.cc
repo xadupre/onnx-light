@@ -49,16 +49,17 @@ std::vector<int64_t> ComputeStrides(const std::vector<int64_t> &shape) {
 
 } // namespace
 
-Tensor Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm,
-                             RuntimeContext *rt) const {
+Tensor Transpose::operator()(RuntimeContext *rt, const Tensor &data,
+                             const std::vector<int64_t> &perm) const {
   const std::vector<int64_t> resolved_perm = ResolvePermOrDefault(perm, data.shape.size());
   std::vector<int64_t> out_shape(resolved_perm.size());
   for (std::size_t i = 0; i < resolved_perm.size(); ++i) {
     out_shape[i] = data.shape[static_cast<std::size_t>(resolved_perm[i])];
   }
 
-  Tensor output("", data.data_type, out_shape,
-                std::vector<uint8_t>(PackedByteSize(data.data_type, data.element_count())));
+  const size_t output_n_bytes = PackedByteSize(data.data_type, data.element_count());
+  Tensor output =
+      MakeOutputTensor(data.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, perm, output);
   return output;
 }

@@ -42,8 +42,8 @@ std::vector<bool> ReadCondition(const Tensor &condition) {
 
 } // namespace
 
-Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
-                            std::optional<int64_t> axis, RuntimeContext *rt) const {
+Tensor Compress::operator()(RuntimeContext *rt, const Tensor &input, const Tensor &condition,
+                            std::optional<int64_t> axis) const {
   const std::vector<bool> cond = ReadCondition(condition);
   const std::size_t cond_len = cond.size();
   const std::size_t elem_size = ElementSize(input.data_type);
@@ -58,8 +58,9 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
       }
     }
     const int64_t out_count = static_cast<int64_t>(selected_indices.size());
-    Tensor output("", input.data_type, {out_count},
-                  std::vector<uint8_t>(static_cast<std::size_t>(out_count) * elem_size));
+    const size_t output_n_bytes = static_cast<std::size_t>(out_count) * elem_size;
+    Tensor output = MakeOutputTensor(input.data_type, {out_count}, output_n_bytes,
+                                     rt ? rt->allocator() : nullptr);
     for (int64_t k = 0; k < out_count; ++k) {
       const std::size_t src_off =
           static_cast<std::size_t>(selected_indices[static_cast<std::size_t>(k)]) * elem_size;
@@ -99,8 +100,9 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
     out_total *= d;
   }
 
-  Tensor output("", input.data_type, out_shape,
-                std::vector<uint8_t>(static_cast<std::size_t>(out_total) * elem_size));
+  const size_t output_n_bytes = static_cast<std::size_t>(out_total) * elem_size;
+  Tensor output =
+      MakeOutputTensor(input.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
 
   // Collect the selected axis indices.
   std::vector<int64_t> sel_axis_indices;
@@ -144,7 +146,7 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
 
 void Compress::operator()(const Tensor &input, const Tensor &condition, std::optional<int64_t> axis,
                           Tensor &output) const {
-  Tensor produced = (*this)(input, condition, axis);
+  Tensor produced = (*this)(nullptr, input, condition, axis);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::Compress: preallocated output dtype must match.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

@@ -49,8 +49,8 @@ int64_t NormalizeAxis(int64_t axis, int64_t rank) {
 
 } // namespace
 
-Tensor Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
-                          RuntimeContext *rt) const {
+Tensor Gather::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
+                          int64_t axis) const {
   const int64_t r = static_cast<int64_t>(data.shape.size());
   const int64_t a = NormalizeAxis(axis, r);
   std::vector<int64_t> out_shape;
@@ -69,8 +69,9 @@ Tensor Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axi
     total *= d;
   }
   const std::size_t elem_size = ElementSize(data.data_type);
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<std::size_t>(total) * elem_size));
+  const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, indices, axis, out);
   return out;
 }

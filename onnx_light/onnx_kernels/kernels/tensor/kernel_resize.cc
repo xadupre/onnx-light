@@ -684,8 +684,8 @@ void RunResize(const Tensor &X, const std::vector<float> &scales_vec,
 
 } // namespace
 
-Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
-                          RuntimeContext *rt) const {
+Tensor Resize::operator()(RuntimeContext *rt, const Tensor &X, const Tensor &scales,
+                          const Attributes &attrs) const {
   const std::size_t rank = X.shape.size();
   const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
   const std::vector<float> scales_in = ReadResizeScales(scales, axes.size());
@@ -700,8 +700,9 @@ Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attribute
   for (int64_t d : out_shape) {
     total_elements *= d;
   }
-  Tensor output("", X.data_type, out_shape,
-                std::vector<uint8_t>(PackedByteSize(X.data_type, total_elements)));
+  const size_t output_n_bytes = PackedByteSize(X.data_type, total_elements);
+  Tensor output =
+      MakeOutputTensor(X.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(X, scales, attrs, output);
   return output;
 }
@@ -761,8 +762,9 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   for (int64_t d : out_shape) {
     total_elements *= d;
   }
-  Tensor output("", X.data_type, out_shape,
-                std::vector<uint8_t>(PackedByteSize(X.data_type, total_elements)));
+  const size_t output_n_bytes = PackedByteSize(X.data_type, total_elements);
+  Tensor output =
+      MakeOutputTensor(X.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
   std::vector<double> roi_start;
   std::vector<double> roi_end;
   BuildRoi(attrs, axes, rank, roi_start, roi_end);

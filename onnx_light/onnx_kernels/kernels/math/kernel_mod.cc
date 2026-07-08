@@ -145,7 +145,7 @@ constexpr const char *kFmodRequiredForFloatMsg =
     " requires attribute ``fmod`` set to 1 for floating-point inputs.";
 } // namespace
 
-Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, RuntimeContext *rt) const {
+Tensor Mod::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y, int64_t fmod) const {
   switch (x.data_type) {
   case DataType::FLOAT16:
     EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,

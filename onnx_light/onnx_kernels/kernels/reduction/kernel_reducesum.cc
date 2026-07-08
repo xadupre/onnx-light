@@ -113,8 +113,8 @@ void ValidateFloatOrDouble(const Tensor &t, const char *name) {
 
 } // namespace
 
-Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
-                             RuntimeContext *rt) const {
+Tensor ReduceSum::operator()(RuntimeContext *rt, const Tensor &data, bool keepdims,
+                             bool noop_with_empty_axes) const {
   ValidateFloatOrDouble(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   const size_t elem_size =
@@ -134,8 +134,9 @@ Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_e
     }
     return n;
   }();
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * elem_size, 0u));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size, 0u;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -171,8 +172,8 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
   SumReduce(data, is_reduced, out_shape_noreduce, output);
 }
 
-Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
-                             bool noop_with_empty_axes, RuntimeContext *rt) const {
+Tensor ReduceSum::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &axes,
+                             bool keepdims, bool noop_with_empty_axes) const {
   ValidateFloatOrDouble(data, "data");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceSum: axes must be an INT64 tensor.");
@@ -199,8 +200,9 @@ Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdi
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * elem_size, 0u));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size, 0u;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
 }

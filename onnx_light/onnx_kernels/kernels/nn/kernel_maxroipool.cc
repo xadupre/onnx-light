@@ -33,8 +33,8 @@ void ValidateInputs(const Tensor &x, const Tensor &rois, const MaxRoiPool::Attri
 
 } // namespace
 
-Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs,
-                              RuntimeContext *rt) const {
+Tensor MaxRoiPool::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &rois,
+                              const Attributes &attrs) const {
   ValidateInputs(x, rois, attrs);
   const int64_t num_rois = rois.shape[0];
   const int64_t C = x.shape[1];
@@ -44,8 +44,9 @@ Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attribu
   for (int64_t d : out_shape) {
     out_elements *= d;
   }
-  Tensor out("", x.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_elements) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(out_elements) * sizeof(float);
+  Tensor out =
+      MakeOutputTensor(x.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, rois, attrs, out);
   return out;
 }

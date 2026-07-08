@@ -69,8 +69,9 @@ StringEqualBroadcast CheckStringEqualInputs(const Tensor &x, const Tensor &y) {
 
 Tensor EqualStringAlloc(const Tensor &x, const Tensor &y) {
   const StringEqualBroadcast bi = CheckStringEqualInputs(x, y);
-  Tensor out("", DataType::BOOL, bi.shape,
-             std::vector<uint8_t>(static_cast<size_t>(bi.element_count)));
+  const size_t out_n_bytes = static_cast<size_t>(bi.element_count);
+  Tensor out =
+      MakeOutputTensor(DataType::BOOL, bi.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   for (int64_t i = 0; i < bi.element_count; ++i) {
     const std::string &a = x.string_data[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
     const std::string &b = y.string_data[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
@@ -96,7 +97,7 @@ void EqualStringInPlace(const Tensor &x, const Tensor &y, Tensor &output) {
 }
 } // namespace
 
-Tensor Equal::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+Tensor Equal::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::BOOL:
     return EqualAlloc<uint8_t>("BOOL", DataType::BOOL, x, y, rt ? rt->allocator() : nullptr);

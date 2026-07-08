@@ -54,8 +54,8 @@ std::vector<int64_t> ComputeUnsqueezedShape(const Tensor &data, const std::vecto
 
 } // namespace
 
-Tensor Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
-                             RuntimeContext *rt) const {
+Tensor Unsqueeze::operator()(RuntimeContext *rt, const Tensor &data,
+                             const std::vector<int64_t> &axes) const {
   const std::vector<int64_t> out_shape = ComputeUnsqueezedShape(data, axes);
   Tensor output = data;
   output.name.clear();

@@ -119,8 +119,8 @@ Tensor PromoteGemmInput(const Tensor &t) { return PromoteToFloat32(t); }
 
 } // namespace
 
-Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
-                        int64_t transA, int64_t transB, RuntimeContext *rt) const {
+Tensor Gemm::operator()(RuntimeContext *rt, const Tensor &a, const Tensor &b, const Tensor *c,
+                        float alpha, float beta, int64_t transA, int64_t transB) const {
   switch (a.data_type) {
   case DataType::FLOAT:
     return GemmAlloc<float>(a, b, c, alpha, beta, transA, transB);
@@ -159,7 +159,7 @@ void Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float a
   case DataType::BFLOAT16: {
     EXT_ENFORCE_INVALID(output.data_type == a.data_type, kGemmName,
                         " preallocated output must have the same dtype as input A.");
-    Tensor y = (*this)(a, b, c, alpha, beta, transA, transB);
+    Tensor y = (*this)(nullptr, a, b, c, alpha, beta, transA, transB);
     EXT_ENFORCE_INVALID(output.shape == y.shape, kGemmName,
                         " preallocated output has an invalid shape.");
     EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(), kGemmName,

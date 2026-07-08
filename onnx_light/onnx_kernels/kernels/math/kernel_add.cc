@@ -37,7 +37,7 @@ constexpr const char *kSupportedAddTypesMsg =
     "UINT32 and UINT64 inputs.";
 } // namespace
 
-Tensor Add::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+Tensor Add::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return AddAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);

@@ -154,9 +154,9 @@ std::vector<int64_t> InferOutputShape(const Tensor &x, const Tensor &w, const Te
 
 } // namespace
 
-Tensor DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &offset,
-                              const Tensor &b, const Tensor &mask, const Attributes &attrs,
-                              RuntimeContext *rt) const {
+Tensor DeformConv::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &w,
+                              const Tensor &offset, const Tensor &b, const Tensor &mask,
+                              const Attributes &attrs) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, offset, b, mask, resolved);
@@ -165,8 +165,9 @@ Tensor DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &of
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor out("", x.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(total) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(float);
+  Tensor out =
+      MakeOutputTensor(x.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, w, offset, b, mask, resolved, out);
   return out;
 }

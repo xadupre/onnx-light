@@ -56,8 +56,8 @@ int64_t LastDim(const std::vector<int64_t> &shape) { return shape.empty() ? 1 : 
 } // namespace
 
 template <typename T>
-Tensor Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
-                          const std::vector<float> &scale, RuntimeContext *rt) const {
+Tensor Scaler::operator()(RuntimeContext *rt, const Tensor &x, const std::vector<float> &offset,
+                          const std::vector<float> &scale) const {
   ValidateInput<T>(x);
   ValidateAttrs(offset, scale, LastDim(x.shape));
   const int64_t n = x.element_count();
@@ -83,8 +83,9 @@ void Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_SCALER(T)                                                           \
-  template Tensor Scaler::operator()<T>(const Tensor &, const std::vector<float> &,                \
-                                        const std::vector<float> &, RuntimeContext *) const;       \
+  template Tensor Scaler::operator()<T>(RuntimeContext *, const Tensor &,                          \
+                                        const std::vector<float> &, const std::vector<float> &)    \
+      const;                                                                                       \
   template void Scaler::operator()<T>(const Tensor &, const std::vector<float> &,                  \
                                       const std::vector<float> &, Tensor &) const
 

@@ -49,8 +49,8 @@ void CheckScaleBroadcast(const std::vector<int64_t> &x_shape, int64_t axis,
 
 } // namespace
 
-Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_t axis,
-                                    float epsilon, RuntimeContext *rt) const {
+Tensor RMSNormalization::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &scale,
+                                    int64_t axis, float epsilon) const {
   // FLOAT16/BFLOAT16 are computed in float32 and demoted back, mirroring the
   // half-precision dispatch used by kernel::Conv and kernel::MatMul. This lets
   // half-precision language models (e.g. the tiny Llama-style decoder) run
@@ -58,13 +58,14 @@ Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_
   if (IsHalfPrecision(x.data_type)) {
     const Tensor x_f = PromoteToFloat32(x);
     const Tensor scale_f = PromoteToFloat32(scale);
-    Tensor y = (*this)(x_f, scale_f, axis, epsilon);
+    Tensor y = (*this)(rt, x_f, scale_f, axis, epsilon);
     return DemoteFromFloat32(y, x.data_type);
   }
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RMSNormalization: X must be FLOAT.");
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
-             std::vector<uint8_t>(x.size_bytes()));
+  const size_t out_n_bytes = x.size_bytes();
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(x, scale, out, axis, epsilon);
   return out;
 }
@@ -74,7 +75,7 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
   if (IsHalfPrecision(x.data_type)) {
     EXT_ENFORCE_INVALID(output.data_type == x.data_type,
                         "kernel::RMSNormalization preallocated output must match the input dtype.");
-    Tensor y = (*this)(x, scale, axis, epsilon);
+    Tensor y = (*this)(nullptr, x, scale, axis, epsilon);
     EXT_ENFORCE_INVALID(output.shape == y.shape,
                         "kernel::RMSNormalization: output must have the same shape as X.");
     EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(),

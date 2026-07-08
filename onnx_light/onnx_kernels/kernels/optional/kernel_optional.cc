@@ -14,8 +14,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor Optional::operator()(const Tensor &input, RuntimeContext *rt) const {
-  Tensor out("", input.data_type, input.shape, std::vector<uint8_t>(input.size_bytes()));
+Tensor Optional::operator()(RuntimeContext *rt, const Tensor &input) const {
+  const size_t out_n_bytes = input.size_bytes();
+  Tensor out =
+      MakeOutputTensor(input.data_type, input.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(input, out);
   return out;
 }

@@ -94,8 +94,8 @@ Tensor ComputeRangeHalf(const Tensor &start, const Tensor &limit, const Tensor &
 
 } // namespace
 
-Tensor Range::operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
-                         RuntimeContext *rt) const {
+Tensor Range::operator()(RuntimeContext *rt, const Tensor &start, const Tensor &limit,
+                         const Tensor &delta) const {
   EXT_ENFORCE_INVALID(start.data_type == limit.data_type && start.data_type == delta.data_type,
                       "kernel::Range: 'start', 'limit' and 'delta' must share the same dtype.");
   switch (static_cast<DataType>(start.data_type)) {
@@ -123,7 +123,7 @@ Tensor Range::operator()(const Tensor &start, const Tensor &limit, const Tensor 
 
 void Range::operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
                        Tensor &output) const {
-  Tensor produced = (*this)(start, limit, delta);
+  Tensor produced = (*this)(nullptr, start, limit, delta);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::Range preallocated output must have the expected dtype.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

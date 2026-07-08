@@ -109,7 +109,7 @@ template <typename T> void ApplyNormalizer(const Tensor &x, NormMode mode, float
 } // namespace
 
 template <typename T>
-Tensor Normalizer::operator()(const Tensor &x, const std::string &norm, RuntimeContext *rt) const {
+Tensor Normalizer::operator()(RuntimeContext *rt, const Tensor &x, const std::string &norm) const {
   ValidateInput<T>(x);
   const NormMode mode = ParseNorm(norm);
   const int64_t n = x.element_count();
@@ -134,7 +134,7 @@ void Normalizer::operator()(const Tensor &x, const std::string &norm, Tensor &ou
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_NORMALIZER(T)                                                       \
-  template Tensor Normalizer::operator()<T>(const Tensor &, const std::string &, RuntimeContext *) \
+  template Tensor Normalizer::operator()<T>(RuntimeContext *, const Tensor &, const std::string &) \
       const;                                                                                       \
   template void Normalizer::operator()<T>(const Tensor &, const std::string &, Tensor &) const
 

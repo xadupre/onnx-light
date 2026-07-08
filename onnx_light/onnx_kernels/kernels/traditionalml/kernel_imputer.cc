@@ -72,8 +72,8 @@ void ApplyImputer(const Tensor &x, const std::vector<T> &imputed_values, T repla
 } // namespace
 
 template <typename T>
-Tensor Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value,
-                           RuntimeContext *rt) const {
+Tensor Imputer::operator()(RuntimeContext *rt, const Tensor &x,
+                           const std::vector<T> &imputed_values, T replaced_value) const {
   ValidateInput<T>(x);
   ValidateImputedValues<T>(imputed_values, LastDim(x.shape));
   const int64_t n = x.element_count();
@@ -99,7 +99,7 @@ void Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values, 
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_IMPUTER(T)                                                          \
-  template Tensor Imputer::operator()(const Tensor &, const std::vector<T> &, T, RuntimeContext *) \
+  template Tensor Imputer::operator()(RuntimeContext *, const Tensor &, const std::vector<T> &, T) \
       const;                                                                                       \
   template void Imputer::operator()(const Tensor &, const std::vector<T> &, T, Tensor &) const
 

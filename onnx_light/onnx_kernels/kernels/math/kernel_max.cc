@@ -69,7 +69,8 @@ Tensor MaxAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor z("", dtype, out_shape, std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(T)));
+  const size_t z_n_bytes = static_cast<size_t>(out_count) * sizeof(T);
+  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, rt ? rt->allocator() : nullptr);
   if (inputs.size() == 1) {
     std::memcpy(z.mutable_bytes(), inputs[0].bytes(),
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
@@ -128,8 +129,9 @@ Tensor MaxFloat16Alloc(const std::vector<Tensor> &inputs, RawBufferAllocator *al
                         " only supports FLOAT16 tensors.");
   }
   if (inputs.size() == 1) {
-    Tensor z("", DataType::FLOAT16, inputs[0].shape,
-             std::vector<uint8_t>(inputs[0].data.begin(), inputs[0].data.end()));
+    const size_t z_n_bytes = inputs[0].data.begin(), inputs[0].data.end();
+    Tensor z = MakeOutputTensor(DataType::FLOAT16, inputs[0].shape, z_n_bytes,
+                                rt ? rt->allocator() : nullptr);
     return z;
   }
   Tensor z = detail::BinaryHalfElementwiseAlloc(kMaxName, "FLOAT16", DataType::FLOAT16, inputs[0],
@@ -164,7 +166,7 @@ void MaxFloat16InPlace(const std::vector<Tensor> &inputs, Tensor &output) {
 
 } // namespace
 
-Tensor Max::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
+Tensor Max::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMaxName, " requires at least one input.");
   switch (inputs[0].data_type) {
 #define ONNX_LIGHT_MAX_CASE_ALLOC(ENUM, CPP, NAME)                                                 \

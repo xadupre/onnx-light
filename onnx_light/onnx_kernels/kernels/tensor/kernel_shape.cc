@@ -59,11 +59,11 @@ std::vector<int64_t> ComputeShapeSlice(const Tensor &data, const Shape::Attribut
 
 } // namespace
 
-Tensor Shape::operator()(const Tensor &data, RuntimeContext *rt) const {
-  return (*this)(data, Attributes{});
+Tensor Shape::operator()(RuntimeContext *rt, const Tensor &data) const {
+  return (*this)(rt, data, Attributes{});
 }
 
-Tensor Shape::operator()(const Tensor &data, const Attributes &attrs, RuntimeContext *rt) const {
+Tensor Shape::operator()(RuntimeContext *rt, const Tensor &data, const Attributes &attrs) const {
   const std::vector<int64_t> values = ComputeShapeSlice(data, attrs);
   const std::vector<int64_t> out_shape{static_cast<int64_t>(values.size())};
   return Tensor::FromInt64("", out_shape, values);

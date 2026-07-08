@@ -124,10 +124,10 @@ void ValidateAttribute(const std::string &approximate) {
 
 } // namespace
 
-Tensor Gelu::operator()(const Tensor &x, const std::string &approximate, RuntimeContext *rt) const {
+Tensor Gelu::operator()(RuntimeContext *rt, const Tensor &x, const std::string &approximate) const {
   ValidateAttribute(approximate);
-  Tensor out("", x.data_type, x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * x.element_size()));
+  const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
+  Tensor out = MakeOutputTensor(x.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   Dispatch(x, approximate, out);
   return out;
 }

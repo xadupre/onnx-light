@@ -39,12 +39,13 @@ std::vector<int64_t> ReadGatherElementsIndices(const Tensor &indices) {
 
 } // namespace
 
-Tensor GatherElements::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
-                                  RuntimeContext *rt) const {
+Tensor GatherElements::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
+                                  int64_t axis) const {
   const std::size_t elem_size = ElementSize(data.data_type);
   int64_t total = indices.element_count();
-  Tensor out("", data.data_type, indices.shape,
-             std::vector<uint8_t>(static_cast<std::size_t>(total) * elem_size));
+  const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, indices.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, indices, axis, out);
   return out;
 }

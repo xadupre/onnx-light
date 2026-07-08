@@ -84,8 +84,8 @@ void StftCompute(const T *signal, const T *window, T *out, int64_t batch_size,
 
 } // namespace
 
-Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
-                        const Tensor *frame_length, bool onesided, RuntimeContext *rt) const {
+Tensor STFT::operator()(RuntimeContext *rt, const Tensor &signal, const Tensor &frame_step,
+                        const Tensor *window, const Tensor *frame_length, bool onesided) const {
   const int64_t rank = static_cast<int64_t>(signal.shape.size());
   EXT_ENFORCE_INVALID(rank == 3, kSTFTName,
                       ": signal must have rank 3 ([batch_size, signal_length, 1]"
@@ -129,9 +129,9 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
 
   std::vector<int64_t> out_shape = {batch_size, n_frames, dft_unique_bins, 2};
   int64_t out_total = batch_size * n_frames * dft_unique_bins * 2;
-  Tensor output(
-      "", signal.data_type, out_shape,
-      std::vector<uint8_t>(static_cast<std::size_t>(out_total) * ElementSize(signal.data_type)));
+  const size_t output_n_bytes = static_cast<std::size_t>(out_total) * ElementSize(signal.data_type);
+  Tensor output =
+      MakeOutputTensor(signal.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
 
   if (window != nullptr) {
     EXT_ENFORCE_INVALID(window->data_type == signal.data_type, kSTFTName,
@@ -158,7 +158,7 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
 
 void STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
                       const Tensor *frame_length, bool onesided, Tensor &output) const {
-  Tensor produced = (*this)(signal, frame_step, window, frame_length, onesided);
+  Tensor produced = (*this)(nullptr, signal, frame_step, window, frame_length, onesided);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type, kSTFTName,
                       ": preallocated output dtype must match.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape, kSTFTName,

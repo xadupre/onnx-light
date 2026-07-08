@@ -295,8 +295,8 @@ void DequantizeBlockFloat4E2M1Loop(const Tensor &x, const float *scales,
 
 } // namespace
 
-Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
-                                    RuntimeContext *rt) const {
+Tensor DequantizeLinear::operator()(RuntimeContext *rt, const Tensor &x,
+                                    const Tensor &x_scale) const {
   // The output element type matches ``x_scale``'s element type (FLOAT or
   // FLOAT16). Both encodings occupy known fixed-size storage so the buffer
   // can be sized up-front.
@@ -305,8 +305,9 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   const size_t elem_size = x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)
                                ? sizeof(uint16_t)
                                : sizeof(float);
-  Tensor out("", x_scale.data_type, x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
+  const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
+  Tensor out =
+      MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, x_scale, out);
   return out;
 }
@@ -370,15 +371,16 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
   }
 }
 
-Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
-                                    const Tensor &x_zero_point, RuntimeContext *rt) const {
+Tensor DequantizeLinear::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &x_scale,
+                                    const Tensor &x_zero_point) const {
   EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
                       "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
   const size_t elem_size = x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)
                                ? sizeof(uint16_t)
                                : sizeof(float);
-  Tensor out("", x_scale.data_type, x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
+  const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
+  Tensor out =
+      MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, x_scale, x_zero_point, out);
   return out;
 }
@@ -457,19 +459,19 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   }
 }
 
-Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
-                                    const Tensor &x_zero_point, int64_t axis,
-                                    RuntimeContext *rt) const {
+Tensor DequantizeLinear::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &x_scale,
+                                    const Tensor &x_zero_point, int64_t axis) const {
   if (x_scale.element_count() == 1) {
-    return (*this)(x, x_scale, x_zero_point);
+    return (*this)(rt, x, x_scale, x_zero_point);
   }
   EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
                       "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
   const size_t elem_size = x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)
                                ? sizeof(uint16_t)
                                : sizeof(float);
-  Tensor out("", x_scale.data_type, x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
+  const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
+  Tensor out =
+      MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, x_scale, x_zero_point, axis, out);
   return out;
 }
@@ -477,7 +479,7 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
 void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                   const Tensor &x_zero_point, int64_t axis, Tensor &output) const {
   if (x_scale.element_count() == 1) {
-    return (*this)(x, x_scale, x_zero_point, output);
+    return (*this)(nullptr, x, x_scale, x_zero_point, output);
   }
   EXT_ENFORCE_INVALID(x_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::DequantizeLinear: x_scale must be FLOAT for per-axis "
@@ -583,18 +585,19 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   }
 }
 
-Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis,
-                                    RuntimeContext *rt) const {
+Tensor DequantizeLinear::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &x_scale,
+                                    int64_t axis) const {
   if (x_scale.element_count() == 1) {
-    return (*this)(x, x_scale);
+    return (*this)(rt, x, x_scale);
   }
   EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
                       "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
   const size_t elem_size = x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)
                                ? sizeof(uint16_t)
                                : sizeof(float);
-  Tensor out("", x_scale.data_type, x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
+  const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
+  Tensor out =
+      MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, x_scale, axis, out);
   return out;
 }
@@ -602,7 +605,7 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int6
 void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis,
                                   Tensor &output) const {
   if (x_scale.element_count() == 1) {
-    return (*this)(x, x_scale, output);
+    return (*this)(nullptr, x, x_scale, output);
   }
   EXT_ENFORCE_INVALID(axis >= 0 && axis < static_cast<int64_t>(x.shape.size()),
                       "kernel::DequantizeLinear: axis out of range.");
@@ -612,8 +615,9 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_
   // explicit-zero-point overload. The zero point mirrors ``x_scale``'s shape so
   // both per-axis (1-D) and blocked (N-D) layouts are handled.
   const int64_t scale_count = x_scale.element_count();
-  Tensor zero_zero_point("", x.data_type, x_scale.shape,
-                         std::vector<uint8_t>(PackedByteSize(x.data_type, scale_count), 0));
+  const size_t zero_zero_point_n_bytes = PackedByteSize(x.data_type, scale_count), 0;
+  Tensor zero_zero_point = MakeOutputTensor(x.data_type, x_scale.shape, zero_zero_point_n_bytes,
+                                            rt ? rt->allocator() : nullptr);
   (*this)(x, x_scale, zero_zero_point, axis, output);
 }
 

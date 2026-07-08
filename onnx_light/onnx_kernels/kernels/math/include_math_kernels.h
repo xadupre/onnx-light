@@ -51,7 +51,7 @@ namespace kernel {
 class Abs : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -62,7 +62,7 @@ public:
 class Acos : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -73,7 +73,7 @@ public:
 class Acosh : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -84,7 +84,7 @@ public:
 class Asin : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -95,7 +95,7 @@ public:
 class Asinh : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -106,7 +106,7 @@ public:
 class Atan : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -117,7 +117,7 @@ public:
 class Atanh : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -128,7 +128,7 @@ public:
 class Cos : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -139,7 +139,7 @@ public:
 class Cosh : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -155,7 +155,7 @@ public:
 class Det : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// The output buffer is smaller than the input (drops the trailing two
@@ -167,7 +167,7 @@ public:
 class Ceil : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -178,7 +178,7 @@ public:
 class Floor : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -198,8 +198,8 @@ public:
   /// Computes ``y = clip(x, min, max)``. ``min``/``max`` may be ``nullptr``
   /// to use the dtype-specific default bound. When provided, each must be a
   /// 0-D (scalar) tensor whose dtype matches ``x``.
-  Tensor operator()(const Tensor &x, const Tensor *min = nullptr, const Tensor *max = nullptr,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor *min = nullptr,
+                    const Tensor *max = nullptr) const;
   void operator()(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -210,7 +210,7 @@ public:
 class Sign : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -221,7 +221,7 @@ public:
 class Round : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -232,7 +232,7 @@ public:
 class Exp : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -243,7 +243,7 @@ public:
 class Erf : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -254,7 +254,7 @@ public:
 class Log : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -265,7 +265,7 @@ public:
 class Reciprocal : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -276,7 +276,7 @@ public:
 class Sqrt : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -287,7 +287,7 @@ public:
 class Sigmoid : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -299,7 +299,7 @@ public:
 class HardSigmoid : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, float alpha, float beta, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, float alpha, float beta) const;
   void operator()(const Tensor &x, float alpha, float beta, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -311,7 +311,7 @@ public:
 class HardSwish : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -323,7 +323,7 @@ public:
 class Hardmax : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, int64_t axis) const;
   void operator()(const Tensor &x, int64_t axis, Tensor &output) const;
 
   /// Hardmax must look at every value along the axis before it can write any
@@ -335,7 +335,7 @@ public:
 class Sin : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -346,7 +346,7 @@ public:
 class Softmax : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, int64_t axis) const;
   void operator()(const Tensor &x, int64_t axis, Tensor &output) const;
 
   /// Softmax needs the full input slice to compute each output value; aliasing
@@ -358,7 +358,7 @@ public:
 class LogSoftmax : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, int64_t axis) const;
   void operator()(const Tensor &x, int64_t axis, Tensor &output) const;
 
   /// LogSoftmax needs the full input slice to compute each output value;
@@ -370,7 +370,7 @@ public:
 class Softplus : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -382,7 +382,7 @@ public:
 class Mish : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -393,7 +393,7 @@ public:
 class Softsign : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -443,9 +443,9 @@ public:
   /// @param ignore_index Class index to ignore (only used when ``has_ignore_index`` is true).
   /// @return Loss tensor whose shape depends on ``reduction``: matches the
   ///         shape of ``target`` for ``"none"``; scalar otherwise.
-  Tensor operator()(const Tensor &input, const Tensor &target, const Tensor *weight,
-                    const std::string &reduction, bool has_ignore_index, int64_t ignore_index,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input, const Tensor &target,
+                    const Tensor *weight, const std::string &reduction, bool has_ignore_index,
+                    int64_t ignore_index) const;
 
   /// The kernel allocates new outputs; it does not support input/output aliasing.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -455,7 +455,7 @@ public:
 class Sinh : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -466,7 +466,7 @@ public:
 class Tan : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -477,7 +477,7 @@ public:
 class Tanh : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -489,7 +489,7 @@ public:
 class Relu : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -502,7 +502,7 @@ public:
 class Elu : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, float alpha = 1.0f) const;
   void operator()(const Tensor &x, float alpha, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -516,7 +516,7 @@ public:
 class Celu : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, float alpha = 1.0f) const;
   void operator()(const Tensor &x, float alpha, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -530,8 +530,8 @@ public:
 class Gelu : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const std::string &approximate = "none",
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x,
+                    const std::string &approximate = "none") const;
   void operator()(const Tensor &x, const std::string &approximate, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -543,7 +543,7 @@ public:
 class Swish : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, float alpha = 1.0f) const;
   void operator()(const Tensor &x, float alpha, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -555,7 +555,7 @@ public:
 class ThresholdedRelu : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, float alpha = 1.0f) const;
   void operator()(const Tensor &x, float alpha, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -568,7 +568,7 @@ public:
 class LeakyRelu : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, float alpha = 0.01f, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, float alpha = 0.01f) const;
   void operator()(const Tensor &x, float alpha, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -581,8 +581,8 @@ public:
 class Shrink : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, float bias = 0.0f, float lambd = 0.5f,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, float bias = 0.0f,
+                    float lambd = 0.5f) const;
   void operator()(const Tensor &x, float bias, float lambd, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -597,8 +597,8 @@ public:
 class Selu : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, float alpha = 1.67326319217681884765625f,
-                    float gamma = 1.05070102214813232421875f, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, float alpha = 1.67326319217681884765625f,
+                    float gamma = 1.05070102214813232421875f) const;
   void operator()(const Tensor &x, float alpha, float gamma, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -609,7 +609,7 @@ public:
 class Add : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
@@ -622,7 +622,7 @@ public:
 class Sub : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
@@ -635,7 +635,7 @@ public:
 class Mul : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
@@ -655,7 +655,7 @@ public:
 class PRelu : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &slope, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &slope) const;
   void operator()(const Tensor &x, const Tensor &slope, Tensor &output) const;
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
@@ -668,7 +668,7 @@ public:
 class Div : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
@@ -687,8 +687,7 @@ public:
 class Mod : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &y, int64_t fmod = 0,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y, int64_t fmod = 0) const;
   void operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &output) const;
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
@@ -703,7 +702,7 @@ public:
 class Neg : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Element-wise unary kernel: the output buffer may alias the input buffer.
@@ -725,7 +724,7 @@ public:
 class Pow : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   /// Element-wise binary kernel: the output buffer may alias the base input
@@ -741,7 +740,7 @@ public:
 class BlackmanWindow : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &size, bool periodic = true, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &size, bool periodic = true) const;
   void operator()(const Tensor &size, bool periodic, Tensor &output) const;
 
   /// Output is a float vector while the input is an int scalar: storage
@@ -755,7 +754,7 @@ public:
 class HannWindow : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &size, bool periodic = true, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &size, bool periodic = true) const;
   void operator()(const Tensor &size, bool periodic, Tensor &output) const;
 
   /// Output is a float vector while the input is an int scalar: storage
@@ -769,7 +768,7 @@ public:
 class HammingWindow : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &size, bool periodic = true, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &size, bool periodic = true) const;
   void operator()(const Tensor &size, bool periodic, Tensor &output) const;
 
   /// Output is a float vector while the input is an int scalar: storage
@@ -784,8 +783,8 @@ public:
 class Gemm : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
-                    int64_t transA, int64_t transB, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &a, const Tensor &b, const Tensor *c,
+                    float alpha, float beta, int64_t transA, int64_t transB) const;
   void operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                   int64_t transA, int64_t transB, Tensor &output) const;
 
@@ -802,7 +801,7 @@ public:
 class MatMul : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &a, const Tensor &b, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &a, const Tensor &b) const;
   void operator()(const Tensor &a, const Tensor &b, Tensor &output) const;
 
   /// MatMul generally changes shape and cannot alias inputs safely.
@@ -822,8 +821,8 @@ public:
   /// Returning overload allocating an INT32 output. ``a_zero_point`` /
   /// ``b_zero_point`` may be default-constructed (empty) tensors meaning the
   /// optional input is absent.
-  Tensor operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
-                    const Tensor &b_zero_point, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &a, const Tensor &b,
+                    const Tensor &a_zero_point, const Tensor &b_zero_point) const;
 
   /// In-place overload writing into a caller-allocated INT32 output.
   void operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
@@ -841,7 +840,7 @@ public:
 class Sum : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const;
   void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
 
   /// Variadic element-wise kernel: the output buffer may alias an input
@@ -858,7 +857,7 @@ public:
 class Max : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const;
   void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
 
   /// Variadic element-wise kernel: the output buffer may alias an input
@@ -874,7 +873,7 @@ public:
 class Min : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const;
   void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
 
   /// See :class:`Max`.
@@ -889,7 +888,7 @@ public:
 class Mean : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const;
   void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
 
   /// Variadic element-wise kernel: the output buffer may alias an input
@@ -905,9 +904,9 @@ public:
 class MelWeightMatrix : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &num_mel_bins, const Tensor &dft_length, const Tensor &sample_rate,
-                    const Tensor &lower_edge_hertz, const Tensor &upper_edge_hertz,
-                    DataType output_dtype = DataType::FLOAT, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &num_mel_bins, const Tensor &dft_length,
+                    const Tensor &sample_rate, const Tensor &lower_edge_hertz,
+                    const Tensor &upper_edge_hertz, DataType output_dtype = DataType::FLOAT) const;
   void operator()(const Tensor &num_mel_bins, const Tensor &dft_length, const Tensor &sample_rate,
                   const Tensor &lower_edge_hertz, const Tensor &upper_edge_hertz,
                   DataType output_dtype, Tensor &output) const;
@@ -925,8 +924,8 @@ public:
 class CumSum : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &axis, bool exclusive = false,
-                    bool reverse = false, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &axis, bool exclusive = false,
+                    bool reverse = false) const;
   void operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
                   Tensor &output) const;
 
@@ -945,8 +944,8 @@ public:
 class CumProd : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &x, const Tensor &axis, bool exclusive = false,
-                    bool reverse = false, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &axis, bool exclusive = false,
+                    bool reverse = false) const;
   void operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
                   Tensor &output) const;
 
@@ -964,8 +963,8 @@ public:
 class Einsum : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, const std::string &equation,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs,
+                    const std::string &equation) const;
   void operator()(const std::vector<Tensor> &inputs, const std::string &equation,
                   Tensor &output) const;
 
@@ -992,9 +991,8 @@ public:
   /// ``axis`` is the signal axis (must satisfy ``-rank <= axis``, ``axis !=
   /// -1`` and ``axis < rank - 1``). ``dft_length`` is a pointer to a 0-D
   /// INT32/INT64 tensor; pass ``nullptr`` to use the default.
-  Tensor operator()(const Tensor &input, const Tensor *dft_length, int64_t axis,
-                    bool onesided = false, bool inverse = false,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &input, const Tensor *dft_length, int64_t axis,
+                    bool onesided = false, bool inverse = false) const;
   void operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
                   bool inverse, Tensor &output) const;
 
@@ -1023,9 +1021,8 @@ public:
 class STFT : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
-                    const Tensor *frame_length, bool onesided = true,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(RuntimeContext *rt, const Tensor &signal, const Tensor &frame_step,
+                    const Tensor *window, const Tensor *frame_length, bool onesided = true) const;
   void operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
                   const Tensor *frame_length, bool onesided, Tensor &output) const;
 

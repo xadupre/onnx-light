@@ -13,8 +13,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p,
-                                   RuntimeContext *rt) const {
+Tensor LpNormalization::operator()(RuntimeContext *rt, const Tensor &x, int64_t axis,
+                                   int64_t p) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LpNormalization: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!x.shape.empty(), "kernel::LpNormalization: x must have rank >= 1.");
@@ -40,8 +40,9 @@ Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p,
   }
 
   const int64_t total = outer * dim * inner;
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(total) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(float);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
 
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());

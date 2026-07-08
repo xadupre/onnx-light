@@ -33,7 +33,7 @@ TEST(KernelClass, IfClassSelectsThenBranchWhenCondTrue) {
   Tensor cond("", onnx_kernels::DataType::BOOL, {}, {1});
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
-  Tensor out = if_kernel(cond, then_v, else_v);
+  Tensor out = if_kernel(nullptr, cond, then_v, else_v);
   ASSERT_EQ(out.element_count(), 2);
   EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_FLOAT_EQ(out.AsFloat()[0], 1.0f);
@@ -46,7 +46,7 @@ TEST(KernelClass, IfClassSelectsElseBranchWhenCondFalse) {
   Tensor cond("", onnx_kernels::DataType::BOOL, {}, {0});
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
-  Tensor out = if_kernel(cond, then_v, else_v);
+  Tensor out = if_kernel(nullptr, cond, then_v, else_v);
   ASSERT_EQ(out.element_count(), 2);
   EXPECT_FLOAT_EQ(out.AsFloat()[0], 3.0f);
   EXPECT_FLOAT_EQ(out.AsFloat()[1], 4.0f);
@@ -61,19 +61,19 @@ TEST(KernelClass, IfClassRejectsInvalidInputs) {
 
   // Non-bool cond is rejected.
   Tensor cond_float = Tensor::FromFloat("", {}, {1.0f});
-  EXPECT_THROW((void)if_kernel(cond_float, then_v, else_v), std::invalid_argument);
+  EXPECT_THROW((void)if_kernel(nullptr, cond_float, then_v, else_v), std::invalid_argument);
 
   // Multi-element cond is rejected.
   Tensor cond_vec("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
-  EXPECT_THROW((void)if_kernel(cond_vec, then_v, else_v), std::invalid_argument);
+  EXPECT_THROW((void)if_kernel(nullptr, cond_vec, then_v, else_v), std::invalid_argument);
 
   // Mismatched branch types are rejected.
   Tensor else_int = Tensor::From<int32_t>("", {2}, {3, 4});
-  EXPECT_THROW((void)if_kernel(cond_bool, then_v, else_int), std::invalid_argument);
+  EXPECT_THROW((void)if_kernel(nullptr, cond_bool, then_v, else_int), std::invalid_argument);
 
   // Mismatched branch shapes are rejected.
   Tensor else_short = Tensor::FromFloat("", {1}, {3.0f});
-  EXPECT_THROW((void)if_kernel(cond_bool, then_v, else_short), std::invalid_argument);
+  EXPECT_THROW((void)if_kernel(nullptr, cond_bool, then_v, else_short), std::invalid_argument);
 }
 
 TEST(KernelClass, IfInPlaceWritesToPreallocatedOutput) {
@@ -160,7 +160,7 @@ TEST(KernelClass, IfBranchOverloadExecutesThenSubgraph) {
   BuildDoubleInitBranchGraph(else_graph, "else_g", "e", "out", -1.0f);
 
   Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
-  std::vector<Tensor> outs = if_kernel(cond_true, then_graph, else_graph, rt);
+  std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 1u);
   ASSERT_EQ(outs[0].element_count(), 1);
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], 10.0f);
@@ -177,7 +177,7 @@ TEST(KernelClass, IfBranchOverloadExecutesElseSubgraph) {
   BuildDoubleInitBranchGraph(else_graph, "else_g", "e", "out", -1.0f);
 
   Tensor cond_false("", onnx_kernels::DataType::BOOL, {}, {0});
-  std::vector<Tensor> outs = if_kernel(cond_false, then_graph, else_graph, rt);
+  std::vector<Tensor> outs = if_kernel(rt, cond_false, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 1u);
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], -2.0f);
 }
@@ -221,7 +221,7 @@ TEST(KernelClass, IfBranchOverloadInheritsOuterScope) {
   tt2->mutable_shape()->add_dim()->set_dim_value(3);
 
   Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
-  std::vector<Tensor> outs = if_kernel(cond_true, then_graph, else_graph, rt);
+  std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 1u);
   ASSERT_EQ(outs[0].element_count(), 3);
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], -1.0f);
@@ -276,7 +276,7 @@ TEST(KernelClass, IfBranchOverloadReturnsAllOutputsInOrder) {
   GraphProto else_graph = then_graph;
 
   Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
-  std::vector<Tensor> outs = if_kernel(cond_true, then_graph, else_graph, rt);
+  std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 2u);
   ASSERT_EQ(outs[0].element_count(), 2);
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], -3.0f);
@@ -296,7 +296,7 @@ TEST(KernelClass, IfBranchOverloadRejectsMismatchedOutputCounts) {
   else_graph.set_name("empty");
 
   Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
-  EXPECT_THROW((void)if_kernel(cond_true, then_graph, else_graph, rt), std::invalid_argument);
+  EXPECT_THROW((void)if_kernel(rt, cond_true, then_graph, else_graph), std::invalid_argument);
 }
 
 TEST(KernelClass, IfBranchOverloadRejectsNonBoolCond) {
@@ -309,10 +309,10 @@ TEST(KernelClass, IfBranchOverloadRejectsNonBoolCond) {
   BuildDoubleInitBranchGraph(else_graph, "else_g", "e", "y", 2.0f);
 
   Tensor cond_float = Tensor::FromFloat("", {}, {1.0f});
-  EXPECT_THROW((void)if_kernel(cond_float, then_graph, else_graph, rt), std::invalid_argument);
+  EXPECT_THROW((void)if_kernel(rt, cond_float, then_graph, else_graph), std::invalid_argument);
 
   Tensor cond_vec("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
-  EXPECT_THROW((void)if_kernel(cond_vec, then_graph, else_graph, rt), std::invalid_argument);
+  EXPECT_THROW((void)if_kernel(rt, cond_vec, then_graph, else_graph), std::invalid_argument);
 }
 
 } // namespace Test
@@ -331,7 +331,7 @@ TEST(KernelClass, LoopStacksScanOutputsAcrossIterations) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
   // M = 3, no cond, no carried deps, K = 1 scan output of shape [2] per iter.
-  Tensor M = Int64Scalar(3);
+  Tensor M = Int64Scalar(nullptr, 3);
   Tensor cond_undef;
   Tensor s0 = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor s1 = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
@@ -352,11 +352,11 @@ TEST(KernelClass, LoopStacksScanOutputsAcrossIterations) {
 TEST(KernelClass, LoopReturnsInitialStateWhenTripCountIsZero) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
-  Tensor M = Int64Scalar(0);
+  Tensor M = Int64Scalar(nullptr, 0);
   Tensor cond_undef;
   Tensor v0 = Tensor::FromFloat("", {2}, {7.0f, 8.0f});
   Tensor v0_final = Tensor::FromFloat("", {2}, {0.0f, 0.0f});
-  std::vector<Tensor> out = loop_kernel(M, cond_undef, {v0}, {v0_final}, {});
+  std::vector<Tensor> out = loop_kernel(nullptr, M, cond_undef, {v0}, {v0_final}, {});
   ASSERT_EQ(out.size(), 1u);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 7.0f);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 8.0f);
@@ -365,7 +365,7 @@ TEST(KernelClass, LoopReturnsInitialStateWhenTripCountIsZero) {
 TEST(KernelClass, LoopHonorsCondFalseEvenWhenMIsLarge) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
-  Tensor M = Int64Scalar(5);
+  Tensor M = Int64Scalar(nullptr, 5);
   Tensor cond_false("", onnx_kernels::DataType::BOOL, {}, {0});
   Tensor scan = Tensor::FromFloat("", {1}, {1.0f});
   std::vector<Tensor> out = loop_kernel(M, cond_false, /*v_initial=*/{}, /*final_state=*/{},
@@ -396,19 +396,19 @@ TEST(KernelClass, LoopUsesPerIterRowLengthWhenMIsAbsent) {
 TEST(KernelClass, LoopRejectsMismatchedFinalStateAndVInitial) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
-  Tensor M = Int64Scalar(1);
+  Tensor M = Int64Scalar(nullptr, 1);
   Tensor cond_undef;
   Tensor v0_float = Tensor::FromFloat("", {2}, {0.0f, 0.0f});
   // Mismatched dtype: float vs int32.
   Tensor v0_final_int = Tensor::From<int32_t>("", {2}, {0, 0});
-  EXPECT_THROW((void)loop_kernel(M, cond_undef, {v0_float}, {v0_final_int}, {}),
+  EXPECT_THROW((void)loop_kernel(nullptr, M, cond_undef, {v0_float}, {v0_final_int}, {}),
                std::invalid_argument);
 }
 
 TEST(KernelClass, LoopRejectsScanRowsOfDifferentLengths) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
-  Tensor M = Int64Scalar(2);
+  Tensor M = Int64Scalar(nullptr, 2);
   Tensor cond_undef;
   Tensor s = Tensor::FromFloat("", {1}, {1.0f});
   EXPECT_THROW(
@@ -429,7 +429,7 @@ TEST(KernelClass, LoopBodyRunnerComputesPrefixSum) {
   // Body: y_out = y_in + iter, cond_out = true, scan_out = y_out.
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
-  Tensor M = Int64Scalar(4);
+  Tensor M = Int64Scalar(nullptr, 4);
   Tensor cond_undef;
   Tensor y0 = Tensor::FromFloat("", {1}, {0.0f});
 
@@ -460,7 +460,7 @@ TEST(KernelClass, LoopBodyRunnerHonorsEarlyTerminationFromCondOut) {
   // M = 10 but body sets cond_out = false after iter == 2 → only 3 iterations.
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
-  Tensor M = Int64Scalar(10);
+  Tensor M = Int64Scalar(nullptr, 10);
   Tensor cond_undef;
   Tensor count0 = Tensor::From<int64_t>("", {}, {0});
 
@@ -483,8 +483,8 @@ TEST(KernelClass, LoopBodyRunnerSkippedWhenInitialCondFalse) {
   // cond = false on entry → body never invoked, v_initial returned as-is.
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
-  Tensor M = Int64Scalar(5);
-  Tensor cond_false = BoolScalar(false);
+  Tensor M = Int64Scalar(nullptr, 5);
+  Tensor cond_false = BoolScalar(nullptr, false);
   Tensor y0 = Tensor::FromFloat("", {1}, {42.0f});
 
   bool called = false;
@@ -503,7 +503,7 @@ TEST(KernelClass, LoopBodyRunnerSkippedWhenInitialCondFalse) {
 TEST(KernelClass, LoopBodyRunnerRejectsWrongOutputCount) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
-  Tensor M = Int64Scalar(1);
+  Tensor M = Int64Scalar(nullptr, 1);
   Tensor cond_undef;
 
   // Body returns only the cond_out (missing the loop-carried output).
@@ -511,14 +511,15 @@ TEST(KernelClass, LoopBodyRunnerRejectsWrongOutputCount) {
     return std::vector<Tensor>{BoolScalar(true)};
   };
   Tensor y0 = Tensor::FromFloat("", {1}, {0.0f});
-  EXPECT_THROW((void)loop_kernel(M, cond_undef, /*v_initial=*/{y0}, /*num_scan_outputs=*/0, runner),
-               std::invalid_argument);
+  EXPECT_THROW(
+      (void)loop_kernel(nullptr, M, cond_undef, /*v_initial=*/{y0}, /*num_scan_outputs=*/0, runner),
+      std::invalid_argument);
 }
 
 TEST(KernelClass, LoopBodyRunnerRejectsCarriedDtypeMismatch) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
-  Tensor M = Int64Scalar(1);
+  Tensor M = Int64Scalar(nullptr, 1);
   Tensor cond_undef;
   Tensor y0 = Tensor::FromFloat("", {1}, {0.0f});
 
@@ -526,8 +527,9 @@ TEST(KernelClass, LoopBodyRunnerRejectsCarriedDtypeMismatch) {
   Loop::BodyRunner runner = [](int64_t, bool, const std::vector<Tensor> &) {
     return std::vector<Tensor>{BoolScalar(true), Tensor::From<int32_t>("", {1}, {7})};
   };
-  EXPECT_THROW((void)loop_kernel(M, cond_undef, /*v_initial=*/{y0}, /*num_scan_outputs=*/0, runner),
-               std::invalid_argument);
+  EXPECT_THROW(
+      (void)loop_kernel(nullptr, M, cond_undef, /*v_initial=*/{y0}, /*num_scan_outputs=*/0, runner),
+      std::invalid_argument);
 }
 
 TEST(KernelClass, ScanStacksPerIterAlongLeadingAxisByDefault) {
@@ -649,7 +651,7 @@ TEST(KernelClass, ScanBodyAwareOverloadRunsBodyAndAccumulatesState) {
   Tensor initial = Tensor::FromFloat("initial", {2}, {0.0f, 0.0f});
   Tensor x = Tensor::FromFloat("x", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
-  std::vector<Tensor> out = scan_kernel(body, {initial}, {x}, rt);
+  std::vector<Tensor> out = scan_kernel(rt, body, {initial}, {x});
   ASSERT_EQ(out.size(), 2u);
   // Final state = [1+3+5, 2+4+6] = [9, 12].
   ASSERT_EQ(out[0].shape, (std::vector<int64_t>{2}));
@@ -677,7 +679,7 @@ TEST(KernelClass, ScanBodyAwareOverloadHonorsScanInputDirectionReverse) {
   Tensor initial = Tensor::FromFloat("initial", {2}, {0.0f, 0.0f});
   Tensor x = Tensor::FromFloat("x", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
-  std::vector<Tensor> out = scan_kernel(body, {initial}, {x}, rt, /*scan_input_axes=*/{0},
+  std::vector<Tensor> out = scan_kernel(rt, body, {initial}, {x}, /*scan_input_axes=*/{0},
                                         /*scan_input_directions=*/{1});
   ASSERT_EQ(out.size(), 2u);
   ASSERT_EQ(out[0].shape, (std::vector<int64_t>{2}));
@@ -703,7 +705,7 @@ TEST(KernelClass, ScanBodyAwareOverloadHonorsScanOutputDirectionReverse) {
   Tensor x = Tensor::FromFloat("x", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
   // Per-iter sums are [[1,2],[4,6],[9,12]]; reversed → [[9,12],[4,6],[1,2]].
-  std::vector<Tensor> out = scan_kernel(body, {initial}, {x}, rt, /*scan_input_axes=*/{},
+  std::vector<Tensor> out = scan_kernel(rt, body, {initial}, {x}, /*scan_input_axes=*/{},
                                         /*scan_input_directions=*/{}, /*scan_output_axes=*/{},
                                         /*scan_output_directions=*/{1});
   ASSERT_EQ(out.size(), 2u);
@@ -726,7 +728,7 @@ TEST(KernelClass, ScanBodyAwareOverloadReturnsInitialStateWhenTripCountIsZero) {
   Tensor initial = Tensor::FromFloat("initial", {2}, {7.0f, 8.0f});
   Tensor x = Tensor::FromFloat("x", {0, 2}, {});
 
-  std::vector<Tensor> out = scan_kernel(body, {initial}, {x}, rt);
+  std::vector<Tensor> out = scan_kernel(rt, body, {initial}, {x});
   ASSERT_EQ(out.size(), 2u);
   // Final state = initial when T = 0 (body never ran).
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 7.0f);
@@ -743,7 +745,7 @@ TEST(KernelClass, ScanBodyAwareOverloadRejectsRank0ScanInput) {
   RuntimeContext rt(ctx);
   Tensor initial = Tensor::FromFloat("initial", {2}, {0.0f, 0.0f});
   Tensor scalar = Tensor::FromFloat("x", {}, {1.0f});
-  EXPECT_THROW((void)scan_kernel(body, {initial}, {scalar}, rt), std::invalid_argument);
+  EXPECT_THROW((void)scan_kernel(rt, body, {initial}, {scalar}), std::invalid_argument);
 }
 
 TEST(KernelClass, ScanBodyAwareOverloadRejectsMismatchedScanInputTripCounts) {
@@ -765,7 +767,7 @@ TEST(KernelClass, ScanBodyAwareOverloadRejectsMismatchedScanInputTripCounts) {
   RuntimeContext rt(ctx);
   Tensor a = Tensor::FromFloat("a", {3}, {0.f, 0.f, 0.f});
   Tensor b = Tensor::FromFloat("b", {2}, {0.f, 0.f});
-  EXPECT_THROW((void)scan_kernel(body, {}, {a, b}, rt), std::invalid_argument);
+  EXPECT_THROW((void)scan_kernel(rt, body, {}, {a, b}), std::invalid_argument);
 }
 
 } // namespace Test

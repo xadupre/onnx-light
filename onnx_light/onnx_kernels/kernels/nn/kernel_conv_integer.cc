@@ -138,9 +138,9 @@ std::vector<int64_t> ComputeOutputSpatial(const Tensor &x, ConvInteger::Attribut
 
 } // namespace
 
-Tensor ConvInteger::operator()(const Tensor &x, const Tensor &w, const Tensor &x_zero_point,
-                               const Tensor &w_zero_point, const Attributes &attrs,
-                               RuntimeContext *rt) const {
+Tensor ConvInteger::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &w,
+                               const Tensor &x_zero_point, const Tensor &w_zero_point,
+                               const Attributes &attrs) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, x_zero_point, w_zero_point, resolved);
@@ -156,8 +156,9 @@ Tensor ConvInteger::operator()(const Tensor &x, const Tensor &w, const Tensor &x
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor out("", static_cast<int32_t>(DataType::INT32), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(total) * sizeof(int32_t)));
+  const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(int32_t);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT32), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(x, w, x_zero_point, w_zero_point, resolved, out);
   return out;
 }

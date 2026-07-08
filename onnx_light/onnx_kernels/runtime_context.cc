@@ -43,11 +43,8 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
   RawBuffer *allocated = allocator->Allocate(n_bytes);
   EXT_ENFORCE(allocated != nullptr,
               "RuntimeContext: allocator returned a null RawBuffer allocation.");
-  if (n_bytes > 0) {
-    EXT_ENFORCE(src != nullptr,
-                "RuntimeContext: tensor has non-zero size with a null data pointer.");
-    std::memcpy(allocated->data(), src, n_bytes);
-  }
+  EXT_ENFORCE(src != nullptr, "RuntimeContext: tensor has non-zero size with a null data pointer.");
+  std::memcpy(allocated->data(), src, n_bytes);
   tensor.SetAllocation(allocator, allocated);
 }
 

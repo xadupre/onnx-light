@@ -204,7 +204,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::Attention: 'head_size' must be positive.");
   const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
-  return (*this)(Q, K, V, scale);
+  return (*this)(Q, K, V, scale, rt);
 }
 
 Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,

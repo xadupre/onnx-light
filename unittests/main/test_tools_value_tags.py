@@ -13,7 +13,11 @@ from onnx_light.tools import (
     infer_value_and_node_tags,
     write_value_and_node_tags_to_metadata,
 )
-from onnx_light.tools._proto_utils import NODE_TAG_METADATA_KEY, VALUE_TAGS_METADATA_KEY
+from onnx_light.tools._proto_utils import (
+    NODE_TAG_METADATA_KEY,
+    VALUE_TAG_METADATA_KEY,
+    VALUE_TAGS_METADATA_KEY,
+)
 
 
 def _meta_dict(proto_obj: object) -> dict[str, str]:
@@ -50,7 +54,31 @@ class TestValueTags(unittest.TestCase):
         write_value_and_node_tags_to_metadata(g)
         tags = json.loads(_meta_dict(g)[VALUE_TAGS_METADATA_KEY])
         self.assertEqual(tags["S"], "shape")
+        self.assertEqual(tags["X"], "weight")
+        self.assertEqual(tags["Y"], "weight")
         self.assertEqual(_meta_dict(g.node[0])[NODE_TAG_METADATA_KEY], "shape")
+        # The graph output Y should carry the per-ValueInfo value_tag.
+        self.assertEqual(_meta_dict(g.output[0])[VALUE_TAG_METADATA_KEY], "weight")
+        # The graph input X should carry the per-ValueInfo value_tag.
+        self.assertEqual(_meta_dict(g.input[0])[VALUE_TAG_METADATA_KEY], "weight")
+
+    def test_output_is_shape_tensor_gets_shape_tag(self):
+        """When the model output is directly a shape tensor, it receives value_tag = 'shape'."""
+        from onnx_light.onnx import TensorProto, helper
+
+        g = helper.make_graph(
+            [helper.make_node("Shape", ["X"], ["Y"])],
+            "g",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3])],
+            [helper.make_tensor_value_info("Y", TensorProto.INT64, [2])],
+        )
+        write_value_and_node_tags_to_metadata(g)
+        tags = json.loads(_meta_dict(g)[VALUE_TAGS_METADATA_KEY])
+        self.assertEqual(tags["X"], "weight")
+        self.assertEqual(tags["Y"], "shape")
+        self.assertEqual(_meta_dict(g.node[0])[NODE_TAG_METADATA_KEY], "shape")
+        # The graph output Y must carry onnx_light.value_tag = "shape".
+        self.assertEqual(_meta_dict(g.output[0])[VALUE_TAG_METADATA_KEY], "shape")
 
     def test_tags_subgraph(self):
         from onnx_light.onnx import TensorProto, helper

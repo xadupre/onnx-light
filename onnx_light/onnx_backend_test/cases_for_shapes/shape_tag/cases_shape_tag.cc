@@ -336,5 +336,72 @@ void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &regist
   registry.emplace_back(std::move(tc));
 }
 
+// ---------------------------------------------------------------------------
+// ``Shape`` — the model output is directly a shape tensor. The graph has a
+// single ``Shape(X)`` node whose output ``Y`` is also the graph output.
+// Because ``Y`` is produced by a ``Shape`` node,
+// ``WriteValueAndNodeTagsToMetadata`` must emit:
+//
+//   * ``onnx_light.node_tag = "shape"`` on the ``Shape`` node.
+//   * ``onnx_light.value_tags = {"X":"weight","Y":"shape"}`` on the graph.
+//   * ``onnx_light.value_tag = "weight"`` on the graph input ``X``.
+//   * ``onnx_light.value_tag = "shape"`` on the graph output ``Y``.
+//
+// This exercises the code path that writes the per-ValueInfo shape tag to a
+// graph output (rather than only to intermediate ``value_info`` entries).
+// ---------------------------------------------------------------------------
+void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(18);
+  const kernel::KernelContext ctx{opset};
+
+  const std::string name = "test_cc_shape_tag_output_is_shape";
+
+  TestCase tc(name, name, "model", "shape_tag");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {opset});
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  AddNode(*graph, "Shape", {"X"}, {"Y"});
+
+  // X is a rank-2 float tensor so CollectGraphSeedTags tags it as "weight".
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+  // Y is the direct output of Shape — it carries the shape of X ([2, 3]).
+  AppendValueInfo(*graph->add_output(), "Y", DataType::INT64, {DimSpec(2)});
+
+  // Pre-embed the expected shape-tag metadata so tests can verify that
+  // WriteValueAndNodeTagsToMetadata produces identical results.
+  // DumpValueTagsAsJson sorts keys, so the canonical order is X < Y.
+  graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey,
+                      "{\"X\":\"weight\",\"Y\":\"shape\"}");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "shape");
+  // X (input[0]) receives onnx_light.value_tag = "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // Y (output[0]) receives onnx_light.value_tag = "shape".
+  {
+    StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("shape");
+  }
+
+  // Build the reference DataSet so the case is executable end-to-end.
+  // Y = Shape(X) = [2, 3].
+  const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor y = kernel::Shape(ctx)(x, kernel::Shape::Attributes{});
+  y.name = "Y";
+
+  AppendDataSet(tc, {x}, {y});
+
+  registry.emplace_back(std::move(tc));
+}
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -49,6 +49,13 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry);
 /// ``WriteValueAndNodeTagsToMetadata`` produces identical results.
 void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &registry);
 
+/// Registers a case where the model output is directly a shape tensor. The
+/// graph has a single ``Shape(X)`` node whose output ``Y`` is also the graph
+/// output (no intermediate ``Reshape``). ``Y`` should receive the ``"shape"``
+/// value tag because it is the direct output of a ``Shape`` node, exercising
+/// the code path that writes ``onnx_light.value_tag`` to a graph output entry.
+void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-tag backend test cases by invoking every
 /// ``Register*ShapeTag*Cases`` helper declared in this header.
 void CollectShapeTagTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

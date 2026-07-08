@@ -33,7 +33,8 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
     return;
   }
   EXT_ENFORCE(!tensor.has_allocation(),
-              "RuntimeContext: incoming tensor already has allocator-backed storage.");
+              "RuntimeContext: incoming tensor already has allocator-backed "
+              "storage; Set/Put expects a non-allocator-backed tensor.");
   const size_t n_bytes = tensor.size_bytes();
   // Keep truly empty inline tensors as-is (no bytes and no allocator binding).
   if (n_bytes == 0) {

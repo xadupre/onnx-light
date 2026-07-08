@@ -21,8 +21,6 @@ void ReleaseTensorAllocation(Tensor &tensor) {
     return;
   }
   RawBufferAllocator *owner = tensor.allocation_owner();
-  EXT_ENFORCE(owner != nullptr,
-              "RuntimeContext: tensor has allocator-backed storage with a null owner.");
   owner->Free(tensor.allocation());
   tensor.ClearAllocation();
 }
@@ -34,7 +32,7 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
   }
   EXT_ENFORCE(!tensor.has_allocation(),
               "RuntimeContext: incoming tensor already has allocator-backed "
-              "storage; Set/Put expects a non-allocator-backed tensor.");
+              "storage; this path expects a non-allocator-backed tensor.");
   const size_t n_bytes = tensor.size_bytes();
   // Keep truly empty inline tensors as-is (no bytes and no allocator binding).
   if (n_bytes == 0) {

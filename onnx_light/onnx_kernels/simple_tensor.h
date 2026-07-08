@@ -382,6 +382,9 @@ struct Tensor {
   /// Callers must release/clear any existing allocation first.
   void SetAllocation(RawBufferAllocator *allocator_owner, RawBuffer *allocation) {
     EXT_ENFORCE(allocation_ == nullptr, "Tensor::SetAllocation: allocation is already set.");
+    EXT_ENFORCE(allocator_owner != nullptr,
+                "Tensor::SetAllocation: allocator owner must not be null.");
+    EXT_ENFORCE(allocation != nullptr, "Tensor::SetAllocation: allocation must not be null.");
     allocation_owner_ = allocator_owner;
     allocation_ = allocation;
     // Drop inline storage: bytes()/size_bytes() now resolve from allocation_.

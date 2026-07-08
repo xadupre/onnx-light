@@ -123,7 +123,7 @@ void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const
 std::vector<int> BackwardTagInputIndices(const NodeProto &node, const std::string &output_tag) {
   const std::string op_type = node.op_type().as_string();
   if (op_type == "Concat") {
-    // Do not propagate "ambiguous" backward: it would corrupt inputs that
+    // Do not propagate "ambiguous" backward to avoid overwriting inputs that
     // already carry a more specific tag (e.g. "shape" or "axes").
     if (output_tag == "ambiguous") {
       return {};
@@ -243,10 +243,10 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
       std::string inherited_tag;
       if (op_type == "Concat") {
         // Concat output tag is determined by examining all inputs:
-        //   * if any input carries "weight"                    → "weight" wins
-        //   * if all tagged inputs share the same tag         → that tag
+        //   * if any input carries "weight"                     → "weight" wins
+        //   * if all tagged inputs share the same tag          → that tag
         //   * if tagged inputs have different (non-weight) tags → "ambiguous"
-        //   * if no input has a known tag                     → no tag
+        //   * if no input has a known tag                      → no tag
         bool any_weight = false;
         bool has_tag = false;
         bool all_same = true;

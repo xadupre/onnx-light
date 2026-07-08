@@ -99,7 +99,7 @@ void Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values, 
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_IMPUTER(T)                                                          \
-  template Tensor Imputer::operator()(RuntimeContext *, const Tensor &, const std::vector<T> &, T) \
+  template Tensor Imputer::operator()(const Tensor &, const std::vector<T> &, T, RuntimeContext *) \
       const;                                                                                       \
   template void Imputer::operator()(const Tensor &, const std::vector<T> &, T, Tensor &) const
 

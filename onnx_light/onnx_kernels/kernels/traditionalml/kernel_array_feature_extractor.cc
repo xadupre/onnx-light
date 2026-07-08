@@ -101,8 +101,8 @@ void ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices,
 }
 
 #define ONNX_LIGHT_INSTANTIATE_ARRAY_FEATURE_EXTRACTOR(T)                                          \
-  template Tensor ArrayFeatureExtractor::operator()<T>(RuntimeContext *, const Tensor &,           \
-                                                       const Tensor &, RuntimeContext *) const;    \
+  template Tensor ArrayFeatureExtractor::operator()<T>(const Tensor &, const Tensor &,             \
+                                                       RuntimeContext *) const;                    \
   template void ArrayFeatureExtractor::operator()<T>(const Tensor &, const Tensor &, Tensor &) const
 
 ONNX_LIGHT_INSTANTIATE_ARRAY_FEATURE_EXTRACTOR(float);

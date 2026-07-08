@@ -54,7 +54,7 @@ void Binarizer::operator()(const Tensor &x, T threshold, Tensor &output) const {
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_BINARIZER(T)                                                        \
-  template Tensor Binarizer::operator()(RuntimeContext *, const Tensor &, T) const;                \
+  template Tensor Binarizer::operator()(const Tensor &, T, RuntimeContext *) const;                \
   template void Binarizer::operator()(const Tensor &, T, Tensor &) const
 
 ONNX_LIGHT_INSTANTIATE_BINARIZER(float);

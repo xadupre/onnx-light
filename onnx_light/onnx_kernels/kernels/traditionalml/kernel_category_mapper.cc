@@ -132,18 +132,19 @@ void CategoryMapper::operator()(const Tensor &x, const std::vector<std::string> 
 
 // Explicit instantiations for the two element-type combinations defined by the
 // ``ai.onnx.ml::CategoryMapper`` schema.
-template Tensor CategoryMapper::operator()<std::string, int64_t>(RuntimeContext *, const Tensor &,
+template Tensor CategoryMapper::operator()<std::string, int64_t>(const Tensor &,
                                                                  const std::vector<std::string> &,
                                                                  const std::vector<int64_t> &,
-                                                                 int64_t) const;
+                                                                 int64_t, RuntimeContext *) const;
 template void CategoryMapper::operator()<std::string, int64_t>(const Tensor &,
                                                                const std::vector<std::string> &,
                                                                const std::vector<int64_t> &,
                                                                int64_t, Tensor &) const;
-template Tensor CategoryMapper::operator()<int64_t, std::string>(RuntimeContext *, const Tensor &,
+template Tensor CategoryMapper::operator()<int64_t, std::string>(const Tensor &,
                                                                  const std::vector<std::string> &,
                                                                  const std::vector<int64_t> &,
-                                                                 std::string) const;
+                                                                 std::string,
+                                                                 RuntimeContext *) const;
 template void CategoryMapper::operator()<int64_t, std::string>(const Tensor &,
                                                                const std::vector<std::string> &,
                                                                const std::vector<int64_t> &,

@@ -145,8 +145,7 @@ void OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &
 
 // Explicit instantiations for the supported numeric element types.
 #define ONNX_LIGHT_INSTANTIATE_ONE_HOT_ENCODER(T)                                                  \
-  template Tensor OneHotEncoder::operator()<T>(RuntimeContext *, const Tensor &,                   \
-                                               const std::vector<int64_t> &, bool,                 \
+  template Tensor OneHotEncoder::operator()<T>(const Tensor &, const std::vector<int64_t> &, bool, \
                                                RuntimeContext *) const;                            \
   template void OneHotEncoder::operator()<T>(const Tensor &, const std::vector<int64_t> &, bool,   \
                                              Tensor &) const

@@ -101,9 +101,9 @@ void LabelEncoder::operator()(const Tensor &x, const std::vector<KeyT> &keys,
 
 // Explicit instantiations for the supported (KeyT, ValueT) combinations.
 #define ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(KEY_T, VALUE_T)                                       \
-  template Tensor LabelEncoder::operator()(                                                        \
-      RuntimeContext *, const Tensor &, const std::vector<KEY_T> &, const std::vector<VALUE_T> &,  \
-      VALUE_T, RuntimeContext *) const;                                                            \
+  template Tensor LabelEncoder::operator()(const Tensor &, const std::vector<KEY_T> &,             \
+                                           const std::vector<VALUE_T> &, VALUE_T,                  \
+                                           RuntimeContext *) const;                                \
   template void LabelEncoder::operator()(const Tensor &, const std::vector<KEY_T> &,               \
                                          const std::vector<VALUE_T> &, VALUE_T, Tensor &) const
 

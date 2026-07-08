@@ -83,9 +83,8 @@ void Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_SCALER(T)                                                           \
-  template Tensor Scaler::operator()<T>(RuntimeContext *, const Tensor &,                          \
-                                        const std::vector<float> &, const std::vector<float> &)    \
-      const;                                                                                       \
+  template Tensor Scaler::operator()<T>(const Tensor &, const std::vector<float> &,                \
+                                        const std::vector<float> &, RuntimeContext *) const;       \
   template void Scaler::operator()<T>(const Tensor &, const std::vector<float> &,                  \
                                       const std::vector<float> &, Tensor &) const
 

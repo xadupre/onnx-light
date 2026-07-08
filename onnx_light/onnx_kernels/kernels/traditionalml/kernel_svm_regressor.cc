@@ -50,8 +50,8 @@ Tensor SVMRegressor::operator()(const Tensor &x, const std::vector<float> &suppo
 
 #define ONNX_LIGHT_INSTANTIATE_SVM_REGRESSOR(T)                                                    \
   template Tensor SVMRegressor::operator()<T>(                                                     \
-      RuntimeContext *, const Tensor &, const std::vector<float> &, const std::vector<float> &,    \
-      const std::vector<float> &, const char *, float, float, float) const
+      const Tensor &, const std::vector<float> &, const std::vector<float> &,                      \
+      const std::vector<float> &, const char *, float, float, float, RuntimeContext *) const
 
 ONNX_LIGHT_INSTANTIATE_SVM_REGRESSOR(float);
 ONNX_LIGHT_INSTANTIATE_SVM_REGRESSOR(double);

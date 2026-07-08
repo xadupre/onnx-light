@@ -51,9 +51,9 @@ Tensor LinearRegressor::operator()(const Tensor &x, const std::vector<float> &co
 }
 
 #define ONNX_LIGHT_INSTANTIATE_LINEAR_REGRESSOR(T)                                                 \
-  template Tensor LinearRegressor::operator()<T>(                                                  \
-      RuntimeContext *, const Tensor &, const std::vector<float> &, const std::vector<float> &,    \
-      int64_t, const std::string &) const
+  template Tensor LinearRegressor::operator()<T>(const Tensor &, const std::vector<float> &,       \
+                                                 const std::vector<float> &, int64_t,              \
+                                                 const std::string &, RuntimeContext *) const
 
 ONNX_LIGHT_INSTANTIATE_LINEAR_REGRESSOR(float);
 ONNX_LIGHT_INSTANTIATE_LINEAR_REGRESSOR(double);

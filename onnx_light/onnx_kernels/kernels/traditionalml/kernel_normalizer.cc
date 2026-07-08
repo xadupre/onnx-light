@@ -134,7 +134,7 @@ void Normalizer::operator()(const Tensor &x, const std::string &norm, Tensor &ou
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_NORMALIZER(T)                                                       \
-  template Tensor Normalizer::operator()<T>(RuntimeContext *, const Tensor &, const std::string &) \
+  template Tensor Normalizer::operator()<T>(const Tensor &, const std::string &, RuntimeContext *) \
       const;                                                                                       \
   template void Normalizer::operator()<T>(const Tensor &, const std::string &, Tensor &) const
 

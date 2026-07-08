@@ -234,39 +234,39 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
   // TestBackendMetadataCoverage to verify that the computed metadata matches.
   //
   // Value-tag seeds: all initializers → "weight"; mask_axes upgraded to "axes"
-  // by Unsqueeze's input[1] rule.  The attention_mask / input_ids / past_key /
-  // past_value graph inputs are NOT rank-2 FLOAT, so they have no tag.
+  // by Unsqueeze's input[1] rule.  The input_ids / past_key / past_value graph
+  // inputs are NOT rank-2 FLOAT, so they have no tag.
   // mask_float and mask_4d are tagged "weight" via Sub backward propagation:
   // Sub(mask_one, mask_4d)→mask_inv tags mask_4d "weight", then Unsqueeze
-  // backward tags mask_float "weight".  attention_mask stays untagged because
-  // Cast is excluded from backward propagation (it changes the element type).
+  // backward tags mask_float "weight".  Cast backward (Cast propagates from its
+  // first input) then tags attention_mask "weight".
   {
     namespace ann = onnx_optim::annotations;
 
     // Graph-level value-tags JSON (all tagged tensors sorted alphabetically;
     // DumpValueTagsAsJson uses strict ASCII order).
-    graph->add_metadata(
-        ann::kValueTagsMetadataKey,
-        "{\"attn_bias\":\"weight\",\"attn_out\":\"weight\",\"attn_proj\":\"weight\","
-        "\"down_proj.weight\":\"weight\",\"embed_tokens.weight\":\"weight\","
-        "\"gate\":\"weight\",\"gate_proj.weight\":\"weight\","
-        "\"gate_sigmoid\":\"weight\",\"gate_silu\":\"weight\","
-        "\"hidden\":\"weight\",\"hidden2\":\"weight\",\"hidden3\":\"weight\","
-        "\"input_layernorm.weight\":\"weight\","
-        "\"k_proj.weight\":\"weight\",\"key\":\"weight\","
-        "\"lm_head.weight\":\"weight\",\"logits\":\"weight\","
-        "\"mask_4d\":\"weight\",\"mask_axes\":\"axes\","
-        "\"mask_float\":\"weight\",\"mask_inv\":\"weight\","
-        "\"mask_neg\":\"weight\",\"mask_one\":\"weight\","
-        "\"mlp_hidden\":\"weight\",\"mlp_out\":\"weight\","
-        "\"norm.weight\":\"weight\","
-        "\"normed1\":\"weight\",\"normed2\":\"weight\",\"normed_final\":\"weight\","
-        "\"o_proj.weight\":\"weight\","
-        "\"post_attention_layernorm.weight\":\"weight\","
-        "\"present_key\":\"weight\",\"present_value\":\"weight\","
-        "\"q_proj.weight\":\"weight\",\"query\":\"weight\","
-        "\"up\":\"weight\",\"up_proj.weight\":\"weight\","
-        "\"v_proj.weight\":\"weight\",\"value\":\"weight\"}");
+    graph->add_metadata(ann::kValueTagsMetadataKey,
+                        "{\"attention_mask\":\"weight\","
+                        "\"attn_bias\":\"weight\",\"attn_out\":\"weight\",\"attn_proj\":\"weight\","
+                        "\"down_proj.weight\":\"weight\",\"embed_tokens.weight\":\"weight\","
+                        "\"gate\":\"weight\",\"gate_proj.weight\":\"weight\","
+                        "\"gate_sigmoid\":\"weight\",\"gate_silu\":\"weight\","
+                        "\"hidden\":\"weight\",\"hidden2\":\"weight\",\"hidden3\":\"weight\","
+                        "\"input_layernorm.weight\":\"weight\","
+                        "\"k_proj.weight\":\"weight\",\"key\":\"weight\","
+                        "\"lm_head.weight\":\"weight\",\"logits\":\"weight\","
+                        "\"mask_4d\":\"weight\",\"mask_axes\":\"axes\","
+                        "\"mask_float\":\"weight\",\"mask_inv\":\"weight\","
+                        "\"mask_neg\":\"weight\",\"mask_one\":\"weight\","
+                        "\"mlp_hidden\":\"weight\",\"mlp_out\":\"weight\","
+                        "\"norm.weight\":\"weight\","
+                        "\"normed1\":\"weight\",\"normed2\":\"weight\",\"normed_final\":\"weight\","
+                        "\"o_proj.weight\":\"weight\","
+                        "\"post_attention_layernorm.weight\":\"weight\","
+                        "\"present_key\":\"weight\",\"present_value\":\"weight\","
+                        "\"q_proj.weight\":\"weight\",\"query\":\"weight\","
+                        "\"up\":\"weight\",\"up_proj.weight\":\"weight\","
+                        "\"v_proj.weight\":\"weight\",\"value\":\"weight\"}");
 
     // Helper: add a metadata entry to the i-th node.
     const auto node_meta = [&](int i, const char *key, const std::string &value) {
@@ -287,8 +287,9 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
     node_meta(4, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(4, ann::kReleaseAfterMetadataKey, "normed1");
     // node[5]  Cast(attention_mask) → mask_float
-    //   attention_mask has no tag → no node_tag; attention_mask is a graph
-    //   input (keep) → no release.
+    //   attention_mask is tagged "weight" via Cast backward propagation
+    //   (mask_float→"weight"→Cast backward→attention_mask="weight").
+    node_meta(5, ann::kNodeTagMetadataKey, "weight");
     // node[6]  Unsqueeze(mask_float, mask_axes) → mask_4d
     //   mask_float inherits "weight" via Sub backward propagation; mask_float
     //   last used here → released.
@@ -504,6 +505,17 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
       entry->set_key(ann::kValueTagMetadataKey);
       entry->set_value("weight");
     }
+
+    // Per-value kValueTagMetadataKey on graph inputs.
+    // input[0] input_ids → no tag (INT64, not rank-2 FLOAT)
+    // input[1] attention_mask → "weight" (Cast backward propagation)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(1)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // input[2] past_key → no tag (not rank-2 FLOAT)
+    // input[3] past_value → no tag (not rank-2 FLOAT)
 
     // Per-value kValueTagMetadataKey on initializers (insertion order, see
     // AddInitializer calls above).
@@ -783,8 +795,8 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
                   {"batch", DimSpec(kNumHeads), "total_seq", DimSpec(kHeadSize)});
 
   // ---- Pre-embedded metadata (shape-tag, inplace-reuse, release-after) ----
-  // present_key/present_value are produced by Concat(past_key/past_value, …)
-  // whose input[0] carries no tag, so they are untagged in this model.
+  // present_key/present_value are now tagged "weight" because Concat gains
+  // "weight" tag when at least one input is "weight" (key_heads/value_heads).
   // The 52 nodes are indexed 0-51 in AddNode insertion order.
   {
     namespace ann = onnx_optim::annotations;
@@ -795,10 +807,14 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
     //   initializers that get seed "weight" (or upgraded to "axes"/"shape").
     //   mask_float and mask_4d are now tagged "weight" via Sub backward
     //   propagation (Sub(mask_one, mask_4d)→mask_inv with mask_one="weight").
-    //   key_heads_t, present_key, present_value have no tag (Concat from
-    //   untagged past_key/past_value as input[0]).
+    //   attention_mask gets "weight" via Cast backward propagation.
+    //   past_key/past_value get "weight" via Concat backward (key_heads/
+    //   value_heads are "weight" → Concat output "weight" → backward).
+    //   key_heads_t gets "weight" via Transpose of present_key (which is
+    //   "weight").
     graph->add_metadata(ann::kValueTagsMetadataKey,
-                        "{\"attn_bias\":\"weight\",\"attn_out\":\"weight\","
+                        "{\"attention_mask\":\"weight\","
+                        "\"attn_bias\":\"weight\",\"attn_out\":\"weight\","
                         "\"attn_proj\":\"weight\",\"attn_scale\":\"weight\","
                         "\"attn_weights\":\"weight\","
                         "\"context\":\"weight\",\"context_t\":\"weight\","
@@ -811,6 +827,7 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
                         "\"input_layernorm.weight\":\"weight\","
                         "\"k_proj.weight\":\"weight\",\"key\":\"weight\","
                         "\"key_4d\":\"weight\",\"key_heads\":\"weight\","
+                        "\"key_heads_t\":\"weight\","
                         "\"lm_head.weight\":\"weight\","
                         "\"ln1_mean\":\"weight\",\"ln1_meaneps\":\"weight\","
                         "\"ln1_norm\":\"weight\",\"ln1_rms\":\"weight\",\"ln1_sq\":\"weight\","
@@ -827,7 +844,9 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
                         "\"norm.weight\":\"weight\","
                         "\"normed1\":\"weight\",\"normed2\":\"weight\",\"normed_final\":\"weight\","
                         "\"o_proj.weight\":\"weight\","
+                        "\"past_key\":\"weight\",\"past_value\":\"weight\","
                         "\"post_attention_layernorm.weight\":\"weight\","
+                        "\"present_key\":\"weight\",\"present_value\":\"weight\","
                         "\"q_proj.weight\":\"weight\",\"query\":\"weight\","
                         "\"query_4d\":\"weight\",\"query_heads\":\"weight\","
                         "\"rms_axes\":\"axes\",\"rms_eps\":\"weight\","
@@ -883,7 +902,8 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
     node_meta(9, ann::kReleaseAfterMetadataKey, "normed1");
     // ---- Attention mask ----------------------------------------------------
     // node[10] Cast(attention_mask) → mask_float
-    //   attention_mask has no tag → no node_tag.
+    //   attention_mask is tagged "weight" via Cast backward propagation.
+    node_meta(10, ann::kNodeTagMetadataKey, "weight");
     // node[11] Unsqueeze(mask_float, mask_axes) → mask_4d
     //   mask_float inherits "weight" via Sub backward propagation; mask_float
     //   released here.
@@ -927,15 +947,20 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
     node_meta(19, ann::kReleaseAfterMetadataKey, "value_4d");
     // ---- Concat KV cache -------------------------------------------------
     // node[20] Concat(past_key, key_heads) → present_key
-    //   input[0]=past_key has no tag → no node_tag.
+    //   key_heads has "weight" → Concat output = "weight"; backward tags
+    //   past_key "weight".
     //   key_heads released here ([b,nh,s,hs] ≠ [b,nh,total,hs] → no inplace).
+    node_meta(20, ann::kNodeTagMetadataKey, "weight");
     node_meta(20, ann::kReleaseAfterMetadataKey, "key_heads");
     // node[21] Concat(past_value, value_heads) → present_value
-    //   input[0]=past_value has no tag → no node_tag.
+    //   value_heads has "weight" → Concat output = "weight"; backward tags
+    //   past_value "weight".
+    node_meta(21, ann::kNodeTagMetadataKey, "weight");
     node_meta(21, ann::kReleaseAfterMetadataKey, "value_heads");
     // node[22] Transpose(present_key) → key_heads_t
-    //   input[0]=present_key has no tag → no node_tag.
+    //   present_key has "weight" → key_heads_t = "weight".
     //   present_key is a graph output (keep) → not released.
+    node_meta(22, ann::kNodeTagMetadataKey, "weight");
     // ---- Scaled dot-product attention ------------------------------------
     // node[23] MatMul(query_heads, key_heads_t) → scores
     node_meta(23, ann::kNodeTagMetadataKey, "weight");
@@ -1151,7 +1176,12 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
       entry->set_key(ann::kValueTagMetadataKey);
       entry->set_value("weight");
     }
-    // value_info[15] key_heads_t → no tag (Transpose of untagged present_key)
+    // value_info[15] key_heads_t → "weight" (Transpose of present_key which is "weight")
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(15)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
     // value_info[16] ln1_mean
     {
       StringStringEntryProto *entry = graph->mutable_value_info(16)->add_metadata_props();
@@ -1358,8 +1388,39 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
       entry->set_key(ann::kValueTagMetadataKey);
       entry->set_value("weight");
     }
-    // output[1] present_key → no tag (Concat from untagged past_key as input[0])
-    // output[2] present_value → no tag
+    // output[1] present_key → "weight" (Concat with key_heads which is "weight")
+    {
+      StringStringEntryProto *entry = graph->mutable_output(1)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // output[2] present_value → "weight" (Concat with value_heads which is "weight")
+    {
+      StringStringEntryProto *entry = graph->mutable_output(2)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+
+    // Per-value kValueTagMetadataKey on graph inputs.
+    // input[0] input_ids → no tag (INT64, not rank-2 FLOAT)
+    // input[1] attention_mask → "weight" (Cast backward propagation)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(1)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // input[2] past_key → "weight" (Concat backward from present_key="weight")
+    {
+      StringStringEntryProto *entry = graph->mutable_input(2)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // input[3] past_value → "weight" (Concat backward from present_value="weight")
+    {
+      StringStringEntryProto *entry = graph->mutable_input(3)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
 
     // Per-value kValueTagMetadataKey on initializers (insertion order, see
     // AddInitializer calls above).

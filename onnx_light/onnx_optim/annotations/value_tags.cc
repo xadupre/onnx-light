@@ -123,6 +123,11 @@ void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const
 std::vector<int> BackwardTagInputIndices(const NodeProto &node, const std::string &output_tag) {
   const std::string op_type = node.op_type().as_string();
   if (op_type == "Concat") {
+    // Do not propagate "ambiguous" backward: it would corrupt inputs that
+    // already carry a more specific tag (e.g. "shape" or "axes").
+    if (output_tag == "ambiguous") {
+      return {};
+    }
     std::vector<int> all_inputs;
     all_inputs.reserve(static_cast<std::size_t>(node.input().size()));
     for (int i = 0; i < node.input().size(); ++i) {
@@ -130,10 +135,11 @@ std::vector<int> BackwardTagInputIndices(const NodeProto &node, const std::strin
     }
     return all_inputs;
   }
-  // Cast changes the element type, so backward propagation would incorrectly
-  // tag non-float inputs (e.g. INT64 attention masks) with the output's tag.
-  if (op_type == "Identity" || op_type == "Squeeze" || op_type == "Unsqueeze" ||
-      op_type == "Gather" || op_type == "Slice") {
+  // Reshape and Cast preserve the semantics of their first input: the output
+  // carries the same tag as input[0].  Back-propagate so that an untagged
+  // producer can inherit the tag that the consumer determines.
+  if (op_type == "Identity" || op_type == "Cast" || op_type == "Reshape" || op_type == "Squeeze" ||
+      op_type == "Unsqueeze" || op_type == "Gather" || op_type == "Slice") {
     return {0};
   }
   // Element-wise binary ops: propagate backward only when the output is a
@@ -235,7 +241,38 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
       }
 
       std::string inherited_tag;
-      if (!node->input().empty()) {
+      if (op_type == "Concat") {
+        // Concat output tag is determined by examining all inputs:
+        //   * if any input carries "weight"                    → "weight" wins
+        //   * if all tagged inputs share the same tag         → that tag
+        //   * if tagged inputs have different (non-weight) tags → "ambiguous"
+        //   * if no input has a known tag                     → no tag
+        bool any_weight = false;
+        bool has_tag = false;
+        bool all_same = true;
+        std::string first_known_tag;
+        for (int i = 0; i < node->input().size(); ++i) {
+          auto it = value_tags.find(node->input(i).as_string());
+          if (it != value_tags.end() && !it->second.empty()) {
+            if (it->second == "weight") {
+              any_weight = true;
+            }
+            if (first_known_tag.empty()) {
+              first_known_tag = it->second;
+              has_tag = true;
+            } else if (first_known_tag != it->second) {
+              all_same = false;
+            }
+          }
+        }
+        if (any_weight) {
+          inherited_tag = "weight";
+        } else if (has_tag && all_same) {
+          inherited_tag = first_known_tag;
+        } else if (has_tag && !all_same) {
+          inherited_tag = "ambiguous";
+        }
+      } else if (!node->input().empty()) {
         auto it = value_tags.find(node->input(0).as_string());
         if (it != value_tags.end()) {
           inherited_tag = it->second;

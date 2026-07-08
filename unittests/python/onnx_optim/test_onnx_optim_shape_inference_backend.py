@@ -377,8 +377,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
           Sub(mask_one:"weight", mask_4d:untagged) → mask_inv:"weight"
           Sub backward {0,1} → mask_4d ← "weight"
           Unsqueeze backward {0} → mask_float ← "weight"
-          Cast is excluded from backward (changes element type), so
-          attention_mask stays untagged.
+          Cast backward {0} → attention_mask ← "weight"
         """
         tests = [
             test
@@ -388,13 +387,14 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         self.assertEqual(len(tests), 1, "test_cc_shape_inference_tiny_llm not found")
         test = tests[0]
 
-        # Verify pre-embedded graph-level value_tags include mask_float and mask_4d.
+        # Verify pre-embedded graph-level value_tags include mask_float, mask_4d, and
+        # attention_mask (now tagged via Cast backward propagation).
         graph_meta = {entry.key: entry.value for entry in test.model.graph.metadata_props}
         self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
         value_tags = json.loads(graph_meta[VALUE_TAGS_METADATA_KEY])
         self.assertEqual(value_tags.get("mask_float"), "weight")
         self.assertEqual(value_tags.get("mask_4d"), "weight")
-        self.assertNotIn("attention_mask", value_tags)
+        self.assertEqual(value_tags.get("attention_mask"), "weight")
 
         # Make a blank copy (strip all metadata) and recompute.
         model_copy = onnxl.ModelProto()
@@ -416,7 +416,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         computed_value_tags = json.loads(computed_graph_meta[VALUE_TAGS_METADATA_KEY])
         self.assertEqual(computed_value_tags.get("mask_float"), "weight")
         self.assertEqual(computed_value_tags.get("mask_4d"), "weight")
-        self.assertNotIn("attention_mask", computed_value_tags)
+        self.assertEqual(computed_value_tags.get("attention_mask"), "weight")
         self.assertEqual(computed_value_tags, value_tags)
 
 

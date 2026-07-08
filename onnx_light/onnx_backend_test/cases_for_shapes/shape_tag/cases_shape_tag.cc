@@ -404,5 +404,292 @@ void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry) {
   registry.emplace_back(std::move(tc));
 }
 
+// ---------------------------------------------------------------------------
+// ``Concat (weight wins)`` — verifies the "weight wins" rule for Concat:
+// when at least one input carries the "weight" tag, the output is "weight"
+// regardless of the tags on other inputs (which may be untagged).
+//
+// Model: PAST (FLOAT [1,2,4] graph input, rank-3 → no seed tag) and
+//        KH (FLOAT [1,3,4] initializer → "weight") are concatenated along
+//        axis 1 to produce C (FLOAT [1,5,4]).  Because KH is "weight",
+//        Concat's output C is "weight" (weight wins).  Backward propagation
+//        then tags PAST as "weight" as well.
+//
+// Expected value tags: C="weight", KH="weight", PAST="weight"
+// Expected node tags:  node[0] (Concat) → "weight"
+// ---------------------------------------------------------------------------
+void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(18);
+  const kernel::KernelContext ctx{opset};
+
+  const std::string name = "test_cc_shape_tag_concat_weight_wins";
+
+  TestCase tc(name, name, "model", "shape_tag");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {opset});
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  // node[0]: Concat(PAST, KH, axis=1) → C
+  NodeProto &concat_node = AddNode(*graph, "Concat", {"PAST", "KH"}, {"C"});
+  AddAxisAttribute(concat_node, 1);
+
+  // PAST: FLOAT [1,2,4] (rank-3) → no auto-seed tag.
+  AppendValueInfo(*graph->add_input(), "PAST", DataType::FLOAT,
+                  {DimSpec(1), DimSpec(2), DimSpec(4)});
+  // C: FLOAT [1,5,4] is the graph output.
+  AppendValueInfo(*graph->add_output(), "C", DataType::FLOAT, {DimSpec(1), DimSpec(5), DimSpec(4)});
+
+  // KH: FLOAT [1,3,4] initializer → seeded "weight".
+  std::vector<float> kh_data(1 * 3 * 4, 1.0f);
+  AddInitializer<float>(*graph, "KH", {1, 3, 4}, kh_data);
+
+  // Pre-embed the expected shape-tag metadata so tests can verify that
+  // WriteValueAndNodeTagsToMetadata produces identical results.
+  // KH is "weight" (initializer seed).  Concat forward: weight wins → C="weight".
+  // Concat backward: C="weight" propagates to PAST → PAST="weight".
+  // DumpValueTagsAsJson sorts keys: C < KH < PAST.
+  graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey,
+                      "{\"C\":\"weight\",\"KH\":\"weight\",\"PAST\":\"weight\"}");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  // PAST (input[0]) → "weight" (via backward propagation from C).
+  {
+    StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // C (output[0]) → "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // KH (initializer[0]) → "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_initializer(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+
+  // Build the reference DataSet so the case is executable end-to-end.
+  const Tensor past =
+      Tensor::FromFloat("PAST", {1, 2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+  const Tensor kh = Tensor::FromFloat("KH", {1, 3, 4}, kh_data);
+  Tensor c = kernel::Concat(ctx)({past, kh}, /*axis=*/1);
+  c.name = "C";
+
+  AppendDataSet(tc, {past}, {c});
+
+  registry.emplace_back(std::move(tc));
+}
+
+// ---------------------------------------------------------------------------
+// ``Cast (backward tag propagation)`` — verifies that backward propagation
+// flows through ``Cast``.
+//
+// Model: X (INT64 [4] graph input, no tag) → Cast(to=FLOAT) → Y (FLOAT [4]).
+//        W (FLOAT [4] initializer → "weight") is the first operand of
+//        Add(W, Y) → Z.  Because W is "weight", Z inherits "weight"; Add
+//        backward then tags Y as "weight"; Cast backward then tags X as
+//        "weight".
+//
+// Expected value tags: W="weight", X="weight", Y="weight", Z="weight"
+// Expected node tags:  node[0] (Cast) → "weight", node[1] (Add) → "weight"
+// ---------------------------------------------------------------------------
+void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(18);
+  const kernel::KernelContext ctx{opset};
+
+  const std::string name = "test_cc_shape_tag_cast_backward";
+
+  TestCase tc(name, name, "model", "shape_tag");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {opset});
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  // node[0]: Cast(X, to=FLOAT) → Y
+  NodeProto &cast_node = AddNode(*graph, "Cast", {"X"}, {"Y"});
+  AddAttribute<int64_t>(cast_node, "to", static_cast<int64_t>(DataType::FLOAT));
+
+  // node[1]: Add(W, Y) → Z
+  //   W is input[0] so inherited_tag = W = "weight" → Z = "weight".
+  AddNode(*graph, "Add", {"W", "Y"}, {"Z"});
+
+  // X: INT64 [4] graph input → no seed tag (not rank-2 FLOAT).
+  AppendValueInfo(*graph->add_input(), "X", DataType::INT64, {DimSpec(4)});
+  // Z: FLOAT [4] graph output.
+  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {DimSpec(4)});
+
+  // Y (intermediate)
+  AppendValueInfo(*graph->add_value_info(), "Y", DataType::FLOAT, {DimSpec(4)});
+
+  // W: FLOAT [4] initializer → seeded "weight".
+  AddInitializer<float>(*graph, "W", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  // Pre-embed the expected shape-tag metadata.
+  // W is "weight" (initializer seed).
+  // Add forward: inherited from W (input[0]) → Z = "weight".
+  // Add backward: Z="weight" → Y gets "weight".
+  // Cast backward: Y="weight" → X gets "weight".
+  // DumpValueTagsAsJson sorts keys: W < X < Y < Z.
+  graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey,
+                      "{\"W\":\"weight\",\"X\":\"weight\",\"Y\":\"weight\",\"Z\":\"weight\"}");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  // X (input[0]) → "weight" (via Cast backward).
+  {
+    StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // Z (output[0]) → "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // Y (value_info[0]) → "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // W (initializer[0]) → "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_initializer(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+
+  // Build the reference DataSet so the case is executable end-to-end.
+  const Tensor x = Tensor::FromInt64("X", {4}, {1, 2, 3, 4});
+  const Tensor w = Tensor::FromFloat("W", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = kernel::Cast(ctx)(x, static_cast<int32_t>(DataType::FLOAT));
+  y.name = "Y";
+  Tensor z = kernel::Add(ctx)(w, y);
+  z.name = "Z";
+
+  AppendDataSet(tc, {x}, {z});
+
+  registry.emplace_back(std::move(tc));
+}
+
+// ---------------------------------------------------------------------------
+// ``Reshape (backward tag propagation)`` — verifies that backward propagation
+// flows through ``Reshape`` to its first input.
+//
+// Model: X (FLOAT [6] graph input, rank-1 → no seed tag) is reshaped by
+//        S (INT64 [2] initializer = {2,3}) into Y (FLOAT [2,3]).  S is
+//        automatically upgraded to "shape" by Reshape's input[1] role rule.
+//        W (FLOAT [2,3] initializer → "weight") is the first operand of
+//        Add(W, Y) → Z.  Because W is "weight", Z inherits "weight"; Add
+//        backward then tags Y as "weight"; Reshape backward then tags X as
+//        "weight".
+//
+// Expected value tags: S="shape", W="weight", X="weight", Y="weight", Z="weight"
+// Expected node tags:  node[0] (Reshape) → "weight", node[1] (Add) → "weight"
+// ---------------------------------------------------------------------------
+void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(18);
+  const kernel::KernelContext ctx{opset};
+
+  const std::string name = "test_cc_shape_tag_reshape_backward";
+
+  TestCase tc(name, name, "model", "shape_tag");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {opset});
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  // node[0]: Reshape(X, S) → Y
+  AddNode(*graph, "Reshape", {"X", "S"}, {"Y"});
+
+  // node[1]: Add(W, Y) → Z
+  //   W is input[0] so inherited_tag = W = "weight" → Z = "weight".
+  AddNode(*graph, "Add", {"W", "Y"}, {"Z"});
+
+  // X: FLOAT [6] graph input → no seed tag (rank-1, not rank-2).
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(6)});
+  // Z: FLOAT [2,3] graph output.
+  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+
+  // Y (intermediate)
+  AppendValueInfo(*graph->add_value_info(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+
+  // S: INT64 [2] initializer = {2,3} → seeded "weight", then upgraded to "shape".
+  AddInitializer<int64_t>(*graph, "S", {2}, {2, 3});
+  // W: FLOAT [2,3] initializer → seeded "weight".
+  AddInitializer<float>(*graph, "W", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+
+  // Pre-embed the expected shape-tag metadata.
+  // S is "weight" (seed) then upgraded to "shape" by Reshape's input[1] rule.
+  // W is "weight" (seed).
+  // Add forward: inherited from W (input[0]) → Z = "weight".
+  // Add backward: Z="weight" → Y gets "weight".
+  // Reshape backward: Y="weight" → X gets "weight".
+  // DumpValueTagsAsJson sorts keys: S < W < X < Y < Z.
+  graph->add_metadata(
+      onnx_optim::annotations::kValueTagsMetadataKey,
+      "{\"S\":\"shape\",\"W\":\"weight\",\"X\":\"weight\",\"Y\":\"weight\",\"Z\":\"weight\"}");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  // X (input[0]) → "weight" (via Reshape backward).
+  {
+    StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // Z (output[0]) → "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // Y (value_info[0]) → "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // S (initializer[0]) → "shape".
+  {
+    StringStringEntryProto *entry = graph->mutable_initializer(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("shape");
+  }
+  // W (initializer[1]) → "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_initializer(1)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+
+  // Build the reference DataSet so the case is executable end-to-end.
+  const Tensor x = Tensor::FromFloat("X", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  const Tensor s = Tensor::FromInt64("S", {2}, {2, 3});
+  const Tensor w = Tensor::FromFloat("W", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor y = kernel::Reshape(ctx)(x, s);
+  y.name = "Y";
+  Tensor z = kernel::Add(ctx)(w, y);
+  z.name = "Z";
+
+  AppendDataSet(tc, {x}, {z});
+
+  registry.emplace_back(std::move(tc));
+}
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

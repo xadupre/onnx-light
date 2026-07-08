@@ -56,6 +56,24 @@ void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &regist
 /// the code path that writes ``onnx_light.value_tag`` to a graph output entry.
 void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry);
 
+/// Registers a ``Concat (weight wins)`` case. PAST (rank-3 FLOAT graph input,
+/// no seed tag) and KH (rank-3 FLOAT initializer, "weight") are concatenated
+/// along axis 1.  Because KH is "weight", the output C inherits "weight"
+/// (weight-wins rule).  Concat backward then also tags PAST as "weight".
+void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry);
+
+/// Registers a ``Cast backward`` case. X (INT64 graph input, no seed tag) is
+/// cast to FLOAT as Y.  W (FLOAT initializer, "weight") is added to Y to
+/// produce Z.  Z inherits "weight" from W; Add backward tags Y as "weight";
+/// Cast backward then tags X as "weight".
+void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry);
+
+/// Registers a ``Reshape backward`` case. X (rank-1 FLOAT graph input, no
+/// seed tag) is reshaped into Y (FLOAT [2,3]).  W (FLOAT [2,3] initializer,
+/// "weight") is added to Y to produce Z.  Z inherits "weight" from W; Add
+/// backward tags Y as "weight"; Reshape backward then tags X as "weight".
+void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-tag backend test cases by invoking every
 /// ``Register*ShapeTag*Cases`` helper declared in this header.
 void CollectShapeTagTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

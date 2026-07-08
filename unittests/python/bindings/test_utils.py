@@ -86,7 +86,7 @@ class TestUtilityFunctions(ExtTestCase):
             ):
                 utils._tar_members_filter(tar, base)
 
-    def test_extract_model_safe_rejects_directory_traversal(self) -> None:
+    def test_extract_model_safe_raises_on_directory_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as tdir:
             base = os.path.join(tdir, "model")
             os.mkdir(base)
@@ -101,7 +101,7 @@ class TestUtilityFunctions(ExtTestCase):
             with self.assertRaisesRegex(RuntimeError, "directory traversal"):
                 utils._extract_model_safe(tar_path, base)
 
-    def test_extract_model_safe_rejects_symlink(self) -> None:
+    def test_extract_model_safe_raises_on_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as tdir:
             base = os.path.join(tdir, "model")
             os.mkdir(base)

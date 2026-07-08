@@ -118,9 +118,9 @@ void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const
   static_cast<void>(TrySetValueTag(value_tags, name, tag));
 }
 
-// Returns the input indices that can safely inherit an output tag when running
-// backward propagation from consumers to producers.
-std::vector<int> BackwardTagInputIndices(const NodeProto &node) {
+// Returns the input indices that can safely inherit the given output tag when
+// running backward propagation from consumers to producers.
+std::vector<int> BackwardTagInputIndices(const NodeProto &node, const std::string &output_tag) {
   const std::string op_type = node.op_type().as_string();
   if (op_type == "Concat") {
     std::vector<int> all_inputs;
@@ -130,9 +130,22 @@ std::vector<int> BackwardTagInputIndices(const NodeProto &node) {
     }
     return all_inputs;
   }
-  if (op_type == "Identity" || op_type == "Cast" || op_type == "Squeeze" ||
-      op_type == "Unsqueeze" || op_type == "Gather" || op_type == "Slice") {
+  // Cast changes the element type, so backward propagation would incorrectly
+  // tag non-float inputs (e.g. INT64 attention masks) with the output's tag.
+  if (op_type == "Identity" || op_type == "Squeeze" || op_type == "Unsqueeze" ||
+      op_type == "Gather" || op_type == "Slice") {
     return {0};
+  }
+  // Element-wise binary ops: propagate backward only when the output is a
+  // "weight" tensor (both operands belong to the same semantic category).
+  // Shape or axes tags must NOT flow back: Mul(shape, weight) → shape should
+  // not retag the weight scalar as "shape".
+  static const std::unordered_set<std::string> kBinaryElemwiseOps = {
+      "Add",   "And",     "BitAnd",         "BitOr", "BitShift",    "BitXor", "Div",
+      "Equal", "Greater", "GreaterOrEqual", "Less",  "LessOrEqual", "Mod",    "Mul",
+      "Or",    "Pow",     "PRelu",          "Sub",   "Xor"};
+  if (kBinaryElemwiseOps.count(op_type) && output_tag == "weight") {
+    return {0, 1};
   }
   return {};
 }
@@ -240,7 +253,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
       }
 
-      const std::vector<int> backward_inputs = BackwardTagInputIndices(*node);
+      const std::vector<int> backward_inputs = BackwardTagInputIndices(*node, current_output_tag);
       if (!backward_inputs.empty()) {
         if (output_tags_are_consistent && !current_output_tag.empty()) {
           for (int idx : backward_inputs) {

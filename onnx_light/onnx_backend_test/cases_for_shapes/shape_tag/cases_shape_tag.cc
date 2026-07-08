@@ -196,8 +196,9 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry) {
 //
 // Expected value tags (backward-propagation through Concat, then Mul):
 //   * ``S1``, ``S2``, ``S_full`` → ``"shape"``
-//   * ``two`` → ``"weight"`` (only used as Mul's second input; Mul does not
-//     backward-propagate the shape tag to its inputs)
+//   * ``two`` → ``"weight"`` (only used as Mul's second input; Mul only
+//     backward-propagates the "weight" tag, not "shape", so the "shape"
+//     tag on S2 does not flow back to ``two``)
 //
 // Expected node tags:
 //   * node[0] (Constant → S1) → ``"shape"``  (output overridden by "shape")

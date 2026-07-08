@@ -382,7 +382,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         """
         tests = [
             test
-            for test in collect_test_cases("inference")
+            for test in collect_test_cases("shape")
             if test.name == "test_cc_shape_inference_tiny_llm"
         ]
         self.assertEqual(len(tests), 1, "test_cc_shape_inference_tiny_llm not found")

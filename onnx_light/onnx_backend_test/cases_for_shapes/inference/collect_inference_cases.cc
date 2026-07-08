@@ -13,7 +13,7 @@ namespace onnx_backend_test {
 // graph's *first* operator only, which is sufficient for the existing
 // node-filtering use cases.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  if (op_type.empty() or op_type == "shape") {
+  if (op_type.empty() or op_type == "shape" or op_type == "inference") {
     RegisterAddConcatReshapeShapeInferenceCases(registry);
     RegisterLocalFunctionAddShapeInferenceCases(registry);
     RegisterNestedLocalFunctionAddShapeInferenceCases(registry);

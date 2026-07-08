@@ -36,14 +36,13 @@ inline float SaturateUint8(float v) {
 
 std::tuple<Tensor, Tensor, Tensor> DynamicQuantizeLinear::operator()(const Tensor &x) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count());
-  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), x.shape, y_n_bytes,
-                              rt ? rt->allocator() : nullptr);
-  const size_t y_scale_n_bytes = sizeof(float), 0;
+  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), x.shape, y_n_bytes, nullptr);
+  const size_t y_scale_n_bytes = sizeof(float);
   Tensor y_scale = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), /*shape=*/{},
-                                    y_scale_n_bytes, rt ? rt->allocator() : nullptr);
-  const size_t y_zero_point_n_bytes = 1, 0;
+                                    y_scale_n_bytes, nullptr);
+  const size_t y_zero_point_n_bytes = 1;
   Tensor y_zero_point = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), /*shape=*/{},
-                                         y_zero_point_n_bytes, rt ? rt->allocator() : nullptr);
+                                         y_zero_point_n_bytes, nullptr);
   (*this)(x, y, y_scale, y_zero_point);
   return std::tuple<Tensor, Tensor, Tensor>(std::move(y), std::move(y_scale),
                                             std::move(y_zero_point));

@@ -369,7 +369,7 @@ Tensor EinsumAlloc(const std::vector<Tensor> &inputs, const std::string &equatio
     out_count *= d;
   }
   const size_t z_n_bytes = static_cast<std::size_t>(out_count) * sizeof(T);
-  Tensor z = MakeOutputTensor(dtype, plan.output_shape, z_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor z = MakeOutputTensor(dtype, plan.output_shape, z_n_bytes, nullptr);
   RunEinsum<T>(inputs, plan, z.As<T>());
   return z;
 }

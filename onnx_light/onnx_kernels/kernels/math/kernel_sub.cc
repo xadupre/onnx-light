@@ -65,11 +65,11 @@ Tensor Sub::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) con
   case DataType::FLOAT16:
     return detail::BinaryHalfElementwiseAlloc(
         kSubName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat, FloatToFloat16Bits,
-        [](float a, float b) { return a - b; }, rt ? rt->allocator() : nullptr);
+        [](float a, float b) { return a - b; }, nullptr);
   case DataType::BFLOAT16:
     return detail::BinaryHalfElementwiseAlloc(
         kSubName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-        [](float a, float b) { return a - b; }, rt ? rt->allocator() : nullptr);
+        [](float a, float b) { return a - b; }, nullptr);
   default:
     EXT_THROW_INVALID(kSubName, ": unsupported data type ", x.data_type, kSupportedSubTypesMsg);
   }

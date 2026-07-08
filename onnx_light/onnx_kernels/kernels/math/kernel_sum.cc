@@ -65,7 +65,7 @@ Tensor SumAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
     out_count *= d;
   }
   const size_t z_n_bytes = static_cast<size_t>(out_count) * sizeof(T);
-  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, nullptr);
   if (inputs.size() == 1) {
     // Single input: copy verbatim. We still go through the broadcast check
     // above so a malformed input shape would have already thrown.

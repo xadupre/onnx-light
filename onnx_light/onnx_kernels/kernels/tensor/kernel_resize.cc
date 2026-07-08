@@ -763,8 +763,7 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
     total_elements *= d;
   }
   const size_t output_n_bytes = PackedByteSize(X.data_type, total_elements);
-  Tensor output =
-      MakeOutputTensor(X.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor output = MakeOutputTensor(X.data_type, out_shape, output_n_bytes, nullptr);
   std::vector<double> roi_start;
   std::vector<double> roi_end;
   BuildRoi(attrs, axes, rank, roi_start, roi_end);

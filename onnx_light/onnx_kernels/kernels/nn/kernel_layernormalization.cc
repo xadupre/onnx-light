@@ -118,14 +118,13 @@ std::tuple<Tensor, Tensor, Tensor> LayerNormalization::operator()(const Tensor &
   const size_t reduced_bytes = static_cast<size_t>(reduced_elem) * sizeof(float);
 
   const size_t y_n_bytes = x.size_bytes();
-  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, y_n_bytes,
-                              rt ? rt->allocator() : nullptr);
+  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, y_n_bytes, nullptr);
   const size_t mean_n_bytes = reduced_bytes;
-  Tensor mean = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape, mean_n_bytes,
-                                 rt ? rt->allocator() : nullptr);
+  Tensor mean =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape, mean_n_bytes, nullptr);
   const size_t inv_std_dev_n_bytes = reduced_bytes;
   Tensor inv_std_dev = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape,
-                                        inv_std_dev_n_bytes, rt ? rt->allocator() : nullptr);
+                                        inv_std_dev_n_bytes, nullptr);
   (*this)(x, scale, b, y, mean, inv_std_dev, axis, epsilon);
   return {std::move(y), std::move(mean), std::move(inv_std_dev)};
 }

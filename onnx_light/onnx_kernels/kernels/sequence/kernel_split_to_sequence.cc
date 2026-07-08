@@ -140,8 +140,7 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
       total *= d;
     }
     const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
-    Tensor out =
-        MakeOutputTensor(input.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+    Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, nullptr);
     const std::size_t out_row_bytes = static_cast<std::size_t>(size) * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
       std::memcpy(out.mutable_bytes() + static_cast<std::size_t>(o) * out_row_bytes,

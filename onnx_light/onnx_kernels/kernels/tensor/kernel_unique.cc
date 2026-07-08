@@ -324,8 +324,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
       out.y = Tensor::FromStrings("", {n_unique}, y_strs);
     } else {
       const size_t y_n_bytes = static_cast<std::size_t>(n_unique) * elem_size;
-      Tensor y =
-          MakeOutputTensor(x.data_type, {n_unique}, y_n_bytes, rt ? rt->allocator() : nullptr);
+      Tensor y = MakeOutputTensor(x.data_type, {n_unique}, y_n_bytes, nullptr);
       for (int64_t g = 0; g < n_unique; ++g) {
         const std::size_t src_off =
             static_cast<std::size_t>(groups.first_occurrence[static_cast<std::size_t>(g)]) *
@@ -361,7 +360,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
     } else {
       const std::size_t block_bytes = static_cast<std::size_t>(inner_elems) * elem_size;
       const size_t y_n_bytes = static_cast<std::size_t>(y_total) * elem_size;
-      Tensor y = MakeOutputTensor(x.data_type, y_shape, y_n_bytes, rt ? rt->allocator() : nullptr);
+      Tensor y = MakeOutputTensor(x.data_type, y_shape, y_n_bytes, nullptr);
       for (int64_t o = 0; o < outer; ++o) {
         for (int64_t g = 0; g < n_unique; ++g) {
           const int64_t k = groups.first_occurrence[static_cast<std::size_t>(g)];

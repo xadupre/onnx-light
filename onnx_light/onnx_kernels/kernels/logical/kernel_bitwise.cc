@@ -117,7 +117,7 @@ template <typename T>
 Tensor BitwiseNotAlloc(const char *dtype_name, int32_t dtype, const Tensor &x,
                        RawBufferAllocator *allocator = nullptr) {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * sizeof(T);
-  Tensor y = MakeOutputTensor(dtype, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor y = MakeOutputTensor(dtype, x.shape, y_n_bytes, allocator);
   BitwiseNotImpl<T>(dtype_name, dtype, x, y);
   return y;
 }

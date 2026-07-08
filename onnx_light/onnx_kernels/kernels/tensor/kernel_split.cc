@@ -95,8 +95,7 @@ std::vector<Tensor> Split::operator()(const Tensor &input, int64_t axis,
       total *= d;
     }
     const size_t out_n_bytes = static_cast<size_t>(total) * elem_size;
-    Tensor out =
-        MakeOutputTensor(input.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+    Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, nullptr);
     const size_t out_row_bytes = static_cast<size_t>(size) * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
       std::memcpy(out.mutable_bytes() + static_cast<size_t>(o) * out_row_bytes,

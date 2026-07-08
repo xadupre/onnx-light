@@ -181,22 +181,22 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
 
   // Normalize Y using the batch statistics via the inference path.
   const size_t saved_mean_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
-  Tensor saved_mean_t = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C},
-                                         saved_mean_t_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor saved_mean_t =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_mean_t_n_bytes, nullptr);
   const size_t saved_var_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
-  Tensor saved_var_t = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C},
-                                        saved_var_t_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor saved_var_t =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_var_t_n_bytes, nullptr);
   std::copy(saved_mean.begin(), saved_mean.end(), saved_mean_t.AsFloat());
   std::copy(saved_var.begin(), saved_var.end(), saved_var_t.AsFloat());
   Tensor y = (*this)(nullptr, x, scale, bias, saved_mean_t, saved_var_t, epsilon);
 
   // Update the running estimates: running = input * momentum + saved * (1 - m).
   const size_t running_mean_n_bytes = static_cast<size_t>(C) * sizeof(float);
-  Tensor running_mean = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C},
-                                         running_mean_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor running_mean =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_mean_n_bytes, nullptr);
   const size_t running_var_n_bytes = static_cast<size_t>(C) * sizeof(float);
-  Tensor running_var = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C},
-                                        running_var_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor running_var =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_var_n_bytes, nullptr);
   float *p_run_mean = running_mean.AsFloat();
   float *p_run_var = running_var.AsFloat();
   for (int64_t c = 0; c < C; ++c) {

@@ -105,7 +105,7 @@ template <typename T>
 Tensor WhereAllocTyped(const Tensor &condition, const Tensor &x, const Tensor &y) {
   const TernaryBroadcastInfo bi = CheckWhereBroadcast(condition, x, y);
   const size_t out_n_bytes = static_cast<size_t>(bi.element_count) * sizeof(T);
-  Tensor out = MakeOutputTensor(x.data_type, bi.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = MakeOutputTensor(x.data_type, bi.shape, out_n_bytes, nullptr);
   const uint8_t *pc = condition.AsBool();
   const T *px = WhereTypedInput<T>(x);
   const T *py = WhereTypedInput<T>(y);

@@ -247,7 +247,7 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
   }
   const size_t elem_size = ElementSize(x.data_type);
   const size_t y_n_bytes = static_cast<size_t>(n_out) * elem_size;
-  Tensor y = MakeOutputTensor(x.data_type, out_shape, y_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor y = MakeOutputTensor(x.data_type, out_shape, y_n_bytes, nullptr);
   Tensor indices;
   if (produce_indices) {
     indices = Tensor("", static_cast<int32_t>(DataType::INT64), out_shape,

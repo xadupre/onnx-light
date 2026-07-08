@@ -70,7 +70,7 @@ Tensor MaxAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
     out_count *= d;
   }
   const size_t z_n_bytes = static_cast<size_t>(out_count) * sizeof(T);
-  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, nullptr);
   if (inputs.size() == 1) {
     std::memcpy(z.mutable_bytes(), inputs[0].bytes(),
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
@@ -129,9 +129,11 @@ Tensor MaxFloat16Alloc(const std::vector<Tensor> &inputs, RawBufferAllocator *al
                         " only supports FLOAT16 tensors.");
   }
   if (inputs.size() == 1) {
-    const size_t z_n_bytes = inputs[0].data.begin(), inputs[0].data.end();
-    Tensor z = MakeOutputTensor(DataType::FLOAT16, inputs[0].shape, z_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+    const size_t z_n_bytes = inputs[0].data.size();
+    Tensor z = MakeOutputTensor(DataType::FLOAT16, inputs[0].shape, z_n_bytes, allocator);
+    if (z_n_bytes > 0) {
+      std::memcpy(z.mutable_bytes(), inputs[0].bytes(), z_n_bytes);
+    }
     return z;
   }
   Tensor z = detail::BinaryHalfElementwiseAlloc(kMaxName, "FLOAT16", DataType::FLOAT16, inputs[0],

@@ -173,7 +173,7 @@ template <typename T> void MatMulCompute(const Tensor &a, const Tensor &b, Tenso
 template <typename T> Tensor MatMulAlloc(const Tensor &a, const Tensor &b) {
   const std::vector<int64_t> out_shape = ComputeMatMulOutputShape(a.shape, b.shape);
   const size_t y_n_bytes = static_cast<size_t>(NumElements(out_shape)) * sizeof(T);
-  Tensor y = MakeOutputTensor(a.data_type, out_shape, y_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor y = MakeOutputTensor(a.data_type, out_shape, y_n_bytes, nullptr);
   MatMulCompute<T>(a, b, y);
   return y;
 }

@@ -126,8 +126,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   const std::vector<int64_t> probs_shape = {batch_size, q_num_heads, q_seq_len, kv_seq_len};
   const int64_t probs_count = batch_size * q_num_heads * q_seq_len * kv_seq_len;
   const size_t probs_n_bytes = static_cast<size_t>(probs_count) * sizeof(T);
-  Tensor probs =
-      MakeOutputTensor(kElementType, probs_shape, probs_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor probs = MakeOutputTensor(kElementType, probs_shape, probs_n_bytes, nullptr);
   T *pProbs = probs.As<T>();
 
   const int64_t probs_head_stride = q_seq_len * kv_seq_len;
@@ -331,9 +330,9 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
 
     const std::vector<int64_t> out_shape = {Q.shape[0], Q.shape[1], Q.shape[2], V.shape[3]};
     const int64_t out_count = out_shape[0] * out_shape[1] * out_shape[2] * out_shape[3];
-    const size_t out_f_n_bytes = static_cast<size_t>(out_count) * sizeof(float), 0;
-    Tensor out_f = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_f_n_bytes,
-                                    rt ? rt->allocator() : nullptr);
+    const size_t out_f_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
+    Tensor out_f =
+        MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_f_n_bytes, nullptr);
     (*this)(Q_f, K_f, V_f, scale, score_mod_wrapped, prob_mod_wrapped, out_f);
     Tensor demoted = DemoteFromFloat32(out_f, target_dtype);
     EXT_ENFORCE_INVALID(output.shape == demoted.shape,

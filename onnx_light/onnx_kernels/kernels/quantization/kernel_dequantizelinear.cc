@@ -615,9 +615,9 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_
   // explicit-zero-point overload. The zero point mirrors ``x_scale``'s shape so
   // both per-axis (1-D) and blocked (N-D) layouts are handled.
   const int64_t scale_count = x_scale.element_count();
-  const size_t zero_zero_point_n_bytes = PackedByteSize(x.data_type, scale_count), 0;
-  Tensor zero_zero_point = MakeOutputTensor(x.data_type, x_scale.shape, zero_zero_point_n_bytes,
-                                            rt ? rt->allocator() : nullptr);
+  const size_t zero_zero_point_n_bytes = PackedByteSize(x.data_type, scale_count);
+  Tensor zero_zero_point =
+      MakeOutputTensor(x.data_type, x_scale.shape, zero_zero_point_n_bytes, nullptr);
   (*this)(x, x_scale, zero_zero_point, axis, output);
 }
 

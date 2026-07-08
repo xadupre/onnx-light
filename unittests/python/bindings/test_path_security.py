@@ -115,15 +115,17 @@ class TestValidateExternalDataPath(unittest.TestCase):
 
     def test_rejects_absolute_outside_base(self):
         fd, outside = tempfile.mkstemp(suffix=".bin")
-        try:
-            with os.fdopen(fd, "wb") as tmp:
-                tmp.write(b"\x00")
-            with self.assertRaises(ValueError) as ctx:
-                validate_external_data_path(outside, self.tmpdir, allow_absolute=True)
-            self.assertIn("outside", str(ctx.exception))
-        finally:
+
+        def cleanup() -> None:
             if os.path.exists(outside):
                 os.unlink(outside)
+
+        self.addCleanup(cleanup)
+        with os.fdopen(fd, "wb") as tmp:
+            tmp.write(b"\x00")
+        with self.assertRaises(ValueError) as ctx:
+            validate_external_data_path(outside, self.tmpdir, allow_absolute=True)
+        self.assertIn("outside", str(ctx.exception))
 
     @unittest.skipUnless(
         hasattr(os, "symlink") and sys.platform != "win32",

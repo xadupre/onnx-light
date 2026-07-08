@@ -121,6 +121,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import warnings
 from typing import TYPE_CHECKING, Any
 
@@ -469,6 +470,18 @@ def _cmd_show(args: argparse.Namespace) -> None:
 
         if graphviz_format is not None:
             import subprocess
+
+            # Validate the format string to prevent command injection.
+            # Only allow alphanumeric characters, dots, underscores, and hyphens
+            # which covers all legitimate Graphviz output formats (e.g. "png",
+            # "svg", "pdf", "xdot1.2").
+            if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", graphviz_format):
+                raise ValueError(
+                    f"Invalid Graphviz output format {graphviz_format!r}. "
+                    "The format must start with a letter or digit and contain only "
+                    "alphanumeric characters, dots, underscores, or hyphens "
+                    "(e.g. 'png', 'svg', 'pdf', 'xdot1.2')."
+                )
 
             result = subprocess.run(
                 ["dot", f"-T{graphviz_format}"],

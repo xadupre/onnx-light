@@ -445,6 +445,21 @@ class TestMainShow(ExtTestCase):
         with self.assertRaises(FileNotFoundError):
             main(["show", "/nonexistent/path/model.onnx"])
 
+    def test_show_invalid_graphviz_format_raises(self):
+        """show rejects --graphviz values containing unsafe characters."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_abs_model(), model_path)
+
+            unsafe_formats = ["; rm -rf /", "../../../etc/passwd", "png && ls", "-format"]
+            for fmt in unsafe_formats:
+                with self.subTest(fmt=fmt), self.assertRaises(
+                    ValueError, msg=f"Expected ValueError for {fmt!r}"
+                ):
+                    main(["show", model_path, "--format", "dot", "--graphviz", fmt])
+
     def test_show_inplace_info(self):
         """show --include-inplace includes inplace annotations in the output."""
         from onnx_light.__main__ import main

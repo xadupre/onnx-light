@@ -117,15 +117,13 @@ class TestValidateExternalDataPath(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as tmp:
             outside = tmp.name
             tmp.write(b"\x00")
-
-        def cleanup() -> None:
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                validate_external_data_path(outside, self.tmpdir, allow_absolute=True)
+            self.assertIn("outside", str(ctx.exception))
+        finally:
             if os.path.exists(outside):
                 os.unlink(outside)
-
-        self.addCleanup(cleanup)
-        with self.assertRaises(ValueError) as ctx:
-            validate_external_data_path(outside, self.tmpdir, allow_absolute=True)
-        self.assertIn("outside", str(ctx.exception))
 
     @unittest.skipUnless(
         hasattr(os, "symlink") and sys.platform != "win32",

@@ -880,24 +880,30 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
     node_meta(13, ann::kReleaseAfterMetadataKey, "mask_inv");
     // ---- Split projections into heads ----------------------------------------
     // node[14] Reshape(query, head_shape) → query_4d
-    //   rank changes [b,s,h]→[b,s,nh,hs] → no inplace.
+    //   [b,s,h]→[b,s,nh,hs]: same total byte size → kEqual.
     node_meta(14, ann::kNodeTagMetadataKey, "weight");
+    node_meta(14, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(14, ann::kReleaseAfterMetadataKey, "query");
     // node[15] Transpose(query_4d) → query_heads
-    //   dims change [b,s,nh,hs]→[b,nh,s,hs] → no inplace.
+    //   [b,s,nh,hs]→[b,nh,s,hs]: same total byte size → kEqual.
     node_meta(15, ann::kNodeTagMetadataKey, "weight");
+    node_meta(15, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(15, ann::kReleaseAfterMetadataKey, "query_4d");
     // node[16] Reshape(key, head_shape) → key_4d
     node_meta(16, ann::kNodeTagMetadataKey, "weight");
+    node_meta(16, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(16, ann::kReleaseAfterMetadataKey, "key");
     // node[17] Transpose(key_4d) → key_heads
     node_meta(17, ann::kNodeTagMetadataKey, "weight");
+    node_meta(17, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(17, ann::kReleaseAfterMetadataKey, "key_4d");
     // node[18] Reshape(value, head_shape) → value_4d
     node_meta(18, ann::kNodeTagMetadataKey, "weight");
+    node_meta(18, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(18, ann::kReleaseAfterMetadataKey, "value");
     // node[19] Transpose(value_4d) → value_heads
     node_meta(19, ann::kNodeTagMetadataKey, "weight");
+    node_meta(19, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(19, ann::kReleaseAfterMetadataKey, "value_4d");
     // ---- Concat KV cache -------------------------------------------------
     // node[20] Concat(past_key, key_heads) → present_key
@@ -934,11 +940,14 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
     node_meta(27, ann::kNodeTagMetadataKey, "weight");
     node_meta(27, ann::kReleaseAfterMetadataKey, "attn_weights");
     // node[28] Transpose(context) → context_t
+    //   [b,nh,s,hs]→[b,s,nh,hs]: same total byte size → kEqual.
     node_meta(28, ann::kNodeTagMetadataKey, "weight");
+    node_meta(28, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(28, ann::kReleaseAfterMetadataKey, "context");
     // node[29] Reshape(context_t, merge_shape) → attn_out
-    //   rank changes → no inplace.
+    //   [b,s,nh,hs]→[b,s,h]: same total byte size → kEqual.
     node_meta(29, ann::kNodeTagMetadataKey, "weight");
+    node_meta(29, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(29, ann::kReleaseAfterMetadataKey, "context_t");
     // ---- Output projection + first residual --------------------------------
     // node[30] MatMul(attn_out, o_proj.weight) → attn_proj

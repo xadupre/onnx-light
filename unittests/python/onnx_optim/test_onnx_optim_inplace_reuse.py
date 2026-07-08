@@ -92,7 +92,7 @@ class TestInPlaceReuse(ExtTestCase):
         # A is alive at node 2, so node 1 cannot reuse it; node 2 reuses A.
         self.assertEqual(reuse, [[], [], [(0, 0)]])
 
-    def test_transpose_same_byte_size_reported_as_greater(self):
+    def test_transpose_same_byte_size_reported_as_equal(self):
         nodes = [
             oh.make_node("Abs", ["X"], ["A"]),
             oh.make_node("Transpose", ["A"], ["B"]),
@@ -109,8 +109,35 @@ class TestInPlaceReuse(ExtTestCase):
 
         # Both transposes change layout but keep the same byte size.
         self.assertEqual(reuse, [[], [(0, 0)], [(0, 0)]])
-        self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kGreater)
-        self.assertEqual(raw[2][0].kind, si.InPlaceReuseKind.kGreater)
+        self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kEqual)
+        self.assertEqual(raw[2][0].kind, si.InPlaceReuseKind.kEqual)
+
+    def test_transpose_symbolic_dim_reported_as_equal(self):
+        """Tests that Transpose with a symbolic batch dimension reports kEqual.
+
+        When the input shape contains a symbolic dimension (e.g. batch), the
+        byte sizes cannot be compared concretely.  The fix uses the symbolic
+        ByteSizeExpr: both [batch, 4, 4] and [4, batch, 4] simplify to the same
+        canonical expression, so kEqual is correctly returned.
+        """
+        nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Transpose", ["A"], ["Y"])]
+        # Build a minimal model proto; shapes are injected via ctx.set below.
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, None)
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, ["batch", 4, 4]))
+        ctx.set("A", si.OptimTensor(onnxl.TensorProto.FLOAT, ["batch", 4, 4]))
+        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, [4, "batch", 4]))
+
+        raw = si.compute_inplace_reuse(ctx, model.graph)
+        reuse = self._reuse_pairs(raw)
+
+        # Node 0: Abs(X) → A — X is a declared graph input, must not be reused.
+        # Node 1: Transpose(A) → Y — A's byte size equals Y's, so kEqual.
+        self.assertEqual(reuse, [[], [(0, 0)]])
+        self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kEqual)
 
     def test_transpose_square_shape_reported_as_equal(self):
         """Tests that a square-matrix Transpose is reported as kEqual.
@@ -396,13 +423,15 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(mem0["outputs"], {"": "4*N"})
 
         mem1 = inplace.node_memory(1)
-        self.assertEqual(mem1["total_bytes"], "12*N+8")
+        # A (FLOAT [N]) and Y (INT32 [N]) have equal byte sizes (4*N each), so A's
+        # buffer is reused for Y — no extra output allocation for this node.
+        self.assertEqual(mem1["total_bytes"], "8*N+8")
         self.assertEqual(mem1["already_allocated_bytes"], "8*N+8")
-        self.assertEqual(mem1["output_allocation_bytes"], "4*N")
+        self.assertEqual(mem1["output_allocation_bytes"], 0)
         self.assertEqual(mem1["inputs"], {"": "4*N"})
         self.assertEqual(mem1["initializers"], {"shape": 8})
         self.assertEqual(mem1["intermediates"], {"": "4*N"})
-        self.assertEqual(mem1["outputs"], {"": "4*N"})
+        self.assertEqual(mem1["outputs"], {})
 
     def test_inplace_context_memory_simplifies_repeated_symbolic_sums(self):
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N"])

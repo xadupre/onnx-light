@@ -71,9 +71,9 @@ using ::onnx_light::onnx_optim::shapes::ShapesContext;
  * Classifies how an input buffer compares in size with the output that
  * reuses it:
  *
- *   - :cpp:enumerator:`kEqual`: the input and output have the same
- *     element type and identical shape, so the buffers have the same
- *     byte size. This is the preferred, space-optimal reuse.
+ *   - :cpp:enumerator:`kEqual`: the input and output buffers have the same
+ *     byte size (e.g. a Transpose or a same-total-size Reshape).
+ *     This is the preferred, space-optimal reuse.
  *   - :cpp:enumerator:`kGreater`: the input buffer is strictly larger in
  *     bytes than the output, so the output still fits but leaves part of
  *     the buffer unused.

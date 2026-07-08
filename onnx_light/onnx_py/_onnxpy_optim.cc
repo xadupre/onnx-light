@@ -1097,8 +1097,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   nb::enum_<onnx_annotations::InPlaceReuseKind>(
       shape_mod, "InPlaceReuseKind", nb::is_arithmetic(),
       "Classifies how the reused input buffer compares in size with the output: "
-      "``kEqual`` when the input and output share the same element type and shape "
-      "(same byte size, the preferred reuse); ``kGreater`` when the input buffer is "
+      "``kEqual`` when the input and output buffers have the same byte size "
+      "(e.g. a Transpose or same-total-size Reshape, the preferred reuse); ``kGreater`` when the "
+      "input buffer is "
       "strictly larger in bytes than the output.")
       .value("kEqual", onnx_annotations::InPlaceReuseKind::kEqual,
              "The input and output have the same byte size.")

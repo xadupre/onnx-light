@@ -87,7 +87,7 @@ class TestUtilityFunctions(ExtTestCase):
                 utils._tar_members_filter(tar, base)
 
     def test_extract_model_safe_raises_on_directory_traversal(self) -> None:
-        """Rejects directory-traversal members during safe extraction."""
+        """Tests that safe extraction rejects directory-traversal members."""
         with tempfile.TemporaryDirectory() as tdir:
             base = os.path.join(tdir, "model")
             os.mkdir(base)
@@ -103,7 +103,7 @@ class TestUtilityFunctions(ExtTestCase):
                 utils._extract_model_safe(tar_path, base)
 
     def test_extract_model_safe_raises_on_symlink(self) -> None:
-        """Rejects symbolic-link members during safe extraction."""
+        """Tests that safe extraction rejects symbolic-link members."""
         with tempfile.TemporaryDirectory() as tdir:
             base = os.path.join(tdir, "model")
             os.mkdir(base)

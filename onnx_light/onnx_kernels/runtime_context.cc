@@ -16,6 +16,37 @@ namespace onnx_kernels {
 
 namespace {
 
+void ReleaseTensorAllocation(Tensor &tensor) {
+  if (!tensor.has_allocation()) {
+    return;
+  }
+  RawBufferAllocator *owner = tensor.allocation_owner();
+  owner->Free(tensor.allocation());
+  tensor.ClearAllocation();
+}
+
+void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
+  // STRING tensors store their payload in string_data instead of raw bytes.
+  if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
+    return;
+  }
+  EXT_ENFORCE(!tensor.has_allocation(),
+              "RuntimeContext: incoming tensor already has allocator-backed "
+              "storage; this path expects a non-allocator-backed tensor.");
+  const size_t n_bytes = tensor.size_bytes();
+  // Keep truly empty inline tensors as-is (no bytes and no allocator binding).
+  if (n_bytes == 0) {
+    return;
+  }
+  const uint8_t *src = tensor.bytes();
+  RawBuffer *allocated = allocator->Allocate(n_bytes);
+  EXT_ENFORCE(allocated != nullptr,
+              "RuntimeContext: allocator returned a null RawBuffer allocation.");
+  EXT_ENFORCE(src != nullptr, "RuntimeContext: tensor has non-zero size with a null data pointer.");
+  std::memcpy(allocated->data(), src, n_bytes);
+  tensor.SetAllocation(allocator, allocated);
+}
+
 int64_t NowNanos() noexcept {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(
              std::chrono::system_clock::now().time_since_epoch())
@@ -170,6 +201,12 @@ RuntimeEvent MakeRemoveEvent(RuntimeEventKind kind, const std::string &name,
 
 } // namespace
 
+RuntimeContext::~RuntimeContext() {
+  for (auto &it : tensors_) {
+    ReleaseTensorAllocation(it.second);
+  }
+}
+
 const char *RuntimeEventActionName(RuntimeEventAction action) noexcept {
   switch (action) {
   case RuntimeEventAction::kAdd:
@@ -202,6 +239,7 @@ const char *RuntimeEventKindName(RuntimeEventKind kind) noexcept {
 
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
+  EnsureAllocatorBacked(tensor, allocator_);
   if (events_enabled_) {
     events_.push_back(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor,
                                             current_node_index_, current_subgraph_node_index_,
@@ -211,6 +249,7 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
 }
 
 void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
+  EnsureAllocatorBacked(tensor, allocator_);
   if (events_enabled_) {
     const RuntimeEventAction action =
         Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
@@ -218,16 +257,25 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
                                             current_subgraph_node_index_,
                                             current_subgraph_attr_name_));
   }
+  auto it = tensors_.find(name);
+  if (it != tensors_.end()) {
+    ReleaseTensorAllocation(it->second);
+  }
   tensors_[name] = std::move(tensor);
 }
 
 bool RuntimeContext::Remove(const std::string &name) {
-  const bool erased = tensors_.erase(name) > 0;
-  if (erased && events_enabled_) {
+  auto it = tensors_.find(name);
+  if (it == tensors_.end()) {
+    return false;
+  }
+  ReleaseTensorAllocation(it->second);
+  tensors_.erase(it);
+  if (events_enabled_) {
     events_.push_back(MakeRemoveEvent(RuntimeEventKind::kUnknown, name,
                                       current_subgraph_node_index_, current_subgraph_attr_name_));
   }
-  return erased;
+  return true;
 }
 
 const Tensor &RuntimeContext::Get(const std::string &name) const {

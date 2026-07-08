@@ -471,8 +471,8 @@ def _cmd_show(args: argparse.Namespace) -> None:
         if graphviz_format is not None:
             import subprocess
 
-            # Validate the format string to prevent command injection.
-            # Only allow alphanumeric characters, dots, underscores, and hyphens
+            # Validates the format string to prevent command injection.
+            # Only allows alphanumeric characters, dots, underscores, and hyphens
             # which covers all legitimate Graphviz output formats (e.g. "png",
             # "svg", "pdf", "xdot1.2").
             if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", graphviz_format):

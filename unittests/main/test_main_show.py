@@ -446,7 +446,7 @@ class TestMainShow(ExtTestCase):
             main(["show", "/nonexistent/path/model.onnx"])
 
     def test_show_invalid_graphviz_format_raises(self):
-        """show rejects --graphviz values containing unsafe characters."""
+        """Tests that show rejects --graphviz values containing unsafe characters."""
         from onnx_light.__main__ import main
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -455,8 +455,9 @@ class TestMainShow(ExtTestCase):
 
             unsafe_formats = ["; rm -rf /", "../../../etc/passwd", "png && ls", "-format"]
             for fmt in unsafe_formats:
-                with self.subTest(fmt=fmt), self.assertRaises(
-                    ValueError, msg=f"Expected ValueError for {fmt!r}"
+                with (
+                    self.subTest(fmt=fmt),
+                    self.assertRaises(ValueError, msg=f"Expected ValueError for {fmt!r}"),
                 ):
                     main(["show", model_path, "--format", "dot", "--graphviz", fmt])
 

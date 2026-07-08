@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/raw_buffer_allocator.h"
 #include "onnx_kernels/simple_map.h"
 #include "onnx_kernels/simple_sequence.h"
 #include "onnx_kernels/simple_tensor.h"
@@ -427,6 +428,14 @@ public:
   kernel::KernelContext &kernel_ctx() noexcept { return kernel_ctx_; }
   const kernel::KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
 
+  /// Optional allocator used by kernels to acquire and release
+  /// :cpp:struct:`RawBuffer` instances. ``nullptr`` when no allocator has
+  /// been attached (the default). The caller retains ownership; the lifetime
+  /// of the allocator must exceed the lifetime of this context.
+  void set_allocator(RawBufferAllocator *allocator) noexcept { allocator_ = allocator; }
+  RawBufferAllocator *allocator() noexcept { return allocator_; }
+  const RawBufferAllocator *allocator() const noexcept { return allocator_; }
+
   /// Model-local function registry consulted by :cpp:func:`RunNode`
   /// before falling back to the built-in kernel dispatch table.
   FunctionMap &functions() noexcept { return functions_; }
@@ -727,6 +736,9 @@ private:
   /// :cpp:func:`GetExecutionPlan` and reused across subsequent runs of
   /// the same model.
   std::unordered_map<const void *, ExecutionPlan> execution_plans_;
+  /// Optional allocator for :cpp:struct:`RawBuffer` instances. Non-owning;
+  /// ``nullptr`` when no allocator has been attached.
+  RawBufferAllocator *allocator_ = nullptr;
 };
 
 } // namespace onnx_kernels

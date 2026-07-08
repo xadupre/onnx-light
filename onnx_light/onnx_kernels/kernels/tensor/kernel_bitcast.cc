@@ -77,8 +77,9 @@ Tensor BitCast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) cons
   // BitCast preserves the exact bit pattern and the shape: same packed
   // byte size for both input and output. Copy the underlying bytes and
   // relabel the dtype.
-  const size_t y_n_bytes = x.bytes(), x.bytes() + x.size_bytes();
+  const size_t y_n_bytes = x.size_bytes();
   Tensor y = MakeOutputTensor(to, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
+  std::memcpy(y.mutable_bytes(), x.bytes(), y_n_bytes);
   return y;
 }
 

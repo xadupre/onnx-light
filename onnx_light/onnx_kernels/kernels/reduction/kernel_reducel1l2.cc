@@ -140,7 +140,7 @@ Tensor ReduceL1L2::operator()(const Tensor &data, bool keepdims, bool noop_with_
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float), 0u;
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
   Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
                                 rt ? rt->allocator() : nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
@@ -199,7 +199,7 @@ Tensor ReduceL1L2::operator()(const Tensor &data, const Tensor &axes, bool keepd
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float), 0u;
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
   Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
                                 rt ? rt->allocator() : nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);

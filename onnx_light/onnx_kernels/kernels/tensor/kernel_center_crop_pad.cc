@@ -79,8 +79,7 @@ Tensor CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
   for (int64_t d : out_shape) {
     total *= d;
   }
-  const size_t output_n_bytes = PackedByteSize(input_data.data_type, total),
-               static_cast<uint8_t>(0);
+  const size_t output_n_bytes = PackedByteSize(input_data.data_type, total);
   Tensor output = MakeOutputTensor(input_data.data_type, out_shape, output_n_bytes,
                                    rt ? rt->allocator() : nullptr);
   (*this)(input_data, shape, attrs, output);

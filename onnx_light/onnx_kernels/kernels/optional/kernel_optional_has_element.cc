@@ -17,9 +17,10 @@ namespace {
 
 // Materializes a scalar ``Tensor<bool, {}>`` carrying the given value.
 Tensor MakeScalarBool(bool value) {
-  const size_t out_n_bytes = 1, value ? uint8_t{1} : uint8_t{0};
+  const size_t out_n_bytes = 1;
   Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), std::vector<int64_t>{},
                                 out_n_bytes, nullptr);
+  *out.mutable_bytes() = value ? uint8_t{1} : uint8_t{0};
   return out;
 }
 

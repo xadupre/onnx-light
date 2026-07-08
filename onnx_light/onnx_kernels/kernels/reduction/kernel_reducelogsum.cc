@@ -227,7 +227,7 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_w
   }
   const size_t elem_size =
       (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
-  const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size, 0u;
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
   Tensor out =
       MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
@@ -291,7 +291,7 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool k
   }
   const size_t elem_size =
       (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
-  const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size, 0u;
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
   Tensor out =
       MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);

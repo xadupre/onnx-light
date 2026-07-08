@@ -66,7 +66,7 @@ Tensor ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims,
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(int64_t), 0u;
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(int64_t);
   Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape, out_n_bytes,
                                 rt ? rt->allocator() : nullptr);
   (*this)(data, axis, keepdims, select_last_index, out);

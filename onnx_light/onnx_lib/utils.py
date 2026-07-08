@@ -284,13 +284,13 @@ def _extract_model_safe(
             contents will be extracted to.
     """
     with tarfile.open(model_tar_path) as model_with_data_zipped:
+        members = _tar_members_filter(model_with_data_zipped, local_model_with_data_dir_path)
         # Mitigate tarball directory traversal risks
         if hasattr(tarfile, "data_filter"):
-            model_with_data_zipped.extractall(path=local_model_with_data_dir_path, filter="data")
+            model_with_data_zipped.extractall(
+                path=local_model_with_data_dir_path, members=members, filter="data"
+            )
         else:
             model_with_data_zipped.extractall(  # noqa: S202
-                path=local_model_with_data_dir_path,
-                members=_tar_members_filter(
-                    model_with_data_zipped, local_model_with_data_dir_path
-                ),
+                path=local_model_with_data_dir_path, members=members
             )

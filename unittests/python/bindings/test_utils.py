@@ -86,6 +86,36 @@ class TestUtilityFunctions(ExtTestCase):
             ):
                 utils._tar_members_filter(tar, base)
 
+    def test_extract_model_safe_rejects_directory_traversal(self) -> None:
+        with tempfile.TemporaryDirectory() as tdir:
+            base = os.path.join(tdir, "model")
+            os.mkdir(base)
+            tar_path = os.path.join(tdir, "payload.tar")
+
+            with tarfile.open(tar_path, "w") as tar:
+                payload = b"outside extraction root"
+                info = tarfile.TarInfo("../model_evil/pwned.txt")
+                info.size = len(payload)
+                tar.addfile(info, io.BytesIO(payload))
+
+            with self.assertRaisesRegex(RuntimeError, "directory traversal"):
+                utils._extract_model_safe(tar_path, base)
+
+    def test_extract_model_safe_rejects_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tdir:
+            base = os.path.join(tdir, "model")
+            os.mkdir(base)
+            tar_path = os.path.join(tdir, "payload.tar")
+
+            with tarfile.open(tar_path, "w") as tar:
+                info = tarfile.TarInfo("linked.txt")
+                info.type = tarfile.SYMTYPE
+                info.linkname = "../outside.txt"
+                tar.addfile(info)
+
+            with self.assertRaisesRegex(RuntimeError, "symbolic links"):
+                utils._extract_model_safe(tar_path, base)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -28,19 +28,27 @@ void ReleaseTensorAllocation(Tensor &tensor) {
 }
 
 void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
+  // STRING tensors store their payload in string_data instead of raw bytes.
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return;
   }
   const size_t n_bytes = tensor.size_bytes();
+  // Keep truly empty inline tensors as-is; allocator-backed tensors (even 0-byte)
+  // still get rebound so Put can replace ownership tracking consistently.
   if (n_bytes == 0 && !tensor.has_allocation()) {
     return;
   }
   const uint8_t *src = tensor.bytes();
   RawBuffer *allocated = allocator->Allocate(n_bytes);
+  EXT_ENFORCE(allocated != nullptr,
+              "RuntimeContext: allocator returned a null RawBuffer allocation.");
   if (n_bytes > 0) {
     EXT_ENFORCE(src != nullptr,
                 "RuntimeContext: tensor has non-zero size with a null data pointer.");
     std::memcpy(allocated->data(), src, n_bytes);
+  }
+  if (tensor.has_allocation()) {
+    tensor.ClearAllocation();
   }
   tensor.SetAllocation(allocator, allocated);
 }

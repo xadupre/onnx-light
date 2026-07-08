@@ -106,6 +106,34 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry) {
     Expect(MakeScatterNDNode("min"), {data, indices, updates}, {output}, "test_cc_scatternd_min",
            {opset}, "backend-test", registry);
   }
+
+  // test_cc_scatternd_max_with_element_indices — mirrors upstream
+  // ``test_scatternd_max_with_element_indices``.
+  // Indices address individual elements (index rank == data rank), exercising
+  // element-level reduction.
+  {
+    Tensor data = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
+    Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
+    Tensor updates = Tensor::FromFloat("", {2}, {5, 1});
+    kernel::ScatterND::Attributes attrs;
+    attrs.reduction = "max";
+    Tensor output = snd_kernel(data, indices, updates, attrs);
+    Expect(MakeScatterNDNode("max"), {data, indices, updates}, {output},
+           "test_cc_scatternd_max_with_element_indices", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_scatternd_min_with_element_indices — mirrors upstream
+  // ``test_scatternd_min_with_element_indices``.
+  {
+    Tensor data = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
+    Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
+    Tensor updates = Tensor::FromFloat("", {2}, {5, 1});
+    kernel::ScatterND::Attributes attrs;
+    attrs.reduction = "min";
+    Tensor output = snd_kernel(data, indices, updates, attrs);
+    Expect(MakeScatterNDNode("min"), {data, indices, updates}, {output},
+           "test_cc_scatternd_min_with_element_indices", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

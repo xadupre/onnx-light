@@ -380,9 +380,11 @@ struct Tensor {
 
   /// Marks the tensor storage as allocator-backed.
   void SetAllocation(RawBufferAllocator *allocator_owner, RawBuffer *allocation) noexcept {
-    EXT_ENFORCE(allocation_ == nullptr, "Tensor::SetAllocation: allocation is already set.");
+    EXT_ENFORCE(allocation_ == nullptr, "Tensor::SetAllocation: allocation is already set. Call "
+                                        "ClearAllocation() before setting a new allocation.");
     allocation_owner_ = allocator_owner;
     allocation_ = allocation;
+    // Drop inline storage: bytes()/size_bytes() now resolve from allocation_.
     data = RawBuffer{};
     borrow_ptr_ = nullptr;
     borrow_size_ = 0;

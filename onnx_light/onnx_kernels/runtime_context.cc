@@ -32,10 +32,11 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return;
   }
+  EXT_ENFORCE(!(tensor.has_allocation()),
+              "RuntimeContext: incoming tensor already has allocator-backed storage.");
   const size_t n_bytes = tensor.size_bytes();
-  // Keep truly empty inline tensors as-is; allocator-backed tensors (even 0-byte)
-  // still get rebound so Put can replace ownership tracking consistently.
-  if (n_bytes == 0 && !tensor.has_allocation()) {
+  // Keep truly empty inline tensors as-is (no bytes and no allocator binding).
+  if (n_bytes == 0) {
     return;
   }
   const uint8_t *src = tensor.bytes();
@@ -46,9 +47,6 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
     EXT_ENFORCE(src != nullptr,
                 "RuntimeContext: tensor has non-zero size with a null data pointer.");
     std::memcpy(allocated->data(), src, n_bytes);
-  }
-  if (tensor.has_allocation()) {
-    tensor.ClearAllocation();
   }
   tensor.SetAllocation(allocator, allocated);
 }

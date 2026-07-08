@@ -25,7 +25,7 @@ Tensor MakeScalarBool(bool value) {
 
 } // namespace
 
-Tensor OptionalHasElement::operator()(RuntimeContext *rt, const Tensor &input) const {
+Tensor OptionalHasElement::operator()(const Tensor &input, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(input.data_type != 0,
                       "kernel::OptionalHasElement: input element type must be a defined DataType.");
   // The runtime Tensor type cannot represent an "empty optional", so any
@@ -34,7 +34,7 @@ Tensor OptionalHasElement::operator()(RuntimeContext *rt, const Tensor &input) c
   return MakeScalarBool(true);
 }
 
-Tensor OptionalHasElement::operator()(RuntimeContext *rt, const Sequence &input) const {
+Tensor OptionalHasElement::operator()(const Sequence &input, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(
       input.elem_type != 0,
       "kernel::OptionalHasElement: input sequence elem_type must be a defined DataType.");

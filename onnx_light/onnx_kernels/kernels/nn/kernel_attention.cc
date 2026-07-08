@@ -198,8 +198,8 @@ double MaskValuePadded(const Tensor *mask, int64_t batch_size, int64_t q_num_hea
 
 } // namespace
 
-Tensor Attention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K,
-                             const Tensor &V) const {
+Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
+                             RuntimeContext *rt) const {
   CheckRank4Float(Q, "Q");
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::Attention: 'head_size' must be positive.");
@@ -207,16 +207,16 @@ Tensor Attention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &
   return (*this)(nullptr, Q, K, V, scale);
 }
 
-Tensor Attention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K, const Tensor &V,
-                             float scale) const {
+Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                             RuntimeContext *rt) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
   return (*this)(rt, Q, K, V, attrs).Y;
 }
 
-Tensor Attention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K, const Tensor &V,
-                             float scale, const Tensor &attn_mask) const {
+Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                             const Tensor &attn_mask, RuntimeContext *rt) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;

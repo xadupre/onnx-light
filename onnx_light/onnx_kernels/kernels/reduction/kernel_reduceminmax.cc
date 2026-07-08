@@ -144,8 +144,8 @@ void MinMaxReduce(const Tensor &data, const std::vector<bool> &is_reduced,
 
 } // namespace
 
-Tensor ReduceMinMax::operator()(RuntimeContext *rt, const Tensor &data, bool keepdims,
-                                bool noop_with_empty_axes) const {
+Tensor ReduceMinMax::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                                RuntimeContext *rt) const {
   ValidateFloatOrBool(data, "data");
   const bool is_bool = data.data_type == static_cast<int32_t>(DataType::BOOL);
   const int64_t rank = static_cast<int64_t>(data.shape.size());
@@ -190,8 +190,8 @@ void ReduceMinMax::operator()(const Tensor &data, bool keepdims, bool noop_with_
   MinMaxReduce(data, is_reduced, out_shape_noreduce, mode_, output);
 }
 
-Tensor ReduceMinMax::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &axes,
-                                bool keepdims, bool noop_with_empty_axes) const {
+Tensor ReduceMinMax::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
+                                bool noop_with_empty_axes, RuntimeContext *rt) const {
   ValidateFloatOrBool(data, "data");
   const bool is_bool = data.data_type == static_cast<int32_t>(DataType::BOOL);
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),

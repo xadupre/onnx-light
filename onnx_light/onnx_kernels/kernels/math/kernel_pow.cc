@@ -293,7 +293,7 @@ void PowDispatch(const Tensor &x, const Tensor &y, Tensor &output,
 }
 } // namespace
 
-Tensor Pow::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
+Tensor Pow::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   const detail::BroadcastInfo bi = BroadcastShape(x, y);
   const size_t elem_size = BaseDtypeSize(x.data_type);
   const size_t z_n_bytes = static_cast<size_t>(bi.element_count) * elem_size;

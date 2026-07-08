@@ -32,9 +32,9 @@ const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
 
 } // namespace
 
-Tensor BatchNormalization::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &scale,
-                                      const Tensor &bias, const Tensor &input_mean,
-                                      const Tensor &input_var, float epsilon) const {
+Tensor BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
+                                      const Tensor &input_mean, const Tensor &input_var,
+                                      float epsilon, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::BatchNormalization: X must be FLOAT.");
   const size_t out_n_bytes = x.size_bytes();

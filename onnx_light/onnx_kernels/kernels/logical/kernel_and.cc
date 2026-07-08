@@ -18,7 +18,7 @@ constexpr const char *kBoolName = "BOOL";
 constexpr auto kAndOp = [](uint8_t a, uint8_t b) -> uint8_t { return (a != 0 && b != 0) ? 1 : 0; };
 } // namespace
 
-Tensor And::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
+Tensor And::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   return detail::BinaryElementwiseAlloc<uint8_t, uint8_t>(kAndName, kBoolName, DataType::BOOL, x, y,
                                                           kAndOp, rt ? rt->allocator() : nullptr);
 }

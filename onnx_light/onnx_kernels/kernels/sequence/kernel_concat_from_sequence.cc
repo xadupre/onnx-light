@@ -140,8 +140,8 @@ void CopyConcatenated(const std::vector<Tensor> &inputs, int resolved_axis,
 
 } // namespace
 
-Tensor ConcatFromSequence::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs,
-                                      int64_t axis, int64_t new_axis) const {
+Tensor ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t axis,
+                                      int64_t new_axis, RuntimeContext *rt) const {
   int resolved_axis = 0;
   std::vector<int64_t> out_shape;
   size_t elem_size = 0;

@@ -67,8 +67,8 @@ void ReduceSlice(int32_t data_type, uint8_t *out_bytes, const uint8_t *upd_bytes
 
 } // namespace
 
-Tensor ScatterND::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
-                             const Tensor &updates, const Attributes &attrs) const {
+Tensor ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
+                             const Attributes &attrs, RuntimeContext *rt) const {
   const size_t out_n_bytes = data.bytes(), data.bytes() + data.size_bytes();
   Tensor out =
       MakeOutputTensor(data.data_type, data.shape, out_n_bytes, rt ? rt->allocator() : nullptr);

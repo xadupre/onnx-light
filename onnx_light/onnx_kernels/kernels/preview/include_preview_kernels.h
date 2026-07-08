@@ -91,29 +91,31 @@ public:
 
   /// Computes the attention output for the given Q, K, V tensors using the
   /// default scaling factor ``1 / sqrt(head_size)``.
-  Tensor operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K, const Tensor &V) const;
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
+                    RuntimeContext *rt = nullptr) const;
 
   /// Computes the attention output for the given Q, K, V tensors using an
   /// explicit ``scale`` value (matching the ``scale`` attribute of the
   /// operator).
-  Tensor operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K, const Tensor &V,
-                    float scale) const;
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                    RuntimeContext *rt = nullptr) const;
 
   /// Computes the attention output and applies the ``prob_mod`` callback
   /// to the post-softmax probability tensor before computing
   /// ``Y = probs @ V``. When ``prob_mod`` is an empty ``std::function``
   /// this is equivalent to the overload without a ``prob_mod``
   /// callback.
-  Tensor operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K, const Tensor &V,
-                    float scale, const ProbModFn &prob_mod) const;
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                    const ProbModFn &prob_mod, RuntimeContext *rt = nullptr) const;
 
   /// Computes the attention output and applies the ``score_mod`` callback
   /// to the pre-softmax score tensor before the softmax, and the
   /// ``prob_mod`` callback to the post-softmax probability tensor before
   /// computing ``Y = probs @ V``. When either callback is an empty
   /// ``std::function`` it is treated as identity.
-  Tensor operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K, const Tensor &V,
-                    float scale, const ScoreModFn &score_mod, const ProbModFn &prob_mod) const;
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                    const ScoreModFn &score_mod, const ProbModFn &prob_mod,
+                    RuntimeContext *rt = nullptr) const;
 
   /// In-place overload writing into a caller-allocated ``output`` tensor.
   /// ``output`` must already share ``Q``'s element type and have shape

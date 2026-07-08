@@ -12,7 +12,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor Constant::operator()(RuntimeContext *rt, const Tensor &value) const {
+Tensor Constant::operator()(const Tensor &value, RuntimeContext *rt) const {
   const size_t out_n_bytes = value.size_bytes();
   Tensor out =
       MakeOutputTensor(value.data_type, value.shape, out_n_bytes, rt ? rt->allocator() : nullptr);

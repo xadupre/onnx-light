@@ -40,7 +40,7 @@ constexpr const char *kSupportedSubTypesMsg =
     "UINT32 and UINT64 inputs.";
 } // namespace
 
-Tensor Sub::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
+Tensor Sub::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return SubAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);

@@ -55,7 +55,7 @@ class Optional : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(RuntimeContext *rt, const Tensor &input) const;
+  Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, Tensor &output) const;
 
   /// Output is a byte-for-byte copy of ``input``, so storage may safely be
@@ -80,7 +80,7 @@ class OptionalGetElement : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(RuntimeContext *rt, const Tensor &input) const;
+  Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, Tensor &output) const;
   Sequence operator()(const Sequence &input) const;
 
@@ -106,9 +106,9 @@ public:
 
   /// Tensor input: always returns ``Tensor<bool, {}>{true}`` (the input
   /// is assumed to be the present element).
-  Tensor operator()(RuntimeContext *rt, const Tensor &input) const;
+  Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
   /// Sequence input: always returns ``Tensor<bool, {}>{true}``.
-  Tensor operator()(RuntimeContext *rt, const Sequence &input) const;
+  Tensor operator()(const Sequence &input, RuntimeContext *rt = nullptr) const;
   /// No input (opset 18 only): returns ``Tensor<bool, {}>{false}``.
   Tensor operator()(RuntimeContext *rt = nullptr) const;
 

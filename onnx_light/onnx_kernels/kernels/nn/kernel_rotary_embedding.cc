@@ -49,9 +49,9 @@ void CheckCacheShape(const Tensor &cache, const char *which, int64_t batch, int6
 
 } // namespace
 
-Tensor RotaryEmbedding::operator()(RuntimeContext *rt, const Tensor &X, const Tensor &cos_cache,
+Tensor RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache,
                                    const Tensor &sin_cache, const Tensor &position_ids,
-                                   const Attributes &attrs) const {
+                                   const Attributes &attrs, RuntimeContext *rt) const {
   Tensor output;
   output.data_type = X.data_type;
   output.shape = X.shape;

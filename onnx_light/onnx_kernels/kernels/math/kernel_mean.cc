@@ -115,7 +115,7 @@ void MeanInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor
 
 } // namespace
 
-Tensor Mean::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const {
+Tensor Mean::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMeanName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:

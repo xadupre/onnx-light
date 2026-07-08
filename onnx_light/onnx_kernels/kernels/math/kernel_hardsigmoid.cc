@@ -12,7 +12,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor HardSigmoid::operator()(RuntimeContext *rt, const Tensor &x, float alpha, float beta) const {
+Tensor HardSigmoid::operator()(const Tensor &x, float alpha, float beta, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * sizeof(float);
   Tensor y = MakeOutputTensor(DataType::FLOAT, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, alpha, beta, y);

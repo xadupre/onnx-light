@@ -71,8 +71,8 @@ constexpr auto kRightShiftFn = [](auto a, auto b) { return a >> static_cast<int>
 
 } // namespace
 
-Tensor BitShift::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y,
-                            Direction direction) const {
+Tensor BitShift::operator()(const Tensor &x, const Tensor &y, Direction direction,
+                            RuntimeContext *rt) const {
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   if (direction == Direction::kLeft) {
     return BitShiftAllocDispatch(x, y, kLeftShiftFn, allocator);

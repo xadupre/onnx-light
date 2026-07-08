@@ -27,7 +27,7 @@ int64_t ComputeNumElements(const std::vector<int64_t> &shape) {
 
 } // namespace
 
-Tensor Size::operator()(RuntimeContext *rt, const Tensor &data) const {
+Tensor Size::operator()(const Tensor &data, RuntimeContext *rt) const {
   const int64_t n = ComputeNumElements(data.shape);
   return Tensor::FromInt64("", {}, {n});
 }

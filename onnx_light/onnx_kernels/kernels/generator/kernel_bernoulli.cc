@@ -183,8 +183,8 @@ void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int32_t sa
 
 } // namespace
 
-Tensor Bernoulli::operator()(RuntimeContext *rt, const Tensor &input, int64_t seed,
-                             int32_t dtype) const {
+Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
+                             RuntimeContext *rt) const {
   const std::vector<double> probs = ReadProbabilities(input);
 
   const int32_t out_dtype = (dtype == 0) ? input.data_type : dtype;

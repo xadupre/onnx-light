@@ -125,8 +125,9 @@ void Compute(const std::vector<Tensor> &inputs, const std::vector<int64_t> &inpu
 
 } // namespace
 
-Tensor FeatureVectorizer::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs,
-                                     const std::vector<int64_t> &inputdimensions) const {
+Tensor FeatureVectorizer::operator()(const std::vector<Tensor> &inputs,
+                                     const std::vector<int64_t> &inputdimensions,
+                                     RuntimeContext *rt) const {
   ValidateInputs(inputs, inputdimensions);
   const std::vector<int64_t> input_dims = ResolveInputDims(inputs, inputdimensions);
   const int64_t n = ResolveBatchSize(inputs);

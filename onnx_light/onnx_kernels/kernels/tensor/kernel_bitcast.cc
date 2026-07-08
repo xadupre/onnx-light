@@ -72,7 +72,7 @@ void ValidateBitCast(int32_t from, int32_t to) {
 
 } // namespace
 
-Tensor BitCast::operator()(RuntimeContext *rt, const Tensor &x, int32_t to) const {
+Tensor BitCast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) const {
   ValidateBitCast(x.data_type, to);
   // BitCast preserves the exact bit pattern and the shape: same packed
   // byte size for both input and output. Copy the underlying bytes and

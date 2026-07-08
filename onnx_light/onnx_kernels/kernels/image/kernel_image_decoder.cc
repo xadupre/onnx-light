@@ -2174,8 +2174,8 @@ int64_t ImageDecoder::ChannelCount(const std::string &pixel_format) {
                     "\" (expected \"RGB\", \"BGR\" or \"Grayscale\").");
 }
 
-Tensor ImageDecoder::operator()(RuntimeContext *rt, const Tensor &encoded_stream,
-                                const std::string &pixel_format) const {
+Tensor ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &pixel_format,
+                                RuntimeContext *rt) const {
   CheckImageDecoderInput(encoded_stream);
   const int64_t channels = ChannelCount(pixel_format);
 

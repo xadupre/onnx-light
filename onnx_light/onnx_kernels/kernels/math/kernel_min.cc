@@ -165,7 +165,7 @@ void MinFloat16InPlace(const std::vector<Tensor> &inputs, Tensor &output) {
 
 } // namespace
 
-Tensor Min::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const {
+Tensor Min::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   switch (inputs[0].data_type) {
 #define ONNX_LIGHT_MIN_CASE_ALLOC(ENUM, CPP, NAME)                                                 \

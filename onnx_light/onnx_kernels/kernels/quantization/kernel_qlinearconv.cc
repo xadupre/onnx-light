@@ -128,11 +128,10 @@ template <typename Y> inline Y SaturateRound(float scaled, float y_zp_f) {
 
 } // namespace
 
-Tensor QLinearConv::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &x_scale,
-                               const Tensor &x_zero_point, const Tensor &w, const Tensor &w_scale,
-                               const Tensor &w_zero_point, const Tensor &y_scale,
-                               const Tensor &y_zero_point, const Tensor &B,
-                               const Attributes &attrs) const {
+Tensor QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
+                               const Tensor &w, const Tensor &w_scale, const Tensor &w_zero_point,
+                               const Tensor &y_scale, const Tensor &y_zero_point, const Tensor &B,
+                               const Attributes &attrs, RuntimeContext *rt) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   std::vector<int64_t> out_spatial = ComputeOutputSpatial(x, resolved);

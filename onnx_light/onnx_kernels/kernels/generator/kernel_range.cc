@@ -94,8 +94,8 @@ Tensor ComputeRangeHalf(const Tensor &start, const Tensor &limit, const Tensor &
 
 } // namespace
 
-Tensor Range::operator()(RuntimeContext *rt, const Tensor &start, const Tensor &limit,
-                         const Tensor &delta) const {
+Tensor Range::operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
+                         RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(start.data_type == limit.data_type && start.data_type == delta.data_type,
                       "kernel::Range: 'start', 'limit' and 'delta' must share the same dtype.");
   switch (static_cast<DataType>(start.data_type)) {

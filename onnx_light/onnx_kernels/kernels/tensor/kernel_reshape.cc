@@ -90,8 +90,8 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &data, const std::vector<in
 
 } // namespace
 
-Tensor Reshape::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &shape,
-                           int64_t allowzero) const {
+Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowzero,
+                           RuntimeContext *rt) const {
   const std::vector<int64_t> target = ReadShapeTensor(shape);
   const std::vector<int64_t> out_shape = ComputeOutputShape(data, target, allowzero);
   const std::size_t elem_size = ElementSize(data.data_type);

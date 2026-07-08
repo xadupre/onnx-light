@@ -12,7 +12,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor Identity::operator()(RuntimeContext *rt, const Tensor &input) const {
+Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
   Tensor output;
   output.data_type = input.data_type;
   output.shape = input.shape;

@@ -138,9 +138,9 @@ std::vector<int64_t> ComputeOutputSpatial(const Tensor &x, ConvInteger::Attribut
 
 } // namespace
 
-Tensor ConvInteger::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &w,
-                               const Tensor &x_zero_point, const Tensor &w_zero_point,
-                               const Attributes &attrs) const {
+Tensor ConvInteger::operator()(const Tensor &x, const Tensor &w, const Tensor &x_zero_point,
+                               const Tensor &w_zero_point, const Attributes &attrs,
+                               RuntimeContext *rt) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, x_zero_point, w_zero_point, resolved);

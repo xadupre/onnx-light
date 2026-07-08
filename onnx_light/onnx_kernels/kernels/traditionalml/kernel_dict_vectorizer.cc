@@ -53,9 +53,9 @@ void Fill(const std::vector<K> &input_keys, const std::vector<V> &input_values,
 } // namespace
 
 template <typename K, typename V>
-Tensor DictVectorizer::operator()(RuntimeContext *rt, const std::vector<K> &input_keys,
+Tensor DictVectorizer::operator()(const std::vector<K> &input_keys,
                                   const std::vector<V> &input_values,
-                                  const std::vector<K> &vocabulary) const {
+                                  const std::vector<K> &vocabulary, RuntimeContext *rt) const {
   const int64_t c = static_cast<int64_t>(vocabulary.size());
   const std::vector<int64_t> shape{c};
   if constexpr (std::is_same_v<V, std::string>) {

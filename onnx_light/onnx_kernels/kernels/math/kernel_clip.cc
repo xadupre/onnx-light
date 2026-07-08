@@ -111,8 +111,8 @@ void Dispatch(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &out
 
 } // namespace
 
-Tensor Clip::operator()(RuntimeContext *rt, const Tensor &x, const Tensor *min,
-                        const Tensor *max) const {
+Tensor Clip::operator()(const Tensor &x, const Tensor *min, const Tensor *max,
+                        RuntimeContext *rt) const {
   ValidateBounds(x, min, max);
   Tensor out = AllocLike(x);
   Dispatch(x, min, max, out);

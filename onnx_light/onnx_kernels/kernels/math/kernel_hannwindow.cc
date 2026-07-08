@@ -13,7 +13,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor HannWindow::operator()(RuntimeContext *rt, const Tensor &size, bool periodic) const {
+Tensor HannWindow::operator()(const Tensor &size, bool periodic, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(size.data_type == DataType::INT32,
                       "kernel::HannWindow expects an INT32 size tensor.");
   EXT_ENFORCE_INVALID(size.element_count() == 1 && size.shape.empty(),

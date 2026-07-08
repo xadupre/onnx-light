@@ -60,7 +60,7 @@ float DeterminantInPlace(float *a, int64_t m) {
 
 } // namespace
 
-Tensor Det::operator()(RuntimeContext *rt, const Tensor &x) const {
+Tensor Det::operator()(const Tensor &x, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.shape.size() >= 2, "kernel::Det requires an input tensor of rank >= 2.");
   const int64_t m = x.shape[x.shape.size() - 1];
   const int64_t m2 = x.shape[x.shape.size() - 2];

@@ -67,8 +67,8 @@ std::pair<Tensor, Tensor> Dropout::operator()(const Tensor &data, float ratio, b
   return {std::move(output), std::move(mask)};
 }
 
-Tensor Dropout::operator()(RuntimeContext *rt, const Tensor &data, float ratio, bool training_mode,
-                           Tensor &mask, int64_t seed) const {
+Tensor Dropout::operator()(const Tensor &data, float ratio, bool training_mode, Tensor &mask,
+                           int64_t seed, RuntimeContext *rt) const {
   ValidateInput(data, ratio);
   EXT_ENFORCE_INVALID(mask.data_type == static_cast<int32_t>(DataType::BOOL),
                       "kernel::Dropout: mask must have BOOL dtype.");

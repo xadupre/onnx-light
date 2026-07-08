@@ -75,7 +75,7 @@ void ValidateOutput(const Tensor &x, const Tensor &output) {
 
 } // namespace
 
-Tensor Elu::operator()(RuntimeContext *rt, const Tensor &x, float alpha) const {
+Tensor Elu::operator()(const Tensor &x, float alpha, RuntimeContext *rt) const {
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
   Tensor out = MakeOutputTensor(x.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   Dispatch(x, alpha, out);

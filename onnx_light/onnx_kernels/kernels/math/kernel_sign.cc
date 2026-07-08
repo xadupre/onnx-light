@@ -42,7 +42,7 @@ template <typename T> void SignSigned(const Tensor &x, Tensor &output) {
 
 } // namespace
 
-Tensor Sign::operator()(RuntimeContext *rt, const Tensor &x) const {
+Tensor Sign::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
   Tensor y = MakeOutputTensor(x.data_type, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, y);

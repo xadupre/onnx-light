@@ -32,7 +32,7 @@ int64_t SpatialCount(const Tensor &x) {
 // GlobalAveragePool
 // ---------------------------------------------------------------------------
 
-Tensor GlobalAveragePool::operator()(RuntimeContext *rt, const Tensor &x) const {
+Tensor GlobalAveragePool::operator()(const Tensor &x, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GlobalAveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2,
@@ -73,7 +73,7 @@ Tensor GlobalAveragePool::operator()(RuntimeContext *rt, const Tensor &x) const 
 // GlobalMaxPool
 // ---------------------------------------------------------------------------
 
-Tensor GlobalMaxPool::operator()(RuntimeContext *rt, const Tensor &x) const {
+Tensor GlobalMaxPool::operator()(const Tensor &x, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GlobalMaxPool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2,
@@ -113,7 +113,7 @@ Tensor GlobalMaxPool::operator()(RuntimeContext *rt, const Tensor &x) const {
 // GlobalLpPool
 // ---------------------------------------------------------------------------
 
-Tensor GlobalLpPool::operator()(RuntimeContext *rt, const Tensor &x, int64_t p) const {
+Tensor GlobalLpPool::operator()(const Tensor &x, int64_t p, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GlobalLpPool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2,

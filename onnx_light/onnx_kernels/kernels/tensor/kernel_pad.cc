@@ -149,9 +149,8 @@ int64_t MapCoord(int64_t out_coord, int64_t pad_begin, int64_t input_dim, const 
 
 } // namespace
 
-Tensor Pad::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &pads,
-                       const Tensor *constant_value, const Tensor *axes,
-                       const std::string &mode) const {
+Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
+                       const Tensor *axes, const std::string &mode, RuntimeContext *rt) const {
   const std::size_t rank = data.shape.size();
   const std::vector<int64_t> axes_vec = ResolveAxes(axes, rank);
   const std::vector<int64_t> pads_vec = ReadInt64Vector(pads, "pads");

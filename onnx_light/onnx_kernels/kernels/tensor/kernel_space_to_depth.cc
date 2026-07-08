@@ -30,8 +30,8 @@ std::vector<int64_t> ComputeSpaceToDepthOutputShape(const std::vector<int64_t> &
 
 } // namespace
 
-Tensor SpaceToDepth::operator()(RuntimeContext *rt, const Tensor &input,
-                                const Attributes &attrs) const {
+Tensor SpaceToDepth::operator()(const Tensor &input, const Attributes &attrs,
+                                RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape =
       ComputeSpaceToDepthOutputShape(input.shape, attrs.blocksize);
   const size_t output_n_bytes = PackedByteSize(input.data_type, input.element_count());

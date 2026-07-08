@@ -80,9 +80,10 @@ std::vector<int64_t> StringNormalizer::ComputeOutputShape(const std::vector<int6
   return {1, out_c};
 }
 
-Tensor StringNormalizer::operator()(RuntimeContext *rt, const Tensor &x,
-                                    CaseChangeAction case_change_action, bool is_case_sensitive,
-                                    const std::vector<std::string> &stopwords) const {
+Tensor StringNormalizer::operator()(const Tensor &x, CaseChangeAction case_change_action,
+                                    bool is_case_sensitive,
+                                    const std::vector<std::string> &stopwords,
+                                    RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::StringNormalizer only supports STRING tensors.");
   const int64_t c = ExtractC(x.shape);

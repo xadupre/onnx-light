@@ -365,9 +365,6 @@ Tensor MakeOutputTensor(int32_t data_type, const Shape &shape, size_t n_bytes,
   t.data_type = data_type;
   t.shape = shape;
   RawBuffer *buf = allocator->Allocate(n_bytes);
-  if (n_bytes > 0) {
-    std::memset(buf->data(), 0, n_bytes);
-  }
   t.SetAllocation(allocator, buf);
   return t;
 }

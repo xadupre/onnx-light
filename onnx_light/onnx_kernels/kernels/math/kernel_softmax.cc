@@ -27,7 +27,7 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 } // namespace
 
-Tensor Softmax::operator()(RuntimeContext *rt, const Tensor &x, int64_t axis) const {
+Tensor Softmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) const {
   // FLOAT16/BFLOAT16 inputs are computed in float32 and demoted back, mirroring
   // the half-precision handling in the other math kernels.
   if (IsHalfPrecision(x.data_type)) {

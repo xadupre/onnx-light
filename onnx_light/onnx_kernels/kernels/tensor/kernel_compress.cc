@@ -42,8 +42,8 @@ std::vector<bool> ReadCondition(const Tensor &condition) {
 
 } // namespace
 
-Tensor Compress::operator()(RuntimeContext *rt, const Tensor &input, const Tensor &condition,
-                            std::optional<int64_t> axis) const {
+Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
+                            std::optional<int64_t> axis, RuntimeContext *rt) const {
   const std::vector<bool> cond = ReadCondition(condition);
   const std::size_t cond_len = cond.size();
   const std::size_t elem_size = ElementSize(input.data_type);

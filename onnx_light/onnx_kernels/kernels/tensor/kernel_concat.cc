@@ -59,8 +59,8 @@ ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t
 
 } // namespace
 
-Tensor Concat::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs,
-                          int64_t axis) const {
+Tensor Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis,
+                          RuntimeContext *rt) const {
   const ConcatLayout layout = ValidateAndComputeLayout(inputs, axis);
   int64_t total = 1;
   for (int64_t d : layout.shape) {

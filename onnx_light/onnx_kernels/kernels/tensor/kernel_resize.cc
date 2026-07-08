@@ -684,8 +684,8 @@ void RunResize(const Tensor &X, const std::vector<float> &scales_vec,
 
 } // namespace
 
-Tensor Resize::operator()(RuntimeContext *rt, const Tensor &X, const Tensor &scales,
-                          const Attributes &attrs) const {
+Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
+                          RuntimeContext *rt) const {
   const std::size_t rank = X.shape.size();
   const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
   const std::vector<float> scales_in = ReadResizeScales(scales, axes.size());

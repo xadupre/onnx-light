@@ -154,9 +154,9 @@ std::vector<int64_t> InferOutputShape(const Tensor &x, const Tensor &w, const Te
 
 } // namespace
 
-Tensor DeformConv::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &w,
-                              const Tensor &offset, const Tensor &b, const Tensor &mask,
-                              const Attributes &attrs) const {
+Tensor DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &offset,
+                              const Tensor &b, const Tensor &mask, const Attributes &attrs,
+                              RuntimeContext *rt) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, offset, b, mask, resolved);

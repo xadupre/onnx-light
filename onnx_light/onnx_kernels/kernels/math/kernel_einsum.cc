@@ -400,8 +400,8 @@ void RequireHomogeneous(const std::vector<Tensor> &inputs) {
 
 } // namespace
 
-Tensor Einsum::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs,
-                          const std::string &equation) const {
+Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation,
+                          RuntimeContext *rt) const {
   RequireHomogeneous(inputs);
   switch (inputs[0].data_type) {
   case DataType::FLOAT:

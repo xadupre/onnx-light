@@ -352,11 +352,11 @@ double ParseAsDouble(const std::string &s) {
 
 } // namespace
 
-Tensor Cast::operator()(RuntimeContext *rt, const Tensor &x, int32_t to) const {
+Tensor Cast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) const {
   return (*this)(rt, x, to, true);
 }
 
-Tensor Cast::operator()(RuntimeContext *rt, const Tensor &x, int32_t to, bool saturate) const {
+Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "

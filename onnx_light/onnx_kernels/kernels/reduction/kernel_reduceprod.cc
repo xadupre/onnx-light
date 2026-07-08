@@ -92,8 +92,8 @@ void ProdReduce(const Tensor &data, const std::vector<bool> &is_reduced,
 
 } // namespace
 
-Tensor ReduceProd::operator()(RuntimeContext *rt, const Tensor &data, bool keepdims,
-                              bool noop_with_empty_axes) const {
+Tensor ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                              RuntimeContext *rt) const {
   ValidateFloat(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
@@ -140,8 +140,8 @@ void ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_em
   ProdReduce(data, is_reduced, out_shape_noreduce, output);
 }
 
-Tensor ReduceProd::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &axes,
-                              bool keepdims, bool noop_with_empty_axes) const {
+Tensor ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
+                              bool noop_with_empty_axes, RuntimeContext *rt) const {
   ValidateFloat(data, "data");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceProd: axes must be an INT64 tensor.");

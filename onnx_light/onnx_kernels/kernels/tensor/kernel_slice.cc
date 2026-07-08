@@ -152,8 +152,8 @@ SliceLayout ComputeSliceLayout(const Tensor &data, const Tensor &starts_t, const
 
 } // namespace
 
-Tensor Slice::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &starts,
-                         const Tensor &ends, const Tensor *axes, const Tensor *steps) const {
+Tensor Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
+                         const Tensor *axes, const Tensor *steps, RuntimeContext *rt) const {
   const SliceLayout layout = ComputeSliceLayout(data, starts, ends, axes, steps);
   const size_t out_n_bytes = static_cast<std::size_t>(layout.total_elements) * layout.elem_size;
   Tensor out = MakeOutputTensor(data.data_type, layout.out_shape, out_n_bytes,

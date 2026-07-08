@@ -31,7 +31,7 @@ template <typename T> void ValidateInput(const Tensor &x) {
 } // namespace
 
 template <typename T>
-Tensor Binarizer::operator()(RuntimeContext *rt, const Tensor &x, T threshold) const {
+Tensor Binarizer::operator()(const Tensor &x, T threshold, RuntimeContext *rt) const {
   ValidateInput<T>(x);
   const int64_t n = x.element_count();
   std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(T));

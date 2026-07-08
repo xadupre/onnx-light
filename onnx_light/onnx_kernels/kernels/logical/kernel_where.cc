@@ -236,8 +236,8 @@ void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &
 
 } // namespace
 
-Tensor Where::operator()(RuntimeContext *rt, const Tensor &condition, const Tensor &x,
-                         const Tensor &y) const {
+Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
+                         RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::BOOL:
     return WhereAllocTyped<uint8_t>(condition, x, y);

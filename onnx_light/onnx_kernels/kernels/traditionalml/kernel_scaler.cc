@@ -56,8 +56,8 @@ int64_t LastDim(const std::vector<int64_t> &shape) { return shape.empty() ? 1 : 
 } // namespace
 
 template <typename T>
-Tensor Scaler::operator()(RuntimeContext *rt, const Tensor &x, const std::vector<float> &offset,
-                          const std::vector<float> &scale) const {
+Tensor Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
+                          const std::vector<float> &scale, RuntimeContext *rt) const {
   ValidateInput<T>(x);
   ValidateAttrs(offset, scale, LastDim(x.shape));
   const int64_t n = x.element_count();

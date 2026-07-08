@@ -22,7 +22,7 @@ constexpr const char *kName = "kernel::Abs";
 
 } // namespace
 
-Tensor Abs::operator()(RuntimeContext *rt, const Tensor &x) const {
+Tensor Abs::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
   Tensor y = MakeOutputTensor(x.data_type, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, y);

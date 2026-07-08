@@ -48,7 +48,7 @@ namespace kernel {
 class And : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -58,7 +58,7 @@ public:
 class Or : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -68,7 +68,7 @@ public:
 class Xor : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -80,7 +80,7 @@ public:
 class Not : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
+  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -93,7 +93,7 @@ public:
 class IsNaN : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
+  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   /// Input is FLOAT (4 bytes/elt) and output is BOOL (1 byte/elt), so the
@@ -111,8 +111,8 @@ public:
 class IsInf : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, int64_t detect_positive = 1,
-                    int64_t detect_negative = 1) const;
+  Tensor operator()(const Tensor &x, int64_t detect_positive = 1, int64_t detect_negative = 1,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, int64_t detect_positive, int64_t detect_negative,
                   Tensor &output) const;
 
@@ -129,7 +129,7 @@ public:
 class Greater : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -143,7 +143,7 @@ public:
 class Less : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -157,7 +157,7 @@ public:
 class GreaterOrEqual : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -171,7 +171,7 @@ public:
 class LessOrEqual : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -187,7 +187,7 @@ public:
 class Equal : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -200,8 +200,8 @@ public:
 class Where : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &condition, const Tensor &x,
-                    const Tensor &y) const;
+  Tensor operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &condition, const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -215,7 +215,7 @@ public:
 class BitwiseAnd : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -229,7 +229,7 @@ public:
 class BitwiseOr : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -243,7 +243,7 @@ public:
 class BitwiseXor : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -256,7 +256,7 @@ public:
 class BitwiseNot : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x) const;
+  Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -274,8 +274,8 @@ public:
   enum class Direction { kLeft, kRight };
 
   using KernelBase::KernelBase;
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y,
-                    Direction direction) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, Direction direction,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Direction direction, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }

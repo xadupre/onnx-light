@@ -295,8 +295,8 @@ void DequantizeBlockFloat4E2M1Loop(const Tensor &x, const float *scales,
 
 } // namespace
 
-Tensor DequantizeLinear::operator()(RuntimeContext *rt, const Tensor &x,
-                                    const Tensor &x_scale) const {
+Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
+                                    RuntimeContext *rt) const {
   // The output element type matches ``x_scale``'s element type (FLOAT or
   // FLOAT16). Both encodings occupy known fixed-size storage so the buffer
   // can be sized up-front.
@@ -371,8 +371,8 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
   }
 }
 
-Tensor DequantizeLinear::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &x_scale,
-                                    const Tensor &x_zero_point) const {
+Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
+                                    const Tensor &x_zero_point, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
                       "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
   const size_t elem_size = x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)
@@ -459,8 +459,9 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   }
 }
 
-Tensor DequantizeLinear::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &x_scale,
-                                    const Tensor &x_zero_point, int64_t axis) const {
+Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
+                                    const Tensor &x_zero_point, int64_t axis,
+                                    RuntimeContext *rt) const {
   if (x_scale.element_count() == 1) {
     return (*this)(rt, x, x_scale, x_zero_point);
   }
@@ -585,8 +586,8 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   }
 }
 
-Tensor DequantizeLinear::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &x_scale,
-                                    int64_t axis) const {
+Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis,
+                                    RuntimeContext *rt) const {
   if (x_scale.element_count() == 1) {
     return (*this)(rt, x, x_scale);
   }

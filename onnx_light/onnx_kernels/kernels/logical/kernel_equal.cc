@@ -96,7 +96,7 @@ void EqualStringInPlace(const Tensor &x, const Tensor &y, Tensor &output) {
 }
 } // namespace
 
-Tensor Equal::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
+Tensor Equal::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::BOOL:
     return EqualAlloc<uint8_t>("BOOL", DataType::BOOL, x, y, rt ? rt->allocator() : nullptr);

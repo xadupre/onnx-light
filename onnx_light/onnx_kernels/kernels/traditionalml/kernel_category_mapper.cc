@@ -79,10 +79,9 @@ void LookupAndFill(const Tensor &x, const std::vector<std::string> &cats_strings
 } // namespace
 
 template <typename InT, typename OutT>
-Tensor CategoryMapper::operator()(RuntimeContext *rt, const Tensor &x,
-                                  const std::vector<std::string> &cats_strings,
-                                  const std::vector<int64_t> &cats_int64s,
-                                  OutT default_value) const {
+Tensor CategoryMapper::operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
+                                  const std::vector<int64_t> &cats_int64s, OutT default_value,
+                                  RuntimeContext *rt) const {
   ValidateInputs<InT, OutT>(x, cats_strings, cats_int64s);
   const int64_t n = x.element_count();
   if constexpr (std::is_same_v<OutT, std::string>) {

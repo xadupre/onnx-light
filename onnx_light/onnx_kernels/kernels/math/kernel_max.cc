@@ -168,7 +168,7 @@ void MaxFloat16InPlace(const std::vector<Tensor> &inputs, Tensor &output) {
 
 } // namespace
 
-Tensor Max::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const {
+Tensor Max::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMaxName, " requires at least one input.");
   switch (inputs[0].data_type) {
 #define ONNX_LIGHT_MAX_CASE_ALLOC(ENUM, CPP, NAME)                                                 \

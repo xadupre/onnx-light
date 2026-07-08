@@ -37,7 +37,7 @@ constexpr const char *kSupportedMulTypesMsg =
     "UINT32 and UINT64 inputs.";
 } // namespace
 
-Tensor Mul::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
+Tensor Mul::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return MulAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);

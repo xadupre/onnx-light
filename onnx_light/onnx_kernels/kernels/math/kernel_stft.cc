@@ -84,8 +84,8 @@ void StftCompute(const T *signal, const T *window, T *out, int64_t batch_size,
 
 } // namespace
 
-Tensor STFT::operator()(RuntimeContext *rt, const Tensor &signal, const Tensor &frame_step,
-                        const Tensor *window, const Tensor *frame_length, bool onesided) const {
+Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
+                        const Tensor *frame_length, bool onesided, RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(signal.shape.size());
   EXT_ENFORCE_INVALID(rank == 3, kSTFTName,
                       ": signal must have rank 3 ([batch_size, signal_length, 1]"

@@ -138,8 +138,8 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &x, ConvTranspose::Attribut
 
 } // namespace
 
-Tensor ConvTranspose::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &w,
-                                 const Tensor &b, const Attributes &attrs) const {
+Tensor ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor &b,
+                                 const Attributes &attrs, RuntimeContext *rt) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, b, resolved);

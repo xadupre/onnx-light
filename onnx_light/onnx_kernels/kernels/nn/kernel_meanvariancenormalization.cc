@@ -111,8 +111,8 @@ void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axe
 
 } // namespace
 
-Tensor MeanVarianceNormalization::operator()(RuntimeContext *rt, const Tensor &x,
-                                             const std::vector<int64_t> &axes) const {
+Tensor MeanVarianceNormalization::operator()(const Tensor &x, const std::vector<int64_t> &axes,
+                                             RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           x.data_type == static_cast<int32_t>(DataType::DOUBLE),
                       "kernel::MeanVarianceNormalization: X must be FLOAT or DOUBLE.");

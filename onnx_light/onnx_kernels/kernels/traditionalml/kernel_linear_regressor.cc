@@ -16,10 +16,9 @@ namespace onnx_kernels {
 namespace kernel {
 
 template <typename T>
-Tensor LinearRegressor::operator()(RuntimeContext *rt, const Tensor &x,
-                                   const std::vector<float> &coefficients,
+Tensor LinearRegressor::operator()(const Tensor &x, const std::vector<float> &coefficients,
                                    const std::vector<float> &intercepts, int64_t targets,
-                                   const std::string &post_transform) const {
+                                   const std::string &post_transform, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(targets >= 1, "kernel::LinearRegressor 'targets' must be >= 1.");
   EXT_ENFORCE_INVALID(post_transform == "NONE",
                       "kernel::LinearRegressor only supports post_transform == 'NONE'.");

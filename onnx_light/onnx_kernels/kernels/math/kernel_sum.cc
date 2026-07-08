@@ -116,7 +116,7 @@ void SumInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
 
 } // namespace
 
-Tensor Sum::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const {
+Tensor Sum::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:

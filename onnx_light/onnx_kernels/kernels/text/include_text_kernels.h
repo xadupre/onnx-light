@@ -59,7 +59,7 @@ class StringConcat : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const;
+  Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   /// Output bytes depend on both inputs, so the output buffer cannot
@@ -119,10 +119,9 @@ public:
   static CaseChangeAction ParseCaseChangeAction(const std::string &value);
 
   /// Allocating overload. ``stopwords`` may be empty.
-  Tensor operator()(RuntimeContext *rt, const Tensor &x,
-                    CaseChangeAction case_change_action = CaseChangeAction::kNone,
-                    bool is_case_sensitive = false,
-                    const std::vector<std::string> &stopwords = {}) const;
+  Tensor operator()(const Tensor &x, CaseChangeAction case_change_action = CaseChangeAction::kNone,
+                    bool is_case_sensitive = false, const std::vector<std::string> &stopwords = {},
+                    RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``output`` must be a ``tensor(string)`` with
   /// the shape returned by :cpp:func:`ComputeOutputShape` and with a
@@ -168,7 +167,8 @@ public:
   /// with the same shape as ``x``. Each output byte is ``1`` when the
   /// corresponding input string is fully matched by ``pattern`` and
   /// ``0`` otherwise.
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const std::string &pattern) const;
+  Tensor operator()(const Tensor &x, const std::string &pattern,
+                    RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``output`` must already be a ``tensor(bool)``
   /// with the same shape as ``x`` and a pre-sized ``data`` buffer of
@@ -230,13 +230,12 @@ public:
   /// is an integer tensor; ``pool_strings`` must be non-empty when
   /// ``x`` is a string tensor. ``weights`` may be empty (treated as
   /// all-ones for ``IDF`` / ``TFIDF``).
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, Mode mode, int64_t min_gram_length,
-                    int64_t max_gram_length, int64_t max_skip_count,
-                    const std::vector<int64_t> &ngram_counts,
+  Tensor operator()(const Tensor &x, Mode mode, int64_t min_gram_length, int64_t max_gram_length,
+                    int64_t max_skip_count, const std::vector<int64_t> &ngram_counts,
                     const std::vector<int64_t> &ngram_indexes,
                     const std::vector<int64_t> &pool_int64s,
-                    const std::vector<std::string> &pool_strings,
-                    const std::vector<float> &weights) const;
+                    const std::vector<std::string> &pool_strings, const std::vector<float> &weights,
+                    RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``output`` must already be a ``tensor(float)``
   /// with the shape returned by :cpp:func:`ComputeOutputShape` and a

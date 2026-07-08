@@ -71,8 +71,9 @@ void ValidateInputs(const Tensor &x, const std::vector<KeyT> &keys,
 } // namespace
 
 template <typename KeyT, typename ValueT>
-Tensor LabelEncoder::operator()(RuntimeContext *rt, const Tensor &x, const std::vector<KeyT> &keys,
-                                const std::vector<ValueT> &values, ValueT default_value) const {
+Tensor LabelEncoder::operator()(const Tensor &x, const std::vector<KeyT> &keys,
+                                const std::vector<ValueT> &values, ValueT default_value,
+                                RuntimeContext *rt) const {
   ValidateInputs<KeyT, ValueT>(x, keys, values);
   const int64_t n = x.element_count();
   std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(ValueT));

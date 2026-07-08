@@ -127,8 +127,8 @@ void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int64_t sa
 
 } // namespace
 
-Tensor Multinomial::operator()(RuntimeContext *rt, const Tensor &input, int64_t sample_size,
-                               int64_t seed, int32_t dtype) const {
+Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t seed,
+                               int32_t dtype, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(input.shape.size() == 2,
                       "kernel::Multinomial: input must be a 2-D tensor of shape "
                       "[batch_size, class_size].");

@@ -36,7 +36,7 @@ void LessInPlace(const char *in_dtype_name, int32_t in_dtype, const Tensor &x, c
 }
 } // namespace
 
-Tensor Less::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
+Tensor Less::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return LessAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);

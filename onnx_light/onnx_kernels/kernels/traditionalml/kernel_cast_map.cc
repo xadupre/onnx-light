@@ -114,9 +114,9 @@ void FillStringOutput(const std::vector<int64_t> &input_keys, const std::vector<
 } // namespace
 
 template <typename V, typename OutT>
-Tensor CastMap::operator()(RuntimeContext *rt, const std::vector<int64_t> &input_keys,
+Tensor CastMap::operator()(const std::vector<int64_t> &input_keys,
                            const std::vector<V> &input_values, const std::string &cast_to,
-                           const std::string &map_form, int64_t max_map) const {
+                           const std::string &map_form, int64_t max_map, RuntimeContext *rt) const {
   ValidateAttributes(input_keys, input_values.size(), map_form, max_map);
   (void)cast_to; // cast_to is encoded in OutT; only validated by the caller.
 

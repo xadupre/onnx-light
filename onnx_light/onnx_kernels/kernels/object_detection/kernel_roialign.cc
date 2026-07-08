@@ -116,8 +116,8 @@ void ValidateInputs(const Tensor &x, const Tensor &rois, const Tensor &batch_ind
 
 } // namespace
 
-Tensor RoiAlign::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &rois,
-                            const Tensor &batch_indices, const Attributes &attrs) const {
+Tensor RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &batch_indices,
+                            const Attributes &attrs, RuntimeContext *rt) const {
   ValidateInputs(x, rois, batch_indices, attrs);
   const int64_t num_rois = rois.shape[0];
   const int64_t C = x.shape[1];

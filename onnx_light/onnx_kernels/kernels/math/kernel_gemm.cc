@@ -119,8 +119,8 @@ Tensor PromoteGemmInput(const Tensor &t) { return PromoteToFloat32(t); }
 
 } // namespace
 
-Tensor Gemm::operator()(RuntimeContext *rt, const Tensor &a, const Tensor &b, const Tensor *c,
-                        float alpha, float beta, int64_t transA, int64_t transB) const {
+Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
+                        int64_t transA, int64_t transB, RuntimeContext *rt) const {
   switch (a.data_type) {
   case DataType::FLOAT:
     return GemmAlloc<float>(a, b, c, alpha, beta, transA, transB);

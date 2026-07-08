@@ -313,11 +313,11 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
 
 } // namespace
 
-Tensor MaxPool::operator()(RuntimeContext *rt, const Tensor &x,
-                           const std::vector<int64_t> &kernel_shape,
+Tensor MaxPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                            const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
                            bool ceil_mode, const std::vector<int64_t> &dilations,
-                           int64_t storage_order, const std::string &auto_pad) const {
+                           int64_t storage_order, const std::string &auto_pad,
+                           RuntimeContext *rt) const {
   auto result = RunMaxPool(x, kernel_shape, strides, pads, ceil_mode, dilations, storage_order,
                            auto_pad, /*produce_indices=*/false);
   return std::move(result.first);

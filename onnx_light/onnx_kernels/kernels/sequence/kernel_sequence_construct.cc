@@ -51,7 +51,7 @@ void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
 
 } // namespace
 
-Tensor SequenceConstruct::operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const {
+Tensor SequenceConstruct::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   std::vector<int64_t> stacked_shape;
   size_t total_bytes = 0;
   ValidateInputsAndComputeShape(inputs, stacked_shape, total_bytes);

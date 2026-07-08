@@ -71,8 +71,8 @@ std::vector<int64_t> ReadShapeInput(const Tensor &shape) {
 
 } // namespace
 
-Tensor ConstantOfShape::operator()(RuntimeContext *rt, const Tensor &shape,
-                                   const Tensor &value) const {
+Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value,
+                                   RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape = ReadShapeInput(shape);
 
   // Default fill: a single FLOAT 0.0 (per the ONNX schema).

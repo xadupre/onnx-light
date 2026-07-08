@@ -115,8 +115,8 @@ void ApplyAffine(const float *theta, int64_t out_dim, int64_t in_dim, const floa
 
 } // namespace
 
-Tensor AffineGrid::operator()(RuntimeContext *rt, const Tensor &theta, const Tensor &size,
-                              const Attributes &attrs) const {
+Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
+                              RuntimeContext *rt) const {
   ValidateInputs(theta, size);
   Tensor out;
   out.data_type = static_cast<int32_t>(DataType::FLOAT);

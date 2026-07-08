@@ -63,7 +63,7 @@ class SequenceConstruct : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs) const;
+  Tensor operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt = nullptr) const;
   void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
 
   /// Sequence-returning overload. Builds an :cpp:struct:`Sequence`
@@ -99,8 +99,8 @@ public:
 
   /// Returning overload. ``axis`` follows the ONNX convention and may
   /// be negative; ``new_axis`` must be 0 (concat) or 1 (stack).
-  Tensor operator()(RuntimeContext *rt, const std::vector<Tensor> &inputs, int64_t axis,
-                    int64_t new_axis = 0) const;
+  Tensor operator()(const std::vector<Tensor> &inputs, int64_t axis, int64_t new_axis = 0,
+                    RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``output`` must already carry the expected
   /// ``data_type``, ``shape`` and sufficiently-sized ``data`` buffer.
@@ -121,7 +121,7 @@ public:
   using KernelBase::KernelBase;
 
   /// Computes ``Tensor<int64, {}>{ len(input_sequence) }``.
-  Tensor operator()(RuntimeContext *rt, const Sequence &input_sequence) const;
+  Tensor operator()(const Sequence &input_sequence, RuntimeContext *rt = nullptr) const;
 };
 
 /// Constructs an empty tensor sequence with element type ``dtype``.
@@ -174,8 +174,8 @@ public:
   using KernelBase::KernelBase;
 
   /// Returns a copy of the tensor at ``position``.
-  Tensor operator()(RuntimeContext *rt, const Sequence &input_sequence,
-                    const Tensor &position) const;
+  Tensor operator()(const Sequence &input_sequence, const Tensor &position,
+                    RuntimeContext *rt = nullptr) const;
 };
 
 /// Reference implementation of the ONNX ``SequenceMap`` operator (since

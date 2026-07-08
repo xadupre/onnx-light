@@ -76,7 +76,7 @@ template <class KernelT> NodeKernelFn MakeUnaryTrampoline() {
     RequireOutputCount(node, 1);
     const Tensor &x = GetInput(node, 0, rt.tensors());
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, x), rt);
+    SetOutput(node, 0, kernel(x, &rt), rt);
   };
 }
 
@@ -87,7 +87,7 @@ template <class KernelT> NodeKernelFn MakeBinaryTrampoline() {
     const Tensor &x = GetInput(node, 0, rt.tensors());
     const Tensor &y = GetInput(node, 1, rt.tensors());
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, x, y), rt);
+    SetOutput(node, 0, kernel(x, y, &rt), rt);
   };
 }
 
@@ -107,9 +107,9 @@ template <class KernelT> NodeKernelFn MakeBinaryWithOptionalThirdTrampoline() {
     const Tensor *c = GetOptionalInput(node, 2, rt.tensors());
     KernelT kernel(rt.kernel_ctx());
     if (c != nullptr) {
-      SetOutput(node, 0, kernel(&rt, a, b, *c), rt);
+      SetOutput(node, 0, kernel(a, b, *c, &rt), rt);
     } else {
-      SetOutput(node, 0, kernel(&rt, a, b), rt);
+      SetOutput(node, 0, kernel(a, b, &rt), rt);
     }
   };
 }
@@ -122,7 +122,7 @@ template <class KernelT> NodeKernelFn MakeTernaryTrampoline() {
     const Tensor &b = GetInput(node, 1, rt.tensors());
     const Tensor &c = GetInput(node, 2, rt.tensors());
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, a, b, c), rt);
+    SetOutput(node, 0, kernel(a, b, c, &rt), rt);
   };
 }
 
@@ -138,7 +138,7 @@ template <class KernelT> NodeKernelFn MakeVariadicTrampoline(int min_inputs = 1)
       inputs.push_back(GetInput(node, i, rt.tensors()));
     }
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, inputs), rt);
+    SetOutput(node, 0, kernel(inputs, &rt), rt);
   };
 }
 
@@ -152,7 +152,7 @@ NodeKernelFn MakeUnaryAlphaTrampoline(const char *attr_name, float default_alpha
     const Tensor &x = GetInput(node, 0, rt.tensors());
     const float alpha = GetAttributeFloatOrDefault(node, name, default_alpha);
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, x, alpha), rt);
+    SetOutput(node, 0, kernel(x, alpha, &rt), rt);
   };
 }
 
@@ -166,7 +166,7 @@ template <class KernelT> NodeKernelFn MakeAxisTrampoline(int64_t default_axis = 
     const Tensor &x = GetInput(node, 0, rt.tensors());
     const int64_t axis = GetAttributeIntOrDefault(node, "axis", default_axis);
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, x, axis), rt);
+    SetOutput(node, 0, kernel(x, axis, &rt), rt);
   };
 }
 
@@ -182,7 +182,7 @@ template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
     EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type().as_string(),
                         " requires INT attribute 'to'.");
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, x, to), rt);
+    SetOutput(node, 0, kernel(x, to, &rt), rt);
   };
 }
 
@@ -205,7 +205,7 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
 
     const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
     if (axes_input != nullptr) {
-      SetOutput(node, 0, kernel(&rt, data, *axes_input, keepdims, noop_with_empty_axes), rt);
+      SetOutput(node, 0, kernel(data, *axes_input, keepdims, noop_with_empty_axes, &rt), rt);
       return;
     }
 
@@ -213,11 +213,11 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
     if (!axes_attr.empty()) {
       const Tensor axes =
           Tensor::FromInt64("", {static_cast<int64_t>(axes_attr.size())}, axes_attr);
-      SetOutput(node, 0, kernel(&rt, data, axes, keepdims, noop_with_empty_axes), rt);
+      SetOutput(node, 0, kernel(data, axes, keepdims, noop_with_empty_axes, &rt), rt);
       return;
     }
 
-    SetOutput(node, 0, kernel(&rt, data, keepdims, noop_with_empty_axes), rt);
+    SetOutput(node, 0, kernel(data, keepdims, noop_with_empty_axes, &rt), rt);
   };
 }
 
@@ -248,7 +248,7 @@ template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_n
       axes = GetAttributeIntsOrDefault(node, "axes", {});
     }
     KernelT k(rt.kernel_ctx());
-    SetOutput(node, 0, k(&rt, data, axes), rt);
+    SetOutput(node, 0, k(data, axes, &rt), rt);
   };
 }
 
@@ -261,7 +261,7 @@ template <class KernelT> NodeKernelFn MakeArgReduceTrampoline() {
     const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
     const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, data, axis, keepdims, select_last_index), rt);
+    SetOutput(node, 0, kernel(data, axis, keepdims, select_last_index, &rt), rt);
   };
 }
 
@@ -382,7 +382,7 @@ NodeKernelFn MakeRandomGenTrampoline(const char *attr_a, float default_a, const 
     const float a = GetAttributeFloatOrDefault(node, name_a, default_a);
     const float b = GetAttributeFloatOrDefault(node, name_b, default_b);
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, shape, a, b, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+    SetOutput(node, 0, kernel(shape, a, b, GetSeedAttr(node), GetDtypeAttr(node), &rt), rt);
   };
 }
 
@@ -402,7 +402,7 @@ NodeKernelFn MakeRandomLikeTrampoline(const char *attr_a, float default_a, const
     const float a = GetAttributeFloatOrDefault(node, name_a, default_a);
     const float b = GetAttributeFloatOrDefault(node, name_b, default_b);
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, input, a, b, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+    SetOutput(node, 0, kernel(input, a, b, GetSeedAttr(node), GetDtypeAttr(node), &rt), rt);
   };
 }
 
@@ -424,7 +424,7 @@ template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) 
                         "RunNode: op '", name, "' only supports output_datatype=FLOAT.");
     const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, size, periodic), rt);
+    SetOutput(node, 0, kernel(size, periodic, &rt), rt);
   };
 }
 
@@ -440,7 +440,7 @@ template <class KernelT> NodeKernelFn MakeCumulativeTrampoline() {
     const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
     const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
     KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(&rt, x, axis, exclusive, reverse), rt);
+    SetOutput(node, 0, kernel(x, axis, exclusive, reverse, &rt), rt);
   };
 }
 
@@ -501,7 +501,7 @@ void RunBatchNormalization(const NodeProto &node, RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(node.output_size() == 1,
                       "RunNode: op 'BatchNormalization' only supports a single output "
                       "(running_mean / running_var require training_mode=1).");
-  SetOutput(node, 0, k(&rt, x, scale, bias, input_mean, input_var, GetEpsilon(node)), rt);
+  SetOutput(node, 0, k(x, scale, bias, input_mean, input_var, GetEpsilon(node), &rt), rt);
 }
 
 void RunGroupNormalization(const NodeProto &node, RuntimeContext &rt) {
@@ -512,7 +512,7 @@ void RunGroupNormalization(const NodeProto &node, RuntimeContext &rt) {
   const Tensor &bias = GetInput(node, 2, rt.tensors());
   const int64_t num_groups = GetAttributeIntOrDefault(node, "num_groups", 0);
   kernel::GroupNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(&rt, x, scale, bias, num_groups, GetEpsilon(node)), rt);
+  SetOutput(node, 0, k(x, scale, bias, num_groups, GetEpsilon(node), &rt), rt);
 }
 
 void RunInstanceNormalization(const NodeProto &node, RuntimeContext &rt) {
@@ -522,7 +522,7 @@ void RunInstanceNormalization(const NodeProto &node, RuntimeContext &rt) {
   const Tensor &scale = GetInput(node, 1, rt.tensors());
   const Tensor &bias = GetInput(node, 2, rt.tensors());
   kernel::InstanceNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(&rt, x, scale, bias, GetEpsilon(node)), rt);
+  SetOutput(node, 0, k(x, scale, bias, GetEpsilon(node), &rt), rt);
 }
 
 void RunLayerNormalization(const NodeProto &node, RuntimeContext &rt) {
@@ -549,7 +549,7 @@ void RunRMSNormalization(const NodeProto &node, RuntimeContext &rt) {
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const Tensor &scale = GetInput(node, 1, rt.tensors());
   kernel::RMSNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(&rt, x, scale, GetNormAxis(node), GetEpsilon(node)), rt);
+  SetOutput(node, 0, k(x, scale, GetNormAxis(node), GetEpsilon(node), &rt), rt);
 }
 
 // Shared spatial pooling attributes consumed by AveragePool / MaxPool
@@ -625,7 +625,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::AffineGrid::Attributes affine_grid_attrs;
          affine_grid_attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", 0);
          kernel::AffineGrid affine_grid_kernel(rt.kernel_ctx());
-         SetOutput(node, 0, affine_grid_kernel(&rt, theta, size, affine_grid_attrs), rt);
+         SetOutput(node, 0, affine_grid_kernel(theta, size, affine_grid_attrs, &rt), rt);
        }},
       {"ai.onnx:And", MakeBinaryTrampoline<kernel::And>()},
       {"ai.onnx:ArgMax", MakeArgReduceTrampoline<kernel::ArgMax>()},
@@ -713,7 +713,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                "RunNode: BitShift 'direction' must be 'LEFT' or 'RIGHT', got '" , direction , "'.");
          }
          kernel::BitShift k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, y, dir), rt);
+         SetOutput(node, 0, k(x, y, dir, &rt), rt);
        }},
       {"ai.onnx:BitCast", MakeUnaryToTrampoline<kernel::BitCast>()},
       {"ai.onnx:BitwiseAnd", MakeBinaryTrampoline<kernel::BitwiseAnd>()},
@@ -727,7 +727,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Tensor &input = GetInput(node, 0, rt.tensors());
          kernel::Bernoulli kernel(rt.kernel_ctx());
-         SetOutput(node, 0, kernel(&rt, input, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+         SetOutput(node, 0, kernel(input, GetSeedAttr(node), GetDtypeAttr(node), &rt), rt);
        }},
       {"ai.onnx:BlackmanWindow", MakeWindowTrampoline<kernel::BlackmanWindow>("BlackmanWindow")},
       {"ai.onnx:CausalConvWithState",
@@ -760,7 +760,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          EXT_ENFORCE_INVALID(!(to < 0), "RunNode: Cast requires INT attribute 'to'.");
          const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
          kernel::Cast kernel(rt.kernel_ctx());
-         SetOutput(node, 0, kernel(&rt, x, to, saturate), rt);
+         SetOutput(node, 0, kernel(x, to, saturate, &rt), rt);
        }},
       {"ai.onnx:CastLike",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -770,7 +770,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &target_type = GetInput(node, 1, rt.tensors());
          const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
          kernel::CastLike k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, target_type, saturate), rt);
+         SetOutput(node, 0, k(x, target_type, saturate, &rt), rt);
        }},
       {"ai.onnx:Ceil", MakeUnaryTrampoline<kernel::Ceil>()},
       {"ai.onnx:Celu", MakeUnaryAlphaTrampoline<kernel::Celu>("alpha", 1.0f)},
@@ -787,7 +787,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            attrs.axes_present = true;
          }
          kernel::CenterCropPad k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input_data, shape, attrs), rt);
+         SetOutput(node, 0, k(input_data, shape, attrs, &rt), rt);
        }},
       {"ai.onnx:Constant",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -834,7 +834,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            value = GetRequiredAttributeTensor(node, "value");
          }
          kernel::ConstantOfShape k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, shape, value), rt);
+         SetOutput(node, 0, k(shape, value, &rt), rt);
        }},
       {"ai.onnx:Clip",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -844,7 +844,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor *min = GetOptionalInput(node, 1, rt.tensors());
          const Tensor *max = GetOptionalInput(node, 2, rt.tensors());
          kernel::Clip k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, min, max), rt);
+         SetOutput(node, 0, k(x, min, max, &rt), rt);
        }},
       {"ai.onnx:Col2Im",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -858,7 +858,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
          attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
          kernel::Col2Im k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input, image_shape, block_shape, attrs), rt);
+         SetOutput(node, 0, k(input, image_shape, block_shape, attrs, &rt), rt);
        }},
       {"ai.onnx:Compress",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -872,7 +872,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            axis = axis_attr->i();
          }
          kernel::Compress k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input, condition, axis), rt);
+         SetOutput(node, 0, k(input, condition, axis, &rt), rt);
        }},
       {"ai.onnx:Concat",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -888,7 +888,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                "RunNode: op 'Concat' is missing required attribute 'axis'.");
          const int64_t axis = axis_attr->i();
          kernel::Concat k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, inputs, axis), rt);
+         SetOutput(node, 0, k(inputs, axis, &rt), rt);
        }},
       {"ai.onnx:Conv",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -907,7 +907,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.group = GetAttributeIntOrDefault(node, "group", 1);
          attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
          kernel::Conv k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, w, b != nullptr ? *b : Tensor{}, attrs), rt);
+         SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
        }},
       {"ai.onnx:ConvInteger",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -951,7 +951,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.group = GetAttributeIntOrDefault(node, "group", 1);
          attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
          kernel::ConvTranspose k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, w, b != nullptr ? *b : Tensor{}, attrs), rt);
+         SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
        }},
       {"ai.onnx:Cos", MakeUnaryTrampoline<kernel::Cos>()},
       {"ai.onnx:Cosh", MakeUnaryTrampoline<kernel::Cosh>()},
@@ -994,7 +994,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.blocksize = blocksize_attr->i();
          attrs.mode = GetAttributeStringOrDefault(node, "mode", "DCR");
          kernel::DepthToSpace kernel(rt.kernel_ctx());
-         SetOutput(node, 0, kernel(&rt, input, attrs), rt);
+         SetOutput(node, 0, kernel(input, attrs, &rt), rt);
        }},
       {"ai.onnx:SpaceToDepth",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1007,7 +1007,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          EXT_ENFORCE_INVALID(!(blocksize_attr->type() != AttributeProto::AttributeType::INT), "RunNode: SpaceToDepth attribute 'blocksize' must be INT.");
          attrs.blocksize = blocksize_attr->i();
          kernel::SpaceToDepth kernel(rt.kernel_ctx());
-         SetOutput(node, 0, kernel(&rt, input, attrs), rt);
+         SetOutput(node, 0, kernel(input, attrs, &rt), rt);
        }},
       {"ai.onnx:DequantizeLinear",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1021,9 +1021,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
          kernel::DequantizeLinear k(rt.kernel_ctx());
          if (x_zero_point != nullptr) {
-           SetOutput(node, 0, k(&rt, x, x_scale, *x_zero_point, axis), rt);
+           SetOutput(node, 0, k(x, x_scale, *x_zero_point, axis, &rt), rt);
          } else {
-           SetOutput(node, 0, k(&rt, x, x_scale, axis), rt);
+           SetOutput(node, 0, k(x, x_scale, axis, &rt), rt);
          }
        }},
       {"ai.onnx:DFT",
@@ -1060,7 +1060,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            axis = GetAttributeIntOrDefault(node, "axis", 1);
          }
          kernel::DFT k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input, dft_length, axis, onesided, inverse), rt);
+         SetOutput(node, 0, k(input, dft_length, axis, onesided, inverse, &rt), rt);
        }},
       {"ai.onnx:Div", MakeBinaryTrampoline<kernel::Div>()},
       {"ai.onnx:Dropout",
@@ -1111,7 +1111,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          } else {
            Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
                        std::vector<uint8_t>(static_cast<std::size_t>(data.element_count()), 1));
-           SetOutput(node, 0, k(&rt, data, ratio, training_mode, mask, seed), rt);
+           SetOutput(node, 0, k(data, ratio, training_mode, mask, seed, &rt), rt);
          }
        }},
       {"ai.onnx:DynamicQuantizeLinear",
@@ -1136,7 +1136,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          const std::string equation = GetRequiredAttributeString(node, "equation");
          kernel::Einsum k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, inputs, equation), rt);
+         SetOutput(node, 0, k(inputs, equation, &rt), rt);
        }},
       {"ai.onnx:Elu", MakeUnaryAlphaTrampoline<kernel::Elu>("alpha", 1.0f)},
       {"ai.onnx:Equal", MakeBinaryTrampoline<kernel::Equal>()},
@@ -1149,7 +1149,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &input = GetInput(node, 0, rt.tensors());
          const Tensor &shape = GetInput(node, 1, rt.tensors());
          kernel::Expand k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input, shape), rt);
+         SetOutput(node, 0, k(input, shape, &rt), rt);
        }},
       {"ai.onnx:EyeLike",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1159,7 +1159,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t k = GetAttributeIntOrDefault(node, "k", 0);
          const int64_t dtype = GetAttributeIntOrDefault(node, "dtype", 0);
          kernel::EyeLike kernel(rt.kernel_ctx());
-         SetOutput(node, 0, kernel(&rt, x, k, static_cast<int32_t>(dtype)), rt);
+         SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype), &rt), rt);
        }},
       {"ai.onnx:Flatten", MakeAxisTrampoline<kernel::Flatten>(1)},
       {"ai.onnx:Floor", MakeUnaryTrampoline<kernel::Floor>()},
@@ -1171,7 +1171,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &indices = GetInput(node, 1, rt.tensors());
          const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
          kernel::Gather k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, data, indices, axis), rt);
+         SetOutput(node, 0, k(data, indices, axis, &rt), rt);
        }},
       {"ai.onnx:GatherElements",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1181,7 +1181,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &indices = GetInput(node, 1, rt.tensors());
          const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
          kernel::GatherElements k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, data, indices, axis), rt);
+         SetOutput(node, 0, k(data, indices, axis, &rt), rt);
        }},
       {"ai.onnx:GatherND",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1191,7 +1191,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &indices = GetInput(node, 1, rt.tensors());
          const int64_t batch_dims = GetAttributeIntOrDefault(node, "batch_dims", 0);
          kernel::GatherND k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, data, indices, batch_dims), rt);
+         SetOutput(node, 0, k(data, indices, batch_dims, &rt), rt);
        }},
       {"ai.onnx:Gelu",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1200,7 +1200,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const std::string approximate = GetAttributeStringOrDefault(node, "approximate", "none");
          kernel::Gelu k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, approximate), rt);
+         SetOutput(node, 0, k(x, approximate, &rt), rt);
        }},
       {"ai.onnx:Gemm",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1216,7 +1216,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t transA = GetAttributeIntOrDefault(node, "transA", 0);
          const int64_t transB = GetAttributeIntOrDefault(node, "transB", 0);
          kernel::Gemm k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, a, b, c, alpha, beta, transA, transB), rt);
+         SetOutput(node, 0, k(a, b, c, alpha, beta, transA, transB, &rt), rt);
        }},
       {"ai.onnx:GlobalAveragePool",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1224,7 +1224,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          kernel::GlobalAveragePool k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x), rt);
+         SetOutput(node, 0, k(x, &rt), rt);
        }},
       {"ai.onnx:GlobalLpPool",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1233,7 +1233,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
          kernel::GlobalLpPool k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, p), rt);
+         SetOutput(node, 0, k(x, p, &rt), rt);
        }},
       {"ai.onnx:GlobalMaxPool",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1241,7 +1241,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          kernel::GlobalMaxPool k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x), rt);
+         SetOutput(node, 0, k(x, &rt), rt);
        }},
       {"ai.onnx:Greater", MakeBinaryTrampoline<kernel::Greater>()},
       {"ai.onnx:GreaterOrEqual", MakeBinaryTrampoline<kernel::GreaterOrEqual>()},
@@ -1258,7 +1258,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.align_corners =
              GetAttributeIntOrDefault(node, "align_corners", attrs.align_corners);
          kernel::GridSample k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, grid, attrs), rt);
+         SetOutput(node, 0, k(x, grid, attrs, &rt), rt);
        }},
       {"ai.onnx:GroupNormalization", RunGroupNormalization},
       {"ai.onnx:GRU",
@@ -1329,7 +1329,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.2f);
          const float beta = GetAttributeFloatOrDefault(node, "beta", 0.5f);
          kernel::HardSigmoid k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, alpha, beta), rt);
+         SetOutput(node, 0, k(x, alpha, beta, &rt), rt);
        }},
       {"ai.onnx:HardSwish", MakeUnaryTrampoline<kernel::HardSwish>()},
       {"ai.onnx:Hardmax", MakeAxisTrampoline<kernel::Hardmax>()},
@@ -1345,7 +1345,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          } else {
            const Tensor &x = GetInput(node, 0, rt.tensors());
            kernel::Identity k(rt.kernel_ctx());
-           SetOutput(node, 0, k(&rt, x), rt);
+           SetOutput(node, 0, k(x, &rt), rt);
          }
        }},
       {"ai.onnx:ImageDecoder",
@@ -1356,7 +1356,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const std::string pixel_format =
              GetAttributeStringOrDefault(node, "pixel_format", "RGB");
          kernel::ImageDecoder image_decoder_kernel(rt.kernel_ctx());
-         SetOutput(node, 0, image_decoder_kernel(&rt, encoded_stream, pixel_format), rt);
+         SetOutput(node, 0, image_decoder_kernel(encoded_stream, pixel_format, &rt), rt);
        }},
       {"ai.onnx:InstanceNormalization", RunInstanceNormalization},
       {"ai.onnx:IsInf",
@@ -1367,7 +1367,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t detect_positive = GetAttributeIntOrDefault(node, "detect_positive", 1);
          const int64_t detect_negative = GetAttributeIntOrDefault(node, "detect_negative", 1);
          kernel::IsInf k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, detect_positive, detect_negative), rt);
+         SetOutput(node, 0, k(x, detect_positive, detect_negative, &rt), rt);
        }},
       {"ai.onnx:IsNaN", MakeUnaryTrampoline<kernel::IsNaN>()},
       {"ai.onnx:LayerNormalization", RunLayerNormalization},
@@ -1506,7 +1506,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const float beta = GetAttributeFloatOrDefault(node, "beta", 0.75f);
          const float bias = GetAttributeFloatOrDefault(node, "bias", 1.0f);
          kernel::LRN k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, size, alpha, beta, bias), rt);
+         SetOutput(node, 0, k(x, size, alpha, beta, bias, &rt), rt);
        }},
       {"ai.onnx:LpNormalization",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1516,7 +1516,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
          const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
          kernel::LpNormalization k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, axis, p), rt);
+         SetOutput(node, 0, k(x, axis, p, &rt), rt);
        }},
       {"ai.onnx:LpPool",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1583,7 +1583,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.pooled_shape = GetAttributeIntsOrDefault(node, "pooled_shape", {});
          attrs.spatial_scale = GetAttributeFloatOrDefault(node, "spatial_scale", 1.0f);
          kernel::MaxRoiPool k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, rois, attrs), rt);
+         SetOutput(node, 0, k(x, rois, attrs, &rt), rt);
        }},
       {"ai.onnx:MaxUnpool",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1598,10 +1598,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::MaxUnpool k(rt.kernel_ctx());
          const Tensor *output_shape = GetOptionalInput(node, 2, rt.tensors());
          if (output_shape != nullptr) {
-           SetOutput(node, 0, k(&rt, x, indices, *output_shape, kernel_shape, strides, pads),
+           SetOutput(node, 0, k(x, indices, *output_shape, kernel_shape, strides, pads, &rt),
                      rt);
          } else {
-           SetOutput(node, 0, k(&rt, x, indices, kernel_shape, strides, pads), rt);
+           SetOutput(node, 0, k(x, indices, kernel_shape, strides, pads, &rt), rt);
          }
        }},
       {"ai.onnx:Mean", MakeVariadicTrampoline<kernel::Mean>()},
@@ -1612,7 +1612,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const std::vector<int64_t> axes = GetAttributeIntsOrDefault(node, "axes", {0, 2, 3});
          kernel::MeanVarianceNormalization k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, axes), rt);
+         SetOutput(node, 0, k(x, axes, &rt), rt);
        }},
       {"ai.onnx:MelWeightMatrix",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1641,7 +1641,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &y = GetInput(node, 1, rt.tensors());
          const int64_t fmod = GetAttributeIntOrDefault(node, "fmod", 0);
          kernel::Mod k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, y, fmod), rt);
+         SetOutput(node, 0, k(x, y, fmod, &rt), rt);
        }},
       {"ai.onnx:Mul", MakeBinaryTrampoline<kernel::Mul>()},
       {"ai.onnx:Multinomial",
@@ -1651,7 +1651,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &input = GetInput(node, 0, rt.tensors());
          const int64_t sample_size = GetAttributeIntOrDefault(node, "sample_size", 1);
          kernel::Multinomial kernel(rt.kernel_ctx());
-         SetOutput(node, 0, kernel(&rt, input, sample_size, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+         SetOutput(node, 0, kernel(input, sample_size, GetSeedAttr(node), GetDtypeAttr(node), &rt), rt);
        }},
       {"ai.onnx:Neg", MakeUnaryTrampoline<kernel::Neg>()},
       {"ai.onnx:NegativeLogLikelihoodLoss",
@@ -1665,7 +1665,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const bool has_ignore_index = FindAttribute(node, "ignore_index") != nullptr;
          const int64_t ignore_index = GetAttributeIntOrDefault(node, "ignore_index", 0);
          kernel::NegativeLogLikelihoodLoss k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input, target, weight, reduction, has_ignore_index, ignore_index),
+         SetOutput(node, 0, k(input, target, weight, reduction, has_ignore_index, ignore_index, &rt),
                    rt);
        }},
       {"ai.onnx:NonMaxSuppression",
@@ -1701,7 +1701,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::OneHot::Attributes attrs;
          attrs.axis = GetAttributeIntOrDefault(node, "axis", -1);
          kernel::OneHot k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, indices, depth, values, attrs), rt);
+         SetOutput(node, 0, k(indices, depth, values, attrs, &rt), rt);
        }},
       {"ai.onnx:Or", MakeBinaryTrampoline<kernel::Or>()},
       // ai.onnx Optional / OptionalGetElement / OptionalHasElement
@@ -1722,7 +1722,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          } else {
            const Tensor &input = GetInput(node, 0, rt.tensors());
            kernel::Optional k(rt.kernel_ctx());
-           SetOutput(node, 0, k(&rt, input), rt);
+           SetOutput(node, 0, k(input, &rt), rt);
          }
        }},
       {"ai.onnx:OptionalGetElement",
@@ -1736,7 +1736,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            SetOutputSequence(node, 0, k(input_seq), rt);
          } else {
            const Tensor &input = GetInput(node, 0, rt.tensors());
-           SetOutput(node, 0, k(&rt, input), rt);
+           SetOutput(node, 0, k(input, &rt), rt);
          }
        }},
       {"ai.onnx:OptionalHasElement",
@@ -1754,10 +1754,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const std::string input_name = node.input(0).as_string();
          if (rt.HasSequence(input_name)) {
            const Sequence &input_seq = GetInputSequence(node, 0, rt);
-           SetOutput(node, 0, k(&rt, input_seq), rt);
+           SetOutput(node, 0, k(input_seq, &rt), rt);
          } else {
            const Tensor &input = GetInput(node, 0, rt.tensors());
-           SetOutput(node, 0, k(&rt, input), rt);
+           SetOutput(node, 0, k(input, &rt), rt);
          }
        }},
       {"ai.onnx:Pad",
@@ -1774,7 +1774,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            const Tensor &pads = GetInput(node, 1, rt.tensors());
            const Tensor *constant_value = GetOptionalInput(node, 2, rt.tensors());
            const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
-           SetOutput(node, 0, k(&rt, data, pads, constant_value, axes, mode), rt);
+           SetOutput(node, 0, k(data, pads, constant_value, axes, mode, &rt), rt);
            return;
          }
 
@@ -1786,11 +1786,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const float value = GetAttributeFloatOrDefault(node, "value", 0.0f);
          if (data.data_type == static_cast<int32_t>(DataType::FLOAT)) {
            const Tensor cv = Tensor::FromFloat("", /*shape=*/{}, {value});
-           SetOutput(node, 0, k(&rt, data, pads, &cv, /*axes=*/nullptr, mode), rt);
+           SetOutput(node, 0, k(data, pads, &cv, /*axes=*/nullptr, mode, &rt), rt);
          } else {
            // For non-float dtypes the legacy form's float ``value`` attribute is
            // ill-defined; fall back to a zero-initialized constant.
-           SetOutput(node, 0, k(&rt, data, pads, /*constant_value=*/nullptr, /*axes=*/nullptr, mode),
+           SetOutput(node, 0, k(data, pads, /*constant_value=*/nullptr, /*axes=*/nullptr, mode, &rt),
                      rt);
          }
        }},
@@ -1858,11 +1858,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t output_dtype = GetAttributeIntOrDefault(node, "output_dtype", 0);
          kernel::QuantizeLinear k(rt.kernel_ctx());
          if (y_zero_point != nullptr) {
-           SetOutput(node, 0, k(&rt, x, y_scale, *y_zero_point, axis), rt);
+           SetOutput(node, 0, k(x, y_scale, *y_zero_point, axis, &rt), rt);
          } else if (output_dtype != 0) {
-           SetOutput(node, 0, k(&rt, x, y_scale, axis, static_cast<int32_t>(output_dtype)), rt);
+           SetOutput(node, 0, k(x, y_scale, axis, static_cast<int32_t>(output_dtype), &rt), rt);
          } else {
-           SetOutput(node, 0, k(&rt, x, y_scale), rt);
+           SetOutput(node, 0, k(x, y_scale, &rt), rt);
          }
        }},
       {"ai.onnx:RandomNormal",
@@ -1881,7 +1881,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &limit = GetInput(node, 1, rt.tensors());
          const Tensor &delta = GetInput(node, 2, rt.tensors());
          kernel::Range k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, start, limit, delta), rt);
+         SetOutput(node, 0, k(start, limit, delta, &rt), rt);
        }},
       {"ai.onnx:RMSNormalization", RunRMSNormalization},
       {"ai.onnx:Reciprocal", MakeUnaryTrampoline<kernel::Reciprocal>()},
@@ -1902,7 +1902,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const std::string pattern = GetAttributeStringOrDefault(node, "pattern", "");
          kernel::RegexFullMatch k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, pattern), rt);
+         SetOutput(node, 0, k(x, pattern, &rt), rt);
        }},
       {"ai.onnx:Relu", MakeUnaryTrampoline<kernel::Relu>()},
       {"ai.onnx:Reshape",
@@ -1913,7 +1913,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &shape = GetInput(node, 1, rt.tensors());
          const int64_t allowzero = GetAttributeIntOrDefault(node, "allowzero", 0);
          kernel::Reshape k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, data, shape, allowzero), rt);
+         SetOutput(node, 0, k(data, shape, allowzero, &rt), rt);
        }},
       {"ai.onnx:Resize",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1959,7 +1959,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
 
          kernel::Resize k(rt.kernel_ctx());
          if (scales != nullptr) {
-           SetOutput(node, 0, k(&rt, x, *scales, attrs), rt);
+           SetOutput(node, 0, k(x, *scales, attrs, &rt), rt);
          } else {
            SetOutput(node, 0, k.ResizeSizes(x, *sizes, attrs), rt);
          }
@@ -1974,7 +1974,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.time_axis = GetAttributeIntOrDefault(node, "time_axis", attrs.time_axis);
          attrs.batch_axis = GetAttributeIntOrDefault(node, "batch_axis", attrs.batch_axis);
          kernel::ReverseSequence k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input, sequence_lens, attrs), rt);
+         SetOutput(node, 0, k(input, sequence_lens, attrs, &rt), rt);
        }},
       {"ai.onnx:RoiAlign",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1999,7 +1999,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.coordinate_transformation_mode =
              GetAttributeStringOrDefault(node, "coordinate_transformation_mode", default_ctm);
          kernel::RoiAlign k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, rois, batch_indices, attrs), rt);
+         SetOutput(node, 0, k(x, rois, batch_indices, attrs, &rt), rt);
        }},
       {"ai.onnx:Round", MakeUnaryTrampoline<kernel::Round>()},
       {"ai.onnx:RNN",
@@ -2082,7 +2082,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::RotaryEmbedding kernel(rt.kernel_ctx());
          const Tensor empty;
          const Tensor &pos = (position_ids != nullptr) ? *position_ids : empty;
-         SetOutput(node, 0, kernel(&rt, x, cos_cache, sin_cache, pos, attrs), rt);
+         SetOutput(node, 0, kernel(x, cos_cache, sin_cache, pos, attrs, &rt), rt);
        }},
       {"ai.onnx:Scatter",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2094,7 +2094,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Scatter::Attributes attrs;
          attrs.axis = GetAttributeIntOrDefault(node, "axis", 0);
          kernel::Scatter k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, data, indices, updates, attrs), rt);
+         SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
        }},
       {"ai.onnx:ScatterElements",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2107,7 +2107,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.axis = GetAttributeIntOrDefault(node, "axis", 0);
          attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
          kernel::ScatterElements k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, data, indices, updates, attrs), rt);
+         SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
        }},
       {"ai.onnx:ScatterND",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2119,7 +2119,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::ScatterND::Attributes attrs;
          attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
          kernel::ScatterND k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, data, indices, updates, attrs), rt);
+         SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
        }},
       {"ai.onnx:Selu",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2129,7 +2129,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.67326319217681884765625f);
          const float gamma = GetAttributeFloatOrDefault(node, "gamma", 1.05070102214813232421875f);
          kernel::Selu k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, alpha, gamma), rt);
+         SetOutput(node, 0, k(x, alpha, gamma, &rt), rt);
        }},
 
       // Sequence operators (ai.onnx). Sequence-typed graph edges are
@@ -2146,7 +2146,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t axis = axis_attr->i();
          const int64_t new_axis = GetAttributeIntOrDefault(node, "new_axis", 0);
          kernel::ConcatFromSequence k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input_sequence.values, axis, new_axis), rt);
+         SetOutput(node, 0, k(input_sequence.values, axis, new_axis, &rt), rt);
        }},
       {"ai.onnx:SequenceAt",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2155,7 +2155,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Sequence &input_sequence = GetInputSequence(node, 0, rt);
          const Tensor &position = GetInput(node, 1, rt.tensors());
          kernel::SequenceAt k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input_sequence, position), rt);
+         SetOutput(node, 0, k(input_sequence, position, &rt), rt);
        }},
       {"ai.onnx:SequenceConstruct",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2208,7 +2208,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Sequence &input_sequence = GetInputSequence(node, 0, rt);
          kernel::SequenceLength k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input_sequence), rt);
+         SetOutput(node, 0, k(input_sequence, &rt), rt);
        }},
       {"ai.onnx:Split",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2274,7 +2274,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            shape_attrs.end = end_attr->i();
          }
          kernel::Shape shape_kernel(rt.kernel_ctx());
-         SetOutput(node, 0, shape_kernel(&rt, data, shape_attrs), rt);
+         SetOutput(node, 0, shape_kernel(data, shape_attrs, &rt), rt);
        }},
       {"ai.onnx:Shrink",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2284,7 +2284,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const float bias = GetAttributeFloatOrDefault(node, "bias", 0.0f);
          const float lambd = GetAttributeFloatOrDefault(node, "lambd", 0.5f);
          kernel::Shrink k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, bias, lambd), rt);
+         SetOutput(node, 0, k(x, bias, lambd, &rt), rt);
        }},
       {"ai.onnx:Sigmoid", MakeUnaryTrampoline<kernel::Sigmoid>()},
       {"ai.onnx:Sign", MakeUnaryTrampoline<kernel::Sign>()},
@@ -2296,7 +2296,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Tensor &data = GetInput(node, 0, rt.tensors());
          kernel::Size k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, data), rt);
+         SetOutput(node, 0, k(data, &rt), rt);
        }},
       {"ai.onnx:Slice",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2311,7 +2311,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
          const Tensor *steps = GetOptionalInput(node, 4, rt.tensors());
          kernel::Slice k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, data, starts, ends, axes, steps), rt);
+         SetOutput(node, 0, k(data, starts, ends, axes, steps, &rt), rt);
        }},
       {"ai.onnx:Softmax", MakeAxisTrampoline<kernel::Softmax>()},
       {"ai.onnx:SoftmaxCrossEntropyLoss",
@@ -2348,7 +2348,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor *frame_length = GetOptionalInput(node, 3, rt.tensors());
          const bool onesided = GetAttributeIntOrDefault(node, "onesided", 1) != 0;
          kernel::STFT k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, signal, frame_step, window, frame_length, onesided), rt);
+         SetOutput(node, 0, k(signal, frame_step, window, frame_length, onesided, &rt), rt);
        }},
       {"ai.onnx:StringConcat", MakeBinaryTrampoline<kernel::StringConcat>()},
       {"ai.onnx:StringNormalizer",
@@ -2396,7 +2396,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.axis = GetAttributeIntOrDefault(node, "axis", -2);
          attrs.mode = GetAttributeStringOrDefault(node, "mode", "linear");
          kernel::TensorScatter kernel(rt.kernel_ctx());
-         SetOutput(node, 0, kernel(&rt, past_cache, update, write_indices, attrs), rt);
+         SetOutput(node, 0, kernel(past_cache, update, write_indices, attrs, &rt), rt);
        }},
       {"ai.onnx:TfIdfVectorizer",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2431,7 +2431,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &input = GetInput(node, 0, rt.tensors());
          const Tensor &repeats = GetInput(node, 1, rt.tensors());
          kernel::Tile k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, input, repeats), rt);
+         SetOutput(node, 0, k(input, repeats, &rt), rt);
        }},
       {"ai.onnx:TopK",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2472,7 +2472,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &data = GetInput(node, 0, rt.tensors());
          const std::vector<int64_t> perm = GetAttributeIntsOrDefault(node, "perm", {});
          kernel::Transpose k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, data, perm), rt);
+         SetOutput(node, 0, k(data, perm, &rt), rt);
        }},
       {"ai.onnx:Trilu",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2483,7 +2483,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Trilu::Attributes attrs;
          attrs.upper = GetAttributeIntOrDefault(node, "upper", 1);
          kernel::Trilu kernel(rt.kernel_ctx());
-         SetOutput(node, 0, kernel(&rt, input, k, attrs), rt);
+         SetOutput(node, 0, kernel(input, k, attrs, &rt), rt);
        }},
       {"ai.onnx:Unique",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2519,7 +2519,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Upsample::Attributes attrs;
          attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
          kernel::Upsample k(rt.kernel_ctx());
-         SetOutput(node, 0, k(&rt, x, scales, attrs), rt);
+         SetOutput(node, 0, k(x, scales, attrs, &rt), rt);
        }},
       {"ai.onnx:Where", MakeTernaryTrampoline<kernel::Where>()},
       {"ai.onnx:Xor", MakeBinaryTrampoline<kernel::Xor>()},

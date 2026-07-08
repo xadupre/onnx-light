@@ -70,8 +70,8 @@ void GatherLastAxis(const Tensor &x, const Tensor &indices, const std::vector<in
 } // namespace
 
 template <typename T>
-Tensor ArrayFeatureExtractor::operator()(RuntimeContext *rt, const Tensor &x,
-                                         const Tensor &indices) const {
+Tensor ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices,
+                                         RuntimeContext *rt) const {
   ValidateInput<T>(x);
   ValidateIndices(x, indices);
   const std::vector<int64_t> out_shape = ComputeOutputShape(x, indices);

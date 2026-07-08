@@ -38,7 +38,7 @@ std::vector<int64_t> ComputeFlattenOutputShape(const std::vector<int64_t> &in_sh
 
 } // namespace
 
-Tensor Flatten::operator()(RuntimeContext *rt, const Tensor &input, int64_t axis) const {
+Tensor Flatten::operator()(const Tensor &input, int64_t axis, RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape = ComputeFlattenOutputShape(input.shape, axis);
   const size_t output_n_bytes = PackedByteSize(input.data_type, input.element_count());
   Tensor output =

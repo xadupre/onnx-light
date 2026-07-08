@@ -49,8 +49,8 @@ int64_t NormalizeAxis(int64_t axis, int64_t rank) {
 
 } // namespace
 
-Tensor Gather::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
-                          int64_t axis) const {
+Tensor Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
+                          RuntimeContext *rt) const {
   const int64_t r = static_cast<int64_t>(data.shape.size());
   const int64_t a = NormalizeAxis(axis, r);
   std::vector<int64_t> out_shape;

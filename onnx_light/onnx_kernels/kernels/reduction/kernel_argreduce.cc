@@ -54,8 +54,8 @@ void ValidateInt64(const Tensor &t, const char *name) {
 
 } // namespace
 
-Tensor ArgReduce::operator()(RuntimeContext *rt, const Tensor &data, int64_t axis, bool keepdims,
-                             bool select_last_index) const {
+Tensor ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims,
+                             bool select_last_index, RuntimeContext *rt) const {
   ValidateFloat(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   EXT_ENFORCE_INVALID(rank > 0, "kernel::ArgReduce: data must have at least one dimension.");

@@ -57,8 +57,8 @@ std::vector<int64_t> ReadGatherNDIndices(const Tensor &indices) {
 
 } // namespace
 
-Tensor GatherND::operator()(RuntimeContext *rt, const Tensor &data, const Tensor &indices,
-                            int64_t batch_dims) const {
+Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims,
+                            RuntimeContext *rt) const {
   std::vector<int64_t> out_shape =
       ComputeGatherNDOutputShape(data.shape, indices.shape, batch_dims);
   int64_t total = 1;

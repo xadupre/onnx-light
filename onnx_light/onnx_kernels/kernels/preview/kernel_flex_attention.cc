@@ -252,8 +252,8 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
 
 } // namespace
 
-Tensor FlexAttention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K,
-                                 const Tensor &V) const {
+Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
+                                 RuntimeContext *rt) const {
   CheckRank4Float(Q, "Q");
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::FlexAttention: 'head_size' must be positive.");
@@ -261,19 +261,19 @@ Tensor FlexAttention::operator()(RuntimeContext *rt, const Tensor &Q, const Tens
   return (*this)(nullptr, Q, K, V, scale);
 }
 
-Tensor FlexAttention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K,
-                                 const Tensor &V, float scale) const {
+Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                                 RuntimeContext *rt) const {
   return (*this)(rt, Q, K, V, scale, ScoreModFn{}, ProbModFn{});
 }
 
-Tensor FlexAttention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K,
-                                 const Tensor &V, float scale, const ProbModFn &prob_mod) const {
+Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                                 const ProbModFn &prob_mod, RuntimeContext *rt) const {
   return (*this)(rt, Q, K, V, scale, ScoreModFn{}, prob_mod);
 }
 
-Tensor FlexAttention::operator()(RuntimeContext *rt, const Tensor &Q, const Tensor &K,
-                                 const Tensor &V, float scale, const ScoreModFn &score_mod,
-                                 const ProbModFn &prob_mod) const {
+Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                                 const ScoreModFn &score_mod, const ProbModFn &prob_mod,
+                                 RuntimeContext *rt) const {
   CheckRank4Float(Q, "Q");
   CheckRank4Float(V, "V");
   const int64_t batch_size = Q.shape[0];

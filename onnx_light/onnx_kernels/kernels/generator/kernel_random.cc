@@ -119,8 +119,8 @@ void CopyIntoOutput(const Tensor &produced, Tensor &output, const char *op_name)
 
 } // namespace
 
-Tensor RandomNormal::operator()(RuntimeContext *rt, const std::vector<int64_t> &shape, double mean,
-                                double scale, int64_t seed, int32_t dtype) const {
+Tensor RandomNormal::operator()(const std::vector<int64_t> &shape, double mean, double scale,
+                                int64_t seed, int32_t dtype, RuntimeContext *rt) const {
   const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomNormal");
   return MakeNormal(shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormal");
 }
@@ -131,8 +131,8 @@ void RandomNormal::operator()(const std::vector<int64_t> &shape, double mean, do
   CopyIntoOutput(produced, output, "RandomNormal");
 }
 
-Tensor RandomUniform::operator()(RuntimeContext *rt, const std::vector<int64_t> &shape, double low,
-                                 double high, int64_t seed, int32_t dtype) const {
+Tensor RandomUniform::operator()(const std::vector<int64_t> &shape, double low, double high,
+                                 int64_t seed, int32_t dtype, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(high >= low,
                       "kernel::RandomUniform: 'high' must be greater than or equal to 'low'.");
   const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomUniform");
@@ -145,8 +145,8 @@ void RandomUniform::operator()(const std::vector<int64_t> &shape, double low, do
   CopyIntoOutput(produced, output, "RandomUniform");
 }
 
-Tensor RandomNormalLike::operator()(RuntimeContext *rt, const Tensor &input, double mean,
-                                    double scale, int64_t seed, int32_t dtype) const {
+Tensor RandomNormalLike::operator()(const Tensor &input, double mean, double scale, int64_t seed,
+                                    int32_t dtype, RuntimeContext *rt) const {
   const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomNormalLike");
   return MakeNormal(input.shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormalLike");
 }
@@ -157,8 +157,8 @@ void RandomNormalLike::operator()(const Tensor &input, double mean, double scale
   CopyIntoOutput(produced, output, "RandomNormalLike");
 }
 
-Tensor RandomUniformLike::operator()(RuntimeContext *rt, const Tensor &input, double low,
-                                     double high, int64_t seed, int32_t dtype) const {
+Tensor RandomUniformLike::operator()(const Tensor &input, double low, double high, int64_t seed,
+                                     int32_t dtype, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(high >= low,
                       "kernel::RandomUniformLike: 'high' must be greater than or equal to 'low'.");
   const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomUniformLike");

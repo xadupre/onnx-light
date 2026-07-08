@@ -283,13 +283,13 @@ std::vector<int64_t> TfIdfVectorizer::ComputeOutputShape(const std::vector<int64
   EXT_THROW_INVALID("kernel::TfIdfVectorizer: input shape must have rank 1 or 2.");
 }
 
-Tensor TfIdfVectorizer::operator()(RuntimeContext *rt, const Tensor &x, Mode mode,
-                                   int64_t min_gram_length, int64_t max_gram_length,
-                                   int64_t max_skip_count, const std::vector<int64_t> &ngram_counts,
+Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_length,
+                                   int64_t max_gram_length, int64_t max_skip_count,
+                                   const std::vector<int64_t> &ngram_counts,
                                    const std::vector<int64_t> &ngram_indexes,
                                    const std::vector<int64_t> &pool_int64s,
                                    const std::vector<std::string> &pool_strings,
-                                   const std::vector<float> &weights) const {
+                                   const std::vector<float> &weights, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!ngram_indexes.empty(),
                       "kernel::TfIdfVectorizer: ngram_indexes must be non-empty.");
   EXT_ENFORCE_INVALID(min_gram_length >= 1,

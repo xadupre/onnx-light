@@ -206,8 +206,8 @@ void RunMatMulInteger(const Tensor &a, const std::vector<int32_t> &a_zps, const 
 
 } // namespace
 
-Tensor MatMulInteger::operator()(RuntimeContext *rt, const Tensor &a, const Tensor &b,
-                                 const Tensor &a_zero_point, const Tensor &b_zero_point) const {
+Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
+                                 const Tensor &b_zero_point, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": A must be INT8 or UINT8.");
   EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": B must be INT8 or UINT8.");
 

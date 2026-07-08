@@ -53,8 +53,8 @@ std::vector<int64_t> ReadInt64Vector(const Tensor &t, const char *name) {
 
 } // namespace
 
-Tensor Col2Im::operator()(RuntimeContext *rt, const Tensor &input, const Tensor &image_shape,
-                          const Tensor &block_shape, const Attributes &attrs) const {
+Tensor Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Tensor &block_shape,
+                          const Attributes &attrs, RuntimeContext *rt) const {
   const std::vector<int64_t> image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
   const std::vector<int64_t> block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
   EXT_ENFORCE_INVALID(image_shape_vec.size() == block_shape_vec.size(),

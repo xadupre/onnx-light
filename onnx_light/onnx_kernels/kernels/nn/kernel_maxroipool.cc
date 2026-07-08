@@ -33,8 +33,8 @@ void ValidateInputs(const Tensor &x, const Tensor &rois, const MaxRoiPool::Attri
 
 } // namespace
 
-Tensor MaxRoiPool::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &rois,
-                              const Attributes &attrs) const {
+Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs,
+                              RuntimeContext *rt) const {
   ValidateInputs(x, rois, attrs);
   const int64_t num_rois = rois.shape[0];
   const int64_t C = x.shape[1];

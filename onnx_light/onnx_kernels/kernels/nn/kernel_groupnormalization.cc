@@ -30,8 +30,8 @@ const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
 
 } // namespace
 
-Tensor GroupNormalization::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &scale,
-                                      const Tensor &bias, int64_t num_groups, float epsilon) const {
+Tensor GroupNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
+                                      int64_t num_groups, float epsilon, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GroupNormalization: X must be FLOAT.");
   const size_t out_n_bytes = x.size_bytes();

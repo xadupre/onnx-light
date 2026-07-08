@@ -49,8 +49,8 @@ void CheckScaleBroadcast(const std::vector<int64_t> &x_shape, int64_t axis,
 
 } // namespace
 
-Tensor RMSNormalization::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &scale,
-                                    int64_t axis, float epsilon) const {
+Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_t axis,
+                                    float epsilon, RuntimeContext *rt) const {
   // FLOAT16/BFLOAT16 are computed in float32 and demoted back, mirroring the
   // half-precision dispatch used by kernel::Conv and kernel::MatMul. This lets
   // half-precision language models (e.g. the tiny Llama-style decoder) run

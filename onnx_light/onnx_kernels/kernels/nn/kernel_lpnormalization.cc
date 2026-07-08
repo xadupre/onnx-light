@@ -13,8 +13,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor LpNormalization::operator()(RuntimeContext *rt, const Tensor &x, int64_t axis,
-                                   int64_t p) const {
+Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p,
+                                   RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LpNormalization: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!x.shape.empty(), "kernel::LpNormalization: x must have rank >= 1.");

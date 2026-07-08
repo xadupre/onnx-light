@@ -192,7 +192,7 @@ template <typename T> void MatMulInPlace(const Tensor &a, const Tensor &b, Tenso
 
 } // namespace
 
-Tensor MatMul::operator()(RuntimeContext *rt, const Tensor &a, const Tensor &b) const {
+Tensor MatMul::operator()(const Tensor &a, const Tensor &b, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(a.data_type == b.data_type, kMatMulName,
                       " inputs must share the same dtype.");
   switch (a.data_type) {

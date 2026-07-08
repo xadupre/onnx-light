@@ -125,8 +125,8 @@ void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out
 
 } // namespace
 
-Tensor DFT::operator()(RuntimeContext *rt, const Tensor &input, const Tensor *dft_length,
-                       int64_t axis, bool onesided, bool inverse) const {
+Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
+                       bool inverse, RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(input.shape.size());
   EXT_ENFORCE_INVALID(rank >= 2, kDFTName,
                       ": input must have rank >= 2 (including the "

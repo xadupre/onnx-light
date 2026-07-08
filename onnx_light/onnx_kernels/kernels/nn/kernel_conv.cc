@@ -116,8 +116,8 @@ std::vector<int64_t> ComputeOutputSpatial(const Tensor &x, Conv::Attributes &att
 
 } // namespace
 
-Tensor Conv::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &w, const Tensor &b,
-                        const Attributes &attrs) const {
+Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const Attributes &attrs,
+                        RuntimeContext *rt) const {
   // FLOAT16/BFLOAT16 are computed in float32 and demoted back; this mirrors
   // the half-precision dispatch used by kernel::MatMul and lets the expanded
   // ``CausalConvWithState`` function (which lowers to a half-precision Conv)

@@ -104,7 +104,7 @@ ExpandLayout ComputeExpandLayout(const Tensor &input, const std::vector<int64_t>
 
 } // namespace
 
-Tensor Expand::operator()(RuntimeContext *rt, const Tensor &input, const Tensor &shape) const {
+Tensor Expand::operator()(const Tensor &input, const Tensor &shape, RuntimeContext *rt) const {
   const std::vector<int64_t> target = ReadExpandShapeInput(shape);
   const ExpandLayout layout = ComputeExpandLayout(input, target);
   const size_t out_n_bytes = static_cast<std::size_t>(layout.total_elements) * layout.elem_size;

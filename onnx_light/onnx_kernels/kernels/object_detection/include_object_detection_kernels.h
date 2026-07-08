@@ -77,8 +77,8 @@ public:
 
   using KernelBase::KernelBase;
 
-  Tensor operator()(RuntimeContext *rt, const Tensor &x, const Tensor &rois,
-                    const Tensor &batch_indices, const Attributes &attrs) const;
+  Tensor operator()(const Tensor &x, const Tensor &rois, const Tensor &batch_indices,
+                    const Attributes &attrs, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &rois, const Tensor &batch_indices,
                   const Attributes &attrs, Tensor &output) const;
 
@@ -120,9 +120,10 @@ public:
   /// of shape ``(num_selected, 3)``. The optional scalar inputs may be
   /// ``nullptr`` to indicate "not provided" (in which case their schema
   /// defaults apply).
-  Tensor operator()(RuntimeContext *rt, const Tensor &boxes, const Tensor &scores,
+  Tensor operator()(const Tensor &boxes, const Tensor &scores,
                     const Tensor *max_output_boxes_per_class, const Tensor *iou_threshold,
-                    const Tensor *score_threshold, const Attributes &attrs) const;
+                    const Tensor *score_threshold, const Attributes &attrs,
+                    RuntimeContext *rt = nullptr) const;
 
   /// Output element layout differs fundamentally from any input
   /// (FLOAT/INT64 mix, distinct rank and shape), so storage cannot be shared.

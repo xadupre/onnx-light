@@ -46,7 +46,7 @@ std::vector<int64_t> ComputeTileOutputShape(const std::vector<int64_t> &in_shape
 
 } // namespace
 
-Tensor Tile::operator()(RuntimeContext *rt, const Tensor &input, const Tensor &repeats) const {
+Tensor Tile::operator()(const Tensor &input, const Tensor &repeats, RuntimeContext *rt) const {
   const std::vector<int64_t> reps = ReadTileRepeatsInput(repeats, input.shape.size());
   const std::vector<int64_t> out_shape = ComputeTileOutputShape(input.shape, reps);
   const std::size_t elem_size = ElementSize(input.data_type);

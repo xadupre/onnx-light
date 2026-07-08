@@ -127,7 +127,7 @@ Tensor BitwiseNotAlloc(const char *dtype_name, int32_t dtype, const Tensor &x,
 // ---------------------------------------------------------------------------
 // BitwiseAnd
 // ---------------------------------------------------------------------------
-Tensor BitwiseAnd::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
+Tensor BitwiseAnd::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   return BitwiseBinAllocDispatch(kBitwiseAndName, x, y, kAndFn, rt ? rt->allocator() : nullptr);
 }
 
@@ -138,7 +138,7 @@ void BitwiseAnd::operator()(const Tensor &x, const Tensor &y, Tensor &output) co
 // ---------------------------------------------------------------------------
 // BitwiseOr
 // ---------------------------------------------------------------------------
-Tensor BitwiseOr::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
+Tensor BitwiseOr::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   return BitwiseBinAllocDispatch(kBitwiseOrName, x, y, kOrFn, rt ? rt->allocator() : nullptr);
 }
 
@@ -149,7 +149,7 @@ void BitwiseOr::operator()(const Tensor &x, const Tensor &y, Tensor &output) con
 // ---------------------------------------------------------------------------
 // BitwiseXor
 // ---------------------------------------------------------------------------
-Tensor BitwiseXor::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) const {
+Tensor BitwiseXor::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   return BitwiseBinAllocDispatch(kBitwiseXorName, x, y, kXorFn, rt ? rt->allocator() : nullptr);
 }
 
@@ -160,7 +160,7 @@ void BitwiseXor::operator()(const Tensor &x, const Tensor &y, Tensor &output) co
 // ---------------------------------------------------------------------------
 // BitwiseNot (unary)
 // ---------------------------------------------------------------------------
-Tensor BitwiseNot::operator()(RuntimeContext *rt, const Tensor &x) const {
+Tensor BitwiseNot::operator()(const Tensor &x, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::INT8:
     return BitwiseNotAlloc<int8_t>("INT8", DataType::INT8, x, rt ? rt->allocator() : nullptr);

@@ -136,6 +136,55 @@ TEST(RuntimeContextAllocator, AllocatorCanBeReset) {
   EXPECT_EQ(ctx.allocator(), nullptr);
 }
 
+TEST(RuntimeContextAllocator, SetStoresAllocatorBackedTensorData) {
+  SimpleRawBufferAllocator alloc(2);
+  RuntimeContext ctx;
+  ctx.set_allocator(&alloc);
+
+  ctx.Set("x", onnx_kernels::Tensor::FromInt32("", {2}, {1, 2}));
+  const auto &stored = ctx.Get("x");
+  EXPECT_TRUE(stored.has_allocation());
+  EXPECT_EQ(stored.data.size(), 0u);
+  EXPECT_EQ(stored.size_bytes(), 2u * sizeof(int32_t));
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+}
+
+TEST(RuntimeContextAllocator, PutReplacesAndReleasesPreviousAllocation) {
+  SimpleRawBufferAllocator alloc(2);
+  RuntimeContext ctx;
+  ctx.set_allocator(&alloc);
+
+  ctx.Put("x", onnx_kernels::Tensor::FromInt32("", {2}, {1, 2}));
+  const uint8_t *first = ctx.Get("x").bytes();
+  ctx.Put("x", onnx_kernels::Tensor::FromInt32("", {2}, {3, 4}));
+  const uint8_t *second = ctx.Get("x").bytes();
+
+  EXPECT_NE(first, second);
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+}
+
+TEST(RuntimeContextAllocator, RemoveReleasesAllocatorBackedTensorData) {
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext ctx;
+  ctx.set_allocator(&alloc);
+
+  ctx.Set("x", onnx_kernels::Tensor::FromInt32("", {1}, {7}));
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_TRUE(ctx.Remove("x"));
+  EXPECT_EQ(alloc.allocated_count(), 0u);
+}
+
+TEST(RuntimeContextAllocator, DestroyingContextReleasesAllocatorBackedTensorData) {
+  SimpleRawBufferAllocator alloc(1);
+  {
+    RuntimeContext ctx;
+    ctx.set_allocator(&alloc);
+    ctx.Set("x", onnx_kernels::Tensor::FromInt32("", {1}, {7}));
+    EXPECT_EQ(alloc.allocated_count(), 1u);
+  }
+  EXPECT_EQ(alloc.allocated_count(), 0u);
+}
+
 // ---------------------------------------------------------------------------
 // Polymorphism: use RawBufferAllocator* interface
 // ---------------------------------------------------------------------------

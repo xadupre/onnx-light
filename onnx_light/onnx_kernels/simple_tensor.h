@@ -293,6 +293,8 @@ private:
   std::vector<uint8_t> storage_;
 };
 
+class RawBufferAllocator;
+
 /**
  * Tensor — minimal runtime tensor used by backend test cases.
  *
@@ -361,12 +363,37 @@ struct Tensor {
   /// Returns a pointer to the raw element bytes.
   /// Works for both owned (``data``) and borrowed (non-owning view) tensors.
   const uint8_t *bytes() const noexcept {
+    if (allocation_ != nullptr) {
+      return allocation_->data();
+    }
     return borrow_ptr_ != nullptr ? borrow_ptr_ : data.data();
   }
 
   /// Returns the total number of raw element bytes.
   /// Works for both owned and borrowed tensors.
-  size_t size_bytes() const noexcept { return borrow_ptr_ != nullptr ? borrow_size_ : data.size(); }
+  size_t size_bytes() const noexcept {
+    if (allocation_ != nullptr) {
+      return allocation_->size();
+    }
+    return borrow_ptr_ != nullptr ? borrow_size_ : data.size();
+  }
+
+  /// Marks the tensor storage as allocator-backed.
+  void SetAllocation(RawBufferAllocator *allocator_owner, RawBuffer *allocation) noexcept {
+    allocation_owner_ = allocator_owner;
+    allocation_ = allocation;
+    data = RawBuffer{};
+    borrow_ptr_ = nullptr;
+    borrow_size_ = 0;
+  }
+
+  bool has_allocation() const noexcept { return allocation_ != nullptr; }
+  RawBuffer *allocation() const noexcept { return allocation_; }
+  RawBufferAllocator *allocation_owner() const noexcept { return allocation_owner_; }
+  void ClearAllocation() noexcept {
+    allocation_ = nullptr;
+    allocation_owner_ = nullptr;
+  }
 
   /// Returns the product of all shape dimensions; 1 for an empty shape.
   int64_t element_count() const;
@@ -461,6 +488,10 @@ struct Tensor {
   std::vector<std::string> &AsStrings();
 
 private:
+  /// Non-null when the tensor bytes are owned by a ``RawBufferAllocator``.
+  RawBuffer *allocation_ = nullptr;
+  /// Allocator owning ``allocation_``.
+  RawBufferAllocator *allocation_owner_ = nullptr;
   /// Non-null only for borrowed (non-owning) tensors created via
   /// :cpp:func:`Borrow`.  When set, element bytes are read from
   /// ``borrow_ptr_[0 .. borrow_size_-1]`` rather than from ``data``.

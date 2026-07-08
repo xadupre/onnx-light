@@ -379,6 +379,7 @@ private:
 class RuntimeContext {
 public:
   RuntimeContext() = default;
+  ~RuntimeContext();
   explicit RuntimeContext(kernel::KernelContext kernel_ctx) : kernel_ctx_(std::move(kernel_ctx)) {}
   RuntimeContext(kernel::KernelContext kernel_ctx, TensorMap tensors)
       : tensors_(std::move(tensors)), kernel_ctx_(std::move(kernel_ctx)) {}

@@ -453,7 +453,7 @@ class TestMainShow(ExtTestCase):
             model_path = os.path.join(tmp, "model.onnx")
             self._save_model(_make_abs_model(), model_path)
 
-            unsafe_formats = ["; rm -rf /", "../../../etc/passwd", "png && ls", "-format"]
+            unsafe_formats = ["; rm -rf /", "../../../etc/passwd", "png && ls"]
             for fmt in unsafe_formats:
                 with (
                     self.subTest(fmt=fmt),

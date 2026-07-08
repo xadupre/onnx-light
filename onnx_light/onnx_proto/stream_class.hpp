@@ -266,6 +266,28 @@ template <typename cls>
 void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStream *stream,
                               ParseOptions &opts) {
   EXT_ENFORCE(stream != nullptr, "ParseFromZeroCopyStream: stream pointer must not be null.");
+  if (opts.format == SerializeFormat::kOrtFlatbuffers) {
+    // Recursion-OOM guard: validate the depth limit before any parsing begins.
+    EXT_ENFORCE(opts.max_recursion_depth > 0,
+                "ParseFromZeroCopyStream: ParseOptions::max_recursion_depth must be > 0 "
+                "(got ",
+                opts.max_recursion_depth,
+                "). "
+                "The ORT flatbuffer parser uses this limit to reject models "
+                "nested more deeply than the configured value, preventing stack "
+                "overflow on adversarially deep inputs.");
+    // Tensor-size OOM guard: max_tensor_size_bytes must be >= 0.
+    EXT_ENFORCE(opts.max_tensor_size_bytes >= 0,
+                "ParseFromZeroCopyStream: ParseOptions::max_tensor_size_bytes must be >= 0 "
+                "(got ",
+                opts.max_tensor_size_bytes,
+                "). Use 0 to disable the limit or a positive value to cap tensor allocations.");
+    EXT_THROW("ParseFromZeroCopyStream: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
+              "Use SerializeFormat::kOnnx for now.");
+  }
+  EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
+              "ParseFromZeroCopyStream: unrecognised SerializeFormat value ",
+              static_cast<int>(opts.format), "; only kOnnx is currently supported.");
   if (opts.is_parallel())
     stream->StartThreadPool(opts.num_threads);
   self.ParseFromStream(*stream, opts);

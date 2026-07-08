@@ -5707,6 +5707,53 @@ TEST(onnx_proto, ParseFromZeroCopyStream_NullStreamThrows) {
   EXPECT_THROW(model.ParseFromZeroCopyStream(null_stream, opts), std::exception);
 }
 
+TEST(onnx_proto, SerializeFormat_OrtFlatbuffersParseFromZeroCopyStreamThrows) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_ort_zero_copy_parse");
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(serialized.data()),
+                             static_cast<int64_t>(serialized.size()));
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  EXPECT_THROW(parsed.ParseFromZeroCopyStream(&stream, popts), std::exception);
+}
+
+TEST(onnx_proto, OrtFlatbuffersParseFromZeroCopyStreamZeroRecursionDepthThrows) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_ort_zero_copy_bad_depth");
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(serialized.data()),
+                             static_cast<int64_t>(serialized.size()));
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  popts.max_recursion_depth = 0;
+  EXPECT_THROW(parsed.ParseFromZeroCopyStream(&stream, popts), std::runtime_error);
+}
+
+TEST(onnx_proto, OrtFlatbuffersParseFromZeroCopyStreamNegativeMaxTensorSizeBytesThrows) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_ort_zero_copy_bad_tensor_limit");
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(serialized.data()),
+                             static_cast<int64_t>(serialized.size()));
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  popts.max_tensor_size_bytes = -1;
+  EXPECT_THROW(parsed.ParseFromZeroCopyStream(&stream, popts), std::runtime_error);
+}
+
 // Tests for SerializeFormat option.
 TEST(onnx_proto, SerializeFormat_DefaultIsOnnx) {
   ParseOptions popts;

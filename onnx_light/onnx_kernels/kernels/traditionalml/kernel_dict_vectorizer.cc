@@ -98,9 +98,8 @@ void DictVectorizer::operator()(const std::vector<K> &input_keys,
 
 // Explicit instantiations for the supported (K, V) pairs.
 #define ONNX_LIGHT_INSTANTIATE_DICT_VECTORIZER(K, V)                                               \
-  template Tensor DictVectorizer::operator()(RuntimeContext *, const std::vector<K> &,             \
-                                             const std::vector<V> &, const std::vector<K> &)       \
-      const;                                                                                       \
+  template Tensor DictVectorizer::operator()(const std::vector<K> &, const std::vector<V> &,       \
+                                             const std::vector<K> &, RuntimeContext *) const;      \
   template void DictVectorizer::operator()(const std::vector<K> &, const std::vector<V> &,         \
                                            const std::vector<K> &, Tensor &) const
 

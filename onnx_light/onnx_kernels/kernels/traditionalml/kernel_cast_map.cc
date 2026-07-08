@@ -168,9 +168,9 @@ void CastMap::operator()(const std::vector<int64_t> &input_keys, const std::vect
 
 // Explicit instantiations for all supported (V, OutT) pairs.
 #define ONNX_LIGHT_INSTANTIATE_CAST_MAP(V, OutT)                                                   \
-  template Tensor CastMap::operator()<V, OutT>(RuntimeContext *, const std::vector<int64_t> &,     \
-                                               const std::vector<V> &, const std::string &,        \
-                                               const std::string &, int64_t) const;                \
+  template Tensor CastMap::operator()<V, OutT>(                                                    \
+      const std::vector<int64_t> &, const std::vector<V> &, const std::string &,                   \
+      const std::string &, int64_t, RuntimeContext *) const;                                       \
   template void CastMap::operator()<V, OutT>(const std::vector<int64_t> &, const std::vector<V> &, \
                                              const std::string &, const std::string &, int64_t,    \
                                              Tensor &) const

@@ -207,7 +207,7 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
 
 void DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
                      bool inverse, Tensor &output) const {
-  Tensor produced = (*this)(nullptr, input, dft_length, axis, onesided, inverse);
+  Tensor produced = (*this)(input, dft_length, axis, onesided, inverse);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type, kDFTName,
                       ": preallocated output dtype must match.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape, kDFTName,

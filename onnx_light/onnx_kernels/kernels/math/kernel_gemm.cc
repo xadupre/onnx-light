@@ -159,7 +159,7 @@ void Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float a
   case DataType::BFLOAT16: {
     EXT_ENFORCE_INVALID(output.data_type == a.data_type, kGemmName,
                         " preallocated output must have the same dtype as input A.");
-    Tensor y = (*this)(nullptr, a, b, c, alpha, beta, transA, transB);
+    Tensor y = (*this)(a, b, c, alpha, beta, transA, transB);
     EXT_ENFORCE_INVALID(output.shape == y.shape, kGemmName,
                         " preallocated output has an invalid shape.");
     EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(), kGemmName,

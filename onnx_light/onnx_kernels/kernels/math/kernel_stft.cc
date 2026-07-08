@@ -158,7 +158,7 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
 
 void STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
                       const Tensor *frame_length, bool onesided, Tensor &output) const {
-  Tensor produced = (*this)(nullptr, signal, frame_step, window, frame_length, onesided);
+  Tensor produced = (*this)(signal, frame_step, window, frame_length, onesided);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type, kSTFTName,
                       ": preallocated output dtype must match.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape, kSTFTName,

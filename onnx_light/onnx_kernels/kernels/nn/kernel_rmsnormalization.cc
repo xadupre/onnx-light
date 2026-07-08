@@ -58,7 +58,7 @@ Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_
   if (IsHalfPrecision(x.data_type)) {
     const Tensor x_f = PromoteToFloat32(x);
     const Tensor scale_f = PromoteToFloat32(scale);
-    Tensor y = (*this)(rt, x_f, scale_f, axis, epsilon);
+    Tensor y = (*this)(x_f, scale_f, axis, epsilon, rt);
     return DemoteFromFloat32(y, x.data_type);
   }
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
@@ -75,7 +75,7 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
   if (IsHalfPrecision(x.data_type)) {
     EXT_ENFORCE_INVALID(output.data_type == x.data_type,
                         "kernel::RMSNormalization preallocated output must match the input dtype.");
-    Tensor y = (*this)(nullptr, x, scale, axis, epsilon);
+    Tensor y = (*this)(x, scale, axis, epsilon);
     EXT_ENFORCE_INVALID(output.shape == y.shape,
                         "kernel::RMSNormalization: output must have the same shape as X.");
     EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(),

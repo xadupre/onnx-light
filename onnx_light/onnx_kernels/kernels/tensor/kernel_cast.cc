@@ -353,7 +353,7 @@ double ParseAsDouble(const std::string &s) {
 } // namespace
 
 Tensor Cast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) const {
-  return (*this)(rt, x, to, true);
+  return (*this)(x, to, true, rt);
 }
 
 Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate, RuntimeContext *rt) const {

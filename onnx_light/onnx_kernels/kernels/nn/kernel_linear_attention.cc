@@ -46,7 +46,7 @@ Tensor LinearAttention::operator()(const Tensor &query, const Tensor &key, const
   // default to 1 head.
   attrs.q_num_heads = 1;
   attrs.kv_num_heads = 1;
-  return (*this)(rt, query, key, value, attrs).output;
+  return (*this)(query, key, value, attrs).output;
 }
 
 LinearAttention::Result LinearAttention::operator()(const Tensor &query, const Tensor &key,
@@ -79,8 +79,7 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
       beta_f = PromoteToFloat32(*beta);
       beta_ptr_in = &beta_f;
     }
-    Result result_f =
-        (*this)(nullptr, query_f, key_f, value_f, attrs, past_ptr, decay_ptr_in, beta_ptr_in);
+    Result result_f = (*this)(query_f, key_f, value_f, attrs, past_ptr, decay_ptr_in, beta_ptr_in);
     Result result;
     result.output = IsHalfPrecision(out_dtype) ? DemoteFromFloat32(result_f.output, out_dtype)
                                                : std::move(result_f.output);

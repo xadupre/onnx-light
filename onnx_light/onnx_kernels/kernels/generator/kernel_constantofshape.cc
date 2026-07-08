@@ -101,7 +101,7 @@ Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value,
 }
 
 void ConstantOfShape::operator()(const Tensor &shape, const Tensor &value, Tensor &output) const {
-  Tensor produced = (*this)(nullptr, shape, value);
+  Tensor produced = (*this)(shape, value);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::ConstantOfShape preallocated output must have the expected dtype.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

@@ -140,7 +140,7 @@ Tensor StringNormalizer::operator()(const Tensor &x, CaseChangeAction case_chang
 void StringNormalizer::operator()(const Tensor &x, CaseChangeAction case_change_action,
                                   bool is_case_sensitive, const std::vector<std::string> &stopwords,
                                   Tensor &output) const {
-  Tensor computed = (*this)(nullptr, x, case_change_action, is_case_sensitive, stopwords);
+  Tensor computed = (*this)(x, case_change_action, is_case_sensitive, stopwords);
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::StringNormalizer preallocated output must be a STRING tensor.");
   EXT_ENFORCE_INVALID(output.shape == computed.shape,

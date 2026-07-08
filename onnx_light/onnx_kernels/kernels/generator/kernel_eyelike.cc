@@ -140,7 +140,7 @@ Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
 }
 
 void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(nullptr, input, k, dtype);
+  Tensor produced = (*this)(input, k, dtype);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::EyeLike preallocated output must have the expected dtype.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

@@ -351,8 +351,8 @@ void TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_le
                                  const std::vector<int64_t> &pool_int64s,
                                  const std::vector<std::string> &pool_strings,
                                  const std::vector<float> &weights, Tensor &output) const {
-  Tensor computed = (*this)(nullptr, x, mode, min_gram_length, max_gram_length, max_skip_count,
-                            ngram_counts, ngram_indexes, pool_int64s, pool_strings, weights);
+  Tensor computed = (*this)(x, mode, min_gram_length, max_gram_length, max_skip_count, ngram_counts,
+                            ngram_indexes, pool_int64s, pool_strings, weights);
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::TfIdfVectorizer preallocated output must be a FLOAT tensor.");
   EXT_ENFORCE_INVALID(output.shape == computed.shape,

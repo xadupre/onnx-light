@@ -63,7 +63,7 @@ std::pair<Tensor, Tensor> Dropout::operator()(const Tensor &data, float ratio, b
   Tensor mask =
       MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), data.shape, mask_n_bytes, nullptr);
 
-  output = (*this)(nullptr, data, ratio, training_mode, mask, seed);
+  output = (*this)(data, ratio, training_mode, mask, seed);
   return {std::move(output), std::move(mask)};
 }
 

@@ -180,9 +180,7 @@ UniqueGroups ComputeUniqueGroups(int64_t count, const Cmp &cmp, bool sorted) {
 
 } // namespace
 
-Unique::Outputs Unique::operator()(const Tensor &x) const {
-  return (*this)(nullptr, x, Attributes{});
-}
+Unique::Outputs Unique::operator()(const Tensor &x) const { return (*this)(x, Attributes{}); }
 
 Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) const {
   const DataType dt = static_cast<DataType>(x.data_type);

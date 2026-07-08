@@ -204,7 +204,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::Attention: 'head_size' must be positive.");
   const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
-  return (*this)(nullptr, Q, K, V, scale);
+  return (*this)(Q, K, V, scale);
 }
 
 Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
@@ -212,7 +212,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, 
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
-  return (*this)(rt, Q, K, V, attrs).Y;
+  return (*this)(Q, K, V, attrs).Y;
 }
 
 Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
@@ -222,7 +222,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, 
   attrs.scale = scale;
   const Tensor *const mask_ptr =
       attn_mask.shape.empty() && attn_mask.size_bytes() == 0 ? nullptr : &attn_mask;
-  return (*this)(rt, Q, K, V, attrs, mask_ptr).Y;
+  return (*this)(Q, K, V, attrs, mask_ptr).Y;
 }
 
 void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
@@ -230,7 +230,7 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
-  Result r = (*this)(nullptr, Q, K, V, attrs, attn_mask);
+  Result r = (*this)(Q, K, V, attrs, attn_mask);
   EXT_ENFORCE_INVALID(output.data_type == Q.data_type,
                       "kernel::Attention preallocated output must share Q's element type.");
   EXT_ENFORCE_INVALID(output.shape == r.Y.shape,

@@ -146,7 +146,7 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
 
 void Compress::operator()(const Tensor &input, const Tensor &condition, std::optional<int64_t> axis,
                           Tensor &output) const {
-  Tensor produced = (*this)(nullptr, input, condition, axis);
+  Tensor produced = (*this)(input, condition, axis);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::Compress: preallocated output dtype must match.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

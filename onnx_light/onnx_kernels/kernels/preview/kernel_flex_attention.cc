@@ -258,17 +258,17 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
   const int64_t head_size = Q.shape[3];
   EXT_ENFORCE_INVALID(head_size > 0, "kernel::FlexAttention: 'head_size' must be positive.");
   const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
-  return (*this)(nullptr, Q, K, V, scale);
+  return (*this)(Q, K, V, scale);
 }
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                  RuntimeContext *rt) const {
-  return (*this)(rt, Q, K, V, scale, ScoreModFn{}, ProbModFn{});
+  return (*this)(Q, K, V, scale, ScoreModFn{}, ProbModFn{}, rt);
 }
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                  const ProbModFn &prob_mod, RuntimeContext *rt) const {
-  return (*this)(rt, Q, K, V, scale, ScoreModFn{}, prob_mod);
+  return (*this)(Q, K, V, scale, ScoreModFn{}, prob_mod, rt);
 }
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,

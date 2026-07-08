@@ -241,7 +241,7 @@ void MatMul::operator()(const Tensor &a, const Tensor &b, Tensor &output) const 
   case DataType::BFLOAT16: {
     EXT_ENFORCE_INVALID(output.data_type == a.data_type, kMatMulName,
                         " preallocated output must have the same dtype as input A.");
-    Tensor y = (*this)(nullptr, a, b);
+    Tensor y = (*this)(a, b);
     EXT_ENFORCE_INVALID(output.shape == y.shape, kMatMulName,
                         " preallocated output has an invalid shape.");
     EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(), kMatMulName,

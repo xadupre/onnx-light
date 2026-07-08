@@ -463,7 +463,7 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                     const Tensor &x_zero_point, int64_t axis,
                                     RuntimeContext *rt) const {
   if (x_scale.element_count() == 1) {
-    return (*this)(rt, x, x_scale, x_zero_point);
+    return (*this)(x, x_scale, x_zero_point, rt);
   }
   EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
                       "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
@@ -480,7 +480,7 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
 void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                   const Tensor &x_zero_point, int64_t axis, Tensor &output) const {
   if (x_scale.element_count() == 1) {
-    return (*this)(nullptr, x, x_scale, x_zero_point, output);
+    return (*this)(x, x_scale, x_zero_point, output);
   }
   EXT_ENFORCE_INVALID(x_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::DequantizeLinear: x_scale must be FLOAT for per-axis "
@@ -589,7 +589,7 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis,
                                     RuntimeContext *rt) const {
   if (x_scale.element_count() == 1) {
-    return (*this)(rt, x, x_scale);
+    return (*this)(x, x_scale, rt);
   }
   EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
                       "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
@@ -606,7 +606,7 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int6
 void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis,
                                   Tensor &output) const {
   if (x_scale.element_count() == 1) {
-    return (*this)(nullptr, x, x_scale, output);
+    return (*this)(x, x_scale, output);
   }
   EXT_ENFORCE_INVALID(axis >= 0 && axis < static_cast<int64_t>(x.shape.size()),
                       "kernel::DequantizeLinear: axis out of range.");

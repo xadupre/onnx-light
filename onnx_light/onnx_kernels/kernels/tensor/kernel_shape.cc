@@ -60,7 +60,7 @@ std::vector<int64_t> ComputeShapeSlice(const Tensor &data, const Shape::Attribut
 } // namespace
 
 Tensor Shape::operator()(const Tensor &data, RuntimeContext *rt) const {
-  return (*this)(rt, data, Attributes{});
+  return (*this)(data, Attributes{}, rt);
 }
 
 Tensor Shape::operator()(const Tensor &data, const Attributes &attrs, RuntimeContext *rt) const {

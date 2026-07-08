@@ -123,7 +123,7 @@ Tensor Range::operator()(const Tensor &start, const Tensor &limit, const Tensor 
 
 void Range::operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
                        Tensor &output) const {
-  Tensor produced = (*this)(nullptr, start, limit, delta);
+  Tensor produced = (*this)(start, limit, delta);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::Range preallocated output must have the expected dtype.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

@@ -188,7 +188,7 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
       MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_var_t_n_bytes, nullptr);
   std::copy(saved_mean.begin(), saved_mean.end(), saved_mean_t.AsFloat());
   std::copy(saved_var.begin(), saved_var.end(), saved_var_t.AsFloat());
-  Tensor y = (*this)(nullptr, x, scale, bias, saved_mean_t, saved_var_t, epsilon);
+  Tensor y = (*this)(x, scale, bias, saved_mean_t, saved_var_t, epsilon);
 
   // Update the running estimates: running = input * momentum + saved * (1 - m).
   const size_t running_mean_n_bytes = static_cast<size_t>(C) * sizeof(float);

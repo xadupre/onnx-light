@@ -210,7 +210,7 @@ Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
 }
 
 void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(nullptr, input, seed, dtype);
+  Tensor produced = (*this)(input, seed, dtype);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::Bernoulli preallocated output must have the expected dtype.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

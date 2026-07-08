@@ -32,7 +32,7 @@ Tensor Softmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) co
   // the half-precision handling in the other math kernels.
   if (IsHalfPrecision(x.data_type)) {
     const Tensor x_f = PromoteToFloat32(x);
-    Tensor y_f = (*this)(rt, x_f, axis);
+    Tensor y_f = (*this)(x_f, axis, rt);
     return DemoteFromFloat32(y_f, x.data_type);
   }
   const int32_t out_dtype = (static_cast<DataType>(x.data_type) == DataType::DOUBLE)

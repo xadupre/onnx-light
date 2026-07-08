@@ -200,7 +200,7 @@ Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t
 
 void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t seed, int32_t dtype,
                              Tensor &output) const {
-  Tensor produced = (*this)(nullptr, input, sample_size, seed, dtype);
+  Tensor produced = (*this)(input, sample_size, seed, dtype);
   EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
                       "kernel::Multinomial preallocated output must have the expected dtype.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape,

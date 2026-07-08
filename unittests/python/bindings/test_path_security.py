@@ -114,10 +114,10 @@ class TestValidateExternalDataPath(unittest.TestCase):
         self.assertEqual(result, os.path.realpath(self.weights_file))
 
     def test_rejects_absolute_outside_base(self):
-        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as tmp:
-            outside = tmp.name
-            tmp.write(b"\x00")
+        fd, outside = tempfile.mkstemp(suffix=".bin")
         try:
+            with os.fdopen(fd, "wb") as tmp:
+                tmp.write(b"\x00")
             with self.assertRaises(ValueError) as ctx:
                 validate_external_data_path(outside, self.tmpdir, allow_absolute=True)
             self.assertIn("outside", str(ctx.exception))

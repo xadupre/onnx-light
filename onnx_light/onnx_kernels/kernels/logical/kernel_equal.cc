@@ -107,27 +107,27 @@ Tensor Equal::operator()(RuntimeContext *rt, const Tensor &x, const Tensor &y) c
   case DataType::FLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; }, nullptr);
+        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; }, rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; }, nullptr);
+        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; }, rt ? rt->allocator() : nullptr);
   case DataType::INT8:
-    return EqualAlloc<int8_t>("INT8", DataType::INT8, x, y, nullptr);
+    return EqualAlloc<int8_t>("INT8", DataType::INT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT16:
-    return EqualAlloc<int16_t>("INT16", DataType::INT16, x, y, nullptr);
+    return EqualAlloc<int16_t>("INT16", DataType::INT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return EqualAlloc<int32_t>("INT32", DataType::INT32, x, y, nullptr);
+    return EqualAlloc<int32_t>("INT32", DataType::INT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return EqualAlloc<int64_t>("INT64", DataType::INT64, x, y, nullptr);
+    return EqualAlloc<int64_t>("INT64", DataType::INT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT8:
-    return EqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, nullptr);
+    return EqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT16:
-    return EqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, nullptr);
+    return EqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return EqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, nullptr);
+    return EqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return EqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, nullptr);
+    return EqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::STRING:
     EXT_ENFORCE_INVALID(y.data_type == static_cast<int32_t>(DataType::STRING),
                         "kernel::Equal inputs must share the same dtype.");

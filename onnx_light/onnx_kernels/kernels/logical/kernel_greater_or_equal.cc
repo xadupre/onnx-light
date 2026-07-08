@@ -49,27 +49,35 @@ Tensor GreaterOrEqual::operator()(RuntimeContext *rt, const Tensor &x, const Ten
   case DataType::FLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kGreaterOrEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; }, nullptr);
+        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; }, rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kGreaterOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; }, nullptr);
+        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; }, rt ? rt->allocator() : nullptr);
   case DataType::INT8:
-    return GreaterOrEqualAlloc<int8_t>("INT8", DataType::INT8, x, y, nullptr);
+    return GreaterOrEqualAlloc<int8_t>("INT8", DataType::INT8, x, y,
+                                       rt ? rt->allocator() : nullptr);
   case DataType::INT16:
-    return GreaterOrEqualAlloc<int16_t>("INT16", DataType::INT16, x, y, nullptr);
+    return GreaterOrEqualAlloc<int16_t>("INT16", DataType::INT16, x, y,
+                                        rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return GreaterOrEqualAlloc<int32_t>("INT32", DataType::INT32, x, y, nullptr);
+    return GreaterOrEqualAlloc<int32_t>("INT32", DataType::INT32, x, y,
+                                        rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return GreaterOrEqualAlloc<int64_t>("INT64", DataType::INT64, x, y, nullptr);
+    return GreaterOrEqualAlloc<int64_t>("INT64", DataType::INT64, x, y,
+                                        rt ? rt->allocator() : nullptr);
   case DataType::UINT8:
-    return GreaterOrEqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, nullptr);
+    return GreaterOrEqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y,
+                                        rt ? rt->allocator() : nullptr);
   case DataType::UINT16:
-    return GreaterOrEqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, nullptr);
+    return GreaterOrEqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y,
+                                         rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return GreaterOrEqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, nullptr);
+    return GreaterOrEqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y,
+                                         rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return GreaterOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, nullptr);
+    return GreaterOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y,
+                                         rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kGreaterOrEqualName, ": unsupported data type ", x.data_type,
                       ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "

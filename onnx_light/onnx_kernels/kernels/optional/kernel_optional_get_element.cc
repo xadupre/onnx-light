@@ -37,7 +37,7 @@ void OptionalGetElement::operator()(const Tensor &input, Tensor &output) const {
   // Passthrough: the "present" optional is unwrapped to an exact copy of
   // the input. ``std::memmove``-style safety is required so the in-place
   // overload may alias ``input`` and ``output``.
-  if (!output.data.empty() && output.mutable_bytes() != input.bytes()) {
+  if (output.mutable_bytes() != input.bytes()) {
     std::memcpy(output.mutable_bytes(), input.bytes(), input.size_bytes());
   }
 }

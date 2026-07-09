@@ -28,7 +28,7 @@ int64_t EffectiveTripCount(const Tensor &M, const Tensor &cond, int64_t per_iter
                         "kernel::Loop: 'cond' must be a BOOL tensor when provided.");
     EXT_ENFORCE_INVALID(cond.element_count() == 1,
                         "kernel::Loop: 'cond' must contain a single element when provided.");
-    if (cond.data[0] == 0) {
+    if (cond.bytes()[0] == 0) {
       return 0;
     }
   }

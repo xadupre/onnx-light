@@ -289,10 +289,10 @@ void ForEachIndex(const std::vector<int64_t> &shape, std::vector<int64_t> &idx, 
 // Main per-channel computation, templated on the element type ``T``.
 template <typename T>
 void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, bool align_corners,
-              RawBuffer &out_bytes, const std::vector<int64_t> &out_shape) {
+              uint8_t *out_bytes, const std::vector<int64_t> &out_shape) {
   const T *x_data = reinterpret_cast<const T *>(X.bytes());
   const T *grid_data = reinterpret_cast<const T *>(grid.bytes());
-  T *y_data = reinterpret_cast<T *>(out_bytes.data());
+  T *y_data = reinterpret_cast<T *>(out_bytes);
 
   const int64_t N = X.shape[0];
   const int64_t C = X.shape[1];
@@ -389,16 +389,16 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
 Tensor GridSample::operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
                               RuntimeContext *rt) const {
   ValidateInputs(X, grid);
-  Tensor out;
-  out.data_type = X.data_type;
-  out.shape = ComputeOutputShape(X, grid);
+  const std::vector<int64_t> out_shape = ComputeOutputShape(X, grid);
   int64_t total = 1;
-  for (int64_t d : out.shape) {
+  for (int64_t d : out_shape) {
     total *= d;
   }
   const size_t elt =
       X.data_type == static_cast<int32_t>(DataType::FLOAT) ? sizeof(float) : sizeof(double);
-  out.data.assign(static_cast<size_t>(total) * elt, 0);
+  const size_t out_n_bytes = static_cast<size_t>(total) * elt;
+  Tensor out =
+      MakeOutputTensor(X.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(X, grid, attrs, out);
   return out;
 }
@@ -430,9 +430,9 @@ void GridSample::operator()(const Tensor &X, const Tensor &grid, const Attribute
   }
 
   if (X.data_type == static_cast<int32_t>(DataType::FLOAT)) {
-    RunTyped<float>(X, grid, interp, pad, align_corners, output.data, expected_shape);
+    RunTyped<float>(X, grid, interp, pad, align_corners, output.mutable_bytes(), expected_shape);
   } else {
-    RunTyped<double>(X, grid, interp, pad, align_corners, output.data, expected_shape);
+    RunTyped<double>(X, grid, interp, pad, align_corners, output.mutable_bytes(), expected_shape);
   }
 }
 

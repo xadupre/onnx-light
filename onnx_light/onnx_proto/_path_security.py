@@ -69,16 +69,18 @@ def validate_external_data_path(
             f"does not escape the base directory."
         )
 
-    # Step 2: Join with base_dir and resolve to canonical path
+    # Step 2: Join with base_dir and resolve to canonical path.
+    # raw_joined is the unresolved joined path; candidate is fully resolved.
     if os.path.isabs(location):
         if not allow_absolute:
             raise ValueError(
                 f"External data location {location!r} is an absolute path. "
                 f"Set allow_absolute=True to permit this."
             )
-        candidate = os.path.realpath(location)
+        raw_joined = location
     else:
-        candidate = os.path.realpath(os.path.join(base_dir, location))
+        raw_joined = os.path.join(base_dir, location)
+    candidate = os.path.realpath(raw_joined)
 
     # Step 3: Canonical containment check (catches symlink escapes in any
     # parent component, handles normalisation of ".." etc.)
@@ -98,7 +100,6 @@ def validate_external_data_path(
 
     # Step 4: Explicit symlink check (defense-in-depth: reject symlinks even
     # when the resolved target stays inside base_dir, to prevent TOCTOU races).
-    raw_joined = location if os.path.isabs(location) else os.path.join(base_dir, location)
     if os.path.islink(raw_joined):
         raise ValueError(
             f"External data location {location!r} is a symbolic link, "
@@ -115,9 +116,9 @@ def validate_external_data_path(
                 f"External data path {candidate!r} has multiple hard links "
                 f"({st.st_nlink}), which is not allowed for security reasons."
             )
-    except OSError:
-        # File does not exist yet (write mode callers) or stat is unavailable;
-        # allow the caller to handle the missing-file error.
+    except FileNotFoundError:
+        # File does not exist yet (write mode callers); allow the caller to
+        # handle the missing-file error.
         pass
 
     return candidate

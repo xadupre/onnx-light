@@ -158,7 +158,7 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(reuse, [[], [(0, 0)]])
         self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kEqual)
 
-    def test_unsqueeze_dynamic_axes_reported_as_equal(self):
+    def test_unsqueeze_dynamic_axes_equal_reuse(self):
         nodes = [
             oh.make_node("Abs", ["X"], ["A"]),
             oh.make_node("Unsqueeze", ["A", "axes"], ["Y"]),

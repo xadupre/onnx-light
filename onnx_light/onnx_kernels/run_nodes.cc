@@ -182,6 +182,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
                                 const std::vector<std::pair<std::string, Tensor>> &bindings,
                                 RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child(rt.kernel_ctx());
+  child.set_allocator(rt.allocator());
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
   child.set_verbose(rt.verbose());
@@ -250,6 +251,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string branch_attr = taken ? "then_branch" : "else_branch";
 
   RuntimeContext child(rt.kernel_ctx());
+  child.set_allocator(rt.allocator());
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
   child.sequences() = rt.sequences();
@@ -311,6 +313,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
   int64_t trip_count = 0;
   for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
     RuntimeContext child(rt.kernel_ctx());
+    child.set_allocator(rt.allocator());
     child.functions() = rt.functions();
     child.tensors() = rt.tensors();
     child.sequences() = rt.sequences();
@@ -858,6 +861,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
   // context and the function registry (so nested function calls work)
   // but starts with a fresh, isolated tensor map.
   RuntimeContext child(rt.kernel_ctx());
+  child.set_allocator(rt.allocator());
   child.functions() = rt.functions();
   child.set_verbose(rt.verbose());
 

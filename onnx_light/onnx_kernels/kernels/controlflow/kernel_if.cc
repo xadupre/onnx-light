@@ -75,6 +75,7 @@ std::vector<Tensor> If::operator()(RuntimeContext &rt, const Tensor &cond,
   // so the subgraph can read outer-scope values, while writes produced by
   // the subgraph remain local and do not pollute ``rt``.
   RuntimeContext child(rt.kernel_ctx());
+  child.set_allocator(rt.allocator());
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
   child.sequences() = rt.sequences();

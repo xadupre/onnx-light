@@ -138,12 +138,13 @@ void StoreSample(int32_t dtype, uint8_t *out, int32_t sample) {
   }
   case DataType::INT8: {
     const int8_t v = static_cast<int8_t>(sample);
-    out[0] = static_cast<uint8_t>(v);
+    std::memcpy(out, &v, sizeof(int8_t));
     break;
   }
   case DataType::UINT8:
   case DataType::BOOL: {
-    out[0] = static_cast<uint8_t>(sample);
+    const uint8_t v = static_cast<uint8_t>(sample);
+    std::memcpy(out, &v, sizeof(uint8_t));
     break;
   }
   case DataType::INT16: {

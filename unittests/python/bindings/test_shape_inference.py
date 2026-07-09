@@ -367,12 +367,19 @@ class TestShapeInference(ExtTestCase):
         # Inferred type info may be recorded either in value_info (intermediate
         # values, and outputs that were untyped in the input model) or directly on
         # the graph outputs (outputs that were already typed).  Merge both by name.
-        # An untyped graph output is recorded in BOTH value_info and output; when a
-        # name appears in both, verify that the two records agree.
+        # An untyped graph output may appear in both value_info (with the inferred
+        # type) and in graph.output (still with empty type); prefer the typed entry.
+        empty_type = onnxl.TypeProto()
         inferred: dict[str, onnxl.ValueInfoProto] = {}
         for x in [*inferred_graph.value_info, *inferred_graph.output]:
             if x.name in inferred:
-                self._compare_value_infos(inferred[x.name].type, x.type)
+                existing = inferred[x.name]
+                if x.type == empty_type:
+                    pass  # duplicate is untyped; keeps the already-recorded typed entry
+                elif existing.type == empty_type:
+                    inferred[x.name] = x  # replaces untyped with the typed duplicate
+                else:
+                    self._compare_value_infos(existing.type, x.type)
             else:
                 inferred[x.name] = x
         self.assertEqual(

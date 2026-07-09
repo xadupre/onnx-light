@@ -21,11 +21,7 @@ namespace {
 template <typename T> T ReadScalar(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.element_count() == 1, "kernel::Range: '", name,
                       "' must be a scalar (single-element) tensor.");
-  EXT_ENFORCE_INVALID(t.size_bytes() == sizeof(T), "kernel::Range: '", name,
-                      "' has unexpected byte size.");
-  T value;
-  std::copy_n(t.bytes(), sizeof(T), reinterpret_cast<uint8_t *>(&value));
-  return value;
+  return t.As<T>()[0];
 }
 
 // Fills ``n`` range elements into ``out_ptr`` starting at ``s`` with step ``d``.
@@ -91,14 +87,18 @@ void ComputeRangeInto(const Tensor &start, const Tensor &limit, const Tensor &de
 // Reads a scalar tensor stored as the raw IEEE-754 binary16 ``float16``
 // bit pattern and returns its value as a ``float``.
 float ReadFloat16Scalar(const Tensor &t, const char *name) {
-  return Float16BitsToFloat(ReadScalar<uint16_t>(t, name));
+  EXT_ENFORCE_INVALID(t.element_count() == 1, "kernel::Range: '", name,
+                      "' must be a scalar (single-element) tensor.");
+  return Float16BitsToFloat(*reinterpret_cast<const uint16_t *>(t.bytes()));
 }
 
 // Reads a scalar tensor stored as the raw ``bfloat16`` bit pattern
 // (the upper 16 bits of an IEEE-754 binary32 ``float``) and returns its
 // value as a ``float``.
 float ReadBfloat16Scalar(const Tensor &t, const char *name) {
-  return Bfloat16BitsToFloat(ReadScalar<uint16_t>(t, name));
+  EXT_ENFORCE_INVALID(t.element_count() == 1, "kernel::Range: '", name,
+                      "' must be a scalar (single-element) tensor.");
+  return Bfloat16BitsToFloat(*reinterpret_cast<const uint16_t *>(t.bytes()));
 }
 
 // IEEE-754 binary16 / bfloat16 encoders (round-to-nearest-even) are provided

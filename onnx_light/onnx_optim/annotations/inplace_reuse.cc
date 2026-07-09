@@ -32,6 +32,9 @@ struct LiveAllocation {
   ShapeTag tag;
 };
 
+constexpr int kSqueezeDataInputIndex = 0;
+constexpr int kUnsqueezeDataInputIndex = 0;
+
 ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags,
                   const std::string &name) {
   auto it = value_tags.find(name);
@@ -369,6 +372,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
   std::vector<std::vector<std::string>> release_after(static_cast<std::size_t>(num_nodes));
+  std::vector<std::vector<std::string>> not_used_after(static_cast<std::size_t>(num_nodes));
   std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes),
                                         MakeEmptyNodeMemoryProfile());
 
@@ -379,6 +383,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   // only initializers and outputs stay protected.
   std::unordered_set<std::string> keep;
   std::unordered_set<std::string> graph_inputs;
+  std::unordered_set<std::string> graph_initializers;
   for (int i = 0; i < graph.input().size(); ++i) {
     const std::string name = graph.input()[i].name().as_string();
     graph_inputs.insert(name);
@@ -387,7 +392,9 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     }
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
-    keep.insert(graph.initializer()[i].name().as_string());
+    const std::string name = graph.initializer()[i].name().as_string();
+    graph_initializers.insert(name);
+    keep.insert(name);
   }
   for (int i = 0; i < graph.output().size(); ++i) {
     keep.insert(graph.output()[i].name().as_string());
@@ -429,6 +436,9 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
+    const std::string op_type = node.op_type().as_string();
+    const bool is_squeeze = op_type == "Squeeze";
+    const bool is_unsqueeze = op_type == "Unsqueeze";
     const std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
 
     for (const std::string &name : referenced) {
@@ -438,6 +448,9 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       }
       if (use_it->second != i) {
         continue;
+      }
+      if (graph_inputs.count(name) || graph_initializers.count(name)) {
+        not_used_after[static_cast<std::size_t>(i)].push_back(name);
       }
       if (keep.count(name)) {
         continue;
@@ -509,7 +522,21 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           if (!ctx.Has(in_name)) {
             continue;
           }
-          const std::optional<InPlaceReuseKind> match = ClassifyReuse(out_tensor, ctx.Get(in_name));
+          std::optional<InPlaceReuseKind> match;
+          // Squeeze/Unsqueeze are shape-only view transforms on their data
+          // input: they keep dtype and element count, so the output can always
+          // alias that input when lifetime constraints allow it.
+          // The dtype guard keeps this fast-path defensive for malformed graphs
+          // or partial type information: aliasing is only safe when input/output
+          // element storage matches.
+          // Squeeze/Unsqueeze data tensor is input 0 by ONNX spec.
+          if (((k == kSqueezeDataInputIndex && is_squeeze) ||
+               (k == kUnsqueezeDataInputIndex && is_unsqueeze)) &&
+              out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
+            match = InPlaceReuseKind::kEqual;
+          } else {
+            match = ClassifyReuse(out_tensor, ctx.Get(in_name));
+          }
           if (!match.has_value() || *match != kind) {
             continue;
           }
@@ -655,6 +682,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 
   reuse_ = std::move(result);
   release_after_ = std::move(release_after);
+  not_used_after_ = std::move(not_used_after);
   memory_ = std::move(memory);
 
   // Populate the shape-tagged subset from value_tags (when provided).
@@ -693,7 +721,8 @@ void ComputeContext::WriteToMetadata(GraphProto &graph) const {
   const bool has_shape_tag_info = release_after_shape_tagged_.size() == reuse_.size();
   for (std::size_t i = 0; i < reuse_.size(); ++i) {
     const bool has_shape_tagged = has_shape_tag_info && !release_after_shape_tagged_[i].empty();
-    if (reuse_[i].empty() && release_after_[i].empty() && !has_shape_tagged) {
+    if (reuse_[i].empty() && release_after_[i].empty() && not_used_after_[i].empty() &&
+        !has_shape_tagged) {
       continue;
     }
     NodeProto &node = (*graph.mutable_node())[i];
@@ -718,6 +747,16 @@ void ComputeContext::WriteToMetadata(GraphProto &graph) const {
         value << release_after_[i][j];
       }
       node.add_metadata(kReleaseAfterMetadataKey, value.str());
+    }
+    if (!not_used_after_[i].empty()) {
+      std::ostringstream value;
+      for (std::size_t j = 0; j < not_used_after_[i].size(); ++j) {
+        if (j != 0) {
+          value << ";";
+        }
+        value << not_used_after_[i][j];
+      }
+      node.add_metadata(kNotUsedAfterMetadataKey, value.str());
     }
     if (has_shape_tagged) {
       std::ostringstream value;

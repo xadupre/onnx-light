@@ -432,7 +432,9 @@ def pretty_onnx(
         ``inplace: out0=in0(equal)``.
     :param include_release: when True, nodes that carry
         ``onnx_light.release_after`` metadata have the release hints
-        appended to their line, e.g. ``release: A, B``.
+        appended to their line, and nodes with
+        ``onnx_light.not_used_after`` metadata include
+        ``not used after: ...``.
     :return: the formatted text.
     """
     assert onx is not None, "onx cannot be None"

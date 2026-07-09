@@ -841,7 +841,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
 
     const std::vector<std::unordered_map<std::string, std::string>> expected_metadata = {
-        {},
+        {{"onnx_light.not_used_after", "X"}},
         {{"onnx_light.inplace_reuse", "0:0:equal"}, {"onnx_light.release_after", "A"}},
         {{"onnx_light.inplace_reuse", "0:0:equal"}, {"onnx_light.release_after", "B"}}};
     const auto &nodes = tc.model.ref_graph().ref_node();
@@ -1780,7 +1780,9 @@ TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
     // would produce: node 0 (Shape) has no release metadata, node 1 (Reshape)
     // carries kReleaseAfterMetadataKey for "S".
     const std::vector<MetadataMap> expected_node_meta = {
-        {}, {{std::string(onnx_optim::annotations::kReleaseAfterMetadataKey), "S"}}};
+        {},
+        {{std::string(onnx_optim::annotations::kReleaseAfterMetadataKey), "S"},
+         {std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey), "X"}}};
     const auto &nodes = tc.model.ref_graph().ref_node();
     ASSERT_EQ(nodes.size(), expected_node_meta.size());
     for (size_t i = 0; i < nodes.size(); ++i) {

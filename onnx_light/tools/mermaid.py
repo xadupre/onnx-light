@@ -172,8 +172,9 @@ def to_mermaid(
             label, for example ``inplace: out0=in1(equal)``.
         include_release: When :data:`True`, the post-execution release hints
             recorded in each node's ``metadata_props`` (under the
-            ``onnx_light.release_after`` key) are appended to the operator
-            label, for example ``release: A, B``.
+            ``onnx_light.release_after`` key, and optional last-use hints
+            under ``onnx_light.not_used_after``) are appended to the operator
+            label, for example ``release: A, B; not used after: X``.
 
     Returns:
         The Mermaid source as a single ``str`` (newline-separated).  The

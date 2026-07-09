@@ -122,6 +122,16 @@ constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
 
 /**
  * Metadata key under which :cpp:func:`ComputeContext::WriteToMetadata`
+ * records, for every node, which declared graph inputs or initializers reach
+ * their last use at that node. Those names are not released by the runtime
+ * (their lifetime is owned by the caller / model) but this key still exposes
+ * the "last read" information. The associated value is a ``;``-separated list
+ * of value names.
+ */
+constexpr const char *kNotUsedAfterMetadataKey = "onnx_light.not_used_after";
+
+/**
+ * Metadata key under which :cpp:func:`ComputeContext::WriteToMetadata`
  * records, for every node, the subset of releasable values that carry the
  * ``"shape"`` value tag (i.e. tensors that represent tensor-shape metadata
  * rather than activation data). The associated value is a ``;``-separated
@@ -414,7 +424,8 @@ public:
   /**
    * Records the computed opportunities into each node's ``metadata_props`` of
    * ``graph`` under :cpp:var:`kInPlaceReuseMetadataKey`,
-   * :cpp:var:`kReleaseAfterMetadataKey`, and (when
+   * :cpp:var:`kReleaseAfterMetadataKey`,
+   * :cpp:var:`kNotUsedAfterMetadataKey`, and (when
    * :cpp:func:`ComputeInPlaceReuseGraph` was called with value tags)
    * :cpp:var:`kReleaseAfterShapeTagMetadataKey`.
    *
@@ -428,14 +439,19 @@ public:
    * added (or updated in place) under :cpp:var:`kReleaseAfterMetadataKey`; the
    * value is a ``;``-separated list of releasable names.
    *
+   * For every node that has declared graph inputs / initializers reaching
+   * their last use, one metadata entry is added (or updated in place) under
+   * :cpp:var:`kNotUsedAfterMetadataKey`; the value is a ``;``-separated list
+   * of those names.
+   *
    * When shape-tag information was provided to
    * :cpp:func:`ComputeInPlaceReuseGraph`, a further metadata entry is added
    * under :cpp:var:`kReleaseAfterShapeTagMetadataKey` for every node that has
    * at least one shape-tagged releasable value; the value is a
    * ``;``-separated list of those names.
    *
-   * Nodes without in-place opportunities and without releasable names are left
-   * untouched.
+   * Nodes without in-place opportunities, without releasable names, and
+   * without last-use input/initializer names are left untouched.
    *
    * ``graph`` must be the same graph passed to
    * :cpp:func:`ComputeInPlaceReuseGraph`, so that node indices line up with
@@ -453,6 +469,7 @@ public:
     node_tags_.clear();
     reuse_.clear();
     release_after_.clear();
+    not_used_after_.clear();
     release_after_shape_tagged_.clear();
     memory_.clear();
   }
@@ -462,6 +479,7 @@ private:
   std::vector<std::string> node_tags_;
   std::vector<std::vector<InPlaceReuse>> reuse_;
   std::vector<std::vector<std::string>> release_after_;
+  std::vector<std::vector<std::string>> not_used_after_;
   std::vector<std::vector<std::string>> release_after_shape_tagged_;
   std::vector<NodeMemoryProfile> memory_;
   ComputeEventLog events_;

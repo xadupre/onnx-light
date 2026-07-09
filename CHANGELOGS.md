@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Security
 
 - Investigated GHSA-hqmj-h5c6-369m (`onnx.hub.load` silent-bypass): onnx-light has never implemented a hub module and is not affected ([#3274](https://github.com/xadupre/onnx-light/issues/3274))
+- Investigated GHSA-hwpq-hmq9-wj77 (`version_converter` Upsample 6→7 null dereference): onnx-light already validates that `Upsample` has an input before reading `inputs()[0]`, so conversion raises an error instead of crashing ([#3272](https://github.com/xadupre/onnx-light/issues/3272))
 
 ## [0.1.4] – 2026-07-07
 

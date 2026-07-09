@@ -1834,6 +1834,23 @@ class TestVersionConverter(ExtTestCase):
 
         self.assertRaises(RuntimeError, test)
 
+    def test_rejects_missing_required_inputs_upsample_6_7(self) -> None:
+        def test() -> None:
+            nodes = [
+                oh.make_node(
+                    "Upsample", [], ["Y"], mode="nearest", width_scale=3.0, height_scale=2.0
+                )
+            ]
+            graph = oh.make_graph(
+                nodes,
+                "test_upsample_6_7_rejects_missing_input",
+                [],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, (1, 1, 4, 6))],
+            )
+            self._converted(graph, oh.make_operatorsetid("", 6), 7)
+
+        self.assertRaises(RuntimeError, test)
+
     # Where 16 -> 15
     def test_where_16_15_success(self) -> None:
         nodes = [oh.make_node("Where", ["cond", "x", "y"], ["out"])]

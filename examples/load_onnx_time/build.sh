@@ -91,9 +91,9 @@ import sys
 
 match = re.match(r"(\d+)\.(\d+)\.(\d+)", onnx.__version__)
 if match:
-    parts = tuple(int(group) for group in match.groups())
-    release = ".".join(match.groups())
-    print("v" + release if parts >= (1, 21, 0) else "v1.21.0")
+    groups = match.groups()
+    parts = tuple(int(group) for group in groups)
+    print("v" + ".".join(groups) if parts >= (1, 21, 0) else "v1.21.0")
 else:
     print(
         f"Warning: Unable to parse ONNX version {onnx.__version__!r}, "

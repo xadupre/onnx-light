@@ -401,6 +401,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   std::unordered_map<std::string, int> producer;
   std::unordered_map<std::string, int> last_use;
   std::vector<std::vector<std::string>> referenced_per_node(static_cast<std::size_t>(num_nodes));
+  constexpr int kUnsqueezeDataInputIndex = 0;
   std::unordered_set<std::string> graph_outputs;
   for (int i = 0; i < graph.output().size(); ++i) {
     graph_outputs.insert(graph.output()[i].name().as_string());
@@ -517,7 +518,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           // or partial type information: aliasing is only safe when input/output
           // element storage matches.
           // Unsqueeze's data tensor is input 0 by ONNX spec; input 1 is axes.
-          if (k == 0 && node.op_type().as_string() == "Unsqueeze" &&
+          if (k == kUnsqueezeDataInputIndex && node.op_type().as_string() == "Unsqueeze" &&
               out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
             match = InPlaceReuseKind::kEqual;
           } else {

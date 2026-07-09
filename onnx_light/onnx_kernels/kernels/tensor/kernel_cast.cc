@@ -8,6 +8,7 @@
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -273,13 +274,13 @@ void StoreFromDouble(Tensor &output, int64_t i, double v) {
     return;
   case DataType::FLOAT16: {
     const std::uint16_t bits = FloatToFloat16Bits(static_cast<float>(v));
-    std::memcpy(output.data.data() + static_cast<size_t>(i) * sizeof(std::uint16_t), &bits,
+    std::memcpy(output.mutable_bytes() + static_cast<size_t>(i) * sizeof(std::uint16_t), &bits,
                 sizeof(bits));
     return;
   }
   case DataType::BFLOAT16: {
     const std::uint16_t bits = FloatToBfloat16Bits(static_cast<float>(v));
-    std::memcpy(output.data.data() + static_cast<size_t>(i) * sizeof(std::uint16_t), &bits,
+    std::memcpy(output.mutable_bytes() + static_cast<size_t>(i) * sizeof(std::uint16_t), &bits,
                 sizeof(bits));
     return;
   }
@@ -351,9 +352,11 @@ double ParseAsDouble(const std::string &s) {
 
 } // namespace
 
-Tensor Cast::operator()(const Tensor &x, int32_t to) const { return (*this)(x, to, true); }
+Tensor Cast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) const {
+  return (*this)(x, to, true, rt);
+}
 
-Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate) const {
+Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
@@ -366,7 +369,8 @@ Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate) const {
     return out;
   }
   const size_t out_bytes = PackedByteSize(to, x.element_count());
-  Tensor out("", to, x.shape, std::vector<uint8_t>(out_bytes));
+  const size_t out_n_bytes = out_bytes;
+  Tensor out = MakeOutputTensor(to, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, to, saturate, out);
   return out;
 }
@@ -409,16 +413,16 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
     EXT_ENFORCE_INVALID(IsSupportedSubBytePair(x.data_type, to),
                         "kernel::Cast: unsupported sub-byte cast pair.");
     const size_t expected_bytes = PackedByteSize(to, n);
-    EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+    EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                         "kernel::Cast preallocated output buffer has unexpected size in bytes.");
     if (to_sub_byte) {
       // Reset trailing padding bytes so the unused nibble / bit-pair stays
       // zero regardless of the previous buffer contents.
       if (!output.data.empty()) {
-        std::memset(output.data.data(), 0, output.data.size());
+        std::memset(output.mutable_bytes(), 0, output.size_bytes());
       }
       const auto to_dt = static_cast<DataType>(to);
-      uint8_t *dst = output.data.data();
+      uint8_t *dst = output.mutable_bytes();
       const auto from_dt_ = static_cast<DataType>(x.data_type);
       if (from_dt_ == DataType::FLOAT || from_dt_ == DataType::FLOAT16 ||
           from_dt_ == DataType::BFLOAT16) {
@@ -554,10 +558,10 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
                         "or BFLOAT16.");
     const size_t expected_bytes =
         static_cast<size_t>(n) * (to_float8 ? size_t{1} : ElementSize(to));
-    EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+    EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                         "kernel::Cast preallocated output buffer has unexpected size in bytes.");
     if (to_float8) {
-      uint8_t *dst = output.data.data();
+      uint8_t *dst = output.mutable_bytes();
       for (int64_t i = 0; i < n; ++i) {
         const float v = static_cast<float>(LoadAsDouble(x, i));
         dst[i] = FloatToFloat8Bits(v, to, saturate);
@@ -587,7 +591,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
 
   const size_t out_elem = ElementSize(to);
   const size_t expected_bytes = static_cast<size_t>(n) * out_elem;
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::Cast preallocated output buffer has unexpected size in bytes.");
 
   if (from_string) {
@@ -604,7 +608,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
   // avoids a needless double round-trip.
   if (x.data_type == to) {
     if (x.size_bytes() > 0) {
-      std::memcpy(output.data.data(), x.bytes(), x.size_bytes());
+      std::memcpy(output.mutable_bytes(), x.bytes(), x.size_bytes());
     }
     return;
   }

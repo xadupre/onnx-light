@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -25,9 +26,9 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 } // namespace
 
-Tensor LogSoftmax::operator()(const Tensor &x, int64_t axis) const {
-  Tensor y("", DataType::FLOAT, x.shape,
-           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
+Tensor LogSoftmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) const {
+  const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * sizeof(float);
+  Tensor y = MakeOutputTensor(DataType::FLOAT, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, axis, y);
   return y;
 }
@@ -39,13 +40,13 @@ void LogSoftmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const
                       "kernel::LogSoftmax preallocated output must be a FLOAT tensor.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::LogSoftmax preallocated output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.data() != x.bytes(),
+  EXT_ENFORCE_INVALID(output.mutable_bytes() != x.bytes(),
                       "kernel::LogSoftmax does not support aliasing input/output buffers.");
 
   const int64_t n = x.element_count();
   const size_t expected_bytes = static_cast<size_t>(n) * sizeof(float);
   EXT_ENFORCE_INVALID(
-      output.data.size() == expected_bytes,
+      output.size_bytes() == expected_bytes,
       "kernel::LogSoftmax preallocated output buffer has unexpected size in bytes.");
 
   const int64_t rank = static_cast<int64_t>(x.shape.size());

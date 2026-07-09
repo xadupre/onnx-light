@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -97,7 +98,7 @@ void FillScalarRepeat(const uint8_t *src, std::size_t elem_size, std::size_t cou
 } // namespace
 
 Tensor OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor &values,
-                          const OneHot::Attributes &attrs) const {
+                          const OneHot::Attributes &attrs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(values.shape.size() == 1 && values.element_count() == 2,
                       "kernel::OneHot: input 'values' must be a rank-1 tensor with exactly two "
                       "elements [off_value, on_value].");
@@ -142,7 +143,8 @@ void OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor
   const int64_t out_count = output.element_count();
 
   // Initialise the whole buffer with ``off_value``.
-  FillScalarRepeat(off_value, elem_size, static_cast<std::size_t>(out_count), output.data.data());
+  FillScalarRepeat(off_value, elem_size, static_cast<std::size_t>(out_count),
+                   output.mutable_bytes());
 
   // Compute strides for the output and for the "indices half" of the output
   // (i.e. the output without the axis dimension). ``inner_size`` is the
@@ -176,7 +178,7 @@ void OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor
     if (k < 0 || k >= depth_val) {
       continue; // Leave the corresponding row filled with off_value.
     }
-    std::memcpy(output.data.data() + (base + k * inner_size) * static_cast<int64_t>(elem_size),
+    std::memcpy(output.mutable_bytes() + (base + k * inner_size) * static_cast<int64_t>(elem_size),
                 on_value, elem_size);
   }
 }

@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -16,7 +17,8 @@ namespace kernel {
 
 Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &target,
                                              const Tensor *weight, const std::string &reduction,
-                                             bool has_ignore_index, int64_t ignore_index) const {
+                                             bool has_ignore_index, int64_t ignore_index,
+                                             RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(input.data_type == DataType::FLOAT,
                       "kernel::NegativeLogLikelihoodLoss only supports FLOAT input.");
   EXT_ENFORCE_INVALID(target.data_type == DataType::INT32 || target.data_type == DataType::INT64,
@@ -82,8 +84,9 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
   }
 
   if (reduction == "none") {
-    Tensor loss("", DataType::FLOAT, target.shape,
-                std::vector<uint8_t>(static_cast<size_t>(n_loss) * sizeof(float)));
+    const size_t loss_n_bytes = static_cast<size_t>(n_loss) * sizeof(float);
+    Tensor loss = MakeOutputTensor(DataType::FLOAT, target.shape, loss_n_bytes,
+                                   rt ? rt->allocator() : nullptr);
     float *out = loss.AsFloat();
     for (int64_t k = 0; k < n_loss; ++k) {
       out[static_cast<size_t>(k)] = per_sample_loss[static_cast<size_t>(k)];
@@ -108,7 +111,9 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
     reduced = sum_weight != 0.0f ? sum_loss / sum_weight : 0.0f;
   }
 
-  Tensor loss("", DataType::FLOAT, std::vector<int64_t>{}, std::vector<uint8_t>(sizeof(float)));
+  const size_t loss_n_bytes = sizeof(float);
+  Tensor loss = MakeOutputTensor(DataType::FLOAT, std::vector<int64_t>{}, loss_n_bytes,
+                                 rt ? rt->allocator() : nullptr);
   loss.AsFloat()[0] = reduced;
   return loss;
 }

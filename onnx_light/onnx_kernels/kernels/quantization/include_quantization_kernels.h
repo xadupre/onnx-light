@@ -13,6 +13,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
+// Forward declaration for allocator-aware operator() overloads.
+class RuntimeContext;
+
 namespace kernel {
 
 // ---------------------------------------------------------------------------
@@ -70,12 +73,13 @@ public:
   using KernelBase::KernelBase;
 
   /// Omitted ``y_zero_point``: output is UINT8 with zero point 0.
-  Tensor operator()(const Tensor &x, const Tensor &y_scale) const;
+  Tensor operator()(const Tensor &x, const Tensor &y_scale, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y_scale, Tensor &output) const;
 
   /// Explicit ``y_zero_point``: its data_type drives the output element type.
   /// Per-tensor (scalar ``y_scale``) quantization.
-  Tensor operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point) const;
+  Tensor operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point,
                   Tensor &output) const;
 
@@ -83,14 +87,14 @@ public:
   /// entry per slice along ``axis``.  When ``y_scale.element_count() == 1``
   /// the call is forwarded to the scalar overload above.
   Tensor operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point,
-                    int64_t axis) const;
+                    int64_t axis, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point, int64_t axis,
                   Tensor &output) const;
 
   /// Per-axis/blocked quantization without explicit ``y_zero_point``.
   /// ``output_dtype`` specifies the output element type; zero point is 0.
-  Tensor operator()(const Tensor &x, const Tensor &y_scale, int64_t axis,
-                    int32_t output_dtype) const;
+  Tensor operator()(const Tensor &x, const Tensor &y_scale, int64_t axis, int32_t output_dtype,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y_scale, int64_t axis, int32_t output_dtype,
                   Tensor &output) const;
 
@@ -109,11 +113,12 @@ public:
   using KernelBase::KernelBase;
 
   /// Omitted ``x_zero_point``: zero point defaults to 0.
-  Tensor operator()(const Tensor &x, const Tensor &x_scale) const;
+  Tensor operator()(const Tensor &x, const Tensor &x_scale, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &x_scale, Tensor &output) const;
 
   /// Explicit ``x_zero_point``: must have the same element type as ``x``.
-  Tensor operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point) const;
+  Tensor operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
                   Tensor &output) const;
 
@@ -121,13 +126,14 @@ public:
   /// slice along ``axis``.  Delegates to the per-tensor overload when
   /// ``x_scale`` is scalar.
   Tensor operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
-                    int64_t axis) const;
+                    int64_t axis, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point, int64_t axis,
                   Tensor &output) const;
 
   /// Per-axis overloads with the ``x_zero_point`` omitted (defaults to 0).
   /// Delegates to the per-tensor overload when ``x_scale`` is scalar.
-  Tensor operator()(const Tensor &x, const Tensor &x_scale, int64_t axis) const;
+  Tensor operator()(const Tensor &x, const Tensor &x_scale, int64_t axis,
+                    RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &x_scale, int64_t axis, Tensor &output) const;
 
   /// Output element type (FLOAT) differs from the integer/float8 input
@@ -170,7 +176,8 @@ public:
   /// Returning overload. Output element type is taken from ``y_zero_point``.
   Tensor operator()(const Tensor &a, const Tensor &a_scale, const Tensor &a_zero_point,
                     const Tensor &b, const Tensor &b_scale, const Tensor &b_zero_point,
-                    const Tensor &y_scale, const Tensor &y_zero_point) const;
+                    const Tensor &y_scale, const Tensor &y_zero_point,
+                    RuntimeContext *rt = nullptr) const;
 
   /// In-place overload writing into a caller-allocated output.
   void operator()(const Tensor &a, const Tensor &a_scale, const Tensor &a_zero_point,
@@ -206,7 +213,7 @@ public:
   Tensor operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
                     const Tensor &w, const Tensor &w_scale, const Tensor &w_zero_point,
                     const Tensor &y_scale, const Tensor &y_zero_point, const Tensor &B,
-                    const Attributes &attrs) const;
+                    const Attributes &attrs, RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
                   const Tensor &w, const Tensor &w_scale, const Tensor &w_zero_point,

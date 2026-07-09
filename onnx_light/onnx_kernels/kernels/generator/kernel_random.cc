@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "onnx_kernels/random.h"
+#include "onnx_kernels/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -109,17 +110,17 @@ void CopyIntoOutput(const Tensor &produced, Tensor &output, const char *op_name)
                       " preallocated output must have the expected dtype.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape, "kernel::", op_name,
                       " preallocated output shape must match the produced tensor shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(), "kernel::", op_name,
+  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(), "kernel::", op_name,
                       " preallocated output buffer has unexpected size in bytes.");
   if (!produced.data.empty()) {
-    std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
+    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 
 } // namespace
 
 Tensor RandomNormal::operator()(const std::vector<int64_t> &shape, double mean, double scale,
-                                int64_t seed, int32_t dtype) const {
+                                int64_t seed, int32_t dtype, RuntimeContext *rt) const {
   const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomNormal");
   return MakeNormal(shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormal");
 }
@@ -131,7 +132,7 @@ void RandomNormal::operator()(const std::vector<int64_t> &shape, double mean, do
 }
 
 Tensor RandomUniform::operator()(const std::vector<int64_t> &shape, double low, double high,
-                                 int64_t seed, int32_t dtype) const {
+                                 int64_t seed, int32_t dtype, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(high >= low,
                       "kernel::RandomUniform: 'high' must be greater than or equal to 'low'.");
   const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomUniform");
@@ -145,7 +146,7 @@ void RandomUniform::operator()(const std::vector<int64_t> &shape, double low, do
 }
 
 Tensor RandomNormalLike::operator()(const Tensor &input, double mean, double scale, int64_t seed,
-                                    int32_t dtype) const {
+                                    int32_t dtype, RuntimeContext *rt) const {
   const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomNormalLike");
   return MakeNormal(input.shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormalLike");
 }
@@ -157,7 +158,7 @@ void RandomNormalLike::operator()(const Tensor &input, double mean, double scale
 }
 
 Tensor RandomUniformLike::operator()(const Tensor &input, double low, double high, int64_t seed,
-                                     int32_t dtype) const {
+                                     int32_t dtype, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(high >= low,
                       "kernel::RandomUniformLike: 'high' must be greater than or equal to 'low'.");
   const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomUniformLike");

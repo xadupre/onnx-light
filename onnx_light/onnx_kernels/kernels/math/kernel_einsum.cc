@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_light_helpers.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <set>
@@ -367,8 +368,8 @@ Tensor EinsumAlloc(const std::vector<Tensor> &inputs, const std::string &equatio
   for (int64_t d : plan.output_shape) {
     out_count *= d;
   }
-  Tensor z("", dtype, plan.output_shape,
-           std::vector<uint8_t>(static_cast<std::size_t>(out_count) * sizeof(T)));
+  const size_t z_n_bytes = static_cast<std::size_t>(out_count) * sizeof(T);
+  Tensor z = MakeOutputTensor(dtype, plan.output_shape, z_n_bytes, nullptr);
   RunEinsum<T>(inputs, plan, z.As<T>());
   return z;
 }
@@ -383,7 +384,7 @@ void EinsumInPlace(const std::vector<Tensor> &inputs, const std::string &equatio
   }
   EXT_ENFORCE_INVALID(output.data_type == dtype, kEinsumName, ": output dtype mismatch.");
   EXT_ENFORCE_INVALID(output.shape == plan.output_shape, kEinsumName, ": output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<std::size_t>(out_count) * sizeof(T),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(out_count) * sizeof(T),
                       kEinsumName, ": output buffer size mismatch.");
   RunEinsum<T>(inputs, plan, output.As<T>());
 }
@@ -399,7 +400,8 @@ void RequireHomogeneous(const std::vector<Tensor> &inputs) {
 
 } // namespace
 
-Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation) const {
+Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation,
+                          RuntimeContext *rt) const {
   RequireHomogeneous(inputs);
   switch (inputs[0].data_type) {
   case DataType::FLOAT:

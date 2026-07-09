@@ -6,6 +6,7 @@
 
 #include "onnx_kernels/kernels/_helpers/float16_promote.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -50,11 +51,11 @@ void CheckCacheShape(const Tensor &cache, const char *which, int64_t batch, int6
 
 Tensor RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache,
                                    const Tensor &sin_cache, const Tensor &position_ids,
-                                   const Attributes &attrs) const {
+                                   const Attributes &attrs, RuntimeContext *rt) const {
   Tensor output;
   output.data_type = X.data_type;
   output.shape = X.shape;
-  output.data.assign(X.data.size(), 0);
+  output.data.assign(X.size_bytes(), 0);
   const Tensor *pos =
       position_ids.shape.empty() && position_ids.size_bytes() == 0 && position_ids.data_type == 0
           ? nullptr
@@ -80,13 +81,14 @@ void RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache, const
     const Tensor X_f = PromoteToFloat32(X);
     const Tensor cos_f = PromoteToFloat32(cos_cache);
     const Tensor sin_f = PromoteToFloat32(sin_cache);
-    Tensor out_f("", static_cast<int32_t>(DataType::FLOAT), X.shape,
-                 std::vector<uint8_t>(static_cast<size_t>(X.element_count()) * sizeof(float), 0));
+    const size_t out_f_n_bytes = static_cast<size_t>(X.element_count()) * sizeof(float);
+    Tensor out_f =
+        MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), X.shape, out_f_n_bytes, nullptr);
     (*this)(X_f, cos_f, sin_f, position_ids, attrs, out_f);
     Tensor demoted = DemoteFromFloat32(out_f, target_dtype);
-    EXT_ENFORCE_INVALID(output.data.size() == demoted.data.size(),
+    EXT_ENFORCE_INVALID(output.size_bytes() == demoted.size_bytes(),
                         "kernel::RotaryEmbedding: output buffer has wrong byte size.");
-    std::memcpy(output.data.data(), demoted.data.data(), demoted.data.size());
+    std::memcpy(output.mutable_bytes(), demoted.bytes(), demoted.size_bytes());
     return;
   }
 
@@ -142,11 +144,11 @@ void RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache, const
   EXT_ENFORCE_INVALID(output.data_type == X.data_type && output.shape == X.shape,
                       "kernel::RotaryEmbedding: output buffer has mismatched type or shape.");
   const size_t expected_bytes = static_cast<size_t>(X.element_count()) * sizeof(float);
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::RotaryEmbedding: output buffer has wrong byte size.");
 
   const float *px = X.AsFloat();
-  float *py = reinterpret_cast<float *>(output.data.data());
+  float *py = reinterpret_cast<float *>(output.mutable_bytes());
   const float *pcos = cos_cache.AsFloat();
   const float *psin = sin_cache.AsFloat();
   const int64_t *ppos = has_position_ids ? position_ids->AsInt64() : nullptr;

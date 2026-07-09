@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -31,7 +32,7 @@ int64_t SpatialCount(const Tensor &x) {
 // GlobalAveragePool
 // ---------------------------------------------------------------------------
 
-Tensor GlobalAveragePool::operator()(const Tensor &x) const {
+Tensor GlobalAveragePool::operator()(const Tensor &x, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GlobalAveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2,
@@ -48,11 +49,12 @@ Tensor GlobalAveragePool::operator()(const Tensor &x) const {
   out_shape[0] = N;
   out_shape[1] = C;
 
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(N * C) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(N * C) * sizeof(float);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
 
   const float *px = x.AsFloat();
-  float *py = reinterpret_cast<float *>(out.data.data());
+  float *py = reinterpret_cast<float *>(out.mutable_bytes());
 
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c = 0; c < C; ++c) {
@@ -71,7 +73,7 @@ Tensor GlobalAveragePool::operator()(const Tensor &x) const {
 // GlobalMaxPool
 // ---------------------------------------------------------------------------
 
-Tensor GlobalMaxPool::operator()(const Tensor &x) const {
+Tensor GlobalMaxPool::operator()(const Tensor &x, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GlobalMaxPool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2,
@@ -87,11 +89,12 @@ Tensor GlobalMaxPool::operator()(const Tensor &x) const {
   out_shape[0] = N;
   out_shape[1] = C;
 
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(N * C) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(N * C) * sizeof(float);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
 
   const float *px = x.AsFloat();
-  float *py = reinterpret_cast<float *>(out.data.data());
+  float *py = reinterpret_cast<float *>(out.mutable_bytes());
 
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c = 0; c < C; ++c) {
@@ -110,7 +113,7 @@ Tensor GlobalMaxPool::operator()(const Tensor &x) const {
 // GlobalLpPool
 // ---------------------------------------------------------------------------
 
-Tensor GlobalLpPool::operator()(const Tensor &x, int64_t p) const {
+Tensor GlobalLpPool::operator()(const Tensor &x, int64_t p, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GlobalLpPool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2,
@@ -125,11 +128,12 @@ Tensor GlobalLpPool::operator()(const Tensor &x, int64_t p) const {
   out_shape[0] = N;
   out_shape[1] = C;
 
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(N * C) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(N * C) * sizeof(float);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
 
   const float *px = x.AsFloat();
-  float *py = reinterpret_cast<float *>(out.data.data());
+  float *py = reinterpret_cast<float *>(out.mutable_bytes());
 
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c = 0; c < C; ++c) {

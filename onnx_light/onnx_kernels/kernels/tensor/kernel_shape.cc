@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <vector>
@@ -58,9 +59,11 @@ std::vector<int64_t> ComputeShapeSlice(const Tensor &data, const Shape::Attribut
 
 } // namespace
 
-Tensor Shape::operator()(const Tensor &data) const { return (*this)(data, Attributes{}); }
+Tensor Shape::operator()(const Tensor &data, RuntimeContext *rt) const {
+  return (*this)(data, Attributes{}, rt);
+}
 
-Tensor Shape::operator()(const Tensor &data, const Attributes &attrs) const {
+Tensor Shape::operator()(const Tensor &data, const Attributes &attrs, RuntimeContext *rt) const {
   const std::vector<int64_t> values = ComputeShapeSlice(data, attrs);
   const std::vector<int64_t> out_shape{static_cast<int64_t>(values.size())};
   return Tensor::FromInt64("", out_shape, values);
@@ -73,10 +76,10 @@ void Shape::operator()(const Tensor &data, const Attributes &attrs, Tensor &outp
                       "kernel::Shape: preallocated output dtype must be INT64.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::Shape: preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == values.size() * sizeof(int64_t),
+  EXT_ENFORCE_INVALID(output.size_bytes() == values.size() * sizeof(int64_t),
                       "kernel::Shape: preallocated output byte-size mismatch.");
   if (!values.empty()) {
-    std::copy(values.begin(), values.end(), reinterpret_cast<int64_t *>(output.data.data()));
+    std::copy(values.begin(), values.end(), reinterpret_cast<int64_t *>(output.mutable_bytes()));
   }
 }
 

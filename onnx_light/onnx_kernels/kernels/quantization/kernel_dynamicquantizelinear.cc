@@ -35,12 +35,14 @@ inline float SaturateUint8(float v) {
 } // namespace
 
 std::tuple<Tensor, Tensor, Tensor> DynamicQuantizeLinear::operator()(const Tensor &x) const {
-  Tensor y("", static_cast<int32_t>(DataType::UINT8), x.shape,
-           std::vector<uint8_t>(static_cast<size_t>(x.element_count())));
-  Tensor y_scale("", static_cast<int32_t>(DataType::FLOAT), /*shape=*/{},
-                 std::vector<uint8_t>(sizeof(float), 0));
-  Tensor y_zero_point("", static_cast<int32_t>(DataType::UINT8), /*shape=*/{},
-                      std::vector<uint8_t>(1, 0));
+  const size_t y_n_bytes = static_cast<size_t>(x.element_count());
+  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), x.shape, y_n_bytes, nullptr);
+  const size_t y_scale_n_bytes = sizeof(float);
+  Tensor y_scale = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), /*shape=*/{},
+                                    y_scale_n_bytes, nullptr);
+  const size_t y_zero_point_n_bytes = 1;
+  Tensor y_zero_point = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), /*shape=*/{},
+                                         y_zero_point_n_bytes, nullptr);
   (*this)(x, y, y_scale, y_zero_point);
   return std::tuple<Tensor, Tensor, Tensor>(std::move(y), std::move(y_scale),
                                             std::move(y_zero_point));
@@ -54,15 +56,15 @@ void DynamicQuantizeLinear::operator()(const Tensor &x, Tensor &y, Tensor &y_sca
                       "kernel::DynamicQuantizeLinear: y must be UINT8.");
   EXT_ENFORCE_INVALID(y.shape == x.shape,
                       "kernel::DynamicQuantizeLinear: y shape must match x shape.");
-  EXT_ENFORCE_INVALID(y.data.size() == static_cast<size_t>(x.element_count()),
+  EXT_ENFORCE_INVALID(y.size_bytes() == static_cast<size_t>(x.element_count()),
                       "kernel::DynamicQuantizeLinear: y buffer has unexpected size.");
   EXT_ENFORCE_INVALID(y_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::DynamicQuantizeLinear: y_scale must be FLOAT.");
-  EXT_ENFORCE_INVALID(y_scale.shape.empty() && y_scale.data.size() == sizeof(float),
+  EXT_ENFORCE_INVALID(y_scale.shape.empty() && y_scale.size_bytes() == sizeof(float),
                       "kernel::DynamicQuantizeLinear: y_scale must be a scalar FLOAT.");
   EXT_ENFORCE_INVALID(y_zero_point.data_type == static_cast<int32_t>(DataType::UINT8),
                       "kernel::DynamicQuantizeLinear: y_zero_point must be UINT8.");
-  EXT_ENFORCE_INVALID(y_zero_point.shape.empty() && y_zero_point.data.size() == 1,
+  EXT_ENFORCE_INVALID(y_zero_point.shape.empty() && y_zero_point.size_bytes() == 1,
                       "kernel::DynamicQuantizeLinear: y_zero_point must be a scalar UINT8.");
 
   const int64_t n = x.element_count();
@@ -103,12 +105,12 @@ void DynamicQuantizeLinear::operator()(const Tensor &x, Tensor &y, Tensor &y_sca
   const uint8_t zp = static_cast<uint8_t>(zp_f);
 
   // Write scalar outputs.
-  float *p_scale = reinterpret_cast<float *>(y_scale.data.data());
+  float *p_scale = reinterpret_cast<float *>(y_scale.mutable_bytes());
   p_scale[0] = scale;
   y_zero_point.data[0] = zp;
 
   // Quantize x.
-  uint8_t *py = y.data.data();
+  uint8_t *py = y.mutable_bytes();
   if (scale == 0.0f) {
     std::fill(py, py + n, zp);
     return;

@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -130,7 +131,7 @@ template <typename Y> inline Y SaturateRound(float scaled, float y_zp_f) {
 Tensor QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
                                const Tensor &w, const Tensor &w_scale, const Tensor &w_zero_point,
                                const Tensor &y_scale, const Tensor &y_zero_point, const Tensor &B,
-                               const Attributes &attrs) const {
+                               const Attributes &attrs, RuntimeContext *rt) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   std::vector<int64_t> out_spatial = ComputeOutputSpatial(x, resolved);
@@ -145,9 +146,9 @@ Tensor QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Ten
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor out(
-      "", y_zero_point.data_type, out_shape,
-      std::vector<uint8_t>(static_cast<size_t>(total) * ElementSize(y_zero_point.data_type)));
+  const size_t out_n_bytes = static_cast<size_t>(total) * ElementSize(y_zero_point.data_type);
+  Tensor out = MakeOutputTensor(y_zero_point.data_type, out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point, B, resolved,
           out);
   return out;

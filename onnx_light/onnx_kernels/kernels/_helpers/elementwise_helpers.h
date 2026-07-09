@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "onnx_kernels/raw_buffer_allocator.h"
 #include "onnx_kernels/simple_tensor.h"
 
 #include <cstdint>
@@ -80,7 +81,7 @@ void BinaryElementwise(const char *op_name, const char *dtype_name, int32_t expe
 
   const TIn *px = reinterpret_cast<const TIn *>(x.bytes());
   const TIn *py = reinterpret_cast<const TIn *>(y.bytes());
-  TOut *pz = reinterpret_cast<TOut *>(output.data.data());
+  TOut *pz = reinterpret_cast<TOut *>(output.mutable_bytes());
 
   // Fast paths: equal-shape and scalar broadcasting.
   if (x.shape == y.shape) {
@@ -121,12 +122,18 @@ void BinaryElementwise(const char *op_name, const char *dtype_name, int32_t expe
 /// Allocating element-wise binary kernel driver. Builds the output tensor
 /// with the broadcasted shape and ``expected_dtype``, then delegates to
 /// :cpp:func:`BinaryElementwise` to fill it in.
+///
+/// When ``allocator`` is non-null the output buffer is acquired from it
+/// directly, so no copy is needed later when the tensor is stored in a
+/// :cpp:class:`RuntimeContext`. Pass ``nullptr`` (or omit the argument) to
+/// fall back to the legacy inline-allocation path.
 template <typename TIn, typename TOut, typename Op>
 Tensor BinaryElementwiseAlloc(const char *op_name, const char *dtype_name, int32_t expected_dtype,
-                              const Tensor &x, const Tensor &y, Op op) {
+                              const Tensor &x, const Tensor &y, Op op,
+                              RawBufferAllocator *allocator = nullptr) {
   const BroadcastInfo bi = CheckBinaryBroadcast(op_name, dtype_name, expected_dtype, x, y);
-  Tensor z("", expected_dtype, bi.shape,
-           std::vector<uint8_t>(static_cast<size_t>(bi.element_count) * sizeof(TOut)));
+  const size_t n_bytes = static_cast<size_t>(bi.element_count) * sizeof(TOut);
+  Tensor z = MakeOutputTensor(expected_dtype, bi.shape, n_bytes, allocator);
   BinaryElementwise<TIn, TOut>(op_name, dtype_name, expected_dtype, x, y, z, op);
   return z;
 }
@@ -147,7 +154,7 @@ void BinaryElementwiseInOut(const char *op_name, const char *in_dtype_name, int3
 
   const TIn *px = reinterpret_cast<const TIn *>(x.bytes());
   const TIn *py = reinterpret_cast<const TIn *>(y.bytes());
-  TOut *pz = reinterpret_cast<TOut *>(output.data.data());
+  TOut *pz = reinterpret_cast<TOut *>(output.mutable_bytes());
 
   if (x.shape == y.shape) {
     for (int64_t i = 0; i < bi.element_count; ++i) {
@@ -185,13 +192,18 @@ void BinaryElementwiseInOut(const char *op_name, const char *in_dtype_name, int3
 /// Allocating variant of :cpp:func:`BinaryElementwiseInOut`. Builds the
 /// output tensor with the broadcasted shape and ``out_dtype``, then
 /// delegates to :cpp:func:`BinaryElementwiseInOut` to fill it in.
+///
+/// When ``allocator`` is non-null the output buffer is acquired from it
+/// directly. Pass ``nullptr`` (or omit the argument) to use inline
+/// allocation.
 template <typename TIn, typename TOut, typename Op>
 Tensor BinaryElementwiseAllocInOut(const char *op_name, const char *in_dtype_name, int32_t in_dtype,
                                    const char *out_dtype_name, int32_t out_dtype, const Tensor &x,
-                                   const Tensor &y, Op op) {
+                                   const Tensor &y, Op op,
+                                   RawBufferAllocator *allocator = nullptr) {
   const BroadcastInfo bi = CheckBinaryBroadcastInOut(op_name, in_dtype_name, in_dtype, x, y);
-  Tensor z("", out_dtype, bi.shape,
-           std::vector<uint8_t>(static_cast<size_t>(bi.element_count) * sizeof(TOut)));
+  const size_t n_bytes = static_cast<size_t>(bi.element_count) * sizeof(TOut);
+  Tensor z = MakeOutputTensor(out_dtype, bi.shape, n_bytes, allocator);
   BinaryElementwiseInOut<TIn, TOut>(op_name, in_dtype_name, in_dtype, out_dtype_name, out_dtype, x,
                                     y, z, op);
   return z;
@@ -220,7 +232,7 @@ void BinaryHalfElementwise(const char *op_name, const char *dtype_name, int32_t 
 
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   const uint16_t *py = reinterpret_cast<const uint16_t *>(y.bytes());
-  uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
+  uint16_t *pz = reinterpret_cast<uint16_t *>(output.mutable_bytes());
 
   if (x.shape == y.shape) {
     for (int64_t i = 0; i < bi.element_count; ++i) {
@@ -256,13 +268,18 @@ void BinaryHalfElementwise(const char *op_name, const char *dtype_name, int32_t 
 }
 
 /// Allocating half-precision binary element-wise kernel.
+///
+/// When ``allocator`` is non-null the output buffer is acquired from it
+/// directly. Pass ``nullptr`` (or omit the argument) to use inline
+/// allocation.
 template <typename Op>
 Tensor BinaryHalfElementwiseAlloc(const char *op_name, const char *dtype_name, int32_t dtype,
                                   const Tensor &x, const Tensor &y, HalfDecodeFunc decode,
-                                  HalfEncodeFunc encode, Op op) {
+                                  HalfEncodeFunc encode, Op op,
+                                  RawBufferAllocator *allocator = nullptr) {
   const BroadcastInfo bi = CheckBinaryBroadcast(op_name, dtype_name, dtype, x, y);
-  Tensor z("", dtype, bi.shape,
-           std::vector<uint8_t>(static_cast<size_t>(bi.element_count) * sizeof(uint16_t)));
+  const size_t n_bytes = static_cast<size_t>(bi.element_count) * sizeof(uint16_t);
+  Tensor z = MakeOutputTensor(dtype, bi.shape, n_bytes, allocator);
   BinaryHalfElementwise(op_name, dtype_name, dtype, x, y, z, decode, encode, op);
   return z;
 }
@@ -279,7 +296,7 @@ void BinaryHalfElementwiseInOut(const char *op_name, const char *in_dtype_name, 
 
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   const uint16_t *py = reinterpret_cast<const uint16_t *>(y.bytes());
-  TOut *pz = reinterpret_cast<TOut *>(output.data.data());
+  TOut *pz = reinterpret_cast<TOut *>(output.mutable_bytes());
 
   if (x.shape == y.shape) {
     for (int64_t i = 0; i < bi.element_count; ++i) {
@@ -315,14 +332,19 @@ void BinaryHalfElementwiseInOut(const char *op_name, const char *in_dtype_name, 
 }
 
 /// Allocating variant of :cpp:func:`BinaryHalfElementwiseInOut`.
+///
+/// When ``allocator`` is non-null the output buffer is acquired from it
+/// directly. Pass ``nullptr`` (or omit the argument) to use inline
+/// allocation.
 template <typename TOut, typename Op>
 Tensor BinaryHalfElementwiseAllocInOut(const char *op_name, const char *in_dtype_name,
                                        int32_t in_dtype, const char *out_dtype_name,
                                        int32_t out_dtype, const Tensor &x, const Tensor &y,
-                                       HalfDecodeFunc decode, Op op) {
+                                       HalfDecodeFunc decode, Op op,
+                                       RawBufferAllocator *allocator = nullptr) {
   const BroadcastInfo bi = CheckBinaryBroadcastInOut(op_name, in_dtype_name, in_dtype, x, y);
-  Tensor z("", out_dtype, bi.shape,
-           std::vector<uint8_t>(static_cast<size_t>(bi.element_count) * sizeof(TOut)));
+  const size_t n_bytes = static_cast<size_t>(bi.element_count) * sizeof(TOut);
+  Tensor z = MakeOutputTensor(out_dtype, bi.shape, n_bytes, allocator);
   BinaryHalfElementwiseInOut<TOut>(op_name, in_dtype_name, in_dtype, out_dtype_name, out_dtype, x,
                                    y, z, decode, op);
   return z;
@@ -334,7 +356,7 @@ void UnaryHalfElementwise(const Tensor &x, Tensor &output, HalfDecodeFunc decode
                           HalfEncodeFunc encode, Op op) {
   const int64_t n = x.element_count();
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
-  uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
   for (int64_t i = 0; i < n; ++i) {
     py[i] = encode(op(decode(px[i])));
   }
@@ -351,7 +373,7 @@ void BinaryHalfCompareElementwise(const char *op_name, const char *dtype_name, i
 
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   const uint16_t *py = reinterpret_cast<const uint16_t *>(y.bytes());
-  uint8_t *pz = output.data.data();
+  uint8_t *pz = output.mutable_bytes();
 
   if (x.shape == y.shape) {
     for (int64_t i = 0; i < bi.element_count; ++i) {
@@ -387,13 +409,17 @@ void BinaryHalfCompareElementwise(const char *op_name, const char *dtype_name, i
 }
 
 /// Allocating half-precision binary comparison kernel (decode→compare→BOOL).
+///
+/// When ``allocator`` is non-null the output buffer is acquired from it
+/// directly. Pass ``nullptr`` (or omit the argument) to use inline
+/// allocation.
 template <typename Op>
 Tensor BinaryHalfCompareElementwiseAlloc(const char *op_name, const char *dtype_name, int32_t dtype,
                                          const Tensor &x, const Tensor &y, HalfDecodeFunc decode,
-                                         Op op) {
+                                         Op op, RawBufferAllocator *allocator = nullptr) {
   const BroadcastInfo bi = CheckBinaryBroadcastInOut(op_name, dtype_name, dtype, x, y);
-  Tensor z("", DataType::BOOL, bi.shape,
-           std::vector<uint8_t>(static_cast<size_t>(bi.element_count)));
+  const size_t n_bytes = static_cast<size_t>(bi.element_count) * sizeof(uint8_t);
+  Tensor z = MakeOutputTensor(DataType::BOOL, bi.shape, n_bytes, allocator);
   BinaryHalfCompareElementwise(op_name, dtype_name, dtype, x, y, z, decode, op);
   return z;
 }

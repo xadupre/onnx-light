@@ -82,7 +82,7 @@ void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_
   EXT_ENFORCE_INVALID(output.shape == expected_shape, op_name,
                       " preallocated output shape must match the broadcasted "
                       "input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes, op_name,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes, op_name,
                       " preallocated output buffer has unexpected size in bytes.");
 }
 

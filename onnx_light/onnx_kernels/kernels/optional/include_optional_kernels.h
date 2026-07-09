@@ -10,6 +10,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
+// Forward declaration for allocator-aware operator() overloads.
+class RuntimeContext;
+
 namespace kernel {
 
 // ---------------------------------------------------------------------------
@@ -52,7 +55,7 @@ class Optional : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &input) const;
+  Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, Tensor &output) const;
 
   /// Output is a byte-for-byte copy of ``input``, so storage may safely be
@@ -77,7 +80,7 @@ class OptionalGetElement : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &input) const;
+  Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, Tensor &output) const;
   Sequence operator()(const Sequence &input) const;
 
@@ -103,11 +106,11 @@ public:
 
   /// Tensor input: always returns ``Tensor<bool, {}>{true}`` (the input
   /// is assumed to be the present element).
-  Tensor operator()(const Tensor &input) const;
+  Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
   /// Sequence input: always returns ``Tensor<bool, {}>{true}``.
-  Tensor operator()(const Sequence &input) const;
+  Tensor operator()(const Sequence &input, RuntimeContext *rt = nullptr) const;
   /// No input (opset 18 only): returns ``Tensor<bool, {}>{false}``.
-  Tensor operator()() const;
+  Tensor operator()(RuntimeContext *rt = nullptr) const;
 
   /// Output is a fresh scalar bool tensor unrelated to any input
   /// storage; aliasing is not permitted.

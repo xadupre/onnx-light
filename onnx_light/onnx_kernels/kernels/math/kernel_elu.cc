@@ -6,6 +6,7 @@
 
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -23,7 +24,7 @@ constexpr const char *kName = "kernel::Elu";
 template <typename T> void ComputeInPlace(const Tensor &x, T alpha, Tensor &output) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
-  T *py = reinterpret_cast<T *>(output.data.data());
+  T *py = reinterpret_cast<T *>(output.mutable_bytes());
   for (int64_t i = 0; i < n; ++i) {
     const T v = px[i];
     py[i] = v < static_cast<T>(0) ? alpha * (std::exp(v) - static_cast<T>(1)) : v;
@@ -37,7 +38,7 @@ void ComputeHalf(const Tensor &x, float alpha, Tensor &output, DecodeFunc decode
                  EncodeFunc encode) {
   const int64_t n = x.element_count();
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
-  uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
   for (int64_t i = 0; i < n; ++i) {
     const float v = decode(px[i]);
     py[i] = encode(v < 0.0f ? alpha * (std::exp(v) - 1.0f) : v);
@@ -68,14 +69,15 @@ void ValidateOutput(const Tensor &x, const Tensor &output) {
   EXT_ENFORCE_INVALID(output.data_type == x.data_type, kName,
                       ": output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), kName, ": output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(), kName,
+                      ": output buffer size mismatch.");
 }
 
 } // namespace
 
-Tensor Elu::operator()(const Tensor &x, float alpha) const {
-  Tensor out("", x.data_type, x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * x.element_size()));
+Tensor Elu::operator()(const Tensor &x, float alpha, RuntimeContext *rt) const {
+  const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
+  Tensor out = MakeOutputTensor(x.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   Dispatch(x, alpha, out);
   return out;
 }

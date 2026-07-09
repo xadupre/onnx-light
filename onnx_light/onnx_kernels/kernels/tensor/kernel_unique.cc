@@ -321,14 +321,14 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
       }
       out.y = Tensor::FromStrings("", {n_unique}, y_strs);
     } else {
-      Tensor y("", x.data_type, {n_unique},
-               std::vector<uint8_t>(static_cast<std::size_t>(n_unique) * elem_size));
+      const size_t y_n_bytes = static_cast<std::size_t>(n_unique) * elem_size;
+      Tensor y = MakeOutputTensor(x.data_type, {n_unique}, y_n_bytes, nullptr);
       for (int64_t g = 0; g < n_unique; ++g) {
         const std::size_t src_off =
             static_cast<std::size_t>(groups.first_occurrence[static_cast<std::size_t>(g)]) *
             elem_size;
         const std::size_t dst_off = static_cast<std::size_t>(g) * elem_size;
-        std::memcpy(y.data.data() + dst_off, x.bytes() + src_off, elem_size);
+        std::memcpy(y.mutable_bytes() + dst_off, x.bytes() + src_off, elem_size);
       }
       out.y = std::move(y);
     }
@@ -357,8 +357,8 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
       out.y = Tensor::FromStrings("", y_shape, y_strs);
     } else {
       const std::size_t block_bytes = static_cast<std::size_t>(inner_elems) * elem_size;
-      Tensor y("", x.data_type, y_shape,
-               std::vector<uint8_t>(static_cast<std::size_t>(y_total) * elem_size));
+      const size_t y_n_bytes = static_cast<std::size_t>(y_total) * elem_size;
+      Tensor y = MakeOutputTensor(x.data_type, y_shape, y_n_bytes, nullptr);
       for (int64_t o = 0; o < outer; ++o) {
         for (int64_t g = 0; g < n_unique; ++g) {
           const int64_t k = groups.first_occurrence[static_cast<std::size_t>(g)];
@@ -370,7 +370,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
               (static_cast<std::size_t>(o) * static_cast<std::size_t>(n_unique) +
                static_cast<std::size_t>(g)) *
               block_bytes;
-          std::memcpy(y.data.data() + dst_off, x.bytes() + src_off, block_bytes);
+          std::memcpy(y.mutable_bytes() + dst_off, x.bytes() + src_off, block_bytes);
         }
       }
       out.y = std::move(y);

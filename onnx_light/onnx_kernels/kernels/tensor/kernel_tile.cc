@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -45,7 +46,7 @@ std::vector<int64_t> ComputeTileOutputShape(const std::vector<int64_t> &in_shape
 
 } // namespace
 
-Tensor Tile::operator()(const Tensor &input, const Tensor &repeats) const {
+Tensor Tile::operator()(const Tensor &input, const Tensor &repeats, RuntimeContext *rt) const {
   const std::vector<int64_t> reps = ReadTileRepeatsInput(repeats, input.shape.size());
   const std::vector<int64_t> out_shape = ComputeTileOutputShape(input.shape, reps);
   const std::size_t elem_size = ElementSize(input.data_type);
@@ -53,8 +54,9 @@ Tensor Tile::operator()(const Tensor &input, const Tensor &repeats) const {
   for (int64_t d : out_shape) {
     total_elements *= d;
   }
-  Tensor out("", input.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<std::size_t>(total_elements) * elem_size));
+  const size_t out_n_bytes = static_cast<std::size_t>(total_elements) * elem_size;
+  Tensor out =
+      MakeOutputTensor(input.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(input, repeats, out);
   return out;
 }
@@ -104,7 +106,7 @@ void Tile::operator()(const Tensor &input, const Tensor &repeats, Tensor &output
       const int64_t in_coord = input.shape[k] == 0 ? 0 : (out_coord % input.shape[k]);
       in_idx += in_coord * in_strides[k];
     }
-    std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * elem_size,
+    std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(out_idx) * elem_size,
                 input.bytes() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
   }
 }

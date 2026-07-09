@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
@@ -56,13 +57,13 @@ int64_t LastDim(const std::vector<int64_t> &shape) { return shape.empty() ? 1 : 
 
 template <typename T>
 Tensor Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
-                          const std::vector<float> &scale) const {
+                          const std::vector<float> &scale, RuntimeContext *rt) const {
   ValidateInput<T>(x);
   ValidateAttrs(offset, scale, LastDim(x.shape));
   const int64_t n = x.element_count();
   std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(float));
   Tensor out("", TensorElementType<float>::value, x.shape, std::move(bytes));
-  ApplyScaler<T>(x, offset, scale, reinterpret_cast<float *>(out.data.data()));
+  ApplyScaler<T>(x, offset, scale, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }
 
@@ -75,7 +76,7 @@ void Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
                       "kernel::Scaler preallocated output dtype must be float.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::Scaler preallocated output shape must match the input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(x.element_count()) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(x.element_count()) * sizeof(float),
                       "kernel::Scaler preallocated output buffer is incorrectly sized.");
   ApplyScaler<T>(x, offset, scale, output.As<float>());
 }
@@ -83,7 +84,7 @@ void Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_SCALER(T)                                                           \
   template Tensor Scaler::operator()<T>(const Tensor &, const std::vector<float> &,                \
-                                        const std::vector<float> &) const;                         \
+                                        const std::vector<float> &, RuntimeContext *) const;       \
   template void Scaler::operator()<T>(const Tensor &, const std::vector<float> &,                  \
                                       const std::vector<float> &, Tensor &) const
 

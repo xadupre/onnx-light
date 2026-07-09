@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/rt/include_rt_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -42,7 +43,7 @@ DelayedInitializer::DelayedInitializer(const KernelContext &ctx, Attributes attr
   }
 }
 
-Tensor DelayedInitializer::operator()() const {
+Tensor DelayedInitializer::operator()(RuntimeContext *rt) const {
   if (attrs_.load_device == "cpu") {
     return Tensor("", attrs_.dtype, attrs_.shape, loaded_bytes_);
   }

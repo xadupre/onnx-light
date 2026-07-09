@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -149,7 +150,7 @@ int64_t MapCoord(int64_t out_coord, int64_t pad_begin, int64_t input_dim, const 
 } // namespace
 
 Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
-                       const Tensor *axes, const std::string &mode) const {
+                       const Tensor *axes, const std::string &mode, RuntimeContext *rt) const {
   const std::size_t rank = data.shape.size();
   const std::vector<int64_t> axes_vec = ResolveAxes(axes, rank);
   const std::vector<int64_t> pads_vec = ReadInt64Vector(pads, "pads");
@@ -179,8 +180,9 @@ Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *con
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<std::size_t>(total) * elem_size));
+  const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, pads, constant_value, axes, mode, out);
   return out;
 }
@@ -244,7 +246,7 @@ void Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *const
       }
       in_idx += mapped * in_strides[k];
     }
-    uint8_t *const dst = output.data.data() + static_cast<std::size_t>(out_idx) * elem_size;
+    uint8_t *const dst = output.mutable_bytes() + static_cast<std::size_t>(out_idx) * elem_size;
     if (is_pad) {
       std::memcpy(dst, constant_bytes.data(), elem_size);
     } else {

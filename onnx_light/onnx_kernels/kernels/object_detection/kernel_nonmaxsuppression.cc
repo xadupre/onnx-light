@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -114,7 +115,7 @@ void ValidateInputs(const Tensor &boxes, const Tensor &scores,
 Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
                                      const Tensor *max_output_boxes_per_class,
                                      const Tensor *iou_threshold, const Tensor *score_threshold,
-                                     const Attributes &attrs) const {
+                                     const Attributes &attrs, RuntimeContext *rt) const {
   ValidateInputs(boxes, scores, max_output_boxes_per_class, iou_threshold, score_threshold);
 
   const int64_t num_batches = boxes.shape[0];

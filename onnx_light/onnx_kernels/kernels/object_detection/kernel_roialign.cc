@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -116,7 +117,7 @@ void ValidateInputs(const Tensor &x, const Tensor &rois, const Tensor &batch_ind
 } // namespace
 
 Tensor RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &batch_indices,
-                            const Attributes &attrs) const {
+                            const Attributes &attrs, RuntimeContext *rt) const {
   ValidateInputs(x, rois, batch_indices, attrs);
   const int64_t num_rois = rois.shape[0];
   const int64_t C = x.shape[1];
@@ -125,8 +126,9 @@ Tensor RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &b
   for (int64_t d : out_shape) {
     out_elements *= d;
   }
-  Tensor out("", x.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_elements) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(out_elements) * sizeof(float);
+  Tensor out =
+      MakeOutputTensor(x.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, rois, batch_indices, attrs, out);
   return out;
 }
@@ -150,7 +152,7 @@ void RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &bat
                       "kernel::RoiAlign preallocated output shape must be "
                       "(num_rois, C, output_height, output_width).");
   const size_t expected_bytes = static_cast<size_t>(num_rois * C * out_h * out_w) * sizeof(float);
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::RoiAlign preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();

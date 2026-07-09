@@ -7,6 +7,7 @@
 #include "onnx_kernels/kernels/traditionalml/kernel_svm_common.h"
 #include "onnx_kernels/kernels/traditionalml/kernel_tree_ensemble_common.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <vector>
 
@@ -131,7 +132,7 @@ Tensor TreeEnsemble::operator()(
     const std::vector<int64_t> &nodes_falseleafs, const std::vector<int64_t> &nodes_missing,
     const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
     const std::vector<T> &membership_values, int64_t n_targets, int64_t aggregate_function,
-    int64_t post_transform) const {
+    int64_t post_transform, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(n_targets >= 1, "kernel::TreeEnsemble: n_targets must be >= 1.");
   EXT_ENFORCE_INVALID(post_transform == kPostNone || post_transform == kPostSoftmax,
                       "kernel::TreeEnsemble: only post_transform 0 (NONE) or 1 (SOFTMAX) "
@@ -221,7 +222,7 @@ Tensor TreeEnsemble::operator()(
       const std::vector<T> &, const std::vector<uint8_t> &, const std::vector<int64_t> &,          \
       const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
       const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<T> &,          \
-      const std::vector<T> &, int64_t, int64_t, int64_t) const
+      const std::vector<T> &, int64_t, int64_t, int64_t, RuntimeContext *) const
 
 ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(float);
 ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(double);

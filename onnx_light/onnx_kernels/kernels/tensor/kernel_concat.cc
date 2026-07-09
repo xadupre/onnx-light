@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 #include <vector>
@@ -58,14 +59,16 @@ ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t
 
 } // namespace
 
-Tensor Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis) const {
+Tensor Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis,
+                          RuntimeContext *rt) const {
   const ConcatLayout layout = ValidateAndComputeLayout(inputs, axis);
   int64_t total = 1;
   for (int64_t d : layout.shape) {
     total *= d;
   }
-  Tensor out("", inputs[0].data_type, layout.shape,
-             std::vector<uint8_t>(static_cast<size_t>(total) * layout.elem_size));
+  const size_t out_n_bytes = static_cast<size_t>(total) * layout.elem_size;
+  Tensor out = MakeOutputTensor(inputs[0].data_type, layout.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(inputs, axis, out);
   return out;
 }
@@ -97,7 +100,7 @@ void Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis, Tensor 
   const size_t row_bytes = out_axis * inner_bytes;
 
   const size_t expected_bytes = static_cast<size_t>(outer) * row_bytes;
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::Concat preallocated output buffer has unexpected size in bytes.");
 
   size_t row_offset = 0;
@@ -105,7 +108,7 @@ void Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis, Tensor 
     const size_t axis_dim = static_cast<size_t>(t.shape[static_cast<size_t>(resolved_axis)]);
     const size_t block_bytes = axis_dim * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
-      std::memcpy(output.data.data() + static_cast<size_t>(o) * row_bytes + row_offset,
+      std::memcpy(output.mutable_bytes() + static_cast<size_t>(o) * row_bytes + row_offset,
                   t.bytes() + static_cast<size_t>(o) * block_bytes, block_bytes);
     }
     row_offset += block_bytes;

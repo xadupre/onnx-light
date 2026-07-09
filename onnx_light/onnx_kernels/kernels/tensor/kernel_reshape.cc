@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -89,7 +90,8 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &data, const std::vector<in
 
 } // namespace
 
-Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowzero) const {
+Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowzero,
+                           RuntimeContext *rt) const {
   const std::vector<int64_t> target = ReadShapeTensor(shape);
   const std::vector<int64_t> out_shape = ComputeOutputShape(data, target, allowzero);
   const std::size_t elem_size = ElementSize(data.data_type);
@@ -97,8 +99,9 @@ Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allo
   for (int64_t d : out_shape) {
     element_count *= d;
   }
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<std::size_t>(element_count) * elem_size));
+  const size_t out_n_bytes = static_cast<std::size_t>(element_count) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, shape, allowzero, out);
   return out;
 }
@@ -111,9 +114,9 @@ void Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowz
                       "kernel::Reshape: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::Reshape: preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == data.size_bytes(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == data.size_bytes(),
                       "kernel::Reshape: preallocated output byte-size mismatch.");
-  std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
+  std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
 }
 
 } // namespace kernel

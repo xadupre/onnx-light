@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include "onnx_light_helpers.h"
 #include <cstdint>
 #include <cstring>
@@ -94,32 +95,32 @@ void ValidatePreallocatedOutput(const Tensor &output, const std::vector<int64_t>
   for (int64_t d : expected_shape) {
     expected_n *= d;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(expected_n) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(expected_n) * sizeof(float),
                       "kernel::OneHotEncoder preallocated output buffer is incorrectly sized.");
 }
 
 } // namespace
 
 template <typename T>
-Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats,
-                                 bool zeros) const {
+Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
+                                 RuntimeContext *rt) const {
   ValidateNumericInput<T>(x, cats);
   const std::vector<int64_t> out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
   std::vector<uint8_t> bytes(static_cast<size_t>(total) * sizeof(float));
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape, std::move(bytes));
-  FillOneHotNumeric<T>(x, cats, zeros, reinterpret_cast<float *>(out.data.data()));
+  FillOneHotNumeric<T>(x, cats, zeros, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }
 
-Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &cats,
-                                 bool zeros) const {
+Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
+                                 RuntimeContext *rt) const {
   ValidateStringInput(x, cats);
   const std::vector<int64_t> out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
   std::vector<uint8_t> bytes(static_cast<size_t>(total) * sizeof(float));
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape, std::move(bytes));
-  FillOneHotString(x, cats, zeros, reinterpret_cast<float *>(out.data.data()));
+  FillOneHotString(x, cats, zeros, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }
 
@@ -144,8 +145,8 @@ void OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &
 
 // Explicit instantiations for the supported numeric element types.
 #define ONNX_LIGHT_INSTANTIATE_ONE_HOT_ENCODER(T)                                                  \
-  template Tensor OneHotEncoder::operator()<T>(const Tensor &, const std::vector<int64_t> &, bool) \
-      const;                                                                                       \
+  template Tensor OneHotEncoder::operator()<T>(const Tensor &, const std::vector<int64_t> &, bool, \
+                                               RuntimeContext *) const;                            \
   template void OneHotEncoder::operator()<T>(const Tensor &, const std::vector<int64_t> &, bool,   \
                                              Tensor &) const
 

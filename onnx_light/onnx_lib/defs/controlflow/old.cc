@@ -835,20 +835,9 @@ static int handle_negative_axis_validate_opset9(const std::string &attrib, int a
 static void ScanInferenceFunction_opset9(InferenceContext &ctx) {
   auto num_inputs = ctx.getNumInputs();
   auto num_scan_inputs = narrow<size_t>(getRequiredAttributeInt(ctx, "num_scan_inputs"));
-  // Guard against size_t underflow (GHSA-qrhj-v62m-vmpf): num_scan_inputs must
-  // not exceed the number of Scan inputs or the subtraction below wraps around.
-  if (num_scan_inputs > num_inputs) {
-    fail_shape_inference("num_scan_inputs (", num_scan_inputs,
-                         ") cannot exceed the number of Scan inputs (", num_inputs, ").");
-  }
-  auto num_loop_state_vars = num_inputs - num_scan_inputs;
   auto num_outputs = ctx.getNumOutputs();
-  // Guard the second subtraction: loop state vars must not exceed the output count.
-  if (num_loop_state_vars > num_outputs) {
-    fail_shape_inference("The number of outputs of the Scan (", num_outputs,
-                         ") should equal the sum of the number of loop state variables (",
-                         num_loop_state_vars, ") and the number of scan-outputs.");
-  }
+  auto num_loop_state_vars =
+      ValidateScanCountsAndGetNumLoopStateVars(num_inputs, num_scan_inputs, num_outputs);
   auto num_scan_outputs = num_outputs - num_loop_state_vars;
 
   std::vector<int64_t> axes, output_axes;

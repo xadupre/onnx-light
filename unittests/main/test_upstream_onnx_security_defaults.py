@@ -1,5 +1,10 @@
-import unittest
+import os
 from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+import unittest
 
 
 class TestUpstreamOnnxSecurityDefaults(unittest.TestCase):
@@ -47,7 +52,50 @@ class TestUpstreamOnnxSecurityDefaults(unittest.TestCase):
 
         self.assertIn(r're.match(r"(\d+)\.(\d+)\.(\d+)", onnx.__version__)', build_sh)
         self.assertIn('print("v" + release if parts >= (1, 21, 0) else "v1.21.0")', build_sh)
-        self.assertIn('else:\n    print("v1.21.0")', build_sh)
+        self.assertIn("falling back to v1.21.0", build_sh)
+
+    def _get_build_sh_python_snippet(self):
+        build_sh = (self.root / "examples" / "load_onnx_time" / "build.sh").read_text(
+            encoding="utf-8"
+        )
+        match = re.search(r"<<'PY'\n(.*?)\nPY", build_sh, re.DOTALL)
+        self.assertIsNotNone(match, "Unable to find embedded Python in build.sh")
+        return match.group(1)
+
+    def _run_build_sh_python_snippet(self, version: str):
+        snippet = self._get_build_sh_python_snippet()
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "onnx.py").write_text(f'__version__ = "{version}"\n', encoding="utf-8")
+            env = dict(os.environ)
+            env["PYTHONPATH"] = (
+                tmp if not env.get("PYTHONPATH") else tmp + os.pathsep + env["PYTHONPATH"]
+            )
+            proc = subprocess.run(
+                [sys.executable, "-c", snippet],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+        self.assertEqual(proc.returncode, 0, msg=f"stderr:\n{proc.stderr}")
+        return proc.stdout.strip(), proc.stderr.strip()
+
+    def test_build_sh_version_clamp_runtime(self):
+        stdout, stderr = self._run_build_sh_python_snippet("1.17.0")
+        self.assertEqual(stdout, "v1.21.0")
+        self.assertEqual(stderr, "")
+
+        stdout, stderr = self._run_build_sh_python_snippet("1.21.0")
+        self.assertEqual(stdout, "v1.21.0")
+        self.assertEqual(stderr, "")
+
+        stdout, stderr = self._run_build_sh_python_snippet("1.22.0.dev20260615")
+        self.assertEqual(stdout, "v1.22.0")
+        self.assertEqual(stderr, "")
+
+        stdout, stderr = self._run_build_sh_python_snippet("invalid")
+        self.assertEqual(stdout, "v1.21.0")
+        self.assertIn("falling back to v1.21.0", stderr)
 
 
 if __name__ == "__main__":

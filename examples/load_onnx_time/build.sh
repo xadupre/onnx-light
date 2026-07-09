@@ -87,6 +87,7 @@ if [ -z "${ONNX_GIT_TAG}" ] && ! _cmake_pkg_found ONNX; then
         ONNX_GIT_TAG="$("${_py}" - <<'PY'
 import onnx
 import re
+import sys
 
 match = re.match(r"(\d+)\.(\d+)\.(\d+)", onnx.__version__)
 if match:
@@ -94,6 +95,11 @@ if match:
     release = ".".join(match.groups())
     print("v" + release if parts >= (1, 21, 0) else "v1.21.0")
 else:
+    print(
+        f"Warning: Unable to parse ONNX version {onnx.__version__!r}, "
+        "falling back to v1.21.0",
+        file=sys.stderr,
+    )
     print("v1.21.0")
 PY
 )"

@@ -2130,7 +2130,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
     ASSERT_NO_THROW(onnx_optim::annotations::WriteValueAndNodeTagsToMetadata(*graph))
         << "case: " << tc.name;
 
-    const GraphProto &expected_graph = tc.model.ref_graph();
+    const GraphProto &reference_graph = tc.model.ref_graph();
 
     const auto has_value_tag = [&](const auto &value) {
       return MetadataOf(value).contains(onnx_optim::annotations::kValueTagMetadataKey);
@@ -2158,12 +2158,12 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
       }
     };
 
-    expect_node_tag_presence_matches(graph->ref_node(), expected_graph.ref_node());
-    expect_tag_presence_matches(graph->ref_input(), expected_graph.ref_input(), "input");
-    expect_tag_presence_matches(graph->ref_value_info(), expected_graph.ref_value_info(),
+    expect_node_tag_presence_matches(graph->ref_node(), reference_graph.ref_node());
+    expect_tag_presence_matches(graph->ref_input(), reference_graph.ref_input(), "input");
+    expect_tag_presence_matches(graph->ref_value_info(), reference_graph.ref_value_info(),
                                 "value_info");
-    expect_tag_presence_matches(graph->ref_output(), expected_graph.ref_output(), "output");
-    expect_tag_presence_matches(graph->ref_initializer(), expected_graph.ref_initializer(),
+    expect_tag_presence_matches(graph->ref_output(), reference_graph.ref_output(), "output");
+    expect_tag_presence_matches(graph->ref_initializer(), reference_graph.ref_initializer(),
                                 "initializer");
   }
   ASSERT_TRUE(found) << "no shape_tag backend cases were collected";

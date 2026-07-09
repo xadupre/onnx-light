@@ -118,6 +118,21 @@ class TestUtilityFunctions(ExtTestCase):
             with self.assertRaisesRegex(RuntimeError, "symbolic links"):
                 utils._extract_model_safe(tar_path, base)
 
+    def test_onnx_light_has_no_hub_module(self) -> None:
+        """Verifies that onnx_light.onnx does not expose a hub attribute.
+
+        GHSA-hqmj-h5c6-369m: the upstream onnx.hub.load() feature was found to
+        silently bypass trust warnings when called with silent=True, and its
+        SHA-256 integrity check was ineffective because the manifest lived in
+        the same attacker-controlled repository.  The upstream fix was to remove
+        the feature entirely.  onnx-light never implemented hub, so this test
+        guards against accidentally introducing it in the future.
+        """
+        self.assertFalse(
+            hasattr(onnxl, "hub"),
+            "onnx_light.onnx must not expose a 'hub' attribute (see GHSA-hqmj-h5c6-369m).",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -171,6 +171,55 @@ class TestValidateExternalDataPath(unittest.TestCase):
 
             shutil.rmtree(outside_dir, ignore_errors=True)
 
+    @unittest.skipUnless(
+        hasattr(os, "symlink") and sys.platform != "win32",
+        "Symlinks require POSIX or elevated privileges on Windows",
+    )
+    def test_rejects_symlink_inside_dir(self):
+        # Symlink final component that points to a file inside the directory;
+        # still rejected as defense-in-depth to prevent TOCTOU races.
+        target = os.path.join(self.tmpdir, "weights.bin")
+        with open(target, "wb") as f:
+            f.write(b"\x00" * 16)
+        link_path = os.path.join(self.tmpdir, "link.bin")
+        os.symlink(target, link_path)
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                validate_external_data_path("link.bin", self.tmpdir)
+            self.assertIn("symbolic link", str(ctx.exception))
+        finally:
+            os.unlink(link_path)
+
+    @unittest.skipUnless(
+        sys.platform != "win32", "Hard link count check may not be supported on Windows"
+    )
+    def test_rejects_hardlink(self):
+        # A hardlink inside the model directory to a file outside it must be
+        # rejected regardless of the containment check passing.
+        import errno
+        import shutil
+
+        outside_dir = tempfile.mkdtemp()
+        original = os.path.join(outside_dir, "sensitive.bin")
+        with open(original, "wb") as f:
+            f.write(b"sensitive data")
+        hardlink = os.path.join(self.tmpdir, "hardlink_weights.bin")
+        try:
+            os.link(original, hardlink)
+        except OSError as exc:
+            shutil.rmtree(outside_dir, ignore_errors=True)
+            if exc.errno in (errno.EXDEV, errno.EPERM, getattr(errno, "ENOTSUP", None)):
+                self.skipTest("Hard links not supported (possibly cross-device).")
+            raise
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                validate_external_data_path("hardlink_weights.bin", self.tmpdir)
+            self.assertIn("hard link", str(ctx.exception))
+        finally:
+            if os.path.exists(hardlink):
+                os.unlink(hardlink)
+            shutil.rmtree(outside_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

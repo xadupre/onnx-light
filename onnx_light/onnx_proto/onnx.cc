@@ -861,6 +861,18 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
                 "' resolves outside the base directory '", base_dir, "' for tensor '",
                 ref_name().as_string(), "'.");
   }
+  // Reject hardlinks: a hardlink to a sensitive file placed inside the model
+  // directory would pass the path-traversal and symlink checks above, but
+  // would allow reading arbitrary files on disk.
+  {
+    std::error_code ec_hc;
+    auto hc = std::filesystem::hard_link_count(data_path, ec_hc);
+    EXT_ENFORCE(!ec_hc, "TensorProto::LoadExternalData: could not determine hard link count for '",
+                data_path.string(), "': ", ec_hc.message());
+    EXT_ENFORCE(hc <= 1, "TensorProto::LoadExternalData: external data file '", data_path.string(),
+                "' has multiple hard links (", static_cast<int64_t>(hc),
+                "), which is not allowed for tensor '", ref_name().as_string(), "'.");
+  }
   std::ifstream file(data_path, std::ios::binary);
   EXT_ENFORCE(file.is_open(), "TensorProto::LoadExternalData unable to open external data file '",
               data_path.string(), "' for tensor '", ref_name().as_string(), "'.");

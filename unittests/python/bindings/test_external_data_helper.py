@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+import warnings
 
 import numpy as np
 
@@ -172,8 +173,6 @@ class TestExternalDataHelper(ExtTestCase):
 
     def test_external_data_info_unknown_key_warns(self):
         """Unknown external data keys must trigger a warning and be ignored."""
-        import warnings
-
         tensor = onnxl.TensorProto()
         tensor.name = "t"
         tensor.data_type = onnxl.TensorProto.FLOAT

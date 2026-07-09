@@ -25,6 +25,7 @@ from . import TensorProto
 _ALLOWED_EXTERNAL_DATA_KEYS: frozenset[str] = frozenset(
     {"location", "offset", "length", "checksum", "basepath"}
 )
+_MAX_KEY_LENGTH_FOR_WARNING = 100
 
 
 class ExternalDataInfo:
@@ -49,7 +50,10 @@ class ExternalDataInfo:
         for entry in tensor.external_data:
             key = entry.key
             if key not in _ALLOWED_EXTERNAL_DATA_KEYS:
-                unknown_keys.add(key[:100] + ("..." if len(key) > 100 else ""))
+                unknown_keys.add(
+                    key[:_MAX_KEY_LENGTH_FOR_WARNING]
+                    + ("..." if len(key) > _MAX_KEY_LENGTH_FOR_WARNING else "")
+                )
                 continue
             if key == "location":
                 self.location = entry.value

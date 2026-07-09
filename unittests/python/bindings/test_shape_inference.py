@@ -259,47 +259,58 @@ class TestShapeInference(ExtTestCase):
     ) -> None:
         """Compares two TypeProto objects for compatible type and shape."""
         if vi_type.has_tensor_type():
-            assert (
-                inferred_vi_type.has_tensor_type()
-            ), f"Expected tensor type, got {inferred_vi_type!r}"
-            assert (
-                vi_type.tensor_type.elem_type == inferred_vi_type.tensor_type.elem_type
-            ), f"\n{vi_type}\n{inferred_vi_type}\n"
-            assert (
-                vi_type.tensor_type.has_shape() == inferred_vi_type.tensor_type.has_shape()
-            ), f"\n{vi_type}\n{inferred_vi_type}\n"
+            self.assertTrue(
+                inferred_vi_type.has_tensor_type(),
+                f"Expected tensor type, got {inferred_vi_type!r}",
+            )
+            self.assertEqual(
+                vi_type.tensor_type.elem_type,
+                inferred_vi_type.tensor_type.elem_type,
+                f"\n{vi_type}\n{inferred_vi_type}\n",
+            )
+            self.assertEqual(
+                vi_type.tensor_type.has_shape(),
+                inferred_vi_type.tensor_type.has_shape(),
+                f"\n{vi_type}\n{inferred_vi_type}\n",
+            )
             if vi_type.tensor_type.has_shape():
-                assert len(vi_type.tensor_type.shape.dim) == len(
-                    inferred_vi_type.tensor_type.shape.dim
-                ), f"\n{vi_type}\n{inferred_vi_type}\n"
+                self.assertEqual(
+                    len(vi_type.tensor_type.shape.dim),
+                    len(inferred_vi_type.tensor_type.shape.dim),
+                    f"\n{vi_type}\n{inferred_vi_type}\n",
+                )
                 for dim_i, dim in enumerate(vi_type.tensor_type.shape.dim):
                     inferred_dim = inferred_vi_type.tensor_type.shape.dim[dim_i]
                     if dim.dim_param:
-                        assert (
-                            dim.dim_param == inferred_dim.dim_param
-                        ), f"\n{vi_type}\n{inferred_vi_type}\n"
+                        self.assertEqual(
+                            dim.dim_param,
+                            inferred_dim.dim_param,
+                            f"\n{vi_type}\n{inferred_vi_type}\n",
+                        )
                     else:
-                        assert (
-                            dim.dim_value == inferred_dim.dim_value
-                        ), f"\n{vi_type}\n{inferred_vi_type}\n"
+                        self.assertEqual(
+                            dim.dim_value,
+                            inferred_dim.dim_value,
+                            f"\n{vi_type}\n{inferred_vi_type}\n",
+                        )
         elif vi_type.has_sequence_type():
-            assert inferred_vi_type.has_sequence_type()
+            self.assertTrue(inferred_vi_type.has_sequence_type())
             self._compare_value_infos(
                 vi_type.sequence_type.elem_type, inferred_vi_type.sequence_type.elem_type
             )
         elif vi_type.has_optional_type():
-            assert inferred_vi_type.has_optional_type()
+            self.assertTrue(inferred_vi_type.has_optional_type())
             self._compare_value_infos(
                 vi_type.optional_type.elem_type, inferred_vi_type.optional_type.elem_type
             )
         elif vi_type.has_map_type():
-            assert inferred_vi_type.has_map_type()
-            assert vi_type.map_type.key_type == inferred_vi_type.map_type.key_type
+            self.assertTrue(inferred_vi_type.has_map_type())
+            self.assertEqual(vi_type.map_type.key_type, inferred_vi_type.map_type.key_type)
             self._compare_value_infos(
                 vi_type.map_type.value_type, inferred_vi_type.map_type.value_type
             )
         elif vi_type == onnxl.TypeProto():
-            assert inferred_vi_type == onnxl.TypeProto()
+            self.assertEqual(inferred_vi_type, onnxl.TypeProto())
         else:
             raise NotImplementedError(
                 f"Unrecognized value info type in _compare_value_infos: {vi_type!r}"
@@ -364,9 +375,11 @@ class TestShapeInference(ExtTestCase):
                 self._compare_value_infos(inferred[x.name].type, x.type)
             else:
                 inferred[x.name] = x
-        assert expected.keys() == inferred.keys(), (
+        self.assertEqual(
+            expected.keys(),
+            inferred.keys(),
             f"\nExpected value infos for: {sorted(expected)}"
-            f"\nInferred value infos for: {sorted(inferred)}\n"
+            f"\nInferred value infos for: {sorted(inferred)}\n",
         )
         for name, expected_vi in expected.items():
             self._compare_value_infos(expected_vi.type, inferred[name].type)

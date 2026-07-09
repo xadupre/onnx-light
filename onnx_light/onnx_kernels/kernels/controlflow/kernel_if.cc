@@ -16,9 +16,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
-                      RuntimeContext *rt) const {
-  (void)rt;
+Tensor If::operator()(const Tensor &cond, const Tensor &then_value,
+                      const Tensor &else_value) const {
   EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL,
                       "kernel::If: 'cond' must be a BOOL tensor.");
   EXT_ENFORCE_INVALID(cond.element_count() == 1,

@@ -327,7 +327,7 @@ TEST(KernelClass, IfBranchOverloadPropagatesOuterScopeSequence) {
   onnx_kernels::RuntimeContext rt(ctx);
 
   // Seed an outer-scope sequence with 3 FLOAT tensors.
-  Sequence outer_seq("outer_seq", static_cast<int32_t>(onnx_kernels::DataType::FLOAT),
+  Sequence outer_seq("outer_seq", onnx_kernels::DataType::FLOAT,
                      {Tensor::FromFloat("", {1}, {1.0f}), Tensor::FromFloat("", {1}, {2.0f}),
                       Tensor::FromFloat("", {1}, {3.0f})});
   rt.PutSequence("outer_seq", std::move(outer_seq));

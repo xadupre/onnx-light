@@ -31,7 +31,7 @@ template <typename T> T ReadScalar(const Tensor &t, const char *name) {
 // Fills ``n`` range elements into ``out_ptr`` starting at ``s`` with step ``d``.
 template <typename T> void FillRangeBuffer(T s, T d, int64_t n, T *out_ptr) {
   for (int64_t i = 0; i < n; ++i) {
-    out_ptr[i] = static_cast<T>(s + static_cast<T>(i * d));
+    out_ptr[i] = s + static_cast<T>(i) * d;
   }
 }
 
@@ -78,7 +78,7 @@ void ComputeRangeInto(const Tensor &start, const Tensor &limit, const Tensor &de
   const int64_t n = ComputeRangeCount(s, l, d);
   EXT_ENFORCE_INVALID(output.data_type == expected_dtype,
                       "kernel::Range preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == (std::vector<int64_t>{n}),
+  EXT_ENFORCE_INVALID(output.shape.size() == 1 && output.shape[0] == n,
                       "kernel::Range preallocated output shape must match the produced tensor "
                       "shape.");
   EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(n) * sizeof(T),
@@ -134,7 +134,7 @@ void ComputeRangeHalfInto(const Tensor &start, const Tensor &limit, const Tensor
   const int64_t n = ComputeRangeCount(s, l, d);
   EXT_ENFORCE_INVALID(output.data_type == expected_dtype,
                       "kernel::Range preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == (std::vector<int64_t>{n}),
+  EXT_ENFORCE_INVALID(output.shape.size() == 1 && output.shape[0] == n,
                       "kernel::Range preallocated output shape must match the produced tensor "
                       "shape.");
   EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(n) * sizeof(uint16_t),

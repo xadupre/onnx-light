@@ -530,17 +530,7 @@ public:
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for subgraph execution.
-  RuntimeContext MakeSubgraphContext(const std::string &attr_name) const {
-    RuntimeContext child(kernel_ctx_);
-    child.set_allocator(allocator_);
-    child.functions() = functions_;
-    child.tensors() = tensors_;
-    child.sequences() = sequences_;
-    child.set_verbose(verbose_);
-    child.set_events_enabled(events_enabled_);
-    child.set_current_subgraph(current_node_index_, attr_name);
-    return child;
-  }
+  RuntimeContext MakeSubgraphContext(const std::string &attr_name) const;
 
   /// Creates a fresh child context for executing a model-local function.
   /// The child inherits the parent's kernel context, allocator, function
@@ -550,13 +540,7 @@ public:
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for function execution.
-  RuntimeContext MakeFunctionContext() const {
-    RuntimeContext child(kernel_ctx_);
-    child.set_allocator(allocator_);
-    child.functions() = functions_;
-    child.set_verbose(verbose_);
-    return child;
-  }
+  RuntimeContext MakeFunctionContext() const;
 
   /// Resets the per-invocation state so the context can be reused for a
   /// fresh run: clears the tensor map, the sequence map and the event

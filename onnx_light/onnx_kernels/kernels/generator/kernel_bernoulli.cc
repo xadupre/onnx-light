@@ -5,8 +5,8 @@
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
 #include "onnx_kernels/runtime_context.h"
+#include <bit>
 #include <cstdint>
-#include <cstring>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -73,8 +73,7 @@ std::vector<double> ReadProbabilities(const Tensor &input) {
       } else {
         f = (sign << 31) | (static_cast<uint32_t>(exp - 15 + 127) << 23) | (mant << 13);
       }
-      float fv;
-      std::memcpy(&fv, &f, sizeof(float));
+      float fv = std::bit_cast<float>(f);
       p[static_cast<std::size_t>(i)] = static_cast<double>(fv);
     }
     break;
@@ -120,63 +119,42 @@ std::size_t OutputElementSize(int32_t dtype) {
 // ``out`` by the element size between successive calls.
 void StoreSample(int32_t dtype, uint8_t *out, int32_t sample) {
   switch (static_cast<DataType>(dtype)) {
-  case DataType::FLOAT: {
-    const float v = static_cast<float>(sample);
-    std::memcpy(out, &v, sizeof(float));
+  case DataType::FLOAT:
+    *reinterpret_cast<float *>(out) = static_cast<float>(sample);
     break;
-  }
-  case DataType::DOUBLE: {
-    const double v = static_cast<double>(sample);
-    std::memcpy(out, &v, sizeof(double));
+  case DataType::DOUBLE:
+    *reinterpret_cast<double *>(out) = static_cast<double>(sample);
     break;
-  }
-  case DataType::FLOAT16: {
+  case DataType::FLOAT16:
     // 0.0 -> 0x0000, 1.0 -> 0x3C00 in IEEE-754 binary16.
-    const uint16_t v = sample == 0 ? static_cast<uint16_t>(0x0000) : static_cast<uint16_t>(0x3C00);
-    std::memcpy(out, &v, sizeof(uint16_t));
+    *reinterpret_cast<uint16_t *>(out) =
+        sample == 0 ? static_cast<uint16_t>(0x0000) : static_cast<uint16_t>(0x3C00);
     break;
-  }
-  case DataType::INT8: {
-    const int8_t v = static_cast<int8_t>(sample);
-    std::memcpy(out, &v, sizeof(int8_t));
+  case DataType::INT8:
+    *reinterpret_cast<int8_t *>(out) = static_cast<int8_t>(sample);
     break;
-  }
   case DataType::UINT8:
-  case DataType::BOOL: {
-    const uint8_t v = static_cast<uint8_t>(sample);
-    std::memcpy(out, &v, sizeof(uint8_t));
+  case DataType::BOOL:
+    *out = static_cast<uint8_t>(sample);
     break;
-  }
-  case DataType::INT16: {
-    const int16_t v = static_cast<int16_t>(sample);
-    std::memcpy(out, &v, sizeof(int16_t));
+  case DataType::INT16:
+    *reinterpret_cast<int16_t *>(out) = static_cast<int16_t>(sample);
     break;
-  }
-  case DataType::UINT16: {
-    const uint16_t v = static_cast<uint16_t>(sample);
-    std::memcpy(out, &v, sizeof(uint16_t));
+  case DataType::UINT16:
+    *reinterpret_cast<uint16_t *>(out) = static_cast<uint16_t>(sample);
     break;
-  }
-  case DataType::INT32: {
-    const int32_t v = sample;
-    std::memcpy(out, &v, sizeof(int32_t));
+  case DataType::INT32:
+    *reinterpret_cast<int32_t *>(out) = sample;
     break;
-  }
-  case DataType::UINT32: {
-    const uint32_t v = static_cast<uint32_t>(sample);
-    std::memcpy(out, &v, sizeof(uint32_t));
+  case DataType::UINT32:
+    *reinterpret_cast<uint32_t *>(out) = static_cast<uint32_t>(sample);
     break;
-  }
-  case DataType::INT64: {
-    const int64_t v = static_cast<int64_t>(sample);
-    std::memcpy(out, &v, sizeof(int64_t));
+  case DataType::INT64:
+    *reinterpret_cast<int64_t *>(out) = static_cast<int64_t>(sample);
     break;
-  }
-  case DataType::UINT64: {
-    const uint64_t v = static_cast<uint64_t>(sample);
-    std::memcpy(out, &v, sizeof(uint64_t));
+  case DataType::UINT64:
+    *reinterpret_cast<uint64_t *>(out) = static_cast<uint64_t>(sample);
     break;
-  }
   default:
     EXT_ENFORCE_INVALID(false, "kernel::Bernoulli: unsupported output dtype ",
                         std::to_string(dtype), ".");

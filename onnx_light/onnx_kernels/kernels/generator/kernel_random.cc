@@ -4,7 +4,6 @@
 
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -59,17 +58,32 @@ std::optional<uint64_t> NormalizeSeed(int64_t seed) {
   return static_cast<uint64_t>(seed);
 }
 
+// Writes ``lowT + samples[i] * span`` into ``dst[i]`` for each sample.
+template <typename T>
+void FillUniform(T *dst, const std::vector<T> &samples, double low, double high) {
+  const T span = static_cast<T>(high - low);
+  const T lowT = static_cast<T>(low);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    dst[i] = lowT + samples[i] * span;
+  }
+}
+
+// Writes ``meanT + samples[i] * scaleT`` into ``dst[i]`` for each sample.
+template <typename T>
+void FillNormal(T *dst, const std::vector<T> &samples, double mean, double scale) {
+  const T meanT = static_cast<T>(mean);
+  const T scaleT = static_cast<T>(scale);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    dst[i] = meanT + samples[i] * scaleT;
+  }
+}
+
 template <typename T>
 Tensor MakeUniformTensor(const std::vector<int64_t> &shape, double low, double high,
                          std::optional<uint64_t> seed, int32_t dtype) {
   const std::vector<T> samples = Rand<T>(shape, seed);
-  const T span = static_cast<T>(high - low);
-  const T lowT = static_cast<T>(low);
   std::vector<uint8_t> bytes(samples.size() * sizeof(T));
-  T *dst = reinterpret_cast<T *>(bytes.data());
-  for (size_t i = 0; i < samples.size(); ++i) {
-    dst[i] = lowT + samples[i] * span;
-  }
+  FillUniform<T>(reinterpret_cast<T *>(bytes.data()), samples, low, high);
   return Tensor("", dtype, shape, std::move(bytes));
 }
 
@@ -77,13 +91,8 @@ template <typename T>
 Tensor MakeNormalTensor(const std::vector<int64_t> &shape, double mean, double scale,
                         std::optional<uint64_t> seed, int32_t dtype) {
   const std::vector<T> samples = Randn<T>(shape, seed);
-  const T meanT = static_cast<T>(mean);
-  const T scaleT = static_cast<T>(scale);
   std::vector<uint8_t> bytes(samples.size() * sizeof(T));
-  T *dst = reinterpret_cast<T *>(bytes.data());
-  for (size_t i = 0; i < samples.size(); ++i) {
-    dst[i] = meanT + samples[i] * scaleT;
-  }
+  FillNormal<T>(reinterpret_cast<T *>(bytes.data()), samples, mean, scale);
   return Tensor("", dtype, shape, std::move(bytes));
 }
 
@@ -105,15 +114,35 @@ Tensor MakeNormal(const std::vector<int64_t> &shape, double mean, double scale,
   return MakeNormalTensor<float>(shape, mean, scale, seed, dtype);
 }
 
-void CopyIntoOutput(const Tensor &produced, Tensor &output, const char *op_name) {
-  EXT_ENFORCE_INVALID(output.data_type == produced.data_type, "kernel::", op_name,
+// Writes uniform samples directly into the pre-allocated ``output`` buffer.
+void WriteUniformInto(Tensor &output, const std::vector<int64_t> &shape, double low, double high,
+                      std::optional<uint64_t> seed, int32_t out_dtype, const char *op_name) {
+  EXT_ENFORCE_INVALID(output.data_type == out_dtype, "kernel::", op_name,
                       " preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == produced.shape, "kernel::", op_name,
-                      " preallocated output shape must match the produced tensor shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(), "kernel::", op_name,
-                      " preallocated output buffer has unexpected size in bytes.");
-  if (!produced.data.empty()) {
-    std::copy(produced.bytes(), produced.bytes() + produced.size_bytes(), output.mutable_bytes());
+  EXT_ENFORCE_INVALID(output.shape == shape, "kernel::", op_name,
+                      " preallocated output shape must match the requested shape.");
+  if (static_cast<DataType>(out_dtype) == DataType::DOUBLE) {
+    const std::vector<double> samples = Rand<double>(shape, seed);
+    FillUniform<double>(reinterpret_cast<double *>(output.mutable_bytes()), samples, low, high);
+  } else {
+    const std::vector<float> samples = Rand<float>(shape, seed);
+    FillUniform<float>(reinterpret_cast<float *>(output.mutable_bytes()), samples, low, high);
+  }
+}
+
+// Writes normal samples directly into the pre-allocated ``output`` buffer.
+void WriteNormalInto(Tensor &output, const std::vector<int64_t> &shape, double mean, double scale,
+                     std::optional<uint64_t> seed, int32_t out_dtype, const char *op_name) {
+  EXT_ENFORCE_INVALID(output.data_type == out_dtype, "kernel::", op_name,
+                      " preallocated output must have the expected dtype.");
+  EXT_ENFORCE_INVALID(output.shape == shape, "kernel::", op_name,
+                      " preallocated output shape must match the requested shape.");
+  if (static_cast<DataType>(out_dtype) == DataType::DOUBLE) {
+    const std::vector<double> samples = Randn<double>(shape, seed);
+    FillNormal<double>(reinterpret_cast<double *>(output.mutable_bytes()), samples, mean, scale);
+  } else {
+    const std::vector<float> samples = Randn<float>(shape, seed);
+    FillNormal<float>(reinterpret_cast<float *>(output.mutable_bytes()), samples, mean, scale);
   }
 }
 
@@ -127,8 +156,9 @@ Tensor RandomNormal::operator()(const std::vector<int64_t> &shape, double mean, 
 
 void RandomNormal::operator()(const std::vector<int64_t> &shape, double mean, double scale,
                               int64_t seed, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(shape, mean, scale, seed, dtype);
-  CopyIntoOutput(produced, output, "RandomNormal");
+  const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomNormal");
+  CheckShape(shape, "RandomNormal");
+  WriteNormalInto(output, shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormal");
 }
 
 Tensor RandomUniform::operator()(const std::vector<int64_t> &shape, double low, double high,
@@ -141,8 +171,11 @@ Tensor RandomUniform::operator()(const std::vector<int64_t> &shape, double low, 
 
 void RandomUniform::operator()(const std::vector<int64_t> &shape, double low, double high,
                                int64_t seed, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(shape, low, high, seed, dtype);
-  CopyIntoOutput(produced, output, "RandomUniform");
+  EXT_ENFORCE_INVALID(high >= low,
+                      "kernel::RandomUniform: 'high' must be greater than or equal to 'low'.");
+  const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomUniform");
+  CheckShape(shape, "RandomUniform");
+  WriteUniformInto(output, shape, low, high, NormalizeSeed(seed), out_dtype, "RandomUniform");
 }
 
 Tensor RandomNormalLike::operator()(const Tensor &input, double mean, double scale, int64_t seed,
@@ -153,8 +186,10 @@ Tensor RandomNormalLike::operator()(const Tensor &input, double mean, double sca
 
 void RandomNormalLike::operator()(const Tensor &input, double mean, double scale, int64_t seed,
                                   int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(input, mean, scale, seed, dtype);
-  CopyIntoOutput(produced, output, "RandomNormalLike");
+  const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomNormalLike");
+  CheckShape(input.shape, "RandomNormalLike");
+  WriteNormalInto(output, input.shape, mean, scale, NormalizeSeed(seed), out_dtype,
+                  "RandomNormalLike");
 }
 
 Tensor RandomUniformLike::operator()(const Tensor &input, double low, double high, int64_t seed,
@@ -167,8 +202,12 @@ Tensor RandomUniformLike::operator()(const Tensor &input, double low, double hig
 
 void RandomUniformLike::operator()(const Tensor &input, double low, double high, int64_t seed,
                                    int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(input, low, high, seed, dtype);
-  CopyIntoOutput(produced, output, "RandomUniformLike");
+  EXT_ENFORCE_INVALID(high >= low,
+                      "kernel::RandomUniformLike: 'high' must be greater than or equal to 'low'.");
+  const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomUniformLike");
+  CheckShape(input.shape, "RandomUniformLike");
+  WriteUniformInto(output, input.shape, low, high, NormalizeSeed(seed), out_dtype,
+                   "RandomUniformLike");
 }
 
 } // namespace kernel

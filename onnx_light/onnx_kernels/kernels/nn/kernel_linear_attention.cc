@@ -6,6 +6,7 @@
 
 #include "onnx_kernels/kernels/_helpers/float16_promote.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -30,8 +31,8 @@ void Check3DFloat(const Tensor &t, const char *label, int64_t &B, int64_t &T, in
 
 } // namespace
 
-Tensor LinearAttention::operator()(const Tensor &query, const Tensor &key,
-                                   const Tensor &value) const {
+Tensor LinearAttention::operator()(const Tensor &query, const Tensor &key, const Tensor &value,
+                                   RuntimeContext *rt) const {
   Attributes attrs;
   attrs.update_rule = "linear";
   attrs.q_num_heads = 0; // will be inferred below

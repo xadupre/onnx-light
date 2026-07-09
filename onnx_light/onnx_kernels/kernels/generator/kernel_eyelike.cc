@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -113,7 +114,8 @@ std::vector<uint8_t> OneElementBytes(int32_t dtype) {
 
 } // namespace
 
-Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype) const {
+Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
+                           RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(input.shape.size() == 2, "kernel::EyeLike: input must be 2-dimensional.");
   const int64_t rows = input.shape[0];
   const int64_t cols = input.shape[1];
@@ -144,10 +146,10 @@ void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &
   EXT_ENFORCE_INVALID(output.shape == produced.shape,
                       "kernel::EyeLike preallocated output shape must match the produced tensor "
                       "shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
                       "kernel::EyeLike preallocated output buffer has unexpected size in bytes.");
   if (!produced.data.empty()) {
-    std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
+    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

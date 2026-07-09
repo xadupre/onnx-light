@@ -160,7 +160,7 @@ TEST(KernelClass, IfBranchOverloadExecutesThenSubgraph) {
   BuildDoubleInitBranchGraph(else_graph, "else_g", "e", "out", -1.0f);
 
   Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
-  std::vector<Tensor> outs = if_kernel(cond_true, then_graph, else_graph, rt);
+  std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 1u);
   ASSERT_EQ(outs[0].element_count(), 1);
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], 10.0f);
@@ -177,7 +177,7 @@ TEST(KernelClass, IfBranchOverloadExecutesElseSubgraph) {
   BuildDoubleInitBranchGraph(else_graph, "else_g", "e", "out", -1.0f);
 
   Tensor cond_false("", onnx_kernels::DataType::BOOL, {}, {0});
-  std::vector<Tensor> outs = if_kernel(cond_false, then_graph, else_graph, rt);
+  std::vector<Tensor> outs = if_kernel(rt, cond_false, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 1u);
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], -2.0f);
 }
@@ -221,7 +221,7 @@ TEST(KernelClass, IfBranchOverloadInheritsOuterScope) {
   tt2->mutable_shape()->add_dim()->set_dim_value(3);
 
   Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
-  std::vector<Tensor> outs = if_kernel(cond_true, then_graph, else_graph, rt);
+  std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 1u);
   ASSERT_EQ(outs[0].element_count(), 3);
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], -1.0f);
@@ -276,7 +276,7 @@ TEST(KernelClass, IfBranchOverloadReturnsAllOutputsInOrder) {
   GraphProto else_graph = then_graph;
 
   Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
-  std::vector<Tensor> outs = if_kernel(cond_true, then_graph, else_graph, rt);
+  std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 2u);
   ASSERT_EQ(outs[0].element_count(), 2);
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], -3.0f);
@@ -296,7 +296,7 @@ TEST(KernelClass, IfBranchOverloadRejectsMismatchedOutputCounts) {
   else_graph.set_name("empty");
 
   Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
-  EXPECT_THROW((void)if_kernel(cond_true, then_graph, else_graph, rt), std::invalid_argument);
+  EXPECT_THROW((void)if_kernel(rt, cond_true, then_graph, else_graph), std::invalid_argument);
 }
 
 TEST(KernelClass, IfBranchOverloadRejectsNonBoolCond) {
@@ -309,10 +309,10 @@ TEST(KernelClass, IfBranchOverloadRejectsNonBoolCond) {
   BuildDoubleInitBranchGraph(else_graph, "else_g", "e", "y", 2.0f);
 
   Tensor cond_float = Tensor::FromFloat("", {}, {1.0f});
-  EXPECT_THROW((void)if_kernel(cond_float, then_graph, else_graph, rt), std::invalid_argument);
+  EXPECT_THROW((void)if_kernel(rt, cond_float, then_graph, else_graph), std::invalid_argument);
 
   Tensor cond_vec("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
-  EXPECT_THROW((void)if_kernel(cond_vec, then_graph, else_graph, rt), std::invalid_argument);
+  EXPECT_THROW((void)if_kernel(rt, cond_vec, then_graph, else_graph), std::invalid_argument);
 }
 
 } // namespace Test
@@ -649,7 +649,7 @@ TEST(KernelClass, ScanBodyAwareOverloadRunsBodyAndAccumulatesState) {
   Tensor initial = Tensor::FromFloat("initial", {2}, {0.0f, 0.0f});
   Tensor x = Tensor::FromFloat("x", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
-  std::vector<Tensor> out = scan_kernel(body, {initial}, {x}, rt);
+  std::vector<Tensor> out = scan_kernel(rt, body, {initial}, {x});
   ASSERT_EQ(out.size(), 2u);
   // Final state = [1+3+5, 2+4+6] = [9, 12].
   ASSERT_EQ(out[0].shape, (std::vector<int64_t>{2}));
@@ -677,7 +677,7 @@ TEST(KernelClass, ScanBodyAwareOverloadHonorsScanInputDirectionReverse) {
   Tensor initial = Tensor::FromFloat("initial", {2}, {0.0f, 0.0f});
   Tensor x = Tensor::FromFloat("x", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
-  std::vector<Tensor> out = scan_kernel(body, {initial}, {x}, rt, /*scan_input_axes=*/{0},
+  std::vector<Tensor> out = scan_kernel(rt, body, {initial}, {x}, /*scan_input_axes=*/{0},
                                         /*scan_input_directions=*/{1});
   ASSERT_EQ(out.size(), 2u);
   ASSERT_EQ(out[0].shape, (std::vector<int64_t>{2}));
@@ -703,7 +703,7 @@ TEST(KernelClass, ScanBodyAwareOverloadHonorsScanOutputDirectionReverse) {
   Tensor x = Tensor::FromFloat("x", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
   // Per-iter sums are [[1,2],[4,6],[9,12]]; reversed → [[9,12],[4,6],[1,2]].
-  std::vector<Tensor> out = scan_kernel(body, {initial}, {x}, rt, /*scan_input_axes=*/{},
+  std::vector<Tensor> out = scan_kernel(rt, body, {initial}, {x}, /*scan_input_axes=*/{},
                                         /*scan_input_directions=*/{}, /*scan_output_axes=*/{},
                                         /*scan_output_directions=*/{1});
   ASSERT_EQ(out.size(), 2u);
@@ -726,7 +726,7 @@ TEST(KernelClass, ScanBodyAwareOverloadReturnsInitialStateWhenTripCountIsZero) {
   Tensor initial = Tensor::FromFloat("initial", {2}, {7.0f, 8.0f});
   Tensor x = Tensor::FromFloat("x", {0, 2}, {});
 
-  std::vector<Tensor> out = scan_kernel(body, {initial}, {x}, rt);
+  std::vector<Tensor> out = scan_kernel(rt, body, {initial}, {x});
   ASSERT_EQ(out.size(), 2u);
   // Final state = initial when T = 0 (body never ran).
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 7.0f);
@@ -743,7 +743,7 @@ TEST(KernelClass, ScanBodyAwareOverloadRejectsRank0ScanInput) {
   RuntimeContext rt(ctx);
   Tensor initial = Tensor::FromFloat("initial", {2}, {0.0f, 0.0f});
   Tensor scalar = Tensor::FromFloat("x", {}, {1.0f});
-  EXPECT_THROW((void)scan_kernel(body, {initial}, {scalar}, rt), std::invalid_argument);
+  EXPECT_THROW((void)scan_kernel(rt, body, {initial}, {scalar}), std::invalid_argument);
 }
 
 TEST(KernelClass, ScanBodyAwareOverloadRejectsMismatchedScanInputTripCounts) {
@@ -765,7 +765,7 @@ TEST(KernelClass, ScanBodyAwareOverloadRejectsMismatchedScanInputTripCounts) {
   RuntimeContext rt(ctx);
   Tensor a = Tensor::FromFloat("a", {3}, {0.f, 0.f, 0.f});
   Tensor b = Tensor::FromFloat("b", {2}, {0.f, 0.f});
-  EXPECT_THROW((void)scan_kernel(body, {}, {a, b}, rt), std::invalid_argument);
+  EXPECT_THROW((void)scan_kernel(rt, body, {}, {a, b}), std::invalid_argument);
 }
 
 } // namespace Test

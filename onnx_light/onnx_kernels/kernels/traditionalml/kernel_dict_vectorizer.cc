@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -54,7 +55,7 @@ void Fill(const std::vector<K> &input_keys, const std::vector<V> &input_values,
 template <typename K, typename V>
 Tensor DictVectorizer::operator()(const std::vector<K> &input_keys,
                                   const std::vector<V> &input_values,
-                                  const std::vector<K> &vocabulary) const {
+                                  const std::vector<K> &vocabulary, RuntimeContext *rt) const {
   const int64_t c = static_cast<int64_t>(vocabulary.size());
   const std::vector<int64_t> shape{c};
   if constexpr (std::is_same_v<V, std::string>) {
@@ -65,7 +66,7 @@ Tensor DictVectorizer::operator()(const std::vector<K> &input_keys,
   } else {
     std::vector<uint8_t> bytes(static_cast<size_t>(c) * sizeof(V), 0u);
     Tensor out("", static_cast<int32_t>(TensorElementType<V>::value), shape, std::move(bytes));
-    Fill<K, V>(input_keys, input_values, vocabulary, reinterpret_cast<V *>(out.data.data()));
+    Fill<K, V>(input_keys, input_values, vocabulary, reinterpret_cast<V *>(out.mutable_bytes()));
     return out;
   }
 }
@@ -88,17 +89,17 @@ void DictVectorizer::operator()(const std::vector<K> &input_keys,
                         "kernel::DictVectorizer preallocated output dtype must match value type.");
     EXT_ENFORCE_INVALID(output.shape == std::vector<int64_t>{c},
                         "kernel::DictVectorizer preallocated output shape must be [vocab_size].");
-    EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(c) * sizeof(V),
+    EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(c) * sizeof(V),
                         "kernel::DictVectorizer preallocated output buffer is incorrectly sized.");
     std::fill(output.data.begin(), output.data.end(), uint8_t{0u});
-    Fill<K, V>(input_keys, input_values, vocabulary, reinterpret_cast<V *>(output.data.data()));
+    Fill<K, V>(input_keys, input_values, vocabulary, reinterpret_cast<V *>(output.mutable_bytes()));
   }
 }
 
 // Explicit instantiations for the supported (K, V) pairs.
 #define ONNX_LIGHT_INSTANTIATE_DICT_VECTORIZER(K, V)                                               \
   template Tensor DictVectorizer::operator()(const std::vector<K> &, const std::vector<V> &,       \
-                                             const std::vector<K> &) const;                        \
+                                             const std::vector<K> &, RuntimeContext *) const;      \
   template void DictVectorizer::operator()(const std::vector<K> &, const std::vector<V> &,         \
                                            const std::vector<K> &, Tensor &) const
 

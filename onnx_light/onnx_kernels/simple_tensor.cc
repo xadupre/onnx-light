@@ -4,6 +4,9 @@
 
 #include "onnx_kernels/simple_tensor.h"
 
+#include "onnx_kernels/raw_buffer_allocator.h"
+
+#include <cstring>
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -351,6 +354,19 @@ Tensor TensorFromProto(const TensorProto &tp) {
   }
 
   return Tensor(name, dtype, std::move(shape), std::move(bytes));
+}
+
+Tensor MakeOutputTensor(int32_t data_type, const Shape &shape, size_t n_bytes,
+                        RawBufferAllocator *allocator) {
+  if (allocator == nullptr) {
+    return Tensor("", data_type, shape, std::vector<uint8_t>(n_bytes, 0));
+  }
+  Tensor t;
+  t.data_type = data_type;
+  t.shape = shape;
+  RawBuffer *buf = allocator->Allocate(n_bytes);
+  t.SetAllocation(allocator, buf);
+  return t;
 }
 
 } // namespace onnx_kernels

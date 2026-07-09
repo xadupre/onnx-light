@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_light_helpers.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
@@ -103,8 +104,8 @@ TernaryBroadcastInfo CheckWhereBroadcast(const Tensor &condition, const Tensor &
 template <typename T>
 Tensor WhereAllocTyped(const Tensor &condition, const Tensor &x, const Tensor &y) {
   const TernaryBroadcastInfo bi = CheckWhereBroadcast(condition, x, y);
-  Tensor out("", x.data_type, bi.shape,
-             std::vector<uint8_t>(static_cast<size_t>(bi.element_count) * sizeof(T)));
+  const size_t out_n_bytes = static_cast<size_t>(bi.element_count) * sizeof(T);
+  Tensor out = MakeOutputTensor(x.data_type, bi.shape, out_n_bytes, nullptr);
   const uint8_t *pc = condition.AsBool();
   const T *px = WhereTypedInput<T>(x);
   const T *py = WhereTypedInput<T>(y);
@@ -139,7 +140,7 @@ void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y
   EXT_ENFORCE_INVALID(
       output.shape == bi.shape,
       "kernel::Where preallocated output shape must match the broadcasted input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(bi.element_count) * sizeof(T),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(bi.element_count) * sizeof(T),
                       "kernel::Where preallocated output buffer has unexpected size in bytes.");
 
   const uint8_t *pc = condition.AsBool();
@@ -235,7 +236,8 @@ void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &
 
 } // namespace
 
-Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y) const {
+Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
+                         RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::BOOL:
     return WhereAllocTyped<uint8_t>(condition, x, y);

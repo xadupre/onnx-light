@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstring>
 #include <stdexcept>
@@ -85,7 +86,7 @@ void ApplyScatterElementsTyped(const Tensor &updates, RawBuffer &out_bytes,
 } // namespace
 
 Tensor ScatterElements::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
-                                   const Attributes &attrs) const {
+                                   const Attributes &attrs, RuntimeContext *rt) const {
   Tensor out("", data.data_type, data.shape, data.data);
   (*this)(data, indices, updates, attrs, out);
   return out;
@@ -113,10 +114,10 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
 
   // Initialize output as a copy of data (when caller passes a fresh tensor, it
   // may already share storage with data; only copy when the buffers differ).
-  if (output.data.data() != data.bytes()) {
-    EXT_ENFORCE_INVALID(output.data.size() == data.size_bytes(),
+  if (output.mutable_bytes() != data.bytes()) {
+    EXT_ENFORCE_INVALID(output.size_bytes() == data.size_bytes(),
                         "kernel::ScatterElements: output buffer size must match data.");
-    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
+    std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
   }
 
   const std::vector<int64_t> idx_values = ReadScatterElementsIndices(indices);
@@ -177,7 +178,7 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
         const int64_t c = (k == axis) ? idx_value : coord[static_cast<std::size_t>(k)];
         data_idx += c * data_strides[static_cast<std::size_t>(k)];
       }
-      std::memcpy(output.data.data() + static_cast<std::size_t>(data_idx) * elem_size,
+      std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(data_idx) * elem_size,
                   updates.bytes() + static_cast<std::size_t>(u_idx) * elem_size, elem_size);
     }
   }

@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -93,7 +94,8 @@ Tensor ComputeRangeHalf(const Tensor &start, const Tensor &limit, const Tensor &
 
 } // namespace
 
-Tensor Range::operator()(const Tensor &start, const Tensor &limit, const Tensor &delta) const {
+Tensor Range::operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
+                         RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(start.data_type == limit.data_type && start.data_type == delta.data_type,
                       "kernel::Range: 'start', 'limit' and 'delta' must share the same dtype.");
   switch (static_cast<DataType>(start.data_type)) {
@@ -127,10 +129,10 @@ void Range::operator()(const Tensor &start, const Tensor &limit, const Tensor &d
   EXT_ENFORCE_INVALID(output.shape == produced.shape,
                       "kernel::Range preallocated output shape must match the produced tensor "
                       "shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
                       "kernel::Range preallocated output buffer has unexpected size in bytes.");
   if (!produced.data.empty()) {
-    std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
+    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

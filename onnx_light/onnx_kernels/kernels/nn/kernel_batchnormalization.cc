@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -33,11 +34,12 @@ const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
 
 Tensor BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                                       const Tensor &input_mean, const Tensor &input_var,
-                                      float epsilon) const {
+                                      float epsilon, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::BatchNormalization: X must be FLOAT.");
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
-             std::vector<uint8_t>(x.size_bytes()));
+  const size_t out_n_bytes = x.size_bytes();
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(x, scale, bias, input_mean, input_var, out, epsilon);
   return out;
 }
@@ -53,7 +55,7 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::BatchNormalization: output must have the same shape as X.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == x.size_bytes(),
+      output.size_bytes() == x.size_bytes(),
       "kernel::BatchNormalization: output buffer must have the same byte size as X.");
 
   // Per the opset 9+ spec, when X is rank 1 it is interpreted as N values
@@ -178,19 +180,23 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
   }
 
   // Normalize Y using the batch statistics via the inference path.
-  Tensor saved_mean_t("", static_cast<int32_t>(DataType::FLOAT), {C},
-                      std::vector<uint8_t>(static_cast<size_t>(C) * sizeof(float)));
-  Tensor saved_var_t("", static_cast<int32_t>(DataType::FLOAT), {C},
-                     std::vector<uint8_t>(static_cast<size_t>(C) * sizeof(float)));
+  const size_t saved_mean_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
+  Tensor saved_mean_t =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_mean_t_n_bytes, nullptr);
+  const size_t saved_var_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
+  Tensor saved_var_t =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_var_t_n_bytes, nullptr);
   std::copy(saved_mean.begin(), saved_mean.end(), saved_mean_t.AsFloat());
   std::copy(saved_var.begin(), saved_var.end(), saved_var_t.AsFloat());
   Tensor y = (*this)(x, scale, bias, saved_mean_t, saved_var_t, epsilon);
 
   // Update the running estimates: running = input * momentum + saved * (1 - m).
-  Tensor running_mean("", static_cast<int32_t>(DataType::FLOAT), {C},
-                      std::vector<uint8_t>(static_cast<size_t>(C) * sizeof(float)));
-  Tensor running_var("", static_cast<int32_t>(DataType::FLOAT), {C},
-                     std::vector<uint8_t>(static_cast<size_t>(C) * sizeof(float)));
+  const size_t running_mean_n_bytes = static_cast<size_t>(C) * sizeof(float);
+  Tensor running_mean =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_mean_n_bytes, nullptr);
+  const size_t running_var_n_bytes = static_cast<size_t>(C) * sizeof(float);
+  Tensor running_var =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_var_n_bytes, nullptr);
   float *p_run_mean = running_mean.AsFloat();
   float *p_run_var = running_var.AsFloat();
   for (int64_t c = 0; c < C; ++c) {

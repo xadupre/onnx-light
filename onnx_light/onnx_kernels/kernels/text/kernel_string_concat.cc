@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/text/include_text_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -51,7 +52,7 @@ StringBroadcast CheckStringConcatInputs(const Tensor &x, const Tensor &y) {
 
 } // namespace
 
-Tensor StringConcat::operator()(const Tensor &x, const Tensor &y) const {
+Tensor StringConcat::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   const StringBroadcast bi = CheckStringConcatInputs(x, y);
   Tensor out = Tensor::MakeString("", bi.shape,
                                   std::vector<std::string>(static_cast<size_t>(bi.element_count)));

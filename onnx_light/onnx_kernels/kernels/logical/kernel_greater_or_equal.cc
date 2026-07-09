@@ -6,6 +6,7 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -25,10 +26,10 @@ constexpr const char *kBoolName = "BOOL";
 // self-explanatory.
 template <typename TIn>
 Tensor GreaterOrEqualAlloc(const char *in_dtype_name, int32_t in_dtype, const Tensor &x,
-                           const Tensor &y) {
+                           const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAllocInOut<TIn, uint8_t>(
       kGreaterOrEqualName, in_dtype_name, in_dtype, kBoolName, DataType::BOOL, x, y,
-      [](TIn a, TIn b) -> uint8_t { return a >= b ? 1 : 0; });
+      [](TIn a, TIn b) -> uint8_t { return a >= b ? 1 : 0; }, allocator);
 }
 
 template <typename TIn>
@@ -40,34 +41,43 @@ void GreaterOrEqualInPlace(const char *in_dtype_name, int32_t in_dtype, const Te
 }
 } // namespace
 
-Tensor GreaterOrEqual::operator()(const Tensor &x, const Tensor &y) const {
+Tensor GreaterOrEqual::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT:
-    return GreaterOrEqualAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+    return GreaterOrEqualAlloc<float>("FLOAT", DataType::FLOAT, x, y,
+                                      rt ? rt->allocator() : nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kGreaterOrEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
+        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; }, rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kGreaterOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
+        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; }, rt ? rt->allocator() : nullptr);
   case DataType::INT8:
-    return GreaterOrEqualAlloc<int8_t>("INT8", DataType::INT8, x, y);
+    return GreaterOrEqualAlloc<int8_t>("INT8", DataType::INT8, x, y,
+                                       rt ? rt->allocator() : nullptr);
   case DataType::INT16:
-    return GreaterOrEqualAlloc<int16_t>("INT16", DataType::INT16, x, y);
+    return GreaterOrEqualAlloc<int16_t>("INT16", DataType::INT16, x, y,
+                                        rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return GreaterOrEqualAlloc<int32_t>("INT32", DataType::INT32, x, y);
+    return GreaterOrEqualAlloc<int32_t>("INT32", DataType::INT32, x, y,
+                                        rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return GreaterOrEqualAlloc<int64_t>("INT64", DataType::INT64, x, y);
+    return GreaterOrEqualAlloc<int64_t>("INT64", DataType::INT64, x, y,
+                                        rt ? rt->allocator() : nullptr);
   case DataType::UINT8:
-    return GreaterOrEqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
+    return GreaterOrEqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y,
+                                        rt ? rt->allocator() : nullptr);
   case DataType::UINT16:
-    return GreaterOrEqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y);
+    return GreaterOrEqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y,
+                                         rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return GreaterOrEqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
+    return GreaterOrEqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y,
+                                         rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return GreaterOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+    return GreaterOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y,
+                                         rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kGreaterOrEqualName, ": unsupported data type ", x.data_type,
                       ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "

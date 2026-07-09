@@ -139,11 +139,11 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
     for (int64_t d : out_shape) {
       total *= d;
     }
-    Tensor out("", input.data_type, out_shape,
-               std::vector<uint8_t>(static_cast<std::size_t>(total) * elem_size));
+    const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
+    Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, nullptr);
     const std::size_t out_row_bytes = static_cast<std::size_t>(size) * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
-      std::memcpy(out.data.data() + static_cast<std::size_t>(o) * out_row_bytes,
+      std::memcpy(out.mutable_bytes() + static_cast<std::size_t>(o) * out_row_bytes,
                   input.bytes() + static_cast<std::size_t>(o) * in_row_bytes + offset,
                   out_row_bytes);
     }

@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -71,14 +72,14 @@ void ApplyImputer(const Tensor &x, const std::vector<T> &imputed_values, T repla
 } // namespace
 
 template <typename T>
-Tensor Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values,
-                           T replaced_value) const {
+Tensor Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value,
+                           RuntimeContext *rt) const {
   ValidateInput<T>(x);
   ValidateImputedValues<T>(imputed_values, LastDim(x.shape));
   const int64_t n = x.element_count();
   std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(T));
   Tensor out("", TensorElementType<T>::value, x.shape, std::move(bytes));
-  ApplyImputer<T>(x, imputed_values, replaced_value, reinterpret_cast<T *>(out.data.data()));
+  ApplyImputer<T>(x, imputed_values, replaced_value, reinterpret_cast<T *>(out.mutable_bytes()));
   return out;
 }
 
@@ -91,14 +92,15 @@ void Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values, 
                       "kernel::Imputer preallocated output dtype must match the input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::Imputer preallocated output shape must match the input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(x.element_count()) * sizeof(T),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(x.element_count()) * sizeof(T),
                       "kernel::Imputer preallocated output buffer is incorrectly sized.");
   ApplyImputer<T>(x, imputed_values, replaced_value, output.As<T>());
 }
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_IMPUTER(T)                                                          \
-  template Tensor Imputer::operator()(const Tensor &, const std::vector<T> &, T) const;            \
+  template Tensor Imputer::operator()(const Tensor &, const std::vector<T> &, T, RuntimeContext *) \
+      const;                                                                                       \
   template void Imputer::operator()(const Tensor &, const std::vector<T> &, T, Tensor &) const
 
 ONNX_LIGHT_INSTANTIATE_IMPUTER(float);

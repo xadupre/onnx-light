@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
@@ -50,12 +51,14 @@ void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
 
 } // namespace
 
-Tensor SequenceConstruct::operator()(const std::vector<Tensor> &inputs) const {
+Tensor SequenceConstruct::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   std::vector<int64_t> stacked_shape;
   size_t total_bytes = 0;
   ValidateInputsAndComputeShape(inputs, stacked_shape, total_bytes);
   const int32_t out_dtype = inputs.empty() ? 0 : inputs[0].data_type;
-  Tensor out("", out_dtype, stacked_shape, std::vector<uint8_t>(total_bytes));
+  const size_t out_n_bytes = total_bytes;
+  Tensor out =
+      MakeOutputTensor(out_dtype, stacked_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(inputs, out);
   return out;
 }
@@ -72,12 +75,12 @@ void SequenceConstruct::operator()(const std::vector<Tensor> &inputs, Tensor &ou
       output.shape == stacked_shape,
       "kernel::SequenceConstruct preallocated output shape must be [N, *input_shape].");
   EXT_ENFORCE_INVALID(
-      output.data.size() == total_bytes,
+      output.size_bytes() == total_bytes,
       "kernel::SequenceConstruct preallocated output buffer has unexpected size in bytes.");
   size_t offset = 0;
   for (const Tensor &in : inputs) {
     if (in.size_bytes() > 0) {
-      std::memcpy(output.data.data() + offset, in.bytes(), in.size_bytes());
+      std::memcpy(output.mutable_bytes() + offset, in.bytes(), in.size_bytes());
     }
     offset += in.size_bytes();
   }

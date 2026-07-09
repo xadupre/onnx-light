@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -59,7 +60,7 @@ float DeterminantInPlace(float *a, int64_t m) {
 
 } // namespace
 
-Tensor Det::operator()(const Tensor &x) const {
+Tensor Det::operator()(const Tensor &x, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.shape.size() >= 2, "kernel::Det requires an input tensor of rank >= 2.");
   const int64_t m = x.shape[x.shape.size() - 1];
   const int64_t m2 = x.shape[x.shape.size() - 2];
@@ -68,8 +69,9 @@ Tensor Det::operator()(const Tensor &x) const {
   int64_t batch = 1;
   for (int64_t d : out_shape)
     batch *= d;
-  Tensor y("", DataType::FLOAT, out_shape,
-           std::vector<uint8_t>(static_cast<size_t>(batch) * sizeof(float)));
+  const size_t y_n_bytes = static_cast<size_t>(batch) * sizeof(float);
+  Tensor y =
+      MakeOutputTensor(DataType::FLOAT, out_shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, y);
   return y;
 }
@@ -91,7 +93,7 @@ void Det::operator()(const Tensor &x, Tensor &output) const {
   for (int64_t d : expected_out_shape)
     batch *= d;
   const size_t expected_bytes = static_cast<size_t>(batch) * sizeof(float);
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::Det preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();

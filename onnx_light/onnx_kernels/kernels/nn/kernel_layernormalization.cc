@@ -117,12 +117,14 @@ std::tuple<Tensor, Tensor, Tensor> LayerNormalization::operator()(const Tensor &
   }
   const size_t reduced_bytes = static_cast<size_t>(reduced_elem) * sizeof(float);
 
-  Tensor y("", static_cast<int32_t>(DataType::FLOAT), x.shape,
-           std::vector<uint8_t>(x.size_bytes()));
-  Tensor mean("", static_cast<int32_t>(DataType::FLOAT), reduced_shape,
-              std::vector<uint8_t>(reduced_bytes));
-  Tensor inv_std_dev("", static_cast<int32_t>(DataType::FLOAT), reduced_shape,
-                     std::vector<uint8_t>(reduced_bytes));
+  const size_t y_n_bytes = x.size_bytes();
+  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, y_n_bytes, nullptr);
+  const size_t mean_n_bytes = reduced_bytes;
+  Tensor mean =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape, mean_n_bytes, nullptr);
+  const size_t inv_std_dev_n_bytes = reduced_bytes;
+  Tensor inv_std_dev = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape,
+                                        inv_std_dev_n_bytes, nullptr);
   (*this)(x, scale, b, y, mean, inv_std_dev, axis, epsilon);
   return {std::move(y), std::move(mean), std::move(inv_std_dev)};
 }
@@ -142,7 +144,7 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
                       "kernel::LayerNormalization: InvStdDev must be FLOAT.");
   EXT_ENFORCE_INVALID(y.shape == x.shape,
                       "kernel::LayerNormalization: Y must have the same shape as X.");
-  EXT_ENFORCE_INVALID(y.data.size() == x.size_bytes(),
+  EXT_ENFORCE_INVALID(y.size_bytes() == x.size_bytes(),
                       "kernel::LayerNormalization: Y buffer must have the same byte size as X.");
 
   const bool has_bias = !b.shape.empty() || b.size_bytes() > 0;

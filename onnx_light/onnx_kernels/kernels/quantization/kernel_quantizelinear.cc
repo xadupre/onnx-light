@@ -8,6 +8,7 @@
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -42,7 +43,7 @@ inline void RequireScalar(const Tensor &t, const char *name) {
 template <typename ZP>
 void QuantizeLoop(const Tensor &x, float y_scale, ZP y_zero_point, Tensor &output) {
   const float *px = x.AsFloat();
-  ZP *py = reinterpret_cast<ZP *>(output.data.data());
+  ZP *py = reinterpret_cast<ZP *>(output.mutable_bytes());
   const int64_t n = x.element_count();
   constexpr float kMin = static_cast<float>(std::numeric_limits<ZP>::min());
   constexpr float kMax = static_cast<float>(std::numeric_limits<ZP>::max());
@@ -122,7 +123,7 @@ template <typename ZP>
 void QuantizeAxisLoop(const Tensor &x, const float *scales, const ZP *zp_data, int64_t inner_stride,
                       int64_t axis_size, Tensor &output) {
   const float *px = x.AsFloat();
-  ZP *py = reinterpret_cast<ZP *>(output.data.data());
+  ZP *py = reinterpret_cast<ZP *>(output.mutable_bytes());
   const int64_t n = x.element_count();
   constexpr float kMin = static_cast<float>(std::numeric_limits<ZP>::min());
   constexpr float kMax = static_cast<float>(std::numeric_limits<ZP>::max());
@@ -144,7 +145,7 @@ void QuantizeAxisInt4Loop(const Tensor &x, const float *scales, const std::uint8
                           int32_t out_dtype, int64_t inner_stride, int64_t axis_size,
                           Tensor &output) {
   const float *px = x.AsFloat();
-  std::uint8_t *py = output.data.data();
+  std::uint8_t *py = output.mutable_bytes();
   const int64_t n = x.element_count();
   const bool is_signed = (static_cast<DataType>(out_dtype) == DataType::INT4);
   const float kMin = is_signed ? -8.0f : 0.0f;
@@ -170,7 +171,7 @@ void QuantizeAxisInt2Loop(const Tensor &x, const float *scales, const std::uint8
                           int32_t out_dtype, int64_t inner_stride, int64_t axis_size,
                           Tensor &output) {
   const float *px = x.AsFloat();
-  std::uint8_t *py = output.data.data();
+  std::uint8_t *py = output.mutable_bytes();
   const int64_t n = x.element_count();
   const bool is_signed = (static_cast<DataType>(out_dtype) == DataType::INT2);
   const float kMin = is_signed ? -2.0f : 0.0f;
@@ -195,7 +196,7 @@ void QuantizeAxisInt2Loop(const Tensor &x, const float *scales, const std::uint8
 void QuantizeAxisFloat4E2M1Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
                                 int64_t inner_stride, int64_t axis_size, Tensor &output) {
   const float *px = x.AsFloat();
-  std::uint8_t *py = output.data.data();
+  std::uint8_t *py = output.mutable_bytes();
   const int64_t n = x.element_count();
   for (int64_t i = 0; i < n; ++i) {
     const int64_t axis_idx = (i / inner_stride) % axis_size;
@@ -210,7 +211,7 @@ void QuantizeAxisFloat8Loop(const Tensor &x, const float *scales, const std::uin
                             int32_t out_dtype, int64_t inner_stride, int64_t axis_size,
                             Tensor &output) {
   const float *px = x.AsFloat();
-  std::uint8_t *py = output.data.data();
+  std::uint8_t *py = output.mutable_bytes();
   const int64_t n = x.element_count();
   for (int64_t i = 0; i < n; ++i) {
     const int64_t axis_idx = (i / inner_stride) % axis_size;
@@ -291,7 +292,7 @@ template <typename ZP>
 void QuantizeBlockLoop(const Tensor &x, const float *scales, const ZP *zp_data,
                        const int64_t *scale_index, Tensor &output) {
   const float *px = x.AsFloat();
-  ZP *py = reinterpret_cast<ZP *>(output.data.data());
+  ZP *py = reinterpret_cast<ZP *>(output.mutable_bytes());
   const int64_t n = x.element_count();
   constexpr float kMin = static_cast<float>(std::numeric_limits<ZP>::min());
   constexpr float kMax = static_cast<float>(std::numeric_limits<ZP>::max());
@@ -312,7 +313,7 @@ void QuantizeBlockLoop(const Tensor &x, const float *scales, const ZP *zp_data,
 void QuantizeBlockInt2Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
                            int32_t out_dtype, const int64_t *scale_index, Tensor &output) {
   const float *px = x.AsFloat();
-  std::uint8_t *py = output.data.data();
+  std::uint8_t *py = output.mutable_bytes();
   const int64_t n = x.element_count();
   const bool is_signed = (static_cast<DataType>(out_dtype) == DataType::INT2);
   const float kMin = is_signed ? -2.0f : 0.0f;
@@ -336,7 +337,7 @@ void QuantizeBlockInt2Loop(const Tensor &x, const float *scales, const std::uint
 void QuantizeBlockFloat4E2M1Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
                                  const int64_t *scale_index, Tensor &output) {
   const float *px = x.AsFloat();
-  std::uint8_t *py = output.data.data();
+  std::uint8_t *py = output.mutable_bytes();
   const int64_t n = x.element_count();
   for (int64_t i = 0; i < n; ++i) {
     const int64_t si = scale_index[i];
@@ -350,7 +351,7 @@ void QuantizeBlockFloat4E2M1Loop(const Tensor &x, const float *scales, const std
 void QuantizeBlockInt4Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
                            int32_t out_dtype, const int64_t *scale_index, Tensor &output) {
   const float *px = x.AsFloat();
-  std::uint8_t *py = output.data.data();
+  std::uint8_t *py = output.mutable_bytes();
   const int64_t n = x.element_count();
   const bool is_signed = (static_cast<DataType>(out_dtype) == DataType::INT4);
   const float kMin = is_signed ? -8.0f : 0.0f;
@@ -374,7 +375,7 @@ void QuantizeBlockInt4Loop(const Tensor &x, const float *scales, const std::uint
 void QuantizeBlockFloat8Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
                              int32_t out_dtype, const int64_t *scale_index, Tensor &output) {
   const float *px = x.AsFloat();
-  std::uint8_t *py = output.data.data();
+  std::uint8_t *py = output.mutable_bytes();
   const int64_t n = x.element_count();
   for (int64_t i = 0; i < n; ++i) {
     const int64_t si = scale_index[i];
@@ -386,9 +387,11 @@ void QuantizeBlockFloat8Loop(const Tensor &x, const float *scales, const std::ui
 
 } // namespace
 
-Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale) const {
-  Tensor out("", static_cast<int32_t>(DataType::UINT8), x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count())));
+Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
+                                  RuntimeContext *rt) const {
+  const size_t out_n_bytes = static_cast<size_t>(x.element_count());
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), x.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(x, y_scale, out);
   return out;
 }
@@ -402,7 +405,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, Tensor &
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::QuantizeLinear preallocated output shape must match x shape.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == PackedByteSize(output.data_type, x.element_count()),
+      output.size_bytes() == PackedByteSize(output.data_type, x.element_count()),
       "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = y_scale.AsFloat()[0];
   switch (output.data_type) {
@@ -427,9 +430,10 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, Tensor &
 }
 
 Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
-                                  const Tensor &y_zero_point) const {
-  Tensor out("", y_zero_point.data_type, x.shape,
-             std::vector<uint8_t>(PackedByteSize(y_zero_point.data_type, x.element_count())));
+                                  const Tensor &y_zero_point, RuntimeContext *rt) const {
+  const size_t out_n_bytes = PackedByteSize(y_zero_point.data_type, x.element_count());
+  Tensor out = MakeOutputTensor(y_zero_point.data_type, x.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(x, y_scale, y_zero_point, out);
   return out;
 }
@@ -447,7 +451,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::QuantizeLinear preallocated output shape must match x shape.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == PackedByteSize(output.data_type, x.element_count()),
+      output.size_bytes() == PackedByteSize(output.data_type, x.element_count()),
       "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = y_scale.AsFloat()[0];
   switch (output.data_type) {
@@ -468,7 +472,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   case static_cast<int32_t>(DataType::FLOAT8E5M2):
   case static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ): {
     const float zp = ReadFloat8ScalarZP(y_zero_point);
-    std::uint8_t *py = output.data.data();
+    std::uint8_t *py = output.mutable_bytes();
     const float *pxf = x.AsFloat();
     const int64_t n = x.element_count();
     for (int64_t i = 0; i < n; ++i) {
@@ -480,7 +484,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   case static_cast<int32_t>(DataType::UINT4): {
     const int64_t n = x.element_count();
     const float *pxf = x.AsFloat();
-    std::uint8_t *py = output.data.data();
+    std::uint8_t *py = output.mutable_bytes();
     const bool is_signed = (static_cast<DataType>(output.data_type) == DataType::INT4);
     const float kMin = is_signed ? -8.0f : 0.0f;
     const float kMax = is_signed ? 7.0f : 15.0f;
@@ -501,7 +505,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   case static_cast<int32_t>(DataType::UINT2): {
     const int64_t n = x.element_count();
     const float *pxf = x.AsFloat();
-    std::uint8_t *py = output.data.data();
+    std::uint8_t *py = output.mutable_bytes();
     const bool is_signed = (static_cast<DataType>(output.data_type) == DataType::INT2);
     const float kMin = is_signed ? -2.0f : 0.0f;
     const float kMax = is_signed ? 1.0f : 3.0f;
@@ -521,7 +525,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   case static_cast<int32_t>(DataType::FLOAT4E2M1): {
     const int64_t n = x.element_count();
     const float *pxf = x.AsFloat();
-    std::uint8_t *py = output.data.data();
+    std::uint8_t *py = output.mutable_bytes();
     const float zp = Float4E2M1NibbleToFloat(Read4BitElement(y_zero_point.bytes(), 0));
     for (int64_t i = 0; i < n; ++i) {
       Write4BitElement(py, i, FloatRoundToFloat4E2M1Nibble(pxf[i] / scale + zp));
@@ -538,13 +542,15 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
 }
 
 Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
-                                  const Tensor &y_zero_point, int64_t axis) const {
+                                  const Tensor &y_zero_point, int64_t axis,
+                                  RuntimeContext *rt) const {
   // Scalar scale: delegate to the per-tensor overload.
   if (y_scale.element_count() == 1) {
-    return (*this)(x, y_scale, y_zero_point);
+    return (*this)(x, y_scale, y_zero_point, rt);
   }
-  Tensor out("", y_zero_point.data_type, x.shape,
-             std::vector<uint8_t>(PackedByteSize(y_zero_point.data_type, x.element_count())));
+  const size_t out_n_bytes = PackedByteSize(y_zero_point.data_type, x.element_count());
+  Tensor out = MakeOutputTensor(y_zero_point.data_type, x.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(x, y_scale, y_zero_point, axis, out);
   return out;
 }
@@ -564,7 +570,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::QuantizeLinear preallocated output shape must match x shape.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == PackedByteSize(output.data_type, x.element_count()),
+      output.size_bytes() == PackedByteSize(output.data_type, x.element_count()),
       "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
   EXT_ENFORCE_INVALID(axis >= 0 && axis < static_cast<int64_t>(x.shape.size()),
                       "kernel::QuantizeLinear: axis out of range.");
@@ -639,9 +645,9 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
 }
 
 Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_t axis,
-                                  int32_t output_dtype) const {
-  Tensor out("", output_dtype, x.shape,
-             std::vector<uint8_t>(PackedByteSize(output_dtype, x.element_count())));
+                                  int32_t output_dtype, RuntimeContext *rt) const {
+  const size_t out_n_bytes = PackedByteSize(output_dtype, x.element_count());
+  Tensor out = MakeOutputTensor(output_dtype, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, y_scale, axis, output_dtype, out);
   return out;
 }

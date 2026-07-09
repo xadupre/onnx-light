@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -125,7 +126,7 @@ void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out
 } // namespace
 
 Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
-                       bool inverse) const {
+                       bool inverse, RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(input.shape.size());
   EXT_ENFORCE_INVALID(rank >= 2, kDFTName,
                       ": input must have rank >= 2 (including the "
@@ -185,9 +186,8 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
     out_total *= d;
   }
 
-  Tensor output(
-      "", input.data_type, out_shape,
-      std::vector<uint8_t>(static_cast<std::size_t>(out_total) * ElementSize(input.data_type)));
+  const size_t output_n_bytes = static_cast<std::size_t>(out_total) * ElementSize(input.data_type);
+  Tensor output = MakeOutputTensor(input.data_type, out_shape, output_n_bytes, nullptr);
 
   switch (input.data_type) {
   case DataType::FLOAT:
@@ -212,10 +212,10 @@ void DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t axis
                       ": preallocated output dtype must match.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape, kDFTName,
                       ": preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(), kDFTName,
+  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(), kDFTName,
                       ": preallocated output buffer size mismatch.");
   if (!produced.data.empty()) {
-    std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
+    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

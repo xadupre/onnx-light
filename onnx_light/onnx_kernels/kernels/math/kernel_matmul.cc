@@ -6,6 +6,7 @@
 
 #include "onnx_kernels/kernels/_helpers/float16_promote.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -171,8 +172,8 @@ template <typename T> void MatMulCompute(const Tensor &a, const Tensor &b, Tenso
 
 template <typename T> Tensor MatMulAlloc(const Tensor &a, const Tensor &b) {
   const std::vector<int64_t> out_shape = ComputeMatMulOutputShape(a.shape, b.shape);
-  Tensor y("", a.data_type, out_shape,
-           std::vector<uint8_t>(static_cast<size_t>(NumElements(out_shape)) * sizeof(T)));
+  const size_t y_n_bytes = static_cast<size_t>(NumElements(out_shape)) * sizeof(T);
+  Tensor y = MakeOutputTensor(a.data_type, out_shape, y_n_bytes, nullptr);
   MatMulCompute<T>(a, b, y);
   return y;
 }
@@ -184,14 +185,14 @@ template <typename T> void MatMulInPlace(const Tensor &a, const Tensor &b, Tenso
   EXT_ENFORCE_INVALID(output.shape == out_shape, kMatMulName,
                       " preallocated output has an invalid shape.");
   const size_t expected_bytes = static_cast<size_t>(NumElements(out_shape)) * sizeof(T);
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes, kMatMulName,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes, kMatMulName,
                       " preallocated output buffer size does not match its shape.");
   MatMulCompute<T>(a, b, output);
 }
 
 } // namespace
 
-Tensor MatMul::operator()(const Tensor &a, const Tensor &b) const {
+Tensor MatMul::operator()(const Tensor &a, const Tensor &b, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(a.data_type == b.data_type, kMatMulName,
                       " inputs must share the same dtype.");
   switch (a.data_type) {
@@ -243,9 +244,9 @@ void MatMul::operator()(const Tensor &a, const Tensor &b, Tensor &output) const 
     Tensor y = (*this)(a, b);
     EXT_ENFORCE_INVALID(output.shape == y.shape, kMatMulName,
                         " preallocated output has an invalid shape.");
-    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(), kMatMulName,
+    EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(), kMatMulName,
                         " preallocated output buffer size does not match its shape.");
-    std::memcpy(output.data.data(), y.data.data(), y.data.size());
+    std::memcpy(output.mutable_bytes(), y.bytes(), y.size_bytes());
     return;
   }
   default:

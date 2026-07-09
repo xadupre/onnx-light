@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -32,7 +33,8 @@ void ValidateInputs(const Tensor &x, const Tensor &rois, const MaxRoiPool::Attri
 
 } // namespace
 
-Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs) const {
+Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs,
+                              RuntimeContext *rt) const {
   ValidateInputs(x, rois, attrs);
   const int64_t num_rois = rois.shape[0];
   const int64_t C = x.shape[1];
@@ -42,8 +44,9 @@ Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attribu
   for (int64_t d : out_shape) {
     out_elements *= d;
   }
-  Tensor out("", x.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_elements) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(out_elements) * sizeof(float);
+  Tensor out =
+      MakeOutputTensor(x.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, rois, attrs, out);
   return out;
 }
@@ -69,7 +72,7 @@ void MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attribute
   const size_t expected_bytes =
       static_cast<size_t>(num_rois * C * pooled_h * pooled_w) * sizeof(float);
   EXT_ENFORCE_INVALID(
-      output.data.size() == expected_bytes,
+      output.size_bytes() == expected_bytes,
       "kernel::MaxRoiPool preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();

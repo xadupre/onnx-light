@@ -369,6 +369,20 @@ struct Tensor {
     return borrow_ptr_ != nullptr ? borrow_ptr_ : data.data();
   }
 
+  /// Returns a mutable pointer to the raw element bytes.
+  /// Works for owned tensors and allocator-backed tensors. For borrowed
+  /// tensors the underlying storage may be read-only; callers must not write
+  /// through the returned pointer when the tensor was created via
+  /// :cpp:func:`Borrow` with an immutable backing buffer.
+  uint8_t *mutable_bytes() noexcept {
+    if (allocation_ != nullptr) {
+      return allocation_->data();
+    }
+    // For borrowed tensors borrow_ptr_ is const; cast away the const here.
+    // Callers are responsible for ensuring the backing storage is writable.
+    return borrow_ptr_ != nullptr ? const_cast<uint8_t *>(borrow_ptr_) : data.data();
+  }
+
   /// Returns the total number of raw element bytes.
   /// Works for both owned and borrowed tensors.
   size_t size_bytes() const noexcept {
@@ -606,6 +620,26 @@ void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi);
  * @throws std::invalid_argument for unsupported ``data_type`` values.
  */
 Tensor TensorFromProto(const TensorProto &tp);
+
+/**
+ * Creates an empty output tensor of ``n_bytes`` bytes with the given
+ * ``data_type`` and ``shape``.
+ *
+ * When ``allocator`` is non-null the byte buffer is acquired from it via
+ * :cpp:func:`RawBufferAllocator::Allocate` and initialised to zero, and the
+ * returned tensor is allocator-backed (``has_allocation()`` returns
+ * ``true``). When ``allocator`` is null the tensor uses an inline
+ * ``std::vector<uint8_t>`` of ``n_bytes`` zero-initialised bytes (the
+ * legacy path).
+ *
+ * @param data_type   ONNX element type (a ``TensorProto::DataType`` integer).
+ * @param shape       Output shape.
+ * @param n_bytes     Total byte size of the output buffer
+ *                    (``element_count × element_size``).
+ * @param allocator   Optional allocator; may be ``nullptr``.
+ */
+Tensor MakeOutputTensor(int32_t data_type, const Shape &shape, size_t n_bytes,
+                        RawBufferAllocator *allocator);
 
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -6,6 +6,7 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -21,9 +22,9 @@ constexpr const char *kName = "kernel::Abs";
 
 } // namespace
 
-Tensor Abs::operator()(const Tensor &x) const {
-  Tensor y("", x.data_type, x.shape,
-           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * x.element_size()));
+Tensor Abs::operator()(const Tensor &x, RuntimeContext *rt) const {
+  const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
+  Tensor y = MakeOutputTensor(x.data_type, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, y);
   return y;
 }

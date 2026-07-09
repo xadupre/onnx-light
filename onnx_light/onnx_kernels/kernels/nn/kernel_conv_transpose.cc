@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
@@ -138,7 +139,7 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &x, ConvTranspose::Attribut
 } // namespace
 
 Tensor ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor &b,
-                                 const Attributes &attrs) const {
+                                 const Attributes &attrs, RuntimeContext *rt) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, b, resolved);
@@ -155,8 +156,9 @@ Tensor ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor 
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor out("", x.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(total) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(float);
+  Tensor out =
+      MakeOutputTensor(x.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, w, b, resolved, out);
   return out;
 }
@@ -183,7 +185,7 @@ void ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor &b
   for (int64_t d : expected_shape) {
     total *= d;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(float),
                       "kernel::ConvTranspose preallocated output buffer has unexpected size.");
 
   const size_t spatial_rank = x.shape.size() - 2;

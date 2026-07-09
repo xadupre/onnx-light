@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -127,7 +128,7 @@ void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int64_t sa
 } // namespace
 
 Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t seed,
-                               int32_t dtype) const {
+                               int32_t dtype, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(input.shape.size() == 2,
                       "kernel::Multinomial: input must be a 2-D tensor of shape "
                       "[batch_size, class_size].");
@@ -205,11 +206,11 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
   EXT_ENFORCE_INVALID(output.shape == produced.shape,
                       "kernel::Multinomial preallocated output shape must match the produced "
                       "tensor shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
                       "kernel::Multinomial preallocated output buffer has unexpected size in "
                       "bytes.");
   if (!produced.data.empty()) {
-    std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
+    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

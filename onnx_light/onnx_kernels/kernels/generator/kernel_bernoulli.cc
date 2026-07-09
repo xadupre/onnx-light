@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <random>
@@ -182,7 +183,8 @@ void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int32_t sa
 
 } // namespace
 
-Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype) const {
+Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
+                             RuntimeContext *rt) const {
   const std::vector<double> probs = ReadProbabilities(input);
 
   const int32_t out_dtype = (dtype == 0) ? input.data_type : dtype;
@@ -214,11 +216,11 @@ void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Ten
   EXT_ENFORCE_INVALID(output.shape == produced.shape,
                       "kernel::Bernoulli preallocated output shape must match the produced "
                       "tensor shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
                       "kernel::Bernoulli preallocated output buffer has unexpected size in "
                       "bytes.");
   if (!produced.data.empty()) {
-    std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
+    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

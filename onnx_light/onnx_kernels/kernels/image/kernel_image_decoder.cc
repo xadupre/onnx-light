@@ -18,6 +18,7 @@
 #if defined(_WIN32)
 #include <windows.h>
 #elif defined(__APPLE__) || defined(__linux__) || defined(__unix__)
+#include "onnx_kernels/runtime_context.h"
 #include <dlfcn.h>
 #endif
 
@@ -2173,8 +2174,8 @@ int64_t ImageDecoder::ChannelCount(const std::string &pixel_format) {
                     "\" (expected \"RGB\", \"BGR\" or \"Grayscale\").");
 }
 
-Tensor ImageDecoder::operator()(const Tensor &encoded_stream,
-                                const std::string &pixel_format) const {
+Tensor ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &pixel_format,
+                                RuntimeContext *rt) const {
   CheckImageDecoderInput(encoded_stream);
   const int64_t channels = ChannelCount(pixel_format);
 
@@ -2216,7 +2217,7 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
   EXT_ENFORCE_INVALID(output.shape[2] == channels,
                       "kernel::ImageDecoder preallocated output channel count does not "
                       "match ``pixel_format``.");
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(output.data.size()) == output.element_count(),
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(output.size_bytes()) == output.element_count(),
                       "kernel::ImageDecoder preallocated output data size does not match "
                       "its shape.");
 

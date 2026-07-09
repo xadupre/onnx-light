@@ -631,7 +631,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   kernel::Scan scan_kernel(rt.kernel_ctx());
   if (!is_scan8) {
     std::vector<Tensor> outputs =
-        scan_kernel(body, initial_state, scan_inputs, rt, scan_input_axes, scan_input_directions,
+        scan_kernel(rt, body, initial_state, scan_inputs, scan_input_axes, scan_input_directions,
                     scan_output_axes, scan_output_directions);
     PropagateOutputsToCaller(node, outputs, rt);
     return;
@@ -679,7 +679,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
       batch_scan.push_back(SliceTensorAlongAxis(scan_inputs[i], 0, b, "Scan"));
     }
     std::vector<Tensor> batch_outputs =
-        scan_kernel(body, batch_state, batch_scan, rt, /*scan_input_axes=*/{},
+        scan_kernel(rt, body, batch_state, batch_scan, /*scan_input_axes=*/{},
                     scan_input_directions, /*scan_output_axes=*/{},
                     /*scan_output_directions=*/{});
     EXT_ENFORCE_INVALID(

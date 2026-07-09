@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -199,7 +200,7 @@ void LogSumNoopElementwiseT(const T *px, T *py, int64_t total, ReduceLogSumOp::M
 void LogSumNoopElementwise(const Tensor &data, ReduceLogSumOp::Mode mode, Tensor &output) {
   const int64_t total = data.element_count();
   if (mode == ReduceLogSumOp::Mode::kLogSumExp) {
-    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
+    std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
     return;
   }
   if (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
@@ -211,8 +212,8 @@ void LogSumNoopElementwise(const Tensor &data, ReduceLogSumOp::Mode mode, Tensor
 
 } // namespace
 
-Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims,
-                                  bool noop_with_empty_axes) const {
+Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                                  RuntimeContext *rt) const {
   ValidateFloatOrDouble(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
@@ -226,8 +227,9 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims,
   }
   const size_t elem_size =
       (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * elem_size, 0u));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -251,7 +253,7 @@ void ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_wit
   const size_t elem_size =
       (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(out_count) * elem_size,
+      output.size_bytes() == static_cast<size_t>(out_count) * elem_size,
       "kernel::ReduceLogSumOp preallocated output buffer has unexpected size in bytes.");
 
   if (noop_with_empty_axes) {
@@ -264,7 +266,7 @@ void ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_wit
 }
 
 Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
-                                  bool noop_with_empty_axes) const {
+                                  bool noop_with_empty_axes, RuntimeContext *rt) const {
   ValidateFloatOrDouble(data, "data");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceLogSumOp: axes must be an INT64 tensor.");
@@ -289,8 +291,9 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool k
   }
   const size_t elem_size =
       (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * elem_size, 0u));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -326,7 +329,7 @@ void ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool kee
   const size_t elem_size =
       (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(out_count) * elem_size,
+      output.size_bytes() == static_cast<size_t>(out_count) * elem_size,
       "kernel::ReduceLogSumOp preallocated output buffer has unexpected size in bytes.");
 
   if (naxes == 0 && noop_with_empty_axes) {

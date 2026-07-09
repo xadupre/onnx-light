@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -56,7 +57,8 @@ std::vector<int64_t> ReadGatherNDIndices(const Tensor &indices) {
 
 } // namespace
 
-Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims) const {
+Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims,
+                            RuntimeContext *rt) const {
   std::vector<int64_t> out_shape =
       ComputeGatherNDOutputShape(data.shape, indices.shape, batch_dims);
   int64_t total = 1;
@@ -64,8 +66,9 @@ Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t b
     total *= d;
   }
   const std::size_t elem_size = ElementSize(data.data_type);
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<std::size_t>(total) * elem_size));
+  const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, indices, batch_dims, out);
   return out;
 }
@@ -133,7 +136,7 @@ void GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t bat
       EXT_ENFORCE_INVALID(idx >= 0 && idx < dim, "kernel::GatherND: index out of range.");
       data_offset += idx * data_strides[static_cast<std::size_t>(batch_dims + k)];
     }
-    std::memcpy(output.data.data() + static_cast<std::size_t>(t * slice_bytes),
+    std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(t * slice_bytes),
                 data.bytes() +
                     static_cast<std::size_t>(data_offset) * static_cast<std::size_t>(elem_size),
                 static_cast<std::size_t>(slice_bytes));

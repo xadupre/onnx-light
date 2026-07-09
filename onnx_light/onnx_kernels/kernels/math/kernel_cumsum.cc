@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -61,7 +62,7 @@ void CumulativeInPlace(const Tensor &x, int64_t axis, bool exclusive, bool rever
   int64_t outer = 0, dim = 0, inner = 0;
   SplitShape(x.shape, axis, outer, dim, inner);
   const T *px = reinterpret_cast<const T *>(x.bytes());
-  T *py = reinterpret_cast<T *>(output.data.data());
+  T *py = reinterpret_cast<T *>(output.mutable_bytes());
 
   // Iterate over the outer/inner cartesian product and accumulate along the
   // axis dimension. Iteration order along the axis is reversed when
@@ -119,7 +120,7 @@ void ValidateOutput(const char *op_name, const Tensor &x, const Tensor &output) 
   EXT_ENFORCE_INVALID(output.data_type == x.data_type, op_name,
                       ": output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape, op_name, ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), op_name,
+  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(), op_name,
                       ": output buffer size mismatch.");
 }
 
@@ -161,7 +162,8 @@ struct ProdOp {
 
 } // namespace
 
-Tensor CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse) const {
+Tensor CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
+                          RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, kCumSumName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumSumName, ReadAxisScalar(kCumSumName, axis), rank);
@@ -196,8 +198,8 @@ void CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, boo
   DispatchCumulative(kCumSumName, x, a, exclusive, reverse, output, SumOp{});
 }
 
-Tensor CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive,
-                           bool reverse) const {
+Tensor CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
+                           RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, kCumProdName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumProdName, ReadAxisScalar(kCumProdName, axis), rank);

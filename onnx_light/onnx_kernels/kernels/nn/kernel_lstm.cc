@@ -176,11 +176,12 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
   // Output allocations.
   const std::vector<int64_t> y_shape{seq_length, 1, batch_size, hidden_size};
   const std::vector<int64_t> y_h_shape{1, batch_size, hidden_size};
-  Tensor y("", static_cast<int32_t>(DataType::FLOAT), y_shape,
-           std::vector<uint8_t>(static_cast<size_t>(seq_length * batch_size * hidden_size) *
-                                sizeof(float)));
-  Tensor y_h("", static_cast<int32_t>(DataType::FLOAT), y_h_shape,
-             std::vector<uint8_t>(static_cast<size_t>(batch_size * hidden_size) * sizeof(float)));
+  const size_t y_n_bytes =
+      static_cast<size_t>(seq_length * batch_size * hidden_size) * sizeof(float);
+  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, nullptr);
+  const size_t y_h_n_bytes = static_cast<size_t>(batch_size * hidden_size) * sizeof(float);
+  Tensor y_h =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_h_shape, y_h_n_bytes, nullptr);
   float *py = y.AsFloat();
   float *py_h = y_h.AsFloat();
 

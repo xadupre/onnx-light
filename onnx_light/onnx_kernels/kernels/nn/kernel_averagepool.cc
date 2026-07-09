@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -89,7 +90,7 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
                                const std::vector<int64_t> &strides,
                                const std::vector<int64_t> &pads, bool ceil_mode,
                                bool count_include_pad, const std::vector<int64_t> &dilations,
-                               const std::string &auto_pad) const {
+                               const std::string &auto_pad, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(),
@@ -157,8 +158,9 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
   for (int64_t d : out_shape) {
     n_out *= d;
   }
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(n_out) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(n_out) * sizeof(float);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   // Forward to the in-place overload with auto_pad already resolved into
   // explicit pads (so the in-place overload need not duplicate the
   // resolution logic).
@@ -232,11 +234,11 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
     n_out *= d;
   }
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(n_out) * sizeof(float),
+      output.size_bytes() == static_cast<size_t>(n_out) * sizeof(float),
       "kernel::AveragePool preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();
-  float *py = reinterpret_cast<float *>(output.data.data());
+  float *py = reinterpret_cast<float *>(output.mutable_bytes());
 
   const std::vector<int64_t> in_strides = RowMajorStrides(x.shape);
   const std::vector<int64_t> out_strides = RowMajorStrides(output.shape);

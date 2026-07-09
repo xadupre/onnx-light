@@ -96,4 +96,28 @@ def validate_external_data_path(
             f"the trusted base directory {real_base!r}."
         )
 
+    # Step 4: Explicit symlink check (defense-in-depth: reject symlinks even
+    # when the resolved target stays inside base_dir, to prevent TOCTOU races).
+    raw_joined = location if os.path.isabs(location) else os.path.join(base_dir, location)
+    if os.path.islink(raw_joined):
+        raise ValueError(
+            f"External data location {location!r} is a symbolic link, "
+            f"which is not allowed for security reasons."
+        )
+
+    # Step 5: Hardlink count check (reject files with multiple hard links to
+    # defend against hardlink-based attacks where a hardlink to a sensitive
+    # file is placed inside the model directory).
+    try:
+        st = os.stat(candidate)
+        if st.st_nlink > 1:
+            raise ValueError(
+                f"External data path {candidate!r} has multiple hard links "
+                f"({st.st_nlink}), which is not allowed for security reasons."
+            )
+    except OSError:
+        # File does not exist yet (write mode callers) or stat is unavailable;
+        # allow the caller to handle the missing-file error.
+        pass
+
     return candidate

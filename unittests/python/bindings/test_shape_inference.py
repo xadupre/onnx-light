@@ -4,6 +4,7 @@ from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
+import onnx_light.onnx.parser as parser
 import onnx_light.onnx.shape_inference as shape_inference
 
 
@@ -248,6 +249,77 @@ class TestShapeInference(ExtTestCase):
             opset_imports=[oh.make_opsetid("", 18)],
         )
         with self.assertRaises(shape_inference.InferenceError):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_scan_num_scan_inputs_out_of_range_opset21(self) -> None:
+        """num_scan_inputs > num_inputs must raise InferenceError (opset 21)."""
+        # 2 inputs but num_scan_inputs = 9; shape inference must fail, not underflow.
+        model = parser.parse_model("""
+            <ir_version: 10, opset_import: ["" : 21]>
+            agraph (float[2] in0, float[3, 2] in1) => (out) {
+                out = Scan <num_scan_inputs = 9, body = b (float a, float x) => (float c) {
+                    c = Add(a, x)
+                }> (in0, in1)
+            }
+            """)
+        with self.assertRaisesRegex(shape_inference.InferenceError, "num_scan_inputs"):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_scan_num_scan_inputs_out_of_range_opset9(self) -> None:
+        """num_scan_inputs > num_inputs must raise InferenceError (opset 9)."""
+        model = parser.parse_model("""
+            <ir_version: 8, opset_import: ["" : 9]>
+            agraph (float[2] in0, float[3, 2] in1) => (out) {
+                out = Scan <num_scan_inputs = 9, body = b (float a, float x) => (float c) {
+                    c = Add(a, x)
+                }> (in0, in1)
+            }
+            """)
+        with self.assertRaisesRegex(shape_inference.InferenceError, "num_scan_inputs"):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_scan_num_scan_inputs_out_of_range_opset8(self) -> None:
+        """num_scan_inputs > num_inputs must raise InferenceError (opset 8)."""
+        # Opset-8 Scan has sequence_lens as its first input; 3 inputs total but
+        # num_scan_inputs = 9 still exceeds the available slots.
+        model = parser.parse_model("""
+            <ir_version: 8, opset_import: ["" : 8]>
+            agraph (float[1, 3] ls, float[1, 2, 2] si) => (out) {
+                out = Scan <num_scan_inputs = 9, body = b (float a, float x) => (float c) {
+                    c = Add(a, x)
+                }> ("", ls, si)
+            }
+            """)
+        with self.assertRaisesRegex(shape_inference.InferenceError, "num_scan_inputs"):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_scan_loop_state_vars_exceed_outputs_opset21(self) -> None:
+        """More loop state vars than outputs must raise InferenceError (opset 21)."""
+        # 3 inputs, num_scan_inputs = 1 → 2 loop state vars; only 1 output declared.
+        model = parser.parse_model("""
+            <ir_version: 10, opset_import: ["" : 21]>
+            agraph (float[2] in0, float[2] in1, float[3, 2] in2) => (out) {
+                out = Scan <num_scan_inputs = 1,
+                    body = b (float a, float b, float x) => (float c) {
+                        c = Identity(a)
+                    }> (in0, in1, in2)
+            }
+            """)
+        with self.assertRaisesRegex(shape_inference.InferenceError, "loop state variables"):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_scan_loop_state_vars_exceed_outputs_opset9(self) -> None:
+        """More loop state vars than outputs must raise InferenceError (opset 9)."""
+        model = parser.parse_model("""
+            <ir_version: 8, opset_import: ["" : 9]>
+            agraph (float[2] in0, float[2] in1, float[3, 2] in2) => (out) {
+                out = Scan <num_scan_inputs = 1,
+                    body = b (float a, float b, float x) => (float c) {
+                        c = Identity(a)
+                    }> (in0, in1, in2)
+            }
+            """)
+        with self.assertRaisesRegex(shape_inference.InferenceError, "loop state variables"):
             shape_inference.infer_shapes(model, strict_mode=True)
 
 

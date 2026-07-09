@@ -4,8 +4,8 @@
 
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
+#include <algorithm>
 #include <cstdint>
-#include <cstring>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -66,9 +66,9 @@ Tensor MakeUniformTensor(const std::vector<int64_t> &shape, double low, double h
   const T span = static_cast<T>(high - low);
   const T lowT = static_cast<T>(low);
   std::vector<uint8_t> bytes(samples.size() * sizeof(T));
+  T *dst = reinterpret_cast<T *>(bytes.data());
   for (size_t i = 0; i < samples.size(); ++i) {
-    T v = lowT + samples[i] * span;
-    std::memcpy(bytes.data() + i * sizeof(T), &v, sizeof(T));
+    dst[i] = lowT + samples[i] * span;
   }
   return Tensor("", dtype, shape, std::move(bytes));
 }
@@ -80,9 +80,9 @@ Tensor MakeNormalTensor(const std::vector<int64_t> &shape, double mean, double s
   const T meanT = static_cast<T>(mean);
   const T scaleT = static_cast<T>(scale);
   std::vector<uint8_t> bytes(samples.size() * sizeof(T));
+  T *dst = reinterpret_cast<T *>(bytes.data());
   for (size_t i = 0; i < samples.size(); ++i) {
-    T v = meanT + samples[i] * scaleT;
-    std::memcpy(bytes.data() + i * sizeof(T), &v, sizeof(T));
+    dst[i] = meanT + samples[i] * scaleT;
   }
   return Tensor("", dtype, shape, std::move(bytes));
 }
@@ -113,7 +113,7 @@ void CopyIntoOutput(const Tensor &produced, Tensor &output, const char *op_name)
   EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(), "kernel::", op_name,
                       " preallocated output buffer has unexpected size in bytes.");
   if (!produced.data.empty()) {
-    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
+    std::copy(produced.bytes(), produced.bytes() + produced.size_bytes(), output.mutable_bytes());
   }
 }
 

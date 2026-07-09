@@ -52,42 +52,48 @@ double DecodeHalf(uint16_t h) {
   } else {
     f = (sign << 31) | (static_cast<uint32_t>(exp - 15 + 127) << 23) | (mant << 13);
   }
-  float fv = std::bit_cast<float>(f);
-  return static_cast<double>(fv);
+  return static_cast<double>(std::bit_cast<float>(f));
 }
 
-// Reads the per-row log-probabilities of ``input`` into a row-major
-// ``std::vector<double>`` of size ``batch_size * class_size``.
-std::vector<double> ReadLogits(const Tensor &input, int64_t batch_size, int64_t class_size) {
-  const int64_t n = batch_size * class_size;
-  std::vector<double> logits(static_cast<std::size_t>(n));
-  switch (static_cast<DataType>(input.data_type)) {
-  case DataType::FLOAT: {
-    const float *src = input.AsFloat();
-    for (int64_t i = 0; i < n; ++i) {
-      logits[static_cast<std::size_t>(i)] = static_cast<double>(src[i]);
+// Builds the CDF for a single batch row from a typed pointer and returns the
+// unnormalized probability sum. The ``cdf`` vector is written in-place and
+// must already be sized to ``class_size``. No intermediate conversion buffer
+// is allocated; values are read directly from ``row``.
+template <typename T>
+double BuildRowCdf(const T *row, int64_t class_size, std::vector<double> &cdf) {
+  double max_logit = static_cast<double>(row[0]);
+  for (int64_t c = 1; c < class_size; ++c) {
+    const double v = static_cast<double>(row[c]);
+    if (v > max_logit) {
+      max_logit = v;
     }
-    break;
   }
-  case DataType::DOUBLE: {
-    const double *src = input.AsDouble();
-    for (int64_t i = 0; i < n; ++i) {
-      logits[static_cast<std::size_t>(i)] = src[i];
+  double sum = 0.0;
+  for (int64_t c = 0; c < class_size; ++c) {
+    const double p = std::exp(static_cast<double>(row[c]) - max_logit);
+    sum += p;
+    cdf[static_cast<std::size_t>(c)] = sum;
+  }
+  return sum;
+}
+
+// Specialisation for FLOAT16 stored as raw uint16_t bytes.
+template <>
+double BuildRowCdf<uint16_t>(const uint16_t *row, int64_t class_size, std::vector<double> &cdf) {
+  double max_logit = DecodeHalf(row[0]);
+  for (int64_t c = 1; c < class_size; ++c) {
+    const double v = DecodeHalf(row[c]);
+    if (v > max_logit) {
+      max_logit = v;
     }
-    break;
   }
-  case DataType::FLOAT16: {
-    const uint16_t *src = reinterpret_cast<const uint16_t *>(input.bytes());
-    for (int64_t i = 0; i < n; ++i) {
-      logits[static_cast<std::size_t>(i)] = DecodeHalf(src[i]);
-    }
-    break;
+  double sum = 0.0;
+  for (int64_t c = 0; c < class_size; ++c) {
+    const double p = std::exp(DecodeHalf(row[c]) - max_logit);
+    sum += p;
+    cdf[static_cast<std::size_t>(c)] = sum;
   }
-  default:
-    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported input dtype ",
-                        std::to_string(input.data_type), ".");
-  }
-  return logits;
+  return sum;
 }
 
 // Returns the byte stride of the supported output dtypes.
@@ -167,8 +173,6 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
                       "kernel::Multinomial preallocated output shape must match the produced "
                       "tensor shape.");
 
-  const std::vector<double> logits = ReadLogits(input, batch_size, class_size);
-
   const std::size_t es = OutputElementSize(out_dtype);
   uint8_t *out_data = output.mutable_bytes();
 
@@ -181,41 +185,43 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
   // unnormalized log-probabilities). Reused across rows.
   std::vector<double> cdf(static_cast<std::size_t>(class_size));
 
-  for (int64_t b = 0; b < batch_size; ++b) {
-    const double *row = logits.data() + static_cast<std::size_t>(b * class_size);
-
-    // Stable softmax: subtract the row max before exponentiating so very
-    // large logits do not overflow.
-    double max_logit = row[0];
-    for (int64_t c = 1; c < class_size; ++c) {
-      if (row[c] > max_logit) {
-        max_logit = row[c];
+  // Dispatch on input dtype once, outside the batch loop, so that typed row
+  // pointers are advanced directly without any intermediate conversion buffer.
+  auto run_batch = [&](auto typed_ptr) {
+    for (int64_t b = 0; b < batch_size; ++b) {
+      const double sum = BuildRowCdf(typed_ptr + b * class_size, class_size, cdf);
+      EXT_ENFORCE_INVALID(sum > 0.0, "kernel::Multinomial: row ", std::to_string(b),
+                          " produced an all-zero probability distribution.");
+      // Normalize the CDF to end at exactly 1.0.
+      for (int64_t c = 0; c < class_size; ++c) {
+        cdf[static_cast<std::size_t>(c)] /= sum;
+      }
+      for (int64_t s = 0; s < sample_size; ++s) {
+        const double u = uniform(engine);
+        // Inverse-CDF: find the smallest index whose CDF >= u.
+        const auto it = std::lower_bound(cdf.begin(), cdf.end(), u);
+        int64_t idx = static_cast<int64_t>(it - cdf.begin());
+        if (idx >= class_size) {
+          idx = class_size - 1;
+        }
+        StoreSample(out_dtype, out_data + static_cast<std::size_t>(b * sample_size + s) * es, idx);
       }
     }
-    double sum = 0.0;
-    for (int64_t c = 0; c < class_size; ++c) {
-      const double p = std::exp(row[c] - max_logit);
-      sum += p;
-      cdf[static_cast<std::size_t>(c)] = sum;
-    }
-    EXT_ENFORCE_INVALID(sum > 0.0, "kernel::Multinomial: row ", std::to_string(b),
-                        " produced an all-zero probability distribution.");
-    // Normalize the CDF to end at exactly 1.0.
-    for (int64_t c = 0; c < class_size; ++c) {
-      cdf[static_cast<std::size_t>(c)] /= sum;
-    }
+  };
 
-    for (int64_t s = 0; s < sample_size; ++s) {
-      const double u = uniform(engine);
-      // Inverse-CDF: find the smallest index whose CDF >= u.
-      const auto it = std::lower_bound(cdf.begin(), cdf.end(), u);
-      int64_t idx = static_cast<int64_t>(it - cdf.begin());
-      if (idx >= class_size) {
-        idx = class_size - 1;
-      }
-      const std::size_t elem_idx = static_cast<std::size_t>(b * sample_size + s);
-      StoreSample(out_dtype, out_data + elem_idx * es, idx);
-    }
+  switch (static_cast<DataType>(input.data_type)) {
+  case DataType::FLOAT:
+    run_batch(input.AsFloat());
+    break;
+  case DataType::DOUBLE:
+    run_batch(input.AsDouble());
+    break;
+  case DataType::FLOAT16:
+    run_batch(reinterpret_cast<const uint16_t *>(input.bytes()));
+    break;
+  default:
+    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported input dtype ",
+                        std::to_string(input.data_type), ".");
   }
 }
 

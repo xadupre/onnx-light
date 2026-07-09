@@ -429,7 +429,6 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
-    const bool is_unsqueeze = node.op_type().as_string() == "Unsqueeze";
     const std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
 
     for (const std::string &name : referenced) {
@@ -517,7 +516,9 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           // The dtype guard keeps this fast-path defensive for malformed graphs
           // or partial type information: aliasing is only safe when input/output
           // element storage matches.
-          if (is_unsqueeze && k == 0 && out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
+          // Unsqueeze's data tensor is input 0 by ONNX spec; input 1 is axes.
+          if (k == 0 && node.op_type().as_string() == "Unsqueeze" &&
+              out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
             match = InPlaceReuseKind::kEqual;
           } else {
             match = ClassifyReuse(out_tensor, ctx.Get(in_name));

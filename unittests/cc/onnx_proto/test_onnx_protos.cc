@@ -5124,6 +5124,32 @@ TEST(onnx_proto, LoadExternalData_RejectsHardlink) {
 #endif
 }
 
+#ifndef _WIN32
+// GHSA-8qff-7g33-75mx: FileWriteStream must refuse to open a symlink as target.
+TEST(onnx_stream, FileWriteStream_RejectsSymlink) {
+#ifndef ONNX_NO_EXCEPTIONS
+  namespace fs = std::filesystem;
+  fs::path dir = fs::temp_directory_path() / "onnx_light_write_symlink_test";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+
+  fs::path real_file = dir / "real.bin";
+  {
+    std::ofstream ofs(real_file, std::ios::binary);
+    ofs.write("real", 4);
+  }
+
+  // Place a symlink at the intended write target.
+  fs::path link = dir / "link.bin";
+  fs::create_symlink(real_file, link);
+
+  EXPECT_THROW(utils::FileWriteStream stream(link.string()), std::exception);
+
+  fs::remove_all(dir);
+#endif
+}
+#endif // !_WIN32
+
 TEST(onnx_proto, SequenceProto_Basic) {
   SequenceProto sequence;
 

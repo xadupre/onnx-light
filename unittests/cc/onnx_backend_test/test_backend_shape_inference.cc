@@ -2111,49 +2111,45 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
 
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
-    model_copy.ParseFromString(serialized);
+    ASSERT_TRUE(tc.model.SerializeToString(&serialized)) << "failed to serialize case: " << tc.name;
+    ASSERT_TRUE(model_copy.ParseFromString(serialized)) << "failed to parse case: " << tc.name;
 
     GraphProto *graph = model_copy.mutable_graph();
     graph->mutable_metadata_props()->clear();
-    for (size_t n = 0; n < graph->node().size(); ++n) {
-      graph->mutable_node(n)->mutable_metadata_props()->clear();
-    }
-    for (size_t vi = 0; vi < graph->value_info().size(); ++vi) {
-      graph->mutable_value_info(vi)->mutable_metadata_props()->clear();
-    }
-    for (size_t i = 0; i < graph->input().size(); ++i) {
-      graph->mutable_input(i)->mutable_metadata_props()->clear();
-    }
-    for (size_t o = 0; o < graph->output().size(); ++o) {
-      graph->mutable_output(o)->mutable_metadata_props()->clear();
-    }
-    for (size_t it = 0; it < graph->initializer().size(); ++it) {
-      graph->mutable_initializer(it)->mutable_metadata_props()->clear();
-    }
+    const auto clear_metadata = [](auto *mutable_entries) {
+      for (size_t idx = 0; idx < mutable_entries->size(); ++idx) {
+        (*mutable_entries)[idx].mutable_metadata_props()->clear();
+      }
+    };
+    clear_metadata(graph->mutable_node());
+    clear_metadata(graph->mutable_value_info());
+    clear_metadata(graph->mutable_input());
+    clear_metadata(graph->mutable_output());
+    clear_metadata(graph->mutable_initializer());
 
     ASSERT_NO_THROW(onnx_optim::annotations::WriteValueAndNodeTagsToMetadata(*graph))
         << "case: " << tc.name;
 
     const auto has_value_tag = [&](const auto &value) {
-      return MetadataOf(value).count(onnx_optim::annotations::kValueTagMetadataKey) > 0;
+      return MetadataOf(value).contains(onnx_optim::annotations::kValueTagMetadataKey);
     };
-    for (size_t i = 0; i < graph->input().size(); ++i) {
-      EXPECT_TRUE(has_value_tag(graph->ref_input()[i]))
-          << "missing value tag on input[" << i << "] in case " << tc.name;
+    const auto has_node_tag = [&](const auto &node) {
+      return MetadataOf(node).contains(onnx_optim::annotations::kNodeTagMetadataKey);
+    };
+    const auto expect_all_tagged = [&](const auto &values, const char *kind) {
+      for (size_t idx = 0; idx < values.size(); ++idx) {
+        EXPECT_TRUE(has_value_tag(values[idx]))
+            << "missing value tag on " << kind << "[" << idx << "] in case " << tc.name;
+      }
+    };
+    for (size_t node_idx = 0; node_idx < graph->node().size(); ++node_idx) {
+      EXPECT_TRUE(has_node_tag(graph->ref_node()[node_idx]))
+          << "missing node tag on node[" << node_idx << "] in case " << tc.name;
     }
-    for (size_t vi = 0; vi < graph->value_info().size(); ++vi) {
-      EXPECT_TRUE(has_value_tag(graph->ref_value_info()[vi]))
-          << "missing value tag on value_info[" << vi << "] in case " << tc.name;
-    }
-    for (size_t o = 0; o < graph->output().size(); ++o) {
-      EXPECT_TRUE(has_value_tag(graph->ref_output()[o]))
-          << "missing value tag on output[" << o << "] in case " << tc.name;
-    }
-    for (size_t it = 0; it < graph->initializer().size(); ++it) {
-      EXPECT_TRUE(has_value_tag(graph->ref_initializer()[it]))
-          << "missing value tag on initializer[" << it << "] in case " << tc.name;
-    }
+    expect_all_tagged(graph->ref_input(), "input");
+    expect_all_tagged(graph->ref_value_info(), "value_info");
+    expect_all_tagged(graph->ref_output(), "output");
+    expect_all_tagged(graph->ref_initializer(), "initializer");
   }
   ASSERT_TRUE(found) << "no shape_tag backend cases were collected";
 }

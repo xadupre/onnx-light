@@ -18,14 +18,17 @@ namespace kernel {
 
 Tensor If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
                       RuntimeContext *rt) const {
-  // Allocate an output matching either branch's type/shape (both must agree;
-  // the in-place overload enforces this); the in-place overload writes into
-  // ``out.data`` below.
-  const size_t out_n_bytes = then_value.size_bytes();
-  Tensor out = MakeOutputTensor(then_value.data_type, then_value.shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
-  (*this)(cond, then_value, else_value, out);
-  return out;
+  (void)rt;
+  EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL,
+                      "kernel::If: 'cond' must be a BOOL tensor.");
+  EXT_ENFORCE_INVALID(cond.element_count() == 1,
+                      "kernel::If: 'cond' must contain a single element.");
+  EXT_ENFORCE_INVALID(then_value.data_type == else_value.data_type,
+                      "kernel::If: 'then_value' and 'else_value' must have the same data type.");
+  EXT_ENFORCE_INVALID(then_value.shape == else_value.shape,
+                      "kernel::If: 'then_value' and 'else_value' must have the same shape.");
+  const bool taken = cond.bytes()[0] != 0;
+  return taken ? then_value : else_value;
 }
 
 void If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
@@ -75,6 +78,8 @@ std::vector<Tensor> If::operator()(RuntimeContext &rt, const Tensor &cond,
   RuntimeContext child(rt.kernel_ctx());
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
+  child.sequences() = rt.sequences();
+  child.set_verbose(rt.verbose());
   child.set_events_enabled(rt.events_enabled());
   child.set_current_subgraph(rt.current_node_index(), branch_name);
   RunGraph(branch, child);

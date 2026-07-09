@@ -87,7 +87,8 @@ void ApplyScatterElementsTyped(const Tensor &updates, RawBuffer &out_bytes,
 
 Tensor ScatterElements::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                                    const Attributes &attrs, RuntimeContext *rt) const {
-  Tensor out("", data.data_type, data.shape, data.data);
+  Tensor out = MakeOutputTensor(data.data_type, data.shape, data.size_bytes(),
+                                rt != nullptr ? rt->allocator() : nullptr);
   (*this)(data, indices, updates, attrs, out);
   return out;
 }

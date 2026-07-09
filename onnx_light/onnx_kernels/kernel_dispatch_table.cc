@@ -489,12 +489,12 @@ void RunBatchNormalization(const NodeProto &node, RuntimeContext &rt) {
     const float momentum = GetAttributeFloatOrDefault(node, "momentum", 0.9f);
     auto [y, running_mean, running_var] =
         k.TrainingForward(x, scale, bias, input_mean, input_var, GetEpsilon(node), momentum);
-    SetOutput(node, 0, std::move(y), rt.tensors());
+    SetOutput(node, 0, std::move(y), rt);
     if (node.output_size() >= 2) {
-      SetOutput(node, 1, std::move(running_mean), rt.tensors());
+      SetOutput(node, 1, std::move(running_mean), rt);
     }
     if (node.output_size() >= 3) {
-      SetOutput(node, 2, std::move(running_var), rt.tensors());
+      SetOutput(node, 2, std::move(running_var), rt);
     }
     return;
   }
@@ -534,12 +534,12 @@ void RunLayerNormalization(const NodeProto &node, RuntimeContext &rt) {
   kernel::LayerNormalization k(rt.kernel_ctx());
   auto [y, mean, inv_std_dev] =
       k(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node));
-  SetOutput(node, 0, std::move(y), rt.tensors());
+  SetOutput(node, 0, std::move(y), rt);
   if (node.output_size() >= 2) {
-    SetOutput(node, 1, std::move(mean), rt.tensors());
+    SetOutput(node, 1, std::move(mean), rt);
   }
   if (node.output_size() >= 3) {
-    SetOutput(node, 2, std::move(inv_std_dev), rt.tensors());
+    SetOutput(node, 2, std::move(inv_std_dev), rt);
   }
 }
 
@@ -694,7 +694,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0,
                    k(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, count_include_pad,
                      a.dilations, a.auto_pad),
-                   rt.tensors());
+                      rt);
        }},
       {"ai.onnx:BitShift",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -822,7 +822,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                "RunNode: op 'Constant' requires one of: value, value_float, "
                "value_floats, value_int, value_ints, value_string, value_strings.");
          }
-         SetOutput(node, 0, std::move(y), rt.tensors());
+         SetOutput(node, 0, std::move(y), rt);
        }},
       {"ai.onnx:ConstantOfShape",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -930,7 +930,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0,
                    k(x, w, x_zp != nullptr ? *x_zp : Tensor{},
                      w_zp != nullptr ? *w_zp : Tensor{}, attrs),
-                   rt.tensors());
+                      rt);
        }},
       {"ai.onnx:ConvTranspose",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -979,7 +979,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0,
                    k(x, w, offset, b != nullptr ? *b : Tensor{},
                      mask != nullptr ? *mask : Tensor{}, attrs),
-                   rt.tensors());
+                      rt);
        }},
       {"ai.onnx:Det", MakeUnaryTrampoline<kernel::Det>()},
       {"ai.onnx:DepthToSpace",
@@ -1402,13 +1402,13 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::LinearAttention k(rt.kernel_ctx());
          kernel::LinearAttention::Result result =
              k(query, key, value, attrs, past_state, decay, beta);
-         SetOutput(node, 0, std::move(result.output), rt.tensors());
+         SetOutput(node, 0, std::move(result.output), rt);
 
          if (node.output_size() >= 2) {
            const std::string present_name = node.output(1).as_string();
            if (!present_name.empty()) {
              result.present_state.name = present_name;
-             rt.tensors()[present_name] = std::move(result.present_state);
+             rt.Put(present_name, std::move(result.present_state), RuntimeEventKind::kIntermediate);
            }
          }
        }},
@@ -1528,7 +1528,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::LpPool k(rt.kernel_ctx());
          SetOutput(node, 0,
                    k(x, a.kernel_shape, a.strides, a.pads, p, a.ceil_mode, a.dilations, a.auto_pad),
-                   rt.tensors());
+                      rt);
        }},
       {"ai.onnx:MatMul", MakeBinaryTrampoline<kernel::MatMul>()},
       {"ai.onnx:MatMulInteger",
@@ -1545,7 +1545,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0,
                    k(a, b, a_zp != nullptr ? *a_zp : Tensor{},
                      b_zp != nullptr ? *b_zp : Tensor{}),
-                   rt.tensors());
+                      rt);
        }},
       {"ai.onnx:Max", MakeVariadicTrampoline<kernel::Max>()},
       {"ai.onnx:MaxPool",
@@ -1562,15 +1562,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          if (need_indices) {
            auto result = k.WithIndices(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode,
                                        a.dilations, storage_order, a.auto_pad);
-           SetOutput(node, 0, std::move(result.first), rt.tensors());
+           SetOutput(node, 0, std::move(result.first), rt);
            const std::string indices_name = node.output(1).as_string();
            result.second.name = indices_name;
-           rt.tensors()[indices_name] = std::move(result.second);
+           rt.Put(indices_name, std::move(result.second), RuntimeEventKind::kIntermediate);
          } else {
            SetOutput(node, 0,
                      k(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, a.dilations,
                        storage_order, a.auto_pad),
-                     rt.tensors());
+                     rt);
          }
        }},
       {"ai.onnx:MaxRoiPool",
@@ -1629,7 +1629,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0,
                    k(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz,
                      output_dtype),
-                   rt.tensors());
+                      rt);
        }},
       {"ai.onnx:Min", MakeVariadicTrampoline<kernel::Min>()},
       {"ai.onnx:Mish", MakeUnaryTrampoline<kernel::Mish>()},
@@ -1687,7 +1687,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0,
                    k(boxes, scores, max_output_boxes_per_class, iou_threshold, score_threshold,
                      attrs),
-                   rt.tensors());
+                      rt);
        }},
       {"ai.onnx:NonZero", MakeUnaryTrampoline<kernel::NonZero>()},
       {"ai.onnx:Not", MakeUnaryTrampoline<kernel::Not>()},
@@ -2575,7 +2575,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          } else {
            Y = flex(Q, K, V, scale);
          }
-         SetOutput(node, 0, std::move(Y), rt.tensors());
+         SetOutput(node, 0, std::move(Y), rt);
        }},
 
       // ai.onnx.preview.training
@@ -2608,7 +2608,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              k(R, T, Xs, Gs, Hs, epsilon, decay_factor, norm_coefficient);
          for (int64_t i = 0; i < 2 * n; ++i) {
            SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]),
-                     rt.tensors());
+                      rt);
          }
        }},
       {"ai.onnx.preview.training:Adam",
@@ -2644,7 +2644,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                                       norm_coefficient, norm_coefficient_post);
          for (int64_t i = 0; i < 3 * n; ++i) {
            SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]),
-                     rt.tensors());
+                      rt);
          }
        }},
       {"ai.onnx.preview.training:Momentum",
@@ -2686,7 +2686,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          std::vector<Tensor> outs = k(R, T, Xs, Gs, Vs, alpha, beta, norm_coefficient, mode);
          for (int64_t i = 0; i < 2 * n; ++i) {
            SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]),
-                     rt.tensors());
+                      rt);
          }
        }},
 
@@ -3088,7 +3088,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            (void)tag;
            return binarizer.template operator()<T>(x, static_cast<T>(threshold));
          });
-         SetOutput(node, 0, std::move(y), rt.tensors());
+         SetOutput(node, 0, std::move(y), rt);
        }},
       {"ai.onnx.ml:Normalizer",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -3102,7 +3102,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            (void)tag;
            return normalizer.template operator()<T>(x, norm);
          });
-         SetOutput(node, 0, std::move(y), rt.tensors());
+         SetOutput(node, 0, std::move(y), rt);
        }},
       {"ai.onnx.ml:Scaler",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -3117,7 +3117,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            (void)tag;
            return scaler.template operator()<T>(x, offset, scale);
          });
-         SetOutput(node, 0, std::move(y), rt.tensors());
+         SetOutput(node, 0, std::move(y), rt);
        }},
       {"ai.onnx.ml:ArrayFeatureExtractor",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -3131,7 +3131,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            (void)tag;
            return afe.template operator()<T>(x, y);
          });
-         SetOutput(node, 0, std::move(z), rt.tensors());
+         SetOutput(node, 0, std::move(z), rt);
        }},
       {"ai.onnx.ml:Imputer",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -3172,7 +3172,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                                                    static_cast<T>(replaced_value_int64));
            }
          });
-         SetOutput(node, 0, std::move(y), rt.tensors());
+         SetOutput(node, 0, std::move(y), rt);
        }},
       {"ai.onnx.ml:CategoryMapper",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -3206,7 +3206,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            EXT_THROW_INVALID(
                "RunNode: CategoryMapper input X must have element type STRING or INT64.");
          }
-         SetOutput(node, 0, std::move(y), rt.tensors());
+         SetOutput(node, 0, std::move(y), rt);
        }},
       {"ai.onnx.ml:LabelEncoder",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -3375,7 +3375,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            EXT_THROW_INVALID(
                "RunNode: LabelEncoder key/value type combination is not supported.");
          }
-         SetOutput(node, 0, std::move(out), rt.tensors());
+         SetOutput(node, 0, std::move(out), rt);
        }},
       {"ai.onnx.ml:OneHotEncoder",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -3417,7 +3417,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                  "of element type STRING.");
            y = one_hot(x, cats, zeros);
          }
-         SetOutput(node, 0, std::move(y), rt.tensors());
+         SetOutput(node, 0, std::move(y), rt);
        }},
       {"ai.onnx.ml:FeatureVectorizer",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -3431,7 +3431,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const std::vector<int64_t> inputdimensions =
              GetAttributeIntsOrDefault(node, "inputdimensions", {});
          kernel::FeatureVectorizer fv(rt.kernel_ctx());
-         SetOutput(node, 0, fv(inputs, inputdimensions), rt.tensors());
+         SetOutput(node, 0, fv(inputs, inputdimensions), rt);
        }},
       {"ai.onnx.ml:TreeEnsemble",
        [](const NodeProto &node, RuntimeContext &rt) {

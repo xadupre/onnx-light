@@ -158,6 +158,45 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(reuse, [[], [(0, 0)]])
         self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kEqual)
 
+    def test_unsqueeze_dynamic_axes_reported_as_equal(self):
+        nodes = [
+            oh.make_node("Abs", ["X"], ["A"]),
+            oh.make_node("Unsqueeze", ["A", "axes"], ["Y"]),
+        ]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, None)
+        axes = oh.make_tensor_value_info("axes", onnxl.TensorProto.INT64, None)
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        model = self._build_model(nodes, [x, axes], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+        raw = si.compute_inplace_reuse(ctx, model.graph)
+        reuse = self._reuse_pairs(raw)
+
+        # Unsqueeze keeps the same underlying buffer as its data input even when
+        # the axes value is dynamic and shape inference cannot prove byte sizes.
+        self.assertEqual(reuse, [[], [(0, 0)]])
+        self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kEqual)
+
+    def test_unsqueeze_is_not_reused_before_last_use(self):
+        nodes = [
+            oh.make_node("Abs", ["X"], ["A"]),
+            oh.make_node("Unsqueeze", ["A", "axes"], ["Y"]),
+            oh.make_node("Abs", ["A"], ["Z"]),
+        ]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, None)
+        axes = oh.make_tensor_value_info("axes", onnxl.TensorProto.INT64, None)
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        z = oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)
+        model = self._build_model(nodes, [x, axes], [y, z])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+        reuse = self._reuse_pairs(si.compute_inplace_reuse(ctx, model.graph))
+
+        # A is consumed again by node 2, so node 1 cannot alias it.
+        self.assertEqual(reuse, [[], [], [(0, 0)]])
+
     def test_graph_output_input_is_not_reused(self):
         nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Abs", ["A"], ["Y"])]
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 2])

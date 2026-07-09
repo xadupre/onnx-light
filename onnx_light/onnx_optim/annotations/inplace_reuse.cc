@@ -509,7 +509,16 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           if (!ctx.Has(in_name)) {
             continue;
           }
-          const std::optional<InPlaceReuseKind> match = ClassifyReuse(out_tensor, ctx.Get(in_name));
+          std::optional<InPlaceReuseKind> match;
+          // Unsqueeze is a shape-only view transform on its data input: it keeps
+          // dtype and element count, so the output can always alias that input
+          // when lifetime constraints allow it.
+          if (node.op_type().as_string() == "Unsqueeze" && k == 0 &&
+              out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
+            match = InPlaceReuseKind::kEqual;
+          } else {
+            match = ClassifyReuse(out_tensor, ctx.Get(in_name));
+          }
           if (!match.has_value() || *match != kind) {
             continue;
           }

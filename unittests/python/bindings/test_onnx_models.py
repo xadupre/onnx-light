@@ -1256,8 +1256,7 @@ class TestSaveExternalDataSymlinkProtection(ExtTestCase):
     def setUp(self):
         import tempfile
 
-        self._tmpdir_obj = tempfile.mkdtemp()
-        self.tmpdir = self._tmpdir_obj
+        self.tmpdir = tempfile.mkdtemp()
 
     def tearDown(self):
         import shutil

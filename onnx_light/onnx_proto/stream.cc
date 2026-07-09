@@ -748,6 +748,11 @@ FileWriteStream::FileWriteStream(const std::string &file_path)
   // arbitrary file.  The Python layer (validate_external_data_path) performs
   // the same check earlier, but this C++-level guard closes the residual
   // TOCTOU window between the Python check and the actual file open.
+  // Note: a narrow TOCTOU window remains between is_symlink() and open()
+  // (e.g., replacing a parent directory component with a symlink after the
+  // check). Eliminating it entirely would require platform-specific O_NOFOLLOW
+  // semantics. In practice the double check (Python + C++) makes exploitation
+  // extremely difficult without elevated privileges.
   if (std::filesystem::is_symlink(std::filesystem::path(file_path))) {
     EXT_THROW("FileWriteStream: target path '", file_path,
               "' is a symbolic link, which is not allowed for security reasons "

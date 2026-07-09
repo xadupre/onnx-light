@@ -208,7 +208,7 @@ class TestValidateExternalDataPath(unittest.TestCase):
             os.link(original, hardlink)
         except OSError as exc:
             shutil.rmtree(outside_dir, ignore_errors=True)
-            if exc.errno in (errno.EXDEV, errno.EPERM, errno.ENOTSUP):
+            if exc.errno in (errno.EXDEV, errno.EPERM, getattr(errno, "ENOTSUP", None)):
                 self.skipTest("Hard links not supported (possibly cross-device).")
             raise
         try:

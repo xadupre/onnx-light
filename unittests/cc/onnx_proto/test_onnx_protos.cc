@@ -5003,7 +5003,7 @@ TEST(onnx_proto, LoadExternalData_RejectsPathTraversal) {
   TensorProto t2 = MakeExternalTensor("/etc/passwd");
   EXPECT_THROW(t2.LoadExternalData(dir.string()), std::exception);
 
-  // Lexically normalises to ../outside, must be rejected.
+  // Lexically normalizes to ../outside, must be rejected.
   TensorProto t3 = MakeExternalTensor("subdir/../../outside.bin");
   EXPECT_THROW(t3.LoadExternalData(dir.string()), std::exception);
 

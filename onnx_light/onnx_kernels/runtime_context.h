@@ -526,8 +526,10 @@ public:
   /// sequence map, verbosity and event-logging flag so outer-scope
   /// values are visible inside the subgraph. :cpp:func:`current_subgraph`
   /// is set to ``(current_node_index(), attr_name)`` on the child.
-  /// Writes produced by the subgraph remain local and do not pollute
-  /// this context.
+  /// The subgraph's writes remain local and do not pollute this context.
+  ///
+  /// Returns:
+  ///   A new :cpp:class:`RuntimeContext` initialised for subgraph execution.
   RuntimeContext MakeSubgraphContext(const std::string &attr_name) const {
     RuntimeContext child(kernel_ctx_);
     child.set_allocator(allocator_);
@@ -545,6 +547,9 @@ public:
   /// registry and verbosity, but starts with an empty tensor and sequence
   /// map so the function's formal inputs are bound explicitly by the
   /// caller.
+  ///
+  /// Returns:
+  ///   A new :cpp:class:`RuntimeContext` initialised for function execution.
   RuntimeContext MakeFunctionContext() const {
     RuntimeContext child(kernel_ctx_);
     child.set_allocator(allocator_);

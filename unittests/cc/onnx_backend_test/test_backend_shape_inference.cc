@@ -636,8 +636,8 @@ TEST(BackendTestCaseShapeInference, OnnxOptimSupportsNestedLocalFunctionCall) {
 
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
-    model_copy.ParseFromString(serialized);
+    ASSERT_TRUE(tc.model.SerializeToString(serialized)) << "failed to serialize case: " << tc.name;
+    ASSERT_TRUE(model_copy.ParseFromString(serialized)) << "failed to parse case: " << tc.name;
 
     // Strip the recorded output shape so optim shape inference has to
     // recover it through the two levels of function-body expansion.

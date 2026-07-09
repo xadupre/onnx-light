@@ -1,7 +1,9 @@
 import unittest
 
+import numpy
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_optim import shape_inference as si
 
@@ -190,9 +192,10 @@ class TestInPlaceReuse(ExtTestCase):
         si.compute_shape_model(ctx, model)
         si.write_inplace_reuse_to_metadata(ctx, model.graph)
 
-        # Node 0 reads the declared graph input X, so it has no reuse and no
-        # metadata is written for it.
-        self.assertEqual(self._node_metadata(model.graph.node[0]), {})
+        # Node 0 reads the declared graph input X for the last time.
+        self.assertEqual(
+            self._node_metadata(model.graph.node[0]), {"onnx_light.not_used_after": "X"}
+        )
         self.assertEqual(
             self._node_metadata(model.graph.node[1]),
             {"onnx_light.inplace_reuse": "0:0:equal", "onnx_light.release_after": "A"},
@@ -215,7 +218,9 @@ class TestInPlaceReuse(ExtTestCase):
         si.compute_shape_model(ctx, model)
         si.write_inplace_reuse_to_metadata(ctx, model.graph)
 
-        self.assertEqual(self._node_metadata(model.graph.node[0]), {})
+        self.assertEqual(
+            self._node_metadata(model.graph.node[0]), {"onnx_light.not_used_after": "X"}
+        )
         self.assertEqual(
             self._node_metadata(model.graph.node[1]),
             {"onnx_light.inplace_reuse": "0:0:greater", "onnx_light.release_after": "A"},
@@ -234,8 +239,29 @@ class TestInPlaceReuse(ExtTestCase):
         si.write_inplace_reuse_to_metadata(ctx, model.graph)
 
         self.assertEqual(
+            self._node_metadata(model.graph.node[0]), {"onnx_light.not_used_after": "X"}
+        )
+        self.assertEqual(
             self._node_metadata(model.graph.node[1]),
             {"onnx_light.inplace_reuse": "0:0:equal", "onnx_light.release_after": "A"},
+        )
+
+    def test_write_inplace_reuse_to_metadata_tracks_initializer_last_use(self):
+        nodes = [oh.make_node("Add", ["X", "W"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 2])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 2])
+        w = onnx_light.onnx.numpy_helper.from_array(
+            numpy.ones((2, 2), dtype=numpy.float32), name="W"
+        )
+        model = self._build_model(nodes, [x], [y])
+        model.graph.initializer.extend([w])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+        si.write_inplace_reuse_to_metadata(ctx, model.graph)
+
+        self.assertEqual(
+            self._node_metadata(model.graph.node[0]), {"onnx_light.not_used_after": "X;W"}
         )
 
     def test_allow_input_overwrite_reuses_graph_input(self):
@@ -531,7 +557,9 @@ class TestInPlaceReuse(ExtTestCase):
         inplace.compute_inplace_reuse_graph(model.graph, ctx)
         inplace.write_to_metadata(model.graph)
 
-        self.assertEqual(self._node_metadata(model.graph.node[0]), {})
+        self.assertEqual(
+            self._node_metadata(model.graph.node[0]), {"onnx_light.not_used_after": "X"}
+        )
         self.assertEqual(
             self._node_metadata(model.graph.node[1]),
             {"onnx_light.inplace_reuse": "0:0:equal", "onnx_light.release_after": "A"},
@@ -631,11 +659,12 @@ class TestInPlaceReuse(ExtTestCase):
         inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags=value_tags)
         inplace.write_to_metadata(model.graph)
 
-        # Node 0 (Shape) has no release metadata.
+        # Node 0 (Shape) has no release metadata because X is still needed by node 1.
         self.assertEqual(self._node_metadata(model.graph.node[0]), {})
         meta1 = self._node_metadata(model.graph.node[1])
         # kReleaseAfterMetadataKey lists S.
         self.assertEqual(meta1.get("onnx_light.release_after"), "S")
+        self.assertEqual(meta1.get("onnx_light.not_used_after"), "X")
         # kReleaseAfterShapeTagMetadataKey also lists S (it is shape-tagged).
         self.assertEqual(meta1.get("onnx_light.release_after_shape_tag"), "S")
 
@@ -672,6 +701,7 @@ class TestInPlaceReuse(ExtTestCase):
 
         meta1 = self._node_metadata(model.graph.node[1])
         self.assertEqual(meta1.get("onnx_light.release_after"), "S")
+        self.assertEqual(meta1.get("onnx_light.not_used_after"), "X")
         self.assertEqual(meta1.get("onnx_light.release_after_shape_tag"), "S")
 
     def test_shape_tag_clear_resets_shape_tagged(self):

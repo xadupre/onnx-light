@@ -191,12 +191,14 @@ int handle_negative_axis_validate(const std::string &attrib, int axis, int rank)
 
 size_t ValidateScanCountsAndGetNumLoopStateVars(size_t num_inputs, size_t num_scan_inputs,
                                                 size_t num_outputs) {
-  // Guard the subtractions below against underflow.
+  // Guard the first subtraction against size_t underflow (GHSA-qrhj-v62m-vmpf).
   if (num_scan_inputs > num_inputs) {
     fail_shape_inference("num_scan_inputs (", num_scan_inputs,
                          ") cannot exceed the number of Scan inputs (", num_inputs, ").");
   }
-  size_t num_loop_state_vars = num_inputs - num_scan_inputs;
+  const size_t num_loop_state_vars = num_inputs - num_scan_inputs;
+  // Guard the second subtraction: loop-state-variable count must not exceed the
+  // output count or num_scan_outputs = num_outputs - num_loop_state_vars wraps.
   if (num_loop_state_vars > num_outputs) {
     fail_shape_inference("The number of outputs of the Scan (", num_outputs,
                          ") should equal the sum of the number of loop state variables (",

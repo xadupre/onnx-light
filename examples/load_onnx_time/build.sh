@@ -89,9 +89,12 @@ import onnx
 import re
 
 match = re.match(r"(\d+)\.(\d+)\.(\d+)", onnx.__version__)
-parts = tuple(int(group) for group in match.groups()) if match else ()
-release = ".".join(match.groups()) if match else ""
-print("v" + release if parts >= (1, 21, 0) else "v1.21.0")
+if match:
+    parts = tuple(int(group) for group in match.groups())
+    release = ".".join(match.groups())
+    print("v" + release if parts >= (1, 21, 0) else "v1.21.0")
+else:
+    print("v1.21.0")
 PY
 )"
     else

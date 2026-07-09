@@ -45,8 +45,9 @@ class TestUpstreamOnnxSecurityDefaults(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('re.match(r"(\\d+)\\.(\\d+)\\.(\\d+)", onnx.__version__)', build_sh)
+        self.assertIn(r're.match(r"(\d+)\.(\d+)\.(\d+)", onnx.__version__)', build_sh)
         self.assertIn('print("v" + release if parts >= (1, 21, 0) else "v1.21.0")', build_sh)
+        self.assertIn('else:\n    print("v1.21.0")', build_sh)
 
 
 if __name__ == "__main__":

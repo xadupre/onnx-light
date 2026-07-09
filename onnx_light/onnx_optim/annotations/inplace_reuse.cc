@@ -32,6 +32,7 @@ struct LiveAllocation {
   ShapeTag tag;
 };
 
+constexpr int kSqueezeDataInputIndex = 0;
 constexpr int kUnsqueezeDataInputIndex = 0;
 
 ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags,
@@ -431,7 +432,9 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
-    const bool is_unsqueeze = node.op_type().as_string() == "Unsqueeze";
+    const std::string op_type = node.op_type().as_string();
+    const bool is_squeeze = op_type == "Squeeze";
+    const bool is_unsqueeze = op_type == "Unsqueeze";
     const std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
 
     for (const std::string &name : referenced) {
@@ -513,14 +516,15 @@ void ComputeContext::ComputeInPlaceReuseGraph(
             continue;
           }
           std::optional<InPlaceReuseKind> match;
-          // Unsqueeze is a shape-only view transform on its data input: it keeps
-          // dtype and element count, so the output can always alias that input
-          // when lifetime constraints allow it.
+          // Squeeze/Unsqueeze are shape-only view transforms on their data
+          // input: they keep dtype and element count, so the output can always
+          // alias that input when lifetime constraints allow it.
           // The dtype guard keeps this fast-path defensive for malformed graphs
           // or partial type information: aliasing is only safe when input/output
           // element storage matches.
-          // Unsqueeze's data tensor is input 0 by ONNX spec; input 1 is axes.
-          if (k == kUnsqueezeDataInputIndex && is_unsqueeze &&
+          // Squeeze/Unsqueeze data tensor is input 0 by ONNX spec.
+          if (((k == kSqueezeDataInputIndex && is_squeeze) ||
+               (k == kUnsqueezeDataInputIndex && is_unsqueeze)) &&
               out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
             match = InPlaceReuseKind::kEqual;
           } else {

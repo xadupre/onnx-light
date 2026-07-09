@@ -178,6 +178,23 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(reuse, [[], [(0, 0)]])
         self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kEqual)
 
+    def test_squeeze_dynamic_axes_equal_reuse(self):
+        nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Squeeze", ["A", "axes"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, None)
+        axes = oh.make_tensor_value_info("axes", onnxl.TensorProto.INT64, None)
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        model = self._build_model(nodes, [x, axes], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+        raw = si.compute_inplace_reuse(ctx, model.graph)
+        reuse = self._reuse_pairs(raw)
+
+        # Squeeze keeps the same underlying buffer as its data input even when
+        # axes is dynamic and shape inference cannot prove byte sizes.
+        self.assertEqual(reuse, [[], [(0, 0)]])
+        self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kEqual)
+
     def test_unsqueeze_is_not_reused_before_last_use(self):
         nodes = [
             oh.make_node("Abs", ["X"], ["A"]),

@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -21,12 +22,14 @@ constexpr const char *kBitShiftName = "kernel::BitShift";
   EXT_THROW_INVALID(kBitShiftName, " only supports UINT8, UINT16, UINT32 and UINT64 inputs.");
 }
 
-template <typename Op> Tensor BitShiftAllocDispatch(const Tensor &x, const Tensor &y, Op op) {
+template <typename Op>
+Tensor BitShiftAllocDispatch(const Tensor &x, const Tensor &y, Op op,
+                             RawBufferAllocator *allocator = nullptr) {
 #define ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(ENUM, NAME, CTYPE)                                       \
   case DataType::ENUM:                                                                             \
     return detail::BinaryElementwiseAlloc<CTYPE, CTYPE>(                                           \
         kBitShiftName, NAME, DataType::ENUM, x, y,                                                 \
-        [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); })
+        [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); }, allocator)
   switch (x.data_type) {
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT8, "UINT8", uint8_t);
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT16, "UINT16", uint16_t);
@@ -68,11 +71,13 @@ constexpr auto kRightShiftFn = [](auto a, auto b) { return a >> static_cast<int>
 
 } // namespace
 
-Tensor BitShift::operator()(const Tensor &x, const Tensor &y, Direction direction) const {
+Tensor BitShift::operator()(const Tensor &x, const Tensor &y, Direction direction,
+                            RuntimeContext *rt) const {
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   if (direction == Direction::kLeft) {
-    return BitShiftAllocDispatch(x, y, kLeftShiftFn);
+    return BitShiftAllocDispatch(x, y, kLeftShiftFn, allocator);
   }
-  return BitShiftAllocDispatch(x, y, kRightShiftFn);
+  return BitShiftAllocDispatch(x, y, kRightShiftFn, allocator);
 }
 
 void BitShift::operator()(const Tensor &x, const Tensor &y, Direction direction,

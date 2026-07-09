@@ -16,13 +16,14 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Tensor If::operator()(const Tensor &cond, const Tensor &then_value,
-                      const Tensor &else_value) const {
+Tensor If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
+                      RuntimeContext *rt) const {
   // Allocate an output matching either branch's type/shape (both must agree;
   // the in-place overload enforces this); the in-place overload writes into
   // ``out.data`` below.
-  Tensor out("", then_value.data_type, then_value.shape,
-             std::vector<uint8_t>(then_value.size_bytes()));
+  const size_t out_n_bytes = then_value.size_bytes();
+  Tensor out = MakeOutputTensor(then_value.data_type, then_value.shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(cond, then_value, else_value, out);
   return out;
 }
@@ -42,18 +43,19 @@ void If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &
       "kernel::If preallocated output must have the same data type as the branches.");
   EXT_ENFORCE_INVALID(output.shape == then_value.shape,
                       "kernel::If preallocated output shape must match the branch shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == then_value.size_bytes(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == then_value.size_bytes(),
                       "kernel::If preallocated output buffer has unexpected size in bytes.");
 
   const bool taken = cond.bytes()[0] != 0;
   const Tensor &src = taken ? then_value : else_value;
   if (src.size_bytes() > 0) {
-    std::memcpy(output.data.data(), src.bytes(), src.size_bytes());
+    std::memcpy(output.mutable_bytes(), src.bytes(), src.size_bytes());
   }
 }
 
-std::vector<Tensor> If::operator()(const Tensor &cond, const GraphProto &then_branch,
-                                   const GraphProto &else_branch, RuntimeContext &rt) const {
+std::vector<Tensor> If::operator()(RuntimeContext &rt, const Tensor &cond,
+                                   const GraphProto &then_branch,
+                                   const GraphProto &else_branch) const {
   EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL,
                       "kernel::If: 'cond' must be a BOOL tensor.");
   EXT_ENFORCE_INVALID(cond.element_count() == 1,

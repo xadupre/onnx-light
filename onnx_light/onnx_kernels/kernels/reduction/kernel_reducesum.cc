@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -63,10 +64,10 @@ void SumReduceT(const Tensor &data, const std::vector<bool> &is_reduced,
   const std::vector<int64_t> out_strides = RowMajorStrides(output_shape_noreduce);
 
   // Zero-initialize the output bytes so we can accumulate into it.
-  std::memset(output.data.data(), 0, output.data.size());
+  std::memset(output.mutable_bytes(), 0, output.size_bytes());
 
   const T *px = reinterpret_cast<const T *>(data.bytes());
-  T *py = reinterpret_cast<T *>(output.data.data());
+  T *py = reinterpret_cast<T *>(output.mutable_bytes());
 
   // Iterate over every element of the input using a multi-dimensional index.
   const int64_t rank = static_cast<int64_t>(data.shape.size());
@@ -112,7 +113,8 @@ void ValidateFloatOrDouble(const Tensor &t, const char *name) {
 
 } // namespace
 
-Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes) const {
+Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                             RuntimeContext *rt) const {
   ValidateFloatOrDouble(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   const size_t elem_size =
@@ -132,8 +134,9 @@ Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_e
     }
     return n;
   }();
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * elem_size, 0u));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -156,11 +159,11 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
                       "kernel::ReduceSum preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(out_count) * elem_size,
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(out_count) * elem_size,
                       "kernel::ReduceSum preallocated output buffer has unexpected size in bytes.");
 
   if (noop_with_empty_axes) {
-    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
+    std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
     return;
   }
 
@@ -170,7 +173,7 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
 }
 
 Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
-                             bool noop_with_empty_axes) const {
+                             bool noop_with_empty_axes, RuntimeContext *rt) const {
   ValidateFloatOrDouble(data, "data");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceSum: axes must be an INT64 tensor.");
@@ -197,8 +200,9 @@ Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdi
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor out("", data.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * elem_size, 0u));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
+  Tensor out =
+      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -232,11 +236,11 @@ void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
                       "kernel::ReduceSum preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(out_count) * elem_size,
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(out_count) * elem_size,
                       "kernel::ReduceSum preallocated output buffer has unexpected size in bytes.");
 
   if (naxes == 0 && noop_with_empty_axes) {
-    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
+    std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
     return;
   }
 

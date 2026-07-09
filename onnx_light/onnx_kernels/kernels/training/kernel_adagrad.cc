@@ -120,7 +120,7 @@ void Adagrad::operator()(const Tensor &R, const Tensor &T, const std::vector<Ten
                         " preallocated 'H_new' shape must match 'H'.");
     const int64_t count = ShapeElementCount(X.shape, "X");
     const size_t bytes = static_cast<size_t>(count) * sizeof(float);
-    EXT_ENFORCE_INVALID(X_out.data.size() == bytes && H_out.data.size() == bytes, kAdagradName,
+    EXT_ENFORCE_INVALID(X_out.size_bytes() == bytes && H_out.size_bytes() == bytes, kAdagradName,
                         " preallocated output buffers have unexpected size in bytes.");
 
     const float *pX = X.AsFloat();

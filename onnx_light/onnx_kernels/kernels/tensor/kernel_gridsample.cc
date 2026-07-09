@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -385,7 +386,8 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
 
 } // namespace
 
-Tensor GridSample::operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs) const {
+Tensor GridSample::operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
+                              RuntimeContext *rt) const {
   ValidateInputs(X, grid);
   Tensor out;
   out.data_type = X.data_type;
@@ -416,7 +418,7 @@ void GridSample::operator()(const Tensor &X, const Tensor &grid, const Attribute
   }
   const size_t elt =
       X.data_type == static_cast<int32_t>(DataType::FLOAT) ? sizeof(float) : sizeof(double);
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * elt,
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * elt,
                       "kernel::GridSample: preallocated output buffer has unexpected size.");
 
   const Interp interp = ParseMode(attrs.mode);

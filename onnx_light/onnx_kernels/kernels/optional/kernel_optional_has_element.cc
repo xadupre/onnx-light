@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/optional/include_optional_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
@@ -16,14 +17,16 @@ namespace {
 
 // Materializes a scalar ``Tensor<bool, {}>`` carrying the given value.
 Tensor MakeScalarBool(bool value) {
-  Tensor out("", static_cast<int32_t>(DataType::BOOL), std::vector<int64_t>{},
-             std::vector<uint8_t>(1, value ? uint8_t{1} : uint8_t{0}));
+  const size_t out_n_bytes = 1;
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), std::vector<int64_t>{},
+                                out_n_bytes, nullptr);
+  *out.mutable_bytes() = value ? uint8_t{1} : uint8_t{0};
   return out;
 }
 
 } // namespace
 
-Tensor OptionalHasElement::operator()(const Tensor &input) const {
+Tensor OptionalHasElement::operator()(const Tensor &input, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(input.data_type != 0,
                       "kernel::OptionalHasElement: input element type must be a defined DataType.");
   // The runtime Tensor type cannot represent an "empty optional", so any
@@ -32,14 +35,14 @@ Tensor OptionalHasElement::operator()(const Tensor &input) const {
   return MakeScalarBool(true);
 }
 
-Tensor OptionalHasElement::operator()(const Sequence &input) const {
+Tensor OptionalHasElement::operator()(const Sequence &input, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(
       input.elem_type != 0,
       "kernel::OptionalHasElement: input sequence elem_type must be a defined DataType.");
   return MakeScalarBool(true);
 }
 
-Tensor OptionalHasElement::operator()() const {
+Tensor OptionalHasElement::operator()(RuntimeContext *rt) const {
   // Opset 18: an omitted input is reported as empty.
   return MakeScalarBool(false);
 }

@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -19,9 +20,9 @@ constexpr auto kXorOp = [](uint8_t a, uint8_t b) -> uint8_t {
 };
 } // namespace
 
-Tensor Xor::operator()(const Tensor &x, const Tensor &y) const {
+Tensor Xor::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   return detail::BinaryElementwiseAlloc<uint8_t, uint8_t>(kXorName, kBoolName, DataType::BOOL, x, y,
-                                                          kXorOp);
+                                                          kXorOp, rt ? rt->allocator() : nullptr);
 }
 
 void Xor::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {

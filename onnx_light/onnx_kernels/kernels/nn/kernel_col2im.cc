@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -53,7 +54,7 @@ std::vector<int64_t> ReadInt64Vector(const Tensor &t, const char *name) {
 } // namespace
 
 Tensor Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Tensor &block_shape,
-                          const Attributes &attrs) const {
+                          const Attributes &attrs, RuntimeContext *rt) const {
   const std::vector<int64_t> image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
   const std::vector<int64_t> block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
   EXT_ENFORCE_INVALID(image_shape_vec.size() == block_shape_vec.size(),
@@ -80,8 +81,9 @@ Tensor Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const 
   for (int64_t d : out_shape) {
     total *= d;
   }
-  Tensor out("", input.data_type, out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(total) * sizeof(float)));
+  const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(float);
+  Tensor out =
+      MakeOutputTensor(input.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(input, image_shape, block_shape, attrs, out);
   return out;
 }
@@ -146,7 +148,7 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
   for (int64_t d : expected_out_shape) {
     total *= d;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(float),
                       "kernel::Col2Im preallocated output buffer has unexpected size.");
 
   // Per-axis image stride into the output buffer.

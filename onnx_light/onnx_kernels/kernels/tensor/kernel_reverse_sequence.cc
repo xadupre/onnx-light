@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -14,7 +15,8 @@ namespace onnx_kernels {
 namespace kernel {
 
 Tensor ReverseSequence::operator()(const Tensor &input, const Tensor &sequence_lens,
-                                   const ReverseSequence::Attributes &attrs) const {
+                                   const ReverseSequence::Attributes &attrs,
+                                   RuntimeContext *rt) const {
   Tensor output;
   output.name = "";
   output.data_type = input.data_type;
@@ -75,7 +77,7 @@ void ReverseSequence::operator()(const Tensor &input, const Tensor &sequence_len
     EXT_ENFORCE_INVALID(static_cast<int64_t>(input.size_bytes()) ==
                             static_cast<int64_t>(PackedByteSize(input.data_type, total)),
                         "kernel::ReverseSequence: input data size does not match shape.");
-    EXT_ENFORCE_INVALID(static_cast<int64_t>(output.data.size()) ==
+    EXT_ENFORCE_INVALID(static_cast<int64_t>(output.size_bytes()) ==
                             static_cast<int64_t>(PackedByteSize(input.data_type, total)),
                         "kernel::ReverseSequence: output data size does not match shape.");
   }
@@ -123,7 +125,7 @@ void ReverseSequence::operator()(const Tensor &input, const Tensor &sequence_len
               input.string_data[static_cast<std::size_t>(src_off + i)];
         }
       } else {
-        std::memcpy(output.data.data() + static_cast<std::size_t>(dst_off) * elem_size,
+        std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(dst_off) * elem_size,
                     input.bytes() + static_cast<std::size_t>(src_off) * elem_size,
                     static_cast<std::size_t>(inner) * elem_size);
       }

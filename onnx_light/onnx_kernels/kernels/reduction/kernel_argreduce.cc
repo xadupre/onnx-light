@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -54,7 +55,7 @@ void ValidateInt64(const Tensor &t, const char *name) {
 } // namespace
 
 Tensor ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims,
-                             bool select_last_index) const {
+                             bool select_last_index, RuntimeContext *rt) const {
   ValidateFloat(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   EXT_ENFORCE_INVALID(rank > 0, "kernel::ArgReduce: data must have at least one dimension.");
@@ -65,8 +66,9 @@ Tensor ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims,
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor out("", static_cast<int32_t>(DataType::INT64), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(int64_t), 0u));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(int64_t);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(data, axis, keepdims, select_last_index, out);
   return out;
 }
@@ -84,7 +86,7 @@ void ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims, bool
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
                       "kernel::ArgReduce preallocated output shape does not match expected.");
   const int64_t out_count = output.element_count();
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(out_count) * sizeof(int64_t),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(out_count) * sizeof(int64_t),
                       "kernel::ArgReduce preallocated output buffer has unexpected size.");
 
   // Decompose the input layout into: outer (dims before axis), the reduced

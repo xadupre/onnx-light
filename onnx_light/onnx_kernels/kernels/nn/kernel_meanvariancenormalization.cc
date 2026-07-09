@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -110,12 +111,13 @@ void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axe
 
 } // namespace
 
-Tensor MeanVarianceNormalization::operator()(const Tensor &x,
-                                             const std::vector<int64_t> &axes) const {
+Tensor MeanVarianceNormalization::operator()(const Tensor &x, const std::vector<int64_t> &axes,
+                                             RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           x.data_type == static_cast<int32_t>(DataType::DOUBLE),
                       "kernel::MeanVarianceNormalization: X must be FLOAT or DOUBLE.");
-  Tensor out("", x.data_type, x.shape, std::vector<uint8_t>(x.data.size()));
+  const size_t out_n_bytes = x.size_bytes();
+  Tensor out = MakeOutputTensor(x.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, out, axes);
   return out;
 }
@@ -130,7 +132,7 @@ void MeanVarianceNormalization::operator()(const Tensor &x, Tensor &output,
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::MeanVarianceNormalization: output must have the same shape as X.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == x.data.size(),
+      output.size_bytes() == x.size_bytes(),
       "kernel::MeanVarianceNormalization: output buffer must have the same byte size as X.");
 
   if (x.data_type == static_cast<int32_t>(DataType::FLOAT)) {

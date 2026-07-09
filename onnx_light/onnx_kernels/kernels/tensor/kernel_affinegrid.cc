@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -114,8 +115,8 @@ void ApplyAffine(const float *theta, int64_t out_dim, int64_t in_dim, const floa
 
 } // namespace
 
-Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size,
-                              const Attributes &attrs) const {
+Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
+                              RuntimeContext *rt) const {
   ValidateInputs(theta, size);
   Tensor out;
   out.data_type = static_cast<int32_t>(DataType::FLOAT);
@@ -142,12 +143,12 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
   for (int64_t d : expected_shape) {
     total *= d;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(float),
                       "kernel::AffineGrid: preallocated output buffer has unexpected size.");
 
   const bool align_corners = attrs.align_corners != 0;
   const float *theta_data = reinterpret_cast<const float *>(theta.bytes());
-  float *out_data = reinterpret_cast<float *>(output.data.data());
+  float *out_data = reinterpret_cast<float *>(output.mutable_bytes());
 
   if (size.shape[0] == 4) {
     // 2D case. Output indexed as [N, H, W, 2].

@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
@@ -58,7 +59,8 @@ std::vector<int64_t> ComputeSqueezedShape(const Tensor &data, const std::vector<
 
 } // namespace
 
-Tensor Squeeze::operator()(const Tensor &data, const std::vector<int64_t> &axes) const {
+Tensor Squeeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
+                           RuntimeContext *rt) const {
   const std::vector<int64_t> out_shape = ComputeSqueezedShape(data, axes);
   Tensor output = data;
   output.name.clear();
@@ -77,9 +79,9 @@ void Squeeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
     output.string_data = data.string_data;
     return;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == data.size_bytes(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == data.size_bytes(),
                       "kernel::Squeeze: preallocated output byte-size mismatch.");
-  std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
+  std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
 }
 
 } // namespace kernel

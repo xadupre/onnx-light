@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -62,7 +63,7 @@ void L1L2Reduce(const Tensor &data, const std::vector<bool> &is_reduced,
                 const std::vector<int64_t> &output_shape_noreduce, ReduceL1L2::Mode mode,
                 Tensor &output) {
   const std::vector<int64_t> out_strides = RowMajorStrides(output_shape_noreduce);
-  std::memset(output.data.data(), 0, output.data.size());
+  std::memset(output.mutable_bytes(), 0, output.size_bytes());
 
   const float *px = data.AsFloat();
   float *py = output.AsFloat();
@@ -126,7 +127,8 @@ void L1L2NoopElementwise(const Tensor &data, ReduceL1L2::Mode mode, Tensor &outp
 
 } // namespace
 
-Tensor ReduceL1L2::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes) const {
+Tensor ReduceL1L2::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                              RuntimeContext *rt) const {
   ValidateFloat(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
@@ -138,8 +140,9 @@ Tensor ReduceL1L2::operator()(const Tensor &data, bool keepdims, bool noop_with_
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float), 0u));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -160,7 +163,7 @@ void ReduceL1L2::operator()(const Tensor &data, bool keepdims, bool noop_with_em
       "kernel::ReduceL1L2 preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(out_count) * sizeof(float),
+      output.size_bytes() == static_cast<size_t>(out_count) * sizeof(float),
       "kernel::ReduceL1L2 preallocated output buffer has unexpected size in bytes.");
 
   if (noop_with_empty_axes) {
@@ -173,7 +176,7 @@ void ReduceL1L2::operator()(const Tensor &data, bool keepdims, bool noop_with_em
 }
 
 Tensor ReduceL1L2::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
-                              bool noop_with_empty_axes) const {
+                              bool noop_with_empty_axes, RuntimeContext *rt) const {
   ValidateFloat(data, "data");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceL1L2: axes must be an INT64 tensor.");
@@ -196,8 +199,9 @@ Tensor ReduceL1L2::operator()(const Tensor &data, const Tensor &axes, bool keepd
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float), 0u));
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -230,7 +234,7 @@ void ReduceL1L2::operator()(const Tensor &data, const Tensor &axes, bool keepdim
       "kernel::ReduceL1L2 preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
   EXT_ENFORCE_INVALID(
-      output.data.size() == static_cast<size_t>(out_count) * sizeof(float),
+      output.size_bytes() == static_cast<size_t>(out_count) * sizeof(float),
       "kernel::ReduceL1L2 preallocated output buffer has unexpected size in bytes.");
 
   if (naxes == 0 && noop_with_empty_axes) {

@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -140,14 +141,16 @@ void CopyConcatenated(const std::vector<Tensor> &inputs, int resolved_axis,
 } // namespace
 
 Tensor ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t axis,
-                                      int64_t new_axis) const {
+                                      int64_t new_axis, RuntimeContext *rt) const {
   int resolved_axis = 0;
   std::vector<int64_t> out_shape;
   size_t elem_size = 0;
   ResolveAndValidate(inputs, axis, new_axis, resolved_axis, out_shape, elem_size);
   const size_t total_bytes = static_cast<size_t>(elem_size) *
                              static_cast<size_t>(PrefixProduct(out_shape, out_shape.size()));
-  Tensor out("", inputs[0].data_type, out_shape, std::vector<uint8_t>(total_bytes));
+  const size_t out_n_bytes = total_bytes;
+  Tensor out =
+      MakeOutputTensor(inputs[0].data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   if (new_axis == 1) {
     // Stacking with identical input shapes is equivalent to concatenating
     // along ``resolved_axis`` after inserting a unit dim at that position
@@ -182,7 +185,7 @@ void ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t a
   const size_t total_bytes = static_cast<size_t>(elem_size) *
                              static_cast<size_t>(PrefixProduct(out_shape, out_shape.size()));
   EXT_ENFORCE_INVALID(
-      output.data.size() == total_bytes,
+      output.size_bytes() == total_bytes,
       "kernel::ConcatFromSequence preallocated output buffer has unexpected size in bytes.");
   if (new_axis == 1) {
     std::vector<Tensor> reshaped;

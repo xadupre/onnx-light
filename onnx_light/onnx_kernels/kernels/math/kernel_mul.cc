@@ -6,6 +6,7 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -18,9 +19,10 @@ namespace {
 constexpr const char *kMulName = "kernel::Mul";
 
 template <typename T>
-Tensor MulAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y) {
-  return detail::BinaryElementwiseAlloc<T, T>(kMulName, dtype_name, dtype, x, y,
-                                              [](T a, T b) -> T { return a * b; });
+Tensor MulAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y,
+                RawBufferAllocator *allocator = nullptr) {
+  return detail::BinaryElementwiseAlloc<T, T>(
+      kMulName, dtype_name, dtype, x, y, [](T a, T b) -> T { return a * b; }, allocator);
 }
 
 template <typename T>
@@ -35,36 +37,36 @@ constexpr const char *kSupportedMulTypesMsg =
     "UINT32 and UINT64 inputs.";
 } // namespace
 
-Tensor Mul::operator()(const Tensor &x, const Tensor &y) const {
+Tensor Mul::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT:
-    return MulAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+    return MulAlloc<float>("FLOAT", DataType::FLOAT, x, y, rt ? rt->allocator() : nullptr);
   case DataType::DOUBLE:
-    return MulAlloc<double>("DOUBLE", DataType::DOUBLE, x, y);
+    return MulAlloc<double>("DOUBLE", DataType::DOUBLE, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT8:
-    return MulAlloc<int8_t>("INT8", DataType::INT8, x, y);
+    return MulAlloc<int8_t>("INT8", DataType::INT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT16:
-    return MulAlloc<int16_t>("INT16", DataType::INT16, x, y);
+    return MulAlloc<int16_t>("INT16", DataType::INT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return MulAlloc<int32_t>("INT32", DataType::INT32, x, y);
+    return MulAlloc<int32_t>("INT32", DataType::INT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return MulAlloc<int64_t>("INT64", DataType::INT64, x, y);
+    return MulAlloc<int64_t>("INT64", DataType::INT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT8:
-    return MulAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
+    return MulAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT16:
-    return MulAlloc<uint16_t>("UINT16", DataType::UINT16, x, y);
+    return MulAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return MulAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
+    return MulAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return MulAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+    return MulAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, rt ? rt->allocator() : nullptr);
   case DataType::FLOAT16:
-    return detail::BinaryHalfElementwiseAlloc(kMulName, "FLOAT16", DataType::FLOAT16, x, y,
-                                              Float16BitsToFloat, FloatToFloat16Bits,
-                                              [](float a, float b) { return a * b; });
+    return detail::BinaryHalfElementwiseAlloc(
+        kMulName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat, FloatToFloat16Bits,
+        [](float a, float b) { return a * b; }, rt ? rt->allocator() : nullptr);
   case DataType::BFLOAT16:
-    return detail::BinaryHalfElementwiseAlloc(kMulName, "BFLOAT16", DataType::BFLOAT16, x, y,
-                                              Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                              [](float a, float b) { return a * b; });
+    return detail::BinaryHalfElementwiseAlloc(
+        kMulName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat, FloatToBfloat16Bits,
+        [](float a, float b) { return a * b; }, rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kMulName, ": unsupported data type ", x.data_type, kSupportedMulTypesMsg);
   }

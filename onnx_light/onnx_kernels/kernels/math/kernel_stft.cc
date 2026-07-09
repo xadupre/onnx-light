@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -84,7 +85,7 @@ void StftCompute(const T *signal, const T *window, T *out, int64_t batch_size,
 } // namespace
 
 Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
-                        const Tensor *frame_length, bool onesided) const {
+                        const Tensor *frame_length, bool onesided, RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(signal.shape.size());
   EXT_ENFORCE_INVALID(rank == 3, kSTFTName,
                       ": signal must have rank 3 ([batch_size, signal_length, 1]"
@@ -128,9 +129,9 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
 
   std::vector<int64_t> out_shape = {batch_size, n_frames, dft_unique_bins, 2};
   int64_t out_total = batch_size * n_frames * dft_unique_bins * 2;
-  Tensor output(
-      "", signal.data_type, out_shape,
-      std::vector<uint8_t>(static_cast<std::size_t>(out_total) * ElementSize(signal.data_type)));
+  const size_t output_n_bytes = static_cast<std::size_t>(out_total) * ElementSize(signal.data_type);
+  Tensor output =
+      MakeOutputTensor(signal.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
 
   if (window != nullptr) {
     EXT_ENFORCE_INVALID(window->data_type == signal.data_type, kSTFTName,
@@ -162,10 +163,10 @@ void STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tens
                       ": preallocated output dtype must match.");
   EXT_ENFORCE_INVALID(output.shape == produced.shape, kSTFTName,
                       ": preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(), kSTFTName,
+  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(), kSTFTName,
                       ": preallocated output buffer size mismatch.");
   if (!produced.data.empty()) {
-    std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
+    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

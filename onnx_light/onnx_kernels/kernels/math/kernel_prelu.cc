@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -27,9 +28,11 @@ template <typename T> inline T PReluOp(T x, T slope) {
 }
 
 template <typename T>
-Tensor PReluAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &slope) {
-  return detail::BinaryElementwiseAlloc<T, T>(kPReluName, dtype_name, dtype, x, slope,
-                                              [](T a, T b) -> T { return PReluOp<T>(a, b); });
+Tensor PReluAlloc(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &slope,
+                  RawBufferAllocator *allocator = nullptr) {
+  return detail::BinaryElementwiseAlloc<T, T>(
+      kPReluName, dtype_name, dtype, x, slope, [](T a, T b) -> T { return PReluOp<T>(a, b); },
+      allocator);
 }
 
 template <typename T>
@@ -43,20 +46,22 @@ constexpr const char *kSupportedPReluTypesMsg =
     " only supports FLOAT, DOUBLE, INT32, INT64, UINT32 and UINT64 inputs.";
 } // namespace
 
-Tensor PRelu::operator()(const Tensor &x, const Tensor &slope) const {
+Tensor PRelu::operator()(const Tensor &x, const Tensor &slope, RuntimeContext *rt) const {
   switch (x.data_type) {
   case DataType::FLOAT:
-    return PReluAlloc<float>("FLOAT", DataType::FLOAT, x, slope);
+    return PReluAlloc<float>("FLOAT", DataType::FLOAT, x, slope, rt ? rt->allocator() : nullptr);
   case DataType::DOUBLE:
-    return PReluAlloc<double>("DOUBLE", DataType::DOUBLE, x, slope);
+    return PReluAlloc<double>("DOUBLE", DataType::DOUBLE, x, slope, rt ? rt->allocator() : nullptr);
   case DataType::INT32:
-    return PReluAlloc<int32_t>("INT32", DataType::INT32, x, slope);
+    return PReluAlloc<int32_t>("INT32", DataType::INT32, x, slope, rt ? rt->allocator() : nullptr);
   case DataType::INT64:
-    return PReluAlloc<int64_t>("INT64", DataType::INT64, x, slope);
+    return PReluAlloc<int64_t>("INT64", DataType::INT64, x, slope, rt ? rt->allocator() : nullptr);
   case DataType::UINT32:
-    return PReluAlloc<uint32_t>("UINT32", DataType::UINT32, x, slope);
+    return PReluAlloc<uint32_t>("UINT32", DataType::UINT32, x, slope,
+                                rt ? rt->allocator() : nullptr);
   case DataType::UINT64:
-    return PReluAlloc<uint64_t>("UINT64", DataType::UINT64, x, slope);
+    return PReluAlloc<uint64_t>("UINT64", DataType::UINT64, x, slope,
+                                rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kPReluName, ": unsupported data type ", x.data_type, kSupportedPReluTypesMsg);
   }

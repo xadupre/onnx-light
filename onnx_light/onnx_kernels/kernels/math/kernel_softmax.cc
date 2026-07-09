@@ -6,6 +6,7 @@
 
 #include "onnx_kernels/kernels/_helpers/float16_promote.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -26,12 +27,12 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 } // namespace
 
-Tensor Softmax::operator()(const Tensor &x, int64_t axis) const {
+Tensor Softmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) const {
   // FLOAT16/BFLOAT16 inputs are computed in float32 and demoted back, mirroring
   // the half-precision handling in the other math kernels.
   if (IsHalfPrecision(x.data_type)) {
     const Tensor x_f = PromoteToFloat32(x);
-    Tensor y_f = (*this)(x_f, axis);
+    Tensor y_f = (*this)(x_f, axis, rt);
     return DemoteFromFloat32(y_f, x.data_type);
   }
   const int32_t out_dtype = (static_cast<DataType>(x.data_type) == DataType::DOUBLE)
@@ -39,8 +40,8 @@ Tensor Softmax::operator()(const Tensor &x, int64_t axis) const {
                                 : static_cast<int32_t>(DataType::FLOAT);
   const size_t elem_size =
       (static_cast<DataType>(x.data_type) == DataType::DOUBLE) ? sizeof(double) : sizeof(float);
-  Tensor y("", out_dtype, x.shape,
-           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
+  const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
+  Tensor y = MakeOutputTensor(out_dtype, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(x, axis, y);
   return y;
 }
@@ -53,13 +54,13 @@ void Softmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const {
                       "kernel::Softmax preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::Softmax preallocated output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.data() != x.bytes(),
+  EXT_ENFORCE_INVALID(output.mutable_bytes() != x.bytes(),
                       "kernel::Softmax does not support aliasing input/output buffers.");
 
   const int64_t n = x.element_count();
   const size_t elem_size = is_double ? sizeof(double) : sizeof(float);
   const size_t expected_bytes = static_cast<size_t>(n) * elem_size;
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+  EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::Softmax preallocated output buffer has unexpected size in bytes.");
 
   const int64_t rank = static_cast<int64_t>(x.shape.size());

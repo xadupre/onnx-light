@@ -92,13 +92,13 @@ void CausalConvWithState::operator()(const Tensor &input, const Tensor &weight, 
   EXT_ENFORCE_INVALID(output.data_type == input.data_type && output.shape == input.shape,
                       "kernel::CausalConvWithState: output buffer has mismatched type or shape.");
   const size_t elem_size = output.element_size();
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(B * C * L) * elem_size,
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(B * C * L) * elem_size,
                       "kernel::CausalConvWithState: output buffer has wrong byte size.");
   EXT_ENFORCE_INVALID(present_state.data_type == input.data_type &&
                           present_state.shape.size() == 3 && present_state.shape[0] == B &&
                           present_state.shape[1] == C && present_state.shape[2] == Km1,
                       "kernel::CausalConvWithState: present_state has mismatched type or shape.");
-  EXT_ENFORCE_INVALID(present_state.data.size() == static_cast<size_t>(B * C * Km1) * elem_size,
+  EXT_ENFORCE_INVALID(present_state.size_bytes() == static_cast<size_t>(B * C * Km1) * elem_size,
                       "kernel::CausalConvWithState: present_state buffer has wrong byte size.");
 
   const bool use_silu = attrs.activation == "silu" || attrs.activation == "swish";

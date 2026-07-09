@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
@@ -29,12 +30,13 @@ template <typename T> void ValidateInput(const Tensor &x) {
 
 } // namespace
 
-template <typename T> Tensor Binarizer::operator()(const Tensor &x, T threshold) const {
+template <typename T>
+Tensor Binarizer::operator()(const Tensor &x, T threshold, RuntimeContext *rt) const {
   ValidateInput<T>(x);
   const int64_t n = x.element_count();
   std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(T));
   Tensor out("", TensorElementType<T>::value, x.shape, std::move(bytes));
-  ApplyThreshold<T>(x, threshold, reinterpret_cast<T *>(out.data.data()));
+  ApplyThreshold<T>(x, threshold, reinterpret_cast<T *>(out.mutable_bytes()));
   return out;
 }
 
@@ -45,14 +47,14 @@ void Binarizer::operator()(const Tensor &x, T threshold, Tensor &output) const {
                       "kernel::Binarizer preallocated output dtype must match the input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::Binarizer preallocated output shape must match the input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(x.element_count()) * sizeof(T),
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(x.element_count()) * sizeof(T),
                       "kernel::Binarizer preallocated output buffer is incorrectly sized.");
   ApplyThreshold<T>(x, threshold, output.As<T>());
 }
 
 // Explicit instantiations for the supported element types.
 #define ONNX_LIGHT_INSTANTIATE_BINARIZER(T)                                                        \
-  template Tensor Binarizer::operator()(const Tensor &, T) const;                                  \
+  template Tensor Binarizer::operator()(const Tensor &, T, RuntimeContext *) const;                \
   template void Binarizer::operator()(const Tensor &, T, Tensor &) const
 
 ONNX_LIGHT_INSTANTIATE_BINARIZER(float);

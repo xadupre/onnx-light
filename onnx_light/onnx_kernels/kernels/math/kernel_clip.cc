@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
@@ -29,7 +30,7 @@ void ClipInPlace(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &
   const T hi = max ? ReadScalar<T>(*max) : std::numeric_limits<T>::max();
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
-  T *py = reinterpret_cast<T *>(output.data.data());
+  T *py = reinterpret_cast<T *>(output.mutable_bytes());
   // Matches ONNX semantics: y = Min(max, Max(input, min)). When ``lo > hi``
   // every element is clamped to ``hi``.
   for (int64_t i = 0; i < n; ++i) {
@@ -66,7 +67,7 @@ void ValidateOutput(const Tensor &x, const Tensor &output) {
   EXT_ENFORCE_INVALID(output.data_type == x.data_type, kClipName,
                       ": output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape, kClipName, ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), kClipName,
+  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(), kClipName,
                       ": output buffer size mismatch.");
 }
 
@@ -110,7 +111,8 @@ void Dispatch(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &out
 
 } // namespace
 
-Tensor Clip::operator()(const Tensor &x, const Tensor *min, const Tensor *max) const {
+Tensor Clip::operator()(const Tensor &x, const Tensor *min, const Tensor *max,
+                        RuntimeContext *rt) const {
   ValidateBounds(x, min, max);
   Tensor out = AllocLike(x);
   Dispatch(x, min, max, out);

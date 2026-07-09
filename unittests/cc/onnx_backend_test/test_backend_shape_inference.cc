@@ -2103,4 +2103,59 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagToOutputWhenOutputIsS
   ASSERT_TRUE(found) << "test_cc_shape_tag_output_is_shape case not registered";
 }
 
+TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInShapeTagCases) {
+  const std::vector<TestCase> cases = CollectTestCases("shape_tag");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    GraphProto *graph = model_copy.mutable_graph();
+    graph->mutable_metadata_props()->clear();
+    for (size_t n = 0; n < graph->node().size(); ++n) {
+      graph->mutable_node(n)->mutable_metadata_props()->clear();
+    }
+    for (size_t vi = 0; vi < graph->value_info().size(); ++vi) {
+      graph->mutable_value_info(vi)->mutable_metadata_props()->clear();
+    }
+    for (size_t i = 0; i < graph->input().size(); ++i) {
+      graph->mutable_input(i)->mutable_metadata_props()->clear();
+    }
+    for (size_t o = 0; o < graph->output().size(); ++o) {
+      graph->mutable_output(o)->mutable_metadata_props()->clear();
+    }
+    for (size_t it = 0; it < graph->initializer().size(); ++it) {
+      graph->mutable_initializer(it)->mutable_metadata_props()->clear();
+    }
+
+    ASSERT_NO_THROW(onnx_optim::annotations::WriteValueAndNodeTagsToMetadata(*graph))
+        << "case: " << tc.name;
+
+    const auto has_value_tag = [&](const auto &value) {
+      return MetadataOf(value).count(onnx_optim::annotations::kValueTagMetadataKey) > 0;
+    };
+    for (size_t i = 0; i < graph->input().size(); ++i) {
+      EXPECT_TRUE(has_value_tag(graph->ref_input()[i]))
+          << "missing value tag on input[" << i << "] in case " << tc.name;
+    }
+    for (size_t vi = 0; vi < graph->value_info().size(); ++vi) {
+      EXPECT_TRUE(has_value_tag(graph->ref_value_info()[vi]))
+          << "missing value tag on value_info[" << vi << "] in case " << tc.name;
+    }
+    for (size_t o = 0; o < graph->output().size(); ++o) {
+      EXPECT_TRUE(has_value_tag(graph->ref_output()[o]))
+          << "missing value tag on output[" << o << "] in case " << tc.name;
+    }
+    for (size_t it = 0; it < graph->initializer().size(); ++it) {
+      EXPECT_TRUE(has_value_tag(graph->ref_initializer()[it]))
+          << "missing value tag on initializer[" << it << "] in case " << tc.name;
+    }
+  }
+  ASSERT_TRUE(found) << "no shape_tag backend cases were collected";
+}
+
 } // namespace Test

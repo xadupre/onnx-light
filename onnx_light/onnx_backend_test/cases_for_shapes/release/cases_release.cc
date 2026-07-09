@@ -33,7 +33,8 @@ constexpr int64_t kDefaultIrVersion = 10;
 // that ``ComputeContext::ComputeInPlaceReuseGraph`` reproduces it exactly:
 //
 //   * node 0 (Shape):   no release metadata.
-//   * node 1 (Reshape): ``onnx_light.release_after = "S"``.
+//   * node 1 (Reshape): ``onnx_light.release_after = "S"``,
+//                       ``onnx_light.not_used_after = "X"``.
 // ---------------------------------------------------------------------------
 void RegisterReleaseCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
@@ -62,9 +63,12 @@ void RegisterReleaseCases(std::vector<TestCase> &registry) {
   // Pre-embed the expected release metadata.
   // The graph has exactly two nodes: node 0 = Shape, node 1 = Reshape.
   // S is produced by Shape and consumed only by Reshape, so the release point
-  // is node 1.  No shape-tag metadata is involved here.
+  // is node 1. X is a declared graph input and also reaches its last use on
+  // node 1, so it is reported as "not used after". No shape-tag metadata is
+  // involved here.
   // NOLINTNEXTLINE: nodes has exactly 2 elements (Shape + Reshape added above).
   (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kReleaseAfterMetadataKey, "S");
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNotUsedAfterMetadataKey, "X");
 
   // Build the reference DataSet so the case is executable end-to-end.
   const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});

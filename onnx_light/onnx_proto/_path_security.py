@@ -111,16 +111,14 @@ def validate_external_data_path(
     # file is placed inside the model directory).  Stat the raw (pre-realpath)
     # path with follow_symlinks=False for consistency with the symlink check
     # above and to avoid TOCTOU between the two checks.
-    try:
+    # Only stat the file if it already exists; missing files are allowed so
+    # that write-mode callers can create the file at the validated path.
+    if os.path.exists(raw_joined):
         st = os.stat(raw_joined, follow_symlinks=False)
         if st.st_nlink > 1:
             raise ValueError(
                 f"External data path {raw_joined!r} has multiple hard links "
                 f"({st.st_nlink}), which is not allowed for security reasons."
             )
-    except FileNotFoundError:
-        # File does not exist yet (write mode callers); allow the caller to
-        # handle the missing-file error.
-        pass
 
     return candidate

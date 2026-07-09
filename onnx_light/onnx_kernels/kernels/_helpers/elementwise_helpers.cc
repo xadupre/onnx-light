@@ -55,7 +55,7 @@ BroadcastInfo CheckBinaryBroadcastInOut(const char *op_name, const char *in_dtyp
   }
 
   BroadcastInfo bi;
-  bi.shape = out;
+  bi.shape = std::move(out);
   bi.shape_x = sx;
   bi.shape_y = sy;
   bi.nx = x.element_count();

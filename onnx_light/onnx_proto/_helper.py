@@ -196,9 +196,9 @@ def make_tensor_type_proto(
     type_proto = TypeProto()
     tensor_type_proto = type_proto.tensor_type
     tensor_type_proto.elem_type = elem_type
-    tensor_shape_proto = tensor_type_proto.shape
 
     if shape is not None:
+        tensor_shape_proto = tensor_type_proto.shape
         tensor_shape_proto.dim.extend([])
 
         if shape_denotation and len(shape_denotation) != len(shape):

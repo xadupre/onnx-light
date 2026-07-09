@@ -2021,6 +2021,7 @@ Performs element-wise binary {name} (with limited broadcast support).
     schema.Output(0, "C", "Result, has same dimensions and type as A", "T");
     schema.TypeConstraint("T", {"tensor(float16)", "tensor(float)", "tensor(double)"},
                           "Constrain input and output types to float tensors.");
+    schema.TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput);
   };
 }
 

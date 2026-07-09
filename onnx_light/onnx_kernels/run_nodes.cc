@@ -181,13 +181,7 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 std::vector<Tensor> RunSubgraph(const GraphProto &graph,
                                 const std::vector<std::pair<std::string, Tensor>> &bindings,
                                 RuntimeContext &rt, const std::string &attr_name) {
-  RuntimeContext child(rt.kernel_ctx());
-  child.set_allocator(rt.allocator());
-  child.functions() = rt.functions();
-  child.tensors() = rt.tensors();
-  child.set_verbose(rt.verbose());
-  child.set_events_enabled(rt.events_enabled());
-  child.set_current_subgraph(rt.current_node_index(), attr_name);
+  RuntimeContext child = rt.MakeSubgraphContext(attr_name);
   for (const auto &kv : bindings) {
     child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
   }
@@ -250,14 +244,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   const GraphProto &branch = taken ? then_branch : else_branch;
   const std::string branch_attr = taken ? "then_branch" : "else_branch";
 
-  RuntimeContext child(rt.kernel_ctx());
-  child.set_allocator(rt.allocator());
-  child.functions() = rt.functions();
-  child.tensors() = rt.tensors();
-  child.sequences() = rt.sequences();
-  child.set_verbose(rt.verbose());
-  child.set_events_enabled(rt.events_enabled());
-  child.set_current_subgraph(rt.current_node_index(), branch_attr);
+  RuntimeContext child = rt.MakeSubgraphContext(branch_attr);
   RunGraph(branch, child);
 
   if (rt.events_enabled()) {
@@ -312,14 +299,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
   std::vector<std::vector<Tensor>> scan_values(k);
   int64_t trip_count = 0;
   for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
-    RuntimeContext child(rt.kernel_ctx());
-    child.set_allocator(rt.allocator());
-    child.functions() = rt.functions();
-    child.tensors() = rt.tensors();
-    child.sequences() = rt.sequences();
-    child.set_verbose(rt.verbose());
-    child.set_events_enabled(rt.events_enabled());
-    child.set_current_subgraph(rt.current_node_index(), "body");
+    RuntimeContext child = rt.MakeSubgraphContext("body");
 
     const std::string &iter_name = body.input(0).name().as_string();
     const std::string &cond_name = body.input(1).name().as_string();
@@ -860,10 +840,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
   // Build a child runtime context that shares the kernel construction
   // context and the function registry (so nested function calls work)
   // but starts with a fresh, isolated tensor map.
-  RuntimeContext child(rt.kernel_ctx());
-  child.set_allocator(rt.allocator());
-  child.functions() = rt.functions();
-  child.set_verbose(rt.verbose());
+  RuntimeContext child = rt.MakeFunctionContext();
 
   // Bind formal function inputs to the caller's actuals.
   for (size_t i = 0; i < func.input_size(); ++i) {

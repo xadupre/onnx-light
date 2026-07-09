@@ -519,6 +519,40 @@ public:
   /// Empties the event log without otherwise touching the tensor map.
   void ClearEvents() noexcept { events_.clear(); }
 
+  /// Creates a fresh child context for executing a subgraph (e.g. the
+  /// ``then_branch`` or ``else_branch`` of ``If``, or the ``body`` of
+  /// ``Loop`` / ``Scan``). The child context inherits the parent's
+  /// kernel context, allocator, function registry, tensor map,
+  /// sequence map, verbosity and event-logging flag so outer-scope
+  /// values are visible inside the subgraph. :cpp:func:`current_subgraph`
+  /// is set to ``(current_node_index(), attr_name)`` on the child.
+  /// Writes produced by the subgraph remain local and do not pollute
+  /// this context.
+  RuntimeContext MakeSubgraphContext(const std::string &attr_name) const {
+    RuntimeContext child(kernel_ctx_);
+    child.set_allocator(allocator_);
+    child.functions() = functions_;
+    child.tensors() = tensors_;
+    child.sequences() = sequences_;
+    child.set_verbose(verbose_);
+    child.set_events_enabled(events_enabled_);
+    child.set_current_subgraph(current_node_index_, attr_name);
+    return child;
+  }
+
+  /// Creates a fresh child context for executing a model-local function.
+  /// The child inherits the parent's kernel context, allocator, function
+  /// registry and verbosity, but starts with an empty tensor and sequence
+  /// map so the function's formal inputs are bound explicitly by the
+  /// caller.
+  RuntimeContext MakeFunctionContext() const {
+    RuntimeContext child(kernel_ctx_);
+    child.set_allocator(allocator_);
+    child.functions() = functions_;
+    child.set_verbose(verbose_);
+    return child;
+  }
+
   /// Resets the per-invocation state so the context can be reused for a
   /// fresh run: clears the tensor map, the sequence map and the event
   /// log, and resets :cpp:func:`current_node_index` to ``-1``. The kernel

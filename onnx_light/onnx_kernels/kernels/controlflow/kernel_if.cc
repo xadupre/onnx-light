@@ -74,14 +74,7 @@ std::vector<Tensor> If::operator()(RuntimeContext &rt, const Tensor &cond,
   // model-local function registry are inherited from the caller's context
   // so the subgraph can read outer-scope values, while writes produced by
   // the subgraph remain local and do not pollute ``rt``.
-  RuntimeContext child(rt.kernel_ctx());
-  child.set_allocator(rt.allocator());
-  child.functions() = rt.functions();
-  child.tensors() = rt.tensors();
-  child.sequences() = rt.sequences();
-  child.set_verbose(rt.verbose());
-  child.set_events_enabled(rt.events_enabled());
-  child.set_current_subgraph(rt.current_node_index(), branch_name);
+  RuntimeContext child = rt.MakeSubgraphContext(branch_name);
   RunGraph(branch, child);
 
   if (rt.events_enabled()) {

@@ -33,20 +33,21 @@ install step is needed:
 
 .. code-block:: bash
 
-    ONNX_GIT_TAG=v1.17.0 bash examples/load_onnx_time/build.sh
+    ONNX_GIT_TAG=v1.21.0 bash examples/load_onnx_time/build.sh
 
 On Windows:
 
 .. code-block:: bat
 
-    set ONNX_GIT_TAG=v1.17.0
+    set ONNX_GIT_TAG=v1.21.0
     examples\load_onnx_time\build.bat
 
 **Option C – automatic** (no variables needed):
 The helper script probes for the onnx CMake package at startup.  If not found,
 it automatically switches to a from-source build.  The onnx git tag is derived
 from the Python ``onnx`` package in site-packages (``import onnx``) when
-available, falling back to ``ONNX_DEFAULT_GIT_TAG`` (default ``v1.17.0``).
+available when that release is at least ``1.21.0``, falling back to
+``ONNX_DEFAULT_GIT_TAG`` (default ``v1.21.0``) otherwise.
 All transitive dependencies are handled by cmake automatically.
 
 .. code-block:: bash
@@ -76,7 +77,7 @@ pre-cloned source tree to skip the download:
 
     cmake -S examples/load_onnx_time -B build-load-onnx-time \
           -DCMAKE_BUILD_TYPE=Release \
-          -DONNX_GIT_TAG=v1.17.0 \
+          -DONNX_GIT_TAG=v1.21.0 \
           -DFETCHCONTENT_SOURCE_DIR_ONNX=/path/to/onnx-src
     cmake --build build-load-onnx-time
 
@@ -153,7 +154,7 @@ transitive dependencies (protobuf, abseil, utf8_range, …) inline:
 
     if(NOT TARGET onnx)
         if(NOT DEFINED ONNX_GIT_TAG)
-            set(ONNX_GIT_TAG "v1.17.0")
+            set(ONNX_GIT_TAG "v1.21.0")
         endif()
         if(NOT DEFINED ONNX_GIT_URL)
             set(ONNX_GIT_URL "https://github.com/onnx/onnx.git")

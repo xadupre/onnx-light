@@ -9,7 +9,7 @@
 #    Requires: sudo apt-get install -y libonnx-dev libprotobuf-dev
 #
 # 2. From-source build (automatic when system onnx is absent, or explicit):
-#      ONNX_GIT_TAG=v1.17.0 bash examples/load_onnx_time/build.sh
+#      ONNX_GIT_TAG=v1.21.0 bash examples/load_onnx_time/build.sh
 #    The script clones onnx from git and passes FETCHCONTENT_SOURCE_DIR_ONNX
 #    to cmake so that onnx (and all its transitive dependencies: protobuf,
 #    abseil, utf8_range, …) is built inline inside the example's cmake build.
@@ -26,13 +26,14 @@
 #                     (default: build/load-onnx-time-example)
 #
 # Environment variables:
-#   ONNX_GIT_TAG         git tag/branch for onnx (e.g. v1.17.0).  When unset
+#   ONNX_GIT_TAG         git tag/branch for onnx (e.g. v1.21.0).  When unset
 #                        the script probes for the system onnx CMake package;
-#                        if absent it derives the tag from Python onnx or falls
-#                        back to ONNX_DEFAULT_GIT_TAG.
+#                        if absent it derives the release tag from Python onnx
+#                        when that release is at least 1.21.0, otherwise it
+#                        falls back to ONNX_DEFAULT_GIT_TAG.
 #   ONNX_GIT_URL         onnx git URL (default: https://github.com/onnx/onnx.git)
 #   ONNX_DEFAULT_GIT_TAG fallback onnx tag when Python onnx is not found
-#                        (default: v1.17.0)
+#                        or resolves to a vulnerable release (default: v1.21.0)
 #   CMAKE_BUILD_TYPE     build type (default: Release)
 
 set -euo pipefail
@@ -48,7 +49,7 @@ PARALLEL_JOBS="${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc 2>/dev/null || sysctl -n hw
 
 ONNX_GIT_TAG="${ONNX_GIT_TAG:-}"
 ONNX_GIT_URL="${ONNX_GIT_URL:-https://github.com/onnx/onnx.git}"
-ONNX_DEFAULT_GIT_TAG="${ONNX_DEFAULT_GIT_TAG:-v1.17.0}"
+ONNX_DEFAULT_GIT_TAG="${ONNX_DEFAULT_GIT_TAG:-v1.21.0}"
 
 # ---- cmake package probe ---------------------------------------------------
 # Returns 0 (true) if the named CMake package is findable, 1 otherwise.
@@ -83,7 +84,16 @@ if [ -z "${ONNX_GIT_TAG}" ] && ! _cmake_pkg_found ONNX; then
     done
 
     if [ -n "${_py}" ]; then
-        ONNX_GIT_TAG="v$(${_py} -c "import onnx; print(onnx.__version__)")"
+        ONNX_GIT_TAG="$("${_py}" - <<'PY'
+import onnx
+import re
+
+match = re.match(r"(\d+)\.(\d+)\.(\d+)", onnx.__version__)
+parts = tuple(int(group) for group in match.groups()) if match else ()
+release = ".".join(match.groups()) if match else ""
+print("v" + release if parts >= (1, 21, 0) else "v1.21.0")
+PY
+)"
     else
         ONNX_GIT_TAG="${ONNX_DEFAULT_GIT_TAG}"
     fi

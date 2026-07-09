@@ -30,14 +30,14 @@ pytest-subtests = "*"
 ruff = "*"
 
 [feature.dev-onnx.dependencies]
-onnx = ">=1.17"
+onnx = ">=1.21.0"
 onnxruntime = "*"
 
 [feature.docs.dependencies]
 black = "*"
 breathe = "*"
 matplotlib-base = "*"
-onnx = ">=1.17"
+onnx = ">=1.21.0"
 onnxruntime = "*"
 pandas = "*"
 pydata-sphinx-theme = "*"

@@ -108,12 +108,14 @@ def validate_external_data_path(
 
     # Step 5: Hardlink count check (reject files with multiple hard links to
     # defend against hardlink-based attacks where a hardlink to a sensitive
-    # file is placed inside the model directory).
+    # file is placed inside the model directory).  Stat the raw (pre-realpath)
+    # path with follow_symlinks=False for consistency with the symlink check
+    # above and to avoid TOCTOU between the two checks.
     try:
-        st = os.stat(candidate)
+        st = os.stat(raw_joined, follow_symlinks=False)
         if st.st_nlink > 1:
             raise ValueError(
-                f"External data path {candidate!r} has multiple hard links "
+                f"External data path {raw_joined!r} has multiple hard links "
                 f"({st.st_nlink}), which is not allowed for security reasons."
             )
     except FileNotFoundError:

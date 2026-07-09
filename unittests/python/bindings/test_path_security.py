@@ -196,6 +196,7 @@ class TestValidateExternalDataPath(unittest.TestCase):
     def test_rejects_hardlink(self):
         # A hardlink inside the model directory to a file outside it must be
         # rejected regardless of the containment check passing.
+        import errno
         import shutil
 
         outside_dir = tempfile.mkdtemp()
@@ -205,9 +206,11 @@ class TestValidateExternalDataPath(unittest.TestCase):
         hardlink = os.path.join(self.tmpdir, "hardlink_weights.bin")
         try:
             os.link(original, hardlink)
-        except OSError:
+        except OSError as exc:
             shutil.rmtree(outside_dir, ignore_errors=True)
-            self.skipTest("Hard links not supported (possibly cross-device).")
+            if exc.errno in (errno.EXDEV, errno.EPERM, errno.ENOTSUP):
+                self.skipTest("Hard links not supported (possibly cross-device).")
+            raise
         try:
             with self.assertRaises(ValueError) as ctx:
                 validate_external_data_path("hardlink_weights.bin", self.tmpdir)

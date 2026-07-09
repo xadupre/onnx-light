@@ -513,6 +513,9 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           // Unsqueeze is a shape-only view transform on its data input: it keeps
           // dtype and element count, so the output can always alias that input
           // when lifetime constraints allow it.
+          // The dtype guard keeps this fast-path defensive for malformed graphs
+          // or partial type information: aliasing is only safe when input/output
+          // element storage matches.
           if (node.op_type().as_string() == "Unsqueeze" && k == 0 &&
               out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
             match = InPlaceReuseKind::kEqual;

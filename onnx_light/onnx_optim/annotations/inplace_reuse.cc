@@ -32,6 +32,8 @@ struct LiveAllocation {
   ShapeTag tag;
 };
 
+constexpr int kUnsqueezeDataInputIndex = 0;
+
 ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags,
                   const std::string &name) {
   auto it = value_tags.find(name);
@@ -401,7 +403,6 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   std::unordered_map<std::string, int> producer;
   std::unordered_map<std::string, int> last_use;
   std::vector<std::vector<std::string>> referenced_per_node(static_cast<std::size_t>(num_nodes));
-  constexpr int kUnsqueezeDataInputIndex = 0;
   std::unordered_set<std::string> graph_outputs;
   for (int i = 0; i < graph.output().size(); ++i) {
     graph_outputs.insert(graph.output()[i].name().as_string());
@@ -430,6 +431,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
+    const bool is_unsqueeze = node.op_type().as_string() == "Unsqueeze";
     const std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
 
     for (const std::string &name : referenced) {
@@ -518,7 +520,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           // or partial type information: aliasing is only safe when input/output
           // element storage matches.
           // Unsqueeze's data tensor is input 0 by ONNX spec; input 1 is axes.
-          if (k == kUnsqueezeDataInputIndex && node.op_type().as_string() == "Unsqueeze" &&
+          if (k == kUnsqueezeDataInputIndex && is_unsqueeze &&
               out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
             match = InPlaceReuseKind::kEqual;
           } else {

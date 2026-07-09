@@ -168,7 +168,7 @@ class TestExternalDataHelper(ExtTestCase):
         self.assertEqual(info.basepath, "/some/dir")
 
     # ------------------------------------------------------------------
-    # Security tests: GHSA-3jf9-582g-jjmq (CVE-2026-34445)
+    # Security tests: GHSA-cjhm-j56f-fj5v (CVE-2026-34445)
     # ------------------------------------------------------------------
 
     def test_external_data_info_unknown_key_warns(self):

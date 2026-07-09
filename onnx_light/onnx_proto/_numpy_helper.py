@@ -197,7 +197,7 @@ def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
     Validates that the external data path does not escape *base_dir* via
     path traversal or symlink indirection before reading the file.
     Also validates that ``offset`` and ``length`` metadata values are
-    non-negative and within the actual file size (GHSA-3jf9-582g-jjmq).
+    non-negative and within the actual file size (GHSA-cjhm-j56f-fj5v).
 
     Args:
         tensor: a TensorProto object whose external_data field describes the file.

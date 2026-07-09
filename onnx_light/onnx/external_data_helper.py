@@ -20,7 +20,7 @@ from ..onnx_proto._numpy_helper import (  # noqa: F401
 )
 from . import TensorProto
 
-# Security: whitelist of spec-defined external-data keys (GHSA-3jf9-582g-jjmq).
+# Security: whitelist of spec-defined external-data keys (GHSA-cjhm-j56f-fj5v).
 # Unknown keys are warned and ignored, preventing attribute injection (CWE-915).
 _ALLOWED_EXTERNAL_DATA_KEYS: frozenset[str] = frozenset(
     {"location", "offset", "length", "checksum", "basepath"}

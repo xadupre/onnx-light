@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Security
 
 - Investigated GHSA-hqmj-h5c6-369m (`onnx.hub.load` silent-bypass): onnx-light has never implemented a hub module and is not affected ([#3274](https://github.com/xadupre/onnx-light/issues/3274))
+- Investigated GHSA-cjhm-j56f-fj5v (`ExternalDataInfo` attribute injection + resource exhaustion via crafted `external_data` entries): onnx-light was never vulnerable — `ExternalDataInfo` uses an explicit key whitelist instead of `setattr()`, and `_load_external_data_for_tensor` validates offset/length bounds against the actual file size; updated advisory references in code comments and bumped onnx dev-dependency floor to 1.21.0 ([#3267](https://github.com/xadupre/onnx-light/issues/3267))
 
 ## [0.1.4] – 2026-07-07
 

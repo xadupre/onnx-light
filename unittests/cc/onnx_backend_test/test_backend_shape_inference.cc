@@ -2111,7 +2111,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
 
     ModelProto model_copy;
     std::string serialized;
-    ASSERT_TRUE(tc.model.SerializeToString(&serialized)) << "failed to serialize case: " << tc.name;
+    ASSERT_TRUE(tc.model.SerializeToString(serialized)) << "failed to serialize case: " << tc.name;
     ASSERT_TRUE(model_copy.ParseFromString(serialized)) << "failed to parse case: " << tc.name;
 
     GraphProto *graph = model_copy.mutable_graph();

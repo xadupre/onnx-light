@@ -117,22 +117,22 @@ std::size_t OutputElementSize(int32_t dtype) {
 
 // Stores ``sample`` (either 0 or 1) at index ``i`` of ``out`` using the
 // stride for ``dtype``.
-void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int32_t sample) {
+void StoreSample(int32_t dtype, uint8_t *out, int64_t i, int32_t sample) {
   switch (static_cast<DataType>(dtype)) {
   case DataType::FLOAT: {
     const float v = static_cast<float>(sample);
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(float), &v, sizeof(float));
+    std::memcpy(out + static_cast<std::size_t>(i) * sizeof(float), &v, sizeof(float));
     break;
   }
   case DataType::DOUBLE: {
     const double v = static_cast<double>(sample);
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(double), &v, sizeof(double));
+    std::memcpy(out + static_cast<std::size_t>(i) * sizeof(double), &v, sizeof(double));
     break;
   }
   case DataType::FLOAT16: {
     // 0.0 -> 0x0000, 1.0 -> 0x3C00 in IEEE-754 binary16.
     const uint16_t v = sample == 0 ? static_cast<uint16_t>(0x0000) : static_cast<uint16_t>(0x3C00);
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * 2, &v, sizeof(uint16_t));
+    std::memcpy(out + static_cast<std::size_t>(i) * 2, &v, sizeof(uint16_t));
     break;
   }
   case DataType::INT8: {
@@ -147,32 +147,32 @@ void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int32_t sa
   }
   case DataType::INT16: {
     const int16_t v = static_cast<int16_t>(sample);
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(int16_t), &v, sizeof(int16_t));
+    std::memcpy(out + static_cast<std::size_t>(i) * sizeof(int16_t), &v, sizeof(int16_t));
     break;
   }
   case DataType::UINT16: {
     const uint16_t v = static_cast<uint16_t>(sample);
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(uint16_t), &v, sizeof(uint16_t));
+    std::memcpy(out + static_cast<std::size_t>(i) * sizeof(uint16_t), &v, sizeof(uint16_t));
     break;
   }
   case DataType::INT32: {
     const int32_t v = sample;
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(int32_t), &v, sizeof(int32_t));
+    std::memcpy(out + static_cast<std::size_t>(i) * sizeof(int32_t), &v, sizeof(int32_t));
     break;
   }
   case DataType::UINT32: {
     const uint32_t v = static_cast<uint32_t>(sample);
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(uint32_t), &v, sizeof(uint32_t));
+    std::memcpy(out + static_cast<std::size_t>(i) * sizeof(uint32_t), &v, sizeof(uint32_t));
     break;
   }
   case DataType::INT64: {
     const int64_t v = static_cast<int64_t>(sample);
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(int64_t), &v, sizeof(int64_t));
+    std::memcpy(out + static_cast<std::size_t>(i) * sizeof(int64_t), &v, sizeof(int64_t));
     break;
   }
   case DataType::UINT64: {
     const uint64_t v = static_cast<uint64_t>(sample);
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(uint64_t), &v, sizeof(uint64_t));
+    std::memcpy(out + static_cast<std::size_t>(i) * sizeof(uint64_t), &v, sizeof(uint64_t));
     break;
   }
   default:
@@ -185,18 +185,34 @@ void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int32_t sa
 
 Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
                              RuntimeContext *rt) const {
-  const std::vector<double> probs = ReadProbabilities(input);
-
   const int32_t out_dtype = (dtype == 0) ? input.data_type : dtype;
   const std::size_t es = OutputElementSize(out_dtype);
   const int64_t n = input.element_count();
-  std::vector<uint8_t> out_data(static_cast<std::size_t>(n) * es, 0);
+  const std::size_t out_n_bytes = static_cast<std::size_t>(n) * es;
 
+  Tensor out =
+      MakeOutputTensor(out_dtype, input.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  (*this)(input, seed, dtype, out);
+  return out;
+}
+
+void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Tensor &output) const {
+  const std::vector<double> probs = ReadProbabilities(input);
+
+  const int32_t out_dtype = (dtype == 0) ? input.data_type : dtype;
+  EXT_ENFORCE_INVALID(output.data_type == out_dtype,
+                      "kernel::Bernoulli preallocated output must have the expected dtype.");
+  EXT_ENFORCE_INVALID(output.shape == input.shape,
+                      "kernel::Bernoulli preallocated output shape must match the input "
+                      "tensor shape.");
+
+  const int64_t n = input.element_count();
   const uint32_t engine_seed =
       (seed == kNoSeed) ? kDefaultBernoulliSeed : static_cast<uint32_t>(seed);
   std::mt19937 engine(engine_seed);
   std::uniform_real_distribution<double> uniform(0.0, 1.0);
 
+  uint8_t *out_data = output.mutable_bytes();
   for (int64_t i = 0; i < n; ++i) {
     const double p = probs[static_cast<std::size_t>(i)];
     EXT_ENFORCE_INVALID(p >= 0.0 && p <= 1.0,
@@ -204,23 +220,6 @@ Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
     const double u = uniform(engine);
     const int32_t sample = (u < p) ? 1 : 0;
     StoreSample(out_dtype, out_data, i, sample);
-  }
-
-  return Tensor("", out_dtype, input.shape, std::move(out_data));
-}
-
-void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(input, seed, dtype);
-  EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
-                      "kernel::Bernoulli preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == produced.shape,
-                      "kernel::Bernoulli preallocated output shape must match the produced "
-                      "tensor shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
-                      "kernel::Bernoulli preallocated output buffer has unexpected size in "
-                      "bytes.");
-  if (!produced.data.empty()) {
-    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

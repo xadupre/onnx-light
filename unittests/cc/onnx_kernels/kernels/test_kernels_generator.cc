@@ -5,6 +5,8 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/raw_buffer_allocator.h"
+#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -13,6 +15,8 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_kernels::RuntimeContext;
+using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Bernoulli;
 using onnx_kernels::kernel::Constant;
@@ -237,6 +241,26 @@ TEST(KernelClass, BernoulliRejectsUnsupportedInputDtype) {
   Bernoulli kernel{ctx};
   const Tensor int_in = Tensor::FromInt32("", {2}, {0, 1});
   EXPECT_THROW(kernel(int_in), std::invalid_argument);
+}
+
+TEST(KernelClass, BernoulliUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Bernoulli kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {4}, {0.0f, 1.0f, 0.0f, 1.0f});
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+  Tensor y = kernel(x, Bernoulli::kNoSeed, /*dtype=*/0, &rt);
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(y.data.size(), 0u);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{4}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.0f);
+  EXPECT_FLOAT_EQ(py[1], 1.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 1.0f);
 }
 
 TEST(KernelClass, MultinomialProducesInt32SamplesWithExpectedShape) {

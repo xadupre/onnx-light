@@ -2130,26 +2130,41 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
     ASSERT_NO_THROW(onnx_optim::annotations::WriteValueAndNodeTagsToMetadata(*graph))
         << "case: " << tc.name;
 
+    const GraphProto &expected_graph = tc.model.ref_graph();
+
     const auto has_value_tag = [&](const auto &value) {
       return MetadataOf(value).contains(onnx_optim::annotations::kValueTagMetadataKey);
     };
     const auto has_node_tag = [&](const auto &node) {
       return MetadataOf(node).contains(onnx_optim::annotations::kNodeTagMetadataKey);
     };
-    const auto expect_all_tagged = [&](const auto &values, const char *kind) {
+    const auto expect_tag_presence_matches = [&](const auto &values, const auto &expected_values,
+                                                 const char *kind) {
+      ASSERT_EQ(values.size(), expected_values.size())
+          << "size mismatch on " << kind << " in case " << tc.name;
       for (size_t idx = 0; idx < values.size(); ++idx) {
-        EXPECT_TRUE(has_value_tag(values[idx]))
-            << "missing value tag on " << kind << "[" << idx << "] in case " << tc.name;
+        const bool expected_tagged = has_value_tag(expected_values[idx]);
+        EXPECT_EQ(has_value_tag(values[idx]), expected_tagged)
+            << "unexpected value tag presence on " << kind << "[" << idx << "] in case " << tc.name;
       }
     };
-    for (size_t node_idx = 0; node_idx < graph->node().size(); ++node_idx) {
-      EXPECT_TRUE(has_node_tag(graph->ref_node()[node_idx]))
-          << "missing node tag on node[" << node_idx << "] in case " << tc.name;
-    }
-    expect_all_tagged(graph->ref_input(), "input");
-    expect_all_tagged(graph->ref_value_info(), "value_info");
-    expect_all_tagged(graph->ref_output(), "output");
-    expect_all_tagged(graph->ref_initializer(), "initializer");
+    const auto expect_node_tag_presence_matches = [&](const auto &nodes,
+                                                      const auto &expected_nodes) {
+      ASSERT_EQ(nodes.size(), expected_nodes.size()) << "node size mismatch in case " << tc.name;
+      for (size_t idx = 0; idx < nodes.size(); ++idx) {
+        const bool expected_tagged = has_node_tag(expected_nodes[idx]);
+        EXPECT_EQ(has_node_tag(nodes[idx]), expected_tagged)
+            << "unexpected node tag presence on node[" << idx << "] in case " << tc.name;
+      }
+    };
+
+    expect_node_tag_presence_matches(graph->ref_node(), expected_graph.ref_node());
+    expect_tag_presence_matches(graph->ref_input(), expected_graph.ref_input(), "input");
+    expect_tag_presence_matches(graph->ref_value_info(), expected_graph.ref_value_info(),
+                                "value_info");
+    expect_tag_presence_matches(graph->ref_output(), expected_graph.ref_output(), "output");
+    expect_tag_presence_matches(graph->ref_initializer(), expected_graph.ref_initializer(),
+                                "initializer");
   }
   ASSERT_TRUE(found) << "no shape_tag backend cases were collected";
 }

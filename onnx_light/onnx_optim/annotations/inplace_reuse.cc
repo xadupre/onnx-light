@@ -32,6 +32,9 @@ struct LiveAllocation {
   ShapeTag tag;
 };
 
+constexpr int kSqueezeDataInputIndex = 0;
+constexpr int kUnsqueezeDataInputIndex = 0;
+
 ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags,
                   const std::string &name) {
   auto it = value_tags.find(name);
@@ -433,6 +436,9 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
+    const std::string op_type = node.op_type().as_string();
+    const bool is_squeeze = op_type == "Squeeze";
+    const bool is_unsqueeze = op_type == "Unsqueeze";
     const std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
 
     for (const std::string &name : referenced) {
@@ -516,7 +522,21 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           if (!ctx.Has(in_name)) {
             continue;
           }
-          const std::optional<InPlaceReuseKind> match = ClassifyReuse(out_tensor, ctx.Get(in_name));
+          std::optional<InPlaceReuseKind> match;
+          // Squeeze/Unsqueeze are shape-only view transforms on their data
+          // input: they keep dtype and element count, so the output can always
+          // alias that input when lifetime constraints allow it.
+          // The dtype guard keeps this fast-path defensive for malformed graphs
+          // or partial type information: aliasing is only safe when input/output
+          // element storage matches.
+          // Squeeze/Unsqueeze data tensor is input 0 by ONNX spec.
+          if (((k == kSqueezeDataInputIndex && is_squeeze) ||
+               (k == kUnsqueezeDataInputIndex && is_unsqueeze)) &&
+              out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
+            match = InPlaceReuseKind::kEqual;
+          } else {
+            match = ClassifyReuse(out_tensor, ctx.Get(in_name));
+          }
           if (!match.has_value() || *match != kind) {
             continue;
           }

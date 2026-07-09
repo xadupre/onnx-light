@@ -6,9 +6,9 @@
 
 #include "onnx_kernels/runtime_context.h"
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -52,8 +52,7 @@ double DecodeHalf(uint16_t h) {
   } else {
     f = (sign << 31) | (static_cast<uint32_t>(exp - 15 + 127) << 23) | (mant << 13);
   }
-  float fv;
-  std::memcpy(&fv, &f, sizeof(float));
+  float fv = std::bit_cast<float>(f);
   return static_cast<double>(fv);
 }
 
@@ -105,20 +104,17 @@ std::size_t OutputElementSize(int32_t dtype) {
   return 0;
 }
 
-// Stores ``sample`` (a class index) at index ``i`` of ``out`` using the
-// stride for ``dtype``.
-void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int64_t sample) {
+// Stores ``sample`` (a class index) at the byte position pointed to by ``out``
+// using the encoding for ``dtype``. The caller is responsible for advancing
+// ``out`` by the element size between successive calls.
+void StoreSample(int32_t dtype, uint8_t *out, int64_t sample) {
   switch (static_cast<DataType>(dtype)) {
-  case DataType::INT32: {
-    const int32_t v = static_cast<int32_t>(sample);
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(int32_t), &v, sizeof(int32_t));
+  case DataType::INT32:
+    *reinterpret_cast<int32_t *>(out) = static_cast<int32_t>(sample);
     break;
-  }
-  case DataType::INT64: {
-    const int64_t v = sample;
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(int64_t), &v, sizeof(int64_t));
+  case DataType::INT64:
+    *reinterpret_cast<int64_t *>(out) = sample;
     break;
-  }
   default:
     EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported output dtype ",
                         std::to_string(dtype), ".");
@@ -137,18 +133,44 @@ Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t
                       std::to_string(sample_size), ".");
 
   const int64_t batch_size = input.shape[0];
+  const int32_t out_dtype = (dtype == 0) ? static_cast<int32_t>(DataType::INT32) : dtype;
+  const std::size_t es = OutputElementSize(out_dtype);
+  const int64_t n_out = batch_size * sample_size;
+  const std::size_t out_n_bytes = static_cast<std::size_t>(n_out) * es;
+
+  Tensor out = MakeOutputTensor(out_dtype, {batch_size, sample_size}, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
+  (*this)(input, sample_size, seed, dtype, out);
+  return out;
+}
+
+void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t seed, int32_t dtype,
+                             Tensor &output) const {
+  EXT_ENFORCE_INVALID(input.shape.size() == 2,
+                      "kernel::Multinomial: input must be a 2-D tensor of shape "
+                      "[batch_size, class_size].");
+  EXT_ENFORCE_INVALID(sample_size >= 0,
+                      "kernel::Multinomial: sample_size must be non-negative, got ",
+                      std::to_string(sample_size), ".");
+
+  const int64_t batch_size = input.shape[0];
   const int64_t class_size = input.shape[1];
   EXT_ENFORCE_INVALID(batch_size >= 0 && class_size >= 0,
                       "kernel::Multinomial: input shape must be non-negative.");
   EXT_ENFORCE_INVALID(batch_size == 0 || class_size > 0,
                       "kernel::Multinomial: class_size must be > 0 for a non-empty batch.");
 
+  const int32_t out_dtype = (dtype == 0) ? static_cast<int32_t>(DataType::INT32) : dtype;
+  EXT_ENFORCE_INVALID(output.data_type == out_dtype,
+                      "kernel::Multinomial preallocated output must have the expected dtype.");
+  EXT_ENFORCE_INVALID(output.shape == (std::vector<int64_t>{batch_size, sample_size}),
+                      "kernel::Multinomial preallocated output shape must match the produced "
+                      "tensor shape.");
+
   const std::vector<double> logits = ReadLogits(input, batch_size, class_size);
 
-  const int32_t out_dtype = (dtype == 0) ? static_cast<int32_t>(DataType::INT32) : dtype;
   const std::size_t es = OutputElementSize(out_dtype);
-  const int64_t n_out = batch_size * sample_size;
-  std::vector<uint8_t> out_data(static_cast<std::size_t>(n_out) * es, 0);
+  uint8_t *out_data = output.mutable_bytes();
 
   const uint32_t engine_seed =
       (seed == kNoSeed) ? kDefaultMultinomialSeed : static_cast<uint32_t>(seed);
@@ -191,26 +213,9 @@ Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t
       if (idx >= class_size) {
         idx = class_size - 1;
       }
-      StoreSample(out_dtype, out_data, b * sample_size + s, idx);
+      const std::size_t elem_idx = static_cast<std::size_t>(b * sample_size + s);
+      StoreSample(out_dtype, out_data + elem_idx * es, idx);
     }
-  }
-
-  return Tensor("", out_dtype, {batch_size, sample_size}, std::move(out_data));
-}
-
-void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t seed, int32_t dtype,
-                             Tensor &output) const {
-  Tensor produced = (*this)(input, sample_size, seed, dtype);
-  EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
-                      "kernel::Multinomial preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == produced.shape,
-                      "kernel::Multinomial preallocated output shape must match the produced "
-                      "tensor shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
-                      "kernel::Multinomial preallocated output buffer has unexpected size in "
-                      "bytes.");
-  if (!produced.data.empty()) {
-    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }
 

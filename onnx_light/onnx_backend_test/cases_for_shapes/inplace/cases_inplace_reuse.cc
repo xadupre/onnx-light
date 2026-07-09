@@ -19,6 +19,7 @@ namespace {
 constexpr int64_t kDefaultIrVersion = 10;
 constexpr const char *kInPlaceReuseMetadataKey = "onnx_light.inplace_reuse";
 constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
+constexpr const char *kNotUsedAfterMetadataKey = "onnx_light.not_used_after";
 
 } // namespace
 
@@ -50,6 +51,7 @@ void RegisterInPlaceReuseCases(std::vector<TestCase> &registry) {
   AppendValueInfo(*graph->add_value_info(), "B", kFloat, shape);
   AppendValueInfo(*graph->add_output(), "Y", kFloat, shape);
 
+  (*graph->mutable_node())[0].add_metadata(kNotUsedAfterMetadataKey, "X");
   (*graph->mutable_node())[1].add_metadata(kInPlaceReuseMetadataKey, "0:0:equal");
   (*graph->mutable_node())[1].add_metadata(kReleaseAfterMetadataKey, "A");
   (*graph->mutable_node())[2].add_metadata(kInPlaceReuseMetadataKey, "0:0:equal");

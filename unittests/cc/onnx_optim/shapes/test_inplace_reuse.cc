@@ -321,9 +321,11 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadata) {
 
   WriteInPlaceReuseToMetadata(graph, ctx);
   ASSERT_EQ(graph.node().size(), 3);
-  // Node 0 reads the declared graph input X, so it has no reuse and no
-  // metadata is written for it.
-  EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
+  // Node 0 reads the declared graph input X for the last time.
+  ASSERT_EQ(graph.node()[0].metadata_props().size(), 1);
+  EXPECT_EQ(graph.node()[0].metadata_props()[0].key().as_string(),
+            std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey));
+  EXPECT_EQ(graph.node()[0].metadata_props()[0].value().as_string(), std::string("X"));
   ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[1].metadata_props()[0].key().as_string(),
             std::string(onnx_optim::annotations::kInPlaceReuseMetadataKey));
@@ -355,7 +357,10 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataGreaterAndUpdate) {
   ctx.ComputeShapeGraph(graph);
 
   WriteInPlaceReuseToMetadata(graph, ctx);
-  EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
+  ASSERT_EQ(graph.node()[0].metadata_props().size(), 1);
+  EXPECT_EQ(graph.node()[0].metadata_props()[0].key().as_string(),
+            std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey));
+  EXPECT_EQ(graph.node()[0].metadata_props()[0].value().as_string(), std::string("X"));
   ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:greater"));
   EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
@@ -511,7 +516,10 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadata) {
   inplace.ComputeInPlaceReuseGraph(graph, ctx);
   inplace.WriteToMetadata(graph);
   ASSERT_EQ(graph.node().size(), 3);
-  EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
+  ASSERT_EQ(graph.node()[0].metadata_props().size(), 1);
+  EXPECT_EQ(graph.node()[0].metadata_props()[0].key().as_string(),
+            std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey));
+  EXPECT_EQ(graph.node()[0].metadata_props()[0].value().as_string(), std::string("X"));
   ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
   EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
@@ -596,12 +604,15 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadataShapeTag) {
   inplace.ComputeInPlaceReuseGraph(graph, ctx, false, value_tags);
   inplace.WriteToMetadata(graph);
 
-  // Node 0 (Shape) has no release and no in-place reuse.
+  // Node 0 (Shape) has no release and no in-place reuse, and X is still used
+  // by the following node, so no metadata is written.
   EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
 
-  // Node 1 (Reshape): releases S which is shape-tagged.
+  // Node 1 (Reshape): releases S which is shape-tagged, and this is the last
+  // use of declared graph input X.
   bool found_release_after = false;
   bool found_shape_tag = false;
+  bool found_not_used_after = false;
   for (int i = 0; i < graph.node()[1].metadata_props().size(); ++i) {
     const auto &prop = graph.node()[1].metadata_props()[i];
     if (prop.key().as_string() == std::string(onnx_optim::annotations::kReleaseAfterMetadataKey)) {
@@ -613,9 +624,14 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadataShapeTag) {
       EXPECT_EQ(prop.value().as_string(), std::string("S"));
       found_shape_tag = true;
     }
+    if (prop.key().as_string() == std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey)) {
+      EXPECT_EQ(prop.value().as_string(), std::string("X"));
+      found_not_used_after = true;
+    }
   }
   EXPECT_TRUE(found_release_after);
   EXPECT_TRUE(found_shape_tag);
+  EXPECT_TRUE(found_not_used_after);
 }
 
 // Without value_tags, ReleaseAfterShapeTagged is all-empty and

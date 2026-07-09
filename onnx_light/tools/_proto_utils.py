@@ -180,12 +180,14 @@ def _node_metadata_value(node: Any, key: str) -> str:
 # - per-node tag -> NODE_TAG_METADATA_KEY
 # - per-node in-place reuse map -> INPLACE_REUSE_METADATA_KEY
 # - per-node release-after tensor list -> RELEASE_AFTER_METADATA_KEY
+# - per-node last-use inputs/initializers list -> NOT_USED_AFTER_METADATA_KEY
 # - per-node shape-tagged release-after list -> RELEASE_AFTER_SHAPE_TAG_METADATA_KEY
 VALUE_TAG_METADATA_KEY = "onnx_light.value_tag"
 VALUE_TAGS_METADATA_KEY = "onnx_light.value_tags"
 NODE_TAG_METADATA_KEY = "onnx_light.node_tag"
 INPLACE_REUSE_METADATA_KEY = "onnx_light.inplace_reuse"
 RELEASE_AFTER_METADATA_KEY = "onnx_light.release_after"
+NOT_USED_AFTER_METADATA_KEY = "onnx_light.not_used_after"
 RELEASE_AFTER_SHAPE_TAG_METADATA_KEY = "onnx_light.release_after_shape_tag"
 VALUE_TAGS = {"shape", "axes", "weight", "ambiguous"}
 VALUE_TAG_COLORS = {
@@ -281,16 +283,21 @@ def _format_release_after(node: Any) -> str:
 
     Parses the ``onnx_light.release_after`` metadata entry written by the
     in-place reuse analysis and renders it as a human-readable string such
-    as ``release: A, B``.  Returns an empty string when the node carries no
-    such metadata.
+    as ``release: A, B``. When present, the
+    ``onnx_light.not_used_after`` metadata entry is appended as
+    ``not used after: X, W``. Returns an empty string when the node carries
+    neither metadata key.
     """
-    raw = _node_metadata_value(node, RELEASE_AFTER_METADATA_KEY)
-    if not raw:
-        return ""
-    names = [name.strip() for name in raw.split(";") if name.strip()]
-    if not names:
-        return ""
-    return "release: " + ", ".join(names)
+    parts: list[str] = []
+    raw_release = _node_metadata_value(node, RELEASE_AFTER_METADATA_KEY)
+    names_release = [name.strip() for name in raw_release.split(";") if name.strip()]
+    if names_release:
+        parts.append("release: " + ", ".join(names_release))
+    raw_not_used = _node_metadata_value(node, NOT_USED_AFTER_METADATA_KEY)
+    names_not_used = [name.strip() for name in raw_not_used.split(";") if name.strip()]
+    if names_not_used:
+        parts.append("not used after: " + ", ".join(names_not_used))
+    return "; ".join(parts)
 
 
 def _graph_value_tags(graph: Any) -> dict[str, str]:

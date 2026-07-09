@@ -724,8 +724,8 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="release_info",
         help=(
             "Also compute last-use release hints and record them in each "
-            "node's metadata_props under the key "
-            "``onnx_light.release_after``."
+            "node's metadata_props under the keys "
+            "``onnx_light.release_after`` and ``onnx_light.not_used_after``."
         ),
     )
     fillshape_parser.add_argument(
@@ -838,7 +838,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="include_release",
         help=(
-            "Show post-execution release hints (onnx_light.release_after metadata). "
+            "Show post-execution release hints "
+            "(onnx_light.release_after and onnx_light.not_used_after metadata). "
             "Only used by the 'pretty' format."
         ),
     )

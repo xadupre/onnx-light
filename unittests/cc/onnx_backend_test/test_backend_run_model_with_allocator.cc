@@ -8,8 +8,11 @@
 // and ``allocation_owner() != nullptr``, proving that the allocator is
 // threaded through the full kernel dispatch / output-commit path.
 //
-// The test layout mirrors ``test_backend_run_model.cc`` one-to-one so that
-// adding a new kernel requires parallel updates in both files.
+// A single TEST (``AllKernels``) iterates over every registered op type; the
+// ``SCOPED_TRACE`` at each iteration reports the currently-executing op type
+// and test-case name in failure messages.  Add new op types to the loop (or
+// to the special-predicate block below) when a kernel is registered in
+// ``KernelDispatchTable``.
 
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/kernel_context.h"
@@ -145,444 +148,340 @@ void RunBackendCasesForWithAllocator(
 } // namespace
 
 // ---------------------------------------------------------------------------
-// One TEST per registered kernel (mirrors BackendRunModel in
-// test_backend_run_model.cc).
+// A single TEST exercises every registered kernel.  SCOPED_TRACE at each
+// iteration reports the op type and test-case name in failure messages.
 // ---------------------------------------------------------------------------
 
-TEST(BackendRunModelWithAllocator, Abs) { RunBackendCasesForWithAllocator("Abs"); }
-TEST(BackendRunModelWithAllocator, Neg) { RunBackendCasesForWithAllocator("Neg"); }
-TEST(BackendRunModelWithAllocator, Add) { RunBackendCasesForWithAllocator("Add"); }
-TEST(BackendRunModelWithAllocator, Sub) { RunBackendCasesForWithAllocator("Sub"); }
-TEST(BackendRunModelWithAllocator, Mul) { RunBackendCasesForWithAllocator("Mul"); }
-TEST(BackendRunModelWithAllocator, Div) { RunBackendCasesForWithAllocator("Div"); }
-
-TEST(BackendRunModelWithAllocator, Acos) { RunBackendCasesForWithAllocator("Acos"); }
-TEST(BackendRunModelWithAllocator, Acosh) { RunBackendCasesForWithAllocator("Acosh"); }
-TEST(BackendRunModelWithAllocator, Asin) { RunBackendCasesForWithAllocator("Asin"); }
-TEST(BackendRunModelWithAllocator, Asinh) { RunBackendCasesForWithAllocator("Asinh"); }
-TEST(BackendRunModelWithAllocator, Atan) { RunBackendCasesForWithAllocator("Atan"); }
-TEST(BackendRunModelWithAllocator, Atanh) { RunBackendCasesForWithAllocator("Atanh"); }
-TEST(BackendRunModelWithAllocator, Ceil) { RunBackendCasesForWithAllocator("Ceil"); }
-TEST(BackendRunModelWithAllocator, Cos) { RunBackendCasesForWithAllocator("Cos"); }
-TEST(BackendRunModelWithAllocator, Cosh) { RunBackendCasesForWithAllocator("Cosh"); }
-TEST(BackendRunModelWithAllocator, Det) { RunBackendCasesForWithAllocator("Det"); }
-TEST(BackendRunModelWithAllocator, Erf) { RunBackendCasesForWithAllocator("Erf"); }
-TEST(BackendRunModelWithAllocator, Exp) { RunBackendCasesForWithAllocator("Exp"); }
-TEST(BackendRunModelWithAllocator, Floor) { RunBackendCasesForWithAllocator("Floor"); }
-TEST(BackendRunModelWithAllocator, HardSwish) { RunBackendCasesForWithAllocator("HardSwish"); }
-TEST(BackendRunModelWithAllocator, Log) { RunBackendCasesForWithAllocator("Log"); }
-TEST(BackendRunModelWithAllocator, Mish) { RunBackendCasesForWithAllocator("Mish"); }
-TEST(BackendRunModelWithAllocator, Reciprocal) { RunBackendCasesForWithAllocator("Reciprocal"); }
-TEST(BackendRunModelWithAllocator, Relu) { RunBackendCasesForWithAllocator("Relu"); }
-TEST(BackendRunModelWithAllocator, ReverseSequence) {
-  RunBackendCasesForWithAllocator("ReverseSequence");
-}
-TEST(BackendRunModelWithAllocator, Round) { RunBackendCasesForWithAllocator("Round"); }
-TEST(BackendRunModelWithAllocator, Sigmoid) { RunBackendCasesForWithAllocator("Sigmoid"); }
-TEST(BackendRunModelWithAllocator, Sign) { RunBackendCasesForWithAllocator("Sign"); }
-TEST(BackendRunModelWithAllocator, Sin) { RunBackendCasesForWithAllocator("Sin"); }
-TEST(BackendRunModelWithAllocator, Sinh) { RunBackendCasesForWithAllocator("Sinh"); }
-TEST(BackendRunModelWithAllocator, Softplus) { RunBackendCasesForWithAllocator("Softplus"); }
-TEST(BackendRunModelWithAllocator, Softsign) { RunBackendCasesForWithAllocator("Softsign"); }
-TEST(BackendRunModelWithAllocator, Sqrt) { RunBackendCasesForWithAllocator("Sqrt"); }
-TEST(BackendRunModelWithAllocator, Tan) { RunBackendCasesForWithAllocator("Tan"); }
-TEST(BackendRunModelWithAllocator, Tanh) { RunBackendCasesForWithAllocator("Tanh"); }
-
-TEST(BackendRunModelWithAllocator, MatMul) { RunBackendCasesForWithAllocator("MatMul"); }
-TEST(BackendRunModelWithAllocator, MatMulInteger) {
-  RunBackendCasesForWithAllocator("MatMulInteger");
-}
-TEST(BackendRunModelWithAllocator, PRelu) { RunBackendCasesForWithAllocator("PRelu"); }
-TEST(BackendRunModelWithAllocator, Pow) { RunBackendCasesForWithAllocator("Pow"); }
-
-TEST(BackendRunModelWithAllocator, Equal) { RunBackendCasesForWithAllocator("Equal"); }
-TEST(BackendRunModelWithAllocator, Greater) { RunBackendCasesForWithAllocator("Greater"); }
-TEST(BackendRunModelWithAllocator, GreaterOrEqual) {
-  RunBackendCasesForWithAllocator("GreaterOrEqual");
-}
-TEST(BackendRunModelWithAllocator, Less) { RunBackendCasesForWithAllocator("Less"); }
-TEST(BackendRunModelWithAllocator, LessOrEqual) { RunBackendCasesForWithAllocator("LessOrEqual"); }
-TEST(BackendRunModelWithAllocator, Where) { RunBackendCasesForWithAllocator("Where"); }
-
-TEST(BackendRunModelWithAllocator, Sum) { RunBackendCasesForWithAllocator("Sum"); }
-TEST(BackendRunModelWithAllocator, Max) { RunBackendCasesForWithAllocator("Max"); }
-TEST(BackendRunModelWithAllocator, Min) { RunBackendCasesForWithAllocator("Min"); }
-TEST(BackendRunModelWithAllocator, Mean) { RunBackendCasesForWithAllocator("Mean"); }
-
-TEST(BackendRunModelWithAllocator, ArgMax) { RunBackendCasesForWithAllocator("ArgMax"); }
-TEST(BackendRunModelWithAllocator, ArgMin) { RunBackendCasesForWithAllocator("ArgMin"); }
-TEST(BackendRunModelWithAllocator, ReduceL1) { RunBackendCasesForWithAllocator("ReduceL1"); }
-TEST(BackendRunModelWithAllocator, ReduceL2) { RunBackendCasesForWithAllocator("ReduceL2"); }
-TEST(BackendRunModelWithAllocator, ReduceLogSum) {
-  RunBackendCasesForWithAllocator("ReduceLogSum");
-}
-TEST(BackendRunModelWithAllocator, ReduceLogSumExp) {
-  RunBackendCasesForWithAllocator("ReduceLogSumExp");
-}
-TEST(BackendRunModelWithAllocator, ReduceMax) { RunBackendCasesForWithAllocator("ReduceMax"); }
-TEST(BackendRunModelWithAllocator, ReduceMean) { RunBackendCasesForWithAllocator("ReduceMean"); }
-TEST(BackendRunModelWithAllocator, ReduceMin) { RunBackendCasesForWithAllocator("ReduceMin"); }
-TEST(BackendRunModelWithAllocator, ReduceProd) { RunBackendCasesForWithAllocator("ReduceProd"); }
-TEST(BackendRunModelWithAllocator, ReduceSum) { RunBackendCasesForWithAllocator("ReduceSum"); }
-TEST(BackendRunModelWithAllocator, ReduceSumSquare) {
-  RunBackendCasesForWithAllocator("ReduceSumSquare");
-}
-
-TEST(BackendRunModelWithAllocator, Celu) { RunBackendCasesForWithAllocator("Celu"); }
-TEST(BackendRunModelWithAllocator, Elu) { RunBackendCasesForWithAllocator("Elu"); }
-TEST(BackendRunModelWithAllocator, LeakyRelu) { RunBackendCasesForWithAllocator("LeakyRelu"); }
-TEST(BackendRunModelWithAllocator, Swish) { RunBackendCasesForWithAllocator("Swish"); }
-TEST(BackendRunModelWithAllocator, ThresholdedRelu) {
-  RunBackendCasesForWithAllocator("ThresholdedRelu");
-}
-TEST(BackendRunModelWithAllocator, TopK) { RunBackendCasesForWithAllocator("TopK"); }
-TEST(BackendRunModelWithAllocator, Hardmax) { RunBackendCasesForWithAllocator("Hardmax"); }
-TEST(BackendRunModelWithAllocator, LogSoftmax) { RunBackendCasesForWithAllocator("LogSoftmax"); }
-TEST(BackendRunModelWithAllocator, Flatten) { RunBackendCasesForWithAllocator("Flatten"); }
-TEST(BackendRunModelWithAllocator, Softmax) { RunBackendCasesForWithAllocator("Softmax"); }
-TEST(BackendRunModelWithAllocator, HardSigmoid) { RunBackendCasesForWithAllocator("HardSigmoid"); }
-TEST(BackendRunModelWithAllocator, Selu) { RunBackendCasesForWithAllocator("Selu"); }
-TEST(BackendRunModelWithAllocator, Shrink) { RunBackendCasesForWithAllocator("Shrink"); }
-TEST(BackendRunModelWithAllocator, GatherElements) {
-  RunBackendCasesForWithAllocator("GatherElements");
-}
-TEST(BackendRunModelWithAllocator, ScatterElements) {
-  RunBackendCasesForWithAllocator("ScatterElements");
-}
-TEST(BackendRunModelWithAllocator, ScatterND) { RunBackendCasesForWithAllocator("ScatterND"); }
-TEST(BackendRunModelWithAllocator, Gelu) { RunBackendCasesForWithAllocator("Gelu"); }
-TEST(BackendRunModelWithAllocator, Mod) { RunBackendCasesForWithAllocator("Mod"); }
-TEST(BackendRunModelWithAllocator, Clip) { RunBackendCasesForWithAllocator("Clip"); }
-TEST(BackendRunModelWithAllocator, Compress) { RunBackendCasesForWithAllocator("Compress"); }
-TEST(BackendRunModelWithAllocator, Unique) { RunBackendCasesForWithAllocator("Unique"); }
-TEST(BackendRunModelWithAllocator, NonZero) { RunBackendCasesForWithAllocator("NonZero"); }
-TEST(BackendRunModelWithAllocator, Concat) { RunBackendCasesForWithAllocator("Concat"); }
-TEST(BackendRunModelWithAllocator, CumSum) { RunBackendCasesForWithAllocator("CumSum"); }
-TEST(BackendRunModelWithAllocator, CumProd) { RunBackendCasesForWithAllocator("CumProd"); }
-TEST(BackendRunModelWithAllocator, DFT) { RunBackendCasesForWithAllocator("DFT"); }
-TEST(BackendRunModelWithAllocator, STFT) { RunBackendCasesForWithAllocator("STFT"); }
-TEST(BackendRunModelWithAllocator, MelWeightMatrix) {
-  RunBackendCasesForWithAllocator("MelWeightMatrix");
-}
-TEST(BackendRunModelWithAllocator, Attention) {
-  RunBackendCasesForWithAllocator("Attention", [](const DataSet &ds) {
-    return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
-           ds.inputs[1].data_type == DataType::FLOAT && ds.inputs[2].data_type == DataType::FLOAT;
-  });
-}
-TEST(BackendRunModelWithAllocator, Cast) { RunBackendCasesForWithAllocator("Cast"); }
-TEST(BackendRunModelWithAllocator, CastLike) { RunBackendCasesForWithAllocator("CastLike"); }
-TEST(BackendRunModelWithAllocator, CenterCropPad) {
-  RunBackendCasesForWithAllocator("CenterCropPad");
-}
-TEST(BackendRunModelWithAllocator, Pad) { RunBackendCasesForWithAllocator("Pad"); }
-TEST(BackendRunModelWithAllocator, Slice) { RunBackendCasesForWithAllocator("Slice"); }
-TEST(BackendRunModelWithAllocator, BitCast) { RunBackendCasesForWithAllocator("BitCast"); }
-TEST(BackendRunModelWithAllocator, CausalConvWithState) {
-  RunBackendCasesForWithAllocator("CausalConvWithState");
-}
-TEST(BackendRunModelWithAllocator, Conv) { RunBackendCasesForWithAllocator("Conv"); }
-TEST(BackendRunModelWithAllocator, ConvInteger) { RunBackendCasesForWithAllocator("ConvInteger"); }
-TEST(BackendRunModelWithAllocator, ConvTranspose) {
-  RunBackendCasesForWithAllocator("ConvTranspose");
-}
-TEST(BackendRunModelWithAllocator, Transpose) { RunBackendCasesForWithAllocator("Transpose"); }
-TEST(BackendRunModelWithAllocator, Trilu) { RunBackendCasesForWithAllocator("Trilu"); }
-TEST(BackendRunModelWithAllocator, TensorScatter) {
-  RunBackendCasesForWithAllocator("TensorScatter");
-}
-TEST(BackendRunModelWithAllocator, Col2Im) { RunBackendCasesForWithAllocator("Col2Im"); }
-TEST(BackendRunModelWithAllocator, DeformConv) { RunBackendCasesForWithAllocator("DeformConv"); }
-TEST(BackendRunModelWithAllocator, DepthToSpace) {
-  RunBackendCasesForWithAllocator("DepthToSpace");
-}
-TEST(BackendRunModelWithAllocator, SpaceToDepth) {
-  RunBackendCasesForWithAllocator("SpaceToDepth");
-}
-TEST(BackendRunModelWithAllocator, Upsample) { RunBackendCasesForWithAllocator("Upsample"); }
-TEST(BackendRunModelWithAllocator, BatchNormalization) {
-  RunBackendCasesForWithAllocator("BatchNormalization");
-}
-TEST(BackendRunModelWithAllocator, GroupNormalization) {
-  RunBackendCasesForWithAllocator("GroupNormalization");
-}
-TEST(BackendRunModelWithAllocator, GridSample) { RunBackendCasesForWithAllocator("GridSample"); }
-TEST(BackendRunModelWithAllocator, RoiAlign) { RunBackendCasesForWithAllocator("RoiAlign"); }
-TEST(BackendRunModelWithAllocator, MaxRoiPool) { RunBackendCasesForWithAllocator("MaxRoiPool"); }
-TEST(BackendRunModelWithAllocator, InstanceNormalization) {
-  RunBackendCasesForWithAllocator("InstanceNormalization");
-}
-TEST(BackendRunModelWithAllocator, LayerNormalization) {
-  RunBackendCasesForWithAllocator("LayerNormalization");
-}
-TEST(BackendRunModelWithAllocator, RMSNormalization) {
-  RunBackendCasesForWithAllocator("RMSNormalization");
-}
-TEST(BackendRunModelWithAllocator, RNN) { RunBackendCasesForWithAllocator("RNN"); }
-TEST(BackendRunModelWithAllocator, RotaryEmbedding) {
-  RunBackendCasesForWithAllocator("RotaryEmbedding");
-}
-TEST(BackendRunModelWithAllocator, MeanVarianceNormalization) {
-  RunBackendCasesForWithAllocator("MeanVarianceNormalization");
-}
-TEST(BackendRunModelWithAllocator, Dropout) { RunBackendCasesForWithAllocator("Dropout"); }
-TEST(BackendRunModelWithAllocator, AveragePool) { RunBackendCasesForWithAllocator("AveragePool"); }
-TEST(BackendRunModelWithAllocator, GlobalAveragePool) {
-  RunBackendCasesForWithAllocator("GlobalAveragePool");
-}
-TEST(BackendRunModelWithAllocator, GlobalMaxPool) {
-  RunBackendCasesForWithAllocator("GlobalMaxPool");
-}
-TEST(BackendRunModelWithAllocator, GlobalLpPool) {
-  RunBackendCasesForWithAllocator("GlobalLpPool");
-}
-TEST(BackendRunModelWithAllocator, LpPool) { RunBackendCasesForWithAllocator("LpPool"); }
-TEST(BackendRunModelWithAllocator, LpNormalization) {
-  RunBackendCasesForWithAllocator("LpNormalization");
-}
-TEST(BackendRunModelWithAllocator, LRN) { RunBackendCasesForWithAllocator("LRN"); }
-TEST(BackendRunModelWithAllocator, MaxPool) {
-  RunBackendCasesForWithAllocator("MaxPool", [](const DataSet &ds) {
-    return !ds.inputs.empty() && ds.inputs[0].data_type == DataType::FLOAT;
-  });
-}
-TEST(BackendRunModelWithAllocator, MaxUnpool) { RunBackendCasesForWithAllocator("MaxUnpool"); }
-
-TEST(BackendRunModelWithAllocator, Adagrad) { RunBackendCasesForWithAllocator("Adagrad"); }
-TEST(BackendRunModelWithAllocator, Adam) { RunBackendCasesForWithAllocator("Adam"); }
-TEST(BackendRunModelWithAllocator, Momentum) { RunBackendCasesForWithAllocator("Momentum"); }
-
-TEST(BackendRunModelWithAllocator, Bernoulli) { RunBackendCasesForWithAllocator("Bernoulli"); }
-TEST(BackendRunModelWithAllocator, DelayedInitializer) {
-  RunBackendCasesForWithAllocator("DelayedInitializer");
-}
-TEST(BackendRunModelWithAllocator, RandomNormal) {
-  RunBackendCasesForWithAllocator("RandomNormal");
-}
-TEST(BackendRunModelWithAllocator, RandomNormalLike) {
-  RunBackendCasesForWithAllocator("RandomNormalLike");
-}
-TEST(BackendRunModelWithAllocator, RandomUniform) {
-  RunBackendCasesForWithAllocator("RandomUniform");
-}
-TEST(BackendRunModelWithAllocator, RandomUniformLike) {
-  RunBackendCasesForWithAllocator("RandomUniformLike");
-}
-TEST(BackendRunModelWithAllocator, Multinomial) { RunBackendCasesForWithAllocator("Multinomial"); }
-
-TEST(BackendRunModelWithAllocator, BlackmanWindow) {
-  RunBackendCasesForWithAllocator("BlackmanWindow");
-}
-TEST(BackendRunModelWithAllocator, HannWindow) { RunBackendCasesForWithAllocator("HannWindow"); }
-TEST(BackendRunModelWithAllocator, HammingWindow) {
-  RunBackendCasesForWithAllocator("HammingWindow");
-}
-
-TEST(BackendRunModelWithAllocator, CastMap) { RunBackendCasesForWithAllocator("CastMap"); }
-TEST(BackendRunModelWithAllocator, DictVectorizer) {
-  RunBackendCasesForWithAllocator("DictVectorizer");
-}
-TEST(BackendRunModelWithAllocator, SVMRegressor) {
-  RunBackendCasesForWithAllocator("SVMRegressor");
-}
-TEST(BackendRunModelWithAllocator, SVMClassifier) {
-  RunBackendCasesForWithAllocator("SVMClassifier");
-}
-TEST(BackendRunModelWithAllocator, LinearRegressor) {
-  RunBackendCasesForWithAllocator("LinearRegressor");
-}
-TEST(BackendRunModelWithAllocator, LinearClassifier) {
-  RunBackendCasesForWithAllocator("LinearClassifier");
-}
-TEST(BackendRunModelWithAllocator, TreeEnsembleRegressor) {
-  RunBackendCasesForWithAllocator("TreeEnsembleRegressor");
-}
-TEST(BackendRunModelWithAllocator, TreeEnsembleClassifier) {
-  RunBackendCasesForWithAllocator("TreeEnsembleClassifier");
-}
-TEST(BackendRunModelWithAllocator, TreeEnsemble) {
-  RunBackendCasesForWithAllocator("TreeEnsemble");
-}
-TEST(BackendRunModelWithAllocator, ArrayFeatureExtractor) {
-  RunBackendCasesForWithAllocator("ArrayFeatureExtractor");
-}
-TEST(BackendRunModelWithAllocator, Binarizer) { RunBackendCasesForWithAllocator("Binarizer"); }
-TEST(BackendRunModelWithAllocator, Normalizer) { RunBackendCasesForWithAllocator("Normalizer"); }
-TEST(BackendRunModelWithAllocator, CategoryMapper) {
-  RunBackendCasesForWithAllocator("CategoryMapper");
-}
-TEST(BackendRunModelWithAllocator, FeatureVectorizer) {
-  RunBackendCasesForWithAllocator("FeatureVectorizer");
-}
-TEST(BackendRunModelWithAllocator, Imputer) { RunBackendCasesForWithAllocator("Imputer"); }
-TEST(BackendRunModelWithAllocator, LabelEncoder) {
-  RunBackendCasesForWithAllocator("LabelEncoder");
-}
-TEST(BackendRunModelWithAllocator, OneHotEncoder) {
-  RunBackendCasesForWithAllocator("OneHotEncoder");
-}
-TEST(BackendRunModelWithAllocator, Scaler) { RunBackendCasesForWithAllocator("Scaler"); }
-
-TEST(BackendRunModelWithAllocator, StringConcat) {
-  RunBackendCasesForWithAllocator("StringConcat");
-}
-TEST(BackendRunModelWithAllocator, StringNormalizer) {
-  RunBackendCasesForWithAllocator("StringNormalizer");
-}
-TEST(BackendRunModelWithAllocator, StringSplit) { RunBackendCasesForWithAllocator("StringSplit"); }
-TEST(BackendRunModelWithAllocator, TfIdfVectorizer) {
-  RunBackendCasesForWithAllocator("TfIdfVectorizer");
-}
-
-TEST(BackendRunModelWithAllocator, Scan) { RunBackendCasesForWithAllocator("Scan"); }
-
-TEST(BackendRunModelWithAllocator, QuantizeLinear) {
-  RunBackendCasesForWithAllocator("QuantizeLinear", [](const DataSet &ds) {
-    if (ds.inputs.size() < 2) {
-      return false;
-    }
-    if (ds.inputs[1].data_type != static_cast<int32_t>(DataType::FLOAT)) {
-      return false;
-    }
-    if (ds.outputs.empty()) {
-      return false;
-    }
-    const int32_t y_dtype = ds.outputs[0].data_type;
-    return y_dtype == static_cast<int32_t>(DataType::UINT8) ||
-           y_dtype == static_cast<int32_t>(DataType::INT8) ||
-           y_dtype == static_cast<int32_t>(DataType::UINT16) ||
-           y_dtype == static_cast<int32_t>(DataType::INT16) ||
-           y_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FN) ||
-           y_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ) ||
-           y_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2) ||
-           y_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ) ||
-           y_dtype == static_cast<int32_t>(DataType::INT4) ||
-           y_dtype == static_cast<int32_t>(DataType::UINT4) ||
-           y_dtype == static_cast<int32_t>(DataType::INT2) ||
-           y_dtype == static_cast<int32_t>(DataType::UINT2) ||
-           y_dtype == static_cast<int32_t>(DataType::FLOAT4E2M1);
-  });
-}
-TEST(BackendRunModelWithAllocator, DequantizeLinear) {
-  RunBackendCasesForWithAllocator("DequantizeLinear", [](const DataSet &ds) {
-    if (ds.inputs.size() < 2) {
-      return false;
-    }
-    const int32_t scale_dtype = ds.inputs[1].data_type;
-    const int64_t scale_count = ds.inputs[1].element_count();
-    const bool is_scalar_scale = scale_count == 1;
-    const bool is_per_axis_scale = scale_count > 1 && ds.inputs[1].shape.size() == 1 &&
-                                   scale_dtype == static_cast<int32_t>(DataType::FLOAT);
-    const bool is_blocked_scale = scale_count > 1 && ds.inputs[1].shape.size() > 1 &&
-                                  scale_dtype == static_cast<int32_t>(DataType::FLOAT);
-    if (!is_scalar_scale && !is_per_axis_scale && !is_blocked_scale) {
-      return false;
-    }
-    if (scale_dtype != static_cast<int32_t>(DataType::FLOAT) &&
-        scale_dtype != static_cast<int32_t>(DataType::FLOAT16)) {
-      return false;
-    }
-    if (ds.outputs.empty() || ds.outputs[0].data_type != scale_dtype) {
-      return false;
-    }
-    const int32_t x_dtype = ds.inputs[0].data_type;
-    return x_dtype == static_cast<int32_t>(DataType::UINT8) ||
-           x_dtype == static_cast<int32_t>(DataType::INT8) ||
-           x_dtype == static_cast<int32_t>(DataType::UINT16) ||
-           x_dtype == static_cast<int32_t>(DataType::INT16) ||
-           x_dtype == static_cast<int32_t>(DataType::INT32) ||
-           x_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FN) ||
-           x_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ) ||
-           x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2) ||
-           x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ) ||
-           x_dtype == static_cast<int32_t>(DataType::INT4) ||
-           x_dtype == static_cast<int32_t>(DataType::UINT4) ||
-           x_dtype == static_cast<int32_t>(DataType::INT2) ||
-           x_dtype == static_cast<int32_t>(DataType::UINT2) ||
-           x_dtype == static_cast<int32_t>(DataType::FLOAT4E2M1);
-  });
-}
-TEST(BackendRunModelWithAllocator, DynamicQuantizeLinear) {
-  RunBackendCasesForWithAllocator("DynamicQuantizeLinear");
-}
-TEST(BackendRunModelWithAllocator, QLinearMatMul) {
-  RunBackendCasesForWithAllocator("QLinearMatMul", [](const DataSet &ds) {
-    if (ds.inputs.size() < 8 || ds.inputs[1].element_count() != 1) {
-      return false;
-    }
-    auto is_float_scale = [](int32_t dt) {
-      return dt == static_cast<int32_t>(DataType::FLOAT) ||
-             dt == static_cast<int32_t>(DataType::FLOAT16);
-    };
-    return is_float_scale(ds.inputs[1].data_type) && is_float_scale(ds.inputs[4].data_type) &&
-           is_float_scale(ds.inputs[6].data_type);
-  });
-}
-TEST(BackendRunModelWithAllocator, QLinearConv) {
-  RunBackendCasesForWithAllocator("QLinearConv", [](const DataSet &ds) {
-    if (ds.inputs.size() < 8 || ds.inputs[1].element_count() != 1 ||
-        ds.inputs[6].element_count() != 1) {
-      return false;
-    }
-    return ds.inputs[1].data_type == static_cast<int32_t>(DataType::FLOAT) &&
-           ds.inputs[4].data_type == static_cast<int32_t>(DataType::FLOAT) &&
-           ds.inputs[6].data_type == static_cast<int32_t>(DataType::FLOAT);
-  });
-}
-TEST(BackendRunModelWithAllocator, LinearAttention) {
-  RunBackendCasesForWithAllocator("LinearAttention", [](const DataSet &ds) {
-    if (ds.inputs.size() < 3) {
-      return false;
-    }
-    const int32_t dtype = ds.inputs[0].data_type;
-    const bool supported = dtype == static_cast<int32_t>(DataType::FLOAT) ||
-                           dtype == static_cast<int32_t>(DataType::FLOAT16);
-    return supported && ds.inputs[1].data_type == dtype && ds.inputs[2].data_type == dtype;
-  });
-}
-TEST(BackendRunModelWithAllocator, FlexAttention) {
-  RunBackendCasesForWithAllocator(
-      "FlexAttention",
-      [](const TestCase &tc) { return tc.name != "test_cc_flexattention_soft_cap"; },
-      [](const DataSet &ds) {
-        if (ds.inputs.size() < 3) {
-          return false;
-        }
-        const bool float_inputs = ds.inputs[0].data_type == DataType::FLOAT &&
-                                  ds.inputs[1].data_type == DataType::FLOAT &&
-                                  ds.inputs[2].data_type == DataType::FLOAT;
-        const bool double_inputs = ds.inputs[0].data_type == DataType::DOUBLE &&
-                                   ds.inputs[1].data_type == DataType::DOUBLE &&
-                                   ds.inputs[2].data_type == DataType::DOUBLE;
-        return float_inputs || double_inputs;
-      });
-}
-
-// SequenceMap outputs are Sequence values (not Tensor values), so the
-// allocator-backed tensor check does not apply.  This test verifies that
-// attaching an allocator to the RuntimeContext does not break SequenceMap
-// execution.
-TEST(BackendRunModelWithAllocator, SequenceMap) {
-  const std::vector<TestCase> cases = CollectTestCases("SequenceMap");
-  ASSERT_FALSE(cases.empty()) << "No backend test cases found for SequenceMap";
-
-  std::size_t executed = 0;
-  for (const TestCase &tc : cases) {
-    SCOPED_TRACE(tc.name);
-    const KernelContext kctx(DefaultOpset(GetDefaultOpsetVersion(tc.model)));
-
-    for (const DataSet &ds : tc.data_sets) {
-      SimpleRawBufferAllocator alloc(kAllocatorCapacity);
-      RuntimeContext rt(kctx);
-      rt.set_allocator(&alloc);
-      for (const Tensor &t : ds.inputs) {
-        rt.Set(t.name, t);
-      }
-      ASSERT_NO_THROW(RunModel(tc.model, rt)) << "RunModel threw for case " << tc.name;
-      ++executed;
-    }
+TEST(BackendRunModelWithAllocator, AllKernels) {
+  // Kernels that run with the default accept predicates.
+  for (const char *op_type : {"Abs",
+                              "Neg",
+                              "Add",
+                              "Sub",
+                              "Mul",
+                              "Div",
+                              "Acos",
+                              "Acosh",
+                              "Asin",
+                              "Asinh",
+                              "Atan",
+                              "Atanh",
+                              "Ceil",
+                              "Cos",
+                              "Cosh",
+                              "Det",
+                              "Erf",
+                              "Exp",
+                              "Floor",
+                              "HardSwish",
+                              "Log",
+                              "Mish",
+                              "Reciprocal",
+                              "Relu",
+                              "ReverseSequence",
+                              "Round",
+                              "Sigmoid",
+                              "Sign",
+                              "Sin",
+                              "Sinh",
+                              "Softplus",
+                              "Softsign",
+                              "Sqrt",
+                              "Tan",
+                              "Tanh",
+                              "MatMul",
+                              "MatMulInteger",
+                              "PRelu",
+                              "Pow",
+                              "Equal",
+                              "Greater",
+                              "GreaterOrEqual",
+                              "Less",
+                              "LessOrEqual",
+                              "Where",
+                              "Sum",
+                              "Max",
+                              "Min",
+                              "Mean",
+                              "ArgMax",
+                              "ArgMin",
+                              "ReduceL1",
+                              "ReduceL2",
+                              "ReduceLogSum",
+                              "ReduceLogSumExp",
+                              "ReduceMax",
+                              "ReduceMean",
+                              "ReduceMin",
+                              "ReduceProd",
+                              "ReduceSum",
+                              "ReduceSumSquare",
+                              "Celu",
+                              "Elu",
+                              "LeakyRelu",
+                              "Swish",
+                              "ThresholdedRelu",
+                              "TopK",
+                              "Hardmax",
+                              "LogSoftmax",
+                              "Flatten",
+                              "Softmax",
+                              "HardSigmoid",
+                              "Selu",
+                              "Shrink",
+                              "GatherElements",
+                              "ScatterElements",
+                              "ScatterND",
+                              "Gelu",
+                              "Mod",
+                              "Clip",
+                              "Compress",
+                              "Unique",
+                              "NonZero",
+                              "Concat",
+                              "CumSum",
+                              "CumProd",
+                              "DFT",
+                              "STFT",
+                              "MelWeightMatrix",
+                              "Cast",
+                              "CastLike",
+                              "CenterCropPad",
+                              "Pad",
+                              "Slice",
+                              "BitCast",
+                              "CausalConvWithState",
+                              "Conv",
+                              "ConvInteger",
+                              "ConvTranspose",
+                              "Transpose",
+                              "Trilu",
+                              "TensorScatter",
+                              "Col2Im",
+                              "DeformConv",
+                              "DepthToSpace",
+                              "SpaceToDepth",
+                              "Upsample",
+                              "BatchNormalization",
+                              "GroupNormalization",
+                              "GridSample",
+                              "RoiAlign",
+                              "MaxRoiPool",
+                              "InstanceNormalization",
+                              "LayerNormalization",
+                              "RMSNormalization",
+                              "RNN",
+                              "RotaryEmbedding",
+                              "MeanVarianceNormalization",
+                              "Dropout",
+                              "AveragePool",
+                              "GlobalAveragePool",
+                              "GlobalMaxPool",
+                              "GlobalLpPool",
+                              "LpPool",
+                              "LpNormalization",
+                              "LRN",
+                              "MaxUnpool",
+                              "Adagrad",
+                              "Adam",
+                              "Momentum",
+                              "Bernoulli",
+                              "DelayedInitializer",
+                              "RandomNormal",
+                              "RandomNormalLike",
+                              "RandomUniform",
+                              "RandomUniformLike",
+                              "Multinomial",
+                              "BlackmanWindow",
+                              "HannWindow",
+                              "HammingWindow",
+                              "CastMap",
+                              "DictVectorizer",
+                              "SVMRegressor",
+                              "SVMClassifier",
+                              "LinearRegressor",
+                              "LinearClassifier",
+                              "TreeEnsembleRegressor",
+                              "TreeEnsembleClassifier",
+                              "TreeEnsemble",
+                              "ArrayFeatureExtractor",
+                              "Binarizer",
+                              "Normalizer",
+                              "CategoryMapper",
+                              "FeatureVectorizer",
+                              "Imputer",
+                              "LabelEncoder",
+                              "OneHotEncoder",
+                              "Scaler",
+                              "StringConcat",
+                              "StringNormalizer",
+                              "StringSplit",
+                              "TfIdfVectorizer",
+                              "Scan",
+                              "DynamicQuantizeLinear"}) {
+    SCOPED_TRACE(op_type);
+    RunBackendCasesForWithAllocator(op_type);
   }
-  EXPECT_GT(executed, 0u) << "No SequenceMap test cases exercised.";
+
+  // Kernels that require a custom accept_data_set predicate.
+  {
+    SCOPED_TRACE("Attention");
+    RunBackendCasesForWithAllocator("Attention", [](const DataSet &ds) {
+      return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
+             ds.inputs[1].data_type == DataType::FLOAT && ds.inputs[2].data_type == DataType::FLOAT;
+    });
+  }
+  {
+    SCOPED_TRACE("MaxPool");
+    RunBackendCasesForWithAllocator("MaxPool", [](const DataSet &ds) {
+      return !ds.inputs.empty() && ds.inputs[0].data_type == DataType::FLOAT;
+    });
+  }
+  {
+    SCOPED_TRACE("QuantizeLinear");
+    RunBackendCasesForWithAllocator("QuantizeLinear", [](const DataSet &ds) {
+      if (ds.inputs.size() < 2 || ds.inputs[1].data_type != static_cast<int32_t>(DataType::FLOAT) ||
+          ds.outputs.empty()) {
+        return false;
+      }
+      const int32_t y_dtype = ds.outputs[0].data_type;
+      return y_dtype == static_cast<int32_t>(DataType::UINT8) ||
+             y_dtype == static_cast<int32_t>(DataType::INT8) ||
+             y_dtype == static_cast<int32_t>(DataType::UINT16) ||
+             y_dtype == static_cast<int32_t>(DataType::INT16) ||
+             y_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FN) ||
+             y_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ) ||
+             y_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2) ||
+             y_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ) ||
+             y_dtype == static_cast<int32_t>(DataType::INT4) ||
+             y_dtype == static_cast<int32_t>(DataType::UINT4) ||
+             y_dtype == static_cast<int32_t>(DataType::INT2) ||
+             y_dtype == static_cast<int32_t>(DataType::UINT2) ||
+             y_dtype == static_cast<int32_t>(DataType::FLOAT4E2M1);
+    });
+  }
+  {
+    SCOPED_TRACE("DequantizeLinear");
+    RunBackendCasesForWithAllocator("DequantizeLinear", [](const DataSet &ds) {
+      if (ds.inputs.size() < 2) {
+        return false;
+      }
+      const int32_t scale_dtype = ds.inputs[1].data_type;
+      const int64_t scale_count = ds.inputs[1].element_count();
+      const bool is_scalar_scale = scale_count == 1;
+      const bool is_per_axis_scale = scale_count > 1 && ds.inputs[1].shape.size() == 1 &&
+                                     scale_dtype == static_cast<int32_t>(DataType::FLOAT);
+      const bool is_blocked_scale = scale_count > 1 && ds.inputs[1].shape.size() > 1 &&
+                                    scale_dtype == static_cast<int32_t>(DataType::FLOAT);
+      if (!is_scalar_scale && !is_per_axis_scale && !is_blocked_scale) {
+        return false;
+      }
+      if (scale_dtype != static_cast<int32_t>(DataType::FLOAT) &&
+          scale_dtype != static_cast<int32_t>(DataType::FLOAT16)) {
+        return false;
+      }
+      if (ds.outputs.empty() || ds.outputs[0].data_type != scale_dtype) {
+        return false;
+      }
+      const int32_t x_dtype = ds.inputs[0].data_type;
+      return x_dtype == static_cast<int32_t>(DataType::UINT8) ||
+             x_dtype == static_cast<int32_t>(DataType::INT8) ||
+             x_dtype == static_cast<int32_t>(DataType::UINT16) ||
+             x_dtype == static_cast<int32_t>(DataType::INT16) ||
+             x_dtype == static_cast<int32_t>(DataType::INT32) ||
+             x_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FN) ||
+             x_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ) ||
+             x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2) ||
+             x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ) ||
+             x_dtype == static_cast<int32_t>(DataType::INT4) ||
+             x_dtype == static_cast<int32_t>(DataType::UINT4) ||
+             x_dtype == static_cast<int32_t>(DataType::INT2) ||
+             x_dtype == static_cast<int32_t>(DataType::UINT2) ||
+             x_dtype == static_cast<int32_t>(DataType::FLOAT4E2M1);
+    });
+  }
+  {
+    SCOPED_TRACE("QLinearMatMul");
+    RunBackendCasesForWithAllocator("QLinearMatMul", [](const DataSet &ds) {
+      if (ds.inputs.size() < 8 || ds.inputs[1].element_count() != 1) {
+        return false;
+      }
+      auto is_float_scale = [](int32_t dt) {
+        return dt == static_cast<int32_t>(DataType::FLOAT) ||
+               dt == static_cast<int32_t>(DataType::FLOAT16);
+      };
+      return is_float_scale(ds.inputs[1].data_type) && is_float_scale(ds.inputs[4].data_type) &&
+             is_float_scale(ds.inputs[6].data_type);
+    });
+  }
+  {
+    SCOPED_TRACE("QLinearConv");
+    RunBackendCasesForWithAllocator("QLinearConv", [](const DataSet &ds) {
+      if (ds.inputs.size() < 8 || ds.inputs[1].element_count() != 1 ||
+          ds.inputs[6].element_count() != 1) {
+        return false;
+      }
+      return ds.inputs[1].data_type == static_cast<int32_t>(DataType::FLOAT) &&
+             ds.inputs[4].data_type == static_cast<int32_t>(DataType::FLOAT) &&
+             ds.inputs[6].data_type == static_cast<int32_t>(DataType::FLOAT);
+    });
+  }
+  {
+    SCOPED_TRACE("LinearAttention");
+    RunBackendCasesForWithAllocator("LinearAttention", [](const DataSet &ds) {
+      if (ds.inputs.size() < 3) {
+        return false;
+      }
+      const int32_t dtype = ds.inputs[0].data_type;
+      const bool supported = dtype == static_cast<int32_t>(DataType::FLOAT) ||
+                             dtype == static_cast<int32_t>(DataType::FLOAT16);
+      return supported && ds.inputs[1].data_type == dtype && ds.inputs[2].data_type == dtype;
+    });
+  }
+  {
+    SCOPED_TRACE("FlexAttention");
+    RunBackendCasesForWithAllocator(
+        "FlexAttention",
+        [](const TestCase &tc) { return tc.name != "test_cc_flexattention_soft_cap"; },
+        [](const DataSet &ds) {
+          if (ds.inputs.size() < 3) {
+            return false;
+          }
+          const bool float_inputs = ds.inputs[0].data_type == DataType::FLOAT &&
+                                    ds.inputs[1].data_type == DataType::FLOAT &&
+                                    ds.inputs[2].data_type == DataType::FLOAT;
+          const bool double_inputs = ds.inputs[0].data_type == DataType::DOUBLE &&
+                                     ds.inputs[1].data_type == DataType::DOUBLE &&
+                                     ds.inputs[2].data_type == DataType::DOUBLE;
+          return float_inputs || double_inputs;
+        });
+  }
+
+  // SequenceMap outputs are Sequence values (not Tensor values), so the
+  // allocator-backed tensor check does not apply.  Verify that attaching an
+  // allocator to the RuntimeContext does not break SequenceMap execution.
+  {
+    SCOPED_TRACE("SequenceMap");
+    const std::vector<TestCase> cases = CollectTestCases("SequenceMap");
+    ASSERT_FALSE(cases.empty()) << "No backend test cases found for SequenceMap";
+
+    std::size_t executed = 0;
+    for (const TestCase &tc : cases) {
+      SCOPED_TRACE(tc.name);
+      const KernelContext kctx(DefaultOpset(GetDefaultOpsetVersion(tc.model)));
+
+      for (const DataSet &ds : tc.data_sets) {
+        SimpleRawBufferAllocator alloc(kAllocatorCapacity);
+        RuntimeContext rt(kctx);
+        rt.set_allocator(&alloc);
+        for (const Tensor &t : ds.inputs) {
+          rt.Set(t.name, t);
+        }
+        ASSERT_NO_THROW(RunModel(tc.model, rt)) << "RunModel threw for case " << tc.name;
+        ++executed;
+      }
+    }
+    EXPECT_GT(executed, 0u) << "No SequenceMap test cases exercised.";
+  }
 }
 
 } // namespace Test

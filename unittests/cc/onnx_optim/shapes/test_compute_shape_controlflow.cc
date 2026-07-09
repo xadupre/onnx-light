@@ -762,4 +762,48 @@ TEST(OnnxOptimShapeScan, HandlesOpset8BatchDimension) {
   EXPECT_EQ(ctx.Get("y_scan").Shape()[2].AsInt(), 2);
 }
 
+// GHSA-qrhj-v62m-vmpf: num_scan_inputs > num_inputs caused a size_t
+// underflow in ScanInferenceFunction.  Both paths (opset 9+ and the
+// onnx_optim::shapes::controlflow::ComputeShapeScan path) must raise
+// an error rather than silently computing a huge index.
+TEST(OnnxOptimShapeScan, RejectsNumScanInputsExceedingNodeInputCount) {
+  // A Scan node with 1 input but num_scan_inputs=9. Previously this
+  // caused size_t underflow: n_state = 1 - 9 wrapped to ~SIZE_MAX.
+  GraphProto body = BuildScanBodyIdentity();
+  // num_scan_inputs=9 but the node only has 1 input.
+  NodeProto node = MakeScanNode({"X"}, {"Y"}, body, /*num_scan_inputs=*/9);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape x_shape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, x_shape));
+  EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeScan, RejectsLoopStateVarsExceedingOutputCount) {
+  // A Scan node with 3 inputs and num_scan_inputs=1 (so 2 loop-state vars)
+  // but only 1 output.  Previously size_t underflow: num_scan_outputs = 1 - 2
+  // wrapped to SIZE_MAX.
+  GraphProto body;
+  body.set_name("body");
+  body.add_input()->set_name("s0_in");
+  body.add_input()->set_name("s1_in");
+  body.add_input()->set_name("x_in");
+  NodeProto *id = body.add_node();
+  id->set_op_type("Identity");
+  id->add_input("s0_in");
+  id->add_output("s0_out");
+  body.add_output()->set_name("s0_out");
+
+  // 3 inputs (s0, s1, x), num_scan_inputs=1 → 2 loop-state vars.
+  // Only 1 output declared on the node → invalid.
+  NodeProto node = MakeScanNode({"s0", "s1", "x"}, {"out"}, body, /*num_scan_inputs=*/1);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  ctx.Set("s0", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  ctx.Set("s1", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node), std::invalid_argument);
+}
+
 } // namespace Test

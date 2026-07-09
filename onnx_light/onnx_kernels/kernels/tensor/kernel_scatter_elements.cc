@@ -39,12 +39,12 @@ std::vector<int64_t> ReadScatterElementsIndices(const Tensor &indices) {
 }
 
 template <typename T>
-void ApplyScatterElementsTyped(const Tensor &updates, RawBuffer &out_bytes,
+void ApplyScatterElementsTyped(const Tensor &updates, uint8_t *out_bytes,
                                const std::vector<int64_t> &idx_values, int64_t axis,
                                int64_t axis_dim, const std::vector<int64_t> &data_strides,
                                const std::vector<int64_t> &idx_strides,
                                const std::string &reduction, int64_t r) {
-  T *out = reinterpret_cast<T *>(out_bytes.data());
+  T *out = reinterpret_cast<T *>(out_bytes);
   const T *upd = reinterpret_cast<const T *>(updates.bytes());
   const int64_t total = static_cast<int64_t>(idx_values.size());
   std::vector<int64_t> coord(static_cast<std::size_t>(r), 0);
@@ -136,24 +136,25 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
   }
 
   const int32_t dt = data.data_type;
+  uint8_t *out_bytes = output.mutable_bytes();
   if (dt == static_cast<int32_t>(DataType::FLOAT)) {
-    ApplyScatterElementsTyped<float>(updates, output.data, idx_values, axis, axis_dim, data_strides,
+    ApplyScatterElementsTyped<float>(updates, out_bytes, idx_values, axis, axis_dim, data_strides,
                                      idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::DOUBLE)) {
-    ApplyScatterElementsTyped<double>(updates, output.data, idx_values, axis, axis_dim,
-                                      data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<double>(updates, out_bytes, idx_values, axis, axis_dim, data_strides,
+                                      idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::INT32)) {
-    ApplyScatterElementsTyped<int32_t>(updates, output.data, idx_values, axis, axis_dim,
-                                       data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<int32_t>(updates, out_bytes, idx_values, axis, axis_dim, data_strides,
+                                       idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::INT64)) {
-    ApplyScatterElementsTyped<int64_t>(updates, output.data, idx_values, axis, axis_dim,
-                                       data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<int64_t>(updates, out_bytes, idx_values, axis, axis_dim, data_strides,
+                                       idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::UINT8)) {
-    ApplyScatterElementsTyped<uint8_t>(updates, output.data, idx_values, axis, axis_dim,
-                                       data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<uint8_t>(updates, out_bytes, idx_values, axis, axis_dim, data_strides,
+                                       idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::INT8)) {
-    ApplyScatterElementsTyped<int8_t>(updates, output.data, idx_values, axis, axis_dim,
-                                      data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<int8_t>(updates, out_bytes, idx_values, axis, axis_dim, data_strides,
+                                      idx_strides, attrs.reduction, r);
   } else {
     // Fall back to byte-wise copy when reduction == "none".
     EXT_ENFORCE_INVALID(attrs.reduction == "none",

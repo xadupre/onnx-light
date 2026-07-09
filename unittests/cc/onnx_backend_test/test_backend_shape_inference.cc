@@ -2145,7 +2145,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
       for (size_t idx = 0; idx < values.size(); ++idx) {
         const bool expected_tagged = has_value_tag(expected_values[idx]);
         EXPECT_EQ(has_value_tag(values[idx]), expected_tagged)
-            << "unexpected value tag presence on " << kind << "[" << idx << "] in case " << tc.name;
+            << "value tag presence mismatch on " << kind << "[" << idx << "] in case " << tc.name;
       }
     };
     const auto expect_node_tag_presence_matches = [&](const auto &nodes,
@@ -2154,7 +2154,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
       for (size_t idx = 0; idx < nodes.size(); ++idx) {
         const bool expected_tagged = has_node_tag(expected_nodes[idx]);
         EXPECT_EQ(has_node_tag(nodes[idx]), expected_tagged)
-            << "unexpected node tag presence on node[" << idx << "] in case " << tc.name;
+            << "node tag presence mismatch on node[" << idx << "] in case " << tc.name;
       }
     };
 

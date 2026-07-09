@@ -2130,7 +2130,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
     ASSERT_NO_THROW(onnx_optim::annotations::WriteValueAndNodeTagsToMetadata(*graph))
         << "case: " << tc.name;
 
-    const GraphProto &reference_graph = tc.model.ref_graph();
+    const GraphProto &original_graph = tc.model.ref_graph();
 
     const auto has_value_tag = [&](const auto &value) {
       return MetadataOf(value).contains(onnx_optim::annotations::kValueTagMetadataKey);
@@ -2138,8 +2138,8 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
     const auto has_node_tag = [&](const auto &node) {
       return MetadataOf(node).contains(onnx_optim::annotations::kNodeTagMetadataKey);
     };
-    const auto expect_tag_presence_matches = [&](const auto &values, const auto &expected_values,
-                                                 const char *kind) {
+    const auto expect_matching_value_tags = [&](const auto &values, const auto &expected_values,
+                                                const char *kind) {
       ASSERT_EQ(values.size(), expected_values.size())
           << "size mismatch on " << kind << " in case " << tc.name;
       for (size_t idx = 0; idx < values.size(); ++idx) {
@@ -2148,8 +2148,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
             << "value tag presence mismatch on " << kind << "[" << idx << "] in case " << tc.name;
       }
     };
-    const auto expect_node_tag_presence_matches = [&](const auto &nodes,
-                                                      const auto &expected_nodes) {
+    const auto expect_matching_node_tags = [&](const auto &nodes, const auto &expected_nodes) {
       ASSERT_EQ(nodes.size(), expected_nodes.size()) << "node size mismatch in case " << tc.name;
       for (size_t idx = 0; idx < nodes.size(); ++idx) {
         const bool expected_tagged = has_node_tag(expected_nodes[idx]);
@@ -2158,13 +2157,13 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
       }
     };
 
-    expect_node_tag_presence_matches(graph->ref_node(), reference_graph.ref_node());
-    expect_tag_presence_matches(graph->ref_input(), reference_graph.ref_input(), "input");
-    expect_tag_presence_matches(graph->ref_value_info(), reference_graph.ref_value_info(),
-                                "value_info");
-    expect_tag_presence_matches(graph->ref_output(), reference_graph.ref_output(), "output");
-    expect_tag_presence_matches(graph->ref_initializer(), reference_graph.ref_initializer(),
-                                "initializer");
+    expect_matching_node_tags(graph->ref_node(), original_graph.ref_node());
+    expect_matching_value_tags(graph->ref_input(), original_graph.ref_input(), "input");
+    expect_matching_value_tags(graph->ref_value_info(), original_graph.ref_value_info(),
+                               "value_info");
+    expect_matching_value_tags(graph->ref_output(), original_graph.ref_output(), "output");
+    expect_matching_value_tags(graph->ref_initializer(), original_graph.ref_initializer(),
+                               "initializer");
   }
   ASSERT_TRUE(found) << "no shape_tag backend cases were collected";
 }

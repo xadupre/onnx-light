@@ -196,12 +196,9 @@ const std::vector<std::string> &Tensor::AsStrings() const {
 std::vector<std::string> &Tensor::AsStrings() {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::STRING),
                       "Tensor data_type does not match the requested view type.");
-  // Borrowed string tensors keep only a non-owning pointer to external
-  // storage. Callers must not mutate that storage through the returned
-  // reference unless they own the backing vector.
-  return borrow_string_data_ != nullptr
-             ? const_cast<std::vector<std::string> &>(*borrow_string_data_)
-             : string_data;
+  EXT_ENFORCE_INVALID(borrow_string_data_ == nullptr,
+                      "Tensor::AsStrings(): borrowed string tensors are read-only.");
+  return string_data;
 }
 
 void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi) {

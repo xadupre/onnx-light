@@ -55,7 +55,7 @@ def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
 
 
 def make_tick_label(output_name: str, node_type: str) -> str:
-    """Builds one x-axis tick label."""
+    """Returns a formatted x-axis tick label."""
 
     return f"{output_name[:5]}-{node_type}"
 
@@ -131,16 +131,14 @@ def main() -> None:
 
     fig, ax = plt.subplots(figsize=(12, 5))
     ax.plot(node_indices, total_bytes, linewidth=1)
-    tick_indices = list(range(0, len(node_indices), 10))
-    tick_labels = [
-        make_tick_label(
-            onnx_model.graph.node[index].output[0] if onnx_model.graph.node[index].output else "",
-            onnx_model.graph.node[index].op_type,
-        )
-        for index in tick_indices
-        if index < len(onnx_model.graph.node)
+    tick_indices = [
+        index for index in range(0, len(node_indices), 10) if index < len(onnx_model.graph.node)
     ]
-    ax.set_xticks(tick_indices[: len(tick_labels)], labels=tick_labels, rotation=45, ha="right")
+    tick_labels = []
+    for index in tick_indices:
+        node = onnx_model.graph.node[index]
+        tick_labels.append(make_tick_label(node.output[0] if node.output else "", node.op_type))
+    ax.set_xticks(tick_indices, labels=tick_labels, rotation=45, ha="right")
     ax.set_title(f"ComputeContext total bytes ({args.model_id}, layers={args.layers})")
     ax.set_xlabel("node index")
     ax.set_ylabel("total bytes")

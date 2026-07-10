@@ -147,6 +147,7 @@ public:                                                                         
   inline utils::RepeatedStringField *mutable_##name() { return &name##_; }                         \
   inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
   inline const type &name(size_t i) const { return name##_[i]; }                                   \
+  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const utils::RepeatedStringField &name() const { return name##_; }                        \
   inline const utils::RepeatedStringField *ptr_##name() const { return &name##_; }                 \
   inline type *add_##name() { return &name##_.add(); }                                             \
@@ -178,7 +179,7 @@ public:                                                                         
   inline bool packed_##name() const { return false; }                                              \
   inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
   inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }       \
-  /* Keep member placement aligned with FIELD_REPEATED for generated classes. */                   \
+  // Keep member placement aligned with FIELD_REPEATED for generated classes.                       \
   utils::RepeatedStringField name##_;                                                              \
   using name##_t = type;
 

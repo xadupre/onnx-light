@@ -105,13 +105,10 @@ def main() -> None:
     dynamic_shapes = {
         "input_ids": {0: "batch_size", 1: "sequence_length"},
         "attention_mask": {0: "batch_size", 1: "cache_plus_sequence_length"},
-        "past_key_values": [
-            (
-                {0: "batch_size", 2: "past_sequence_length"},
-                {0: "batch_size", 2: "past_sequence_length"},
-            )
-            for _ in range(config.num_hidden_layers)
-        ],
+        "past_key_values": tuple(
+            {0: "batch_size", 2: "past_sequence_length"}
+            for _ in range(config.num_hidden_layers * 2)
+        ),
     }
     with (
         register_flattening_functions(patch_transformers=True),

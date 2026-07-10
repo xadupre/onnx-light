@@ -52,7 +52,15 @@ std::string validate_weights_file_is_next_to_model(const std::string &model_path
               "External weights file must include a filename. model=", model_path,
               ", weights=", weights_file);
 
-  return (weights_parent / normalized_weights.filename()).string();
+  std::filesystem::path final_path = weights_parent / normalized_weights.filename();
+  // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
+  // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
+  if (std::filesystem::is_symlink(final_path)) {
+    EXT_THROW("External weights file '", final_path.string(),
+              "' is a symbolic link, which is not allowed for security reasons "
+              "(see GHSA-8qff-7g33-75mx).");
+  }
+  return final_path.string();
 }
 
 std::filesystem::path validate_external_location_is_next_to_model(const std::string &model_path,
@@ -72,7 +80,16 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
   EXT_ENFORCE(!normalized_location.filename().empty(),
               "External data location must include a filename. location=", location);
 
-  return normalized_model_parent(model_path) / normalized_location.filename();
+  std::filesystem::path final_path =
+      normalized_model_parent(model_path) / normalized_location.filename();
+  // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
+  // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
+  if (std::filesystem::is_symlink(final_path)) {
+    EXT_THROW("External data location '", final_path.string(),
+              "' is a symbolic link, which is not allowed for security reasons "
+              "(see GHSA-8qff-7g33-75mx).");
+  }
+  return final_path;
 }
 
 std::shared_ptr<uint8_t> make_shared_file_buffer(size_t size, size_t alignment) {
@@ -723,8 +740,25 @@ void BorrowedWriteStream::write_raw_bytes(const uint8_t *, offset_t) {
 //////////////////
 
 FileWriteStream::FileWriteStream(const std::string &file_path)
-    : BinaryWriteStream(), file_path_(file_path), file_stream_(file_path, std::ios::binary) {
+    : BinaryWriteStream(), file_path_(file_path) {
   written_bytes_ = 0;
+  // Defense-in-depth against GHSA-8qff-7g33-75mx (TOCTOU symlink attack on
+  // save_external_data): reject symlinks before opening so that an attacker
+  // who places a symlink at the target path cannot redirect writes to an
+  // arbitrary file.  The Python layer (validate_external_data_path) performs
+  // the same check earlier, but this C++-level guard closes the residual
+  // TOCTOU window between the Python check and the actual file open.
+  // Note: a narrow TOCTOU window remains between is_symlink() and open()
+  // (e.g., replacing a parent directory component with a symlink after the
+  // check). Eliminating it entirely would require platform-specific O_NOFOLLOW
+  // semantics. In practice the double check (Python + C++) makes exploitation
+  // extremely difficult without elevated privileges.
+  if (std::filesystem::is_symlink(std::filesystem::path(file_path))) {
+    EXT_THROW("FileWriteStream: target path '", file_path,
+              "' is a symbolic link, which is not allowed for security reasons "
+              "(see GHSA-8qff-7g33-75mx).");
+  }
+  file_stream_.open(file_path, std::ios::binary);
 }
 
 void FileWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {

@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Security
 
 - Investigated GHSA-hqmj-h5c6-369m (`onnx.hub.load` silent-bypass): onnx-light has never implemented a hub module and is not affected ([#3274](https://github.com/xadupre/onnx-light/issues/3274))
+- Investigated GHSA-8qff-7g33-75mx (TOCTOU arbitrary file read/write in `save_external_data`): onnx-light does not expose a Python `save_external_data` function; saving routes through C++ with Python-level pre-validation (`validate_external_data_path`) that rejects symlinks and hardlinks at the target path. Added defense-in-depth symlink checks at the C++ write layer (`FileWriteStream`, `validate_weights_file_is_next_to_model`, `validate_external_location_is_next_to_model`) to close the residual TOCTOU window, and regression tests to cover this path ([#3271](https://github.com/xadupre/onnx-light/issues/3271))
 
 ## [0.1.4] – 2026-07-07
 

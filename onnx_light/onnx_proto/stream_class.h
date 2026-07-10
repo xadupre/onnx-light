@@ -176,10 +176,10 @@ public:                                                                         
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return false; }                                              \
-  utils::RepeatedStringField name##_;                                                              \
-  using name##_t = type;                                                                           \
   inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
-  inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }
+  inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }       \
+  utils::RepeatedStringField name##_;                                                              \
+  using name##_t = type;
 
 #define FIELD_REPEATED_PROTO(type, name, order, doc)                                               \
 public:                                                                                            \

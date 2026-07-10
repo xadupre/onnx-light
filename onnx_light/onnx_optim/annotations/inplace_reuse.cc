@@ -5,6 +5,7 @@
 #include "onnx_optim/annotations/inplace_reuse.h"
 
 #include <algorithm>
+#include <iostream>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -368,7 +369,7 @@ const char *ComputeEventActionName(ComputeEventAction action) {
 
 void ComputeContext::ComputeInPlaceReuseGraph(
     const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite,
-    const std::unordered_map<std::string, std::string> &value_tags) {
+    const std::unordered_map<std::string, std::string> &value_tags, int verbose) {
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
   std::vector<std::vector<std::string>> release_after(static_cast<std::size_t>(num_nodes));
@@ -707,6 +708,26 @@ void ComputeContext::ComputeInPlaceReuseGraph(
             events_.push_back(std::move(ev));
           }
         }
+      }
+    }
+  }
+
+  if (verbose >= 1) {
+    for (int i = 0; i < num_nodes; ++i) {
+      const NodeProto &node = graph.node()[i];
+      const std::size_t si = static_cast<std::size_t>(i);
+      for (const InPlaceReuse &r : reuse_[si]) {
+        std::cout << "[inplace_reuse] node=" << i << " " << node.op_type().as_string() << " output["
+                  << r.output_index << "] reuses input[" << r.input_index << "] ("
+                  << (r.kind == InPlaceReuseKind::kEqual ? "equal" : "greater") << ")\n";
+      }
+      for (const std::string &name : release_after_[si]) {
+        std::cout << "[inplace_reuse] node=" << i << " " << node.op_type().as_string()
+                  << " release_after=" << name << "\n";
+      }
+      for (const std::string &name : not_used_after_[si]) {
+        std::cout << "[inplace_reuse] node=" << i << " " << node.op_type().as_string()
+                  << " not_used_after=" << name << "\n";
       }
     }
   }

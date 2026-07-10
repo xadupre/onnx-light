@@ -5,6 +5,7 @@
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include <algorithm>
+#include <iostream>
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
 #include <nanobind/stl/map.h>
@@ -1268,8 +1269,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           [](onnx_annotations::ComputeContext &self, const GraphProto &graph,
              const onnx_shapes::ShapesContext &ctx, bool allow_input_overwrite,
              const std::unordered_map<std::string, std::string> &value_tags, int verbose) {
-            (void)verbose;
-            self.ComputeInPlaceReuseGraph(graph, ctx, allow_input_overwrite, value_tags);
+            self.ComputeInPlaceReuseGraph(graph, ctx, allow_input_overwrite, value_tags, verbose);
           },
           nb::arg("graph"), nb::arg("ctx"), nb::arg("allow_input_overwrite") = false,
           nb::arg("value_tags") = std::unordered_map<std::string, std::string>{},
@@ -1284,17 +1284,32 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "are also stored in ``release_after_shape_tagged`` and written to "
           "``onnx_light.release_after_shape_tag`` by :meth:`write_to_metadata`. When "
           "``value_tags`` is omitted, this method reuses the last tags stored by "
-          ":meth:`compute_value_and_node_tags` on the same context, if any. ``verbose`` is "
-          "currently accepted for API compatibility and has no effect.")
+          ":meth:`compute_value_and_node_tags` on the same context, if any. When ``verbose >= 1``, "
+          "prints one line per in-place reuse decision, release, and not-used-after annotation.")
       .def(
           "compute_release_after_shape_tagged",
           [](const onnx_annotations::ComputeContext &self, int verbose) {
-            (void)verbose;
-            return self.ReleaseAfterShapeTagged();
+            const auto &result = self.ReleaseAfterShapeTagged();
+            if (verbose >= 1) {
+              for (std::size_t i = 0; i < result.size(); ++i) {
+                if (!result[i].empty()) {
+                  std::cout << "[inplace_reuse] compute_release_after_shape_tagged node=" << i
+                            << ": [";
+                  for (std::size_t j = 0; j < result[i].size(); ++j) {
+                    if (j > 0) {
+                      std::cout << ", ";
+                    }
+                    std::cout << result[i][j];
+                  }
+                  std::cout << "]\n";
+                }
+              }
+            }
+            return result;
           },
           nb::arg("verbose") = 0,
-          "Returns ``release_after_shape_tagged``; the optional ``verbose`` argument is accepted "
-          "for API compatibility.")
+          "Returns ``release_after_shape_tagged``. When ``verbose >= 1``, prints the result to "
+          "``stdout`` before returning.")
       .def_prop_rw(
           "events_enabled",
           [](const onnx_annotations::ComputeContext &self) { return self.events_enabled(); },

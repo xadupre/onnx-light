@@ -349,11 +349,14 @@ public:
    *               :cpp:func:`NodeReleaseAfterShapeTagged`, and written to
    *               :cpp:var:`kReleaseAfterShapeTagMetadataKey` by
    *               :cpp:func:`WriteToMetadata`.
+   * @param verbose When ``>= 1``, prints one line per in-place reuse decision,
+   *               per release, and per not-used-after annotation to
+   *               ``std::cout``. Higher values have the same effect as ``1``.
    */
-  void
-  ComputeInPlaceReuseGraph(const GraphProto &graph, const ShapesContext &ctx,
-                           bool allow_input_overwrite = false,
-                           const std::unordered_map<std::string, std::string> &value_tags = {});
+  void ComputeInPlaceReuseGraph(const GraphProto &graph, const ShapesContext &ctx,
+                                bool allow_input_overwrite = false,
+                                const std::unordered_map<std::string, std::string> &value_tags = {},
+                                int verbose = 0);
 
   /// Number of nodes for which reuse has been computed (one entry per node of
   /// the analysed graph, in ``graph.node()`` order). Zero before

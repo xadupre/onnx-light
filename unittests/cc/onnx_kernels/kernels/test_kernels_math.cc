@@ -7,6 +7,7 @@
 #include "onnx_kernels/kernels/_helpers/float16_promote.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -19,6 +20,8 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_kernels::RuntimeContext;
+using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Abs;
 using onnx_kernels::kernel::Acos;
@@ -1518,6 +1521,28 @@ TEST(KernelClass, EinsumEllipsisBatchMatMul) {
   EXPECT_FLOAT_EQ(py[5], 7.0f * 0 + 8 * 2 + 9 * 1);
   EXPECT_FLOAT_EQ(py[6], 10.0f * 2 + 11 * 0 + 12 * 1);
   EXPECT_FLOAT_EQ(py[7], 10.0f * 0 + 11 * 2 + 12 * 1);
+}
+
+TEST(KernelClass, EinsumUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+  Tensor a = Tensor::FromFloat("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor b = Tensor::FromFloat("", {3, 2}, {7, 8, 9, 10, 11, 12});
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = einsum_kernel({a, b}, "ij,jk->ik", &rt);
+
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(y.data.size(), 0u);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1 * 7 + 2 * 9 + 3 * 11);
+  EXPECT_FLOAT_EQ(py[1], 1 * 8 + 2 * 10 + 3 * 12);
+  EXPECT_FLOAT_EQ(py[2], 4 * 7 + 5 * 9 + 6 * 11);
+  EXPECT_FLOAT_EQ(py[3], 4 * 8 + 5 * 10 + 6 * 12);
 }
 
 TEST(KernelClass, EinsumRejectsEmptyEquation) {

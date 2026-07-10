@@ -655,17 +655,9 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
       .def(
           "__iter__",
           [](utils::RepeatedField<T> &self) -> nb::object {
-            if constexpr (std::is_same_v<T, utils::String>) {
-              nb::list values;
-              for (const auto &it : self) {
-                values.append(nb::cast(it.as_string()));
-              }
-              return nb::iter(values);
-            } else {
-              auto iterator = nb::make_iterator(nb::type<utils::RepeatedField<T>>(), "iterator",
-                                                self.begin(), self.end());
-              return nb::cast(iterator);
-            }
+            auto iterator = nb::make_iterator(nb::type<utils::RepeatedField<T>>(), "iterator",
+                                              self.begin(), self.end());
+            return nb::cast(iterator);
           },
           "Iterates over the elements.")
       .def(
@@ -1515,6 +1507,18 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       },
       nb::arg("iterable"), "Creates a RepeatedFieldString from an iterable.");
   define_repeated_field_type_extend(rep_string);
+  nb::class_<utils::RepeatedStringField, utils::RepeatedField<utils::String>> rep_string_name(
+      m, "RepeatedFieldStringName", "RepeatedFieldStringName");
+  rep_string_name.def(
+      "__iter__",
+      [](utils::RepeatedStringField &self) -> nb::object {
+        nb::list values;
+        for (const auto &it : self) {
+          values.append(nb::cast(it.as_string()));
+        }
+        return nb::iter(values);
+      },
+      "Iterates over name-like string elements as python str.");
 
   nb::enum_<OperatorStatus>(m, "OperatorStatus", nb::is_arithmetic())
       .value("EXPERIMENTAL", OperatorStatus::EXPERIMENTAL)

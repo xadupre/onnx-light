@@ -195,6 +195,12 @@ private:
   std::vector<T> values_;
 };
 
+/** Repeated field used by name-like string lists (for example NodeProto inputs/outputs). */
+class RepeatedStringField : public RepeatedField<utils::String> {
+public:
+  using RepeatedField<utils::String>::RepeatedField;
+};
+
 /** Output iterator that appends to a RepeatedField via push_back.
  *  Mirrors std::back_insert_iterator so it can back
  *  google::protobuf::RepeatedFieldBackInsertIterator as a pure alias. */

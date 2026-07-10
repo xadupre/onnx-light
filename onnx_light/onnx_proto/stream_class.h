@@ -139,7 +139,45 @@ public:                                                                         
   using name##_t = type;
 
 #define FIELD_REPEATED_STR(type, name, order, doc)                                                 \
-  FIELD_REPEATED(utils::String, name, order, doc)                                                  \
+public:                                                                                            \
+  inline utils::RepeatedField<utils::String> &ref_##name() { return name##_; }                     \
+  inline const utils::RepeatedField<utils::String> &ref_##name() const { return name##_; }         \
+  /** Compatibility accessor - equivalent to ref_##name(). */                                      \
+  inline utils::RepeatedField<utils::String> &name() { return name##_; }                           \
+  inline utils::RepeatedField<utils::String> *mutable_##name() { return &name##_; }                \
+  inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
+  inline const type &name(size_t i) const { return name##_[i]; }                                   \
+  inline const utils::RepeatedField<utils::String> &name() const { return name##_; }               \
+  inline const utils::RepeatedField<utils::String> *ptr_##name() const { return &name##_; }        \
+  inline type *add_##name() { return &name##_.add(); }                                             \
+  inline type *add_##name(type &&v) {                                                              \
+    name##_.emplace_back(v);                                                                       \
+    return &name##_.back();                                                                        \
+  }                                                                                                \
+  inline type *add_##name(const type &v) {                                                         \
+    name##_.push_back(v);                                                                          \
+    return &name##_.back();                                                                        \
+  }                                                                                                \
+  inline type *add_##name(const type *v) {                                                         \
+    if (v == nullptr) {                                                                            \
+      name##_.add();                                                                               \
+    } else {                                                                                       \
+      name##_.push_back(*v);                                                                       \
+    }                                                                                              \
+    return &name##_.back();                                                                        \
+  }                                                                                                \
+  inline void add_##name(const std::vector<type> &v) { name##_.extend(v); }                        \
+  inline void extend_##name(const std::vector<type> &v) { name##_.extend(v); }                     \
+  inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
+  inline int order_##name() const { return order; }                                                \
+  inline void clr_##name() { name##_.clear(); }                                                    \
+  inline void clear_##name() { name##_.clear(); }                                                  \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
+  static inline constexpr const char *DOC_##name = doc;                                            \
+  static inline constexpr const char *_name_##name = #name;                                        \
+  inline bool packed_##name() const { return false; }                                              \
+  utils::RepeatedStringField name##_;                                                              \
+  using name##_t = type;                                                                           \
   inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
   inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }
 

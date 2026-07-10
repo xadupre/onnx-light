@@ -45,6 +45,23 @@ TEST(KernelClass, ConstantClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[1], -2.0f);
   EXPECT_FLOAT_EQ(py[2], 3.5f);
   EXPECT_FLOAT_EQ(py[3], 0.0f);
+  EXPECT_EQ(y.bytes(), value.bytes());
+  EXPECT_TRUE(y.data.empty());
+}
+
+TEST(KernelClass, ConstantPreallocatedOutputStillCopiesBytes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Constant constant_kernel{ctx};
+  Tensor value = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.5f, 0.0f});
+  Tensor output("", onnx_kernels::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  constant_kernel(value, output);
+  ASSERT_NE(output.bytes(), value.bytes());
+  ASSERT_EQ(output.element_count(), value.element_count());
+  const float *py = output.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], -2.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.5f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
 }
 
 TEST(KernelClass, ConstantRejectsMismatchedOutput) {

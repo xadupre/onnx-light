@@ -13,11 +13,12 @@ namespace onnx_kernels {
 namespace kernel {
 
 Tensor Constant::operator()(const Tensor &value, RuntimeContext *rt) const {
-  const size_t out_n_bytes = value.size_bytes();
-  Tensor out =
-      MakeOutputTensor(value.data_type, value.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(value, out);
-  return out;
+  static_cast<void>(rt);
+  if (value.data_type == static_cast<int32_t>(DataType::STRING)) {
+    return value;
+  }
+  return Tensor::Borrow(value.name, value.data_type, value.shape, value.bytes(),
+                        value.size_bytes());
 }
 
 void Constant::operator()(const Tensor &value, Tensor &output) const {

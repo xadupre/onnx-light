@@ -25,11 +25,12 @@ template <typename T> std::string write_as_string(utils::PrintOptions &, const T
   return MakeString(field);
 }
 
-template <> std::string write_as_string(utils::PrintOptions &, const utils::String &field) {
+template <> inline std::string write_as_string(utils::PrintOptions &, const utils::String &field) {
   return field.as_string(true);
 }
 
-template <> std::string write_as_string(utils::PrintOptions &, const std::vector<uint8_t> &field) {
+template <>
+inline std::string write_as_string(utils::PrintOptions &, const std::vector<uint8_t> &field) {
   const char *hex_chars = "0123456789ABCDEF";
   std::string result;
   result.reserve(field.size() * 2);
@@ -40,7 +41,8 @@ template <> std::string write_as_string(utils::PrintOptions &, const std::vector
   return result;
 }
 
-template <> std::string write_as_string(utils::PrintOptions &, const utils::ByteSpan &field) {
+template <>
+inline std::string write_as_string(utils::PrintOptions &, const utils::ByteSpan &field) {
   const char *hex_chars = "0123456789ABCDEF";
   std::string result;
   result.reserve(field.size() * 2);
@@ -79,8 +81,8 @@ std::string write_as_repeated_field(utils::PrintOptions &, const utils::Repeated
 }
 
 template <>
-std::string write_as_repeated_field(utils::PrintOptions &,
-                                    const utils::RepeatedField<utils::String> &field) {
+inline std::string write_as_repeated_field(utils::PrintOptions &,
+                                           const utils::RepeatedField<utils::String> &field) {
   std::string result;
   result += "[";
   for (size_t i = 0; i < field.size(); ++i) {
@@ -100,88 +102,96 @@ std::string write_as_string_optional(utils::PrintOptions &options, const std::op
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const std::vector<float> &field) {
+inline std::string write_as_string(utils::PrintOptions &options, const std::vector<float> &field) {
   return write_as_string_vector(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const std::vector<int64_t> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const std::vector<int64_t> &field) {
   return write_as_string_vector(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const std::vector<uint64_t> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const std::vector<uint64_t> &field) {
   return write_as_string_vector(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const std::vector<double> &field) {
+inline std::string write_as_string(utils::PrintOptions &options, const std::vector<double> &field) {
   return write_as_string_vector(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const std::vector<int32_t> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const std::vector<int32_t> &field) {
   return write_as_string_vector(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const std::optional<float> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const std::optional<float> &field) {
   return write_as_string_optional(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const std::optional<int64_t> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const std::optional<int64_t> &field) {
   return write_as_string_optional(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const std::optional<uint64_t> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const std::optional<uint64_t> &field) {
   return write_as_string_optional(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const std::optional<double> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const std::optional<double> &field) {
   return write_as_string_optional(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const std::optional<int32_t> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const std::optional<int32_t> &field) {
   return write_as_string_optional(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options,
-                            const utils::RepeatedField<float> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const utils::RepeatedField<float> &field) {
   return write_as_repeated_field(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options,
-                            const utils::RepeatedField<int64_t> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const utils::RepeatedField<int64_t> &field) {
   return write_as_repeated_field(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options,
-                            const utils::RepeatedField<uint64_t> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const utils::RepeatedField<uint64_t> &field) {
   return write_as_repeated_field(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options,
-                            const utils::RepeatedField<int32_t> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const utils::RepeatedField<int32_t> &field) {
   return write_as_repeated_field(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options,
-                            const utils::RepeatedField<double> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const utils::RepeatedField<double> &field) {
   return write_as_repeated_field(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options,
-                            const utils::RepeatedField<utils::String> &field) {
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const utils::RepeatedField<utils::String> &field) {
   return write_as_repeated_field(options, field);
 }
 
@@ -222,110 +232,111 @@ void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, cons
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::String &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const utils::String &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const int64_t &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const int64_t &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const float &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const float &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const uint64_t &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const uint64_t &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const int32_t &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const int32_t &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const TensorProto::DataType &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const TensorProto::DataType &field) {
   ss << field_name << ": " << write_as_string(options, static_cast<int32_t>(field)) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const SequenceProto::DataType &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const SequenceProto::DataType &field) {
   ss << field_name << ": " << write_as_string(options, static_cast<int32_t>(field)) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const OptionalProto::DataType &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const OptionalProto::DataType &field) {
   ss << field_name << ": " << write_as_string(options, static_cast<int32_t>(field)) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const TensorProto::DataLocation &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const TensorProto::DataLocation &field) {
   ss << field_name << ": " << write_as_string(options, static_cast<int32_t>(field)) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const AttributeProto::AttributeType &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const AttributeProto::AttributeType &field) {
   ss << field_name << ": " << write_as_string(options, static_cast<int32_t>(field)) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const std::vector<uint8_t> &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const std::vector<uint8_t> &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::ByteSpan &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const utils::ByteSpan &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::RepeatedField<utils::String> &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name,
+                              const utils::RepeatedField<utils::String> &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::RepeatedField<uint64_t> &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const utils::RepeatedField<uint64_t> &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::RepeatedField<int64_t> &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const utils::RepeatedField<int64_t> &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::RepeatedField<int32_t> &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const utils::RepeatedField<int32_t> &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::RepeatedField<float> &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const utils::RepeatedField<float> &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::RepeatedField<double> &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const utils::RepeatedField<double> &field) {
   ss << field_name << ": " << write_as_string(options, field) << " ";
 }
 
@@ -340,20 +351,20 @@ void write_into_stream_optional(std::stringstream &ss, utils::PrintOptions &opti
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::OptionalField<int64_t> &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const utils::OptionalField<int64_t> &field) {
   write_into_stream_optional(ss, options, field_name, field);
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::OptionalField<uint64_t> &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const utils::OptionalField<uint64_t> &field) {
   write_into_stream_optional(ss, options, field_name, field);
 }
 
 template <>
-void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
-                       const utils::OptionalField<int32_t> &field) {
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const utils::OptionalField<int32_t> &field) {
   write_into_stream_optional(ss, options, field_name, field);
 }
 

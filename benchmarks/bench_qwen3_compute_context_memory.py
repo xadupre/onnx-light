@@ -107,13 +107,21 @@ def make_export_options() -> ExportOptions:
 
 
 def make_tick_label(output_name: str, node_type: str) -> str:
-    """Formats one tick label with 5 output-name characters and node type."""
+    """Formats one tick label with 5 output-name characters and node type.
+
+    Args:
+        output_name: Output name associated with the node.
+        node_type: Operation type associated with the node.
+
+    Returns:
+        A label in the form ``first5chars-node_type``.
+    """
 
     return f"{str(output_name)[:5]}-{node_type}"
 
 
 def main() -> None:
-    """Runs export/shape profiling and writes ONNX, XLSX, and PNG artifacts."""
+    """Performs export/shape profiling and writes ONNX, XLSX, and PNG artifacts."""
 
     args = parse_args()
 

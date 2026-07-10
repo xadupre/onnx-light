@@ -121,20 +121,19 @@ void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &
   EXT_ENFORCE_INVALID(rows >= 0 && cols >= 0,
                       "kernel::EyeLike: input dimensions must be non-negative.");
 
-  const int32_t out_dtype = (dtype != 0) ? dtype : input.data_type;
-  EXT_ENFORCE_INVALID(IsSupportedEyeLikeDtype(out_dtype),
-                      "kernel::EyeLike: unsupported output dtype.");
-  EXT_ENFORCE_INVALID(output.data_type == out_dtype,
+  EXT_ENFORCE_INVALID(IsSupportedEyeLikeDtype(dtype), "kernel::EyeLike: unsupported output dtype.");
+  EXT_ENFORCE_INVALID(output.data_type == dtype,
                       "kernel::EyeLike preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == (std::vector<int64_t>{rows, cols}),
+  EXT_ENFORCE_INVALID(output.shape.size() == 2 && output.shape[0] == rows &&
+                          output.shape[1] == cols,
                       "kernel::EyeLike preallocated output shape must match the produced tensor "
                       "shape.");
-  const std::size_t es = ElementSize(out_dtype);
+  const std::size_t es = ElementSize(dtype);
   EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(rows * cols) * es,
                       "kernel::EyeLike preallocated output buffer has unexpected size in bytes.");
 
   std::memset(output.mutable_bytes(), 0, output.size_bytes());
-  const std::vector<uint8_t> one = OneElementBytes(out_dtype);
+  const std::vector<uint8_t> one = OneElementBytes(dtype);
   for (int64_t i = 0; i < rows; ++i) {
     const int64_t j = i + k;
     if (j >= 0 && j < cols) {
@@ -152,7 +151,7 @@ Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
   output.data_type = out_dtype;
   output.shape = input.shape;
   output.data.assign(PackedByteSize(out_dtype, input.element_count()), uint8_t{0});
-  (*this)(input, k, dtype, output);
+  (*this)(input, k, out_dtype, output);
   return output;
 }
 

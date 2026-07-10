@@ -3,17 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import inspect
 
 import matplotlib.pyplot as plt
 import pandas
 import torch
-from torch.utils._pytree import tree_flatten
 from transformers import AutoConfig, AutoModelForCausalLM
 from yobx.torch import to_onnx
-from yobx.torch.export_options import ExportOptions
 
-import onnx_light.onnx.defs as defs
 from onnx_light.onnx import load as ol_load
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
@@ -59,64 +55,7 @@ def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
     return evaluate_expression(value, assignment)
 
 
-def make_past_key_values(config: AutoConfig, batch_size: int, past_sequence_length: int) -> tuple:
-    """Creates per-layer past key-value cache tensors for transformer export.
-
-    Returns:
-        A tuple where each element is ``(key, value)`` for one layer.
-    """
-
-    num_attention_heads = int(config.num_attention_heads)
-    num_key_value_heads = (
-        int(config.num_key_value_heads)
-        if hasattr(config, "num_key_value_heads")
-        else num_attention_heads
-    )
-    head_dim = (
-        int(config.head_dim)
-        if hasattr(config, "head_dim")
-        else int(config.hidden_size // num_attention_heads)
-    )
-    dtype = torch.float32
-    cache: list[tuple[torch.Tensor, torch.Tensor]] = []
-    for _ in range(config.num_hidden_layers):
-        key = torch.randn(
-            (batch_size, num_key_value_heads, past_sequence_length, head_dim), dtype=dtype
-        )
-        value = torch.randn(
-            (batch_size, num_key_value_heads, past_sequence_length, head_dim), dtype=dtype
-        )
-        cache.append((key, value))
-    return tuple(cache)
-
-
-def make_export_options() -> ExportOptions:
-    """Constructs export options while guarding version-dependent parameters."""
-
-    export_options_signature = inspect.signature(ExportOptions)
-    kwargs: dict[str, object] = {}
-    if "strategy" in export_options_signature.parameters:
-        kwargs["strategy"] = "transformers"
-    if "dynamic_shapes" in export_options_signature.parameters:
-        kwargs["dynamic_shapes"] = True
-    if "patches" in export_options_signature.parameters:
-        kwargs["patches"] = "transformers"
-    if "flattening_function" in export_options_signature.parameters:
-        kwargs["flattening_function"] = tree_flatten
-    return ExportOptions(**kwargs)
-
-
 def make_tick_label(output_name: str, node_type: str) -> str:
-    """Formats one tick label with 5 output-name characters and node type.
-
-    Args:
-        output_name: Output name associated with the node.
-        node_type: Operation type associated with the node.
-
-    Returns:
-        A label in the form ``first5chars-node_type``.
-    """
-
     return f"{str(output_name)[:5]}-{node_type}"
 
 
@@ -125,15 +64,30 @@ def main() -> None:
 
     args = parse_args()
 
-    defs.register_onnx_operator_set_schema()
-
     config = AutoConfig.from_pretrained(args.model_id)
     config.num_hidden_layers = args.layers
     if hasattr(config, "use_cache"):
         config.use_cache = True
-    model = AutoModelForCausalLM.from_config(config).eval()
+    model = AutoModelForCausalLM.from_config(config).eval().to(torch.float16)
 
-    past_key_values = make_past_key_values(config, args.batch, args.past_sequence_length)
+    from yobx.torch import apply_patches_for_model, register_flattening_functions
+    from yobx.torch.in_transformers.cache_helper import make_dynamic_cache
+
+    num_attention_heads = int(config.num_attention_heads)
+    shape = (
+        args.batch,
+        (
+            int(config.num_key_value_heads)
+            if hasattr(config, "num_key_value_heads")
+            else num_attention_heads
+        ),
+        args.past_sequence_length,
+        (
+            int(config.head_dim)
+            if hasattr(config, "head_dim")
+            else int(config.hidden_size // num_attention_heads)
+        ),
+    )
     sample_inputs = {
         "input_ids": torch.randint(
             0, config.vocab_size, (args.batch, args.sequence_length), dtype=torch.int64
@@ -141,8 +95,12 @@ def main() -> None:
         "attention_mask": torch.ones(
             (args.batch, args.past_sequence_length + args.sequence_length), dtype=torch.int64
         ),
-        "past_key_values": past_key_values,
-        "use_cache": True,
+        "past_key_values": make_dynamic_cache(
+            [
+                (torch.rand(shape, dtype=torch.float16), torch.rand(shape, dtype=torch.float16))
+                for _ in range(config.num_hidden_layers)
+            ]
+        ),
     }
     dynamic_shapes = {
         "input_ids": {0: "batch_size", 1: "sequence_length"},
@@ -155,19 +113,11 @@ def main() -> None:
             for _ in range(config.num_hidden_layers)
         ],
     }
-    export_options = make_export_options()
-    to_onnx_signature = inspect.signature(to_onnx)
-    to_onnx_kwargs: dict[str, object] = {
-        "kwargs": sample_inputs,
-        "export_options": export_options,
-    }
-    if "dynamic_shapes" in to_onnx_signature.parameters:
-        to_onnx_kwargs["dynamic_shapes"] = dynamic_shapes
-    if "flattening_function" in to_onnx_signature.parameters:
-        to_onnx_kwargs["flattening_function"] = tree_flatten
-    if "patches" in to_onnx_signature.parameters:
-        to_onnx_kwargs["patches"] = "transformers"
-    artifact = to_onnx(model, **to_onnx_kwargs)
+    with (
+        register_flattening_functions(patch_transformers=True),
+        apply_patches_for_model(patch_transformers=True, patch_torch=False),
+    ):
+        artifact = to_onnx(model, kwargs=sample_inputs, dynamic_shapes=dynamic_shapes)
     filename = f"{args.output_prefix}.onnx"
     artifact.save(filename)
     onnx_model = ol_load(filename, load_external_data=False)

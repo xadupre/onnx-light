@@ -519,7 +519,8 @@ struct Tensor {
   /// Typed view over the underlying ``string_data`` buffer. Throws
   /// ``std::invalid_argument`` if ``data_type`` is not
   /// ``DataType::STRING``. Borrowed string tensors return a reference to the
-  /// external backing vector.
+  /// external backing vector; callers must not mutate a borrowed backing
+  /// vector through the non-const overload unless they own that storage.
   const std::vector<std::string> &AsStrings() const;
   std::vector<std::string> &AsStrings();
 

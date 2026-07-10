@@ -10,7 +10,6 @@
 #include <random>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -24,65 +23,31 @@ namespace {
 // schema's non-deterministic contract.
 constexpr uint32_t kDefaultBernoulliSeed = 0u;
 
-// Reads the input probability tensor as a vector of double. Only the
-// three float dtypes accepted by the Bernoulli ``T1`` constraint are
-// supported here (FLOAT, DOUBLE, FLOAT16); other dtypes throw.
-std::vector<double> ReadProbabilities(const Tensor &input) {
-  const int64_t n = input.element_count();
-  std::vector<double> p(static_cast<std::size_t>(n));
-  switch (static_cast<DataType>(input.data_type)) {
-  case DataType::FLOAT: {
-    const float *src = input.AsFloat();
-    for (int64_t i = 0; i < n; ++i) {
-      p[static_cast<std::size_t>(i)] = static_cast<double>(src[i]);
-    }
-    break;
-  }
-  case DataType::DOUBLE: {
-    const double *src = input.AsDouble();
-    for (int64_t i = 0; i < n; ++i) {
-      p[static_cast<std::size_t>(i)] = src[i];
-    }
-    break;
-  }
-  case DataType::FLOAT16: {
-    // FLOAT16 is stored as a 2-byte stride; convert via the IEEE-754
-    // half-precision encoding.
-    const uint16_t *src = reinterpret_cast<const uint16_t *>(input.bytes());
-    for (int64_t i = 0; i < n; ++i) {
-      const uint16_t h = src[i];
-      const uint32_t sign = (h >> 15) & 0x1u;
-      const uint32_t exp = (h >> 10) & 0x1Fu;
-      const uint32_t mant = h & 0x3FFu;
-      uint32_t f;
-      if (exp == 0) {
-        if (mant == 0) {
-          f = sign << 31;
-        } else {
-          uint32_t m = mant;
-          int32_t e = -1;
-          while ((m & 0x400u) == 0) {
-            m <<= 1;
-            --e;
-          }
-          m &= 0x3FFu;
-          f = (sign << 31) | (static_cast<uint32_t>(e + 127 + 1) << 23) | (m << 13);
-        }
-      } else if (exp == 0x1Fu) {
-        f = (sign << 31) | 0x7F800000u | (mant << 13);
-      } else {
-        f = (sign << 31) | (static_cast<uint32_t>(exp - 15 + 127) << 23) | (mant << 13);
+// Decodes a single IEEE-754 binary16 value to ``double``.
+double DecodeHalf(uint16_t h) {
+  const uint32_t sign = (h >> 15) & 0x1u;
+  const uint32_t exp = (h >> 10) & 0x1Fu;
+  const uint32_t mant = h & 0x3FFu;
+  uint32_t f;
+  if (exp == 0) {
+    if (mant == 0) {
+      f = sign << 31;
+    } else {
+      uint32_t m = mant;
+      int32_t e = -1;
+      while ((m & 0x400u) == 0) {
+        m <<= 1;
+        --e;
       }
-      float fv = std::bit_cast<float>(f);
-      p[static_cast<std::size_t>(i)] = static_cast<double>(fv);
+      m &= 0x3FFu;
+      f = (sign << 31) | (static_cast<uint32_t>(e + 127 + 1) << 23) | (m << 13);
     }
-    break;
+  } else if (exp == 0x1Fu) {
+    f = (sign << 31) | 0x7F800000u | (mant << 13);
+  } else {
+    f = (sign << 31) | (static_cast<uint32_t>(exp - 15 + 127) << 23) | (mant << 13);
   }
-  default:
-    EXT_ENFORCE_INVALID(false, "kernel::Bernoulli: unsupported input dtype ",
-                        std::to_string(input.data_type), ".");
-  }
-  return p;
+  return static_cast<double>(std::bit_cast<float>(f));
 }
 
 // Number of bytes per element for the supported output dtypes.
@@ -168,6 +133,7 @@ Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
   const int32_t out_dtype = (dtype == 0) ? input.data_type : dtype;
   const std::size_t es = OutputElementSize(out_dtype);
   const int64_t n = input.element_count();
+  EXT_ENFORCE_INVALID(n >= 0, "kernel::Bernoulli: input shape must be non-negative.");
   const std::size_t out_n_bytes = static_cast<std::size_t>(n) * es;
 
   Tensor out =
@@ -177,8 +143,6 @@ Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
 }
 
 void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Tensor &output) const {
-  const std::vector<double> probs = ReadProbabilities(input);
-
   const int32_t out_dtype = (dtype == 0) ? input.data_type : dtype;
   EXT_ENFORCE_INVALID(output.data_type == out_dtype,
                       "kernel::Bernoulli preallocated output must have the expected dtype.");
@@ -187,6 +151,7 @@ void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Ten
                       "tensor shape.");
 
   const int64_t n = input.element_count();
+  EXT_ENFORCE_INVALID(n >= 0, "kernel::Bernoulli: input shape must be non-negative.");
   const uint32_t engine_seed =
       (seed == kNoSeed) ? kDefaultBernoulliSeed : static_cast<uint32_t>(seed);
   std::mt19937 engine(engine_seed);
@@ -194,13 +159,37 @@ void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Ten
 
   const std::size_t es = OutputElementSize(out_dtype);
   uint8_t *out_data = output.mutable_bytes();
-  for (int64_t i = 0; i < n; ++i) {
-    const double p = probs[static_cast<std::size_t>(i)];
-    EXT_ENFORCE_INVALID(p >= 0.0 && p <= 1.0,
-                        "kernel::Bernoulli: input values must lie in [0, 1].");
-    const double u = uniform(engine);
-    const int32_t sample = (u < p) ? 1 : 0;
-    StoreSample(out_dtype, out_data + static_cast<std::size_t>(i) * es, sample);
+
+  auto draw_samples = [&](auto read_probability) {
+    for (int64_t i = 0; i < n; ++i) {
+      const double p = read_probability(i);
+      EXT_ENFORCE_INVALID(p >= 0.0 && p <= 1.0,
+                          "kernel::Bernoulli: input values must lie in [0, 1].");
+      const double u = uniform(engine);
+      const int32_t sample = (u < p) ? 1 : 0;
+      StoreSample(out_dtype, out_data + static_cast<std::size_t>(i) * es, sample);
+    }
+  };
+
+  switch (static_cast<DataType>(input.data_type)) {
+  case DataType::FLOAT: {
+    const float *src = input.AsFloat();
+    draw_samples([&](int64_t i) { return static_cast<double>(src[i]); });
+    break;
+  }
+  case DataType::DOUBLE: {
+    const double *src = input.AsDouble();
+    draw_samples([&](int64_t i) { return src[i]; });
+    break;
+  }
+  case DataType::FLOAT16: {
+    const uint16_t *src = reinterpret_cast<const uint16_t *>(input.bytes());
+    draw_samples([&](int64_t i) { return DecodeHalf(src[i]); });
+    break;
+  }
+  default:
+    EXT_ENFORCE_INVALID(false, "kernel::Bernoulli: unsupported input dtype ",
+                        std::to_string(input.data_type), ".");
   }
 }
 

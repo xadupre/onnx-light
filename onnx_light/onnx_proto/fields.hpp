@@ -15,6 +15,7 @@ namespace utils {
 template <typename T>
 void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
                                            utils::PrintOptions &options) const {
+  // Keep string items quoted to match protobuf-like debug text output.
   constexpr bool quote_strings = true;
   ss << "[ ";
   for (const auto &p : values_) {

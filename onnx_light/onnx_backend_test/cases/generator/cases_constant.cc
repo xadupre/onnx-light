@@ -7,6 +7,7 @@
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -24,7 +25,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
   node.set_op_type("Constant");
   node.add_output("y");
 
-  const Tensor value = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
+  Tensor value = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
 
   AttributeProto *attr = node.add_attribute();
   attr->set_name("value");
@@ -40,7 +41,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
 
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
-  Tensor y = kernel::Constant(ctx)(value);
+  Tensor y = kernel::Constant(ctx)(std::move(value));
 
   Expect(node, /*inputs=*/{}, {y}, "test_cc_constant", {opset}, "backend-test", registry);
 
@@ -63,7 +64,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
         0.3336743414f,  1.494079113f,  -0.2051582634f, 0.3130677044f,  -0.854095757f,
         -2.552989721f,  0.6536185741f, 0.8644362092f,  -0.742165029f,  2.269754648f,
     };
-    const Tensor values = Tensor::FromFloat("", values_shape, values_data);
+    Tensor values = Tensor::FromFloat("", values_shape, values_data);
 
     NodeProto upstream_node;
     upstream_node.set_op_type("Constant");
@@ -86,7 +87,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
       ut->add_float_data(v);
     }
 
-    Tensor y_upstream = kernel::Constant(ctx)(values);
+    Tensor y_upstream = kernel::Constant(ctx)(std::move(values));
     Expect(upstream_node, /*inputs=*/{}, {y_upstream}, "test_constant", {opset}, "backend-test",
            registry);
   }

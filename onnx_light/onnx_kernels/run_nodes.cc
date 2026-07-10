@@ -137,6 +137,27 @@ void BorrowParentTensors(TensorMap &tensors) {
   }
 }
 
+// Returns an independent deep copy of ``src`` with inline (non-allocator-backed)
+// data. Used when extracting outputs from a child ``RuntimeContext`` whose
+// lifetime is shorter than that of the caller's data structures (e.g. Scan
+// state, Loop scan values). Inline data is owned solely by the returned
+// ``Tensor``; the child context can safely free its own allocation for
+// ``src`` on destruction without affecting the copy.
+Tensor DeepCopyInline(const Tensor &src) {
+  Tensor dst;
+  dst.name = src.name;
+  dst.data_type = src.data_type;
+  dst.shape = src.shape;
+  dst.string_data = src.string_data;
+  const size_t n_bytes = src.size_bytes();
+  if (n_bytes > 0) {
+    std::vector<uint8_t> buf(n_bytes);
+    std::memcpy(buf.data(), src.bytes(), n_bytes);
+    dst.data = std::move(buf);
+  }
+  return dst;
+}
+
 int64_t ResolveAxis(int64_t axis, size_t rank, const std::string &op_name) {
   int64_t a = axis;
   const int64_t r = static_cast<int64_t>(rank);
@@ -191,10 +212,14 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
                                 const std::vector<std::pair<std::string, Tensor>> &bindings,
                                 RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child = rt.MakeSubgraphContext(attr_name);
+  // BorrowParentTensors MUST be called before any Put so that the child's
+  // copies of parent allocator-backed tensors are demoted to borrowed views
+  // first, preventing Put from releasing the parent's allocations via
+  // ReleaseTensorAllocation when a binding name shadows a parent-tensor name.
+  BorrowParentTensors(child.tensors());
   for (const auto &kv : bindings) {
     child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
   }
-  BorrowParentTensors(child.tensors());
   RunGraph(graph, child);
 
   if (rt.events_enabled()) {
@@ -203,6 +228,13 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     }
   }
 
+  // Collect outputs as independent inline deep copies.  A body graph may
+  // declare the same output name more than once (e.g. a Scan body where the
+  // loop-carried state and the per-iteration scan value are the same tensor).
+  // Using DeepCopyInline ensures every caller-visible slot has valid,
+  // disjoint data regardless of duplicate names.  The child context retains
+  // ownership of its allocator-backed tensors and frees them on destruction,
+  // so no ClearAllocation call is needed here.
   std::vector<Tensor> outputs;
   outputs.reserve(graph.output().size());
   for (size_t i = 0; i < graph.output().size(); ++i) {
@@ -211,12 +243,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
-    outputs.push_back(std::move(it->second));
-    // Clear allocation in moved-from entry so child destructor does not
-    // double-free: MakeSubgraphContext propagates the parent allocator,
-    // and compiler-generated move does not null out raw allocation_
-    // pointer in the source.
-    it->second.ClearAllocation();
+    outputs.push_back(DeepCopyInline(it->second));
   }
   return outputs;
 }
@@ -320,6 +347,11 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
   int64_t trip_count = 0;
   for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
     RuntimeContext child = rt.MakeSubgraphContext("body");
+    // BorrowParentTensors MUST be called before any Put so that the child's
+    // copies of parent allocator-backed tensors are demoted to borrowed views
+    // first, preventing Put from freeing the parent's allocations when a
+    // binding name shadows a parent-tensor name.
+    BorrowParentTensors(child.tensors());
 
     const std::string &iter_name = body.input(0).name().as_string();
     const std::string &cond_name = body.input(1).name().as_string();
@@ -335,7 +367,6 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         child.Put(bname, std::move(t), RuntimeEventKind::kInput);
       }
     }
-    BorrowParentTensors(child.tensors());
     RunGraph(body, child);
 
     if (rt.events_enabled()) {
@@ -351,6 +382,10 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
                         "'.");
     cond_value = ParseBoolScalar(cond_it->second, "Loop body output 'cond_out'");
 
+    // Extract loop-carried state and scan outputs as independent inline deep
+    // copies.  A body may reuse the same output name for both a loop-carried
+    // state slot and a scan slot.  DeepCopyInline gives each slot its own
+    // data and lets the child context free its own allocations on destruction.
     for (std::size_t i = 0; i < n; ++i) {
       const std::string &oname = body.output(static_cast<int>(1 + i)).name().as_string();
       if (is_seq_state[i]) {
@@ -363,10 +398,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         EXT_ENFORCE_INVALID(it != child.tensors().end(),
                             "RunNode: Loop body did not produce tensor-typed loop-carried output '",
                             oname, "'.");
-        tensor_state[i] = std::move(it->second);
-        // Clear allocation in moved-from entry to prevent double-free:
-        // compiler-generated move does not null raw allocation_ pointer.
-        it->second.ClearAllocation();
+        tensor_state[i] = DeepCopyInline(it->second);
       }
     }
     for (std::size_t j = 0; j < k; ++j) {
@@ -374,9 +406,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       auto it = child.tensors().find(oname);
       EXT_ENFORCE_INVALID(it != child.tensors().end(),
                           "RunNode: Loop body did not produce scan output '", oname, "'.");
-      scan_values[j].push_back(std::move(it->second));
-      // Clear allocation in moved-from entry to prevent double-free.
-      it->second.ClearAllocation();
+      scan_values[j].push_back(DeepCopyInline(it->second));
     }
     ++trip_count;
   }

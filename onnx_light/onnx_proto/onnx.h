@@ -256,8 +256,8 @@ enum DataType : int32_t {
   // Future extensions go here.
 };
 
-inline static bool DataType_IsValid(DataType t) { return t != DataType::UNDEFINED; }
-inline static const char *DataType_Name(DataType t) {
+inline static constexpr bool DataType_IsValid(DataType t) { return t != DataType::UNDEFINED; }
+inline static constexpr const char *DataType_Name(DataType t) {
   switch (t) {
   case FLOAT:
     return "FLOAT";
@@ -660,7 +660,7 @@ enum AttributeType : int32_t {
   AttributeProto_AttributeType_TYPE_PROTOS = 14,
 };
 
-inline static const char *AttributeType_Name(AttributeType t) {
+inline static constexpr const char *AttributeType_Name(AttributeType t) {
   switch (t) {
   case FLOAT:
     return "FLOAT";
@@ -820,7 +820,7 @@ NodeProto &add_node(const std::string &op_type, const std::vector<std::string> &
 StringStringEntryProto &add_metadata(const std::string &key, const std::string &value);
 END_PROTO()
 
-inline const char *AttributeProto_AttributeType_Name(AttributeProto::AttributeType t) {
+inline constexpr const char *AttributeProto_AttributeType_Name(AttributeProto::AttributeType t) {
   return AttributeProto::AttributeType_Name(t);
 }
 

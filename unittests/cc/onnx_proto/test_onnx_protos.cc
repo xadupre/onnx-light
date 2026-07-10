@@ -7,9 +7,17 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <sstream>
+#include <string_view>
 #include <type_traits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+
+static_assert(std::string_view(TensorProto::DataType_Name(TensorProto::DataType::FLOAT)) ==
+              "FLOAT");
+static_assert(std::string_view(AttributeProto::AttributeType_Name(
+                  AttributeProto::AttributeType::SPARSE_TENSORS)) == "SPARSE_TENSORS");
+static_assert(std::string_view(AttributeProto_AttributeType_Name(
+                  AttributeProto::AttributeType::TYPE_PROTO)) == "TYPE_PROTO");
 
 TEST(onnx_compatibility, NamespaceMacros) {
   EXPECT_TRUE((std::is_same<ONNX_LIGHT_NAMESPACE::ModelProto, ModelProto>::value));

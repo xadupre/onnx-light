@@ -92,7 +92,41 @@ enum class AttributeType : int32_t {
 };
 
 /// Returns the canonical ONNX name for an ``AttributeType`` (e.g. ``"INTS"``).
-const char *AttributeType_Name(AttributeType t);
+inline constexpr const char *AttributeType_Name(AttributeType t) {
+  switch (t) {
+  case AttributeType::FLOAT:
+    return "FLOAT";
+  case AttributeType::INT:
+    return "INT";
+  case AttributeType::STRING:
+    return "STRING";
+  case AttributeType::TENSOR:
+    return "TENSOR";
+  case AttributeType::GRAPH:
+    return "GRAPH";
+  case AttributeType::FLOATS:
+    return "FLOATS";
+  case AttributeType::INTS:
+    return "INTS";
+  case AttributeType::STRINGS:
+    return "STRINGS";
+  case AttributeType::TENSORS:
+    return "TENSORS";
+  case AttributeType::GRAPHS:
+    return "GRAPHS";
+  case AttributeType::SPARSE_TENSOR:
+    return "SPARSE_TENSOR";
+  case AttributeType::SPARSE_TENSORS:
+    return "SPARSE_TENSORS";
+  case AttributeType::TYPE_PROTO:
+    return "TYPE_PROTO";
+  case AttributeType::TYPE_PROTOS:
+    return "TYPE_PROTOS";
+  case AttributeType::UNDEFINED:
+  default:
+    return "UNDEFINED";
+  }
+}
 
 /**
  * Typed default value carried by an :class:`AttributeParam`.

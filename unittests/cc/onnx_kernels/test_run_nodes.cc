@@ -22,6 +22,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -40,6 +41,11 @@ using onnx_kernels::Tensor;
 using onnx_kernels::TensorFromProto;
 using onnx_kernels::TensorMap;
 using onnx_kernels::kernel::KernelContext;
+
+static_assert(std::string_view(onnx_kernels::RuntimeEventActionName(
+                  onnx_kernels::RuntimeEventAction::kRunNode)) == "run_node");
+static_assert(std::string_view(onnx_kernels::RuntimeEventKindName(
+                  onnx_kernels::RuntimeEventKind::kOutput)) == "output");
 
 namespace Test {
 

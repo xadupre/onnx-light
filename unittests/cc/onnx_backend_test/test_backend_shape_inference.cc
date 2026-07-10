@@ -725,9 +725,10 @@ TEST(BackendTestCaseShapeInference, OnnxOptimPropagatesValueAsShapeInLocalFuncti
 }
 
 // ---------------------------------------------------------------------------
+// onnx_optim shape inference + Loop subgraph
+// ---------------------------------------------------------------------------
 //
 // Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
-// a ``Loop`` node whose ``body`` attribute is a sub-graph. The case used is
 // ``test_cc_loop_basic_trip_count``: no loop-carried states (N=0) and one
 // scan output (K=1). The body is a two-node sub-graph that produces a
 // constant INT64 ``[42]`` tensor of shape ``[1]`` each iteration.

@@ -157,6 +157,8 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
 // Expected output: out = [0, 1, 2, 3, 4]
 // ---------------------------------------------------------------------------
 void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &registry) {
+  constexpr int64_t kRangeStart = 0;
+  constexpr int64_t kRangeDelta = 1;
   constexpr int64_t kRangeLimit = 5;
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext kctx{opset};
@@ -186,13 +188,13 @@ void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &regist
     NodeProto *start_node = func->add_node();
     start_node->set_op_type("Constant");
     start_node->add_output("start_c");
-    AddAttribute<int64_t>(*start_node, "value_int", static_cast<int64_t>(0));
+    AddAttribute<int64_t>(*start_node, "value_int", kRangeStart);
   }
   {
     NodeProto *delta_node = func->add_node();
     delta_node->set_op_type("Constant");
     delta_node->add_output("delta_c");
-    AddAttribute<int64_t>(*delta_node, "value_int", static_cast<int64_t>(1));
+    AddAttribute<int64_t>(*delta_node, "value_int", kRangeDelta);
   }
   {
     NodeProto *range_node = func->add_node();
@@ -224,8 +226,8 @@ void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &regist
 
   // Reference DataSet: no graph inputs; output = Abs(Range(0, 5, 1)) = [0,1,2,3,4].
   Tensor limit_t = Tensor::FromInt64("", {}, {kRangeLimit});
-  Tensor zero_t = Tensor::FromInt64("", {}, {static_cast<int64_t>(0)});
-  Tensor one_t = Tensor::FromInt64("", {}, {static_cast<int64_t>(1)});
+  Tensor zero_t = Tensor::FromInt64("", {}, {kRangeStart});
+  Tensor one_t = Tensor::FromInt64("", {}, {kRangeDelta});
   Tensor r_t = kernel::Range(kctx)(zero_t, limit_t, one_t);
   Tensor out_t = kernel::Abs(kctx)(r_t);
   out_t.name = "out";

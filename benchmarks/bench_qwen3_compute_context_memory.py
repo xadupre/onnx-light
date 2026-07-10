@@ -22,10 +22,10 @@ from onnx_light.onnx_optim.shape_inference import (
 
 
 def parse_args() -> argparse.Namespace:
-    """Parses command-line arguments.
+    """Parses command-line arguments for the benchmark.
 
     Returns:
-        Parsed command-line arguments.
+        The parsed command-line arguments.
     """
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -37,10 +37,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
-    """Evaluates one memory scalar.
+    """Evaluates one memory scalar expression.
+
+    Args:
+        value: One symbolic or numeric memory scalar from ``ComputeContext.memory``.
+        assignment: Mapping used to evaluate symbolic dimensions.
 
     Returns:
-        The evaluated integer value.
+        The evaluated integer value of the memory scalar.
     """
 
     if isinstance(value, int):
@@ -49,7 +53,7 @@ def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
 
 
 def main() -> None:
-    """Runs the benchmark."""
+    """Runs the benchmark process."""
 
     args = parse_args()
 

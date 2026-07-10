@@ -59,11 +59,9 @@ def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
     return evaluate_expression(value, assignment)
 
 
-def flatten_with_pytree(data: object) -> tuple[list[object], object]:
-    return tree_flatten(data)
-
-
 def make_past_key_values(config: AutoConfig, batch_size: int, past_sequence_length: int) -> tuple:
+    """Creates past key-value cache tensors for transformer model export."""
+
     num_attention_heads = int(config.num_attention_heads)
     num_key_value_heads = (
         int(config.num_key_value_heads)
@@ -89,6 +87,8 @@ def make_past_key_values(config: AutoConfig, batch_size: int, past_sequence_leng
 
 
 def make_export_options() -> ExportOptions:
+    """Constructs export options with version-compatible parameters."""
+
     export_options_signature = inspect.signature(ExportOptions)
     kwargs: dict[str, object] = {}
     if "strategy" in export_options_signature.parameters:
@@ -98,15 +98,19 @@ def make_export_options() -> ExportOptions:
     if "patches" in export_options_signature.parameters:
         kwargs["patches"] = "transformers"
     if "flattening_function" in export_options_signature.parameters:
-        kwargs["flattening_function"] = flatten_with_pytree
+        kwargs["flattening_function"] = tree_flatten
     return ExportOptions(**kwargs)
 
 
 def make_tick_label(output_name: str, node_type: str) -> str:
+    """Formats one tick label from the first output prefix and the node type."""
+
     return f"{str(output_name)[:5]}-{node_type}"
 
 
 def main() -> None:
+    """Runs the benchmark export and writes profiling artifacts."""
+
     args = parse_args()
 
     defs.register_onnx_operator_set_schema()
@@ -148,7 +152,7 @@ def main() -> None:
     if "dynamic_shapes" in to_onnx_signature.parameters:
         to_onnx_kwargs["dynamic_shapes"] = dynamic_shapes
     if "flattening_function" in to_onnx_signature.parameters:
-        to_onnx_kwargs["flattening_function"] = flatten_with_pytree
+        to_onnx_kwargs["flattening_function"] = tree_flatten
     if "patches" in to_onnx_signature.parameters:
         to_onnx_kwargs["patches"] = "transformers"
     artifact = to_onnx(model, **to_onnx_kwargs)

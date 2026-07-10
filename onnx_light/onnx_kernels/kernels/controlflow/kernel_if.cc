@@ -77,6 +77,7 @@ std::vector<Tensor> If::operator()(RuntimeContext &rt, const Tensor &cond,
   child.tensors() = rt.tensors();
   child.set_events_enabled(rt.events_enabled());
   child.set_current_subgraph(rt.current_node_index(), branch_name);
+  BorrowParentTensors(child.tensors());
   RunGraph(branch, child);
 
   if (rt.events_enabled()) {

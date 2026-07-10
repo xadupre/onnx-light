@@ -128,6 +128,15 @@ void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const st
 
 } // namespace
 
+void BorrowParentTensors(TensorMap &tensors) {
+  for (auto &kv : tensors) {
+    Tensor &t = kv.second;
+    if (t.has_allocation()) {
+      t = Tensor::Borrow(t.name, t.data_type, t.shape, t.bytes(), t.size_bytes());
+    }
+  }
+}
+
 int64_t ResolveAxis(int64_t axis, size_t rank, const std::string &op_name) {
   int64_t a = axis;
   const int64_t r = static_cast<int64_t>(rank);
@@ -190,23 +199,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   for (const auto &kv : bindings) {
     child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
   }
-  // The child context receives two categories of allocator-backed tensors
-  // that it must NOT own:
-  //   1. Tensors copied from the parent context via ``child.tensors() =
-  //      rt.tensors()`` — they share allocation slots with the parent.
-  //   2. Binding tensors passed in by the caller (e.g. Scan loop-carried
-  //      state) that are copies of allocator-backed parent tensors.
-  // The child destructor calls ReleaseTensorAllocation on every tensor in
-  // its map, which would free those shared slots and leave the parent
-  // context with dangling allocation_ pointers (SEGFAULT / bad-alloc).
-  // Convert every allocator-backed tensor to a non-owning borrowed view so
-  // the child destructor does not free any of the parent's allocations.
-  for (auto &kv : child.tensors()) {
-    Tensor &t = kv.second;
-    if (t.has_allocation()) {
-      t = Tensor::Borrow(t.name, t.data_type, t.shape, t.bytes(), t.size_bytes());
-    }
-  }
+  BorrowParentTensors(child.tensors());
   RunGraph(graph, child);
 
   if (rt.events_enabled()) {
@@ -273,6 +266,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   child.set_verbose(rt.verbose());
   child.set_events_enabled(rt.events_enabled());
   child.set_current_subgraph(rt.current_node_index(), branch_attr);
+  BorrowParentTensors(child.tensors());
   RunGraph(branch, child);
 
   if (rt.events_enabled()) {
@@ -349,6 +343,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         child.Put(bname, std::move(t), RuntimeEventKind::kInput);
       }
     }
+    BorrowParentTensors(child.tensors());
     RunGraph(body, child);
 
     if (rt.events_enabled()) {

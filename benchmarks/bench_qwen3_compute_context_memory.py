@@ -11,6 +11,7 @@ from yobx.torch import to_onnx
 from yobx.torch.export_options import ExportOptions
 
 import onnx_light.onnx.defs as defs
+from onnx_light.onnx import load as ol_load
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
     ComputeContext,
@@ -73,7 +74,9 @@ def main() -> None:
     artifact = to_onnx(
         model, kwargs=sample_inputs, export_options=ExportOptions(strategy="transformers")
     )
-    onnx_model = artifact.get_proto()
+    filename = "bench_qwen3_compute_context_memory.onnx"
+    artifact.save(filename)
+    onnx_model = ol_load(filename, load_external_data=False)
 
     shape_context = ShapesContext()
     compute_shape_model(shape_context, onnx_model)
@@ -106,7 +109,7 @@ def main() -> None:
     ax.set_ylabel("total bytes")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
-    plt.show()
+    fig.savefig("bench_qwen3_compute_context_memory.png")
 
 
 if __name__ == "__main__":

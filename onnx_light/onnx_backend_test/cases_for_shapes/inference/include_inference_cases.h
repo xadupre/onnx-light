@@ -275,6 +275,30 @@ void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registr
 /// undefined placeholder names instead of the real dims ``D1``/``D2``.
 void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a two-decoder-layer Qwen3-style causal language model
+/// (context-encoding phase) with tiny dimensions. The graph reproduces the
+/// key structural pattern from ``bench_qwen3_compute_context_memory.onnx``
+/// that caused the in-place reuse analysis to appear stuck in an infinite
+/// loop (issue #3356):
+///
+/// 1. A causal attention mask is derived from two ``Range`` operators,
+///    producing a 4-D boolean tensor of shape
+///    ``[Range_dim0, 1, 1, Range_dim0]``.
+/// 2. ``Where(mask, attention_scores, -inf)`` broadcasts this mask against
+///    ``[batch_size, heads, seq, total_seq]``; because ``Range_dim0``
+///    occupies dim 0 of the mask, the batch dimension of the output becomes
+///    ``broadcast(Range_dim0, batch_size)``.
+/// 3. Over two decoder layers this expression grows to ~240 characters.
+///    Without the ``kMaxSymbolicDimExprLength`` guard in ``ByteSizeExpr``
+///    (``inplace_reuse.cc``), processing these long expressions in the
+///    memory-profile pass causes quadratic run-time; with the guard the pass
+///    returns ``nullopt`` for those tensors and completes quickly.
+///
+/// External weights in the original model are replaced by deterministic
+/// pseudo-random initializers so the case is self-contained. No DataSet is
+/// attached; it is shape-inference-only.
+void RegisterQwen3ContextShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

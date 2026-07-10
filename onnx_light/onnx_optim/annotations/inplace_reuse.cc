@@ -205,6 +205,20 @@ std::optional<int64_t> ConcreteByteSize(const OptimTensor &t) {
   return (num_elements * bits + 7) / 8;
 }
 
+// Maximum length (in characters) of a symbolic dimension expression that
+// ``ByteSizeExpr`` is willing to process.  Shape inference for broadcast-heavy
+// graphs (e.g. models with repeated Expand or Where nodes) can produce
+// ``broadcast(...)`` dimension strings that grow exponentially with the number
+// of broadcast operations.  Parsing and simplifying those strings inside
+// ``simplify_expression`` is O(n) in the string length, and since
+// ``ByteSizeExpr`` is called for every live allocation at every node in the
+// memory-profile pass, the overall complexity becomes quadratic, making
+// ``ComputeInPlaceReuseGraph`` appear to hang.  Returning ``std::nullopt``
+// for over-long expressions is conservative (the tensor's contribution is
+// omitted from the memory profile) but does not affect the correctness of the
+// in-place reuse decisions themselves.
+constexpr std::size_t kMaxSymbolicDimExprLength = 128;
+
 std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t) {
   const int bits = ElementBitWidth(t.Dtype());
   if (bits == 0) {
@@ -212,7 +226,15 @@ std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t) {
   }
   expressions::DimType num_elements = int64_t{1};
   for (std::size_t i = 0; i < t.Shape().Rank(); ++i) {
-    num_elements = expressions::dim_mul(num_elements, shapes::ToDimType(t.Shape()[i]));
+    const OptimDim &d = t.Shape()[i];
+    // Skip byte-size computation when a dimension carries an excessively long
+    // symbolic expression.  ``broadcast(...)`` nesting from successive Expand /
+    // Where operations can produce strings hundreds of characters long; feeding
+    // them into ``simplify_expression`` repeatedly causes quadratic run time.
+    if (!d.IsInt() && d.AsExpr().size() > kMaxSymbolicDimExprLength) {
+      return std::nullopt;
+    }
+    num_elements = expressions::dim_mul(num_elements, shapes::ToDimType(d));
   }
   if (bits % 8 == 0) {
     return SimplifyDimType(

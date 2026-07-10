@@ -178,6 +178,7 @@ public:                                                                         
   inline bool packed_##name() const { return false; }                                              \
   inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
   inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }       \
+  /* Keep member placement aligned with FIELD_REPEATED for generated classes. */                   \
   utils::RepeatedStringField name##_;                                                              \
   using name##_t = type;
 

@@ -228,11 +228,11 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     }
   }
 
-  // Collect outputs as independent inline deep copies.  A body graph may
+  // Collect outputs as independent inline deep copies. A body graph may
   // declare the same output name more than once (e.g. a Scan body where the
   // loop-carried state and the per-iteration scan value are the same tensor).
   // Using DeepCopyInline ensures every caller-visible slot has valid,
-  // disjoint data regardless of duplicate names.  The child context retains
+  // disjoint data regardless of duplicate names. The child context retains
   // ownership of its allocator-backed tensors and frees them on destruction,
   // so no ClearAllocation call is needed here.
   std::vector<Tensor> outputs;
@@ -383,8 +383,8 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     cond_value = ParseBoolScalar(cond_it->second, "Loop body output 'cond_out'");
 
     // Extract loop-carried state and scan outputs as independent inline deep
-    // copies.  A body may reuse the same output name for both a loop-carried
-    // state slot and a scan slot.  DeepCopyInline gives each slot its own
+    // copies. A body may reuse the same output name for both a loop-carried
+    // state slot and a scan slot. DeepCopyInline gives each slot its own
     // data and lets the child context free its own allocations on destruction.
     for (std::size_t i = 0; i < n; ++i) {
       const std::string &oname = body.output(static_cast<int>(1 + i)).name().as_string();

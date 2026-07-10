@@ -124,8 +124,9 @@ void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &
   EXT_ENFORCE_INVALID(IsSupportedEyeLikeDtype(dtype), "kernel::EyeLike: unsupported output dtype.");
   EXT_ENFORCE_INVALID(output.data_type == dtype,
                       "kernel::EyeLike preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape.size() == 2 && output.shape[0] == rows &&
-                          output.shape[1] == cols,
+  const bool shape_matches =
+      output.shape.size() == 2 && output.shape[0] == rows && output.shape[1] == cols;
+  EXT_ENFORCE_INVALID(shape_matches,
                       "kernel::EyeLike preallocated output shape must match the produced tensor "
                       "shape.");
   const std::size_t es = ElementSize(dtype);

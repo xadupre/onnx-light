@@ -636,18 +636,14 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
           "Returns a python-like representation for the list of values.")
       .def(
           "__getitem__",
-          [](utils::RepeatedField<T> &self, int index) -> nb::object {
+          [](utils::RepeatedField<T> &self, int index) -> T & {
             if (index < 0)
               index += static_cast<int>(self.size());
             EXT_ENFORCE(index >= 0 && index < static_cast<int>(self.size()), "index=", index,
                         " out of boundary");
-            if constexpr (std::is_same_v<T, utils::String>) {
-              return nb::cast(self[index].as_string());
-            } else {
-              return nb::cast(self[index], nb::rv_policy::reference);
-            }
+            return self[index];
           },
-          nb::arg("index"), "Returns the element at position index.")
+          nb::rv_policy::reference, nb::arg("index"), "Returns the element at position index.")
       .def(
           "__delitem__",
           [](utils::RepeatedField<T> &self, nb::slice slice) {
@@ -659,15 +655,17 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
       .def(
           "__iter__",
           [](utils::RepeatedField<T> &self) -> nb::object {
-            nb::list values;
-            for (const auto &it : self) {
-              if constexpr (std::is_same_v<T, utils::String>) {
+            if constexpr (std::is_same_v<T, utils::String>) {
+              nb::list values;
+              for (const auto &it : self) {
                 values.append(nb::cast(it.as_string()));
-              } else {
-                values.append(nb::cast(it));
               }
+              return nb::iter(values);
+            } else {
+              auto iterator = nb::make_iterator(nb::type<utils::RepeatedField<T>>(), "iterator",
+                                                self.begin(), self.end());
+              return nb::cast(iterator);
             }
-            return nb::iter(values);
           },
           "Iterates over the elements.")
       .def(

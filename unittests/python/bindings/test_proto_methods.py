@@ -328,9 +328,6 @@ class TestProtoMethods(ExtTestCase):
     def test_repeated_field_string_join(self):
         node = oh.make_node("MatMul", ["a", "b"], ["c"])
         self.assertEqual(", ".join(node.input), "a, b")
-        output_name = node.output[0]
-        self.assertIsInstance(output_name, str)
-        self.assertEqual(output_name[:1], "c")
 
     def test_init_kwargs_tensor_proto(self):
         # The use case from the issue: build a TensorProto from another

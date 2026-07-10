@@ -35,6 +35,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--layers", type=int, default=4, help="Number of hidden layers.")
     parser.add_argument("--batch", type=int, default=1, help="Input batch size.")
     parser.add_argument("--sequence-length", type=int, default=16, help="Input sequence length.")
+    parser.add_argument(
+        "--output-prefix",
+        default="bench_qwen3_compute_context_memory",
+        help="Output file prefix for ONNX, PNG, and XLSX artifacts.",
+    )
     return parser.parse_args()
 
 
@@ -55,13 +60,13 @@ def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
 
 
 def make_tick_label(output_name: str, node_type: str) -> str:
-    """Returns a formatted x-axis tick label."""
+    """Returns a formatted x-axis tick label for plotting."""
 
     return f"{output_name[:5]}-{node_type}"
 
 
 def main() -> None:
-    """Runs the benchmark process."""
+    """Exports a Qwen3 model to ONNX, profiles memory usage, and generates artifacts."""
 
     args = parse_args()
 
@@ -81,7 +86,7 @@ def main() -> None:
     artifact = to_onnx(
         model, kwargs=sample_inputs, export_options=ExportOptions(strategy="transformers")
     )
-    filename = "bench_qwen3_compute_context_memory.onnx"
+    filename = f"{args.output_prefix}.onnx"
     artifact.save(filename)
     onnx_model = ol_load(filename, load_external_data=False)
 
@@ -127,7 +132,7 @@ def main() -> None:
 
     print(f"Converted model with {len(onnx_model.graph.node)} nodes.")
     print(f"Peak ComputeContext total bytes: {max(total_bytes):,}")
-    pandas.DataFrame(memory_rows).to_excel("bench_qwen3_compute_context_memory.xlsx", index=False)
+    pandas.DataFrame(memory_rows).to_excel(f"{args.output_prefix}.xlsx", index=False)
 
     fig, ax = plt.subplots(figsize=(12, 5))
     ax.plot(node_indices, total_bytes, linewidth=1)
@@ -144,7 +149,7 @@ def main() -> None:
     ax.set_ylabel("total bytes")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
-    fig.savefig("bench_qwen3_compute_context_memory.png")
+    fig.savefig(f"{args.output_prefix}.png")
 
 
 if __name__ == "__main__":

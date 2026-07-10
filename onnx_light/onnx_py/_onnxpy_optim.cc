@@ -1285,7 +1285,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "``onnx_light.release_after_shape_tag`` by :meth:`write_to_metadata`. When "
           "``value_tags`` is omitted, this method reuses the last tags stored by "
           ":meth:`compute_value_and_node_tags` on the same context, if any. When ``verbose >= 1``, "
-          "prints one line per in-place reuse decision, release, and not-used-after annotation.")
+          "prints one line per in-place reuse decision, release, and not-used-after annotation to "
+          "``stdout``.")
       .def(
           "compute_release_after_shape_tagged",
           [](const onnx_annotations::ComputeContext &self, int verbose) {

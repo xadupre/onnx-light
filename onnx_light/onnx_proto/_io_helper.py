@@ -177,7 +177,10 @@ def save(
         if location is None:
             location = str(f) + ".data"
         # Validate that the external data location does not escape the model
-        # directory via path traversal (CVE-2025-51480).
+        # directory via path traversal (CVE-2025-51480) and does not point at
+        # a symlink or hardlink (GHSA-8qff-7g33-75mx, TOCTOU symlink attack on
+        # save_external_data).  The C++ write path performs a second check at
+        # open time; both layers together close the TOCTOU window.
         from ._path_security import validate_external_data_path
 
         model_dir = os.path.dirname(os.path.abspath(str(f)))

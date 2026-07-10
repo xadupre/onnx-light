@@ -6,9 +6,9 @@
 
 #include "onnx_kernels/runtime_context.h"
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -52,43 +52,48 @@ double DecodeHalf(uint16_t h) {
   } else {
     f = (sign << 31) | (static_cast<uint32_t>(exp - 15 + 127) << 23) | (mant << 13);
   }
-  float fv;
-  std::memcpy(&fv, &f, sizeof(float));
-  return static_cast<double>(fv);
+  return static_cast<double>(std::bit_cast<float>(f));
 }
 
-// Reads the per-row log-probabilities of ``input`` into a row-major
-// ``std::vector<double>`` of size ``batch_size * class_size``.
-std::vector<double> ReadLogits(const Tensor &input, int64_t batch_size, int64_t class_size) {
-  const int64_t n = batch_size * class_size;
-  std::vector<double> logits(static_cast<std::size_t>(n));
-  switch (static_cast<DataType>(input.data_type)) {
-  case DataType::FLOAT: {
-    const float *src = input.AsFloat();
-    for (int64_t i = 0; i < n; ++i) {
-      logits[static_cast<std::size_t>(i)] = static_cast<double>(src[i]);
+// Builds the CDF for a single batch row from a typed pointer and returns the
+// unnormalized probability sum. The ``cdf`` vector is written in-place and
+// must already be sized to ``class_size``. No intermediate conversion buffer
+// is allocated; values are read directly from ``row``.
+template <typename T>
+double BuildRowCdf(const T *row, int64_t class_size, std::vector<double> &cdf) {
+  double max_logit = static_cast<double>(row[0]);
+  for (int64_t c = 1; c < class_size; ++c) {
+    const double v = static_cast<double>(row[c]);
+    if (v > max_logit) {
+      max_logit = v;
     }
-    break;
   }
-  case DataType::DOUBLE: {
-    const double *src = input.AsDouble();
-    for (int64_t i = 0; i < n; ++i) {
-      logits[static_cast<std::size_t>(i)] = src[i];
+  double sum = 0.0;
+  for (int64_t c = 0; c < class_size; ++c) {
+    const double p = std::exp(static_cast<double>(row[c]) - max_logit);
+    sum += p;
+    cdf[static_cast<std::size_t>(c)] = sum;
+  }
+  return sum;
+}
+
+// Specialisation for FLOAT16 stored as raw uint16_t bytes.
+template <>
+double BuildRowCdf<uint16_t>(const uint16_t *row, int64_t class_size, std::vector<double> &cdf) {
+  double max_logit = DecodeHalf(row[0]);
+  for (int64_t c = 1; c < class_size; ++c) {
+    const double v = DecodeHalf(row[c]);
+    if (v > max_logit) {
+      max_logit = v;
     }
-    break;
   }
-  case DataType::FLOAT16: {
-    const uint16_t *src = reinterpret_cast<const uint16_t *>(input.bytes());
-    for (int64_t i = 0; i < n; ++i) {
-      logits[static_cast<std::size_t>(i)] = DecodeHalf(src[i]);
-    }
-    break;
+  double sum = 0.0;
+  for (int64_t c = 0; c < class_size; ++c) {
+    const double p = std::exp(DecodeHalf(row[c]) - max_logit);
+    sum += p;
+    cdf[static_cast<std::size_t>(c)] = sum;
   }
-  default:
-    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported input dtype ",
-                        std::to_string(input.data_type), ".");
-  }
-  return logits;
+  return sum;
 }
 
 // Returns the byte stride of the supported output dtypes.
@@ -105,20 +110,17 @@ std::size_t OutputElementSize(int32_t dtype) {
   return 0;
 }
 
-// Stores ``sample`` (a class index) at index ``i`` of ``out`` using the
-// stride for ``dtype``.
-void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int64_t sample) {
+// Stores ``sample`` (a class index) at the byte position pointed to by ``out``
+// using the encoding for ``dtype``. The caller is responsible for advancing
+// ``out`` by the element size between successive calls.
+void StoreSample(int32_t dtype, uint8_t *out, int64_t sample) {
   switch (static_cast<DataType>(dtype)) {
-  case DataType::INT32: {
-    const int32_t v = static_cast<int32_t>(sample);
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(int32_t), &v, sizeof(int32_t));
+  case DataType::INT32:
+    *reinterpret_cast<int32_t *>(out) = static_cast<int32_t>(sample);
     break;
-  }
-  case DataType::INT64: {
-    const int64_t v = sample;
-    std::memcpy(out.data() + static_cast<std::size_t>(i) * sizeof(int64_t), &v, sizeof(int64_t));
+  case DataType::INT64:
+    *reinterpret_cast<int64_t *>(out) = sample;
     break;
-  }
   default:
     EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported output dtype ",
                         std::to_string(dtype), ".");
@@ -137,18 +139,42 @@ Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t
                       std::to_string(sample_size), ".");
 
   const int64_t batch_size = input.shape[0];
+  const int32_t out_dtype = (dtype == 0) ? static_cast<int32_t>(DataType::INT32) : dtype;
+  const std::size_t es = OutputElementSize(out_dtype);
+  const int64_t n_out = batch_size * sample_size;
+  const std::size_t out_n_bytes = static_cast<std::size_t>(n_out) * es;
+
+  Tensor out = MakeOutputTensor(out_dtype, {batch_size, sample_size}, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
+  (*this)(input, sample_size, seed, dtype, out);
+  return out;
+}
+
+void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t seed, int32_t dtype,
+                             Tensor &output) const {
+  EXT_ENFORCE_INVALID(input.shape.size() == 2,
+                      "kernel::Multinomial: input must be a 2-D tensor of shape "
+                      "[batch_size, class_size].");
+  EXT_ENFORCE_INVALID(sample_size >= 0,
+                      "kernel::Multinomial: sample_size must be non-negative, got ",
+                      std::to_string(sample_size), ".");
+
+  const int64_t batch_size = input.shape[0];
   const int64_t class_size = input.shape[1];
   EXT_ENFORCE_INVALID(batch_size >= 0 && class_size >= 0,
                       "kernel::Multinomial: input shape must be non-negative.");
   EXT_ENFORCE_INVALID(batch_size == 0 || class_size > 0,
                       "kernel::Multinomial: class_size must be > 0 for a non-empty batch.");
 
-  const std::vector<double> logits = ReadLogits(input, batch_size, class_size);
-
   const int32_t out_dtype = (dtype == 0) ? static_cast<int32_t>(DataType::INT32) : dtype;
+  EXT_ENFORCE_INVALID(output.data_type == out_dtype,
+                      "kernel::Multinomial preallocated output must have the expected dtype.");
+  EXT_ENFORCE_INVALID(output.shape == (std::vector<int64_t>{batch_size, sample_size}),
+                      "kernel::Multinomial preallocated output shape must match the produced "
+                      "tensor shape.");
+
   const std::size_t es = OutputElementSize(out_dtype);
-  const int64_t n_out = batch_size * sample_size;
-  std::vector<uint8_t> out_data(static_cast<std::size_t>(n_out) * es, 0);
+  uint8_t *out_data = output.mutable_bytes();
 
   const uint32_t engine_seed =
       (seed == kNoSeed) ? kDefaultMultinomialSeed : static_cast<uint32_t>(seed);
@@ -159,58 +185,43 @@ Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t
   // unnormalized log-probabilities). Reused across rows.
   std::vector<double> cdf(static_cast<std::size_t>(class_size));
 
-  for (int64_t b = 0; b < batch_size; ++b) {
-    const double *row = logits.data() + static_cast<std::size_t>(b * class_size);
-
-    // Stable softmax: subtract the row max before exponentiating so very
-    // large logits do not overflow.
-    double max_logit = row[0];
-    for (int64_t c = 1; c < class_size; ++c) {
-      if (row[c] > max_logit) {
-        max_logit = row[c];
+  // Dispatch on input dtype once, outside the batch loop, so that typed row
+  // pointers are advanced directly without any intermediate conversion buffer.
+  auto run_batch = [&](auto typed_ptr) {
+    for (int64_t b = 0; b < batch_size; ++b) {
+      const double sum = BuildRowCdf(typed_ptr + b * class_size, class_size, cdf);
+      EXT_ENFORCE_INVALID(sum > 0.0, "kernel::Multinomial: row ", std::to_string(b),
+                          " produced an all-zero probability distribution.");
+      // Normalize the CDF to end at exactly 1.0.
+      for (int64_t c = 0; c < class_size; ++c) {
+        cdf[static_cast<std::size_t>(c)] /= sum;
+      }
+      for (int64_t s = 0; s < sample_size; ++s) {
+        const double u = uniform(engine);
+        // Inverse-CDF: find the smallest index whose CDF >= u.
+        const auto it = std::lower_bound(cdf.begin(), cdf.end(), u);
+        int64_t idx = static_cast<int64_t>(it - cdf.begin());
+        if (idx >= class_size) {
+          idx = class_size - 1;
+        }
+        StoreSample(out_dtype, out_data + static_cast<std::size_t>(b * sample_size + s) * es, idx);
       }
     }
-    double sum = 0.0;
-    for (int64_t c = 0; c < class_size; ++c) {
-      const double p = std::exp(row[c] - max_logit);
-      sum += p;
-      cdf[static_cast<std::size_t>(c)] = sum;
-    }
-    EXT_ENFORCE_INVALID(sum > 0.0, "kernel::Multinomial: row ", std::to_string(b),
-                        " produced an all-zero probability distribution.");
-    // Normalize the CDF to end at exactly 1.0.
-    for (int64_t c = 0; c < class_size; ++c) {
-      cdf[static_cast<std::size_t>(c)] /= sum;
-    }
+  };
 
-    for (int64_t s = 0; s < sample_size; ++s) {
-      const double u = uniform(engine);
-      // Inverse-CDF: find the smallest index whose CDF >= u.
-      const auto it = std::lower_bound(cdf.begin(), cdf.end(), u);
-      int64_t idx = static_cast<int64_t>(it - cdf.begin());
-      if (idx >= class_size) {
-        idx = class_size - 1;
-      }
-      StoreSample(out_dtype, out_data, b * sample_size + s, idx);
-    }
-  }
-
-  return Tensor("", out_dtype, {batch_size, sample_size}, std::move(out_data));
-}
-
-void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t seed, int32_t dtype,
-                             Tensor &output) const {
-  Tensor produced = (*this)(input, sample_size, seed, dtype);
-  EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
-                      "kernel::Multinomial preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == produced.shape,
-                      "kernel::Multinomial preallocated output shape must match the produced "
-                      "tensor shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
-                      "kernel::Multinomial preallocated output buffer has unexpected size in "
-                      "bytes.");
-  if (!produced.data.empty()) {
-    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
+  switch (static_cast<DataType>(input.data_type)) {
+  case DataType::FLOAT:
+    run_batch(input.AsFloat());
+    break;
+  case DataType::DOUBLE:
+    run_batch(input.AsDouble());
+    break;
+  case DataType::FLOAT16:
+    run_batch(reinterpret_cast<const uint16_t *>(input.bytes()));
+    break;
+  default:
+    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported input dtype ",
+                        std::to_string(input.data_type), ".");
   }
 }
 

@@ -5,6 +5,8 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/raw_buffer_allocator.h"
+#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -13,6 +15,8 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_kernels::RuntimeContext;
+using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Bernoulli;
 using onnx_kernels::kernel::Constant;
@@ -239,6 +243,26 @@ TEST(KernelClass, BernoulliRejectsUnsupportedInputDtype) {
   EXPECT_THROW(kernel(int_in), std::invalid_argument);
 }
 
+TEST(KernelClass, BernoulliUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Bernoulli kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {4}, {0.0f, 1.0f, 0.0f, 1.0f});
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+  Tensor y = kernel(x, Bernoulli::kNoSeed, /*dtype=*/0, &rt);
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(y.data.size(), 0u);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{4}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.0f);
+  EXPECT_FLOAT_EQ(py[1], 1.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 1.0f);
+}
+
 TEST(KernelClass, MultinomialProducesInt32SamplesWithExpectedShape) {
   const KernelContext ctx{DefaultOpset(22)};
   Multinomial kernel{ctx};
@@ -440,6 +464,43 @@ TEST(KernelClass, RangeRejectsZeroDelta) {
   const Tensor limit = Tensor::FromInt64("", {}, {5});
   const Tensor delta = Tensor::FromInt64("", {}, {0});
   EXPECT_THROW(kernel(start, limit, delta), std::invalid_argument);
+}
+
+TEST(KernelClass, RangeInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Range kernel{ctx};
+  const Tensor start = Tensor::FromFloat("", {}, {1.0f});
+  const Tensor limit = Tensor::FromFloat("", {}, {5.0f});
+  const Tensor delta = Tensor::FromFloat("", {}, {2.0f});
+  Tensor y("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+  kernel(start, limit, delta, y);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 3.0f);
+}
+
+TEST(KernelClass, RangeInPlaceInt32NegativeDelta) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Range kernel{ctx};
+  const Tensor start = Tensor::FromInt32("", {}, {10});
+  const Tensor limit = Tensor::FromInt32("", {}, {6});
+  const Tensor delta = Tensor::FromInt32("", {}, {-3});
+  Tensor y("", onnx_kernels::DataType::INT32, {2}, std::vector<uint8_t>(2 * sizeof(int32_t)));
+  kernel(start, limit, delta, y);
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], 10);
+  EXPECT_EQ(py[1], 7);
+}
+
+TEST(KernelClass, RangeInPlaceEmptyOutput) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Range kernel{ctx};
+  const Tensor start = Tensor::FromInt64("", {}, {5});
+  const Tensor limit = Tensor::FromInt64("", {}, {5});
+  const Tensor delta = Tensor::FromInt64("", {}, {1});
+  Tensor y("", onnx_kernels::DataType::INT64, {0}, std::vector<uint8_t>(0));
+  kernel(start, limit, delta, y);
+  EXPECT_EQ(y.element_count(), 0);
 }
 
 } // namespace Test

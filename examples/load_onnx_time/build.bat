@@ -9,7 +9,7 @@
 ::    On Windows you can install onnx via vcpkg: vcpkg install onnx
 ::
 :: 2. From-source build (automatic when system onnx is absent, or explicit):
-::      set ONNX_GIT_TAG=v1.17.0 && examples\load_onnx_time\build.bat
+::      set ONNX_GIT_TAG=v1.21.0 && examples\load_onnx_time\build.bat
 ::    The script clones onnx from git and passes FETCHCONTENT_SOURCE_DIR_ONNX
 ::    to cmake so that onnx (and all its transitive dependencies: protobuf,
 ::    abseil, utf8_range, …) is built inline inside the example's cmake build.
@@ -26,12 +26,12 @@
 ::                     (default: build\load-onnx-time-example)
 ::
 :: Environment variables:
-::   ONNX_GIT_TAG         git tag/branch for onnx (e.g. v1.17.0).  When unset
+::   ONNX_GIT_TAG         git tag/branch for onnx (e.g. v1.21.0).  When unset
 ::                        the script checks whether Python onnx is importable;
 ::                        if absent it switches to a from-source build using
 ::                        ONNX_DEFAULT_GIT_TAG.
 ::   ONNX_GIT_URL         onnx git URL
-::   ONNX_DEFAULT_GIT_TAG fallback onnx tag (default: v1.17.0)
+::   ONNX_DEFAULT_GIT_TAG fallback onnx tag (default: v1.21.0)
 ::   CMAKE_BUILD_TYPE     build type (default: Release)
 
 setlocal enabledelayedexpansion
@@ -66,7 +66,7 @@ if "%CMAKE_BUILD_PARALLEL_LEVEL%"=="" (
 )
 
 if "%ONNX_GIT_URL%"=="" set "ONNX_GIT_URL=https://github.com/onnx/onnx.git"
-if "%ONNX_DEFAULT_GIT_TAG%"=="" set "ONNX_DEFAULT_GIT_TAG=v1.17.0"
+if "%ONNX_DEFAULT_GIT_TAG%"=="" set "ONNX_DEFAULT_GIT_TAG=v1.21.0"
 
 :: ---- auto-detect: switch to from-source if onnx is not in site-packages ---
 if "%ONNX_GIT_TAG%"=="" (

@@ -5,11 +5,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.5] – Unreleased
 
+### New Features
+
+- Add `SimpleRawBufferAllocator` with virtual interface and wire into `RuntimeContext` ([#3241](https://github.com/xadupre/onnx-light/pull/3241))
+- Add `RuntimeContext*` to all kernel `operator()` signatures for allocator-backed output buffers ([#3261](https://github.com/xadupre/onnx-light/pull/3261))
+
+### Improvements
+
+- Extend shape-tag metadata coverage to initializers ([#3233](https://github.com/xadupre/onnx-light/pull/3233))
+- Replace `vector` fields in `Tensor` with dedicated `Shape` and `RawBuffer` types ([#3238](https://github.com/xadupre/onnx-light/pull/3238))
+- Build modifications for onnx-light ([#3239](https://github.com/xadupre/onnx-light/pull/3239))
+- Track allocator-owned `RawBuffer` in `Tensor` and route `RuntimeContext` tensor storage through allocator ([#3259](https://github.com/xadupre/onnx-light/pull/3259))
+- Add `onnx_light.not_used_after` metadata for last-use graph inputs/initializers ([#3298](https://github.com/xadupre/onnx-light/pull/3298))
+- Use `Shape` in `elementwise_helpers` for broadcast shape metadata ([#3323](https://github.com/xadupre/onnx-light/pull/3323))
+- Eliminate `memcpy` in `Range` kernel preallocated-output path ([#3317](https://github.com/xadupre/onnx-light/pull/3317))
+- Eliminate `memcpy` in `Random` kernels ([#3318](https://github.com/xadupre/onnx-light/pull/3318))
+- Eliminate `memcpy` from `Multinomial` kernel ([#3319](https://github.com/xadupre/onnx-light/pull/3319))
+- Propagate onnx/onnx#8168: update shape inference tests to use parser ([#3292](https://github.com/xadupre/onnx-light/pull/3292))
+
+### Fixes
+
+- Fix `Transpose` inplace reuse kind is always `kGreater`, never `kEqual` ([#3235](https://github.com/xadupre/onnx-light/pull/3235))
+- Fix inplace reuse missing `kGreater` for `Transpose`/`Reshape` with symbolic dimensions ([#3253](https://github.com/xadupre/onnx-light/pull/3253))
+- Add shape tag annotation for model outputs ([#3255](https://github.com/xadupre/onnx-light/pull/3255))
+- Fix backward tag propagation for `mask_float`/`mask_4d` through `Sub` in `tiny_llm` ([#3257](https://github.com/xadupre/onnx-light/pull/3257))
+- Fix shape tag propagation for `Concat`, `Reshape`, and `Cast` ([#3263](https://github.com/xadupre/onnx-light/pull/3263))
+- Propagate onnx#8114: validate `Scan` `num_scan_inputs` to prevent shape-inference underflow ([#3293](https://github.com/xadupre/onnx-light/pull/3293))
+- Correct `Unsqueeze` inplace reuse annotation when shape proof is unavailable ([#3296](https://github.com/xadupre/onnx-light/pull/3296))
+- Fix `If::operator()` — avoid extra allocation and `memcpy`, propagate full `RuntimeContext` to branches ([#3302](https://github.com/xadupre/onnx-light/pull/3302))
+- Fix `Bernoulli` kernel: use allocator from `RuntimeContext` for output tensor ([#3306](https://github.com/xadupre/onnx-light/pull/3306))
+
+### Security
+
+- Fix `size_t` underflow in `Scan` shape inference (GHSA-qrhj-v62m-vmpf) ([#3294](https://github.com/xadupre/onnx-light/pull/3294))
+- Harden zero-copy parse path for ORT format guardrails ([#3268](https://github.com/xadupre/onnx-light/pull/3268))
+- Harden advisory-related tar extraction path validation ([#3270](https://github.com/xadupre/onnx-light/pull/3270))
+- Validate `graphviz` format argument to prevent command injection ([#3286](https://github.com/xadupre/onnx-light/pull/3286))
+- Replace insecure temporary file creation in path security test ([#3287](https://github.com/xadupre/onnx-light/pull/3287))
+- Prevent Actions code injection in `clang_tidy.yml` ([#3288](https://github.com/xadupre/onnx-light/pull/3288))
+- Prevent Actions expression injection in release wheel workflows ([#3289](https://github.com/xadupre/onnx-light/pull/3289))
+- Address GHSA-3jf9-582g-jjmq — bounds and file-size validation for external data ([#3320](https://github.com/xadupre/onnx-light/pull/3320))
+- Harden external data loading against hardlink and symlink attacks (GHSA-xrch-8vh7-h656) ([#3322](https://github.com/xadupre/onnx-light/pull/3322))
+- Raise upstream ONNX minimum/default to 1.21.0 for GHSA-p893-rvq9-2xf9 ([#3324](https://github.com/xadupre/onnx-light/pull/3324))
+- Investigated GHSA-hqmj-h5c6-369m (`onnx.hub.load` silent-bypass): onnx-light has never implemented a hub module and is not affected ([#3274](https://github.com/xadupre/onnx-light/issues/3274))
+- Investigated GHSA-8qff-7g33-75mx (TOCTOU arbitrary file read/write in `save_external_data`): onnx-light does not expose a Python `save_external_data` function; saving routes through C++ with Python-level pre-validation (`validate_external_data_path`) that rejects symlinks and hardlinks at the target path. Added defense-in-depth symlink checks at the C++ write layer (`FileWriteStream`, `validate_weights_file_is_next_to_model`, `validate_external_location_is_next_to_model`) to close the residual TOCTOU window, and regression tests to cover this path ([#3271](https://github.com/xadupre/onnx-light/issues/3271))
+
+### Testing
+
+- Add Loop early-exit shape inference regression test (onnx/onnx#8146) ([#3290](https://github.com/xadupre/onnx-light/pull/3290))
+- Add `ScatterND` element-level index test cases for `max`/`min` reductions (onnx#8099) ([#3291](https://github.com/xadupre/onnx-light/pull/3291))
+- Enforce full metadata tagging coverage in shape-tag backend tests ([#3300](https://github.com/xadupre/onnx-light/pull/3300))
+
 ## [0.1.4] – 2026-07-07
 
 ### Fixes
 
 - Fix Win32 narrowing in backend-test DLPack shape conversion ([#3223](https://github.com/xadupre/onnx-light/pull/3223))
+- Suppress GCC 13 false-positive `-Wfree-nonheap-object` in `ComputeScaleIndex` ([#3227](https://github.com/xadupre/onnx-light/pull/3227))
+
+### Security
+
+- Validate `raw_data` alignment in `ParseData` to prevent out-of-bounds copy (propagate ONNX #8032) ([#3225](https://github.com/xadupre/onnx-light/pull/3225))
 
 ## [0.1.3] – 2026-07-06
 

@@ -70,10 +70,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          tag="${{ inputs.tag }}"
+          tag="${INPUT_TAG}"
           if [ -z "${tag}" ]; then
-            tag="${{ github.ref_name }}"
+            tag="${GITHUB_REF_NAME}"
           fi
           tag="${tag#refs/tags/}"
           if ! gh release view "${tag}" >/dev/null 2>&1; then
@@ -131,10 +132,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          tag="${{ inputs.tag }}"
+          tag="${INPUT_TAG}"
           if [ -z "${tag}" ]; then
-            tag="${{ github.ref_name }}"
+            tag="${GITHUB_REF_NAME}"
           fi
           tag="${tag#refs/tags/}"
           if ! gh release view "${tag}" >/dev/null 2>&1; then
@@ -191,10 +193,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          tag="${{ inputs.tag }}"
+          tag="${INPUT_TAG}"
           if [ -z "${tag}" ]; then
-            tag="${{ github.ref_name }}"
+            tag="${GITHUB_REF_NAME}"
           fi
           tag="${tag#refs/tags/}"
           if ! gh release view "${tag}" >/dev/null 2>&1; then

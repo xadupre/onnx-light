@@ -17,7 +17,7 @@
 # abseil and utf8_range) inline – no manual target_include_directories /
 # target_link_libraries needed.  Explicit git tag overrides:
 #
-#   ONNX_GIT_TAG=v1.17.0 bash examples/load_onnx_time/build.sh
+#   ONNX_GIT_TAG=v1.21.0 bash examples/load_onnx_time/build.sh
 #
 # Run
 # ---
@@ -58,7 +58,7 @@ if(NOT TARGET onnx)
     # onnx from ONNX_GIT_URL at configure time.
     # ------------------------------------------------------------------
     if(NOT DEFINED ONNX_GIT_TAG)
-        set(ONNX_GIT_TAG "v1.17.0")
+        set(ONNX_GIT_TAG "v1.21.0")
     endif()
     if(NOT DEFINED ONNX_GIT_URL)
         set(ONNX_GIT_URL "https://github.com/onnx/onnx.git")

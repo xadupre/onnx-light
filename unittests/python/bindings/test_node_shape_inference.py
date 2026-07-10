@@ -108,6 +108,42 @@ class TestNodeShapeInference(ExtTestCase):
             defs.get_schema("ConvTranspose").since_version
         )
 
+    def _make_scan_body_identity(self):
+        """Creates a minimal Scan body graph: ``y_elt = Identity(x_elt)``."""
+        body_graph = oh.make_graph(
+            [oh.make_node("Identity", ["x_elt"], ["y_elt"])],
+            "scan_body",
+            [oh.make_tensor_value_info("x_elt", onnxl.TensorProto.FLOAT, None)],
+            [oh.make_tensor_value_info("y_elt", onnxl.TensorProto.FLOAT, None)],
+        )
+        return body_graph
+
+    def _check_scan_num_scan_inputs_out_of_range(self, opset: int) -> None:
+        """Checks that Scan with num_scan_inputs > num_inputs raises InferenceError.
+
+        GHSA-qrhj-v62m-vmpf: num_scan_inputs > num_inputs caused a size_t
+        underflow in ScanInferenceFunction leading to out-of-bounds indexing
+        and potential memory corruption.  The fix validates the bounds before
+        the subtraction.
+        """
+        schema = defs.get_schema("Scan", opset, "")
+        body = self._make_scan_body_identity()
+        # 1 input but num_scan_inputs=9 — previously caused size_t underflow.
+        node = oh.make_node("Scan", ["x"], ["y"], body=body, num_scan_inputs=9)
+        xtype = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [4, 3])
+        with self.assertRaises(shape_inference.InferenceError) as cm:
+            shape_inference.infer_node_outputs(schema, node, {"x": xtype})
+        self.assertIn("num_scan_inputs", str(cm.exception))
+
+    def test_scan_num_scan_inputs_out_of_range_opset9(self) -> None:
+        self._check_scan_num_scan_inputs_out_of_range(9)
+
+    def test_scan_num_scan_inputs_out_of_range_opset11(self) -> None:
+        self._check_scan_num_scan_inputs_out_of_range(11)
+
+    def test_scan_num_scan_inputs_out_of_range_latest(self) -> None:
+        self._check_scan_num_scan_inputs_out_of_range(defs.get_schema("Scan").since_version)
+
 
 if __name__ == "__main__":
     unittest.main()

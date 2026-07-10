@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import os
 import sys
 from typing import TYPE_CHECKING, Any
 
@@ -195,13 +196,16 @@ def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
 
     Validates that the external data path does not escape *base_dir* via
     path traversal or symlink indirection before reading the file.
+    Also validates that ``offset`` and ``length`` metadata values are
+    non-negative and within the actual file size (GHSA-3jf9-582g-jjmq).
 
     Args:
         tensor: a TensorProto object whose external_data field describes the file.
         base_dir: directory that contains the external data file.
 
     Raises:
-        ValueError: If the location escapes the base directory.
+        ValueError: If the location escapes the base directory, or if
+            ``offset`` / ``length`` are negative or exceed the file size.
     """
     from ._path_security import validate_external_data_path
 
@@ -218,11 +222,39 @@ def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
         elif key == "length":
             length = int(value)
 
+    if offset is not None and offset < 0:
+        raise ValueError(
+            f"External data offset must be non-negative, got {offset} "
+            f"for tensor {tensor.name!r}."
+        )
+    if length is not None and length < 0:
+        raise ValueError(
+            f"External data length must be non-negative, got {length} "
+            f"for tensor {tensor.name!r}."
+        )
+
     data_path = validate_external_data_path(location, base_dir)
     with open(data_path, "rb") as data_file:
+        file_size = os.fstat(data_file.fileno()).st_size
+        read_start = offset if offset is not None else 0
         if offset is not None:
+            if offset > file_size:
+                raise ValueError(
+                    f"External data offset ({offset}) exceeds file size "
+                    f"({file_size}) for tensor {tensor.name!r}."
+                )
             data_file.seek(offset)
-        tensor.raw_data = data_file.read(length) if length is not None else data_file.read()
+        if length is not None:
+            available = file_size - read_start
+            if length > available:
+                raise ValueError(
+                    f"External data length ({length}) exceeds available data "
+                    f"({available} bytes from offset {read_start}) "
+                    f"for tensor {tensor.name!r}."
+                )
+            tensor.raw_data = data_file.read(length)
+        else:
+            tensor.raw_data = data_file.read()
 
 
 def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PLR0911

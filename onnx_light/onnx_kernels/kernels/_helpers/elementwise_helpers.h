@@ -37,9 +37,9 @@ namespace detail {
 /// reported for diagnostics. ``nx``/``ny`` are kept for fast-path detection
 /// (equal-shape or scalar broadcasting).
 struct BroadcastInfo {
-  std::vector<int64_t> shape;
-  std::vector<int64_t> shape_x;
-  std::vector<int64_t> shape_y;
+  Shape shape;
+  Shape shape_x;
+  Shape shape_y;
   std::vector<int64_t> strides_x;
   std::vector<int64_t> strides_y;
   int64_t element_count = 0;
@@ -65,7 +65,7 @@ BroadcastInfo CheckBinaryBroadcastInOut(const char *op_name, const char *in_dtyp
 /// Verifies the caller-supplied preallocated output tensor matches the
 /// expected dtype, shape and byte buffer size.
 void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_t expected_dtype,
-                             const std::vector<int64_t> &expected_shape, size_t expected_bytes,
+                             const Shape &expected_shape, size_t expected_bytes,
                              const Tensor &output);
 
 /// In-place element-wise binary kernel driver. Validates inputs + output then

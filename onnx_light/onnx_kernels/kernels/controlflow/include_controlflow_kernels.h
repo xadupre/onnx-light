@@ -48,13 +48,18 @@ namespace kernel {
 //     (``operator()(cond, then_value, else_value [, output])``) consume
 //     already-evaluated branch outputs and simply select one based on the
 //     scalar BOOL ``cond``. They are convenient for unit tests that do not
-//     need a graph executor.
+//     need a graph executor. The returning overload returns a copy of the
+//     selected branch tensor directly, avoiding any extra allocation or
+//     explicit buffer copy.
 //   * The "branch graphs" overload
-//     (``operator()(cond, then_branch, else_branch, rt)``) executes the
+//     (``operator()(rt, cond, then_branch, else_branch)``) executes the
 //     selected ``GraphProto`` subgraph through :cpp:func:`RunGraph` using
 //     the caller-provided :cpp:class:`RuntimeContext` and returns the
-//     subgraph's outputs in declaration order. This is the form used by
-//     :cpp:func:`RunIfNode` when dispatching ``If`` from a model graph.
+//     subgraph's outputs in declaration order. The caller's tensors,
+//     sequences, and verbosity level are all propagated to the child
+//     context so subgraphs can reference outer-scope values.
+//     This is the form used by :cpp:func:`RunIfNode` when dispatching
+//     ``If`` from a model graph.
 //
 // Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
 // query indicating whether the output tensor's data buffer may alias one of
@@ -68,8 +73,7 @@ namespace kernel {
 class If : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
-                    RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value) const;
   void operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
                   Tensor &output) const;
 
@@ -80,8 +84,11 @@ public:
   /// the selected subgraph through :cpp:func:`RunGraph` using ``rt`` (a
   /// child :cpp:class:`RuntimeContext` is created internally so the
   /// caller's tensor map is left untouched apart from being inherited as
-  /// the outer scope of the subgraph). The returned vector contains the
-  /// subgraph outputs in the order declared by ``branch.output()``.
+  /// the outer scope of the subgraph). The child context also inherits
+  /// ``rt.sequences()`` and ``rt.verbose()`` so that outer-scope
+  /// sequence values and diagnostic verbosity are visible inside the
+  /// branch. The returned vector contains the subgraph outputs in the
+  /// order declared by ``branch.output()``.
   ///
   /// @throws std::invalid_argument if ``cond`` is not a BOOL scalar, if a
   ///         declared subgraph output is missing, if ``then_branch`` and

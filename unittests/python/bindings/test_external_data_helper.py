@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+import warnings
 
 import numpy as np
 
@@ -149,6 +150,188 @@ class TestExternalDataHelper(ExtTestCase):
         self.assertEqual(info.location, "")
         self.assertIsNone(info.offset)
         self.assertIsNone(info.length)
+
+    def test_external_data_info_checksum_and_basepath(self):
+        """Tests that ExternalDataInfo parses checksum and basepath fields."""
+        tensor = onnxl.TensorProto()
+        tensor.name = "t"
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        tensor.data_location = onnxl.TensorProto.EXTERNAL
+        for k, v in [("location", "data.bin"), ("checksum", "abc123"), ("basepath", "/some/dir")]:
+            entry = tensor.external_data.add()
+            entry.key = k
+            entry.value = v
+
+        info = ExternalDataInfo(tensor)
+        self.assertEqual(info.location, "data.bin")
+        self.assertEqual(info.checksum, "abc123")
+        self.assertEqual(info.basepath, "/some/dir")
+
+    # ------------------------------------------------------------------
+    # Security tests: GHSA-3jf9-582g-jjmq (CVE-2026-34445)
+    # ------------------------------------------------------------------
+
+    def test_external_data_info_unknown_key_warns(self):
+        """Unknown external data keys must trigger a warning and be ignored."""
+        tensor = onnxl.TensorProto()
+        tensor.name = "t"
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        tensor.data_location = onnxl.TensorProto.EXTERNAL
+        entry_loc = tensor.external_data.add()
+        entry_loc.key = "location"
+        entry_loc.value = "data.bin"
+        entry_bad = tensor.external_data.add()
+        entry_bad.key = "__class__"
+        entry_bad.value = "malicious"
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            info = ExternalDataInfo(tensor)
+
+        self.assertEqual(info.location, "data.bin")
+        self.assertIsNone(info.offset)
+        self.assertEqual(len(caught), 1)
+        self.assertIn("__class__", str(caught[0].message))
+
+    def test_external_data_info_negative_offset_raises(self):
+        """ExternalDataInfo must reject a negative offset."""
+        tensor = onnxl.TensorProto()
+        tensor.name = "t"
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        tensor.data_location = onnxl.TensorProto.EXTERNAL
+        for k, v in [("location", "data.bin"), ("offset", "-1")]:
+            entry = tensor.external_data.add()
+            entry.key = k
+            entry.value = v
+
+        with self.assertRaises(ValueError):
+            ExternalDataInfo(tensor)
+
+    def test_external_data_info_negative_length_raises(self):
+        """ExternalDataInfo must reject a negative length."""
+        tensor = onnxl.TensorProto()
+        tensor.name = "t"
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        tensor.data_location = onnxl.TensorProto.EXTERNAL
+        for k, v in [("location", "data.bin"), ("length", "-5")]:
+            entry = tensor.external_data.add()
+            entry.key = k
+            entry.value = v
+
+        with self.assertRaises(ValueError):
+            ExternalDataInfo(tensor)
+
+    def test_load_external_data_offset_past_eof_raises(self):
+        """_load_external_data_for_tensor must raise when offset > file size."""
+        from onnx_light.onnx_proto._numpy_helper import _load_external_data_for_tensor
+
+        values = np.arange(4, dtype=np.float32)
+        with tempfile.TemporaryDirectory() as tmp:
+            ext_name = "data.bin"
+            with open(os.path.join(tmp, ext_name), "wb") as f:
+                f.write(values.tobytes())  # 16 bytes
+
+            tensor = onnxl.TensorProto()
+            tensor.name = "t"
+            tensor.data_type = onnxl.TensorProto.FLOAT
+            tensor.data_location = onnxl.TensorProto.EXTERNAL
+            for k, v in [("location", ext_name), ("offset", "99999")]:
+                entry = tensor.external_data.add()
+                entry.key = k
+                entry.value = v
+
+            with self.assertRaises(ValueError):
+                _load_external_data_for_tensor(tensor, tmp)
+
+    def test_load_external_data_length_exceeds_available_raises(self):
+        """_load_external_data_for_tensor must raise when length > available bytes."""
+        from onnx_light.onnx_proto._numpy_helper import _load_external_data_for_tensor
+
+        values = np.arange(4, dtype=np.float32)
+        with tempfile.TemporaryDirectory() as tmp:
+            ext_name = "data.bin"
+            with open(os.path.join(tmp, ext_name), "wb") as f:
+                f.write(values.tobytes())  # 16 bytes
+
+            tensor = onnxl.TensorProto()
+            tensor.name = "t"
+            tensor.data_type = onnxl.TensorProto.FLOAT
+            tensor.data_location = onnxl.TensorProto.EXTERNAL
+            for k, v in [("location", ext_name), ("offset", "0"), ("length", "99999")]:
+                entry = tensor.external_data.add()
+                entry.key = k
+                entry.value = v
+
+            with self.assertRaises(ValueError):
+                _load_external_data_for_tensor(tensor, tmp)
+
+    def test_load_external_data_negative_offset_raises(self):
+        """_load_external_data_for_tensor must raise when offset is negative."""
+        from onnx_light.onnx_proto._numpy_helper import _load_external_data_for_tensor
+
+        values = np.arange(4, dtype=np.float32)
+        with tempfile.TemporaryDirectory() as tmp:
+            ext_name = "data.bin"
+            with open(os.path.join(tmp, ext_name), "wb") as f:
+                f.write(values.tobytes())
+
+            tensor = onnxl.TensorProto()
+            tensor.name = "t"
+            tensor.data_type = onnxl.TensorProto.FLOAT
+            tensor.data_location = onnxl.TensorProto.EXTERNAL
+            for k, v in [("location", ext_name), ("offset", "-1")]:
+                entry = tensor.external_data.add()
+                entry.key = k
+                entry.value = v
+
+            with self.assertRaises(ValueError):
+                _load_external_data_for_tensor(tensor, tmp)
+
+    def test_load_external_data_negative_length_raises(self):
+        """_load_external_data_for_tensor must raise when length is negative."""
+        from onnx_light.onnx_proto._numpy_helper import _load_external_data_for_tensor
+
+        values = np.arange(4, dtype=np.float32)
+        with tempfile.TemporaryDirectory() as tmp:
+            ext_name = "data.bin"
+            with open(os.path.join(tmp, ext_name), "wb") as f:
+                f.write(values.tobytes())
+
+            tensor = onnxl.TensorProto()
+            tensor.name = "t"
+            tensor.data_type = onnxl.TensorProto.FLOAT
+            tensor.data_location = onnxl.TensorProto.EXTERNAL
+            for k, v in [("location", ext_name), ("length", "-1")]:
+                entry = tensor.external_data.add()
+                entry.key = k
+                entry.value = v
+
+            with self.assertRaises(ValueError):
+                _load_external_data_for_tensor(tensor, tmp)
+
+    def test_load_external_data_valid_offset_and_length(self):
+        """_load_external_data_for_tensor reads the correct slice when given offset/length."""
+        from onnx_light.onnx_proto._numpy_helper import _load_external_data_for_tensor
+
+        values = np.arange(8, dtype=np.float32)  # 32 bytes total
+        with tempfile.TemporaryDirectory() as tmp:
+            ext_name = "data.bin"
+            with open(os.path.join(tmp, ext_name), "wb") as f:
+                f.write(values.tobytes())
+
+            # Read only elements [4:8] (16 bytes starting at byte offset 16)
+            tensor = onnxl.TensorProto()
+            tensor.name = "t"
+            tensor.data_type = onnxl.TensorProto.FLOAT
+            tensor.data_location = onnxl.TensorProto.EXTERNAL
+            for k, v in [("location", ext_name), ("offset", "16"), ("length", "16")]:
+                entry = tensor.external_data.add()
+                entry.key = k
+                entry.value = v
+
+            _load_external_data_for_tensor(tensor, tmp)
+            got = np.frombuffer(tensor.raw_data, dtype=np.float32)
+            np.testing.assert_array_equal(got, values[4:])
 
 
 if __name__ == "__main__":

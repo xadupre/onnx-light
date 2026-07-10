@@ -4972,6 +4972,184 @@ TEST(onnx_proto, TensorProto_CopyFromWithDataLocation) {
   EXPECT_EQ(target.ref_external_data()[0].ref_value(), "source_file.bin");
 }
 
+// Helper: build a minimal EXTERNAL TensorProto with the given location string.
+static TensorProto MakeExternalTensor(const std::string &location) {
+  TensorProto t;
+  t.set_name("test_tensor");
+  t.set_data_type(TensorProto::DataType::FLOAT);
+  t.set_data_location(TensorProto::DataLocation::EXTERNAL);
+  StringStringEntryProto *e = t.add_external_data();
+  e->set_key("location");
+  e->set_value(location);
+  return t;
+}
+
+TEST(onnx_proto, LoadExternalData_RejectsPathTraversal) {
+#ifndef ONNX_NO_EXCEPTIONS
+  namespace fs = std::filesystem;
+  fs::path dir = fs::temp_directory_path() / "onnx_light_load_traversal_test";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+
+  // Create a real weights file inside the directory.
+  {
+    std::ofstream ofs(dir / "weights.bin", std::ios::binary);
+    ofs << "data";
+  }
+
+  TensorProto t1 = MakeExternalTensor("../escape.bin");
+  EXPECT_THROW(t1.LoadExternalData(dir.string()), std::exception);
+
+  TensorProto t2 = MakeExternalTensor("/etc/passwd");
+  EXPECT_THROW(t2.LoadExternalData(dir.string()), std::exception);
+
+  // Lexically normalizes to ../outside, must be rejected.
+  TensorProto t3 = MakeExternalTensor("subdir/../../outside.bin");
+  EXPECT_THROW(t3.LoadExternalData(dir.string()), std::exception);
+
+  fs::remove_all(dir);
+#endif
+}
+
+#ifndef _WIN32
+TEST(onnx_proto, LoadExternalData_RejectsSymlink) {
+#ifndef ONNX_NO_EXCEPTIONS
+  namespace fs = std::filesystem;
+  fs::path dir = fs::temp_directory_path() / "onnx_light_load_symlink_test";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+
+  // Create a real target file.
+  fs::path target = dir / "real.bin";
+  {
+    std::ofstream ofs(target, std::ios::binary);
+    ofs.write("test", 4);
+  }
+
+  // Create a symlink pointing to the real file inside the directory.
+  fs::path link = dir / "link.bin";
+  fs::create_symlink(target, link);
+
+  TensorProto t = MakeExternalTensor("link.bin");
+  EXPECT_THROW(t.LoadExternalData(dir.string()), std::exception);
+
+  fs::remove_all(dir);
+#endif
+}
+
+TEST(onnx_proto, LoadExternalData_RejectsSymlinkOutside) {
+#ifndef ONNX_NO_EXCEPTIONS
+  namespace fs = std::filesystem;
+  fs::path dir = fs::temp_directory_path() / "onnx_light_load_symlink_out_test";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  fs::path outside = fs::temp_directory_path() / "onnx_light_load_symlink_out_secret";
+  fs::remove_all(outside);
+  fs::create_directories(outside);
+  {
+    std::ofstream ofs(outside / "secret.bin", std::ios::binary);
+    ofs.write("secret", 6);
+  }
+
+  // Symlink inside dir pointing to a file outside dir.
+  fs::path link = dir / "evil.bin";
+  fs::create_symlink(outside / "secret.bin", link);
+
+  TensorProto t = MakeExternalTensor("evil.bin");
+  EXPECT_THROW(t.LoadExternalData(dir.string()), std::exception);
+
+  fs::remove_all(dir);
+  fs::remove_all(outside);
+#endif
+}
+
+TEST(onnx_proto, LoadExternalData_RejectsParentDirSymlink) {
+#ifndef ONNX_NO_EXCEPTIONS
+  namespace fs = std::filesystem;
+  fs::path dir = fs::temp_directory_path() / "onnx_light_load_parentsym_test";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  fs::path outside = fs::temp_directory_path() / "onnx_light_load_parentsym_outside";
+  fs::remove_all(outside);
+  fs::create_directories(outside);
+  {
+    std::ofstream ofs(outside / "secret.bin", std::ios::binary);
+    ofs.write("secret", 6);
+  }
+
+  // Create a directory symlink inside dir pointing outside.
+  fs::path symlink_subdir = dir / "subdir";
+  fs::create_directory_symlink(outside, symlink_subdir);
+
+  // "subdir/secret.bin" resolves outside dir via the symlink.
+  TensorProto t = MakeExternalTensor("subdir/secret.bin");
+  EXPECT_THROW(t.LoadExternalData(dir.string()), std::exception);
+
+  fs::remove_all(dir);
+  fs::remove_all(outside);
+#endif
+}
+#endif // !_WIN32
+
+TEST(onnx_proto, LoadExternalData_RejectsHardlink) {
+#ifndef ONNX_NO_EXCEPTIONS
+  namespace fs = std::filesystem;
+  fs::path dir = fs::temp_directory_path() / "onnx_light_load_hardlink_test";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+
+  // Create original file outside dir to simulate a sensitive file.
+  fs::path original = fs::temp_directory_path() / "onnx_light_hardlink_original.bin";
+  {
+    std::ofstream ofs(original, std::ios::binary);
+    ofs.write("sensitive", 9);
+  }
+
+  // Create a hard link inside dir pointing to the original file.
+  fs::path hardlink = dir / "weights.bin";
+  std::error_code ec;
+  fs::create_hard_link(original, hardlink, ec);
+  if (ec) {
+    // Hard links across filesystems are not supported; skip this test.
+    fs::remove_all(dir);
+    fs::remove(original);
+    GTEST_SKIP() << "Hard links not supported across filesystems on this platform.";
+  }
+
+  TensorProto t = MakeExternalTensor("weights.bin");
+  EXPECT_THROW(t.LoadExternalData(dir.string()), std::exception);
+
+  fs::remove_all(dir);
+  fs::remove(original);
+#endif
+}
+
+#ifndef _WIN32
+// GHSA-8qff-7g33-75mx: FileWriteStream must refuse to open a symlink as target.
+TEST(onnx_stream, FileWriteStream_RejectsSymlink) {
+#ifndef ONNX_NO_EXCEPTIONS
+  namespace fs = std::filesystem;
+  fs::path dir = fs::temp_directory_path() / "onnx_light_write_symlink_test";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+
+  fs::path real_file = dir / "real.bin";
+  {
+    std::ofstream ofs(real_file, std::ios::binary);
+    ofs.write("real", 4);
+  }
+
+  // Place a symlink at the intended write target.
+  fs::path link = dir / "link.bin";
+  fs::create_symlink(real_file, link);
+
+  EXPECT_THROW(utils::FileWriteStream stream(link.string()), std::exception);
+
+  fs::remove_all(dir);
+#endif
+}
+#endif // !_WIN32
+
 TEST(onnx_proto, SequenceProto_Basic) {
   SequenceProto sequence;
 

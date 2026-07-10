@@ -5,12 +5,10 @@
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
 #include <cstdint>
-#include <cstring>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "onnx_kernels/random.h"
 #include "onnx_kernels/runtime_context.h"
@@ -49,8 +47,8 @@ int32_t ResolveOutputDtype(int32_t requested, int32_t default_dtype, const char 
 }
 
 // Converts the FLOAT-typed ``seed`` attribute (passed here as int64) to
-// the ``std::optional<uint64_t>`` accepted by :cpp:func:`Rand` /
-// :cpp:func:`Randn`. ``kNoSeed`` (-1) means "no seed", which maps to
+// the ``std::optional<uint64_t>`` accepted by :cpp:func:`RandUniformInto` /
+// :cpp:func:`RandNormalInto`. ``kNoSeed`` (-1) means "no seed", which maps to
 // ``std::nullopt``.
 std::optional<uint64_t> NormalizeSeed(int64_t seed) {
   if (seed == -1) {
@@ -59,61 +57,69 @@ std::optional<uint64_t> NormalizeSeed(int64_t seed) {
   return static_cast<uint64_t>(seed);
 }
 
-template <typename T>
-Tensor MakeUniformTensor(const std::vector<int64_t> &shape, double low, double high,
-                         std::optional<uint64_t> seed, int32_t dtype) {
-  const std::vector<T> samples = Rand<T>(shape, seed);
-  const T span = static_cast<T>(high - low);
-  const T lowT = static_cast<T>(low);
-  std::vector<uint8_t> bytes(samples.size() * sizeof(T));
-  for (size_t i = 0; i < samples.size(); ++i) {
-    T v = lowT + samples[i] * span;
-    std::memcpy(bytes.data() + i * sizeof(T), &v, sizeof(T));
-  }
-  return Tensor("", dtype, shape, std::move(bytes));
-}
-
-template <typename T>
-Tensor MakeNormalTensor(const std::vector<int64_t> &shape, double mean, double scale,
-                        std::optional<uint64_t> seed, int32_t dtype) {
-  const std::vector<T> samples = Randn<T>(shape, seed);
-  const T meanT = static_cast<T>(mean);
-  const T scaleT = static_cast<T>(scale);
-  std::vector<uint8_t> bytes(samples.size() * sizeof(T));
-  for (size_t i = 0; i < samples.size(); ++i) {
-    T v = meanT + samples[i] * scaleT;
-    std::memcpy(bytes.data() + i * sizeof(T), &v, sizeof(T));
-  }
-  return Tensor("", dtype, shape, std::move(bytes));
-}
-
 Tensor MakeUniform(const std::vector<int64_t> &shape, double low, double high,
-                   std::optional<uint64_t> seed, int32_t dtype, const char *op_name) {
-  CheckShape(shape, op_name);
+                   std::optional<uint64_t> seed, int32_t dtype, const char *op_name,
+                   RuntimeContext *rt) {
+  const int64_t count = CheckShape(shape, op_name);
+  const size_t elem_size =
+      (static_cast<DataType>(dtype) == DataType::DOUBLE) ? sizeof(double) : sizeof(float);
+  Tensor out = MakeOutputTensor(dtype, shape, static_cast<size_t>(count) * elem_size,
+                                rt ? rt->allocator() : nullptr);
   if (static_cast<DataType>(dtype) == DataType::DOUBLE) {
-    return MakeUniformTensor<double>(shape, low, high, seed, dtype);
+    RandUniformInto<double>(reinterpret_cast<double *>(out.mutable_bytes()), count, low, high,
+                            seed);
+  } else {
+    RandUniformInto<float>(reinterpret_cast<float *>(out.mutable_bytes()), count, low, high, seed);
   }
-  return MakeUniformTensor<float>(shape, low, high, seed, dtype);
+  return out;
 }
 
 Tensor MakeNormal(const std::vector<int64_t> &shape, double mean, double scale,
-                  std::optional<uint64_t> seed, int32_t dtype, const char *op_name) {
-  CheckShape(shape, op_name);
+                  std::optional<uint64_t> seed, int32_t dtype, const char *op_name,
+                  RuntimeContext *rt) {
+  const int64_t count = CheckShape(shape, op_name);
+  const size_t elem_size =
+      (static_cast<DataType>(dtype) == DataType::DOUBLE) ? sizeof(double) : sizeof(float);
+  Tensor out = MakeOutputTensor(dtype, shape, static_cast<size_t>(count) * elem_size,
+                                rt ? rt->allocator() : nullptr);
   if (static_cast<DataType>(dtype) == DataType::DOUBLE) {
-    return MakeNormalTensor<double>(shape, mean, scale, seed, dtype);
+    RandNormalInto<double>(reinterpret_cast<double *>(out.mutable_bytes()), count, mean, scale,
+                           seed);
+  } else {
+    RandNormalInto<float>(reinterpret_cast<float *>(out.mutable_bytes()), count, mean, scale, seed);
   }
-  return MakeNormalTensor<float>(shape, mean, scale, seed, dtype);
+  return out;
 }
 
-void CopyIntoOutput(const Tensor &produced, Tensor &output, const char *op_name) {
-  EXT_ENFORCE_INVALID(output.data_type == produced.data_type, "kernel::", op_name,
+void WriteUniformInto(Tensor &output, const std::vector<int64_t> &shape, double low, double high,
+                      std::optional<uint64_t> seed, int32_t out_dtype, const char *op_name) {
+  EXT_ENFORCE_INVALID(output.data_type == out_dtype, "kernel::", op_name,
                       " preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == produced.shape, "kernel::", op_name,
-                      " preallocated output shape must match the produced tensor shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(), "kernel::", op_name,
-                      " preallocated output buffer has unexpected size in bytes.");
-  if (!produced.data.empty()) {
-    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
+  EXT_ENFORCE_INVALID(output.shape == shape, "kernel::", op_name,
+                      " preallocated output shape must match the requested shape.");
+  const int64_t count = CheckShape(shape, op_name);
+  if (static_cast<DataType>(out_dtype) == DataType::DOUBLE) {
+    RandUniformInto<double>(reinterpret_cast<double *>(output.mutable_bytes()), count, low, high,
+                            seed);
+  } else {
+    RandUniformInto<float>(reinterpret_cast<float *>(output.mutable_bytes()), count, low, high,
+                           seed);
+  }
+}
+
+void WriteNormalInto(Tensor &output, const std::vector<int64_t> &shape, double mean, double scale,
+                     std::optional<uint64_t> seed, int32_t out_dtype, const char *op_name) {
+  EXT_ENFORCE_INVALID(output.data_type == out_dtype, "kernel::", op_name,
+                      " preallocated output must have the expected dtype.");
+  EXT_ENFORCE_INVALID(output.shape == shape, "kernel::", op_name,
+                      " preallocated output shape must match the requested shape.");
+  const int64_t count = CheckShape(shape, op_name);
+  if (static_cast<DataType>(out_dtype) == DataType::DOUBLE) {
+    RandNormalInto<double>(reinterpret_cast<double *>(output.mutable_bytes()), count, mean, scale,
+                           seed);
+  } else {
+    RandNormalInto<float>(reinterpret_cast<float *>(output.mutable_bytes()), count, mean, scale,
+                          seed);
   }
 }
 
@@ -122,13 +128,13 @@ void CopyIntoOutput(const Tensor &produced, Tensor &output, const char *op_name)
 Tensor RandomNormal::operator()(const std::vector<int64_t> &shape, double mean, double scale,
                                 int64_t seed, int32_t dtype, RuntimeContext *rt) const {
   const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomNormal");
-  return MakeNormal(shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormal");
+  return MakeNormal(shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormal", rt);
 }
 
 void RandomNormal::operator()(const std::vector<int64_t> &shape, double mean, double scale,
                               int64_t seed, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(shape, mean, scale, seed, dtype);
-  CopyIntoOutput(produced, output, "RandomNormal");
+  const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomNormal");
+  WriteNormalInto(output, shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormal");
 }
 
 Tensor RandomUniform::operator()(const std::vector<int64_t> &shape, double low, double high,
@@ -136,25 +142,29 @@ Tensor RandomUniform::operator()(const std::vector<int64_t> &shape, double low, 
   EXT_ENFORCE_INVALID(high >= low,
                       "kernel::RandomUniform: 'high' must be greater than or equal to 'low'.");
   const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomUniform");
-  return MakeUniform(shape, low, high, NormalizeSeed(seed), out_dtype, "RandomUniform");
+  return MakeUniform(shape, low, high, NormalizeSeed(seed), out_dtype, "RandomUniform", rt);
 }
 
 void RandomUniform::operator()(const std::vector<int64_t> &shape, double low, double high,
                                int64_t seed, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(shape, low, high, seed, dtype);
-  CopyIntoOutput(produced, output, "RandomUniform");
+  EXT_ENFORCE_INVALID(high >= low,
+                      "kernel::RandomUniform: 'high' must be greater than or equal to 'low'.");
+  const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomUniform");
+  WriteUniformInto(output, shape, low, high, NormalizeSeed(seed), out_dtype, "RandomUniform");
 }
 
 Tensor RandomNormalLike::operator()(const Tensor &input, double mean, double scale, int64_t seed,
                                     int32_t dtype, RuntimeContext *rt) const {
   const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomNormalLike");
-  return MakeNormal(input.shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormalLike");
+  return MakeNormal(input.shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormalLike",
+                    rt);
 }
 
 void RandomNormalLike::operator()(const Tensor &input, double mean, double scale, int64_t seed,
                                   int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(input, mean, scale, seed, dtype);
-  CopyIntoOutput(produced, output, "RandomNormalLike");
+  const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomNormalLike");
+  WriteNormalInto(output, input.shape, mean, scale, NormalizeSeed(seed), out_dtype,
+                  "RandomNormalLike");
 }
 
 Tensor RandomUniformLike::operator()(const Tensor &input, double low, double high, int64_t seed,
@@ -162,13 +172,17 @@ Tensor RandomUniformLike::operator()(const Tensor &input, double low, double hig
   EXT_ENFORCE_INVALID(high >= low,
                       "kernel::RandomUniformLike: 'high' must be greater than or equal to 'low'.");
   const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomUniformLike");
-  return MakeUniform(input.shape, low, high, NormalizeSeed(seed), out_dtype, "RandomUniformLike");
+  return MakeUniform(input.shape, low, high, NormalizeSeed(seed), out_dtype, "RandomUniformLike",
+                     rt);
 }
 
 void RandomUniformLike::operator()(const Tensor &input, double low, double high, int64_t seed,
                                    int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(input, low, high, seed, dtype);
-  CopyIntoOutput(produced, output, "RandomUniformLike");
+  EXT_ENFORCE_INVALID(high >= low,
+                      "kernel::RandomUniformLike: 'high' must be greater than or equal to 'low'.");
+  const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomUniformLike");
+  WriteUniformInto(output, input.shape, low, high, NormalizeSeed(seed), out_dtype,
+                   "RandomUniformLike");
 }
 
 } // namespace kernel

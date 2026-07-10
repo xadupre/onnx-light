@@ -457,5 +457,25 @@ const ExecutionPlan &RuntimeContext::GetExecutionPlan(const FunctionProto &func)
 
 void RuntimeContext::ClearExecutionPlans() noexcept { execution_plans_.clear(); }
 
+RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
+  RuntimeContext child(kernel_ctx_);
+  child.set_allocator(allocator_);
+  child.functions() = functions_;
+  child.tensors() = tensors_;
+  child.sequences() = sequences_;
+  child.set_verbose(verbose_);
+  child.set_events_enabled(events_enabled_);
+  child.set_current_subgraph(current_node_index_, attr_name);
+  return child;
+}
+
+RuntimeContext RuntimeContext::MakeFunctionContext() const {
+  RuntimeContext child(kernel_ctx_);
+  child.set_allocator(allocator_);
+  child.functions() = functions_;
+  child.set_verbose(verbose_);
+  return child;
+}
+
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

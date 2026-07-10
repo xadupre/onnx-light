@@ -7,6 +7,7 @@
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/runtime_context.h"
+#include "onnx_kernels/simple_sequence.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
@@ -19,6 +20,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_kernels::RuntimeContext;
+using onnx_kernels::Sequence;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::If;
 using onnx_kernels::kernel::KernelContext;
@@ -313,6 +315,45 @@ TEST(KernelClass, IfBranchOverloadRejectsNonBoolCond) {
 
   Tensor cond_vec("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
   EXPECT_THROW((void)if_kernel(rt, cond_vec, then_graph, else_graph), std::invalid_argument);
+}
+
+TEST(KernelClass, IfBranchOverloadPropagatesOuterScopeSequence) {
+  // Validates that the branch-graph overload propagates the caller's sequences
+  // to the child context so that subgraphs can reference outer-scope sequence
+  // values by name. A SequenceLength node inside the then-branch reads the
+  // outer sequence "outer_seq" (3 elements) and outputs its length as "len".
+  const KernelContext ctx{DefaultOpset(13)};
+  If if_kernel{ctx};
+  onnx_kernels::RuntimeContext rt(ctx);
+
+  // Seed an outer-scope sequence with 3 FLOAT tensors.
+  Sequence outer_seq("outer_seq", onnx_kernels::DataType::FLOAT,
+                     {Tensor::FromFloat("", {1}, {1.0f}), Tensor::FromFloat("", {1}, {2.0f}),
+                      Tensor::FromFloat("", {1}, {3.0f})});
+  rt.PutSequence("outer_seq", std::move(outer_seq));
+
+  // Build the then-branch: SequenceLength("outer_seq") → "len".
+  GraphProto then_graph;
+  then_graph.set_name("then_seq_len");
+  NodeProto *sl_node = then_graph.add_node();
+  sl_node->set_op_type("SequenceLength");
+  sl_node->add_input("outer_seq");
+  sl_node->add_output("len");
+  ValueInfoProto *vi = then_graph.add_output();
+  vi->set_name("len");
+  TypeProto::Tensor *tt = vi->mutable_type()->mutable_tensor_type();
+  tt->set_elem_type(onnx_kernels::DataType::INT64);
+  tt->mutable_shape();
+
+  // Build the else-branch: must declare the same number of outputs.
+  GraphProto else_graph = then_graph;
+  else_graph.set_name("else_seq_len");
+
+  Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
+  std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
+  ASSERT_EQ(outs.size(), 1u);
+  ASSERT_EQ(outs[0].element_count(), 1);
+  EXPECT_EQ(outs[0].AsInt64()[0], 3);
 }
 
 } // namespace Test

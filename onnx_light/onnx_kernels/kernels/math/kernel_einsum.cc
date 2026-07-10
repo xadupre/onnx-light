@@ -362,14 +362,15 @@ void RunEinsum(const std::vector<Tensor> &inputs, const EinsumPlan &plan, T *out
 }
 
 template <typename T>
-Tensor EinsumAlloc(const std::vector<Tensor> &inputs, const std::string &equation, int32_t dtype) {
+Tensor EinsumAlloc(const std::vector<Tensor> &inputs, const std::string &equation, int32_t dtype,
+                   RuntimeContext *rt) {
   const EinsumPlan plan = BuildPlan(inputs, equation);
   int64_t out_count = 1;
   for (int64_t d : plan.output_shape) {
     out_count *= d;
   }
   const size_t z_n_bytes = static_cast<std::size_t>(out_count) * sizeof(T);
-  Tensor z = MakeOutputTensor(dtype, plan.output_shape, z_n_bytes, nullptr);
+  Tensor z = MakeOutputTensor(dtype, plan.output_shape, z_n_bytes, rt ? rt->allocator() : nullptr);
   RunEinsum<T>(inputs, plan, z.As<T>());
   return z;
 }
@@ -405,9 +406,9 @@ Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &
   RequireHomogeneous(inputs);
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
-    return EinsumAlloc<float>(inputs, equation, DataType::FLOAT);
+    return EinsumAlloc<float>(inputs, equation, DataType::FLOAT, rt);
   case DataType::DOUBLE:
-    return EinsumAlloc<double>(inputs, equation, DataType::DOUBLE);
+    return EinsumAlloc<double>(inputs, equation, DataType::DOUBLE, rt);
   default:
     EXT_THROW_INVALID(kEinsumName, ": unsupported data type ", inputs[0].data_type,
                       ", only supports FLOAT and DOUBLE inputs.");

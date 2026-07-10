@@ -636,8 +636,8 @@ TEST(BackendTestCaseShapeInference, OnnxOptimSupportsNestedLocalFunctionCall) {
 
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
-    model_copy.ParseFromString(serialized);
+    ASSERT_TRUE(tc.model.SerializeToString(serialized)) << "failed to serialize case: " << tc.name;
+    ASSERT_TRUE(model_copy.ParseFromString(serialized)) << "failed to parse case: " << tc.name;
 
     // Strip the recorded output shape so optim shape inference has to
     // recover it through the two levels of function-body expansion.
@@ -841,7 +841,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
 
     const std::vector<std::unordered_map<std::string, std::string>> expected_metadata = {
-        {},
+        {{"onnx_light.not_used_after", "X"}},
         {{"onnx_light.inplace_reuse", "0:0:equal"}, {"onnx_light.release_after", "A"}},
         {{"onnx_light.inplace_reuse", "0:0:equal"}, {"onnx_light.release_after", "B"}}};
     const auto &nodes = tc.model.ref_graph().ref_node();
@@ -1780,7 +1780,9 @@ TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
     // would produce: node 0 (Shape) has no release metadata, node 1 (Reshape)
     // carries kReleaseAfterMetadataKey for "S".
     const std::vector<MetadataMap> expected_node_meta = {
-        {}, {{std::string(onnx_optim::annotations::kReleaseAfterMetadataKey), "S"}}};
+        {},
+        {{std::string(onnx_optim::annotations::kReleaseAfterMetadataKey), "S"},
+         {std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey), "X"}}};
     const auto &nodes = tc.model.ref_graph().ref_node();
     ASSERT_EQ(nodes.size(), expected_node_meta.size());
     for (size_t i = 0; i < nodes.size(); ++i) {
@@ -2101,6 +2103,71 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagToOutputWhenOutputIsS
     }
   }
   ASSERT_TRUE(found) << "test_cc_shape_tag_output_is_shape case not registered";
+}
+
+TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInShapeTagCases) {
+  const std::vector<TestCase> cases = CollectTestCases("shape_tag");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    ASSERT_TRUE(tc.model.SerializeToString(serialized)) << "failed to serialize case: " << tc.name;
+    ASSERT_TRUE(model_copy.ParseFromString(serialized)) << "failed to parse case: " << tc.name;
+
+    GraphProto *graph = model_copy.mutable_graph();
+    graph->mutable_metadata_props()->clear();
+    const auto clear_metadata = [](auto *mutable_entries) {
+      for (size_t idx = 0; idx < mutable_entries->size(); ++idx) {
+        (*mutable_entries)[idx].mutable_metadata_props()->clear();
+      }
+    };
+    clear_metadata(graph->mutable_node());
+    clear_metadata(graph->mutable_value_info());
+    clear_metadata(graph->mutable_input());
+    clear_metadata(graph->mutable_output());
+    clear_metadata(graph->mutable_initializer());
+
+    ASSERT_NO_THROW(onnx_optim::annotations::WriteValueAndNodeTagsToMetadata(*graph))
+        << "case: " << tc.name;
+
+    const GraphProto &original_graph = tc.model.ref_graph();
+
+    const auto has_value_tag = [&](const auto &value) {
+      return MetadataOf(value).contains(onnx_optim::annotations::kValueTagMetadataKey);
+    };
+    const auto has_node_tag = [&](const auto &node) {
+      return MetadataOf(node).contains(onnx_optim::annotations::kNodeTagMetadataKey);
+    };
+    const auto expect_matching_value_tags = [&](const auto &values, const auto &expected_values,
+                                                const char *kind) {
+      ASSERT_EQ(values.size(), expected_values.size())
+          << "size mismatch on " << kind << " in case " << tc.name;
+      for (size_t idx = 0; idx < values.size(); ++idx) {
+        const bool expected_tagged = has_value_tag(expected_values[idx]);
+        EXPECT_EQ(has_value_tag(values[idx]), expected_tagged)
+            << "value tag presence mismatch on " << kind << "[" << idx << "] in case " << tc.name;
+      }
+    };
+    const auto expect_matching_node_tags = [&](const auto &nodes, const auto &expected_nodes) {
+      ASSERT_EQ(nodes.size(), expected_nodes.size()) << "node size mismatch in case " << tc.name;
+      for (size_t idx = 0; idx < nodes.size(); ++idx) {
+        const bool expected_tagged = has_node_tag(expected_nodes[idx]);
+        EXPECT_EQ(has_node_tag(nodes[idx]), expected_tagged)
+            << "node tag presence mismatch on node[" << idx << "] in case " << tc.name;
+      }
+    };
+
+    expect_matching_node_tags(graph->ref_node(), original_graph.ref_node());
+    expect_matching_value_tags(graph->ref_input(), original_graph.ref_input(), "input");
+    expect_matching_value_tags(graph->ref_value_info(), original_graph.ref_value_info(),
+                               "value_info");
+    expect_matching_value_tags(graph->ref_output(), original_graph.ref_output(), "output");
+    expect_matching_value_tags(graph->ref_initializer(), original_graph.ref_initializer(),
+                               "initializer");
+  }
+  ASSERT_TRUE(found) << "no shape_tag backend cases were collected";
 }
 
 } // namespace Test

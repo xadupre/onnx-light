@@ -25,7 +25,12 @@ BroadcastInfo CheckBinaryBroadcastInOut(const char *op_name, const char *in_dtyp
   // compatibility per the standard NumPy/ONNX rules: for each pair of aligned
   // dimensions (dx, dy), one of them must be 1 or they must be equal.
   const size_t rank = x.shape.size() > y.shape.size() ? x.shape.size() : y.shape.size();
-  std::vector<int64_t> sx(rank, 1), sy(rank, 1), out(rank, 1);
+  Shape sx;
+  Shape sy;
+  Shape out;
+  sx.assign(rank, 1);
+  sy.assign(rank, 1);
+  out.assign(rank, 1);
   for (size_t i = 0; i < x.shape.size(); ++i) {
     sx[rank - x.shape.size() + i] = x.shape[i];
   }
@@ -75,7 +80,7 @@ BroadcastInfo CheckBinaryBroadcastInOut(const char *op_name, const char *in_dtyp
 }
 
 void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_t expected_dtype,
-                             const std::vector<int64_t> &expected_shape, size_t expected_bytes,
+                             const Shape &expected_shape, size_t expected_bytes,
                              const Tensor &output) {
   EXT_ENFORCE_INVALID(output.data_type == expected_dtype, op_name,
                       " preallocated output must be a ", dtype_name, " tensor.");

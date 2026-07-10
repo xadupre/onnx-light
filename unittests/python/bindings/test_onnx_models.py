@@ -1237,5 +1237,87 @@ class TestOnnxLightHelper(ExtTestCase):
             self.assertEqual(len(init.raw_data), 3 * 5 * 128 * 64 * 4)
 
 
+@unittest.skipIf(
+    not hasattr(os, "symlink") or os.name == "nt",
+    "Symlinks require POSIX or elevated privileges on Windows",
+)
+class TestSaveExternalDataSymlinkProtection(ExtTestCase):
+    """Verifies that saving external data rejects symlink targets (GHSA-8qff-7g33-75mx).
+
+    GHSA-8qff-7g33-75mx: TOCTOU arbitrary file read/write in save_external_data.
+    An attacker who places a symlink at the external-data target path before the
+    model is saved could redirect writes to an arbitrary file.  onnx-light guards
+    against this at two layers:
+      1. Python: validate_external_data_path rejects symlinks at the target path.
+      2. C++:    FileWriteStream / validate_weights_file_is_next_to_model reject
+                 symlinks at open time (defense-in-depth, closes the TOCTOU window).
+    """
+
+    def setUp(self):
+        import tempfile
+
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _make_simple_model(self):
+        """Returns a small model with a large enough initializer to trigger external data."""
+        TFLOAT = TensorProto.FLOAT
+        init = onh.from_array(np.ones((16, 16), dtype=np.float32), name="weight")
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["weight"], ["out"])],
+                "g",
+                [],
+                [oh.make_tensor_value_info("out", TFLOAT, [16, 16])],
+                [init],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        return model
+
+    def test_save_rejects_symlink_at_explicit_location(self):
+        """Saving must fail when the explicit external-data location is a symlink."""
+        sensitive = os.path.join(self.tmpdir, "sensitive.txt")
+        with open(sensitive, "w") as f:
+            f.write("SENSITIVE DATA")
+
+        model_path = os.path.join(self.tmpdir, "model.onnx")
+        data_path = os.path.join(self.tmpdir, "model.data")
+        # Place a symlink at the external-data target path before saving.
+        os.symlink(sensitive, data_path)
+
+        model = self._make_simple_model()
+        with self.assertRaises((ValueError, RuntimeError)):
+            onnxl.save(model, model_path, save_as_external_data=True, location="model.data")
+
+        # The sensitive file must not be modified.
+        with open(sensitive) as f:
+            self.assertEqual(f.read(), "SENSITIVE DATA")
+
+    def test_save_rejects_symlink_at_default_location(self):
+        """Saving must fail when the default external-data location is a symlink."""
+        sensitive = os.path.join(self.tmpdir, "sensitive2.txt")
+        with open(sensitive, "w") as f:
+            f.write("SENSITIVE DATA 2")
+
+        model_path = os.path.join(self.tmpdir, "model2.onnx")
+        default_data_path = model_path + ".data"
+        # Place a symlink at the default external-data path before saving.
+        os.symlink(sensitive, default_data_path)
+
+        model = self._make_simple_model()
+        with self.assertRaises((ValueError, RuntimeError)):
+            onnxl.save(model, model_path, save_as_external_data=True)
+
+        # The sensitive file must not be modified.
+        with open(sensitive) as f:
+            self.assertEqual(f.read(), "SENSITIVE DATA 2")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -100,6 +100,52 @@ extern template std::vector<float> Randn<float>(const std::vector<int64_t> &shap
 /// @endcond
 
 /**
+ * Generates ``count`` uniform samples in ``[low, high)`` and writes them
+ * directly into ``dst`` without an intermediate allocation. Samples are
+ * computed in ``double`` precision and ``static_cast`` to ``T``.
+ *
+ * @tparam T Floating-point output element type (``double`` or ``float``).
+ * @param dst  Destination buffer of at least ``count`` elements.
+ * @param count Number of values to generate.
+ * @param low   Inclusive lower bound.
+ * @param high  Exclusive upper bound.
+ * @param seed  Optional 64-bit seed. ``std::nullopt`` selects the default seed.
+ */
+template <typename T>
+void RandUniformInto(T *dst, int64_t count, double low, double high,
+                     std::optional<uint64_t> seed = std::nullopt);
+
+/// @cond DOXYGEN_SKIP_EXTERN_TEMPLATE
+extern template void RandUniformInto<double>(double *dst, int64_t count, double low, double high,
+                                             std::optional<uint64_t> seed);
+extern template void RandUniformInto<float>(float *dst, int64_t count, double low, double high,
+                                            std::optional<uint64_t> seed);
+/// @endcond
+
+/**
+ * Generates ``count`` normal samples using the Irwin-Hall approximation and
+ * writes them directly into ``dst`` without an intermediate allocation.
+ * Samples are computed in ``double`` precision and ``static_cast`` to ``T``.
+ *
+ * @tparam T Floating-point output element type (``double`` or ``float``).
+ * @param dst   Destination buffer of at least ``count`` elements.
+ * @param count Number of values to generate.
+ * @param mean  Distribution mean.
+ * @param scale Distribution standard deviation.
+ * @param seed  Optional 64-bit seed. ``std::nullopt`` selects the default seed.
+ */
+template <typename T>
+void RandNormalInto(T *dst, int64_t count, double mean, double scale,
+                    std::optional<uint64_t> seed = std::nullopt);
+
+/// @cond DOXYGEN_SKIP_EXTERN_TEMPLATE
+extern template void RandNormalInto<double>(double *dst, int64_t count, double mean, double scale,
+                                            std::optional<uint64_t> seed);
+extern template void RandNormalInto<float>(float *dst, int64_t count, double mean, double scale,
+                                           std::optional<uint64_t> seed);
+/// @endcond
+
+/**
  * Builds a signed-integer vector whose elements are drawn from the same
  * Irwin-Hall-approximated :cpp:func:`Randn` distribution as the upstream
  * ``np.random.randn(...).astype(np.intN)`` pattern. Values are truncated via

@@ -114,6 +114,49 @@ template std::vector<double> Randn<double>(const std::vector<int64_t> &shape,
 template std::vector<float> Randn<float>(const std::vector<int64_t> &shape,
                                          std::optional<uint64_t> seed);
 
+template <typename T>
+void RandUniformInto(T *dst, int64_t count, double low, double high, std::optional<uint64_t> seed) {
+  static_assert(std::is_floating_point_v<T>,
+                "RandUniformInto<T> requires a floating-point element type.");
+  const T span = static_cast<T>(high - low);
+  const T lowT = static_cast<T>(low);
+  uint64_t state = seed.value_or(kDefaultSeed);
+  for (int64_t i = 0; i < count; ++i) {
+    auto [next_state, value] = NextUint64(state);
+    state = next_state;
+    dst[static_cast<size_t>(i)] = lowT + static_cast<T>(UniformFromState(value)) * span;
+  }
+}
+
+template void RandUniformInto<double>(double *dst, int64_t count, double low, double high,
+                                      std::optional<uint64_t> seed);
+template void RandUniformInto<float>(float *dst, int64_t count, double low, double high,
+                                     std::optional<uint64_t> seed);
+
+template <typename T>
+void RandNormalInto(T *dst, int64_t count, double mean, double scale,
+                    std::optional<uint64_t> seed) {
+  static_assert(std::is_floating_point_v<T>,
+                "RandNormalInto<T> requires a floating-point element type.");
+  const T meanT = static_cast<T>(mean);
+  const T scaleT = static_cast<T>(scale);
+  uint64_t state = seed.value_or(kDefaultSeed);
+  for (int64_t i = 0; i < count; ++i) {
+    double sample = 0.0;
+    for (int j = 0; j < 12; ++j) {
+      auto [next_state, value] = NextUint64(state);
+      state = next_state;
+      sample += UniformFromState(value);
+    }
+    dst[static_cast<size_t>(i)] = meanT + static_cast<T>(sample - 6.0) * scaleT;
+  }
+}
+
+template void RandNormalInto<double>(double *dst, int64_t count, double mean, double scale,
+                                     std::optional<uint64_t> seed);
+template void RandNormalInto<float>(float *dst, int64_t count, double mean, double scale,
+                                    std::optional<uint64_t> seed);
+
 template <typename TInt>
 std::vector<TInt> RandnInt(const std::vector<int64_t> &shape, uint64_t seed) {
   const std::vector<float> floats = Randn<float>(shape, seed);

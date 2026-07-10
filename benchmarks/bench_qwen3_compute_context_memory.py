@@ -62,13 +62,25 @@ def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
 
 
 def make_tick_label(output_name: str, node_type: str) -> str:
-    """Formats an x-axis tick label for plotting."""
+    """Formats an x-axis tick label for plotting.
+
+    Args:
+        output_name: The output tensor name to truncate.
+        node_type: The ONNX node operation type.
+
+    Returns:
+        A formatted string in the form ``prefix-type``.
+    """
 
     return f"{output_name[:5]}-{node_type}"
 
 
 def main() -> None:
-    """Exports a Qwen3 model to ONNX, profiles memory usage, and generates artifacts."""
+    """Exports a Qwen3 model to ONNX, profiles memory usage, and generates artifacts.
+
+    Returns:
+        None.
+    """
 
     args = parse_args()
 

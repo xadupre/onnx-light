@@ -46,42 +46,16 @@ def parse_args() -> argparse.Namespace:
 
 
 def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
-    """Evaluates one memory scalar expression.
-
-    Args:
-        value: One symbolic or numeric memory scalar from ``ComputeContext.memory``.
-        assignment: Mapping used to evaluate symbolic dimensions.
-
-    Returns:
-        The evaluated integer value of the memory scalar.
-    """
-
     if isinstance(value, int):
         return value
     return evaluate_expression(value, assignment)
 
 
 def make_tick_label(output_name: str, node_type: str) -> str:
-    """Formats an x-axis tick label for plotting.
-
-    Args:
-        output_name: The output tensor name to truncate.
-        node_type: The ONNX node operation type.
-
-    Returns:
-        A formatted string in the form ``prefix-type``.
-    """
-
     return f"{str(output_name)[:5]}-{node_type}"
 
 
 def main() -> None:
-    """Exports a Qwen3 model to ONNX, profiles memory usage, and generates artifacts.
-
-    Returns:
-        None.
-    """
-
     args = parse_args()
 
     defs.register_onnx_operator_set_schema()

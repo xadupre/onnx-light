@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 
 import matplotlib.pyplot as plt
 import pandas
 import torch
+from torch.utils._pytree import tree_flatten
 from transformers import AutoConfig, AutoModelForCausalLM
 from yobx.torch import to_onnx
 from yobx.torch.export_options import ExportOptions
@@ -38,6 +40,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch", type=int, default=1, help="Input batch size.")
     parser.add_argument("--sequence-length", type=int, default=16, help="Input sequence length.")
     parser.add_argument(
+        "--past-sequence-length",
+        type=int,
+        default=8,
+        help="Past key-value cache sequence length.",
+    )
+    parser.add_argument(
         "--output-prefix",
         default="bench_qwen3_compute_context_memory",
         help="Output file prefix for ONNX, PNG, and XLSX artifacts.",
@@ -51,6 +59,49 @@ def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
     return evaluate_expression(value, assignment)
 
 
+def flatten_with_pytree(data: object) -> tuple[list[object], object]:
+    return tree_flatten(data)
+
+
+def make_past_key_values(config: AutoConfig, batch_size: int, past_sequence_length: int) -> tuple:
+    num_attention_heads = int(config.num_attention_heads)
+    num_key_value_heads = (
+        int(config.num_key_value_heads)
+        if hasattr(config, "num_key_value_heads")
+        else num_attention_heads
+    )
+    head_dim = (
+        int(config.head_dim)
+        if hasattr(config, "head_dim")
+        else int(config.hidden_size // num_attention_heads)
+    )
+    dtype = torch.float32
+    cache: list[tuple[torch.Tensor, torch.Tensor]] = []
+    for _ in range(config.num_hidden_layers):
+        key = torch.randn(
+            (batch_size, num_key_value_heads, past_sequence_length, head_dim), dtype=dtype
+        )
+        value = torch.randn(
+            (batch_size, num_key_value_heads, past_sequence_length, head_dim), dtype=dtype
+        )
+        cache.append((key, value))
+    return tuple(cache)
+
+
+def make_export_options() -> ExportOptions:
+    export_options_signature = inspect.signature(ExportOptions)
+    kwargs: dict[str, object] = {}
+    if "strategy" in export_options_signature.parameters:
+        kwargs["strategy"] = "transformers"
+    if "dynamic_shapes" in export_options_signature.parameters:
+        kwargs["dynamic_shapes"] = True
+    if "patches" in export_options_signature.parameters:
+        kwargs["patches"] = "transformers"
+    if "flattening_function" in export_options_signature.parameters:
+        kwargs["flattening_function"] = flatten_with_pytree
+    return ExportOptions(**kwargs)
+
+
 def make_tick_label(output_name: str, node_type: str) -> str:
     return f"{str(output_name)[:5]}-{node_type}"
 
@@ -62,18 +113,45 @@ def main() -> None:
 
     config = AutoConfig.from_pretrained(args.model_id)
     config.num_hidden_layers = args.layers
+    if hasattr(config, "use_cache"):
+        config.use_cache = True
     model = AutoModelForCausalLM.from_config(config).eval()
 
+    past_key_values = make_past_key_values(config, args.batch, args.past_sequence_length)
     sample_inputs = {
         "input_ids": torch.randint(
             0, config.vocab_size, (args.batch, args.sequence_length), dtype=torch.int64
         ),
-        "attention_mask": torch.ones((args.batch, args.sequence_length), dtype=torch.int64),
+        "attention_mask": torch.ones(
+            (args.batch, args.past_sequence_length + args.sequence_length), dtype=torch.int64
+        ),
+        "past_key_values": past_key_values,
+        "use_cache": True,
     }
-
-    artifact = to_onnx(
-        model, kwargs=sample_inputs, export_options=ExportOptions(strategy="transformers")
-    )
+    dynamic_shapes = {
+        "input_ids": {0: "batch_size", 1: "sequence_length"},
+        "attention_mask": {0: "batch_size", 1: "cache_plus_sequence_length"},
+        "past_key_values": [
+            (
+                {0: "batch_size", 2: "past_sequence_length"},
+                {0: "batch_size", 2: "past_sequence_length"},
+            )
+            for _ in range(config.num_hidden_layers)
+        ],
+    }
+    export_options = make_export_options()
+    to_onnx_signature = inspect.signature(to_onnx)
+    to_onnx_kwargs: dict[str, object] = {
+        "kwargs": sample_inputs,
+        "export_options": export_options,
+    }
+    if "dynamic_shapes" in to_onnx_signature.parameters:
+        to_onnx_kwargs["dynamic_shapes"] = dynamic_shapes
+    if "flattening_function" in to_onnx_signature.parameters:
+        to_onnx_kwargs["flattening_function"] = flatten_with_pytree
+    if "patches" in to_onnx_signature.parameters:
+        to_onnx_kwargs["patches"] = "transformers"
+    artifact = to_onnx(model, **to_onnx_kwargs)
     filename = f"{args.output_prefix}.onnx"
     artifact.save(filename)
     onnx_model = ol_load(filename, load_external_data=False)
@@ -91,7 +169,7 @@ def main() -> None:
     assignment = {
         "batch_size": args.batch,
         "sequence_length": args.sequence_length,
-        "past_sequence_length": 0,
+        "past_sequence_length": args.past_sequence_length,
     }
     total_bytes = [
         evaluate_memory_scalar(profile[NODE_MEMORY_TOTAL_BYTES_KEY], assignment)

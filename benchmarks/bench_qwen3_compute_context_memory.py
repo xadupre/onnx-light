@@ -22,6 +22,8 @@ from onnx_light.onnx_optim.shape_inference import (
     compute_shape_model,
 )
 
+TICK_INTERVAL = 10
+
 
 def parse_args() -> argparse.Namespace:
     """Parses command-line arguments for the benchmark.
@@ -60,7 +62,7 @@ def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
 
 
 def make_tick_label(output_name: str, node_type: str) -> str:
-    """Returns a formatted x-axis tick label for plotting."""
+    """Formats an x-axis tick label for plotting."""
 
     return f"{output_name[:5]}-{node_type}"
 
@@ -137,7 +139,9 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(12, 5))
     ax.plot(node_indices, total_bytes, linewidth=1)
     tick_indices = [
-        index for index in range(0, len(node_indices), 10) if index < len(onnx_model.graph.node)
+        index
+        for index in range(0, len(node_indices), TICK_INTERVAL)
+        if index < len(onnx_model.graph.node)
     ]
     tick_labels = []
     for index in tick_indices:

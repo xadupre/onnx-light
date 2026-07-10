@@ -211,7 +211,12 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
-    outputs.push_back(it->second);
+    outputs.push_back(std::move(it->second));
+    // Clear allocation in moved-from entry so child destructor does not
+    // double-free: MakeSubgraphContext propagates the parent allocator,
+    // and compiler-generated move does not null out raw allocation_
+    // pointer in the source.
+    it->second.ClearAllocation();
   }
   return outputs;
 }
@@ -278,6 +283,10 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
                           "' was not produced by the selected branch.");
       Tensor t = std::move(it->second);
+      // Clear allocation in moved-from entry: compiler-generated move does
+      // not null out raw allocation_ pointer, so child destructor would
+      // otherwise double-free the allocation owned by t.
+      it->second.ClearAllocation();
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -354,7 +363,10 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         EXT_ENFORCE_INVALID(it != child.tensors().end(),
                             "RunNode: Loop body did not produce tensor-typed loop-carried output '",
                             oname, "'.");
-        tensor_state[i] = it->second;
+        tensor_state[i] = std::move(it->second);
+        // Clear allocation in moved-from entry to prevent double-free:
+        // compiler-generated move does not null raw allocation_ pointer.
+        it->second.ClearAllocation();
       }
     }
     for (std::size_t j = 0; j < k; ++j) {
@@ -362,7 +374,9 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       auto it = child.tensors().find(oname);
       EXT_ENFORCE_INVALID(it != child.tensors().end(),
                           "RunNode: Loop body did not produce scan output '", oname, "'.");
-      scan_values[j].push_back(it->second);
+      scan_values[j].push_back(std::move(it->second));
+      // Clear allocation in moved-from entry to prevent double-free.
+      it->second.ClearAllocation();
     }
     ++trip_count;
   }
@@ -910,6 +924,10 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
                         "' of model-local function '", op_type,
                         "' was not produced by the function body.");
     Tensor result = std::move(it->second);
+    // Clear allocation in moved-from entry: compiler-generated move does
+    // not null out raw allocation_ pointer, so child destructor would
+    // otherwise double-free the allocation owned by result.
+    it->second.ClearAllocation();
     result.name = caller_name;
     rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
   }

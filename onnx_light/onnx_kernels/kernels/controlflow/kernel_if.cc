@@ -93,6 +93,10 @@ std::vector<Tensor> If::operator()(RuntimeContext &rt, const Tensor &cond,
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "kernel::If: subgraph output '", out_name,
                         "' was not produced by the selected branch.");
     outputs.push_back(std::move(it->second));
+    // Clear allocation in moved-from entry: compiler-generated move does
+    // not null out raw allocation_ pointer, so child destructor would
+    // otherwise double-free the allocation owned by outputs.back().
+    it->second.ClearAllocation();
   }
   return outputs;
 }

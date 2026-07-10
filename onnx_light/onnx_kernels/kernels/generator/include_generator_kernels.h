@@ -26,8 +26,11 @@ namespace kernel {
 //
 // Two flavors of ``operator()`` are provided:
 //
-//   * The returning overload (``Tensor operator()(...) const``) allocates a
-//     fresh ``Tensor`` whose data buffer is owned by the returned value.
+//   * The returning overload (``Tensor operator()(...) const``) returns the
+//     operator result as a ``Tensor`` value. Most kernels allocate fresh
+//     storage for that tensor; ``Constant`` instead reuses the input tensor
+//     storage directly (borrowing lvalue inputs and moving temporaries) to
+//     avoid an unnecessary copy.
 //   * The in-place overload (``void operator()(..., Tensor &output) const``)
 //     writes results into a caller-supplied output tensor whose buffer has
 //     already been allocated. The caller is responsible for setting
@@ -46,15 +49,17 @@ namespace kernel {
 // Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
 // query indicating whether the output tensor's data buffer may alias the
 // supplied ``value`` tensor's buffer. ``Constant`` simply copies the
-// ``value`` bytes into the output, so aliasing with the value buffer is
-// permitted.
+// ``value`` bytes into a caller-provided output, and its returning overload
+// reuses the supplied ``value`` storage directly, so aliasing with the value
+// buffer is permitted.
 // ---------------------------------------------------------------------------
 
-/// Returns a copy of the ``value`` attribute of the ``Constant`` op.
+/// Returns the ``value`` attribute of the ``Constant`` op without copying.
 class Constant : public KernelBase {
 public:
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &value, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(Tensor &&value, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &value, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }

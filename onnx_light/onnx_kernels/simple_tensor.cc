@@ -71,57 +71,57 @@ size_t PackedByteSize(int32_t dtype, int64_t element_count) {
   }
 }
 
-Tensor Tensor::FromFloat(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromFloat(const std::string &name, const Shape &shape,
                          const std::vector<float> &values) {
   return Tensor::From<float>(name, shape, values);
 }
 
-Tensor Tensor::FromDouble(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromDouble(const std::string &name, const Shape &shape,
                           const std::vector<double> &values) {
   return Tensor::From<double>(name, shape, values);
 }
 
-Tensor Tensor::FromInt32(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromInt32(const std::string &name, const Shape &shape,
                          const std::vector<int32_t> &values) {
   return Tensor::From<int32_t>(name, shape, values);
 }
 
-Tensor Tensor::FromInt64(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromInt64(const std::string &name, const Shape &shape,
                          const std::vector<int64_t> &values) {
   return Tensor::From<int64_t>(name, shape, values);
 }
 
-Tensor Tensor::FromInt8(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromInt8(const std::string &name, const Shape &shape,
                         const std::vector<int8_t> &values) {
   return Tensor::From<int8_t>(name, shape, values);
 }
 
-Tensor Tensor::FromUint8(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromUint8(const std::string &name, const Shape &shape,
                          const std::vector<uint8_t> &values) {
   return Tensor::From<uint8_t>(name, shape, values);
 }
 
-Tensor Tensor::FromInt16(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromInt16(const std::string &name, const Shape &shape,
                          const std::vector<int16_t> &values) {
   return Tensor::From<int16_t>(name, shape, values);
 }
 
-Tensor Tensor::FromUint16(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromUint16(const std::string &name, const Shape &shape,
                           const std::vector<uint16_t> &values) {
   return Tensor::From<uint16_t>(name, shape, values);
 }
 
-Tensor Tensor::FromUint32(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromUint32(const std::string &name, const Shape &shape,
                           const std::vector<uint32_t> &values) {
   return Tensor::From<uint32_t>(name, shape, values);
 }
 
-Tensor Tensor::FromUint64(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromUint64(const std::string &name, const Shape &shape,
                           const std::vector<uint64_t> &values) {
   return Tensor::From<uint64_t>(name, shape, values);
 }
 
-Tensor Tensor::FromBool(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromBool(const std::string &name, const Shape &shape,
                         const std::vector<uint8_t> &values) {
   int64_t expected = 1;
   for (int64_t d : shape) {
@@ -137,7 +137,7 @@ Tensor Tensor::FromBool(const std::string &name, const std::vector<int64_t> &sha
   return Tensor(name, static_cast<int32_t>(DataType::BOOL), shape, std::move(bytes));
 }
 
-Tensor Tensor::FromStrings(const std::string &name, const std::vector<int64_t> &shape,
+Tensor Tensor::FromStrings(const std::string &name, const Shape &shape,
                            const std::vector<std::string> &values) {
   int64_t expected = 1;
   for (int64_t d : shape) {
@@ -190,12 +190,14 @@ uint8_t *Tensor::AsBool() {
 const std::vector<std::string> &Tensor::AsStrings() const {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::STRING),
                       "Tensor data_type does not match the requested view type.");
-  return string_data;
+  return borrow_string_data_ != nullptr ? *borrow_string_data_ : string_data;
 }
 
 std::vector<std::string> &Tensor::AsStrings() {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::STRING),
                       "Tensor data_type does not match the requested view type.");
+  EXT_ENFORCE_INVALID(borrow_string_data_ == nullptr,
+                      "Tensor::AsStrings(): borrowed string tensors are read-only.");
   return string_data;
 }
 
@@ -210,14 +212,23 @@ void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi) {
   }
 }
 
-Tensor Tensor::Borrow(std::string name, int32_t dtype, std::vector<int64_t> shape,
-                      const uint8_t *ptr, size_t sz) {
+Tensor Tensor::Borrow(std::string name, int32_t dtype, Shape shape, const uint8_t *ptr, size_t sz) {
   Tensor t;
   t.name = std::move(name);
   t.data_type = dtype;
   t.shape = std::move(shape);
   t.borrow_ptr_ = ptr;
   t.borrow_size_ = sz;
+  return t;
+}
+
+Tensor Tensor::BorrowStrings(std::string name, Shape shape,
+                             const std::vector<std::string> &strings) {
+  Tensor t;
+  t.name = std::move(name);
+  t.data_type = static_cast<int32_t>(DataType::STRING);
+  t.shape = std::move(shape);
+  t.borrow_string_data_ = &strings;
   return t;
 }
 

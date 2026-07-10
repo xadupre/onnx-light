@@ -144,7 +144,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def("element_count", &Tensor::element_count)
       .def("element_size", &Tensor::element_size)
       .def(
-          "raw_data", [](const Tensor &t) { return nb::bytes(t.data.data(), t.data.size()); },
+          "raw_data", [](const Tensor &t) { return nb::bytes(t.bytes(), t.size_bytes()); },
           "Returns the raw element bytes as a Python ``bytes`` object.")
       .def(
           "string_data", [](const Tensor &t) { return t.string_data; },

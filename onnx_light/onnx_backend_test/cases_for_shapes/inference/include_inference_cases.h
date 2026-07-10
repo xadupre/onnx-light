@@ -57,6 +57,15 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
 /// FunctionProto-expansion path of ``onnx_optim`` shape inference.
 void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a single-node case exercising **shape-as-value propagation
+/// through a local-function call boundary** when the function body contains
+/// a ``Range`` node whose ``limit`` input is the function's own input
+/// parameter. The caller passes the graph initializer
+/// ``limit_val : int64[] = 5`` which is seeded with ``ValueAsShape = [5]``;
+/// ``ExpandLocalFunctionCall`` must copy that annotation into the
+/// sub-context so ``ComputeShapeRange`` can resolve the output length to 5.
+void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers a single-node case whose op is a call to a **model-local
 /// function whose body itself calls another model-local function**. The
 /// outer function is ``local:func_outer_add(a, b) -> c`` whose body is a

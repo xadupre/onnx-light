@@ -45,6 +45,51 @@ TEST(KernelClass, ConstantClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[1], -2.0f);
   EXPECT_FLOAT_EQ(py[2], 3.5f);
   EXPECT_FLOAT_EQ(py[3], 0.0f);
+  EXPECT_EQ(y.bytes(), value.bytes());
+  EXPECT_TRUE(y.data.empty());
+}
+
+TEST(KernelClass, ConstantStringClassBorrowsStringStorage) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Constant constant_kernel{ctx};
+  Tensor value = Tensor::FromStrings("", {2}, {std::string("hello"), std::string("world")});
+  Tensor y = constant_kernel(value);
+  const Tensor &value_const_ref = value;
+  const Tensor &y_const_ref = y;
+  EXPECT_EQ(y.shape, value.shape);
+  ASSERT_EQ(y_const_ref.AsStrings().size(), 2u);
+  EXPECT_EQ(y_const_ref.AsStrings()[0], "hello");
+  EXPECT_EQ(y_const_ref.AsStrings()[1], "world");
+  EXPECT_EQ(&y_const_ref.AsStrings(), &value_const_ref.AsStrings());
+  EXPECT_TRUE(y.string_data.empty());
+}
+
+TEST(KernelClass, ConstantTemporaryInputRetainsBytes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Constant constant_kernel{ctx};
+  Tensor y = constant_kernel(Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.5f, 0.0f}));
+  ASSERT_FALSE(y.data.empty());
+  ASSERT_EQ(y.element_count(), 4);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], -2.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.5f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
+}
+
+TEST(KernelClass, ConstantPreallocatedOutputStillCopiesBytes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Constant constant_kernel{ctx};
+  Tensor value = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.5f, 0.0f});
+  Tensor output("", onnx_kernels::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  constant_kernel(value, output);
+  ASSERT_NE(output.bytes(), value.bytes());
+  ASSERT_EQ(output.element_count(), value.element_count());
+  const float *py = output.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], -2.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.5f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
 }
 
 TEST(KernelClass, ConstantRejectsMismatchedOutput) {

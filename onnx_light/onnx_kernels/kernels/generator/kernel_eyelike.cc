@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -37,120 +36,98 @@ bool IsSupportedEyeLikeDtype(int32_t dtype) {
   }
 }
 
-std::vector<uint8_t> OneElementBytes(int32_t dtype) {
-  const std::size_t es = ElementSize(dtype);
-  std::vector<uint8_t> one(es, uint8_t{0});
-  switch (static_cast<DataType>(dtype)) {
-  case DataType::FLOAT: {
-    const float v = 1.0f;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::DOUBLE: {
-    const double v = 1.0;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::INT8: {
-    const int8_t v = 1;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::UINT8: {
-    const uint8_t v = 1;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::INT16: {
-    const int16_t v = 1;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::UINT16: {
-    const uint16_t v = 1;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::INT32: {
-    const int32_t v = 1;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::UINT32: {
-    const uint32_t v = 1;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::INT64: {
-    const int64_t v = 1;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::UINT64: {
-    const uint64_t v = 1;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::BOOL: {
-    const uint8_t v = 1;
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::FLOAT16: {
-    const uint16_t v = 0x3C00; // IEEE 754 binary16 encoding of 1.0
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  case DataType::BFLOAT16: {
-    const uint16_t v = 0x3F80; // bfloat16 encoding of 1.0
-    std::memcpy(one.data(), &v, sizeof(v));
-    return one;
-  }
-  default:
-    EXT_THROW_INVALID("unsupported data type ", dtype, ", ",
-                      "kernel::EyeLike: unsupported output dtype.");
-  }
-}
-
 } // namespace
 
-Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
-                           RuntimeContext *rt) const {
+void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &output) const {
   EXT_ENFORCE_INVALID(input.shape.size() == 2, "kernel::EyeLike: input must be 2-dimensional.");
   const int64_t rows = input.shape[0];
   const int64_t cols = input.shape[1];
   EXT_ENFORCE_INVALID(rows >= 0 && cols >= 0,
                       "kernel::EyeLike: input dimensions must be non-negative.");
 
-  const int32_t out_dtype = (dtype != 0) ? dtype : input.data_type;
-  EXT_ENFORCE_INVALID(IsSupportedEyeLikeDtype(out_dtype),
-                      "kernel::EyeLike: unsupported output dtype.");
-  const std::size_t es = ElementSize(out_dtype);
-  std::vector<uint8_t> out_data(static_cast<std::size_t>(rows * cols) * es, uint8_t{0});
-  const std::vector<uint8_t> one = OneElementBytes(out_dtype);
-  for (int64_t i = 0; i < rows; ++i) {
-    const int64_t j = i + k;
-    if (j >= 0 && j < cols) {
-      const std::size_t offset = static_cast<std::size_t>(i * cols + j) * es;
-      std::memcpy(out_data.data() + offset, one.data(), es);
-    }
-  }
-
-  return Tensor("", out_dtype, {rows, cols}, std::move(out_data));
-}
-
-void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(input, k, dtype);
-  EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
+  EXT_ENFORCE_INVALID(IsSupportedEyeLikeDtype(dtype), "kernel::EyeLike: unsupported output dtype.");
+  EXT_ENFORCE_INVALID(output.data_type == dtype,
                       "kernel::EyeLike preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == produced.shape,
+  const bool shape_matches =
+      output.shape.size() == 2 && output.shape[0] == rows && output.shape[1] == cols;
+  EXT_ENFORCE_INVALID(shape_matches,
                       "kernel::EyeLike preallocated output shape must match the produced tensor "
                       "shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
-                      "kernel::EyeLike preallocated output buffer has unexpected size in bytes.");
-  if (!produced.data.empty()) {
-    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
+
+  std::memset(output.mutable_bytes(), 0, output.size_bytes());
+
+  // Write 1 at each diagonal position using typed accessors for direct assignment (no
+  // intermediate buffer or extra copy). FLOAT16/BFLOAT16 have no typed accessor so a
+  // single memcpy from a local variable is used for those two types.
+  auto write_diagonal = [&](auto *ptr, auto one_val) {
+    for (int64_t i = 0; i < rows; ++i) {
+      const int64_t j = i + k;
+      if (j >= 0 && j < cols)
+        ptr[static_cast<std::size_t>(i * cols + j)] = one_val;
+    }
+  };
+  auto write_diagonal_u16 = [&](uint16_t one_val) {
+    uint8_t *ptr = output.mutable_bytes();
+    for (int64_t i = 0; i < rows; ++i) {
+      const int64_t j = i + k;
+      if (j >= 0 && j < cols)
+        std::memcpy(ptr + static_cast<std::size_t>(i * cols + j) * sizeof(one_val), &one_val,
+                    sizeof(one_val));
+    }
+  };
+
+  switch (static_cast<DataType>(dtype)) {
+  case DataType::FLOAT:
+    write_diagonal(output.AsFloat(), 1.0f);
+    break;
+  case DataType::DOUBLE:
+    write_diagonal(output.AsDouble(), 1.0);
+    break;
+  case DataType::INT8:
+    write_diagonal(output.AsInt8(), int8_t{1});
+    break;
+  case DataType::UINT8:
+    write_diagonal(output.AsUint8(), uint8_t{1});
+    break;
+  case DataType::INT16:
+    write_diagonal(output.AsInt16(), int16_t{1});
+    break;
+  case DataType::UINT16:
+    write_diagonal(output.AsUint16(), uint16_t{1});
+    break;
+  case DataType::INT32:
+    write_diagonal(output.AsInt32(), int32_t{1});
+    break;
+  case DataType::UINT32:
+    write_diagonal(output.AsUint32(), uint32_t{1});
+    break;
+  case DataType::INT64:
+    write_diagonal(output.AsInt64(), int64_t{1});
+    break;
+  case DataType::UINT64:
+    write_diagonal(output.AsUint64(), uint64_t{1});
+    break;
+  case DataType::BOOL:
+    write_diagonal(output.AsBool(), uint8_t{1});
+    break;
+  case DataType::FLOAT16:
+    write_diagonal_u16(0x3C00);
+    break; // 1.0 in float16
+  case DataType::BFLOAT16:
+    write_diagonal_u16(0x3F80);
+    break; // 1.0 in bfloat16
+  default:
+    EXT_THROW_INVALID("kernel::EyeLike: unsupported output dtype ", dtype, ".");
   }
+}
+
+Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
+                           RuntimeContext *rt) const {
+  const int32_t out_dtype = (dtype != 0) ? dtype : input.data_type;
+  const size_t n_bytes = PackedByteSize(out_dtype, input.element_count());
+  Tensor output = MakeOutputTensor(out_dtype, input.shape, n_bytes, rt ? rt->allocator() : nullptr);
+  (*this)(input, k, out_dtype, output);
+  return output;
 }
 
 } // namespace kernel

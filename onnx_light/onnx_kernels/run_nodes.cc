@@ -190,6 +190,23 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   for (const auto &kv : bindings) {
     child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
   }
+  // The child context receives two categories of allocator-backed tensors
+  // that it must NOT own:
+  //   1. Tensors copied from the parent context via ``child.tensors() =
+  //      rt.tensors()`` — they share allocation slots with the parent.
+  //   2. Binding tensors passed in by the caller (e.g. Scan loop-carried
+  //      state) that are copies of allocator-backed parent tensors.
+  // The child destructor calls ReleaseTensorAllocation on every tensor in
+  // its map, which would free those shared slots and leave the parent
+  // context with dangling allocation_ pointers (SEGFAULT / bad-alloc).
+  // Convert every allocator-backed tensor to a non-owning borrowed view so
+  // the child destructor does not free any of the parent's allocations.
+  for (auto &kv : child.tensors()) {
+    Tensor &t = kv.second;
+    if (t.has_allocation()) {
+      t = Tensor::Borrow(t.name, t.data_type, t.shape, t.bytes(), t.size_bytes());
+    }
+  }
   RunGraph(graph, child);
 
   if (rt.events_enabled()) {

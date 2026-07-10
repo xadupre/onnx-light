@@ -13,11 +13,19 @@ namespace onnx_kernels {
 namespace kernel {
 
 Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
-  Tensor output;
-  output.data_type = input.data_type;
-  output.shape = input.shape;
-  output.data = input.data;
-  output.string_data = input.string_data;
+  if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
+    Tensor output;
+    output.data_type = input.data_type;
+    output.shape = input.shape;
+    output.string_data = input.string_data;
+    return output;
+  }
+  const size_t n_bytes = input.size_bytes();
+  Tensor output =
+      MakeOutputTensor(input.data_type, input.shape, n_bytes, rt ? rt->allocator() : nullptr);
+  if (n_bytes > 0) {
+    std::memcpy(output.mutable_bytes(), input.bytes(), n_bytes);
+  }
   return output;
 }
 

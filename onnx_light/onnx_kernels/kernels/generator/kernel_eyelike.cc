@@ -151,7 +151,7 @@ Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
   output.name = "";
   output.data_type = out_dtype;
   output.shape = input.shape;
-  output.data.assign(PackedByteSize(out_dtype, input.element_count()), uint8_t{0});
+  output.data.resize(PackedByteSize(out_dtype, input.element_count()));
   (*this)(input, k, out_dtype, output);
   return output;
 }

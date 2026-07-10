@@ -320,8 +320,9 @@ struct Tensor {
   RawBuffer data;
 
   /// String element values in row-major layout. Populated only when
-  /// ``data_type`` is ``DataType::STRING``; empty for all other
-  /// element types.
+  /// ``data_type`` is ``DataType::STRING`` and the tensor owns its string
+  /// storage; empty for all other element types and for borrowed string
+  /// views.
   std::vector<std::string> string_data;
 
   Tensor() = default;
@@ -359,6 +360,13 @@ struct Tensor {
    */
   static Tensor Borrow(std::string name, int32_t dtype, std::vector<int64_t> shape,
                        const uint8_t *ptr, size_t sz);
+
+  /// Creates a non-owning (borrowed) ``STRING`` tensor that references an
+  /// external string vector without copying.
+  ///
+  /// The referenced string vector **MUST** outlive this ``Tensor``.
+  static Tensor BorrowStrings(std::string name, std::vector<int64_t> shape,
+                              const std::vector<std::string> &strings);
 
   /// Returns a pointer to the raw element bytes.
   /// Works for both owned (``data``) and borrowed (non-owning view) tensors.
@@ -510,7 +518,8 @@ struct Tensor {
 
   /// Typed view over the underlying ``string_data`` buffer. Throws
   /// ``std::invalid_argument`` if ``data_type`` is not
-  /// ``DataType::STRING``.
+  /// ``DataType::STRING``. Borrowed string tensors return a reference to the
+  /// external backing vector.
   const std::vector<std::string> &AsStrings() const;
   std::vector<std::string> &AsStrings();
 
@@ -524,6 +533,7 @@ private:
   /// ``borrow_ptr_[0 .. borrow_size_-1]`` rather than from ``data``.
   const uint8_t *borrow_ptr_ = nullptr;
   size_t borrow_size_ = 0;
+  const std::vector<std::string> *borrow_string_data_ = nullptr;
 };
 
 /// Trait mapping a C++ element type to its ``DataType`` value.

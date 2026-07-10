@@ -49,6 +49,29 @@ TEST(KernelClass, ConstantClassMatchesReference) {
   EXPECT_TRUE(y.data.empty());
 }
 
+TEST(KernelClass, ConstantStringClassBorrowsStringStorage) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Constant constant_kernel{ctx};
+  Tensor value = Tensor::FromStrings("", {2}, {std::string("hello"), std::string("world")});
+  Tensor y = constant_kernel(value);
+  EXPECT_EQ(y.shape, value.shape);
+  EXPECT_EQ(&y.AsStrings(), &value.AsStrings());
+  EXPECT_TRUE(y.string_data.empty());
+}
+
+TEST(KernelClass, ConstantTemporaryInputRetainsBytes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Constant constant_kernel{ctx};
+  Tensor y = constant_kernel(Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.5f, 0.0f}));
+  ASSERT_FALSE(y.data.empty());
+  ASSERT_EQ(y.element_count(), 4);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], -2.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.5f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
+}
+
 TEST(KernelClass, ConstantPreallocatedOutputStillCopiesBytes) {
   const KernelContext ctx{DefaultOpset(13)};
   Constant constant_kernel{ctx};

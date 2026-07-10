@@ -190,13 +190,15 @@ uint8_t *Tensor::AsBool() {
 const std::vector<std::string> &Tensor::AsStrings() const {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::STRING),
                       "Tensor data_type does not match the requested view type.");
-  return string_data;
+  return borrow_string_data_ != nullptr ? *borrow_string_data_ : string_data;
 }
 
 std::vector<std::string> &Tensor::AsStrings() {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::STRING),
                       "Tensor data_type does not match the requested view type.");
-  return string_data;
+  return borrow_string_data_ != nullptr
+             ? const_cast<std::vector<std::string> &>(*borrow_string_data_)
+             : string_data;
 }
 
 void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi) {
@@ -218,6 +220,16 @@ Tensor Tensor::Borrow(std::string name, int32_t dtype, std::vector<int64_t> shap
   t.shape = std::move(shape);
   t.borrow_ptr_ = ptr;
   t.borrow_size_ = sz;
+  return t;
+}
+
+Tensor Tensor::BorrowStrings(std::string name, std::vector<int64_t> shape,
+                             const std::vector<std::string> &strings) {
+  Tensor t;
+  t.name = std::move(name);
+  t.data_type = static_cast<int32_t>(DataType::STRING);
+  t.shape = std::move(shape);
+  t.borrow_string_data_ = &strings;
   return t;
 }
 

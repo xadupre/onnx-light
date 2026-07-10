@@ -15,10 +15,15 @@ namespace kernel {
 Tensor Constant::operator()(const Tensor &value, RuntimeContext *rt) const {
   static_cast<void>(rt);
   if (value.data_type == static_cast<int32_t>(DataType::STRING)) {
-    return value;
+    return Tensor::BorrowStrings(value.name, value.shape, value.AsStrings());
   }
   return Tensor::Borrow(value.name, value.data_type, value.shape, value.bytes(),
                         value.size_bytes());
+}
+
+Tensor Constant::operator()(Tensor &&value, RuntimeContext *rt) const {
+  static_cast<void>(rt);
+  return std::move(value);
 }
 
 void Constant::operator()(const Tensor &value, Tensor &output) const {

@@ -42,6 +42,7 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   const TestCase *avp_2d_same_upper = nullptr;
   const TestCase *avp_2d_same_lower = nullptr;
   const TestCase *avp_2d_dilations = nullptr;
+  const TestCase *avp_2d_dilations_valid = nullptr;
   const TestCase *avp_3d_dilations_small = nullptr;
   const TestCase *avp_3d_dil_large_0_T = nullptr;
   const TestCase *avp_3d_dil_large_0_F = nullptr;
@@ -78,6 +79,8 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
       avp_2d_same_lower = &c;
     } else if (c.name == "test_cc_averagepool_2d_dilations") {
       avp_2d_dilations = &c;
+    } else if (c.name == "test_cc_averagepool_2d_dilations_valid") {
+      avp_2d_dilations_valid = &c;
     } else if (c.name == "test_cc_averagepool_3d_dilations_small") {
       avp_3d_dilations_small = &c;
     } else if (c.name ==
@@ -109,6 +112,7 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   ASSERT_NE(avp_2d_same_upper, nullptr);
   ASSERT_NE(avp_2d_same_lower, nullptr);
   ASSERT_NE(avp_2d_dilations, nullptr);
+  ASSERT_NE(avp_2d_dilations_valid, nullptr);
   ASSERT_NE(avp_3d_dilations_small, nullptr);
   ASSERT_NE(avp_3d_dil_large_0_T, nullptr);
   ASSERT_NE(avp_3d_dil_large_0_F, nullptr);
@@ -148,6 +152,17 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   {
     const auto &ds = pads->data_sets[0];
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 5, 5}));
+  }
+
+  // Dilated VALID case: effective kernel is 5x5, so a 7x7 input yields a 3x3
+  // output whose center value is the mean of the sampled 3x3 grid.
+  {
+    const auto &ds = avp_2d_dilations_valid->data_sets[0];
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 3, 3}));
+    const float *py = ds.outputs[0].AsFloat();
+    EXPECT_FLOAT_EQ(py[0], 17.0f);
+    EXPECT_FLOAT_EQ(py[4], 25.0f);
+    EXPECT_FLOAT_EQ(py[8], 33.0f);
   }
 }
 

@@ -55,6 +55,8 @@ namespace onnx_backend_test {
 //     ``auto_pad = SAME_LOWER``.
 //   * ``test_cc_averagepool_2d_dilations`` — 2x2 kernel, dilations
 //     ``(2, 2)``, ``ceil_mode = 1``.
+//   * ``test_cc_averagepool_2d_dilations_valid`` — 3x3 kernel, dilations
+//     ``(2, 2)``, ``auto_pad = VALID``.
 //   * ``test_cc_averagepool_3d_default`` — 3-D, 2x2x2 kernel.
 //   * ``test_cc_averagepool_3d_dilations_small`` — 3-D, 2x2x2 kernel,
 //     dilations ``(2, 2, 2)``, ``ceil_mode = 1``.
@@ -373,6 +375,33 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
                                    /*dilations=*/{2, 2});
 
     Expect(node, {x}, {y}, "test_cc_averagepool_2d_dilations", {opset}, "backend-test", registry);
+  }
+
+  // 3x3 kernel, dilations (2, 2), strides (1, 1), ``auto_pad = VALID`` on a
+  // 1x1x7x7 input. Covers the dilated effective-kernel output-shape path fixed
+  // in ONNX PR #8174.
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {1, 1});
+    AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2});
+    AddAttribute<std::string>(node, "auto_pad", std::string("VALID"));
+
+    Tensor x = Tensor::FromFloat(
+        "", {1, 1, 7, 7},
+        {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,  10.0f, 11.0f, 12.0f, 13.0f,
+         14.0f, 15.0f, 16.0f, 17.0f, 18.0f, 19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f, 26.0f,
+         27.0f, 28.0f, 29.0f, 30.0f, 31.0f, 32.0f, 33.0f, 34.0f, 35.0f, 36.0f, 37.0f, 38.0f, 39.0f,
+         40.0f, 41.0f, 42.0f, 43.0f, 44.0f, 45.0f, 46.0f, 47.0f, 48.0f, 49.0f});
+    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1}, /*pads=*/{},
+                                   /*ceil_mode=*/false, /*count_include_pad=*/false,
+                                   /*dilations=*/{2, 2}, /*auto_pad=*/"VALID");
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_2d_dilations_valid", {opset}, "backend-test",
+           registry);
   }
 
   // 3-D AveragePool with a 2x2x2 kernel, dilations (2, 2, 2), strides

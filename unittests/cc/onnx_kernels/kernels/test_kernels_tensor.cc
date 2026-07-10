@@ -237,6 +237,13 @@ TEST(KernelClass, Float16BitsToFloatDecodesSubnormals) {
   EXPECT_FLOAT_EQ(Float16BitsToFloat(0x8002u), -std::ldexp(1.0f, -23));
 }
 
+TEST(KernelClass, MakeFloat16TensorAcceptsShape) {
+  const onnx_kernels::Shape shape{2, 1};
+  Tensor t = onnx_kernels::kernel::MakeFloat16Tensor("", shape, {1.0f, -2.0f});
+  EXPECT_EQ(t.shape, shape);
+  EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+}
+
 // Regression test for the FLOAT16 -> FLOAT8E5M2 underflow path: a subnormal
 // half below the smallest FLOAT8E5M2 subnormal (2^-16) rounds to zero, while
 // exactly 2^-16 maps to the smallest FLOAT8E5M2 subnormal encoding (0x01).

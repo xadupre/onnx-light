@@ -198,7 +198,7 @@ std::vector<std::uint8_t> Pack2Bit(const std::vector<std::int8_t> &values) {
   return bytes;
 }
 
-Tensor MakeFloat16Tensor(const std::string &name, const std::vector<int64_t> &shape,
+Tensor MakeFloat16Tensor(const std::string &name, const Shape &shape,
                          const std::vector<float> &values) {
   std::vector<std::uint16_t> bits(values.size());
   for (std::size_t i = 0; i < values.size(); ++i) {
@@ -215,7 +215,7 @@ Tensor MakeFloat16Scalar(const std::string &name, float value) {
   return t;
 }
 
-Tensor MakeBfloat16Tensor(const std::string &name, const std::vector<int64_t> &shape,
+Tensor MakeBfloat16Tensor(const std::string &name, const Shape &shape,
                           const std::vector<float> &values) {
   std::vector<std::uint16_t> bits(values.size());
   for (std::size_t i = 0; i < values.size(); ++i) {
@@ -268,8 +268,8 @@ Tensor Int16ZeroPoint(std::int16_t value) {
   return MakeScalarTensor(static_cast<std::int32_t>(DataType::INT16), bytes);
 }
 
-Tensor MakeFloat8Tensor(DataType dtype, const std::vector<int64_t> &shape,
-                        const std::vector<float> &values, std::uint8_t (*encode)(float) noexcept) {
+Tensor MakeFloat8Tensor(DataType dtype, const Shape &shape, const std::vector<float> &values,
+                        std::uint8_t (*encode)(float) noexcept) {
   std::vector<std::uint8_t> bytes(values.size());
   for (std::size_t i = 0; i < values.size(); ++i) {
     bytes[i] = encode(values[i]);
@@ -277,13 +277,13 @@ Tensor MakeFloat8Tensor(DataType dtype, const std::vector<int64_t> &shape,
   return Tensor("", static_cast<std::int32_t>(dtype), shape, std::move(bytes));
 }
 
-Tensor MakeSubByteTensor(DataType dtype, const std::vector<int64_t> &shape,
-                         const std::vector<std::int8_t> &values, int bits) {
+Tensor MakeSubByteTensor(DataType dtype, const Shape &shape, const std::vector<std::int8_t> &values,
+                         int bits) {
   std::vector<std::uint8_t> bytes = (bits == 4) ? Pack4Bit(values) : Pack2Bit(values);
   return Tensor("", static_cast<std::int32_t>(dtype), shape, std::move(bytes));
 }
 
-Tensor MakeFloat4E2M1Tensor(const std::vector<int64_t> &shape, const std::vector<float> &values) {
+Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values) {
   std::vector<std::uint8_t> bytes((values.size() + 1) / 2, 0);
   for (std::size_t i = 0; i < values.size(); ++i) {
     const std::uint8_t nibble = FloatToFloat4E2M1Nibble(values[i]);

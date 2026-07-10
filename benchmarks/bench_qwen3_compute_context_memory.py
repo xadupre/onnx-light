@@ -72,7 +72,7 @@ def make_tick_label(output_name: str, node_type: str) -> str:
         A formatted string in the form ``prefix-type``.
     """
 
-    return f"{output_name[:5]}-{node_type}"
+    return f"{str(output_name)[:5]}-{node_type}"
 
 
 def main() -> None:
@@ -136,8 +136,8 @@ def main() -> None:
         row: dict[str, object] = {
             "node index": index,
             "node type": node.op_type if node else "",
-            "input": ", ".join(node.input) if node else "",
-            "output": ", ".join(node.output) if node else "",
+            "input": ", ".join(map(str, node.input)) if node else "",
+            "output": ", ".join(map(str, node.output)) if node else "",
             "memory": total_bytes[index],
             "event": profile.get(event_key, ""),
         }

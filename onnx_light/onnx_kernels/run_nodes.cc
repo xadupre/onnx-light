@@ -218,7 +218,13 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   // ReleaseTensorAllocation when a binding name shadows a parent-tensor name.
   BorrowParentTensors(child.tensors());
   for (const auto &kv : bindings) {
-    child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
+    // Deep-copy each binding so the child context owns its data independently.
+    // Passing kv.second directly (by value) would create a copy that shares
+    // allocation_ with the caller's tensor; both the child destructor and the
+    // caller's destructor would then call Free on the same RawBuffer, causing
+    // a double-free (std::invalid_argument from SimpleRawBufferAllocator::Free
+    // and std::terminate from the destructor throwing).
+    child.Put(kv.first, DeepCopyInline(kv.second), RuntimeEventKind::kInput);
   }
   RunGraph(graph, child);
 
@@ -362,7 +368,10 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       if (is_seq_state[i]) {
         child.PutSequence(bname, sequence_state[i]);
       } else {
-        Tensor t = tensor_state[i];
+        // Use DeepCopyInline so the child context owns its data independently.
+        // Directly copying tensor_state[i] would share allocation_ with the
+        // original tensor in rt, causing a double-free in the child destructor.
+        Tensor t = DeepCopyInline(tensor_state[i]);
         t.name = bname;
         child.Put(bname, std::move(t), RuntimeEventKind::kInput);
       }
@@ -911,7 +920,12 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
                         "' of call to model-local "
                         "function '",
                         op_type, "' is missing from the tensor map.");
-    Tensor bound = it->second;
+    // Deep-copy the caller's tensor so the child function context owns its
+    // data independently.  Directly copying it->second shares allocation_
+    // with the parent context; both the child destructor and the caller's
+    // destructor would then call Free on the same RawBuffer, triggering a
+    // double-free (std::terminate from the destructor throwing).
+    Tensor bound = DeepCopyInline(it->second);
     bound.name = param_name;
     child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
   }

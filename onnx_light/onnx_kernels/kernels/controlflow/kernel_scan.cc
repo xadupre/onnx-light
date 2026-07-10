@@ -53,7 +53,7 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, 
                       "kernel::Scan: scan-output row is shorter than the trip count.");
 
   DataType dtype = DataType::UNDEFINED;
-  std::vector<int64_t> elt_shape;
+  Shape elt_shape;
   std::size_t elt_bytes = 0;
   if (!per_iter.empty()) {
     const Tensor &first = per_iter[0];
@@ -74,7 +74,7 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, 
   const std::size_t out_rank = elt_shape.size() + 1;
   const int64_t axis = ResolveAxis(axis_raw, elt_shape.size());
 
-  std::vector<int64_t> out_shape;
+  Shape out_shape;
   out_shape.reserve(out_rank);
   for (std::size_t d = 0; d <= elt_shape.size(); ++d) {
     if (static_cast<int64_t>(d) == axis) {
@@ -270,7 +270,7 @@ std::vector<Tensor> Scan::operator()(RuntimeContext &rt, const GraphProto &body,
       bindings.emplace_back(t.name, std::move(t));
     }
     for (std::size_t i = 0; i < m; ++i) {
-      std::vector<int64_t> slice_shape;
+      Shape slice_shape;
       slice_shape.reserve(scan_inputs[i].shape.size() - 1);
       for (std::size_t d = 0; d < scan_inputs[i].shape.size(); ++d) {
         if (static_cast<int64_t>(d) != resolved_scan_input_axes[i]) {

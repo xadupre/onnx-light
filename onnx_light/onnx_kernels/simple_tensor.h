@@ -325,12 +325,12 @@ struct Tensor {
   std::vector<std::string> string_data;
 
   Tensor() = default;
-  Tensor(std::string n, int32_t dt, std::vector<int64_t> s, std::vector<uint8_t> d)
+  Tensor(std::string n, int32_t dt, Shape s, std::vector<uint8_t> d)
       : name(std::move(n)), data_type(dt), shape(std::move(s)), data(std::move(d)) {}
   /// Constructs a ``STRING`` tensor whose elements live in ``string_data``.
   /// Distinct from the bytes-based constructor so brace-enclosed
   /// ``{ ... }`` initializer lists at call sites are unambiguous.
-  static Tensor MakeString(std::string n, std::vector<int64_t> s, std::vector<std::string> sd) {
+  static Tensor MakeString(std::string n, Shape s, std::vector<std::string> sd) {
     Tensor t;
     t.name = std::move(n);
     t.data_type = static_cast<int32_t>(DataType::STRING);
@@ -357,8 +357,7 @@ struct Tensor {
    * @param sz    Total byte count of the element buffer.
    * @return      A ``Tensor`` backed by the external buffer.
    */
-  static Tensor Borrow(std::string name, int32_t dtype, std::vector<int64_t> shape,
-                       const uint8_t *ptr, size_t sz);
+  static Tensor Borrow(std::string name, int32_t dtype, Shape shape, const uint8_t *ptr, size_t sz);
 
   /// Returns a pointer to the raw element bytes.
   /// Works for both owned (``data``) and borrowed (non-owning view) tensors.
@@ -438,39 +437,38 @@ struct Tensor {
   /// ``FromFloat``/``FromDouble``/``FromInt32``/``FromInt64`` are thin wrappers
   /// kept for source compatibility.
   template <typename T>
-  static Tensor From(const std::string &name, const std::vector<int64_t> &shape,
-                     const std::vector<T> &values);
+  static Tensor From(const std::string &name, const Shape &shape, const std::vector<T> &values);
 
-  static Tensor FromFloat(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromFloat(const std::string &name, const Shape &shape,
                           const std::vector<float> &values);
-  static Tensor FromDouble(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromDouble(const std::string &name, const Shape &shape,
                            const std::vector<double> &values);
-  static Tensor FromInt32(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromInt32(const std::string &name, const Shape &shape,
                           const std::vector<int32_t> &values);
-  static Tensor FromInt64(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromInt64(const std::string &name, const Shape &shape,
                           const std::vector<int64_t> &values);
-  static Tensor FromInt8(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromInt8(const std::string &name, const Shape &shape,
                          const std::vector<int8_t> &values);
-  static Tensor FromUint8(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromUint8(const std::string &name, const Shape &shape,
                           const std::vector<uint8_t> &values);
-  static Tensor FromInt16(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromInt16(const std::string &name, const Shape &shape,
                           const std::vector<int16_t> &values);
-  static Tensor FromUint16(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromUint16(const std::string &name, const Shape &shape,
                            const std::vector<uint16_t> &values);
-  static Tensor FromUint32(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromUint32(const std::string &name, const Shape &shape,
                            const std::vector<uint32_t> &values);
-  static Tensor FromUint64(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromUint64(const std::string &name, const Shape &shape,
                            const std::vector<uint64_t> &values);
   /// Constructs a ``BOOL`` tensor; element values are stored as one byte each
   /// (0 == false, non-zero == true). Provided as a ``uint8_t`` vector so the
   /// usual ``std::vector<bool>`` packing pitfalls are avoided.
-  static Tensor FromBool(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromBool(const std::string &name, const Shape &shape,
                          const std::vector<uint8_t> &values);
   /// Constructs a ``STRING`` tensor whose elements are the provided UTF-8
   /// strings (stored in ``string_data``). Throws ``std::invalid_argument`` if
   /// any dimension in ``shape`` is negative or if ``values.size()`` does not
   /// match ``prod(shape)``.
-  static Tensor FromStrings(const std::string &name, const std::vector<int64_t> &shape,
+  static Tensor FromStrings(const std::string &name, const Shape &shape,
                             const std::vector<std::string> &values);
 
   /// Typed views over the underlying ``data`` buffer. They throw if the
@@ -552,8 +550,7 @@ ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint64_t, DataType::UINT64);
 #undef ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE
 
 template <typename T>
-Tensor Tensor::From(const std::string &name, const std::vector<int64_t> &shape,
-                    const std::vector<T> &values) {
+Tensor Tensor::From(const std::string &name, const Shape &shape, const std::vector<T> &values) {
   int64_t expected = 1;
   for (int64_t d : shape) {
     EXT_ENFORCE_INVALID(d >= 0, "Tensor shape dimensions must be non-negative.");

@@ -21,6 +21,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_kernels::RuntimeContext;
 using onnx_kernels::Sequence;
+using onnx_kernels::Shape;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::If;
 using onnx_kernels::kernel::KernelContext;
@@ -582,7 +583,7 @@ TEST(KernelClass, ScanStacksPerIterAlongLeadingAxisByDefault) {
       scan_kernel(3, /*initial_state=*/{}, /*final_state=*/{}, {{s0, s1, s2}});
   ASSERT_EQ(out.size(), 1u);
   EXPECT_EQ(out[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-  ASSERT_EQ(out[0].shape, (std::vector<int64_t>{3, 2}));
+  ASSERT_EQ(out[0].shape, (Shape{3, 2}));
   ASSERT_EQ(out[0].element_count(), 6);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 0.0f);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 1.0f);
@@ -604,7 +605,7 @@ TEST(KernelClass, ScanReturnsInitialStateWhenTripCountIsZero) {
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 7.0f);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 8.0f);
   // Scan output has shape [0, 2] (empty along the new leading axis).
-  EXPECT_EQ(out[1].shape, (std::vector<int64_t>{0, 2}));
+  EXPECT_EQ(out[1].shape, (Shape{0, 2}));
   EXPECT_EQ(out[1].element_count(), 0);
 }
 
@@ -619,7 +620,7 @@ TEST(KernelClass, ScanReversesPerIterWhenDirectionPrepend) {
                                         /*scan_output_axes=*/{},
                                         /*scan_output_directions=*/{1});
   ASSERT_EQ(out.size(), 1u);
-  ASSERT_EQ(out[0].shape, (std::vector<int64_t>{3, 1}));
+  ASSERT_EQ(out[0].shape, (Shape{3, 1}));
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 30.0f);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 20.0f);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[2], 10.0f);
@@ -633,7 +634,7 @@ TEST(KernelClass, ScanStacksAlongNonLeadingAxisWhenRequested) {
   Tensor s1 = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
   std::vector<Tensor> out = scan_kernel(2, {}, {}, {{s0, s1}}, /*scan_output_axes=*/{1});
   ASSERT_EQ(out.size(), 1u);
-  ASSERT_EQ(out[0].shape, (std::vector<int64_t>{3, 2}));
+  ASSERT_EQ(out[0].shape, (Shape{3, 2}));
   // Memory layout (row-major, axis 1 = trip):
   //   [s0[0], s1[0], s0[1], s1[1], s0[2], s1[2]] = [1, 4, 2, 5, 3, 6].
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 1.0f);
@@ -693,11 +694,11 @@ TEST(KernelClass, ScanBodyAwareOverloadRunsBodyAndAccumulatesState) {
   std::vector<Tensor> out = scan_kernel(rt, body, {initial}, {x});
   ASSERT_EQ(out.size(), 2u);
   // Final state = [1+3+5, 2+4+6] = [9, 12].
-  ASSERT_EQ(out[0].shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(out[0].shape, (Shape{2}));
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 9.0f);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 12.0f);
   // Scan output = stacked per-iter sums: [[1,2],[4,6],[9,12]].
-  ASSERT_EQ(out[1].shape, (std::vector<int64_t>{3, 2}));
+  ASSERT_EQ(out[1].shape, (Shape{3, 2}));
   const float *z = out[1].AsFloat();
   EXPECT_FLOAT_EQ(z[0], 1.0f);
   EXPECT_FLOAT_EQ(z[1], 2.0f);
@@ -721,10 +722,10 @@ TEST(KernelClass, ScanBodyAwareOverloadHonorsScanInputDirectionReverse) {
   std::vector<Tensor> out = scan_kernel(rt, body, {initial}, {x}, /*scan_input_axes=*/{0},
                                         /*scan_input_directions=*/{1});
   ASSERT_EQ(out.size(), 2u);
-  ASSERT_EQ(out[0].shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(out[0].shape, (Shape{2}));
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 9.0f);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 12.0f);
-  ASSERT_EQ(out[1].shape, (std::vector<int64_t>{3, 2}));
+  ASSERT_EQ(out[1].shape, (Shape{3, 2}));
   const float *z = out[1].AsFloat();
   EXPECT_FLOAT_EQ(z[0], 5.0f);
   EXPECT_FLOAT_EQ(z[1], 6.0f);
@@ -748,7 +749,7 @@ TEST(KernelClass, ScanBodyAwareOverloadHonorsScanOutputDirectionReverse) {
                                         /*scan_input_directions=*/{}, /*scan_output_axes=*/{},
                                         /*scan_output_directions=*/{1});
   ASSERT_EQ(out.size(), 2u);
-  ASSERT_EQ(out[1].shape, (std::vector<int64_t>{3, 2}));
+  ASSERT_EQ(out[1].shape, (Shape{3, 2}));
   const float *z = out[1].AsFloat();
   EXPECT_FLOAT_EQ(z[0], 9.0f);
   EXPECT_FLOAT_EQ(z[1], 12.0f);

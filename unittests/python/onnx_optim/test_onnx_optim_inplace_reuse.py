@@ -678,8 +678,8 @@ class TestInPlaceReuse(ExtTestCase):
 
         compute = si.ComputeContext()
         value_tags, _ = compute.compute_value_and_node_tags(model.graph, verbose=1)
-        compute.compute_inplace_reuse_graph(model.graph, ctx, value_tags=value_tags, verbose=1)
-        self.assertEqual(compute.compute_release_after_shape_tagged(verbose=1), [[], ["S"]])
+        compute.compute_inplace_reuse_graph(model.graph, ctx, value_tags=value_tags)
+        self.assertEqual(compute.compute_release_after_shape_tagged(), [[], ["S"]])
 
     def test_infer_value_and_node_tags_binding_removed(self):
         self.assertFalse(hasattr(si._C, "infer_value_and_node_tags"))

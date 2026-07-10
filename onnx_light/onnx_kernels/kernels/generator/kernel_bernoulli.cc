@@ -23,7 +23,7 @@ namespace {
 // schema's non-deterministic contract.
 constexpr uint32_t kDefaultBernoulliSeed = 0u;
 
-// Decodes a single IEEE-754 binary16 value to ``double``.
+// Decodes a single IEEE-754 binary16 value to double.
 double DecodeHalf(uint16_t h) {
   const uint32_t sign = (h >> 15) & 0x1u;
   const uint32_t exp = (h >> 10) & 0x1Fu;
@@ -160,9 +160,9 @@ void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Ten
   const std::size_t es = OutputElementSize(out_dtype);
   uint8_t *out_data = output.mutable_bytes();
 
-  auto draw_samples = [&](auto read_probability) {
+  auto draw_samples = [&](auto probability_reader) {
     for (int64_t i = 0; i < n; ++i) {
-      const double p = read_probability(i);
+      const double p = probability_reader(i);
       EXT_ENFORCE_INVALID(p >= 0.0 && p <= 1.0,
                           "kernel::Bernoulli: input values must lie in [0, 1].");
       const double u = uniform(engine);

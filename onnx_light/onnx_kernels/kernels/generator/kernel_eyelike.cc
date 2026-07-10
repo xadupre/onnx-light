@@ -124,11 +124,8 @@ void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &
 Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
                            RuntimeContext *rt) const {
   const int32_t out_dtype = (dtype != 0) ? dtype : input.data_type;
-  Tensor output;
-  output.name = "";
-  output.data_type = out_dtype;
-  output.shape = input.shape;
-  output.data.assign(PackedByteSize(out_dtype, input.element_count()), uint8_t{0});
+  const size_t n_bytes = PackedByteSize(out_dtype, input.element_count());
+  Tensor output = MakeOutputTensor(out_dtype, input.shape, n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(input, k, out_dtype, output);
   return output;
 }

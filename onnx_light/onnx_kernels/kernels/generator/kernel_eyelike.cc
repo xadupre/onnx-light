@@ -6,6 +6,7 @@
 
 #include "onnx_kernels/runtime_context.h"
 
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -70,19 +71,14 @@ void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &
   };
   auto write_diagonal_u16 = [&](uint16_t one_val) {
     uint8_t *ptr = output.mutable_bytes();
-    const uint8_t low = static_cast<uint8_t>(one_val & 0xFFu);
-    const uint8_t high = static_cast<uint8_t>((one_val >> 8) & 0xFFu);
+    const std::array<uint8_t, sizeof(uint16_t)> one_bytes =
+        std::bit_cast<std::array<uint8_t, sizeof(uint16_t)>>(one_val);
     for (int64_t i = 0; i < rows; ++i) {
       const int64_t j = i + k;
       if (j >= 0 && j < cols) {
         const std::size_t offset = static_cast<std::size_t>(i * cols + j) * sizeof(one_val);
-        if constexpr (std::endian::native == std::endian::little) {
-          ptr[offset] = low;
-          ptr[offset + 1] = high;
-        } else {
-          ptr[offset] = high;
-          ptr[offset + 1] = low;
-        }
+        ptr[offset] = one_bytes[0];
+        ptr[offset + 1] = one_bytes[1];
       }
     }
   };

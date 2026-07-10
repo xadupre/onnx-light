@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <bit>
 #include <stdexcept>
 #include <vector>
@@ -38,10 +39,8 @@ namespace {
 uint16_t ReadUint16Element(const Tensor &tensor, size_t index) {
   const uint8_t *bytes = tensor.bytes();
   const size_t offset = index * sizeof(uint16_t);
-  if constexpr (std::endian::native == std::endian::little) {
-    return static_cast<uint16_t>(bytes[offset]) | (static_cast<uint16_t>(bytes[offset + 1]) << 8);
-  }
-  return (static_cast<uint16_t>(bytes[offset]) << 8) | static_cast<uint16_t>(bytes[offset + 1]);
+  return std::bit_cast<uint16_t>(
+      std::array<uint8_t, sizeof(uint16_t)>{bytes[offset], bytes[offset + 1]});
 }
 
 } // namespace

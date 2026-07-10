@@ -244,10 +244,11 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
 
 /**
  * Converts every allocator-backed tensor in ``tensors`` to a non-owning
- * borrowed view. Call this on a child :cpp:class:`RuntimeContext`'s tensor map
- * after shallow-copying it from a parent context (``child.tensors() =
- * rt.tensors()``). The conversion prevents the child's destructor from
- * double-freeing allocations that are still owned by the parent.
+ * borrowed view. Intended for use on a child
+ * :cpp:class:`RuntimeContext`'s tensor map after shallow-copying it from a
+ * parent context (``child.tensors() = rt.tensors()``). The conversion
+ * prevents the child's destructor from double-freeing allocations that are
+ * still owned by the parent.
  */
 void BorrowParentTensors(TensorMap &tensors);
 

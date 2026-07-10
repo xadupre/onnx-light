@@ -54,13 +54,13 @@ TEST(KernelClass, ConstantStringClassBorrowsStringStorage) {
   Constant constant_kernel{ctx};
   Tensor value = Tensor::FromStrings("", {2}, {std::string("hello"), std::string("world")});
   Tensor y = constant_kernel(value);
-  const Tensor &value_ref = value;
-  const Tensor &y_ref = y;
+  const Tensor &value_const_ref = value;
+  const Tensor &y_const_ref = y;
   EXPECT_EQ(y.shape, value.shape);
-  ASSERT_EQ(y_ref.AsStrings().size(), 2u);
-  EXPECT_EQ(y_ref.AsStrings()[0], "hello");
-  EXPECT_EQ(y_ref.AsStrings()[1], "world");
-  EXPECT_EQ(&y_ref.AsStrings(), &value_ref.AsStrings());
+  ASSERT_EQ(y_const_ref.AsStrings().size(), 2u);
+  EXPECT_EQ(y_const_ref.AsStrings()[0], "hello");
+  EXPECT_EQ(y_const_ref.AsStrings()[1], "world");
+  EXPECT_EQ(&y_const_ref.AsStrings(), &value_const_ref.AsStrings());
   EXPECT_TRUE(y.string_data.empty());
 }
 

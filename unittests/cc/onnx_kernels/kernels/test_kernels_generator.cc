@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <bit>
 #include <stdexcept>
 #include <vector>
 
@@ -31,6 +32,19 @@ using onnx_kernels::kernel::RandomUniformLike;
 using onnx_kernels::kernel::Range;
 
 namespace Test {
+
+namespace {
+
+uint16_t ReadUint16Element(const Tensor &tensor, size_t index) {
+  const uint8_t *bytes = tensor.bytes();
+  const size_t offset = index * sizeof(uint16_t);
+  if constexpr (std::endian::native == std::endian::little) {
+    return static_cast<uint16_t>(bytes[offset]) | (static_cast<uint16_t>(bytes[offset + 1]) << 8);
+  }
+  return (static_cast<uint16_t>(bytes[offset]) << 8) | static_cast<uint16_t>(bytes[offset + 1]);
+}
+
+} // namespace
 
 TEST(KernelClass, ConstantClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
@@ -210,6 +224,28 @@ TEST(KernelClass, EyeLikeFloatOutputUsesOneValue) {
   EXPECT_FLOAT_EQ(py[1], 0.0f);
   EXPECT_FLOAT_EQ(py[2], 0.0f);
   EXPECT_FLOAT_EQ(py[3], 1.0f);
+}
+
+TEST(KernelClass, EyeLikeFloat16AndBFloat16UseExpectedBitPatterns) {
+  const KernelContext ctx{DefaultOpset(22)};
+  EyeLike kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
+
+  const Tensor y_float16 =
+      kernel(x, /*k=*/0, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  EXPECT_EQ(y_float16.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  EXPECT_EQ(ReadUint16Element(y_float16, 0), 0x3C00);
+  EXPECT_EQ(ReadUint16Element(y_float16, 1), 0x0000);
+  EXPECT_EQ(ReadUint16Element(y_float16, 2), 0x0000);
+  EXPECT_EQ(ReadUint16Element(y_float16, 3), 0x3C00);
+
+  const Tensor y_bfloat16 =
+      kernel(x, /*k=*/0, static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16));
+  EXPECT_EQ(y_bfloat16.data_type, static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16));
+  EXPECT_EQ(ReadUint16Element(y_bfloat16, 0), 0x3F80);
+  EXPECT_EQ(ReadUint16Element(y_bfloat16, 1), 0x0000);
+  EXPECT_EQ(ReadUint16Element(y_bfloat16, 2), 0x0000);
+  EXPECT_EQ(ReadUint16Element(y_bfloat16, 3), 0x3F80);
 }
 
 TEST(KernelClass, EyeLikeRejectsNonMatrixInput) {

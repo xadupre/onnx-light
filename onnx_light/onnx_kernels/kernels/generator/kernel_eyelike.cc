@@ -5,6 +5,8 @@
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
 #include "onnx_kernels/runtime_context.h"
+
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -57,8 +59,8 @@ void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &
   std::memset(output.mutable_bytes(), 0, output.size_bytes());
 
   // Write 1 at each diagonal position using typed accessors for direct assignment (no
-  // intermediate buffer or extra copy). FLOAT16/BFLOAT16 have no typed accessor so a
-  // single memcpy from a local variable is used for those two types.
+  // intermediate buffer or extra copy). FLOAT16/BFLOAT16 have no typed accessor, so
+  // their two-byte representations are written directly into the output buffer.
   auto write_diagonal = [&](auto *ptr, auto one_val) {
     for (int64_t i = 0; i < rows; ++i) {
       const int64_t j = i + k;
@@ -68,11 +70,20 @@ void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &
   };
   auto write_diagonal_u16 = [&](uint16_t one_val) {
     uint8_t *ptr = output.mutable_bytes();
+    const uint8_t low = static_cast<uint8_t>(one_val & 0xFFu);
+    const uint8_t high = static_cast<uint8_t>((one_val >> 8) & 0xFFu);
     for (int64_t i = 0; i < rows; ++i) {
       const int64_t j = i + k;
-      if (j >= 0 && j < cols)
-        std::memcpy(ptr + static_cast<std::size_t>(i * cols + j) * sizeof(one_val), &one_val,
-                    sizeof(one_val));
+      if (j >= 0 && j < cols) {
+        const std::size_t offset = static_cast<std::size_t>(i * cols + j) * sizeof(one_val);
+        if constexpr (std::endian::native == std::endian::little) {
+          ptr[offset] = low;
+          ptr[offset + 1] = high;
+        } else {
+          ptr[offset] = high;
+          ptr[offset + 1] = low;
+        }
+      }
     }
   };
 

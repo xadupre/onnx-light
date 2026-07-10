@@ -654,9 +654,18 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
           "Removes elements.")
       .def(
           "__iter__",
-          [](utils::RepeatedField<T> &self) {
-            return nb::make_iterator(nb::type<utils::RepeatedField<T>>(), "iterator", self.begin(),
-                                     self.end());
+          [](utils::RepeatedField<T> &self) -> nb::object {
+            if constexpr (std::is_same_v<T, utils::String>) {
+              nb::list values;
+              for (const auto &it : self) {
+                values.append(nb::cast(it.as_string()));
+              }
+              return nb::iter(values);
+            } else {
+              auto iterator = nb::make_iterator(nb::type<utils::RepeatedField<T>>(), "iterator",
+                                                self.begin(), self.end());
+              return nb::cast(iterator);
+            }
           },
           nb::keep_alive<0, 1>(), "Iterates over the elements.")
       .def(

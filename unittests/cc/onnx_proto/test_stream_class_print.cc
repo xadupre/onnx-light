@@ -4,7 +4,7 @@
 // formatting for byte and string fields.
 
 #include "onnx.h"
-#include "stream_class.hpp"
+#include "stream_class_print.hpp"
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <optional>

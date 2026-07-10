@@ -620,6 +620,9 @@ if(ONNX_LIGHT_BUILD_TESTS)
   file(GLOB_RECURSE ONNX_CPP_OPTIM_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_optim/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test/test_*.cc")
+  set(ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST
+      "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_stream_class_print.cc")
+  list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
   set(ONNX_CPP_TEST_SOURCES
       ${ONNX_CPP_PROTO_TEST_SOURCES}
       ${ONNX_CPP_LIB_TEST_SOURCES}
@@ -628,7 +631,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
       ${ONNX_CPP_KERNELS_TEST_SOURCES}
       ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES}
   )
-  set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
+  set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES} ${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST})
 
   enable_testing()
 
@@ -682,6 +685,16 @@ if(ONNX_LIGHT_BUILD_TESTS)
       <vector>
   )
   gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
+
+  add_executable(test_stream_class_print "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
+  target_include_directories(test_stream_class_print PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light"
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+    "${ONNX_COMMON_PATH}"
+  )
+  target_link_libraries(test_stream_class_print PRIVATE lib_onnx_proto GTest::gtest_main)
+  gtest_discover_tests(test_stream_class_print DISCOVERY_TIMEOUT 120)
 
   add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto" PREFIX "Source Files/cc/onnx_proto"

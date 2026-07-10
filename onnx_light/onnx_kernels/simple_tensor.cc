@@ -223,7 +223,7 @@ Tensor Tensor::Borrow(std::string name, int32_t dtype, std::vector<int64_t> shap
   return t;
 }
 
-Tensor Tensor::BorrowStrings(std::string name, std::vector<int64_t> shape,
+Tensor Tensor::BorrowStrings(std::string name, Shape shape,
                              const std::vector<std::string> &strings) {
   Tensor t;
   t.name = std::move(name);

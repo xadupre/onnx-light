@@ -365,7 +365,7 @@ struct Tensor {
   /// external string vector without copying.
   ///
   /// The referenced string vector **MUST** outlive this ``Tensor``.
-  static Tensor BorrowStrings(std::string name, std::vector<int64_t> shape,
+  static Tensor BorrowStrings(std::string name, Shape shape,
                               const std::vector<std::string> &strings);
 
   /// Returns a pointer to the raw element bytes.

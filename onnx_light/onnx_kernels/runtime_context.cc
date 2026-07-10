@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <unordered_set>
@@ -21,7 +23,15 @@ void ReleaseTensorAllocation(Tensor &tensor) {
     return;
   }
   RawBufferAllocator *owner = tensor.allocation_owner();
-  owner->Free(tensor.allocation());
+  try {
+    owner->Free(tensor.allocation());
+  } catch (const std::exception &e) {
+    std::fprintf(stderr,
+                 "FATAL: ReleaseTensorAllocation: allocator->Free() threw for tensor '%s': %s\n",
+                 tensor.name.c_str(), e.what());
+    std::fflush(stderr);
+    std::abort();
+  }
   tensor.ClearAllocation();
 }
 

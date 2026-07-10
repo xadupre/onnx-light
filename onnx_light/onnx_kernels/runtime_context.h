@@ -163,13 +163,39 @@ enum class RuntimeEventKind : int32_t {
  * ``"remove"``, ``"run_node"``). Useful for human-readable rendering of the
  * event log.
  */
-const char *RuntimeEventActionName(RuntimeEventAction action) noexcept;
+inline constexpr const char *RuntimeEventActionName(RuntimeEventAction action) noexcept {
+  switch (action) {
+  case RuntimeEventAction::kAdd:
+    return "add";
+  case RuntimeEventAction::kReplace:
+    return "replace";
+  case RuntimeEventAction::kRemove:
+    return "remove";
+  case RuntimeEventAction::kRunNode:
+    return "run_node";
+  }
+  return "unknown";
+}
 
 /**
  * Returns a short lowercase label for ``kind`` (``"unknown"``,
  * ``"initializer"``, ``"input"``, ``"intermediate"``, ``"output"``).
  */
-const char *RuntimeEventKindName(RuntimeEventKind kind) noexcept;
+inline constexpr const char *RuntimeEventKindName(RuntimeEventKind kind) noexcept {
+  switch (kind) {
+  case RuntimeEventKind::kUnknown:
+    return "unknown";
+  case RuntimeEventKind::kInitializer:
+    return "initializer";
+  case RuntimeEventKind::kInput:
+    return "input";
+  case RuntimeEventKind::kIntermediate:
+    return "intermediate";
+  case RuntimeEventKind::kOutput:
+    return "output";
+  }
+  return "unknown";
+}
 
 /**
  * Single entry of the :cpp:class:`RuntimeContext` event log.

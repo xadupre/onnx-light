@@ -209,36 +209,6 @@ RuntimeContext::~RuntimeContext() {
   }
 }
 
-const char *RuntimeEventActionName(RuntimeEventAction action) noexcept {
-  switch (action) {
-  case RuntimeEventAction::kAdd:
-    return "add";
-  case RuntimeEventAction::kReplace:
-    return "replace";
-  case RuntimeEventAction::kRemove:
-    return "remove";
-  case RuntimeEventAction::kRunNode:
-    return "run_node";
-  }
-  return "unknown";
-}
-
-const char *RuntimeEventKindName(RuntimeEventKind kind) noexcept {
-  switch (kind) {
-  case RuntimeEventKind::kUnknown:
-    return "unknown";
-  case RuntimeEventKind::kInitializer:
-    return "initializer";
-  case RuntimeEventKind::kInput:
-    return "input";
-  case RuntimeEventKind::kIntermediate:
-    return "intermediate";
-  case RuntimeEventKind::kOutput:
-    return "output";
-  }
-  return "unknown";
-}
-
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
   EnsureAllocatorBacked(tensor, allocator_);

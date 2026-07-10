@@ -114,8 +114,7 @@ std::vector<uint8_t> OneElementBytes(int32_t dtype) {
 
 } // namespace
 
-Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
-                           RuntimeContext *rt) const {
+void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &output) const {
   EXT_ENFORCE_INVALID(input.shape.size() == 2, "kernel::EyeLike: input must be 2-dimensional.");
   const int64_t rows = input.shape[0];
   const int64_t cols = input.shape[1];
@@ -125,32 +124,36 @@ Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
   const int32_t out_dtype = (dtype != 0) ? dtype : input.data_type;
   EXT_ENFORCE_INVALID(IsSupportedEyeLikeDtype(out_dtype),
                       "kernel::EyeLike: unsupported output dtype.");
+  EXT_ENFORCE_INVALID(output.data_type == out_dtype,
+                      "kernel::EyeLike preallocated output must have the expected dtype.");
+  EXT_ENFORCE_INVALID(output.shape == (std::vector<int64_t>{rows, cols}),
+                      "kernel::EyeLike preallocated output shape must match the produced tensor "
+                      "shape.");
   const std::size_t es = ElementSize(out_dtype);
-  std::vector<uint8_t> out_data(static_cast<std::size_t>(rows * cols) * es, uint8_t{0});
+  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(rows * cols) * es,
+                      "kernel::EyeLike preallocated output buffer has unexpected size in bytes.");
+
+  std::memset(output.mutable_bytes(), 0, output.size_bytes());
   const std::vector<uint8_t> one = OneElementBytes(out_dtype);
   for (int64_t i = 0; i < rows; ++i) {
     const int64_t j = i + k;
     if (j >= 0 && j < cols) {
       const std::size_t offset = static_cast<std::size_t>(i * cols + j) * es;
-      std::memcpy(out_data.data() + offset, one.data(), es);
+      std::memcpy(output.mutable_bytes() + offset, one.data(), es);
     }
   }
-
-  return Tensor("", out_dtype, {rows, cols}, std::move(out_data));
 }
 
-void EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &output) const {
-  Tensor produced = (*this)(input, k, dtype);
-  EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
-                      "kernel::EyeLike preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == produced.shape,
-                      "kernel::EyeLike preallocated output shape must match the produced tensor "
-                      "shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
-                      "kernel::EyeLike preallocated output buffer has unexpected size in bytes.");
-  if (!produced.data.empty()) {
-    std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
-  }
+Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
+                           RuntimeContext *rt) const {
+  const int32_t out_dtype = (dtype != 0) ? dtype : input.data_type;
+  Tensor output;
+  output.name = "";
+  output.data_type = out_dtype;
+  output.shape = input.shape;
+  output.data.assign(PackedByteSize(out_dtype, input.element_count()), uint8_t{0});
+  (*this)(input, k, dtype, output);
+  return output;
 }
 
 } // namespace kernel

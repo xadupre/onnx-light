@@ -288,6 +288,15 @@ TEST(KernelClass, BernoulliRejectsUnsupportedInputDtype) {
   EXPECT_THROW(kernel(int_in), std::invalid_argument);
 }
 
+TEST(KernelClass, BernoulliRejectsNegativeInputShape) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Bernoulli kernel{ctx};
+  Tensor bad;
+  bad.data_type = static_cast<int32_t>(onnx_kernels::DataType::FLOAT);
+  bad.shape = {-1};
+  EXPECT_THROW(kernel(bad), std::invalid_argument);
+}
+
 TEST(KernelClass, BernoulliUsesAllocatorWhenRuntimeContextHasOne) {
   const KernelContext ctx{DefaultOpset(22)};
   Bernoulli kernel{ctx};

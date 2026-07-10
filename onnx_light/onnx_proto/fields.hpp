@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -16,7 +17,13 @@ void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
                                            utils::PrintOptions &options) const {
   ss << "[ ";
   for (const auto &p : values_) {
-    p.PrintToStringStream(ss, options);
+    if constexpr (requires(const T &value) { value.PrintToStringStream(ss, options); }) {
+      p.PrintToStringStream(ss, options);
+    } else if constexpr (std::is_same_v<T, utils::String>) {
+      ss << p.as_string(true);
+    } else {
+      ss << p;
+    }
     ss << " ";
   }
   ss << "]";

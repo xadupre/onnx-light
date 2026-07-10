@@ -58,7 +58,7 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count) 
   EXT_ENFORCE_INVALID(static_cast<int64_t>(per_iter.size()) >= trip_count,
                       "kernel::Loop: scan-output row is shorter than the effective trip count.");
   DataType dtype = DataType::UNDEFINED;
-  std::vector<int64_t> base_shape;
+  Shape base_shape;
   std::size_t elem_bytes = 0;
   // Seed dtype/shape from the first available per-iteration tensor so that
   // even when the loop runs zero iterations the stacked output keeps its
@@ -86,7 +86,7 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count) 
                           "across iterations.");
     }
   }
-  std::vector<int64_t> stacked_shape;
+  Shape stacked_shape;
   stacked_shape.reserve(base_shape.size() + 1);
   stacked_shape.push_back(trip_count);
   stacked_shape.insert(stacked_shape.end(), base_shape.begin(), base_shape.end());

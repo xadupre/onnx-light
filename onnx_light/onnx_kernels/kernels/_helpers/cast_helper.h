@@ -79,7 +79,7 @@ std::vector<std::uint8_t> Pack2Bit(const std::vector<std::int8_t> &values);
 
 // Builds a FLOAT16 tensor of the requested shape from a flattened list of
 // float32 sample values rounded via :cpp:func:`FloatToFloat16Bits`.
-Tensor MakeFloat16Tensor(const std::string &name, const std::vector<int64_t> &shape,
+Tensor MakeFloat16Tensor(const std::string &name, const Shape &shape,
                          const std::vector<float> &values);
 
 // Builds a FLOAT16 scalar tensor from a ``float`` sample value.
@@ -87,7 +87,7 @@ Tensor MakeFloat16Scalar(const std::string &name, float value);
 
 // Builds a BFLOAT16 tensor of the requested shape from a flattened list of
 // float32 sample values rounded via :cpp:func:`FloatToBfloat16Bits`.
-Tensor MakeBfloat16Tensor(const std::string &name, const std::vector<int64_t> &shape,
+Tensor MakeBfloat16Tensor(const std::string &name, const Shape &shape,
                           const std::vector<float> &values);
 
 // Builds a BFLOAT16 scalar tensor from a ``float`` sample value.
@@ -116,18 +116,18 @@ Tensor Int16ZeroPoint(std::int16_t value);
 // ``onnx_kernels/kernels/_helpers/cast_float8.h``. Mirrors the way upstream
 // ``onnx.helper.make_tensor`` stores float8 scalars (one raw byte per
 // element).
-Tensor MakeFloat8Tensor(DataType dtype, const std::vector<int64_t> &shape,
-                        const std::vector<float> &values, std::uint8_t (*encode)(float) noexcept);
+Tensor MakeFloat8Tensor(DataType dtype, const Shape &shape, const std::vector<float> &values,
+                        std::uint8_t (*encode)(float) noexcept);
 
 // Builds a sub-byte tensor with the supplied ``dtype`` and ``shape`` from a
 // flattened list of element values. ``bits`` must be 4 or 2.
-Tensor MakeSubByteTensor(DataType dtype, const std::vector<int64_t> &shape,
-                         const std::vector<std::int8_t> &values, int bits);
+Tensor MakeSubByteTensor(DataType dtype, const Shape &shape, const std::vector<std::int8_t> &values,
+                         int bits);
 
 // Builds a FLOAT4E2M1 tensor of the requested shape from a flattened list
 // of float32 sample values; every input must be representable in FLOAT4E2M1
 // (see :cpp:func:`FloatToFloat4E2M1Nibble`).
-Tensor MakeFloat4E2M1Tensor(const std::vector<int64_t> &shape, const std::vector<float> &values);
+Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values);
 
 } // namespace kernel
 } // namespace onnx_kernels

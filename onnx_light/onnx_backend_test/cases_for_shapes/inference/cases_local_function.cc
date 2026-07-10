@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -26,6 +27,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ``unittests/python/bindings/test_onnx_function.py``).
 constexpr const char *kLocalDomain = "local";
 constexpr const char *kFuncAddName = "func_add";
+constexpr const char *kFuncRangeName = "func_range";
 
 } // namespace
 
@@ -120,6 +122,115 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
   z.name = "Z";
 
   AppendDataSet(tc, {x, y}, {z});
+
+  registry.emplace_back(std::move(tc));
+}
+
+// ---------------------------------------------------------------------------
+// Single-call to a **model-local function whose body contains a ``Range``
+// node** — exercises the shape-as-value propagation path inside
+// ``ExpandLocalFunctionCall``.
+//
+// The function body produces a 1-D INT64 sequence by calling
+// ``Range(start_c, lim, delta_c)`` where:
+//   * ``start_c`` = 0 and ``delta_c`` = 1 are ``Constant`` nodes defined
+//     inside the function body, so ``onnx_optim`` shape inference assigns
+//     them concrete ``ValueAsShape`` annotations right away.
+//   * ``lim`` is the function's **input parameter**, bound at the call site
+//     to the graph initializer ``limit_val: int64[] = 5``.
+//
+// When ``ExpandLocalFunctionCall`` copies the caller's ``OptimTensor`` for
+// ``limit_val`` (which carries ``ValueAsShape = [5]`` from initializer
+// data-propagation) into the function sub-context as ``lim``, the
+// ``ValueAsShape`` annotation must survive the copy so that
+// ``ComputeShapeRange`` can resolve the output length to the concrete value
+// 5 rather than emitting a generic symbolic dim.
+//
+// Graph topology:
+//
+//   Initializer: limit_val : int64[] = 5
+//       ↓
+//   local:func_range(limit_val) → r_out : int64[5]
+//       ↓
+//   Abs(r_out) → out : int64[5]
+//
+// Expected output: out = [0, 1, 2, 3, 4]
+// ---------------------------------------------------------------------------
+void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &registry) {
+  constexpr int64_t kRangeLimit = 5;
+  const OpsetId opset = DefaultOpset(18);
+  const kernel::KernelContext kctx{opset};
+
+  const std::string name = "test_cc_shape_inference_local_function_range";
+
+  TestCase tc(name, name, "model", "inference");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion,
+            {opset, OpsetId(std::string(kLocalDomain), static_cast<int64_t>(1))});
+
+  // Declare the model-local function ``local:func_range(lim) -> r``.
+  // Body: start_c = Constant(0), delta_c = Constant(1), r = Range(start_c, lim, delta_c).
+  FunctionProto *func = model.add_functions();
+  func->set_name(kFuncRangeName);
+  func->set_domain(kLocalDomain);
+  func->add_input("lim");
+  func->add_output("r");
+  OperatorSetIdProto *func_opset = func->add_opset_import();
+  func_opset->set_domain("");
+  func_opset->set_version(static_cast<int64_t>(opset.version));
+
+  {
+    NodeProto *start_node = func->add_node();
+    start_node->set_op_type("Constant");
+    start_node->add_output("start_c");
+    AddAttribute<int64_t>(*start_node, "value_int", static_cast<int64_t>(0));
+  }
+  {
+    NodeProto *delta_node = func->add_node();
+    delta_node->set_op_type("Constant");
+    delta_node->add_output("delta_c");
+    AddAttribute<int64_t>(*delta_node, "value_int", static_cast<int64_t>(1));
+  }
+  {
+    NodeProto *range_node = func->add_node();
+    range_node->set_op_type("Range");
+    range_node->add_input("start_c");
+    range_node->add_input("lim");
+    range_node->add_input("delta_c");
+    range_node->add_output("r");
+  }
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  // Graph initializer: ``limit_val : int64[] = 5``.
+  // ``onnx_optim`` seeds this with ``ValueAsShape = [5]``.  When the local
+  // function is called, ``ExpandLocalFunctionCall`` copies the full
+  // ``OptimTensor`` (including ``ValueAsShape``) to the sub-context as
+  // ``lim``, allowing ``ComputeShapeRange`` to resolve the output length.
+  AddInitializer<int64_t>(*graph, "limit_val", {}, {kRangeLimit});
+
+  // Main graph nodes: call the local function then take Abs.
+  AddNode(*graph, kFuncRangeName, {"limit_val"}, {"r_out"}, kLocalDomain);
+  AddNode(*graph, "Abs", {"r_out"}, {"out"});
+
+  // Intermediate and output value_info with concrete shapes.
+  const int32_t kInt64 = static_cast<int32_t>(DataType::INT64);
+  AppendValueInfo(*graph->add_value_info(), "r_out", kInt64, {DimSpec(kRangeLimit)});
+  AppendValueInfo(*graph->add_output(), "out", kInt64, {DimSpec(kRangeLimit)});
+
+  // Reference DataSet: no graph inputs; output = Abs(Range(0, 5, 1)) = [0,1,2,3,4].
+  Tensor limit_t = Tensor::FromInt64("", {}, {kRangeLimit});
+  Tensor zero_t = Tensor::FromInt64("", {}, {static_cast<int64_t>(0)});
+  Tensor one_t = Tensor::FromInt64("", {}, {static_cast<int64_t>(1)});
+  Tensor r_t = kernel::Range(kctx)(zero_t, limit_t, one_t);
+  Tensor out_t = kernel::Abs(kctx)(r_t);
+  out_t.name = "out";
+
+  AppendDataSet(tc, {}, {out_t});
 
   registry.emplace_back(std::move(tc));
 }

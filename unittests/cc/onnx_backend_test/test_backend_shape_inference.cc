@@ -666,7 +666,64 @@ TEST(BackendTestCaseShapeInference, OnnxOptimSupportsNestedLocalFunctionCall) {
 }
 
 // ---------------------------------------------------------------------------
-// onnx_optim shape inference + Loop subgraph
+// onnx_optim shape inference + local function with Range node
+// ---------------------------------------------------------------------------
+//
+// Verifies that ``onnx_optim`` shape inference propagates the initializer's
+// ``ValueAsShape`` annotation through a local-function call boundary when the
+// function body contains a ``Range`` node that uses the function's own input
+// as its ``limit``.
+//
+// The model topology is:
+//   Initializer: limit_val : int64[] = 5
+//       ↓
+//   local:func_range(limit_val) → r_out
+//       ↓
+//   Abs(r_out) → out
+//
+// The function body is: start_c=Constant(0), delta_c=Constant(1),
+// r = Range(start_c, lim, delta_c).
+//
+// After inference the output ``out`` must have elem_type=INT64 and shape=[5].
+TEST(BackendTestCaseShapeInference, OnnxOptimPropagatesValueAsShapeInLocalFunctionRange) {
+  const std::vector<TestCase> cases = CollectTestCases("shape");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_local_function_range") {
+      continue;
+    }
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    ASSERT_TRUE(tc.model.SerializeToString(serialized)) << "failed to serialize case: " << tc.name;
+    ASSERT_TRUE(model_copy.ParseFromString(serialized)) << "failed to parse case: " << tc.name;
+
+    // Strip the recorded output shape so optim shape inference has to
+    // recover it by expanding the function body and propagating the
+    // initializer's ValueAsShape annotation through the call boundary.
+    auto &outputs = model_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(outputs.size(), 1u);
+    auto *tt = MutableTensorTypeOf(*outputs[0].mutable_type());
+    ASSERT_NE(tt, nullptr);
+    tt->clear_shape();
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    const ValueInfoProto &out = model_copy.ref_graph().ref_output()[0];
+    ASSERT_TRUE(out.has_type());
+    const TypeProto::Tensor *out_tt = TensorTypeOf(out.ref_type());
+    ASSERT_NE(out_tt, nullptr);
+    EXPECT_EQ(static_cast<int32_t>(out_tt->elem_type()), 7 /* INT64 */);
+    ASSERT_TRUE(out_tt->has_shape());
+    const auto &dims = out_tt->ref_shape().ref_dim();
+    ASSERT_EQ(dims.size(), 1u);
+    ASSERT_TRUE(dims[0].has_dim_value());
+    EXPECT_EQ(dims[0].ref_dim_value(), 5);
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_local_function_range case not registered";
+}
+
 // ---------------------------------------------------------------------------
 //
 // Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles

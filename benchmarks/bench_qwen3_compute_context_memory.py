@@ -60,7 +60,11 @@ def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
 
 
 def make_past_key_values(config: AutoConfig, batch_size: int, past_sequence_length: int) -> tuple:
-    """Creates past key-value cache tensors for transformer model export."""
+    """Creates per-layer past key-value cache tensors for transformer export.
+
+    Returns:
+        A tuple where each element is ``(key, value)`` for one layer.
+    """
 
     num_attention_heads = int(config.num_attention_heads)
     num_key_value_heads = (
@@ -87,7 +91,7 @@ def make_past_key_values(config: AutoConfig, batch_size: int, past_sequence_leng
 
 
 def make_export_options() -> ExportOptions:
-    """Constructs export options with version-compatible parameters."""
+    """Constructs export options while guarding version-dependent parameters."""
 
     export_options_signature = inspect.signature(ExportOptions)
     kwargs: dict[str, object] = {}
@@ -103,13 +107,13 @@ def make_export_options() -> ExportOptions:
 
 
 def make_tick_label(output_name: str, node_type: str) -> str:
-    """Formats one tick label from the first output prefix and the node type."""
+    """Formats one tick label with 5 output-name characters and node type."""
 
     return f"{str(output_name)[:5]}-{node_type}"
 
 
 def main() -> None:
-    """Runs the benchmark export and writes profiling artifacts."""
+    """Runs export/shape profiling and writes ONNX, XLSX, and PNG artifacts."""
 
     args = parse_args()
 

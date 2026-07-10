@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 
 import matplotlib.pyplot as plt
+import pandas
 import torch
 from transformers import AutoConfig, AutoModelForCausalLM
 from yobx.torch import to_onnx
@@ -53,6 +54,12 @@ def evaluate_memory_scalar(value: int | str, assignment: dict[str, int]) -> int:
     return evaluate_expression(value, assignment)
 
 
+def make_tick_label(output_name: str, node_type: str) -> str:
+    """Builds one x-axis tick label."""
+
+    return f"{output_name[:5]}-{node_type}"
+
+
 def main() -> None:
     """Runs the benchmark process."""
 
@@ -98,12 +105,42 @@ def main() -> None:
         for profile in compute_context.memory
     ]
     node_indices = list(range(len(total_bytes)))
+    event_key = "event"
+    extra_keys = sorted(
+        key
+        for key in {k for profile in compute_context.memory for k in profile}
+        if key not in {NODE_MEMORY_TOTAL_BYTES_KEY, event_key}
+    )
+    memory_rows: list[dict[str, object]] = []
+    for index, profile in enumerate(compute_context.memory):
+        node = onnx_model.graph.node[index] if index < len(onnx_model.graph.node) else None
+        row: dict[str, object] = {
+            "node index": index,
+            "node type": node.op_type if node else "",
+            "input": ", ".join(node.input) if node else "",
+            "output": ", ".join(node.output) if node else "",
+            "memory": total_bytes[index],
+            "event": profile.get(event_key, ""),
+        }
+        row.update({key: profile.get(key, "") for key in extra_keys})
+        memory_rows.append(row)
 
     print(f"Converted model with {len(onnx_model.graph.node)} nodes.")
     print(f"Peak ComputeContext total bytes: {max(total_bytes):,}")
+    pandas.DataFrame(memory_rows).to_excel("bench_qwen3_compute_context_memory.xlsx", index=False)
 
     fig, ax = plt.subplots(figsize=(12, 5))
     ax.plot(node_indices, total_bytes, linewidth=1)
+    tick_indices = list(range(0, len(node_indices), 10))
+    tick_labels = [
+        make_tick_label(
+            onnx_model.graph.node[index].output[0] if onnx_model.graph.node[index].output else "",
+            onnx_model.graph.node[index].op_type,
+        )
+        for index in tick_indices
+        if index < len(onnx_model.graph.node)
+    ]
+    ax.set_xticks(tick_indices[: len(tick_labels)], labels=tick_labels, rotation=45, ha="right")
     ax.set_title(f"ComputeContext total bytes ({args.model_id}, layers={args.layers})")
     ax.set_xlabel("node index")
     ax.set_ylabel("total bytes")

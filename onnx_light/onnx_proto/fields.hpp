@@ -15,12 +15,13 @@ namespace utils {
 template <typename T>
 void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
                                            utils::PrintOptions &options) const {
+  constexpr bool quote_strings = true;
   ss << "[ ";
   for (const auto &p : values_) {
     if constexpr (requires(const T &value) { value.PrintToStringStream(ss, options); }) {
       p.PrintToStringStream(ss, options);
     } else if constexpr (std::is_same_v<T, utils::String>) {
-      ss << p.as_string(true);
+      ss << p.as_string(quote_strings);
     } else {
       ss << p;
     }

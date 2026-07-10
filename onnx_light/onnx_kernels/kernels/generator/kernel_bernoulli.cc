@@ -133,7 +133,7 @@ Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
   const int32_t out_dtype = (dtype == 0) ? input.data_type : dtype;
   const std::size_t es = OutputElementSize(out_dtype);
   const int64_t n = input.element_count();
-  EXT_ENFORCE_INVALID(n >= 0, "kernel::Bernoulli: input element count must be non-negative.");
+  EXT_ENFORCE_INVALID(n >= 0, "kernel::Bernoulli: input shape contains negative dimensions.");
   const std::size_t out_n_bytes = static_cast<std::size_t>(n) * es;
 
   Tensor out =
@@ -151,7 +151,7 @@ void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Ten
                       "tensor shape.");
 
   const int64_t n = input.element_count();
-  EXT_ENFORCE_INVALID(n >= 0, "kernel::Bernoulli: input element count must be non-negative.");
+  EXT_ENFORCE_INVALID(n >= 0, "kernel::Bernoulli: input shape contains negative dimensions.");
   const uint32_t engine_seed =
       (seed == kNoSeed) ? kDefaultBernoulliSeed : static_cast<uint32_t>(seed);
   std::mt19937 engine(engine_seed);

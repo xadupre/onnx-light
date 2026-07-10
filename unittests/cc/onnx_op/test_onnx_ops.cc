@@ -8,6 +8,7 @@
 #include "onnx_lib/defs/operator_sets.h"
 #include "onnx_lib/defs/schema.h"
 #include <gtest/gtest.h>
+#include <string_view>
 
 #ifdef ONNX_LIGHT_NAMESPACE
 // onnx_lib headers define ONNX_LIGHT_NAMESPACE as a macro alias (onnx_light),
@@ -17,6 +18,9 @@
 #endif
 
 using namespace ONNX_LIGHT_NAMESPACE;
+
+static_assert(std::string_view(onnx_op::AttributeType_Name(onnx_op::AttributeType::TYPE_PROTOS)) ==
+              "TYPE_PROTOS");
 
 namespace Test {
 

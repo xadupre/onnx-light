@@ -48,7 +48,7 @@ std::size_t ElementBytes(const Tensor &t) {
 // ``axis``, optionally reversing them when ``reverse`` is true (matching the
 // ONNX Scan "prepend" direction).
 Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, int64_t axis_raw,
-                       bool reverse) {
+                       bool reverse, RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(static_cast<int64_t>(per_iter.size()) >= trip_count,
                       "kernel::Scan: scan-output row is shorter than the trip count.");
 
@@ -85,14 +85,10 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, 
     }
   }
 
-  std::vector<uint8_t> out_data;
+  const std::size_t out_n_bytes =
+      trip_count > 0 ? static_cast<std::size_t>(trip_count) * per_iter[0].size_bytes() : 0;
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(dtype), out_shape, out_n_bytes, allocator);
   if (trip_count > 0 && elt_bytes > 0) {
-    // Element count of out_shape = trip_count * product(elt_shape).
-    const int64_t elt_count =
-        std::accumulate(elt_shape.begin(), elt_shape.end(), int64_t{1}, std::multiplies<int64_t>());
-    const int64_t total_elts = trip_count * elt_count;
-    out_data.resize(static_cast<std::size_t>(total_elts) * elt_bytes);
-
     // outer = product of out_shape[0..axis-1] in the *output*; for each
     // outer index we copy ``trip_count`` element-blocks of size
     // ``inner_bytes`` from consecutive per-iteration tensors. Because the
@@ -119,20 +115,20 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, 
         const std::size_t src_offset = static_cast<std::size_t>(o * inner) * elt_bytes;
         const std::size_t dst_offset =
             static_cast<std::size_t>(o * trip_count * inner + t * inner) * elt_bytes;
-        std::memcpy(out_data.data() + dst_offset, src.bytes() + src_offset, inner_bytes);
+        std::memcpy(out.mutable_bytes() + dst_offset, src.bytes() + src_offset, inner_bytes);
       }
     }
   }
-  return Tensor("", static_cast<int32_t>(dtype), out_shape, std::move(out_data));
+  return out;
 }
 
-} // namespace
-
-std::vector<Tensor> Scan::operator()(int64_t trip_count, const std::vector<Tensor> &initial_state,
-                                     const std::vector<Tensor> &final_state,
-                                     const std::vector<std::vector<Tensor>> &scan_values_per_iter,
-                                     const std::vector<int64_t> &scan_output_axes,
-                                     const std::vector<int64_t> &scan_output_directions) const {
+std::vector<Tensor>
+AssembleScanOutputs(int64_t trip_count, const std::vector<Tensor> &initial_state,
+                    const std::vector<Tensor> &final_state,
+                    const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+                    const std::vector<int64_t> &scan_output_axes,
+                    const std::vector<int64_t> &scan_output_directions,
+                    RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(trip_count >= 0, "kernel::Scan: trip_count must be non-negative.");
   EXT_ENFORCE_INVALID(initial_state.size() == final_state.size(),
                       "kernel::Scan: 'final_state' must have the same number of tensors "
@@ -150,19 +146,36 @@ std::vector<Tensor> Scan::operator()(int64_t trip_count, const std::vector<Tenso
 
   std::vector<Tensor> out;
   out.reserve(initial_state.size() + k);
-  // N final state values: when the scan ran zero iterations, the final
-  // value equals the initial value; otherwise it is whatever the caller
-  // produced.
   for (std::size_t i = 0; i < initial_state.size(); ++i) {
     out.push_back(trip_count == 0 ? initial_state[i] : final_state[i]);
   }
-  // K stacked scan outputs.
   for (std::size_t ki = 0; ki < k; ++ki) {
     const int64_t axis = scan_output_axes.empty() ? 0 : scan_output_axes[ki];
     const bool reverse = !scan_output_directions.empty() && scan_output_directions[ki] != 0;
-    out.push_back(StackScanOutput(scan_values_per_iter[ki], trip_count, axis, reverse));
+    out.push_back(StackScanOutput(scan_values_per_iter[ki], trip_count, axis, reverse, allocator));
   }
   return out;
+}
+
+} // namespace
+
+std::vector<Tensor> Scan::operator()(int64_t trip_count, const std::vector<Tensor> &initial_state,
+                                     const std::vector<Tensor> &final_state,
+                                     const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+                                     const std::vector<int64_t> &scan_output_axes,
+                                     const std::vector<int64_t> &scan_output_directions) const {
+  return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
+                             scan_output_axes, scan_output_directions, nullptr);
+}
+
+std::vector<Tensor> Scan::operator()(RuntimeContext &rt, int64_t trip_count,
+                                     const std::vector<Tensor> &initial_state,
+                                     const std::vector<Tensor> &final_state,
+                                     const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+                                     const std::vector<int64_t> &scan_output_axes,
+                                     const std::vector<int64_t> &scan_output_directions) const {
+  return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
+                             scan_output_axes, scan_output_directions, rt.allocator());
 }
 
 std::vector<Tensor> Scan::operator()(RuntimeContext &rt, const GraphProto &body,
@@ -293,10 +306,8 @@ std::vector<Tensor> Scan::operator()(RuntimeContext &rt, const GraphProto &body,
     }
   }
 
-  // Delegate to the stacking-only overload for the final assembly so the
-  // two overloads share the validation/stacking semantics.
-  return (*this)(trip_count, initial_state, state, scan_values, scan_output_axes,
-                 scan_output_directions);
+  return AssembleScanOutputs(trip_count, initial_state, state, scan_values, scan_output_axes,
+                             scan_output_directions, rt.allocator());
 }
 
 } // namespace kernel

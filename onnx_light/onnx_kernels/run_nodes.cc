@@ -500,7 +500,7 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
   };
 
   kernel::Loop loop_kernel(rt.kernel_ctx());
-  std::vector<Tensor> outputs = loop_kernel(m_tensor, cond_tensor, v_initial, k, run_body);
+  std::vector<Tensor> outputs = loop_kernel(rt, m_tensor, cond_tensor, v_initial, k, run_body);
 
   // When the loop runs zero iterations the kernel produces UNDEFINED-typed
   // empty scan outputs (it has no template to seed dtype/shape from). Patch
@@ -674,7 +674,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   }
 
   // Stack each output column along a new leading axis (default axis 0).
-  std::vector<Tensor> outputs = scan_kernel(batch, /*initial_state=*/{}, /*final_state=*/{},
+  std::vector<Tensor> outputs = scan_kernel(rt, batch, /*initial_state=*/{}, /*final_state=*/{},
                                             per_output, /*scan_output_axes=*/{},
                                             /*scan_output_directions=*/{});
   PropagateOutputsToCaller(node, outputs, rt);

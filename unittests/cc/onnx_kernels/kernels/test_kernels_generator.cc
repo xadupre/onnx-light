@@ -18,6 +18,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_kernels::RuntimeContext;
+using onnx_kernels::Shape;
 using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Bernoulli;
@@ -138,7 +139,7 @@ TEST(KernelClass, ConstantOfShapeInt64Fill) {
   const Tensor value = Tensor::FromInt64("", {1}, {static_cast<int64_t>(-7)});
   Tensor y = kernel(shape, value);
   EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
-  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_EQ(y.shape, (Shape{2, 2}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], -7);
   EXPECT_EQ(py[1], -7);
@@ -152,7 +153,7 @@ TEST(KernelClass, ConstantOfShapeDefaultValueIsFloatZero) {
   const Tensor shape = Tensor::FromInt64("", {1}, {static_cast<int64_t>(4)});
   Tensor y = kernel(shape, Tensor());
   EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-  EXPECT_EQ(y.shape, (std::vector<int64_t>{4}));
+  EXPECT_EQ(y.shape, (Shape{4}));
   const float *py = y.AsFloat();
   for (int i = 0; i < 4; ++i) {
     EXPECT_FLOAT_EQ(py[i], 0.0f);
@@ -166,7 +167,7 @@ TEST(KernelClass, ConstantOfShapeEmptyShapeProducesScalar) {
   const Tensor shape = Tensor::FromInt64("", {0}, {});
   const Tensor value = Tensor::FromFloat("", {1}, {2.5f});
   Tensor y = kernel(shape, value);
-  EXPECT_EQ(y.shape, (std::vector<int64_t>{}));
+  EXPECT_EQ(y.shape, (Shape{}));
   ASSERT_EQ(y.element_count(), 1);
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 2.5f);
 }

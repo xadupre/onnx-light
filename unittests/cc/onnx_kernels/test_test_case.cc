@@ -239,6 +239,12 @@ TEST(BackendTestCase, Qwen3ContextMemoryCaseEmbedsExpectedMetadata) {
   ASSERT_EQ(cases.size(), 1u);
   ASSERT_TRUE(cases[0].model.has_graph());
   const GraphProto &graph = cases[0].model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 5u);
+  EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "MatMul");
+  EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "Concat");
+  EXPECT_EQ(graph.ref_node()[2].ref_op_type().as_string(), "Shape");
+  EXPECT_EQ(graph.ref_node()[3].ref_op_type().as_string(), "Abs");
+  EXPECT_EQ(graph.ref_node()[4].ref_op_type().as_string(), "Reshape");
 
   bool has_value_tags = false;
   std::string value_tags_json;

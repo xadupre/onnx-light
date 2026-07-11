@@ -18,11 +18,11 @@ namespace onnx_backend_test {
 
 namespace {
 
-constexpr int64_t kDefaultIrVersion = 8;
+constexpr int64_t kQwen3ModelIrVersion = 8;
 
 } // namespace
 
-// Registers a Qwen3-inspired compute-context-memory model as a backend
+// Registers a Qwen3-inspired compute-context-memory model as a backend.
 // shape-inference case, then pre-embeds expected shape, value-tag,
 // release-after and in-place-reuse metadata computed by onnx-light.
 void RegisterQwen3ComputeContextMemoryShapeInferenceCase(std::vector<TestCase> &registry) {
@@ -33,13 +33,16 @@ void RegisterQwen3ComputeContextMemoryShapeInferenceCase(std::vector<TestCase> &
   tc.atol = 1e-5;
 
   ModelProto &model = tc.model;
-  InitModel(model, kDefaultIrVersion, {DefaultOpset(18)});
-  GraphProto *graph = model.add_graph();
+  InitModel(model, kQwen3ModelIrVersion, {DefaultOpset(18)});
+  GraphProto *graph = model.mutable_graph();
   graph->set_name(name);
 
+  // The small chain mirrors the compute-context-memory pattern used in the
+  // benchmark: projection, concat growth, shape extraction, elementwise op and
+  // shape-driven reshape.
   AddNode(*graph, "MatMul", {"X", "W"}, {"M"});
-  NodeProto &concat_node = AddNode(*graph, "Concat", {"M", "X"}, {"C"});
-  AddAttribute<int64_t>(concat_node, "axis", 0);
+  NodeProto &concat_with_axis_node = AddNode(*graph, "Concat", {"M", "X"}, {"C"});
+  AddAttribute<int64_t>(concat_with_axis_node, "axis", 0);
   AddNode(*graph, "Shape", {"C"}, {"S"});
   AddNode(*graph, "Abs", {"C"}, {"A"});
   AddNode(*graph, "Reshape", {"A", "S"}, {"Z"});
@@ -48,9 +51,9 @@ void RegisterQwen3ComputeContextMemoryShapeInferenceCase(std::vector<TestCase> &
                         {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
                          0.0f, 0.0f, 0.0f, 1.0f});
 
-  const auto kFloat = static_cast<int32_t>(DataType::FLOAT);
-  AppendValueInfo(*graph->add_input(), "X", kFloat, {"N", 4});
-  AppendValueInfo(*graph->add_output(), "Z", kFloat, {"2N", 4});
+  const auto float_type = static_cast<int32_t>(DataType::FLOAT);
+  AppendValueInfo(*graph->add_input(), "X", float_type, {"N", 4});
+  AppendValueInfo(*graph->add_output(), "Z", float_type, {"2N", 4});
 
   onnx_optim::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);

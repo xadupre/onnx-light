@@ -56,10 +56,10 @@ Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_
   // half-precision language models (e.g. the tiny Llama-style decoder) run
   // their RMSNorm layers through this kernel.
   if (IsHalfPrecision(x.data_type)) {
-    const Tensor x_f = PromoteToFloat32(x);
-    const Tensor scale_f = PromoteToFloat32(scale);
+    const Tensor x_f = PromoteToFloat32(x, rt);
+    const Tensor scale_f = PromoteToFloat32(scale, rt);
     Tensor y = (*this)(x_f, scale_f, axis, epsilon, rt);
-    return DemoteFromFloat32(y, x.data_type);
+    return DemoteFromFloat32(y, x.data_type, rt);
   }
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RMSNormalization: X must be FLOAT.");

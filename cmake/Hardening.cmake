@@ -149,8 +149,8 @@ if(MSVC)
       message(WARNING
               "ONNX_HARDENING: /Qspectre is enabled but the MSVC Spectre-mitigated "
               "CRT/STL libraries could not be located. The resulting binaries may "
-              "fail Spectre-mitigation validation. Install the 'C++ "
-              "Spectre-mitigated libs' Visual Studio component and build from a "
+              "fail Spectre-mitigation validation. Install the C++ "
+              "Spectre-mitigated libs Visual Studio component and build from a "
               "Developer Command Prompt.")
     endif()
   endif()

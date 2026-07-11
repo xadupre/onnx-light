@@ -233,6 +233,48 @@ TEST(BackendTestCase, TagIsShapeTagForShapeTagCases) {
   }
 }
 
+TEST(BackendTestCase, Qwen3ContextMemoryCaseEmbedsExpectedMetadata) {
+  const auto cases =
+      CollectTestCasesByName("^test_cc_shape_inference_qwen3_compute_context_memory$");
+  ASSERT_EQ(cases.size(), 1u);
+  ASSERT_TRUE(cases[0].model.has_graph());
+  const GraphProto &graph = cases[0].model.ref_graph();
+
+  bool has_value_tags = false;
+  for (const auto &meta : graph.ref_metadata_props()) {
+    if (meta.ref_key().as_string() == "onnx_light.value_tags") {
+      has_value_tags = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(has_value_tags);
+  EXPECT_FALSE(graph.ref_value_info().empty());
+
+  bool has_release_after = false;
+  bool has_release_after_shape = false;
+  bool has_inplace_reuse = false;
+  bool has_node_tag = false;
+  for (const auto &node : graph.ref_node()) {
+    for (const auto &meta : node.ref_metadata_props()) {
+      const auto key = meta.ref_key().as_string();
+      if (key == "onnx_light.release_after") {
+        has_release_after = true;
+      } else if (key == "onnx_light.release_after_shape_tag") {
+        has_release_after_shape = true;
+      } else if (key == "onnx_light.inplace_reuse") {
+        has_inplace_reuse = true;
+      } else if (key == "onnx_light.node_tag") {
+        has_node_tag = true;
+      }
+    }
+  }
+
+  EXPECT_TRUE(has_release_after);
+  EXPECT_TRUE(has_release_after_shape);
+  EXPECT_TRUE(has_inplace_reuse);
+  EXPECT_TRUE(has_node_tag);
+}
+
 TEST(BackendTestCase, TagDefaultsToDomainForNonDefaultDomainNode) {
   // When the node belongs to a non-default operator domain (e.g.
   // ``ai.onnx.ml``) and no explicit tag is supplied, ``Expect`` should

@@ -245,6 +245,11 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry);
 /// three outputs as the fused companion.
 void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers the exported ``bench_qwen3_compute_context_memory`` model as a
+/// shape-inference backend case and pre-embeds expected shape, value-tag,
+/// release and in-place reuse metadata.
+void RegisterQwen3ComputeContextMemoryShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers a ``TopK(K, axis=-1) → TopK(K, axis=-1) → ReduceMean`` case
 /// where both TopK nodes share the **same** runtime K input (INT64 ``[1]``).
 /// Because K is unknown at shape-inference time, each TopK emits a fresh

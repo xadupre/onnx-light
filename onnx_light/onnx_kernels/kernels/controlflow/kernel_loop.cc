@@ -52,10 +52,16 @@ int64_t EffectiveTripCount(const Tensor &M, const Tensor &cond, int64_t per_iter
 }
 
 // Parses the optional INT64 scalar ``M`` into a non-negative trip-count
-// upper bound. Returns ``INT64_MAX`` when ``M`` is omitted.
+// upper bound.
+//   * ``M``: optional Loop trip-count tensor.
+//   * returns: ``INT64_MAX`` when ``M`` is omitted, otherwise the validated
+//     non-negative scalar value.
 int64_t ParseMaxTripCount(const Tensor &M);
 // Parses the optional BOOL scalar ``cond`` into the initial termination
-// condition. Returns ``true`` when ``cond`` is omitted.
+// condition.
+//   * ``cond``: optional Loop initial-condition tensor.
+//   * returns: ``true`` when ``cond`` is omitted, otherwise the scalar BOOL
+//     value.
 bool ParseInitialCond(const Tensor &cond);
 
 // Stacks ``per_iter`` along a new leading axis of length ``trip_count``.
@@ -117,8 +123,13 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count,
 }
 
 // Builds the final Loop outputs from the final loop-carried state and the
-// collected per-iteration scan values. When ``allocator`` is non-null, each
-// stacked scan output is allocated through it.
+// collected per-iteration scan values.
+//   * ``trip_count``: number of executed iterations.
+//   * ``v_initial``: initial loop-carried tensors returned when
+//     ``trip_count == 0``.
+//   * ``final_state``: final loop-carried tensors produced by the loop body.
+//   * ``scan_values_per_iter``: collected per-iteration scan-output tensors.
+//   * ``allocator``: optional allocator used for stacked scan outputs.
 std::vector<Tensor>
 AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
                     const std::vector<Tensor> &final_state,
@@ -136,8 +147,14 @@ AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
 }
 
 // Executes the Loop body callback until termination, then assembles the final
-// outputs. When ``allocator`` is non-null, stacked scan outputs are allocated
-// through it before they are returned.
+// outputs.
+//   * ``M``: optional Loop trip-count tensor.
+//   * ``cond``: optional Loop initial-condition tensor.
+//   * ``v_initial``: initial loop-carried tensors.
+//   * ``num_scan_outputs``: number of per-iteration scan outputs produced by
+//     ``run_body``.
+//   * ``run_body``: callback implementing one Loop body iteration.
+//   * ``allocator``: optional allocator used for stacked scan outputs.
 std::vector<Tensor> RunLoopBody(const Tensor &M, const Tensor &cond,
                                 const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
                                 const Loop::BodyRunner &run_body, RawBufferAllocator *allocator) {

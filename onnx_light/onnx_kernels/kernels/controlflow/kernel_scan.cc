@@ -124,8 +124,16 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, 
 }
 
 // Builds the final Scan outputs from the final state tensors and collected
-// per-iteration scan values. When ``allocator`` is non-null, each stacked
-// scan output is allocated through it.
+// per-iteration scan values.
+//   * ``trip_count``: number of executed iterations.
+//   * ``initial_state``: initial state tensors returned when
+//     ``trip_count == 0``.
+//   * ``final_state``: final state tensors produced by the body.
+//   * ``scan_values_per_iter``: collected per-iteration scan-output tensors.
+//   * ``scan_output_axes``: output-axis positions for stacking each scan
+//     output.
+//   * ``scan_output_directions``: per-output append/prepend directions.
+//   * ``allocator``: optional allocator used for stacked scan outputs.
 std::vector<Tensor>
 AssembleScanOutputs(int64_t trip_count, const std::vector<Tensor> &initial_state,
                     const std::vector<Tensor> &final_state,

@@ -503,6 +503,48 @@ TEST(KernelClass, SoftmaxClassSupportsFloat16) {
   EXPECT_NEAR(py[5], 0.66524094f, 1e-3f);
 }
 
+TEST(KernelClass, Float16PromoteUsesAllocatorWhenRuntimeContextHasOne) {
+  Tensor x32 = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
+  Tensor x16 =
+      onnx_kernels::DemoteFromFloat32(x32, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = onnx_kernels::PromoteToFloat32(x16, &rt);
+
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(y.data.size(), 0u);
+  ASSERT_EQ(y.shape, x32.shape);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  const float *py = y.AsFloat();
+  for (int64_t i = 0; i < x32.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], x32.AsFloat()[i]);
+  }
+}
+
+TEST(KernelClass, Float16DemoteUsesAllocatorWhenRuntimeContextHasOne) {
+  Tensor x32 = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = onnx_kernels::DemoteFromFloat32(
+      x32, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), &rt);
+
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(y.data.size(), 0u);
+  ASSERT_EQ(y.shape, x32.shape);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  const Tensor roundtrip = onnx_kernels::PromoteToFloat32(y);
+  const float *py = roundtrip.AsFloat();
+  for (int64_t i = 0; i < x32.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], x32.AsFloat()[i]);
+  }
+}
+
 TEST(KernelClass, LogSoftmaxClassMatchesReferenceAxis1) {
   const KernelContext ctx{DefaultOpset(13)};
   LogSoftmax logsoftmax_kernel{ctx};

@@ -17,6 +17,8 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 
+class RuntimeContext;
+
 /// Returns true if the data type is FLOAT16 or BFLOAT16.
 inline bool IsHalfPrecision(int32_t data_type) {
   return data_type == static_cast<int32_t>(DataType::FLOAT16) ||
@@ -25,13 +27,13 @@ inline bool IsHalfPrecision(int32_t data_type) {
 
 /// Converts a FLOAT16 or BFLOAT16 tensor to FLOAT32.
 /// If the input is already FLOAT or DOUBLE, returns a copy unchanged (no conversion).
-Tensor PromoteToFloat32(const Tensor &src);
+Tensor PromoteToFloat32(const Tensor &src, RuntimeContext *rt = nullptr);
 
 /// Demotes a FLOAT32 tensor back to FLOAT16 or BFLOAT16.
 /// @param src The float32 tensor to demote.
 /// @param target_dtype The target data type (FLOAT16 or BFLOAT16).
 /// @return A new Tensor with data_type == target_dtype and the same shape/name.
-Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype);
+Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype, RuntimeContext *rt = nullptr);
 
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

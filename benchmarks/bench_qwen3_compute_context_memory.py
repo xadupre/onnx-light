@@ -10,7 +10,7 @@ import torch
 from transformers import AutoConfig, AutoModelForCausalLM
 from yobx.torch import to_onnx
 
-from onnx_light.onnx import load as ol_load
+from onnx_light.onnx import load as ol_load, save as ol_save, inliner
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
     ComputeContext,
@@ -104,35 +104,48 @@ def main() -> None:
     }
     dynamic_shapes = {
         "input_ids": {0: "batch_size", 1: "sequence_length"},
-        "attention_mask": {0: "batch_size", 1: "cache_plus_sequence_length"},
-        "past_key_values": tuple(
+        "attention_mask": {0: "batch_size", 1: "total_sequence_length"},
+        "past_key_values": [
             {0: "batch_size", 2: "past_sequence_length"}
             for _ in range(config.num_hidden_layers * 2)
-        ),
+        ],
     }
+    print("-- converts the model")
     with (
         register_flattening_functions(patch_transformers=True),
         apply_patches_for_model(patch_transformers=True, patch_torch=False),
     ):
         artifact = to_onnx(model, kwargs=sample_inputs, dynamic_shapes=dynamic_shapes)
     filename = f"{args.output_prefix}.onnx"
-    artifact.save(filename)
-    onnx_model = ol_load(filename, load_external_data=False)
 
+    print("-- saves the onnx model")
+    artifact.save(filename)
+    print("-- loads the onnx model")
+    onnx_model = ol_load(filename, load_external_data=False)
+    onnx_model = inliner.inline_local_functions(onnx_model)
+    del onnx_model.graph.value_info[:]
+
+    print("-- infer shapes")
     shape_context = ShapesContext()
     compute_shape_model(shape_context, onnx_model)
     apply_inferred_shapes_to_model(shape_context, onnx_model)
+    print("-- saves the model again")
+    ol_save(onnx_model, filename, save_as_external_data=True)
 
+    print("-- compute value and node tags")
     compute_context = ComputeContext()
-    value_tags, _ = compute_context.compute_value_and_node_tags(onnx_model.graph)
+    value_tags, _ = compute_context.compute_value_and_node_tags(onnx_model.graph, verbose=10)
+    print("-- compute inplace")
     compute_context.compute_inplace_reuse_graph(
-        onnx_model.graph, shape_context, value_tags=value_tags
+        onnx_model.graph, shape_context, value_tags=value_tags, verbose=10
     )
 
+    print("-- create export")
     assignment = {
         "batch_size": args.batch,
         "sequence_length": args.sequence_length,
         "past_sequence_length": args.past_sequence_length,
+        "total_sequence_length": args.sequence_length + args.past_sequence_length,
     }
     total_bytes = [
         evaluate_memory_scalar(profile[NODE_MEMORY_TOTAL_BYTES_KEY], assignment)

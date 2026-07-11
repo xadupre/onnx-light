@@ -51,6 +51,9 @@ int64_t EffectiveTripCount(const Tensor &M, const Tensor &cond, int64_t per_iter
   return limit;
 }
 
+int64_t ParseMaxTripCount(const Tensor &M);
+bool ParseInitialCond(const Tensor &cond);
+
 // Stacks ``per_iter`` along a new leading axis of length ``trip_count``.
 // All entries must share the same data type and shape; only the first
 // ``trip_count`` entries are consumed (later entries, if any, are ignored
@@ -123,9 +126,6 @@ AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
   }
   return out;
 }
-
-int64_t ParseMaxTripCount(const Tensor &M);
-bool ParseInitialCond(const Tensor &cond);
 
 std::vector<Tensor> RunLoopBody(const Tensor &M, const Tensor &cond,
                                 const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,

@@ -454,7 +454,7 @@ TEST(KernelClass, LoopUsesAllocatorWhenRuntimeContextHasOne) {
   EXPECT_TRUE(out[0].has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);
   // Allocator-backed tensors keep their bytes in the RawBuffer allocation,
-  // so the inline ``data`` vector stays empty.
+  // so the inline `data` vector stays empty.
   EXPECT_EQ(out[0].data.size(), 0u);
   ASSERT_EQ(out[0].shape, (Shape{2, 1}));
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 1.0f);
@@ -688,7 +688,7 @@ TEST(KernelClass, ScanUsesAllocatorWhenRuntimeContextHasOne) {
   EXPECT_TRUE(out[0].has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);
   // Allocator-backed tensors keep their bytes in the RawBuffer allocation,
-  // so the inline ``data`` vector stays empty.
+  // so the inline `data` vector stays empty.
   EXPECT_EQ(out[0].data.size(), 0u);
   ASSERT_EQ(out[0].shape, (Shape{3, 1}));
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 10.0f);

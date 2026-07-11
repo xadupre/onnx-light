@@ -41,8 +41,7 @@ int64_t EffectiveTripCount(const Tensor &M, const Tensor &cond, int64_t per_iter
                         "kernel::Loop: 'M' must contain a single element when provided.");
     EXT_ENFORCE_INVALID(M.size_bytes() >= sizeof(int64_t),
                         "kernel::Loop: 'M' buffer is too small to hold an INT64.");
-    int64_t m_value = 0;
-    std::memcpy(&m_value, M.bytes(), sizeof(int64_t));
+    const int64_t m_value = M.AsInt64()[0];
     EXT_ENFORCE_INVALID(m_value >= 0, "kernel::Loop: 'M' must be non-negative.");
     if (m_value < limit) {
       limit = m_value;
@@ -64,8 +63,7 @@ int64_t ParseMaxTripCount(const Tensor &M) {
                       "kernel::Loop: 'M' must contain a single element when provided.");
   EXT_ENFORCE_INVALID(M.size_bytes() >= sizeof(int64_t),
                       "kernel::Loop: 'M' buffer is too small to hold an INT64.");
-  int64_t m_value = 0;
-  std::memcpy(&m_value, M.bytes(), sizeof(int64_t));
+  const int64_t m_value = M.AsInt64()[0];
   EXT_ENFORCE_INVALID(m_value >= 0, "kernel::Loop: 'M' must be non-negative.");
   return m_value;
 }

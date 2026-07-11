@@ -34,7 +34,7 @@ struct LiveAllocation {
 
 constexpr int kSqueezeDataInputIndex = 0;
 constexpr int kUnsqueezeDataInputIndex = 0;
-using ExpressionSimplificationCache = std::unordered_map<std::string, expressions::DimType>;
+using SimplifiedExpressionCache = std::unordered_map<std::string, expressions::DimType>;
 
 ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags,
                   const std::string &name) {
@@ -50,7 +50,7 @@ bool IsZeroDim(const expressions::DimType &d) {
 }
 
 expressions::DimType SimplifyDimType(const expressions::DimType &value,
-                                     ExpressionSimplificationCache *cache = nullptr) {
+                                     SimplifiedExpressionCache *cache = nullptr) {
   if (std::holds_alternative<int64_t>(value)) {
     return value;
   }
@@ -76,14 +76,14 @@ expressions::DimType SimplifyDimType(const expressions::DimType &value,
   return simplified_value;
 }
 
-void SimplifyTaggedMemory(TaggedMemory &bucket, ExpressionSimplificationCache *cache = nullptr) {
+void SimplifyTaggedMemory(TaggedMemory &bucket, SimplifiedExpressionCache *cache = nullptr) {
   for (auto &entry : bucket) {
     entry.second = SimplifyDimType(entry.second, cache);
   }
 }
 
 void SimplifyNodeMemoryProfile(NodeMemoryProfile &profile,
-                               ExpressionSimplificationCache *cache = nullptr) {
+                               SimplifiedExpressionCache *cache = nullptr) {
   NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
       SimplifyDimType(NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey), cache);
   NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) =
@@ -97,7 +97,7 @@ void SimplifyNodeMemoryProfile(NodeMemoryProfile &profile,
 }
 
 void AddTaggedBytes(TaggedMemory &dst, const ShapeTag &tag, const expressions::DimType &bytes,
-                    ExpressionSimplificationCache *cache = nullptr) {
+                    SimplifiedExpressionCache *cache = nullptr) {
   const expressions::DimType simplified_bytes = SimplifyDimType(bytes, cache);
   if (IsZeroDim(simplified_bytes)) {
     return;
@@ -111,7 +111,7 @@ void AddTaggedBytes(TaggedMemory &dst, const ShapeTag &tag, const expressions::D
 }
 
 void AddLiveAllocation(NodeMemoryProfile &profile, const LiveAllocation &alloc,
-                       ExpressionSimplificationCache *cache = nullptr) {
+                       SimplifiedExpressionCache *cache = nullptr) {
   const expressions::DimType simplified_bytes = SimplifyDimType(alloc.bytes, cache);
   expressions::DimType &already_allocated =
       NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey);
@@ -226,7 +226,7 @@ std::optional<int64_t> ConcreteByteSize(const OptimTensor &t) {
 }
 
 std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t,
-                                                 ExpressionSimplificationCache *cache = nullptr) {
+                                                 SimplifiedExpressionCache *cache = nullptr) {
   const int bits = ElementBitWidth(t.Dtype());
   if (bits == 0) {
     return std::nullopt;
@@ -254,10 +254,10 @@ std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t,
 const std::optional<expressions::DimType> &
 GetCachedByteSizeExpr(const ShapesContext &ctx, const std::string &name,
                       std::unordered_map<std::string, std::optional<expressions::DimType>> &cache,
-                      ExpressionSimplificationCache *simplified_cache = nullptr) {
+                      SimplifiedExpressionCache *simplification_cache = nullptr) {
   auto [it, inserted] = cache.try_emplace(name);
   if (inserted) {
-    it->second = ByteSizeExpr(ctx.Get(name), simplified_cache);
+    it->second = ByteSizeExpr(ctx.Get(name), simplification_cache);
   }
   return it->second;
 }
@@ -279,7 +279,7 @@ std::optional<InPlaceReuseKind> ClassifyReuse(
     const ShapesContext &ctx, const std::string &out_name, const OptimTensor &out,
     const std::string &in_name, const OptimTensor &in,
     std::unordered_map<std::string, std::optional<expressions::DimType>> &byte_size_expr_cache,
-    ExpressionSimplificationCache *simplified_cache = nullptr) {
+    SimplifiedExpressionCache *simplification_cache = nullptr) {
   if (SameStorage(out, in)) {
     return InPlaceReuseKind::kEqual;
   }
@@ -299,8 +299,9 @@ std::optional<InPlaceReuseKind> ClassifyReuse(
   // canonical form describe equal buffer sizes regardless of the runtime
   // values of symbolic dimension variables.
   const auto &out_expr =
-      GetCachedByteSizeExpr(ctx, out_name, byte_size_expr_cache, simplified_cache);
-  const auto &in_expr = GetCachedByteSizeExpr(ctx, in_name, byte_size_expr_cache, simplified_cache);
+      GetCachedByteSizeExpr(ctx, out_name, byte_size_expr_cache, simplification_cache);
+  const auto &in_expr =
+      GetCachedByteSizeExpr(ctx, in_name, byte_size_expr_cache, simplification_cache);
   if (out_expr.has_value() && in_expr.has_value() && *out_expr == *in_expr) {
     return InPlaceReuseKind::kEqual;
   }
@@ -415,7 +416,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   std::vector<std::vector<std::string>> not_used_after(static_cast<std::size_t>(num_nodes));
   std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes),
                                         MakeEmptyNodeMemoryProfile());
-  ExpressionSimplificationCache simplified_dim_cache;
+  SimplifiedExpressionCache simplified_dim_cache;
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_size_expr_cache;
 
   // Names whose buffers must never be overwritten in place: declared graph

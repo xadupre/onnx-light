@@ -64,8 +64,8 @@ Shape ReadShapeInput(const Tensor &shape) {
   const int64_t n = shape.shape[0];
   Shape out;
   const int64_t *dims = shape.AsInt64();
-  for (int64_t i = 0; i < n; ++i) {
-    out.push_back(dims[i]);
+  if (n > 0) {
+    out.insert(out.end(), dims, dims + n);
   }
   return out;
 }

@@ -46,7 +46,8 @@ std::size_t ElementBytes(const Tensor &t) {
 
 // Stacks the first ``trip_count`` per-iteration tensors along the chosen
 // ``axis``, optionally reversing them when ``reverse`` is true (matching the
-// ONNX Scan "prepend" direction).
+// ONNX Scan "prepend" direction). When ``allocator`` is non-null, the
+// returned tensor stores its bytes in an allocator-owned ``RawBuffer``.
 Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, int64_t axis_raw,
                        bool reverse, RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(static_cast<int64_t>(per_iter.size()) >= trip_count,
@@ -122,6 +123,9 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, 
   return out;
 }
 
+// Builds the final Scan outputs from the final state tensors and collected
+// per-iteration scan values. When ``allocator`` is non-null, each stacked
+// scan output is allocated through it.
 std::vector<Tensor>
 AssembleScanOutputs(int64_t trip_count, const std::vector<Tensor> &initial_state,
                     const std::vector<Tensor> &final_state,

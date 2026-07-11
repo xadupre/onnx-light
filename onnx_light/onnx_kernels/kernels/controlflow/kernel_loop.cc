@@ -51,13 +51,18 @@ int64_t EffectiveTripCount(const Tensor &M, const Tensor &cond, int64_t per_iter
   return limit;
 }
 
+// Parses the optional INT64 scalar ``M`` into a non-negative trip-count
+// upper bound. Returns ``INT64_MAX`` when ``M`` is omitted.
 int64_t ParseMaxTripCount(const Tensor &M);
+// Parses the optional BOOL scalar ``cond`` into the initial termination
+// condition. Returns ``true`` when ``cond`` is omitted.
 bool ParseInitialCond(const Tensor &cond);
 
 // Stacks ``per_iter`` along a new leading axis of length ``trip_count``.
 // All entries must share the same data type and shape; only the first
 // ``trip_count`` entries are consumed (later entries, if any, are ignored
-// because the loop terminated early).
+// because the loop terminated early). When ``allocator`` is non-null, the
+// returned tensor stores its bytes in an allocator-owned ``RawBuffer``.
 Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count,
                        RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(static_cast<int64_t>(per_iter.size()) >= trip_count,
@@ -111,6 +116,9 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count,
   return stacked;
 }
 
+// Builds the final Loop outputs from the final loop-carried state and the
+// collected per-iteration scan values. When ``allocator`` is non-null, each
+// stacked scan output is allocated through it.
 std::vector<Tensor>
 AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
                     const std::vector<Tensor> &final_state,
@@ -127,6 +135,9 @@ AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
   return out;
 }
 
+// Executes the Loop body callback until termination, then assembles the final
+// outputs. When ``allocator`` is non-null, stacked scan outputs are allocated
+// through it before they are returned.
 std::vector<Tensor> RunLoopBody(const Tensor &M, const Tensor &cond,
                                 const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
                                 const Loop::BodyRunner &run_body, RawBufferAllocator *allocator) {

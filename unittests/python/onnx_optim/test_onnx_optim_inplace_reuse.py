@@ -724,6 +724,33 @@ class TestInPlaceReuse(ExtTestCase):
         # kReleaseAfterShapeTagMetadataKey also lists S (it is shape-tagged).
         self.assertEqual(meta1.get("onnx_light.release_after_shape_tag"), "S")
 
+    def test_shape_tag_release_info_with_long_symbolic_names(self):
+        long_dim = "very_long_dynamic_dimension_name_" * 16 + "N"
+        nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, None)
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [long_dim]))
+        ctx.set("S", si.OptimTensor(onnxl.TensorProto.INT64, [1]))
+        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, [long_dim]))
+
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
+
+        self.assertEqual(inplace.release_after_shape_tagged, [[], ["S"]])
+        mem0 = inplace.node_memory(0)
+        self.assertEqual(mem0["inputs"], {"": f"4*{long_dim}"})
+        self.assertEqual(mem0["output_allocation_bytes"], 8)
+        self.assertEqual(mem0["total_bytes"], f"4*{long_dim}+8")
+
+        inplace.write_to_metadata(model.graph)
+        meta1 = self._node_metadata(model.graph.node[1])
+        self.assertEqual(meta1.get("onnx_light.release_after"), "S")
+        self.assertEqual(meta1.get("onnx_light.not_used_after"), "X")
+        self.assertEqual(meta1.get("onnx_light.release_after_shape_tag"), "S")
+
     def test_shape_tag_no_value_tags_leaves_shape_tagged_empty(self):
         nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Abs", ["A"], ["Y"])]
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])

@@ -42,7 +42,7 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
     RegisterPadCannyAverageShapeInferenceCases(registry);
     RegisterTinyLlmShapeInferenceCases(registry);
     RegisterTinyLlmInlinedShapeInferenceCases(registry);
-    RegisterQwen3ComputeContextMemoryShapeInferenceCases(registry);
+    RegisterQwen3ComputeContextMemoryShapeInferenceCase(registry);
     RegisterUnsqueezeVasReshapeShapeInferenceCases(registry);
   }
 }

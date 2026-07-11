@@ -241,13 +241,19 @@ TEST(BackendTestCase, Qwen3ContextMemoryCaseEmbedsExpectedMetadata) {
   const GraphProto &graph = cases[0].model.ref_graph();
 
   bool has_value_tags = false;
+  std::string value_tags_json;
   for (const auto &meta : graph.ref_metadata_props()) {
     if (meta.ref_key().as_string() == "onnx_light.value_tags") {
       has_value_tags = true;
+      value_tags_json = meta.ref_value().as_string();
       break;
     }
   }
   EXPECT_TRUE(has_value_tags);
+  EXPECT_FALSE(value_tags_json.empty());
+  EXPECT_EQ(value_tags_json.front(), '{');
+  EXPECT_EQ(value_tags_json.back(), '}');
+  EXPECT_NE(value_tags_json.find(':'), std::string::npos);
   EXPECT_FALSE(graph.ref_value_info().empty());
 
   bool has_release_after = false;
@@ -273,6 +279,20 @@ TEST(BackendTestCase, Qwen3ContextMemoryCaseEmbedsExpectedMetadata) {
   EXPECT_TRUE(has_release_after_shape);
   EXPECT_TRUE(has_inplace_reuse);
   EXPECT_TRUE(has_node_tag);
+
+  bool has_value_tag_in_value_info = false;
+  for (const auto &value_info : graph.ref_value_info()) {
+    for (const auto &meta : value_info.ref_metadata_props()) {
+      if (meta.ref_key().as_string() == "onnx_light.value_tag") {
+        has_value_tag_in_value_info = true;
+        break;
+      }
+    }
+    if (has_value_tag_in_value_info) {
+      break;
+    }
+  }
+  EXPECT_TRUE(has_value_tag_in_value_info);
 }
 
 TEST(BackendTestCase, TagDefaultsToDomainForNonDefaultDomainNode) {

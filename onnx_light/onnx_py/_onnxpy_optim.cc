@@ -1267,13 +1267,11 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "compute_inplace_reuse_graph",
           [](onnx_annotations::ComputeContext &self, const GraphProto &graph,
              const onnx_shapes::ShapesContext &ctx, bool allow_input_overwrite,
-             const std::unordered_map<std::string, std::string> &value_tags, int verbose) {
-            (void)verbose;
+             const std::unordered_map<std::string, std::string> &value_tags) {
             self.ComputeInPlaceReuseGraph(graph, ctx, allow_input_overwrite, value_tags);
           },
           nb::arg("graph"), nb::arg("ctx"), nb::arg("allow_input_overwrite") = false,
           nb::arg("value_tags") = std::unordered_map<std::string, std::string>{},
-          nb::arg("verbose") = 0,
           "Guesses, for every node of ``graph``, which outputs reuse which input buffers in "
           "place, using the shapes already inferred into ``ctx``, and stores the result in this "
           "context (replacing any previous result).\n\n"
@@ -1284,17 +1282,13 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "are also stored in ``release_after_shape_tagged`` and written to "
           "``onnx_light.release_after_shape_tag`` by :meth:`write_to_metadata`. When "
           "``value_tags`` is omitted, this method reuses the last tags stored by "
-          ":meth:`compute_value_and_node_tags` on the same context, if any. ``verbose`` is "
-          "currently accepted for API compatibility and has no effect.")
+          ":meth:`compute_value_and_node_tags` on the same context, if any.")
       .def(
           "compute_release_after_shape_tagged",
-          [](const onnx_annotations::ComputeContext &self, int verbose) {
-            (void)verbose;
+          [](const onnx_annotations::ComputeContext &self) {
             return self.ReleaseAfterShapeTagged();
           },
-          nb::arg("verbose") = 0,
-          "Returns ``release_after_shape_tagged``; the optional ``verbose`` argument is accepted "
-          "for API compatibility.")
+          "Returns ``release_after_shape_tagged``.")
       .def_prop_rw(
           "events_enabled",
           [](const onnx_annotations::ComputeContext &self) { return self.events_enabled(); },

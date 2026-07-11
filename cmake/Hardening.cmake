@@ -52,6 +52,60 @@ function(_onnx_light_try_link_flag flag out_var)
   endif()
 endfunction()
 
+function(_onnx_light_normalize_msvc_arch arch out_var)
+  string(TOLOWER "${arch}" _arch)
+  if(_arch STREQUAL "win32" OR _arch STREQUAL "x86")
+    set(${out_var} "x86" PARENT_SCOPE)
+  elseif(_arch STREQUAL "x64" OR _arch STREQUAL "amd64" OR _arch STREQUAL "x86_64")
+    set(${out_var} "x64" PARENT_SCOPE)
+  elseif(_arch STREQUAL "arm")
+    set(${out_var} "arm" PARENT_SCOPE)
+  elseif(_arch STREQUAL "arm64" OR _arch STREQUAL "aarch64")
+    set(${out_var} "arm64" PARENT_SCOPE)
+  elseif(_arch STREQUAL "arm64ec")
+    set(${out_var} "arm64ec" PARENT_SCOPE)
+  else()
+    set(${out_var} "${_arch}" PARENT_SCOPE)
+  endif()
+endfunction()
+
+function(_onnx_light_get_msvc_spectre_lib_dir out_var)
+  if(NOT DEFINED ENV{VCToolsInstallDir} OR "$ENV{VCToolsInstallDir}" STREQUAL "")
+    set(${out_var} "" PARENT_SCOPE)
+    return()
+  endif()
+
+  if(CMAKE_VS_PLATFORM_NAME)
+    set(_target_arch "${CMAKE_VS_PLATFORM_NAME}")
+  elseif(CMAKE_GENERATOR_PLATFORM)
+    set(_target_arch "${CMAKE_GENERATOR_PLATFORM}")
+  elseif(DEFINED ENV{VSCMD_ARG_TGT_ARCH} AND NOT "$ENV{VSCMD_ARG_TGT_ARCH}" STREQUAL "")
+    set(_target_arch "$ENV{VSCMD_ARG_TGT_ARCH}")
+  elseif(CMAKE_SYSTEM_PROCESSOR)
+    set(_target_arch "${CMAKE_SYSTEM_PROCESSOR}")
+  else()
+    set(_target_arch "x64")
+  endif()
+  _onnx_light_normalize_msvc_arch("${_target_arch}" _target_arch)
+
+  file(TO_CMAKE_PATH "$ENV{VCToolsInstallDir}" _vctools_dir)
+  set(_spectre_dir "${_vctools_dir}/lib/spectre/${_target_arch}")
+  if(IS_DIRECTORY "${_spectre_dir}")
+    set(${out_var} "${_spectre_dir}" PARENT_SCOPE)
+    return()
+  endif()
+
+  if(_target_arch STREQUAL "arm64ec")
+    set(_arm64_fallback "${_vctools_dir}/lib/spectre/arm64")
+    if(IS_DIRECTORY "${_arm64_fallback}")
+      set(${out_var} "${_arm64_fallback}" PARENT_SCOPE)
+      return()
+    endif()
+  endif()
+
+  set(${out_var} "" PARENT_SCOPE)
+endfunction()
+
 set(_onnx_light_hardening_compile_options "")
 set(_onnx_light_hardening_compile_definitions "")
 set(_onnx_light_hardening_link_options "")
@@ -84,6 +138,22 @@ if(MSVC)
       list(APPEND _onnx_light_hardening_link_options "${flag}")
     endif()
   endforeach()
+
+  list(FIND _onnx_light_hardening_compile_options "/Qspectre" _onnx_light_qspectre_index)
+  if(NOT _onnx_light_qspectre_index EQUAL -1)
+    _onnx_light_get_msvc_spectre_lib_dir(_onnx_light_msvc_spectre_lib_dir)
+    if(_onnx_light_msvc_spectre_lib_dir)
+      list(APPEND _onnx_light_hardening_link_options
+           "SHELL:/LIBPATH:\"${_onnx_light_msvc_spectre_lib_dir}\"")
+    else()
+      message(WARNING
+              "ONNX_HARDENING: /Qspectre is enabled but the MSVC Spectre-mitigated "
+              "CRT/STL libraries could not be located. The resulting binaries may "
+              "fail Spectre-mitigation validation. Install the 'C++ "
+              "Spectre-mitigated libs' Visual Studio component and build from a "
+              "Developer Command Prompt.")
+    endif()
+  endif()
 else()
   # GCC / Clang recommendations.
   set(_gcc_compile_candidates

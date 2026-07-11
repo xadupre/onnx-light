@@ -51,8 +51,37 @@ int64_t EffectiveTripCount(const Tensor &M, const Tensor &cond, int64_t per_iter
   return limit;
 }
 
-int64_t ParseMaxTripCount(const Tensor &M);
-bool ParseInitialCond(const Tensor &cond);
+// Parses the INT64 scalar ``M`` (when provided) into a non-negative
+// trip-count upper bound. Returns ``INT64_MAX`` when ``M`` is omitted
+// (``data_type == UNDEFINED``).
+int64_t ParseMaxTripCount(const Tensor &M) {
+  if (M.data_type == DataType::UNDEFINED) {
+    return std::numeric_limits<int64_t>::max();
+  }
+  EXT_ENFORCE_INVALID(M.data_type == DataType::INT64,
+                      "kernel::Loop: 'M' must be an INT64 tensor when provided.");
+  EXT_ENFORCE_INVALID(M.element_count() == 1,
+                      "kernel::Loop: 'M' must contain a single element when provided.");
+  EXT_ENFORCE_INVALID(M.size_bytes() >= sizeof(int64_t),
+                      "kernel::Loop: 'M' buffer is too small to hold an INT64.");
+  int64_t m_value = 0;
+  std::memcpy(&m_value, M.bytes(), sizeof(int64_t));
+  EXT_ENFORCE_INVALID(m_value >= 0, "kernel::Loop: 'M' must be non-negative.");
+  return m_value;
+}
+
+// Parses the optional BOOL scalar ``cond`` into the initial termination
+// condition. Returns ``true`` when ``cond`` is omitted.
+bool ParseInitialCond(const Tensor &cond) {
+  if (cond.data_type == DataType::UNDEFINED) {
+    return true;
+  }
+  EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL,
+                      "kernel::Loop: 'cond' must be a BOOL tensor when provided.");
+  EXT_ENFORCE_INVALID(cond.element_count() == 1,
+                      "kernel::Loop: 'cond' must contain a single element when provided.");
+  return cond.bytes()[0] != 0;
+}
 
 // Stacks ``per_iter`` along a new leading axis of length ``trip_count``.
 // All entries must share the same data type and shape; only the first
@@ -112,8 +141,8 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count,
   return stacked;
 }
 
-// Assembles the final Loop outputs from the final loop-carried state and the
-// collected per-iteration scan values.
+// Assembles the final Loop outputs from the final loop-carried state and the collected
+// per-iteration scan values.
 //   * ``trip_count``: number of executed iterations.
 //   * ``v_initial``: initial loop-carried tensors returned when
 //     ``trip_count == 0``.
@@ -136,8 +165,7 @@ AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
   return out;
 }
 
-// Runs the Loop body callback until termination, then assembles the final
-// outputs.
+// Runs the Loop body callback until termination, then assembles the final outputs.
 //   * ``M``: optional Loop trip-count tensor.
 //   * ``cond``: optional Loop initial-condition tensor.
 //   * ``v_initial``: initial loop-carried tensors.
@@ -258,42 +286,6 @@ Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
   return AssembleLoopOutputs(trip_count, v_initial, final_state, scan_values_per_iter,
                              rt.allocator());
 }
-
-namespace {
-
-// Parses the INT64 scalar ``M`` (when provided) into a non-negative
-// trip-count upper bound. Returns ``INT64_MAX`` when ``M`` is omitted
-// (``data_type == UNDEFINED``).
-int64_t ParseMaxTripCount(const Tensor &M) {
-  if (M.data_type == DataType::UNDEFINED) {
-    return std::numeric_limits<int64_t>::max();
-  }
-  EXT_ENFORCE_INVALID(M.data_type == DataType::INT64,
-                      "kernel::Loop: 'M' must be an INT64 tensor when provided.");
-  EXT_ENFORCE_INVALID(M.element_count() == 1,
-                      "kernel::Loop: 'M' must contain a single element when provided.");
-  EXT_ENFORCE_INVALID(M.size_bytes() >= sizeof(int64_t),
-                      "kernel::Loop: 'M' buffer is too small to hold an INT64.");
-  int64_t m_value = 0;
-  std::memcpy(&m_value, M.bytes(), sizeof(int64_t));
-  EXT_ENFORCE_INVALID(m_value >= 0, "kernel::Loop: 'M' must be non-negative.");
-  return m_value;
-}
-
-// Parses the optional BOOL scalar ``cond`` into the initial termination
-// condition. Returns ``true`` when ``cond`` is omitted.
-bool ParseInitialCond(const Tensor &cond) {
-  if (cond.data_type == DataType::UNDEFINED) {
-    return true;
-  }
-  EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL,
-                      "kernel::Loop: 'cond' must be a BOOL tensor when provided.");
-  EXT_ENFORCE_INVALID(cond.element_count() == 1,
-                      "kernel::Loop: 'cond' must contain a single element when provided.");
-  return cond.bytes()[0] != 0;
-}
-
-} // namespace
 
 std::vector<Tensor> Loop::operator()(const Tensor &M, const Tensor &cond,
                                      const std::vector<Tensor> &v_initial,

@@ -22,6 +22,7 @@ using onnx_backend_test::DefaultOpset;
 using onnx_kernels::RuntimeContext;
 using onnx_kernels::Sequence;
 using onnx_kernels::Shape;
+using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::If;
 using onnx_kernels::kernel::KernelContext;
@@ -435,6 +436,31 @@ TEST(KernelClass, LoopUsesPerIterRowLengthWhenMIsAbsent) {
   EXPECT_EQ(out[0].shape[1], 1);
 }
 
+TEST(KernelClass, LoopUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  RuntimeContext rt(ctx);
+  SimpleRawBufferAllocator alloc(1);
+  rt.set_allocator(&alloc);
+  Tensor M = Int64Scalar(2);
+  Tensor cond_undef;
+  Tensor s0 = Tensor::FromFloat("", {1}, {1.0f});
+  Tensor s1 = Tensor::FromFloat("", {1}, {2.0f});
+
+  std::vector<Tensor> out =
+      loop_kernel(rt, M, cond_undef, /*v_initial=*/{}, /*final_state=*/{}, {{s0, s1}});
+
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_TRUE(out[0].has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  // Allocator-backed tensors keep their bytes in the RawBuffer allocation,
+  // so the inline `data` vector stays empty.
+  EXPECT_EQ(out[0].data.size(), 0u);
+  ASSERT_EQ(out[0].shape, (Shape{2, 1}));
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 2.0f);
+}
+
 TEST(KernelClass, LoopRejectsMismatchedFinalStateAndVInitial) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
@@ -643,6 +669,31 @@ TEST(KernelClass, ScanStacksAlongNonLeadingAxisWhenRequested) {
   EXPECT_FLOAT_EQ(out[0].AsFloat()[3], 5.0f);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[4], 3.0f);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[5], 6.0f);
+}
+
+TEST(KernelClass, ScanUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(18)};
+  Scan scan_kernel{ctx};
+  RuntimeContext rt(ctx);
+  SimpleRawBufferAllocator alloc(1);
+  rt.set_allocator(&alloc);
+  Tensor s0 = Tensor::FromFloat("", {1}, {10.0f});
+  Tensor s1 = Tensor::FromFloat("", {1}, {20.0f});
+  Tensor s2 = Tensor::FromFloat("", {1}, {30.0f});
+
+  std::vector<Tensor> out =
+      scan_kernel(rt, 3, /*initial_state=*/{}, /*final_state=*/{}, {{s0, s1, s2}});
+
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_TRUE(out[0].has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  // Allocator-backed tensors keep their bytes in the RawBuffer allocation,
+  // so the inline `data` vector stays empty.
+  EXPECT_EQ(out[0].data.size(), 0u);
+  ASSERT_EQ(out[0].shape, (Shape{3, 1}));
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 10.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 20.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[2], 30.0f);
 }
 
 TEST(KernelClass, ScanRejectsMismatchedInitialAndFinalState) {

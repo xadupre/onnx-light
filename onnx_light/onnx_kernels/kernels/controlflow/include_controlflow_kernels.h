@@ -150,6 +150,12 @@ public:
              const std::vector<Tensor> &final_state,
              const std::vector<std::vector<Tensor>> &scan_values_per_iter) const;
 
+  /// Allocator-aware stacking-only overload used by the runtime dispatcher.
+  std::vector<Tensor>
+  operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
+             const std::vector<Tensor> &v_initial, const std::vector<Tensor> &final_state,
+             const std::vector<std::vector<Tensor>> &scan_values_per_iter) const;
+
   /// Body-runner callback executed by the new ``operator()`` overload once
   /// per iteration. ``iter`` is the 0-based iteration index, ``cond_in`` is
   /// the BOOL termination condition entering this iteration, and ``state``
@@ -184,6 +190,11 @@ public:
   ///                          :type:`BodyRunner`.
   /// @return ``N + num_scan_outputs`` tensors.
   std::vector<Tensor> operator()(const Tensor &M, const Tensor &cond,
+                                 const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
+                                 const BodyRunner &run_body) const;
+
+  /// Allocator-aware body-aware overload used by the runtime dispatcher.
+  std::vector<Tensor> operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
                                  const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
                                  const BodyRunner &run_body) const;
 
@@ -270,6 +281,14 @@ public:
                                  const std::vector<Tensor> &scan_inputs,
                                  const std::vector<int64_t> &scan_input_axes = {},
                                  const std::vector<int64_t> &scan_input_directions = {},
+                                 const std::vector<int64_t> &scan_output_axes = {},
+                                 const std::vector<int64_t> &scan_output_directions = {}) const;
+
+  /// Allocator-aware stacking-only overload used by the runtime dispatcher.
+  std::vector<Tensor> operator()(RuntimeContext &rt, int64_t trip_count,
+                                 const std::vector<Tensor> &initial_state,
+                                 const std::vector<Tensor> &final_state,
+                                 const std::vector<std::vector<Tensor>> &scan_values_per_iter,
                                  const std::vector<int64_t> &scan_output_axes = {},
                                  const std::vector<int64_t> &scan_output_directions = {}) const;
 

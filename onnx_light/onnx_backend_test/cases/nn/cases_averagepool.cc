@@ -27,12 +27,21 @@ namespace onnx_backend_test {
 // reference case, with the ``test_cc_`` prefix):
 //
 //   * ``test_cc_averagepool_1d_default`` — 1-D, 2-wide kernel.
+//   * ``test_cc_averagepool_18_ceil_count_include_pad_1d`` — opset-18, 1-D,
+//     7-wide kernel, strides ``(3)``, pads ``(3, 3)``, ``ceil_mode = 1`` and
+//     ``count_include_pad = 1``.
 //   * ``test_cc_averagepool_2d_default`` — 2x2 kernel, default strides (1),
 //     no padding.
 //   * ``test_cc_averagepool_2d_strides`` — 3x3 kernel, strides ``(2, 2)``,
 //     no padding.
 //   * ``test_cc_averagepool_2d_ceil`` — 3x3 kernel, strides ``(2, 2)``,
 //     ``ceil_mode = 1``.
+//   * ``test_cc_averagepool_18_ceil_count_include_pad_2d`` — opset-18, 3x3
+//     kernel, strides ``(2, 2)``, pads ``(1, 1, 1, 1)``, ``ceil_mode = 1``
+//     and ``count_include_pad = 1``.
+//   * ``test_cc_averagepool_18_ceil_count_exclude_pad_2d`` — opset-18, 3x3
+//     kernel, strides ``(2, 2)``, pads ``(1, 1, 1, 1)`` and
+//     ``ceil_mode = 1`` with the default ``count_include_pad = 0``.
 //   * ``test_cc_averagepool_2d_ceil_last_window_starts_on_pad`` — 3x3
 //     kernel, strides ``(3, 3)``, pads ``(1, 1, 1, 1)``, ``ceil_mode = 1``
 //     and ``count_include_pad = 1`` (the last window starts on a padded
@@ -58,6 +67,9 @@ namespace onnx_backend_test {
 //   * ``test_cc_averagepool_2d_dilations_valid`` — 3x3 kernel, dilations
 //     ``(2, 2)``, ``auto_pad = VALID``.
 //   * ``test_cc_averagepool_3d_default`` — 3-D, 2x2x2 kernel.
+//   * ``test_cc_averagepool_18_ceil_count_include_pad_3d`` — opset-18, 3-D,
+//     3x3x3 kernel, strides ``(2, 2, 2)``, pads ``(1, 1, 1, 1, 1, 1)``,
+//     ``ceil_mode = 1`` and ``count_include_pad = 1``.
 //   * ``test_cc_averagepool_3d_dilations_small`` — 3-D, 2x2x2 kernel,
 //     dilations ``(2, 2, 2)``, ``ceil_mode = 1``.
 //   * ``test_cc_averagepool_3d_dilations_large_count_include_pad_is_{0,1}_ceil_mode_is_{True,False}``
@@ -68,6 +80,9 @@ namespace onnx_backend_test {
 //     ``np.random.randn`` so the values are reproducible).
 // ---------------------------------------------------------------------------
 void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
+  const OpsetId opset18 = DefaultOpset(18);
+  const kernel::KernelContext ctx18{opset18};
+  const kernel::AveragePool average_pool_kernel18{ctx18};
   const OpsetId opset = DefaultOpset(19);
   const kernel::KernelContext ctx{opset};
   const kernel::AveragePool average_pool_kernel{ctx};
@@ -144,6 +159,31 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     Expect(node, {x}, {y}, "test_cc_averagepool_1d_default", {opset}, "backend-test", registry);
   }
 
+  // Opset-18 clone of ``test_averagepool_19_ceil_count_include_pad_1d``,
+  // covering the legacy ceil_mode + count_include_pad path mirrored in
+  // onnxruntime PR #29629.
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {7});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {3});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {3, 3});
+    AddAttribute<int64_t>(node, "ceil_mode", 1);
+    AddAttribute<int64_t>(node, "count_include_pad", 1);
+
+    Tensor x = Tensor::FromFloat("", {1, 2, 9},
+                                 {2.0903f, 4.6493f, 1.6320f, -3.2051f, 4.6975f, 4.7296f, 3.3653f,
+                                  -1.5815f, -2.3832f, 0.9628f, -1.5899f, -2.6820f, 5.7529f, 7.7346f,
+                                  -0.8910f, -2.0151f, 0.1313f, -0.5374f});
+    Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{7}, /*strides=*/{3}, /*pads=*/{3, 3},
+                                     /*ceil_mode=*/true, /*count_include_pad=*/true);
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_18_ceil_count_include_pad_1d", {opset18},
+           "backend-test", registry);
+  }
+
   // 3x3 kernel, strides (2, 2) with ``ceil_mode = 1`` (mirrors
   // ``test_averagepool_2d_ceil``).
   {
@@ -163,6 +203,54 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
                                    /*count_include_pad=*/false);
 
     Expect(node, {x}, {y}, "test_cc_averagepool_2d_ceil", {opset}, "backend-test", registry);
+  }
+
+  // Opset-18 clone of the ceil_mode + count_include_pad regression case from
+  // onnxruntime PR #29629.
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
+    AddAttribute<int64_t>(node, "ceil_mode", 1);
+    AddAttribute<int64_t>(node, "count_include_pad", 1);
+
+    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+    Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
+                                     /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
+                                     /*count_include_pad=*/true);
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_18_ceil_count_include_pad_2d", {opset18},
+           "backend-test", registry);
+  }
+
+  // No-regression opset-18 ceil_mode case: excluding padding must remain
+  // correct on the legacy path as well.
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
+    AddAttribute<int64_t>(node, "ceil_mode", 1);
+    AddAttribute<int64_t>(node, "count_include_pad", 0);
+
+    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+    Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
+                                     /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
+                                     /*count_include_pad=*/false);
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_18_ceil_count_exclude_pad_2d", {opset18},
+           "backend-test", registry);
   }
 
   // 3x3 kernel, strides (3, 3), pads (1, 1, 1, 1), ``ceil_mode = 1`` and
@@ -290,6 +378,32 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2, 2});
 
     Expect(node, {x}, {y}, "test_cc_averagepool_3d_default", {opset}, "backend-test", registry);
+  }
+
+  // Opset-18 clone of the 3-D ceil_mode + count_include_pad regression case
+  // from onnxruntime PR #29629.
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1, 1, 1});
+    AddAttribute<int64_t>(node, "ceil_mode", 1);
+    AddAttribute<int64_t>(node, "count_include_pad", 1);
+
+    std::vector<float> data(27);
+    for (size_t i = 0; i < data.size(); ++i) {
+      data[i] = static_cast<float>(i + 1);
+    }
+    Tensor x = Tensor::FromFloat("", {1, 1, 3, 3, 3}, data);
+    Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3, 3}, /*strides=*/{2, 2, 2},
+                                     /*pads=*/{1, 1, 1, 1, 1, 1}, /*ceil_mode=*/true,
+                                     /*count_include_pad=*/true);
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_18_ceil_count_include_pad_3d", {opset18},
+           "backend-test", registry);
   }
 
   // 3x3 kernel with strides (2, 2) and ``auto_pad = SAME_UPPER`` on a

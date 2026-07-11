@@ -31,13 +31,17 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   const TestCase *strides = nullptr;
   const TestCase *pads = nullptr;
   const TestCase *avp_1d_default = nullptr;
+  const TestCase *avp_18_1d_ceil_cip = nullptr;
   const TestCase *avp_2d_ceil = nullptr;
+  const TestCase *avp_18_2d_ceil_cip = nullptr;
+  const TestCase *avp_18_2d_ceil_no_cip = nullptr;
   const TestCase *avp_2d_ceil_last = nullptr;
   const TestCase *avp_2d_pads = nullptr;
   const TestCase *avp_2d_pre_pads = nullptr;
   const TestCase *avp_2d_pre_pads_cip = nullptr;
   const TestCase *avp_2d_pre_strides = nullptr;
   const TestCase *avp_3d_default = nullptr;
+  const TestCase *avp_18_3d_ceil_cip = nullptr;
   const TestCase *avp_2d_pre_same_upper = nullptr;
   const TestCase *avp_2d_same_upper = nullptr;
   const TestCase *avp_2d_same_lower = nullptr;
@@ -57,8 +61,14 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
       pads = &c;
     } else if (c.name == "test_cc_averagepool_1d_default") {
       avp_1d_default = &c;
+    } else if (c.name == "test_cc_averagepool_18_ceil_count_include_pad_1d") {
+      avp_18_1d_ceil_cip = &c;
     } else if (c.name == "test_cc_averagepool_2d_ceil") {
       avp_2d_ceil = &c;
+    } else if (c.name == "test_cc_averagepool_18_ceil_count_include_pad_2d") {
+      avp_18_2d_ceil_cip = &c;
+    } else if (c.name == "test_cc_averagepool_18_ceil_count_exclude_pad_2d") {
+      avp_18_2d_ceil_no_cip = &c;
     } else if (c.name == "test_cc_averagepool_2d_ceil_last_window_starts_on_pad") {
       avp_2d_ceil_last = &c;
     } else if (c.name == "test_cc_averagepool_2d_pads") {
@@ -71,6 +81,8 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
       avp_2d_pre_strides = &c;
     } else if (c.name == "test_cc_averagepool_3d_default") {
       avp_3d_default = &c;
+    } else if (c.name == "test_cc_averagepool_18_ceil_count_include_pad_3d") {
+      avp_18_3d_ceil_cip = &c;
     } else if (c.name == "test_cc_averagepool_2d_precomputed_same_upper") {
       avp_2d_pre_same_upper = &c;
     } else if (c.name == "test_cc_averagepool_2d_same_upper") {
@@ -101,13 +113,17 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   ASSERT_NE(strides, nullptr);
   ASSERT_NE(pads, nullptr);
   ASSERT_NE(avp_1d_default, nullptr);
+  ASSERT_NE(avp_18_1d_ceil_cip, nullptr);
   ASSERT_NE(avp_2d_ceil, nullptr);
+  ASSERT_NE(avp_18_2d_ceil_cip, nullptr);
+  ASSERT_NE(avp_18_2d_ceil_no_cip, nullptr);
   ASSERT_NE(avp_2d_ceil_last, nullptr);
   ASSERT_NE(avp_2d_pads, nullptr);
   ASSERT_NE(avp_2d_pre_pads, nullptr);
   ASSERT_NE(avp_2d_pre_pads_cip, nullptr);
   ASSERT_NE(avp_2d_pre_strides, nullptr);
   ASSERT_NE(avp_3d_default, nullptr);
+  ASSERT_NE(avp_18_3d_ceil_cip, nullptr);
   ASSERT_NE(avp_2d_pre_same_upper, nullptr);
   ASSERT_NE(avp_2d_same_upper, nullptr);
   ASSERT_NE(avp_2d_same_lower, nullptr);
@@ -163,6 +179,46 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
     EXPECT_FLOAT_EQ(py[0], 17.0f);
     EXPECT_FLOAT_EQ(py[4], 25.0f);
     EXPECT_FLOAT_EQ(py[8], 33.0f);
+  }
+
+  // Opset-18 1-D ceil/count_include_pad case: 1x2x4 output with the
+  // reference values mirrored from the ORT regression tests.
+  {
+    const auto &ds = avp_18_1d_ceil_cip->data_sets[0];
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 4}));
+    const float *py = ds.outputs[0].AsFloat();
+    EXPECT_FLOAT_EQ(py[0], 0.73807144f);
+    EXPECT_FLOAT_EQ(py[7], -0.40353334f);
+  }
+
+  // Opset-18 2-D ceil/count_include_pad case: 1x1x3x3 output whose trailing
+  // windows must ignore ceil-mode phantom cells.
+  {
+    const auto &ds = avp_18_2d_ceil_cip->data_sets[0];
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 3, 3}));
+    const float *py = ds.outputs[0].AsFloat();
+    EXPECT_FLOAT_EQ(py[0], 1.5555556f);
+    EXPECT_FLOAT_EQ(py[4], 11.0f);
+    EXPECT_FLOAT_EQ(py[8], 4.0f);
+  }
+
+  // Opset-18 2-D ceil/count_exclude_pad no-regression case.
+  {
+    const auto &ds = avp_18_2d_ceil_no_cip->data_sets[0];
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 3, 3}));
+    const float *py = ds.outputs[0].AsFloat();
+    EXPECT_FLOAT_EQ(py[0], 3.5f);
+    EXPECT_FLOAT_EQ(py[4], 11.0f);
+    EXPECT_FLOAT_EQ(py[8], 16.0f);
+  }
+
+  // Opset-18 3-D ceil/count_include_pad case: 1x1x2x2x2 output.
+  {
+    const auto &ds = avp_18_3d_ceil_cip->data_sets[0];
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 2, 2, 2}));
+    const float *py = ds.outputs[0].AsFloat();
+    EXPECT_FLOAT_EQ(py[0], 2.2222223f);
+    EXPECT_FLOAT_EQ(py[7], 6.074074f);
   }
 }
 

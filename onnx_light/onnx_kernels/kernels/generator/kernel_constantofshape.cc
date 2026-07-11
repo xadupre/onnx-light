@@ -62,8 +62,6 @@ Shape ReadShapeInput(const Tensor &shape) {
     return Shape{};
   }
   const int64_t n = shape.shape[0];
-  EXT_ENFORCE_INVALID(n >= 0,
-                      "kernel::ConstantOfShape: 'shape' input must have non-negative length.");
   Shape out;
   const int64_t *dims = shape.AsInt64();
   for (int64_t i = 0; i < n; ++i) {

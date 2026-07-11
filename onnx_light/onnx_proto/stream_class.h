@@ -97,17 +97,17 @@ public:                                                                         
   inline void set_##name(const std::string &v) { name##_ = v; }                                    \
   inline void set_##name(const utils::RefString &v) { name##_ = v; }
 
-#define FIELD_REPEATED(type, name, order, doc)                                                     \
+#define FIELD_REPEATED_BASE(type, repeated_type, name, order, doc)                                 \
 public:                                                                                            \
-  inline utils::RepeatedField<type> &ref_##name() { return name##_; }                              \
-  inline const utils::RepeatedField<type> &ref_##name() const { return name##_; }                  \
+  inline repeated_type &ref_##name() { return name##_; }                                           \
+  inline const repeated_type &ref_##name() const { return name##_; }                               \
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
-  inline utils::RepeatedField<type> &name() { return name##_; }                                    \
-  inline utils::RepeatedField<type> *mutable_##name() { return &name##_; }                         \
+  inline repeated_type &name() { return name##_; }                                                 \
+  inline repeated_type *mutable_##name() { return &name##_; }                                      \
   inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
   inline const type &name(size_t i) const { return name##_[i]; }                                   \
-  inline const utils::RepeatedField<type> &name() const { return name##_; }                        \
-  inline const utils::RepeatedField<type> *ptr_##name() const { return &name##_; }                 \
+  inline const repeated_type &name() const { return name##_; }                                     \
+  inline const repeated_type *ptr_##name() const { return &name##_; }                              \
   inline type *add_##name() { return &name##_.add(); }                                             \
   inline type *add_##name(type &&v) {                                                              \
     name##_.emplace_back(v);                                                                       \
@@ -135,11 +135,14 @@ public:                                                                         
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return false; }                                              \
-  utils::RepeatedField<type> name##_;                                                              \
+  repeated_type name##_;                                                                           \
   using name##_t = type;
 
+#define FIELD_REPEATED(type, name, order, doc)                                                     \
+  FIELD_REPEATED_BASE(type, utils::RepeatedField<type>, name, order, doc)
+
 #define FIELD_REPEATED_STR(type, name, order, doc)                                                 \
-  FIELD_REPEATED(utils::String, name, order, doc)                                                  \
+  FIELD_REPEATED_BASE(type, utils::RepeatedStringField, name, order, doc)                          \
   inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
   inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }
 

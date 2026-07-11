@@ -51,17 +51,7 @@ int64_t EffectiveTripCount(const Tensor &M, const Tensor &cond, int64_t per_iter
   return limit;
 }
 
-// Parses the optional INT64 scalar ``M`` into a non-negative trip-count
-// upper bound.
-//   * ``M``: optional Loop trip-count tensor.
-//   * returns: ``INT64_MAX`` when ``M`` is omitted, otherwise the validated
-//     non-negative scalar value.
 int64_t ParseMaxTripCount(const Tensor &M);
-// Parses the optional BOOL scalar ``cond`` into the initial termination
-// condition.
-//   * ``cond``: optional Loop initial-condition tensor.
-//   * returns: ``true`` when ``cond`` is omitted, otherwise the scalar BOOL
-//     value.
 bool ParseInitialCond(const Tensor &cond);
 
 // Stacks ``per_iter`` along a new leading axis of length ``trip_count``.
@@ -122,7 +112,7 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count,
   return stacked;
 }
 
-// Builds the final Loop outputs from the final loop-carried state and the
+// Assembles the final Loop outputs from the final loop-carried state and the
 // collected per-iteration scan values.
 //   * ``trip_count``: number of executed iterations.
 //   * ``v_initial``: initial loop-carried tensors returned when
@@ -146,7 +136,7 @@ AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
   return out;
 }
 
-// Executes the Loop body callback until termination, then assembles the final
+// Runs the Loop body callback until termination, then assembles the final
 // outputs.
 //   * ``M``: optional Loop trip-count tensor.
 //   * ``cond``: optional Loop initial-condition tensor.

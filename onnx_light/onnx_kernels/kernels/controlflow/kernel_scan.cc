@@ -123,7 +123,7 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, 
   return out;
 }
 
-// Builds the final Scan outputs from the final state tensors and collected
+// Assembles the final Scan outputs from the final state tensors and collected
 // per-iteration scan values.
 //   * ``trip_count``: number of executed iterations.
 //   * ``initial_state``: initial state tensors returned when

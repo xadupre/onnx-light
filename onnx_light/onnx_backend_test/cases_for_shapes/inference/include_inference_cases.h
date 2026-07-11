@@ -245,7 +245,7 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry);
 /// three outputs as the fused companion.
 void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry);
 
-/// Registers the exported ``bench_qwen3_compute_context_memory`` model as a
+/// Registers a C++-built compute-context-memory model as a
 /// shape-inference backend case and pre-embeds expected shape, value-tag,
 /// release and in-place reuse metadata.
 void RegisterQwen3ComputeContextMemoryShapeInferenceCase(std::vector<TestCase> &registry);

@@ -112,11 +112,6 @@ void GemmInPlace(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
 constexpr const char *kSupportedGemmTypesMsg =
     " only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 inputs.";
 
-// Promotes a (possibly half-precision) Gemm input to FLOAT32, leaving FLOAT/
-// DOUBLE tensors untouched. Used by the half-precision fast paths so the
-// reference computation can run in float32 and then be demoted back.
-Tensor PromoteGemmInput(const Tensor &t, RuntimeContext *rt) { return PromoteToFloat32(t, rt); }
-
 } // namespace
 
 Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
@@ -130,14 +125,14 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
   case DataType::BFLOAT16: {
     EXT_ENFORCE_INVALID(b.data_type == a.data_type, kGemmName,
                         " inputs A and B must share the same dtype.");
-    const Tensor a_f = PromoteGemmInput(a, rt);
-    const Tensor b_f = PromoteGemmInput(b, rt);
+    const Tensor a_f = PromoteToFloat32(a, rt);
+    const Tensor b_f = PromoteToFloat32(b, rt);
     Tensor c_f;
     const Tensor *c_ptr = nullptr;
     if (c != nullptr) {
       EXT_ENFORCE_INVALID(c->data_type == a.data_type, kGemmName,
                           " input C must share dtype with A and B.");
-      c_f = PromoteGemmInput(*c, rt);
+      c_f = PromoteToFloat32(*c, rt);
       c_ptr = &c_f;
     }
     Tensor y = GemmAlloc<float>(a_f, b_f, c_ptr, alpha, beta, transA, transB);

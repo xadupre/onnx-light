@@ -75,8 +75,6 @@ TestReferenceEvaluatorBackend = make_test_class(
         "image_decoder_decode_jpeg_grayscale",
         "image_decoder_decode_jpeg_rgb",
         "image_decoder_decode_webp_rgb",
-        # Large model tests: weight tensors exceed the threshold for a reference-evaluator run.
-        ".*_big_.*",
     ],
 )
 

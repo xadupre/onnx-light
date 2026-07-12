@@ -103,10 +103,6 @@ def metadata_coverage_check(model: onnxl.ModelProto, *_inputs):
 TestBackendMetadataCoverage = make_test_class(
     metadata_coverage_check,
     include_regex=["^test_cc_shape_inference_.*", "^test_cc_release_.*", "^test_cc_shape_tag_.*"],
-    exclude_regex=[
-        # Large model tests: weight tensors exceed the threshold for a metadata-coverage pass.
-        ".*_big_.*"
-    ],
 )
 
 

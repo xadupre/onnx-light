@@ -98,11 +98,7 @@ def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, Pr
 
 
 def main() -> None:
-    """Performs export/profiling, writes artifacts, and prints the XLSX profile table.
-
-    Returns:
-        Nothing.
-    """
+    """Performs export/profiling, writes artifacts, and prints the XLSX profile table."""
 
     args = parse_args()
 

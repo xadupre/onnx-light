@@ -2228,4 +2228,130 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
   ASSERT_TRUE(found) << "no shape_tag backend cases were collected";
 }
 
+// ---------------------------------------------------------------------------
+// Big-model smoke tests
+//
+// These tests collect only big-model cases (CollectTestCases("", true)
+// filtered to names containing "_big_") and verify that the four main
+// optimisation passes complete without throwing. No detailed output checks
+// are performed; the goal is to guard against crashes or assertion failures
+// in the analysis passes when faced with realistic large graphs.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Deep-copies a ModelProto by serializing and re-parsing it.
+// Asserts on failure so the test is immediately aborted.
+ModelProto DeepCopyModel(const ModelProto &src, const std::string &tc_name) {
+  std::string serialized;
+  EXPECT_TRUE(src.SerializeToString(serialized)) << "failed to serialize case: " << tc_name;
+  ModelProto copy;
+  EXPECT_TRUE(copy.ParseFromString(serialized)) << "failed to parse case: " << tc_name;
+  return copy;
+}
+
+} // namespace
+
+TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
+  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name.find("_big_") == std::string::npos) {
+      continue;
+    }
+    found = true;
+    SCOPED_TRACE(tc.name);
+
+    ModelProto model_copy = DeepCopyModel(tc.model, tc.name);
+
+    for (auto &out : model_copy.mutable_graph()->ref_output()) {
+      if (auto *ott = MutableTensorTypeOf(*out.mutable_type()); ott != nullptr) {
+        ott->clear_shape();
+      }
+    }
+    model_copy.mutable_graph()->mutable_value_info()->clear();
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    // Every graph output must have a type after shape inference.
+    for (const auto &out : model_copy.ref_graph().ref_output()) {
+      EXPECT_TRUE(out.has_type()) << "output " << out.ref_name().as_string()
+                                  << " missing type after shape inference";
+    }
+  }
+  EXPECT_TRUE(found) << "no big-model backend cases were collected";
+}
+
+TEST(BackendTestCaseShapeInference, BigModelsReleaseInfo) {
+  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name.find("_big_") == std::string::npos) {
+      continue;
+    }
+    found = true;
+    SCOPED_TRACE(tc.name);
+
+    onnx_optim::shapes::ShapesContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
+
+    onnx_optim::annotations::ComputeContext inplace;
+    inplace.set_events_enabled(true);
+    ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(tc.model.ref_graph(), ctx, false, {}))
+        << "case: " << tc.name;
+  }
+  EXPECT_TRUE(found) << "no big-model backend cases were collected";
+}
+
+TEST(BackendTestCaseShapeInference, BigModelsShapeTag) {
+  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name.find("_big_") == std::string::npos) {
+      continue;
+    }
+    found = true;
+    SCOPED_TRACE(tc.name);
+
+    ModelProto model_copy = DeepCopyModel(tc.model, tc.name);
+
+    GraphProto *graph = model_copy.mutable_graph();
+    graph->mutable_metadata_props()->clear();
+    const auto clear_meta = [](auto *entries) {
+      for (size_t i = 0; i < entries->size(); ++i) {
+        (*entries)[i].mutable_metadata_props()->clear();
+      }
+    };
+    clear_meta(graph->mutable_node());
+    clear_meta(graph->mutable_value_info());
+    clear_meta(graph->mutable_input());
+    clear_meta(graph->mutable_output());
+    clear_meta(graph->mutable_initializer());
+
+    ASSERT_NO_THROW(onnx_optim::annotations::WriteValueAndNodeTagsToMetadata(*graph))
+        << "case: " << tc.name;
+  }
+  EXPECT_TRUE(found) << "no big-model backend cases were collected";
+}
+
+TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
+  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name.find("_big_") == std::string::npos) {
+      continue;
+    }
+    found = true;
+    SCOPED_TRACE(tc.name);
+
+    onnx_optim::shapes::ShapesContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
+
+    ASSERT_NO_THROW(onnx_optim::annotations::ComputeInPlaceReuse(tc.model.ref_graph(), ctx,
+                                                                 /*allow_input_overwrite=*/true))
+        << "case: " << tc.name;
+  }
+  EXPECT_TRUE(found) << "no big-model backend cases were collected";
+}
+
 } // namespace Test

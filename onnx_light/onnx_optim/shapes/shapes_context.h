@@ -8,9 +8,9 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -183,6 +183,27 @@ using ShapeEventLog = std::vector<ShapeEvent>;
  * :cpp:class:`OptimTensor` values stored here are themselves
  * non-owning views.
  */
+/**
+ * @brief Hash functor for ``std::pair<std::string, std::string>``.
+ *
+ * Used by the ``std::unordered_set`` members that store symbolic-dimension
+ * equality and upper-bound constraints.  The hash combines the individual
+ * ``std::hash<std::string>`` values using the boost-style hash_combine
+ * formula to avoid the trivial collision risk of a plain XOR.
+ */
+struct PairStringHash {
+  /// Combines two string hashes using bit-mixing with the fractional part of
+  /// the golden ratio (``2^32 / φ ≈ 0x9e3779b9``) to spread bits uniformly
+  /// and reduce collisions compared to a plain XOR.
+  static constexpr std::size_t kHashCombineMul = 0x9e3779b9ULL;
+
+  std::size_t operator()(const std::pair<std::string, std::string> &p) const noexcept {
+    std::size_t h = std::hash<std::string>{}(p.first);
+    h ^= std::hash<std::string>{}(p.second) + kHashCombineMul + (h << 6) + (h >> 2);
+    return h;
+  }
+};
+
 class ShapesContext {
 public:
   using CustomComputeShapeFn = std::function<void(ShapesContext &, const NodeProto &)>;
@@ -524,7 +545,9 @@ public:
 
   /// Read-only access to the underlying set of equality constraints.
   /// Each element is a ``(lhs, rhs)`` pair with ``lhs < rhs``.
-  const std::set<Constraint> &Constraints() const noexcept { return constraints_; }
+  const std::unordered_set<Constraint, PairStringHash> &Constraints() const noexcept {
+    return constraints_;
+  }
 
   // ── Symbolic-dimension upper-bound constraints ──────────────────────
   //
@@ -583,7 +606,8 @@ public:
 
   /// Read-only access to the underlying set of ``<=`` constraints. Each
   /// element is an ordered ``(lhs, rhs)`` pair meaning ``lhs <= rhs``.
-  const std::set<LessEqualConstraint> &LessEqualConstraints() const noexcept {
+  const std::unordered_set<LessEqualConstraint, PairStringHash> &
+  LessEqualConstraints() const noexcept {
     return le_constraints_;
   }
 
@@ -727,8 +751,8 @@ private:
   std::unordered_map<std::string, int> opsets_;
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
   CustomShapeInferenceMap custom_shape_inference_;
-  std::set<Constraint> constraints_;
-  std::set<LessEqualConstraint> le_constraints_;
+  std::unordered_set<Constraint, PairStringHash> constraints_;
+  std::unordered_set<LessEqualConstraint, PairStringHash> le_constraints_;
   std::map<SubgraphContextKey, std::shared_ptr<ShapesContext>> subgraph_contexts_;
   ShapeEventLog events_;
   std::function<void(const ShapeEvent &)> event_callback_;

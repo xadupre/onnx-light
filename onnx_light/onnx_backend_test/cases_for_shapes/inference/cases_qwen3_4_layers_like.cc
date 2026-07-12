@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
+#include "onnx_backend_test/cases_for_shapes/inference/inference_random_weights.h"
 
 #include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
@@ -13,22 +14,6 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
-
-namespace {
-
-// Builds a deterministic pseudo-random FP16 weight vector using an LCG.
-// All external weights from the original model are replaced with random values.
-std::vector<uint16_t> RandomWeightsF16(size_t count, uint32_t seed) {
-  std::vector<uint16_t> values(count);
-  uint32_t s = seed;
-  for (size_t i = 0; i < count; ++i) {
-    s = s * 1664525u + 1013904223u;
-    values[i] = static_cast<uint16_t>(0x3400u | (s & 0x03FFu));
-  }
-  return values;
-}
-
-} // namespace
 
 // ---------------------------------------------------------------------------
 // ``qwen3_4_layers_like`` — a 4-layer Qwen3-style causal language model.

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
+#include "onnx_backend_test/cases_for_shapes/inference/inference_random_weights.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_optim/annotations/inplace_reuse.h"
 #include "onnx_optim/annotations/value_tags.h"
@@ -31,22 +32,6 @@ constexpr int64_t kHiddenSize = 16;
 constexpr int64_t kNumHeads = 4;
 constexpr int64_t kHeadSize = kHiddenSize / kNumHeads; // 4
 constexpr int64_t kIntermediateSize = 32;
-
-// Builds a deterministic pseudo-random FLOAT weight vector of ``count``
-// elements in ``[-0.05, 0.05]`` (a typical initialization range for small
-// language-model weights). A Numerical-Recipes LCG seeded by ``seed`` keeps
-// the data reproducible across runs and platforms without depending on a
-// global RNG.
-std::vector<float> RandomWeights(size_t count, uint32_t seed) {
-  std::vector<float> values(count);
-  uint32_t s = seed;
-  for (size_t i = 0; i < count; ++i) {
-    s = s * 1664525u + 1013904223u;
-    const float u = static_cast<float>(s & 0x00ffffffu) / static_cast<float>(0x01000000u);
-    values[i] = -0.05f + 0.1f * u;
-  }
-  return values;
-}
 
 } // namespace
 

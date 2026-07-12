@@ -1459,6 +1459,21 @@ TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
   return tensor;
 }
 
+// Stores FLOAT16 (and BFLOAT16 / INT16 / UINT16) values as ``int32_data``
+// per the ONNX spec: each 16-bit element occupies the lower 16 bits of one
+// int32 entry.  Callers pass the raw bit-pattern as ``uint16_t``.
+template <>
+TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
+                            const std::vector<uint16_t> &values) {
+  TensorProto tensor;
+  InitInitializerHeader(tensor, name, dims);
+  tensor.set_data_type(TensorProto::DataType::FLOAT16);
+  for (uint16_t v : values) {
+    tensor.ref_int32_data().push_back(static_cast<int32_t>(v));
+  }
+  return tensor;
+}
+
 template <typename T>
 TensorProto &AddInitializer(GraphProto &graph, const char *name, const std::vector<int64_t> &dims,
                             const std::vector<T> &values) {
@@ -1486,6 +1501,9 @@ template TensorProto &AddInitializer<double>(GraphProto &, const char *,
 template TensorProto &AddInitializer<std::string>(GraphProto &, const char *,
                                                   const std::vector<int64_t> &,
                                                   const std::vector<std::string> &);
+template TensorProto &AddInitializer<uint16_t>(GraphProto &, const char *,
+                                               const std::vector<int64_t> &,
+                                               const std::vector<uint16_t> &);
 
 TensorProto MakeInitializerShape(const char *name, const std::vector<int64_t> &values) {
   return MakeInitializer<int64_t>(name, {static_cast<int64_t>(values.size())}, values);

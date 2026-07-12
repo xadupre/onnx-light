@@ -43,6 +43,7 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
     RegisterTinyLlmShapeInferenceCases(registry);
     RegisterTinyLlmInlinedShapeInferenceCases(registry);
     RegisterUnsqueezeVasReshapeShapeInferenceCases(registry);
+    RegisterQwen3_4LayersLikeShapeInferenceCases(registry);
   }
 }
 

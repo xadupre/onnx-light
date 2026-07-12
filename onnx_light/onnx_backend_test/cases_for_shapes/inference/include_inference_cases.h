@@ -275,6 +275,15 @@ void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registr
 /// undefined placeholder names instead of the real dims ``D1``/``D2``.
 void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a 4-layer Qwen3-style causal language model (opset 21, IR 10)
+/// reproduced from a PyTorch-exported graph. The model uses GQA-style
+/// attention (16 Q / 8 KV heads, head-dim 128), manual RMSNorm, RoPE
+/// embeddings, causal masking and a SwiGLU MLP per layer.  External weight
+/// initializers are replaced with deterministic random FP16 values;
+/// doc_strings are omitted.  The test exercises shape inference on a
+/// realistic multi-layer transformer graph.
+void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

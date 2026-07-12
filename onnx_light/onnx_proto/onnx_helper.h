@@ -540,7 +540,9 @@ NodeProto &AddNode(GraphProto &graph, const char *op_type, const std::vector<std
  * fixtures, shape-inference unit tests, etc.).
  *
  * Explicit specializations are provided for ``int64_t``, ``int32_t``,
- * ``uint64_t``, ``float``, ``double`` and ``std::string``.
+ * ``uint64_t``, ``uint16_t``, ``float``, ``double`` and ``std::string``.
+ * The ``uint16_t`` specialization stores each value as a FLOAT16 bit-pattern
+ * in ``int32_data`` (per the ONNX spec for 16-bit element types).
  *
  * The product of ``dims`` is **not** validated against ``values.size()``: a
  * scalar initializer is built by passing an empty ``dims`` vector and a

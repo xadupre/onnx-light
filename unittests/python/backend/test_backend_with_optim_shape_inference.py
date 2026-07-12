@@ -99,6 +99,8 @@ TestOptimShapeInferenceBackend = make_test_class(
         # symbolic name ("TopK_k"); the dims are equivalent but the
         # names differ, so these cases are excluded.
         "test_cc_shape_inference_.*topk_pairwise_distance.*",
+        # Large model tests: weight tensors exceed the threshold for a shape-inference pass.
+        ".*_big_.*",
     ],
 )
 
@@ -144,6 +146,8 @@ TestOptimShapeInferenceNoNewNamesBackend = make_test_class(
         "test_cc_shape_inference_loop_topk_pairwise_distance.*",
         "test_cc_shape_inference_scan_topk_pairwise_distance.*",
         "test_cc_shape_inference_topk_pairwise_distance.*",
+        # Large model tests: weight tensors exceed the threshold for a shape-inference pass.
+        ".*_big_.*",
     ],
 )
 

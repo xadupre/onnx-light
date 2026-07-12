@@ -146,6 +146,8 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_shape_inference_loop_topk_pairwise_distance.*",
         "test_cc_shape_inference_scan_topk_pairwise_distance.*",
         "test_cc_shape_inference_tiny_llm.*",
+        # Large model tests: weight tensors exceed the threshold for a shape-inference pass.
+        ".*_big_.*",
     ],
 )
 

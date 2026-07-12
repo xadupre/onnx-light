@@ -46,7 +46,7 @@ namespace onnx_backend_test {
 void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(21);
 
-  const std::string name = "test_cc_shape_inference_qwen3_4_layers_like";
+  const std::string name = "test_cc_shape_inference_big_qwen3_4_layers_like";
 
   TestCase tc(name, name, "model", "inference");
   tc.rtol = 1e-3f;

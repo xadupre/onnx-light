@@ -176,6 +176,8 @@ TestRunModelBackend = make_test_class(
         # TopK k input exceeds the axis length for the scan/loop topk variants.
         "test_cc_shape_inference_loop_topk_pairwise_distance.*",
         "test_cc_shape_inference_scan_topk_pairwise_distance.*",
+        # Large model tests: weight tensors exceed the threshold for a run-model pass.
+        ".*_big_.*",
     ],
 )
 

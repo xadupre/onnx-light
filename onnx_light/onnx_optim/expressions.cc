@@ -1871,11 +1871,10 @@ rename_dynamic_expression(const std::string &expression,
 
 // ─────────────────────────────────────────────────────────────────────────
 
-std::map<std::string, std::string>
-rename_dynamic_dimensions(const std::map<std::string, std::unordered_set<std::string>> &constraints,
-                          const std::unordered_set<std::string> &original,
-                          const std::string &ban_prefix) {
-  std::map<std::string, std::string> replacements;
+std::unordered_map<std::string, std::string> rename_dynamic_dimensions(
+    const std::unordered_map<std::string, std::unordered_set<std::string>> &constraints,
+    const std::unordered_set<std::string> &original, const std::string &ban_prefix) {
+  std::unordered_map<std::string, std::string> replacements;
   for (const auto &s : original)
     replacements[s] = s;
 

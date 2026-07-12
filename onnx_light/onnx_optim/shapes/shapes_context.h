@@ -192,9 +192,14 @@ using ShapeEventLog = std::vector<ShapeEvent>;
  * formula to avoid the trivial collision risk of a plain XOR.
  */
 struct PairStringHash {
+  /// Combines two string hashes using bit-mixing with the fractional part of
+  /// the golden ratio (``2^32 / φ ≈ 0x9e3779b9``) to spread bits uniformly
+  /// and reduce collisions compared to a plain XOR.
+  static constexpr std::size_t kHashCombineMul = 0x9e3779b9ULL;
+
   std::size_t operator()(const std::pair<std::string, std::string> &p) const noexcept {
     std::size_t h = std::hash<std::string>{}(p.first);
-    h ^= std::hash<std::string>{}(p.second) + 0x9e3779b9ULL + (h << 6) + (h >> 2);
+    h ^= std::hash<std::string>{}(p.second) + kHashCombineMul + (h << 6) + (h >> 2);
     return h;
   }
 };

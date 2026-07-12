@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
     """Parses command-line arguments for the benchmark.
 
     Returns:
-        The parsed command-line arguments.
+        The parsed arguments.
     """
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -76,7 +76,11 @@ def make_tick_label(output_name: str, node_type: str) -> str:
 
 
 def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, PretrainedConfig]:
-    """Creates a random-weight Qwen3-like model matching the shape-inference test case."""
+    """Creates a random-weight Qwen3-like model matching the shape-inference test case.
+
+    Returns:
+        The created model and its configuration.
+    """
 
     config = AutoConfig.for_model(
         TEST_CASE_MODEL_TYPE,
@@ -94,7 +98,11 @@ def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, Pr
 
 
 def main() -> None:
-    """Performs export/profiling, writes artifacts, and prints the XLSX profile table."""
+    """Performs export/profiling, writes artifacts, and prints the XLSX profile table.
+
+    Returns:
+        Nothing.
+    """
 
     args = parse_args()
 

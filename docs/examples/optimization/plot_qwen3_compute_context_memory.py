@@ -1,4 +1,14 @@
-"""Builds a random Qwen3-0.6B (4 layers), converts it with yobx, and plots memory."""
+"""
+.. _l-example-plot-qwen3-compute-context-memory:
+
+Qwen3-like ComputeContext memory profile
+========================================
+
+This example builds a random-weight Qwen3-like model aligned with
+``test_cc_shape_inference_big_qwen3_4_layers_like``, exports it to ONNX with
+``yobx``, computes :class:`~onnx_light.onnx_optim.shape_inference.ComputeContext`
+memory events, saves them to Excel, and prints the same profile as a table.
+"""
 
 from __future__ import annotations
 
@@ -21,6 +31,13 @@ from onnx_light.onnx_optim.shape_inference import (
 )
 
 TICK_INTERVAL = 10
+TEST_CASE_MODEL_TYPE = "qwen2"
+TEST_CASE_HIDDEN_SIZE = 1024
+TEST_CASE_INTERMEDIATE_SIZE = 3072
+TEST_CASE_NUM_ATTENTION_HEADS = 16
+TEST_CASE_NUM_KEY_VALUE_HEADS = 8
+TEST_CASE_HEAD_DIM = 128
+TEST_CASE_VOCAB_SIZE = 151936
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,7 +48,6 @@ def parse_args() -> argparse.Namespace:
     """
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model-id", default="Qwen/Qwen3-0.6B", help="Hugging Face model id.")
     parser.add_argument("--layers", type=int, default=4, help="Number of hidden layers.")
     parser.add_argument("--batch", type=int, default=1, help="Input batch size.")
     parser.add_argument("--sequence-length", type=int, default=16, help="Input sequence length.")
@@ -59,16 +75,30 @@ def make_tick_label(output_name: str, node_type: str) -> str:
     return f"{str(output_name)[:5]}-{node_type}"
 
 
+def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, object]:
+    """Creates a random-weight Qwen3-like model matching the shape-inference test case."""
+
+    config = AutoConfig.for_model(
+        TEST_CASE_MODEL_TYPE,
+        vocab_size=TEST_CASE_VOCAB_SIZE,
+        hidden_size=TEST_CASE_HIDDEN_SIZE,
+        intermediate_size=TEST_CASE_INTERMEDIATE_SIZE,
+        num_hidden_layers=num_hidden_layers,
+        num_attention_heads=TEST_CASE_NUM_ATTENTION_HEADS,
+        num_key_value_heads=TEST_CASE_NUM_KEY_VALUE_HEADS,
+        head_dim=TEST_CASE_HEAD_DIM,
+        use_cache=True,
+    )
+    model = AutoModelForCausalLM.from_config(config).eval().to(torch.float16)
+    return model, config
+
+
 def main() -> None:
     """Performs export/shape profiling and writes ONNX, XLSX, and PNG artifacts."""
 
     args = parse_args()
 
-    config = AutoConfig.from_pretrained(args.model_id)
-    config.num_hidden_layers = args.layers
-    if hasattr(config, "use_cache"):
-        config.use_cache = True
-    model = AutoModelForCausalLM.from_config(config).eval().to(torch.float16)
+    model, config = create_qwen3_like_model(args.layers)
 
     from yobx.torch import apply_patches_for_model, register_flattening_functions
     from yobx.torch.in_transformers.cache_helper import make_dynamic_cache
@@ -90,7 +120,7 @@ def main() -> None:
     )
     sample_inputs = {
         "input_ids": torch.randint(
-            0, config.vocab_size, (args.batch, args.sequence_length), dtype=torch.int64
+            0, TEST_CASE_VOCAB_SIZE, (args.batch, args.sequence_length), dtype=torch.int64
         ),
         "attention_mask": torch.ones(
             (args.batch, args.past_sequence_length + args.sequence_length), dtype=torch.int64
@@ -174,7 +204,10 @@ def main() -> None:
 
     print(f"Converted model with {len(onnx_model.graph.node)} nodes.")
     print(f"Peak ComputeContext total bytes: {max(total_bytes):,}")
-    pandas.DataFrame(memory_rows).to_excel(f"{args.output_prefix}.xlsx", index=False)
+    memory_df = pandas.DataFrame(memory_rows)
+    memory_df.to_excel(f"{args.output_prefix}.xlsx", index=False)
+    with pandas.option_context("display.max_rows", None, "display.max_columns", None):
+        print(memory_df.to_string(index=False))
 
     fig, ax = plt.subplots(figsize=(12, 5))
     ax.plot(node_indices, total_bytes, linewidth=1)
@@ -188,7 +221,9 @@ def main() -> None:
         node = onnx_model.graph.node[index]
         tick_labels.append(make_tick_label(node.output[0] if node.output else "", node.op_type))
     ax.set_xticks(tick_indices, labels=tick_labels, rotation=45, ha="right")
-    ax.set_title(f"ComputeContext total bytes ({args.model_id}, layers={args.layers})")
+    ax.set_title(
+        f"ComputeContext total bytes (qwen3_4_layers_like, layers={config.num_hidden_layers})"
+    )
     ax.set_xlabel("node index")
     ax.set_ylabel("total bytes")
     ax.grid(True, alpha=0.3)

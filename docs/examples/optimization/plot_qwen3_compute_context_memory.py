@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
     """Parses command-line arguments for the benchmark.
 
     Returns:
-        The parsed arguments.
+        parsed arguments.
     """
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -79,7 +79,7 @@ def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, Pr
     """Creates a random-weight Qwen3-like model matching the shape-inference test case.
 
     Returns:
-        The created model and its configuration.
+        Tuple containing the created model and its configuration.
     """
 
     config = AutoConfig.for_model(

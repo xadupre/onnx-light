@@ -46,10 +46,10 @@ bool TryReadKnownIntScalar(const OptimTensor &input, int64_t *out) {
 }
 
 // Returns the single dim (integer or symbolic) carried by a ``ValueAsShape``
-// annotation of rank 1, if any. Unlike ``TryReadKnownIntScalar`` this
-// function also succeeds when the dim is a symbolic expression string, so it
-// can be used to extract the symbolic bound of a Range input even when the
-// concrete integer value is not statically known.
+// annotation of rank 1, if any. Unlike ``TryReadKnownIntScalar``, succeeds
+// when the dim is a symbolic expression string, allowing extraction of the
+// symbolic bound of a Range input even when the concrete integer value is
+// not statically known.
 bool TryReadOptimDimScalar(const OptimTensor &input, OptimDim *out) {
   if (!input.HasValueAsShape()) {
     return false;

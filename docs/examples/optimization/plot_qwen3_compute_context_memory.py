@@ -17,7 +17,7 @@ import argparse
 import matplotlib.pyplot as plt
 import pandas
 import torch
-from transformers import AutoConfig, AutoModelForCausalLM
+from transformers import AutoConfig, AutoModelForCausalLM, PretrainedConfig
 from yobx.torch import to_onnx
 
 from onnx_light.onnx import load as ol_load, save as ol_save, inliner
@@ -75,7 +75,7 @@ def make_tick_label(output_name: str, node_type: str) -> str:
     return f"{str(output_name)[:5]}-{node_type}"
 
 
-def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, object]:
+def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, PretrainedConfig]:
     """Creates a random-weight Qwen3-like model matching the shape-inference test case."""
 
     config = AutoConfig.for_model(
@@ -94,7 +94,7 @@ def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, ob
 
 
 def main() -> None:
-    """Performs export/shape profiling and writes ONNX, XLSX, and PNG artifacts."""
+    """Performs export/profiling, writes artifacts, and prints the XLSX profile table."""
 
     args = parse_args()
 

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
-#include "onnx_backend_test/cases_for_shapes/inference/inference_random_weights.h"
 
 #include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
@@ -20,8 +19,8 @@ namespace onnx_backend_test {
 //
 // Faithfully reproduces the structure of a Qwen3 model with 4 transformer
 // layers exported from PyTorch via onnxscript (opset 21, IR version 10).
-// External weight initializers are replaced with deterministic random FP16
-// values; doc_strings are omitted.
+// External weight initializers carry shape and dtype metadata only
+// (no payload data); doc_strings are omitted.
 //
 // Graph signature:
 //
@@ -96,63 +95,62 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   AddInitializer<uint16_t>(*graph, "init10_s1_", {INT64_C(1)}, {static_cast<uint16_t>(13506u)});
   AddInitializer<float>(*graph, "init1_s_2::RSh1", {INT64_C(1)}, {1e-06f});
   AddInitializer<uint16_t>(*graph, "p_model_layers_0_self_attn_q_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(2048)}, RandomWeightsF16(2097152u, 100u));
+                           {INT64_C(1024), INT64_C(2048)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_0_self_attn_k_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(1024)}, RandomWeightsF16(1048576u, 101u));
+                           {INT64_C(1024), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_0_self_attn_v_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(1024)}, RandomWeightsF16(1048576u, 102u));
+                           {INT64_C(1024), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_0_self_attn_o_proj_weight::T10",
-                           {INT64_C(2048), INT64_C(1024)}, RandomWeightsF16(2097152u, 103u));
+                           {INT64_C(2048), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_0_mlp_gate_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(3072)}, RandomWeightsF16(3145728u, 104u));
+                           {INT64_C(1024), INT64_C(3072)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_0_mlp_up_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(3072)}, RandomWeightsF16(3145728u, 105u));
+                           {INT64_C(1024), INT64_C(3072)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_0_mlp_down_proj_weight::T10",
-                           {INT64_C(3072), INT64_C(1024)}, RandomWeightsF16(3145728u, 106u));
+                           {INT64_C(3072), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_1_self_attn_q_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(2048)}, RandomWeightsF16(2097152u, 107u));
+                           {INT64_C(1024), INT64_C(2048)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_1_self_attn_k_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(1024)}, RandomWeightsF16(1048576u, 108u));
+                           {INT64_C(1024), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_1_self_attn_v_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(1024)}, RandomWeightsF16(1048576u, 109u));
+                           {INT64_C(1024), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_1_self_attn_o_proj_weight::T10",
-                           {INT64_C(2048), INT64_C(1024)}, RandomWeightsF16(2097152u, 110u));
+                           {INT64_C(2048), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_1_mlp_gate_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(3072)}, RandomWeightsF16(3145728u, 111u));
+                           {INT64_C(1024), INT64_C(3072)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_1_mlp_up_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(3072)}, RandomWeightsF16(3145728u, 112u));
+                           {INT64_C(1024), INT64_C(3072)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_1_mlp_down_proj_weight::T10",
-                           {INT64_C(3072), INT64_C(1024)}, RandomWeightsF16(3145728u, 113u));
+                           {INT64_C(3072), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_2_self_attn_q_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(2048)}, RandomWeightsF16(2097152u, 114u));
+                           {INT64_C(1024), INT64_C(2048)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_2_self_attn_k_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(1024)}, RandomWeightsF16(1048576u, 115u));
+                           {INT64_C(1024), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_2_self_attn_v_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(1024)}, RandomWeightsF16(1048576u, 116u));
+                           {INT64_C(1024), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_2_self_attn_o_proj_weight::T10",
-                           {INT64_C(2048), INT64_C(1024)}, RandomWeightsF16(2097152u, 117u));
+                           {INT64_C(2048), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_2_mlp_gate_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(3072)}, RandomWeightsF16(3145728u, 118u));
+                           {INT64_C(1024), INT64_C(3072)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_2_mlp_up_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(3072)}, RandomWeightsF16(3145728u, 119u));
+                           {INT64_C(1024), INT64_C(3072)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_2_mlp_down_proj_weight::T10",
-                           {INT64_C(3072), INT64_C(1024)}, RandomWeightsF16(3145728u, 120u));
+                           {INT64_C(3072), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_3_self_attn_q_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(2048)}, RandomWeightsF16(2097152u, 121u));
+                           {INT64_C(1024), INT64_C(2048)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_3_self_attn_k_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(1024)}, RandomWeightsF16(1048576u, 122u));
+                           {INT64_C(1024), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_3_self_attn_v_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(1024)}, RandomWeightsF16(1048576u, 123u));
+                           {INT64_C(1024), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_3_self_attn_o_proj_weight::T10",
-                           {INT64_C(2048), INT64_C(1024)}, RandomWeightsF16(2097152u, 124u));
+                           {INT64_C(2048), INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_3_mlp_gate_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(3072)}, RandomWeightsF16(3145728u, 125u));
+                           {INT64_C(1024), INT64_C(3072)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_3_mlp_up_proj_weight::T10",
-                           {INT64_C(1024), INT64_C(3072)}, RandomWeightsF16(3145728u, 126u));
+                           {INT64_C(1024), INT64_C(3072)}, {});
   AddInitializer<uint16_t>(*graph, "p_model_layers_3_mlp_down_proj_weight::T10",
-                           {INT64_C(3072), INT64_C(1024)}, RandomWeightsF16(3145728u, 127u));
-  AddInitializer<uint16_t>(*graph, "p_lm_head_weight::T10", {INT64_C(1024), INT64_C(151936)},
-                           RandomWeightsF16(155582464u, 128u));
+                           {INT64_C(3072), INT64_C(1024)}, {});
+  AddInitializer<uint16_t>(*graph, "p_lm_head_weight::T10", {INT64_C(1024), INT64_C(151936)}, {});
   AddInitializer<float>(
       *graph, "to_322", {INT64_C(1), INT64_C(1), INT64_C(64)},
       {1.0f,           0.80566406f,    0.64941406f,    0.5234375f,     0.42163086f,
@@ -184,44 +182,38 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   // All-same FP16 initializer (value=0x3C00).
   AddInitializer<uint16_t>(*graph, "model.layers.0.self_attn.k_norm.weight", {INT64_C(128)},
                            std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
-  AddInitializer<uint16_t>(*graph, "model.layers.0.input_layernorm.weight", {INT64_C(1024)},
-                           RandomWeightsF16(1024u, 129u));
+  AddInitializer<uint16_t>(*graph, "model.layers.0.input_layernorm.weight", {INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "model.layers.0.post_attention_layernorm.weight",
-                           {INT64_C(1024)}, RandomWeightsF16(1024u, 130u));
+                           {INT64_C(1024)}, {});
   // All-same FP16 initializer (value=0x3C00).
   AddInitializer<uint16_t>(*graph, "model.layers.1.self_attn.q_norm.weight", {INT64_C(128)},
                            std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
   // All-same FP16 initializer (value=0x3C00).
   AddInitializer<uint16_t>(*graph, "model.layers.1.self_attn.k_norm.weight", {INT64_C(128)},
                            std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
-  AddInitializer<uint16_t>(*graph, "model.layers.1.input_layernorm.weight", {INT64_C(1024)},
-                           RandomWeightsF16(1024u, 131u));
+  AddInitializer<uint16_t>(*graph, "model.layers.1.input_layernorm.weight", {INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "model.layers.1.post_attention_layernorm.weight",
-                           {INT64_C(1024)}, RandomWeightsF16(1024u, 132u));
+                           {INT64_C(1024)}, {});
   // All-same FP16 initializer (value=0x3C00).
   AddInitializer<uint16_t>(*graph, "model.layers.2.self_attn.q_norm.weight", {INT64_C(128)},
                            std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
   // All-same FP16 initializer (value=0x3C00).
   AddInitializer<uint16_t>(*graph, "model.layers.2.self_attn.k_norm.weight", {INT64_C(128)},
                            std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
-  AddInitializer<uint16_t>(*graph, "model.layers.2.input_layernorm.weight", {INT64_C(1024)},
-                           RandomWeightsF16(1024u, 133u));
+  AddInitializer<uint16_t>(*graph, "model.layers.2.input_layernorm.weight", {INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "model.layers.2.post_attention_layernorm.weight",
-                           {INT64_C(1024)}, RandomWeightsF16(1024u, 134u));
+                           {INT64_C(1024)}, {});
   // All-same FP16 initializer (value=0x3C00).
   AddInitializer<uint16_t>(*graph, "model.layers.3.self_attn.q_norm.weight", {INT64_C(128)},
                            std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
   // All-same FP16 initializer (value=0x3C00).
   AddInitializer<uint16_t>(*graph, "model.layers.3.self_attn.k_norm.weight", {INT64_C(128)},
                            std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
-  AddInitializer<uint16_t>(*graph, "model.layers.3.input_layernorm.weight", {INT64_C(1024)},
-                           RandomWeightsF16(1024u, 135u));
+  AddInitializer<uint16_t>(*graph, "model.layers.3.input_layernorm.weight", {INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "model.layers.3.post_attention_layernorm.weight",
-                           {INT64_C(1024)}, RandomWeightsF16(1024u, 136u));
-  AddInitializer<uint16_t>(*graph, "model.norm.weight", {INT64_C(1024)},
-                           RandomWeightsF16(1024u, 137u));
-  AddInitializer<uint16_t>(*graph, "lm_head.weight", {INT64_C(151936), INT64_C(1024)},
-                           RandomWeightsF16(155582464u, 138u));
+                           {INT64_C(1024)}, {});
+  AddInitializer<uint16_t>(*graph, "model.norm.weight", {INT64_C(1024)}, {});
+  AddInitializer<uint16_t>(*graph, "lm_head.weight", {INT64_C(151936), INT64_C(1024)}, {});
 
   // ---- Nodes --------------------------------------------------------------
   // Constant nodes have been promoted to initializers above.

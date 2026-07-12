@@ -293,7 +293,7 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_
   CollectTextTestCases(registry, op_type);
   CollectTraditionalMLTestCases(registry, op_type);
   CollectTrainingTestCases(registry, op_type);
-  CollectShapeInferenceTestCases(registry, op_type);
+  CollectShapeInferenceTestCases(registry, op_type, /*include_big=*/true);
   CollectEmptyShapeTestCases(registry, op_type);
   CollectInPlaceTestCases(registry, op_type);
   CollectReleaseTestCases(registry, op_type);

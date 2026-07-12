@@ -12,7 +12,8 @@ namespace onnx_backend_test {
 // register every case; the ``op_type`` filter is applied by matching the
 // graph's *first* operator only, which is sufficient for the existing
 // node-filtering use cases.
-void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::string &op_type,
+                                    bool include_big) {
   if (op_type.empty() or op_type == "shape" or op_type == "inference") {
     RegisterAddConcatReshapeShapeInferenceCases(registry);
     RegisterLocalFunctionAddShapeInferenceCases(registry);
@@ -43,7 +44,9 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
     RegisterTinyLlmShapeInferenceCases(registry);
     RegisterTinyLlmInlinedShapeInferenceCases(registry);
     RegisterUnsqueezeVasReshapeShapeInferenceCases(registry);
-    RegisterQwen3_4LayersLikeShapeInferenceCases(registry);
+    if (include_big) {
+      RegisterQwen3_4LayersLikeShapeInferenceCases(registry);
+    }
   }
 }
 

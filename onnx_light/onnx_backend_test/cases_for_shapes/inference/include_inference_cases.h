@@ -286,8 +286,11 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
 
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
+/// @param include_big When ``false`` (the default), test cases whose name
+///                    contains ``"_big_"`` are excluded from the output.
+///                    Pass ``true`` to also include those large cases.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,
-                                    const std::string &op_type = "");
+                                    const std::string &op_type = "", bool include_big = false);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

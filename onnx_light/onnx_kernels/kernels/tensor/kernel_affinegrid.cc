@@ -18,8 +18,9 @@ namespace kernel {
 namespace {
 
 // Returns the per-axis normalised coordinate values for an axis of length
-// ``dim_size``. The convention matches ``torch.nn.functional.affine_grid``
-// and the upstream ONNX reference (``op_affine_grid.py``):
+// ``dim_size`` as a 1-D FLOAT Tensor. The convention matches
+// ``torch.nn.functional.affine_grid`` and the upstream ONNX reference
+// (``op_affine_grid.py``):
 //
 //   * align_corners == 1: linearly maps integer indices ``[0, dim_size-1]``
 //     to the closed interval ``[-1, +1]``; the corner pixel *centres* are
@@ -31,26 +32,30 @@ namespace {
 // A dim of size 1 collapses to a single coordinate at 0 (matches numpy's
 // ``np.arange(start, stop, step)`` behaviour for both conventions, where
 // the single produced value is ``start``).
-std::vector<float> NormalisedCoords(int64_t dim_size, bool align_corners) {
-  std::vector<float> out;
+//
+// When ``allocator`` is non-null the backing buffer is acquired from it;
+// otherwise inline storage is used.
+Tensor NormalisedCoords(int64_t dim_size, bool align_corners, RawBufferAllocator *allocator) {
   if (dim_size <= 0) {
-    return out;
+    return MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {0}, 0, allocator);
   }
-  out.reserve(static_cast<size_t>(dim_size));
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {dim_size},
+                                static_cast<size_t>(dim_size) * sizeof(float), allocator);
+  float *data = out.AsFloat();
   if (align_corners) {
     if (dim_size == 1) {
-      out.push_back(-1.0f);
+      data[0] = -1.0f;
       return out;
     }
     const float step = 2.0f / static_cast<float>(dim_size - 1);
     for (int64_t i = 0; i < dim_size; ++i) {
-      out.push_back(-1.0f + step * static_cast<float>(i));
+      data[i] = -1.0f + step * static_cast<float>(i);
     }
   } else {
     const float step = 2.0f / static_cast<float>(dim_size);
     const float start = -1.0f + step / 2.0f;
     for (int64_t i = 0; i < dim_size; ++i) {
-      out.push_back(start + step * static_cast<float>(i));
+      data[i] = start + step * static_cast<float>(i);
     }
   }
   return out;
@@ -118,20 +123,20 @@ void ApplyAffine(const float *theta, int64_t out_dim, int64_t in_dim, const floa
 Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                               RuntimeContext *rt) const {
   ValidateInputs(theta, size);
-  Tensor out;
-  out.data_type = static_cast<int32_t>(DataType::FLOAT);
-  out.shape = ComputeOutputShape(size);
+  const std::vector<int64_t> out_shape = ComputeOutputShape(size);
   int64_t total = 1;
-  for (int64_t d : out.shape) {
+  for (int64_t d : out_shape) {
     total *= d;
   }
-  out.data.assign(static_cast<size_t>(total) * sizeof(float), 0);
-  (*this)(theta, size, attrs, out);
+  RawBufferAllocator *allocator = (rt != nullptr) ? rt->allocator() : nullptr;
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape,
+                                static_cast<size_t>(total) * sizeof(float), allocator);
+  (*this)(theta, size, attrs, out, allocator);
   return out;
 }
 
 void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
-                            Tensor &output) const {
+                            Tensor &output, RawBufferAllocator *allocator) const {
   (void)ctx_;
   ValidateInputs(theta, size);
   const std::vector<int64_t> expected_shape = ComputeOutputShape(size);
@@ -155,8 +160,10 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
     const int64_t N = expected_shape[0];
     const int64_t H = expected_shape[1];
     const int64_t W = expected_shape[2];
-    const std::vector<float> y_coords = NormalisedCoords(H, align_corners);
-    const std::vector<float> x_coords = NormalisedCoords(W, align_corners);
+    const Tensor y_coords = NormalisedCoords(H, align_corners, allocator);
+    const Tensor x_coords = NormalisedCoords(W, align_corners, allocator);
+    const float *y_data = y_coords.AsFloat();
+    const float *x_data = x_coords.AsFloat();
     // Homogeneous coord per (y, x): [x, y, 1] (matches op_affine_grid.py
     // which prepends y for dim 0 then x for dim 1 and finally takes the
     // dot product with theta rows).
@@ -165,7 +172,7 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
       float *out_n = out_data + n * H * W * 2;
       for (int64_t h = 0; h < H; ++h) {
         for (int64_t w = 0; w < W; ++w) {
-          const float coords[3] = {x_coords[w], y_coords[h], 1.0f};
+          const float coords[3] = {x_data[w], y_data[h], 1.0f};
           ApplyAffine(t, /*out_dim=*/2, /*in_dim=*/3, coords, out_n + (h * W + w) * 2);
         }
       }
@@ -176,16 +183,19 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
     const int64_t D = expected_shape[1];
     const int64_t H = expected_shape[2];
     const int64_t W = expected_shape[3];
-    const std::vector<float> z_coords = NormalisedCoords(D, align_corners);
-    const std::vector<float> y_coords = NormalisedCoords(H, align_corners);
-    const std::vector<float> x_coords = NormalisedCoords(W, align_corners);
+    const Tensor z_coords = NormalisedCoords(D, align_corners, allocator);
+    const Tensor y_coords = NormalisedCoords(H, align_corners, allocator);
+    const Tensor x_coords = NormalisedCoords(W, align_corners, allocator);
+    const float *z_data = z_coords.AsFloat();
+    const float *y_data = y_coords.AsFloat();
+    const float *x_data = x_coords.AsFloat();
     for (int64_t n = 0; n < N; ++n) {
       const float *t = theta_data + n * 12; // (3 x 4) row-major
       float *out_n = out_data + n * D * H * W * 3;
       for (int64_t d = 0; d < D; ++d) {
         for (int64_t h = 0; h < H; ++h) {
           for (int64_t w = 0; w < W; ++w) {
-            const float coords[4] = {x_coords[w], y_coords[h], z_coords[d], 1.0f};
+            const float coords[4] = {x_data[w], y_data[h], z_data[d], 1.0f};
             ApplyAffine(t, /*out_dim=*/3, /*in_dim=*/4, coords, out_n + ((d * H + h) * W + w) * 3);
           }
         }

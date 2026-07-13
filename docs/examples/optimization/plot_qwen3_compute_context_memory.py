@@ -156,10 +156,10 @@ def get_big_qwen3_test_case_model():
 
     cases = collect_test_case()
     if TEST_CASE_NAME not in cases:
-        available = ", ".join(name for name in sorted(cases) if "qwen" in name.lower())
+        available_qwen_cases = ", ".join(name for name in sorted(cases) if "qwen" in name.lower())
         raise ValueError(
             f"{TEST_CASE_NAME!r} was not found in backend test cases. "
-            f"Available qwen-like names: {available}"
+            f"Available qwen-like names: {available_qwen_cases}"
         )
     return cases[TEST_CASE_NAME].model
 

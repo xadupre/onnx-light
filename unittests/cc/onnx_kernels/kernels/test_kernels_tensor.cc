@@ -246,6 +246,13 @@ TEST(KernelClass, MakeFloat16TensorAcceptsShape) {
   EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
 }
 
+TEST(KernelClass, MakeFloat8TensorRejectsShapeMismatch) {
+  EXPECT_THROW((void)onnx_kernels::kernel::MakeFloat8Tensor(
+                   onnx_kernels::DataType::FLOAT8E5M2, {3}, {0.0f, 1.0f},
+                   &onnx_kernels::kernel::FloatToFloat8E5M2Bits),
+               std::invalid_argument);
+}
+
 TEST(KernelClass, CastHelperTensorBuildersUseAllocatorWhenProvided) {
   onnx_kernels::SimpleRawBufferAllocator alloc(12);
 

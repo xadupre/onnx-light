@@ -301,6 +301,7 @@ Tensor Int16ZeroPoint(std::int16_t value, RawBufferAllocator *allocator) {
 
 Tensor MakeFloat8Tensor(DataType dtype, const Shape &shape, const std::vector<float> &values,
                         std::uint8_t (*encode)(float) noexcept, RawBufferAllocator *allocator) {
+  ValidateShapeAndElementCount(shape, values.size());
   Tensor t = MakeTensor("", static_cast<std::int32_t>(dtype), shape, values.size(), allocator);
   std::uint8_t *bytes = t.mutable_bytes();
   for (std::size_t i = 0; i < values.size(); ++i) {
@@ -324,6 +325,9 @@ Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values
   Tensor t = MakeTensor("", static_cast<std::int32_t>(DataType::FLOAT4E2M1), shape,
                         (values.size() + 1) / 2, allocator);
   std::uint8_t *bytes = t.mutable_bytes();
+  if (t.size_bytes() != 0) {
+    std::memset(bytes, 0, t.size_bytes());
+  }
   for (std::size_t i = 0; i < values.size(); ++i) {
     const std::uint8_t nibble = FloatToFloat4E2M1Nibble(values[i]);
     bytes[i / 2] |= static_cast<std::uint8_t>(nibble << (4 * (i % 2)));

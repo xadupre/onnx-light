@@ -67,8 +67,7 @@ StringEqualBroadcast CheckStringEqualInputs(const Tensor &x, const Tensor &y) {
   return bi;
 }
 
-Tensor EqualStringAlloc(const Tensor &x, const Tensor &y,
-                         RawBufferAllocator *allocator = nullptr) {
+Tensor EqualStringAlloc(const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   const StringEqualBroadcast bi = CheckStringEqualInputs(x, y);
   const size_t out_n_bytes = static_cast<size_t>(bi.element_count);
   Tensor out = MakeOutputTensor(DataType::BOOL, bi.shape, out_n_bytes, allocator);

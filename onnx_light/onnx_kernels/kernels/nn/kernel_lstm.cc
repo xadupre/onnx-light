@@ -180,8 +180,7 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
   const size_t y_n_bytes =
       static_cast<size_t>(seq_length * batch_size * hidden_size) * sizeof(float);
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
-  Tensor y =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, allocator);
+  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, allocator);
   const size_t y_h_n_bytes = static_cast<size_t>(batch_size * hidden_size) * sizeof(float);
   Tensor y_h =
       MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_h_shape, y_h_n_bytes, allocator);

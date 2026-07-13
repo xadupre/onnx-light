@@ -245,8 +245,7 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
 Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
                                         const Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
-                                        const Tensor *nonpad_kv_seqlen,
-                                        RuntimeContext *rt) const {
+                                        const Tensor *nonpad_kv_seqlen, RuntimeContext *rt) const {
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   // ----- Half-precision fast path ----------------------------------------
   // FLOAT16 / BFLOAT16 inputs are promoted to FLOAT32 here, the reference

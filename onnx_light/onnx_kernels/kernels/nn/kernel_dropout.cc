@@ -58,9 +58,8 @@ std::pair<Tensor, Tensor> Dropout::operator()(const Tensor &data, float ratio, b
   ValidateInput(data, ratio);
 
   const size_t mask_n_bytes = static_cast<std::size_t>(data.element_count());
-  Tensor mask =
-      MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), data.shape, mask_n_bytes,
-                       rt ? rt->allocator() : nullptr);
+  Tensor mask = MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), data.shape, mask_n_bytes,
+                                 rt ? rt->allocator() : nullptr);
 
   Tensor output = (*this)(data, ratio, training_mode, mask, seed, rt);
   return {std::move(output), std::move(mask)};

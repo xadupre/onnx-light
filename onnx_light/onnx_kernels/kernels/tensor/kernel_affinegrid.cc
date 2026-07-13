@@ -87,9 +87,9 @@ void ValidateInputs(const Tensor &theta, const Tensor &size) {
 
 // Computes the output shape for an AffineGrid call given a fully validated
 // ``size`` input (1-D INT64 of length 4 or 5).
-std::vector<int64_t> ComputeOutputShape(const Tensor &size) {
+onnx_kernels::Shape ComputeOutputShape(const Tensor &size) {
   const int64_t *size_data = reinterpret_cast<const int64_t *>(size.bytes());
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_shape;
   out_shape.push_back(size_data[0]); // N
   if (size.shape[0] == 4) {
     out_shape.push_back(size_data[2]); // H
@@ -139,7 +139,7 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
                             Tensor &output, RawBufferAllocator *allocator) const {
   (void)ctx_;
   ValidateInputs(theta, size);
-  const std::vector<int64_t> expected_shape = ComputeOutputShape(size);
+  const onnx_kernels::Shape expected_shape = ComputeOutputShape(size);
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AffineGrid: preallocated output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,

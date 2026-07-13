@@ -166,7 +166,7 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(value_tags["S"], "shape")
         self.assertEqual(node_tags[0], "shape")
 
-    def test_rank2_float_input_is_seeded_as_weight(self):
+    def test_all_graph_inputs_are_seeded_as_weight(self):
         from onnx_light.onnx import TensorProto, helper
 
         g = helper.make_graph(
@@ -181,8 +181,8 @@ class TestValueTags(unittest.TestCase):
         )
         value_tags, _ = compute_value_and_node_tags(g)
         self.assertEqual(value_tags.get("W"), "weight")
-        self.assertNotIn("X", value_tags)
-        self.assertNotIn("I", value_tags)
+        self.assertEqual(value_tags.get("X"), "weight")
+        self.assertEqual(value_tags.get("I"), "weight")
 
     def test_infer_alias_keeps_backward_compatibility(self):
         from onnx_light.onnx import helper

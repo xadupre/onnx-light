@@ -17,7 +17,7 @@ namespace kernel {
 namespace {
 
 // Reads the target shape from the 1-D INT64 ``shape`` input tensor.
-std::vector<int64_t> ReadExpandShapeInput(const Tensor &shape) {
+onnx_kernels::Shape ReadExpandShapeInput(const Tensor &shape) {
   EXT_ENFORCE_INVALID(shape.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::Expand: 'shape' input must be INT64.");
   EXT_ENFORCE_INVALID(shape.shape.size() <= 1,
@@ -26,21 +26,23 @@ std::vector<int64_t> ReadExpandShapeInput(const Tensor &shape) {
     return {};
   }
   const int64_t n = shape.shape[0];
-  std::vector<int64_t> out(static_cast<std::size_t>(n));
+  onnx_kernels::Shape out;
+  out.assign(static_cast<std::size_t>(n), 0);
   if (n > 0) {
-    std::memcpy(out.data(), shape.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.begin(), shape.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   }
   return out;
 }
 
 // Computes the broadcast output shape from ``in_shape`` and ``target``.
 // Follows numpy-style right-alignment: missing leading dims are treated as 1.
-std::vector<int64_t> BroadcastOutputShape(const std::vector<int64_t> &in_shape,
-                                          const std::vector<int64_t> &target) {
+onnx_kernels::Shape BroadcastOutputShape(const onnx_kernels::Shape &in_shape,
+                                         const onnx_kernels::Shape &target) {
   const std::size_t ri = in_shape.size();
   const std::size_t rt = target.size();
   const std::size_t r = std::max(ri, rt);
-  std::vector<int64_t> out(r);
+  onnx_kernels::Shape out;
+  out.assign(r, 0);
   for (std::size_t k = 0; k < r; ++k) {
     const bool has_i = k + ri >= r;
     const bool has_t = k + rt >= r;
@@ -55,15 +57,15 @@ std::vector<int64_t> BroadcastOutputShape(const std::vector<int64_t> &in_shape,
 }
 
 struct ExpandLayout {
-  std::vector<int64_t> out_shape;
-  std::vector<int64_t> in_shape_aligned; // right-aligned, prepended with 1s
+  onnx_kernels::Shape out_shape;
+  onnx_kernels::Shape in_shape_aligned; // right-aligned, prepended with 1s
   std::vector<int64_t> out_strides;
   std::vector<int64_t> in_strides;
   size_t elem_size;
   int64_t total_elements;
 };
 
-ExpandLayout ComputeExpandLayout(const Tensor &input, const std::vector<int64_t> &target) {
+ExpandLayout ComputeExpandLayout(const Tensor &input, const onnx_kernels::Shape &target) {
   ExpandLayout layout;
   layout.out_shape = BroadcastOutputShape(input.shape, target);
   const int64_t out_rank = static_cast<int64_t>(layout.out_shape.size());
@@ -105,7 +107,7 @@ ExpandLayout ComputeExpandLayout(const Tensor &input, const std::vector<int64_t>
 } // namespace
 
 Tensor Expand::operator()(const Tensor &input, const Tensor &shape, RuntimeContext *rt) const {
-  const std::vector<int64_t> target = ReadExpandShapeInput(shape);
+  const onnx_kernels::Shape target = ReadExpandShapeInput(shape);
   const ExpandLayout layout = ComputeExpandLayout(input, target);
   const size_t out_n_bytes = static_cast<std::size_t>(layout.total_elements) * layout.elem_size;
   Tensor out = MakeOutputTensor(input.data_type, layout.out_shape, out_n_bytes,
@@ -115,7 +117,7 @@ Tensor Expand::operator()(const Tensor &input, const Tensor &shape, RuntimeConte
 }
 
 void Expand::operator()(const Tensor &input, const Tensor &shape, Tensor &output) const {
-  const std::vector<int64_t> target = ReadExpandShapeInput(shape);
+  const onnx_kernels::Shape target = ReadExpandShapeInput(shape);
   const ExpandLayout layout = ComputeExpandLayout(input, target);
 
   EXT_ENFORCE_INVALID(output.data_type == input.data_type,

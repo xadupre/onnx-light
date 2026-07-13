@@ -42,12 +42,12 @@ void ResolveStartEnd(const Shape::Attributes &attrs, int64_t rank, int64_t &star
   }
 }
 
-std::vector<int64_t> ComputeShapeSlice(const Tensor &data, const Shape::Attributes &attrs) {
+onnx_kernels::Shape ComputeShapeSlice(const Tensor &data, const Shape::Attributes &attrs) {
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   int64_t start = 0;
   int64_t end = 0;
   ResolveStartEnd(attrs, rank, start, end);
-  std::vector<int64_t> values;
+  onnx_kernels::Shape values;
   if (end > start) {
     values.reserve(static_cast<std::size_t>(end - start));
     for (int64_t i = start; i < end; ++i) {
@@ -64,14 +64,14 @@ Tensor Shape::operator()(const Tensor &data, RuntimeContext *rt) const {
 }
 
 Tensor Shape::operator()(const Tensor &data, const Attributes &attrs, RuntimeContext *rt) const {
-  const std::vector<int64_t> values = ComputeShapeSlice(data, attrs);
-  const std::vector<int64_t> out_shape{static_cast<int64_t>(values.size())};
+  const onnx_kernels::Shape values = ComputeShapeSlice(data, attrs);
+  const onnx_kernels::Shape out_shape{static_cast<int64_t>(values.size())};
   return Tensor::FromInt64("", out_shape, values);
 }
 
 void Shape::operator()(const Tensor &data, const Attributes &attrs, Tensor &output) const {
-  const std::vector<int64_t> values = ComputeShapeSlice(data, attrs);
-  const std::vector<int64_t> out_shape{static_cast<int64_t>(values.size())};
+  const onnx_kernels::Shape values = ComputeShapeSlice(data, attrs);
+  const onnx_kernels::Shape out_shape{static_cast<int64_t>(values.size())};
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::Shape: preallocated output dtype must be INT64.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,

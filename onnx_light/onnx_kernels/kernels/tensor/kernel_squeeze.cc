@@ -30,9 +30,9 @@ std::vector<int64_t> ResolveAxes(const std::vector<int64_t> &axes, int64_t rank)
   return resolved;
 }
 
-std::vector<int64_t> ComputeSqueezedShape(const Tensor &data, const std::vector<int64_t> &axes) {
+onnx_kernels::Shape ComputeSqueezedShape(const Tensor &data, const std::vector<int64_t> &axes) {
   const int64_t rank = static_cast<int64_t>(data.shape.size());
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_shape;
 
   if (axes.empty()) {
     for (int64_t d : data.shape) {
@@ -61,7 +61,7 @@ std::vector<int64_t> ComputeSqueezedShape(const Tensor &data, const std::vector<
 
 Tensor Squeeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
                            RuntimeContext *rt) const {
-  const std::vector<int64_t> out_shape = ComputeSqueezedShape(data, axes);
+  const onnx_kernels::Shape out_shape = ComputeSqueezedShape(data, axes);
   Tensor output = data;
   output.name.clear();
   output.shape = out_shape;
@@ -70,7 +70,7 @@ Tensor Squeeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
 
 void Squeeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
                          Tensor &output) const {
-  const std::vector<int64_t> out_shape = ComputeSqueezedShape(data, axes);
+  const onnx_kernels::Shape out_shape = ComputeSqueezedShape(data, axes);
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::Squeeze: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,

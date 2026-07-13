@@ -61,14 +61,15 @@ Shape ValidateAndBroadcastShape(const std::vector<Tensor> &inputs, const char *d
 }
 
 template <typename T>
-Tensor SumAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs) {
+Tensor SumAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
+                RawBufferAllocator *allocator) {
   const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {
     out_count *= d;
   }
   const size_t z_n_bytes = static_cast<size_t>(out_count) * sizeof(T);
-  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, nullptr);
+  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, allocator);
   if (inputs.size() == 1) {
     // Single input: copy verbatim. We still go through the broadcast check
     // above so a malformed input shape would have already thrown.
@@ -121,11 +122,12 @@ void SumInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
 
 Tensor Sum::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
-    return SumAlloc<float>("FLOAT", DataType::FLOAT, inputs);
+    return SumAlloc<float>("FLOAT", DataType::FLOAT, inputs, allocator);
   case DataType::DOUBLE:
-    return SumAlloc<double>("DOUBLE", DataType::DOUBLE, inputs);
+    return SumAlloc<double>("DOUBLE", DataType::DOUBLE, inputs, allocator);
   default:
     EXT_THROW_INVALID(kSumName, ": unsupported data type ", inputs[0].data_type,
                       kSupportedSumTypesMsg);

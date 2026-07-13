@@ -206,7 +206,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
   }
 
   const std::size_t elem_size = is_string ? 0u : ElementSize(x.data_type);
-  const std::vector<int64_t> &shape = x.shape;
+  const onnx_kernels::Shape &shape = x.shape;
   const int64_t rank = static_cast<int64_t>(shape.size());
 
   // Resolve axis.
@@ -334,7 +334,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
     }
   } else {
     // Y has the same shape as X, with axis_dim replaced by n_unique.
-    std::vector<int64_t> y_shape = shape;
+    onnx_kernels::Shape y_shape = shape;
     y_shape[static_cast<std::size_t>(*axis)] = n_unique;
     int64_t y_total = 1;
     for (int64_t d : y_shape) {

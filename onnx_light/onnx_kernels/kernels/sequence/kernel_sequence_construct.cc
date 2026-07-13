@@ -22,7 +22,7 @@ namespace {
 // that every entry in ``inputs`` shares the first entry's ``data_type`` and
 // ``shape``; throws ``std::invalid_argument`` otherwise.
 void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
-                                   std::vector<int64_t> &stacked_shape, size_t &total_bytes) {
+                                   onnx_kernels::Shape &stacked_shape, size_t &total_bytes) {
   const int64_t n = static_cast<int64_t>(inputs.size());
   if (n == 0) {
     stacked_shape = {0};
@@ -42,7 +42,7 @@ void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
     EXT_ENFORCE_INVALID(inputs[i].size_bytes() == per_elem_bytes,
                         "kernel::SequenceConstruct: all inputs must share the same byte size.");
   }
-  stacked_shape.clear();
+  stacked_shape.assign(0, 0);
   stacked_shape.reserve(first.shape.size() + 1);
   stacked_shape.push_back(n);
   stacked_shape.insert(stacked_shape.end(), first.shape.begin(), first.shape.end());
@@ -52,7 +52,7 @@ void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
 } // namespace
 
 Tensor SequenceConstruct::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
-  std::vector<int64_t> stacked_shape;
+  onnx_kernels::Shape stacked_shape;
   size_t total_bytes = 0;
   ValidateInputsAndComputeShape(inputs, stacked_shape, total_bytes);
   const int32_t out_dtype = inputs.empty() ? 0 : inputs[0].data_type;
@@ -64,7 +64,7 @@ Tensor SequenceConstruct::operator()(const std::vector<Tensor> &inputs, RuntimeC
 }
 
 void SequenceConstruct::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
-  std::vector<int64_t> stacked_shape;
+  onnx_kernels::Shape stacked_shape;
   size_t total_bytes = 0;
   ValidateInputsAndComputeShape(inputs, stacked_shape, total_bytes);
   const int32_t expected_dtype = inputs.empty() ? 0 : inputs[0].data_type;

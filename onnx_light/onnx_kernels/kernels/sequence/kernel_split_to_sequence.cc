@@ -122,7 +122,7 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
   outputs.reserve(sizes.size());
   std::size_t offset = 0; // byte offset within each "row" of the input.
   for (int64_t size : sizes) {
-    std::vector<int64_t> out_shape;
+    onnx_kernels::Shape out_shape;
     out_shape.reserve(static_cast<std::size_t>(rank));
     for (int64_t d = 0; d < rank; ++d) {
       if (d == resolved_axis) {

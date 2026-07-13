@@ -31,8 +31,8 @@ int64_t NormalizeAxis(int64_t axis, int64_t rank) {
 
 // Validates that ``param``'s shape is unidirectionally broadcastable to the
 // normalized shape ``X.shape[axis:]``.
-void CheckParamBroadcast(const std::vector<int64_t> &x_shape, int64_t axis,
-                         const std::vector<int64_t> &param_shape, const char *param_name) {
+void CheckParamBroadcast(const Shape &x_shape, int64_t axis, const Shape &param_shape,
+                         const char *param_name) {
   const int64_t normalized_rank = static_cast<int64_t>(x_shape.size()) - axis;
   EXT_ENFORCE_INVALID(static_cast<int64_t>(param_shape.size()) <= normalized_rank,
                       "kernel::LayerNormalization: ", param_name,
@@ -50,14 +50,14 @@ void CheckParamBroadcast(const std::vector<int64_t> &x_shape, int64_t axis,
 // over ``x_shape[axis:]``), the corresponding flat index into a broadcast
 // parameter tensor of shape ``param_shape``. Dimensions of ``param_shape``
 // equal to 1 contribute 0 to the index.
-std::vector<int64_t> BuildBroadcastIndex(const std::vector<int64_t> &x_shape, int64_t axis,
-                                         const std::vector<int64_t> &param_shape,
-                                         int64_t norm_size) {
+std::vector<int64_t> BuildBroadcastIndex(const Shape &x_shape, int64_t axis,
+                                         const Shape &param_shape, int64_t norm_size) {
   const int64_t normalized_rank = static_cast<int64_t>(x_shape.size()) - axis;
   const int64_t param_rank = static_cast<int64_t>(param_shape.size());
   const int64_t offset = normalized_rank - param_rank;
 
-  std::vector<int64_t> param_strides(static_cast<size_t>(param_rank), 0);
+  Shape param_strides;
+  param_strides.assign(static_cast<size_t>(param_rank), 0);
   if (param_rank > 0) {
     int64_t stride = 1;
     for (int64_t i = param_rank - 1; i >= 0; --i) {
@@ -69,7 +69,8 @@ std::vector<int64_t> BuildBroadcastIndex(const std::vector<int64_t> &x_shape, in
 
   std::vector<int64_t> index(static_cast<size_t>(norm_size), 0);
   if (norm_size > 0 && param_rank > 0) {
-    std::vector<int64_t> coord(static_cast<size_t>(normalized_rank), 0);
+    Shape coord;
+    coord.assign(static_cast<size_t>(normalized_rank), 0);
     for (int64_t flat = 0; flat < norm_size; ++flat) {
       int64_t pi = 0;
       for (int64_t i = offset; i < normalized_rank; ++i) {
@@ -91,8 +92,8 @@ std::vector<int64_t> BuildBroadcastIndex(const std::vector<int64_t> &x_shape, in
 
 // Returns the shape ``[d[0], ..., d[axis-1], 1, ..., 1]`` (rank ==
 // rank(x_shape)) used for ``Mean`` and ``InvStdDev``.
-std::vector<int64_t> ReducedShape(const std::vector<int64_t> &x_shape, int64_t axis) {
-  std::vector<int64_t> shape(x_shape);
+Shape ReducedShape(const Shape &x_shape, int64_t axis) {
+  Shape shape(x_shape);
   for (int64_t i = axis; i < static_cast<int64_t>(shape.size()); ++i) {
     shape[static_cast<size_t>(i)] = 1;
   }
@@ -111,7 +112,7 @@ std::tuple<Tensor, Tensor, Tensor> LayerNormalization::operator()(const Tensor &
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, "kernel::LayerNormalization: X must have rank >= 1.");
   const int64_t normalized_axis = NormalizeAxis(axis, rank);
-  const std::vector<int64_t> reduced_shape = ReducedShape(x.shape, normalized_axis);
+  const Shape reduced_shape = ReducedShape(x.shape, normalized_axis);
   int64_t reduced_elem = 1;
   for (int64_t d : reduced_shape) {
     reduced_elem *= d;
@@ -164,7 +165,7 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
     CheckParamBroadcast(x.shape, axis, b.shape, "B");
   }
 
-  const std::vector<int64_t> reduced_shape = ReducedShape(x.shape, axis);
+  const Shape reduced_shape = ReducedShape(x.shape, axis);
   EXT_ENFORCE_INVALID(mean.shape == reduced_shape,
                       "kernel::LayerNormalization: Mean shape must equal X's reduced shape.");
   EXT_ENFORCE_INVALID(inv_std_dev.shape == reduced_shape,

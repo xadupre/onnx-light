@@ -102,7 +102,7 @@ struct EinsumPlan {
   // label).
   std::vector<std::vector<int64_t>> input_strides;
   // Output shape (in label order, i.e. ``output_labels``).
-  std::vector<int64_t> output_shape;
+  Shape output_shape;
   // Output strides indexed by ``all_labels``. Zero for summed labels.
   std::vector<int64_t> output_stride_per_label;
 };
@@ -163,7 +163,7 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
   std::unordered_map<char, int64_t> label_size_map;
   for (std::size_t i = 0; i < plan.input_labels.size(); ++i) {
     const std::string &labels = plan.input_labels[i];
-    const std::vector<int64_t> &shape = inputs[i].shape;
+    const Shape &shape = inputs[i].shape;
     EXT_ENFORCE_INVALID(labels.size() == shape.size(), kEinsumName, ": expanded term '", labels,
                         "' has ", labels.size(), " labels but input ", i, " has rank ",
                         shape.size(), ".");
@@ -250,7 +250,7 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
                             std::vector<int64_t>(plan.all_labels.size(), 0));
   for (std::size_t i = 0; i < plan.input_labels.size(); ++i) {
     const std::string &labels = plan.input_labels[i];
-    const std::vector<int64_t> &shape = inputs[i].shape;
+    const Shape &shape = inputs[i].shape;
     // Row-major strides for the input itself.
     std::vector<int64_t> in_stride(shape.size(), 1);
     for (std::size_t d = shape.size(); d-- > 0;) {

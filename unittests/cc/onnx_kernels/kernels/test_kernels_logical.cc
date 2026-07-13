@@ -6,6 +6,8 @@
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
+#include "onnx_kernels/raw_buffer_allocator.h"
+#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -15,6 +17,8 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_kernels::RuntimeContext;
+using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::And;
 using onnx_kernels::kernel::BitwiseAnd;
@@ -580,6 +584,32 @@ TEST(KernelClass, WhereRejectsNonBoolCondition) {
   Tensor x = Tensor::FromInt32("x", {2}, {1, 2});
   Tensor y = Tensor::FromInt32("y", {2}, {3, 4});
   EXPECT_THROW((void)where_kernel(condition, x, y), std::invalid_argument);
+}
+
+TEST(KernelClass, WhereUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(16)};
+  Where where_kernel{ctx};
+  constexpr size_t kMaxAllocations = 1;
+  SimpleRawBufferAllocator alloc(kMaxAllocations);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+  Tensor condition = Tensor::FromBool("condition", {2, 2}, {1, 0, 1, 0});
+  Tensor x = Tensor::FromFloat("x", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("y", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
+
+  Tensor output = where_kernel(condition, x, y, &rt);
+
+  ASSERT_TRUE(output.has_allocation());
+  ASSERT_NE(output.allocation(), nullptr);
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(output.bytes(), output.allocation()->data());
+  EXPECT_EQ(output.data.size(), 0u);
+  ASSERT_EQ(output.shape, (std::vector<int64_t>{2, 2}));
+  const float *values = output.AsFloat();
+  EXPECT_FLOAT_EQ(values[0], 1.0f);
+  EXPECT_FLOAT_EQ(values[1], 6.0f);
+  EXPECT_FLOAT_EQ(values[2], 3.0f);
+  EXPECT_FLOAT_EQ(values[3], 8.0f);
 }
 
 // ---------------------------------------------------------------------------

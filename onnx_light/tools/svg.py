@@ -417,21 +417,58 @@ def _minimize_crossings(boxes: list[_Box], edges: list[tuple[int, int, str]]) ->
     the average position of its neighbours in the adjacent layers, alternating
     downward and upward sweeps.  Boxes without neighbours keep their current
     position so the layout stays stable.
+
+    Long-range edges (skip connections) that span more than one layer are
+    handled by inserting dummy nodes at every intermediate layer before the
+    sweeps begin.  Each original edge thereby becomes a chain of unit-length
+    edges, so the barycenter of every real node is always computed relative to
+    the single adjacent layer — no positions from non-comparable layers are
+    ever mixed.  The dummy nodes are discarded after the sweeps; they are
+    never written back to the caller's ``boxes`` list.
     """
     if not edges:
         return
 
-    successors: dict[int, list[int]] = {box.id: [] for box in boxes}
-    predecessors: dict[int, list[int]] = {box.id: [] for box in boxes}
-    for src, dst, _label in edges:
-        successors[src].append(dst)
-        predecessors[dst].append(src)
-
     layers: dict[int, list[_Box]] = {}
     for box in boxes:
         layers.setdefault(box.layer, []).append(box)
+    sorted_layers = sorted(layers)
+    layer_rank: dict[int, int] = {layer: i for i, layer in enumerate(sorted_layers)}
+    box_by_id: dict[int, _Box] = {box.id: box for box in boxes}
 
-    # Position of every box within its layer; updated as layers are reordered.
+    # Insert dummy nodes at intermediate layers for each long-range edge so
+    # that every edge in the augmented graph spans exactly one layer.
+    next_id = max(box_by_id, default=-1) + 1
+    real_ids: set[int] = set(box_by_id)
+    aug_edges: list[tuple[int, int, str]] = []
+    for src_id, dst_id, label in edges:
+        src_rank = layer_rank[box_by_id[src_id].layer]
+        dst_rank = layer_rank[box_by_id[dst_id].layer]
+        if dst_rank - src_rank <= 1:
+            aug_edges.append((src_id, dst_id, label))
+            continue
+        # Break the long-range edge into a chain through one dummy per intermediate layer.
+        prev_id = src_id
+        for ri in range(src_rank + 1, dst_rank):
+            inter_layer = sorted_layers[ri]
+            # "dummy" is an internal-only kind; these boxes never reach the renderer.
+            dummy = _Box(next_id, "dummy", [])
+            dummy.layer = inter_layer
+            box_by_id[next_id] = dummy
+            layers[inter_layer].append(dummy)
+            aug_edges.append((prev_id, next_id, ""))
+            next_id += 1
+            prev_id = dummy.id
+        aug_edges.append((prev_id, dst_id, ""))
+
+    # Build adjacency maps from the augmented edge set.
+    successors: dict[int, list[int]] = {bid: [] for bid in box_by_id}
+    predecessors: dict[int, list[int]] = {bid: [] for bid in box_by_id}
+    for src, dst, _ in aug_edges:
+        successors[src].append(dst)
+        predecessors[dst].append(src)
+
+    # Position of every box (real and dummy) within its layer.
     position: dict[int, int] = {}
     for layer_boxes in layers.values():
         for index, box in enumerate(layer_boxes):
@@ -450,16 +487,17 @@ def _minimize_crossings(boxes: list[_Box], edges: list[tuple[int, int, str]]) ->
         for index, box in enumerate(layer_boxes):
             position[box.id] = index
 
-    sorted_layers = sorted(layers)
     for _ in range(_CROSSING_SWEEPS):
         for layer_index in sorted_layers[1:]:
             reorder(layer_index, predecessors)
         for layer_index in reversed(sorted_layers[:-1]):
             reorder(layer_index, successors)
 
+    # Write the final within-layer order back to real boxes only.
     for layer_boxes in layers.values():
         for index, box in enumerate(layer_boxes):
-            box.order = index
+            if box.id in real_ids:
+                box.order = index
 
 
 def _layout(boxes: list[_Box], horizontal: bool) -> tuple[float, float]:

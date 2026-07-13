@@ -114,11 +114,12 @@ struct Shape {
   /// Returns ``true`` when there are no dimensions (scalar shape).
   bool empty() const noexcept { return size_ == 0; }
 
-  /// Returns the product of all dimensions; 1 for an empty (scalar) shape.
+  /// Computes and returns the product of all dimensions; 1 for an empty (scalar) shape.
   int64_t product() const noexcept {
     int64_t n = 1;
-    for (size_t i = 0; i < size_; ++i)
+    for (size_t i = 0; i < size_; ++i) {
       n *= dims_[i];
+    }
     return n;
   }
 

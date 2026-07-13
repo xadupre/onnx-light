@@ -32,6 +32,7 @@ dev = [
 dev-no-onnx = [
     "onnx-light[style]",
     "matplotlib",
+    "openpyxl",
     "pandas",
     "pytest>=7",
     "pytest-coverage",
@@ -44,6 +45,7 @@ docs = [
     "matplotlib",
     "onnx>=1.21.0",
     "onnxruntime",
+    "openpyxl",
     "pandas",
     "pydata-sphinx-theme",
     "sphinx>=7",

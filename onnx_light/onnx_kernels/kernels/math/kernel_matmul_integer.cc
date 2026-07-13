@@ -31,9 +31,9 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
   return static_cast<int32_t>(t.AsUint8()[idx]);
 }
 
-// Holds zero-point values either in a fallback std::vector<int32_t> or in an
-// allocator-backed RawBuffer. Owns allocator-backed storage and releases it on
-// destruction.
+// Holds zero-point values either in a fallback std::vector<int32_t> or in
+// allocator-backed RawBuffer storage. Takes ownership of allocator-backed
+// storage and releases it upon destruction.
 struct ZeroPointValues {
   std::vector<int32_t> fallback;
   // `buffer` is the active-storage discriminator: non-null means allocator-backed

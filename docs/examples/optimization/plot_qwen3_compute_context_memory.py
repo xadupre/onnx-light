@@ -84,6 +84,14 @@ def model_to_onnx(output_prefix, num_hidden_layers, batch, sequence_length, past
     from yobx.torch.in_transformers.cache_helper import make_dynamic_cache
     from transformers import AutoConfig, AutoModelForCausalLM
 
+    TEST_CASE_MODEL_TYPE = "qwen2"
+    TEST_CASE_HIDDEN_SIZE = 1024
+    TEST_CASE_INTERMEDIATE_SIZE = 3072
+    TEST_CASE_NUM_ATTENTION_HEADS = 16
+    TEST_CASE_NUM_KEY_VALUE_HEADS = 8
+    TEST_CASE_HEAD_DIM = 128
+    TEST_CASE_VOCAB_SIZE = 151936
+
     config = AutoConfig.for_model(
         TEST_CASE_MODEL_TYPE,
         vocab_size=TEST_CASE_VOCAB_SIZE,

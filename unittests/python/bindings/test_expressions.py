@@ -180,6 +180,32 @@ class TestSimplifyExpressions(ExtTestCase):
         self.assertEqual("x-1", simplify_expression("-1+x"))
         self.assertEqual("x", simplify_expression("-x+2*x"))
 
+    def test_simplify_like_terms_multi_symbolic_factor(self):
+        # When an integer constant is not a direct child of the Mult node
+        # (e.g. 4096*a*b parses as Mult(Mult(4096,a),b)), the like-term
+        # collector must still extract the coefficient and combine terms
+        # with the same symbolic product.
+        self.assertEqual("4104*a*b", simplify_expression("4096*a*b+8*a*b"))
+        self.assertEqual("8*x*y", simplify_expression("3*x*y+5*x*y"))
+        self.assertEqual("5*a*b*c", simplify_expression("2*a*b*c+3*a*b*c"))
+        # Full expression from the issue.
+        expr = (
+            "(past_sequence_length+sequence_length)"
+            "+16384*batch_size*past_sequence_length"
+            "+4096*batch_size*sequence_length"
+            "+8*batch_size*sequence_length"
+            "+8*batch_size*total_sequence_length"
+            "+748180122"
+        )
+        result = simplify_expression(expr)
+        self.assertEqual(
+            "16384*batch_size*past_sequence_length"
+            "+4104*batch_size*sequence_length"
+            "+8*batch_size*total_sequence_length"
+            "+past_sequence_length+sequence_length+748180122",
+            result,
+        )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # test_evaluate_expressions.py (adapted)

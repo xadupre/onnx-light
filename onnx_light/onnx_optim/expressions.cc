@@ -1455,7 +1455,52 @@ static void run_add_visitor(const Node &node, AddVisitorResult &res) {
         res.const_term += simp.const_term * value;
         return;
       }
-      // Both sides symbolic: fall through to generic_visit
+      // Neither direct child is a constant.  Flatten the whole multiplication
+      // chain to extract any embedded integer coefficient.  For example,
+      // ``4096*batch_size*sequence_length`` parses as
+      //   Mult(Mult(4096, batch_size), sequence_length)
+      // so the direct-child check above misses the constant 4096.  By
+      // collecting and separating all factors we can still combine
+      // ``4096*a*b + 8*a*b`` into ``4104*a*b``.
+      {
+        std::vector<NodePtr> num, den;
+        flatten_mul_div(*b, num, den);
+        if (den.empty()) {
+          // Single pass: accumulate the integer coefficient and collect each
+          // symbolic factor exactly once, pairing it with its unparsed key
+          // immediately so no second cast or second unparse is needed.
+          int64_t num_c = 1;
+          std::vector<std::pair<std::string, NodePtr>> sym_keyed;
+          sym_keyed.reserve(num.size());
+          for (auto &x : num) {
+            if (const auto *c = dynamic_cast<const Constant *>(x.get()))
+              num_c *= c->value;
+            else
+              sym_keyed.emplace_back(unparse(*x), std::move(x));
+          }
+          if (sym_keyed.size() < num.size()) {
+            // At least one constant factor was extracted.
+            if (sym_keyed.empty()) {
+              res.const_term += num_c;
+              return;
+            }
+            // Sort symbolic factors by their pre-computed key for a canonical form.
+            std::sort(sym_keyed.begin(), sym_keyed.end(),
+                      [](const auto &a, const auto &b) { return a.first < b.first; });
+            NodePtr symbolic = std::move(sym_keyed[0].second);
+            for (size_t i = 1; i < sym_keyed.size(); ++i)
+              symbolic = std::make_unique<BinOp>(std::move(symbolic), BinOpKind::Mult,
+                                                 std::move(sym_keyed[i].second));
+            AddVisitorResult simp;
+            run_add_visitor(*symbolic, simp);
+            for (const auto &[k, v] : simp.coeffs)
+              res.add_coeff(k, num_c * v);
+            res.const_term += simp.const_term * num_c;
+            return;
+          }
+        }
+      }
+      // All factors are symbolic (no extractable constant): fall through to generic_visit
     }
     // For UnaryOp and other BinOps: generic_visit
   }

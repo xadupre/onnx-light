@@ -66,7 +66,7 @@ template <typename ZP> ZP ReadScalarZeroPoint(const Tensor &y_zero_point) {
 }
 
 // Holds temporary typed storage for per-axis/blocked zero points. Uses the
-// output tensor's allocator when available and falls back to std::vector
+// output tensor's allocator when provided and falls back to std::vector
 // otherwise. Allocator-backed storage is released automatically on destruction.
 template <typename T> struct TemporaryTypedBuffer {
   std::vector<T> fallback;
@@ -84,9 +84,9 @@ template <typename T> struct TemporaryTypedBuffer {
     }
   }
 
-  // Allocates space for `count` elements, preferring `buffer_allocator`
-  // when provided and validating the returned buffer before use. `name` is
-  // used to contextualize any allocation errors.
+  // Allocates space for `count` elements, prefers `buffer_allocator` when
+  // provided, and validates the returned buffer before use. `name` is used to
+  // contextualize any allocation errors.
   void Allocate(size_t count, RawBufferAllocator *buffer_allocator, const char *name) {
     size = count;
     if (buffer_allocator != nullptr) {
@@ -104,8 +104,8 @@ template <typename T> struct TemporaryTypedBuffer {
     fallback.resize(count);
   }
 
-  // Returns the writable storage regardless of whether the active backend is the
-  // fallback vector or allocator-backed RawBuffer.
+  // Returns the writable storage regardless of whether the active backend is
+  // the fallback vector or allocator-backed RawBuffer.
   T *data() {
     if (buffer != nullptr) {
       return reinterpret_cast<T *>(buffer->data());

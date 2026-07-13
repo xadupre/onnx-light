@@ -5,9 +5,10 @@ Qwen3-like ComputeContext memory profile
 ========================================
 
 This example builds a random-weight Qwen3-like model aligned with
-``test_cc_shape_inference_big_qwen3_4_layers_like``, exports it to ONNX with
-``yobx``, computes :class:`~onnx_light.onnx_optim.shape_inference.ComputeContext`
-memory events, saves them to Excel, and prints the same profile as a table.
+``test_cc_shape_inference_big_qwen3_4_layers_like`` by retrieving it from
+backend test cases through :func:`onnx_light.onnx.backend.collect_test_case`,
+computes :class:`~onnx_light.onnx_optim.shape_inference.ComputeContext` memory
+events, saves them to Excel, and prints the same profile as a table.
 """
 
 from __future__ import annotations
@@ -16,11 +17,9 @@ import argparse
 
 import matplotlib.pyplot as plt
 import pandas
-import torch
-from transformers import AutoConfig, AutoModelForCausalLM, PretrainedConfig
-from yobx.torch import to_onnx
 
 from onnx_light.onnx import load as ol_load, save as ol_save, inliner
+from onnx_light.onnx.backend import collect_test_case
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
     ComputeContext,
@@ -31,13 +30,7 @@ from onnx_light.onnx_optim.shape_inference import (
 )
 
 TICK_INTERVAL = 10
-TEST_CASE_MODEL_TYPE = "qwen2"
-TEST_CASE_HIDDEN_SIZE = 1024
-TEST_CASE_INTERMEDIATE_SIZE = 3072
-TEST_CASE_NUM_ATTENTION_HEADS = 16
-TEST_CASE_NUM_KEY_VALUE_HEADS = 8
-TEST_CASE_HEAD_DIM = 128
-TEST_CASE_VOCAB_SIZE = 151936
+TEST_CASE_NAME = "test_cc_shape_inference_big_qwen3_4_layers_like"
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,7 +41,6 @@ def parse_args() -> argparse.Namespace:
     """
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--layers", type=int, default=4, help="Number of hidden layers.")
     parser.add_argument("--batch", type=int, default=1, help="Input batch size.")
     parser.add_argument("--sequence-length", type=int, default=16, help="Input sequence length.")
     parser.add_argument(
@@ -75,86 +67,33 @@ def make_tick_label(output_name: str, node_type: str) -> str:
     return f"{str(output_name)[:5]}-{node_type}"
 
 
-def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, PretrainedConfig]:
-    """Creates a random-weight Qwen3-like model matching the shape-inference test case.
+def get_big_qwen3_test_case_model():
+    """Returns the ONNX model from the backend test case collection.
 
     Returns:
-        Tuple containing the created model and its configuration.
+        The ``ModelProto`` from ``test_cc_shape_inference_big_qwen3_4_layers_like``.
     """
 
-    config = AutoConfig.for_model(
-        TEST_CASE_MODEL_TYPE,
-        vocab_size=TEST_CASE_VOCAB_SIZE,
-        hidden_size=TEST_CASE_HIDDEN_SIZE,
-        intermediate_size=TEST_CASE_INTERMEDIATE_SIZE,
-        num_hidden_layers=num_hidden_layers,
-        num_attention_heads=TEST_CASE_NUM_ATTENTION_HEADS,
-        num_key_value_heads=TEST_CASE_NUM_KEY_VALUE_HEADS,
-        head_dim=TEST_CASE_HEAD_DIM,
-        use_cache=True,
-    )
-    model = AutoModelForCausalLM.from_config(config).eval().to(torch.float16)
-    return model, config
+    cases = collect_test_case()
+    if TEST_CASE_NAME not in cases:
+        available = ", ".join(name for name in sorted(cases) if "qwen" in name.lower())
+        raise ValueError(
+            f"{TEST_CASE_NAME!r} was not found in backend test cases. "
+            f"Available qwen-like names: {available}"
+        )
+    return cases[TEST_CASE_NAME].model
 
 
 def main() -> None:
-    """Performs export/profiling, writes artifacts, and prints the XLSX profile table."""
+    """Profiles a backend test-case model and writes ONNX/XLSX/PNG artifacts."""
 
     args = parse_args()
 
-    model, config = create_qwen3_like_model(args.layers)
-
-    from yobx.torch import apply_patches_for_model, register_flattening_functions
-    from yobx.torch.in_transformers.cache_helper import make_dynamic_cache
-
-    num_attention_heads = int(config.num_attention_heads)
-    shape = (
-        args.batch,
-        (
-            int(config.num_key_value_heads)
-            if hasattr(config, "num_key_value_heads")
-            else num_attention_heads
-        ),
-        args.past_sequence_length,
-        (
-            int(config.head_dim)
-            if hasattr(config, "head_dim")
-            else int(config.hidden_size // num_attention_heads)
-        ),
-    )
-    sample_inputs = {
-        "input_ids": torch.randint(
-            0, TEST_CASE_VOCAB_SIZE, (args.batch, args.sequence_length), dtype=torch.int64
-        ),
-        "attention_mask": torch.ones(
-            (args.batch, args.past_sequence_length + args.sequence_length), dtype=torch.int64
-        ),
-        "past_key_values": make_dynamic_cache(
-            [
-                (torch.rand(shape, dtype=torch.float16), torch.rand(shape, dtype=torch.float16))
-                for _ in range(config.num_hidden_layers)
-            ]
-        ),
-    }
-    dynamic_shapes = {
-        "input_ids": {0: "batch_size", 1: "sequence_length"},
-        "attention_mask": {0: "batch_size", 1: "total_sequence_length"},
-        "past_key_values": [
-            {0: "batch_size", 2: "past_sequence_length"}
-            for _ in range(config.num_hidden_layers * 2)
-        ],
-    }
-    print("-- converts the model")
-    with (
-        register_flattening_functions(patch_transformers=True),
-        apply_patches_for_model(patch_transformers=True, patch_torch=False),
-    ):
-        artifact = to_onnx(model, kwargs=sample_inputs, dynamic_shapes=dynamic_shapes)
+    onnx_model = get_big_qwen3_test_case_model()
     filename = f"{args.output_prefix}.onnx"
 
     print("-- saves the onnx model")
-    artifact.save(filename)
-    print("-- loads the onnx model")
+    ol_save(onnx_model, filename, save_as_external_data=True)
     onnx_model = ol_load(filename, load_external_data=False)
     onnx_model = inliner.inline_local_functions(onnx_model)
     del onnx_model.graph.value_info[:]
@@ -225,9 +164,7 @@ def main() -> None:
         node = onnx_model.graph.node[index]
         tick_labels.append(make_tick_label(node.output[0] if node.output else "", node.op_type))
     ax.set_xticks(tick_indices, labels=tick_labels, rotation=45, ha="right")
-    ax.set_title(
-        f"ComputeContext total bytes (qwen3_4_layers_like, layers={config.num_hidden_layers})"
-    )
+    ax.set_title(f"ComputeContext total bytes ({TEST_CASE_NAME})")
     ax.set_xlabel("node index")
     ax.set_ylabel("total bytes")
     ax.grid(True, alpha=0.3)

@@ -74,7 +74,7 @@ def get_big_qwen3_test_case_model():
         The ``ModelProto`` from ``test_cc_shape_inference_big_qwen3_4_layers_like``.
     """
 
-    # collect_test_case() returns a mapping: test case name -> backend TestCase.
+    # collect_test_case() Returns a mapping: test case name -> backend TestCase.
     cases = collect_test_case()
     if TEST_CASE_NAME not in cases:
         available_qwen_cases = ", ".join(name for name in sorted(cases) if "qwen" in name.lower())

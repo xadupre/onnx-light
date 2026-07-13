@@ -203,7 +203,7 @@ def main() -> None:
     value_tags, _ = compute_context.compute_value_and_node_tags(onnx_model.graph, verbose=10)
     print("-- compute inplace")
     compute_context.compute_inplace_reuse_graph(
-        onnx_model.graph, shape_context, value_tags=value_tags, verbose=10
+        onnx_model.graph, shape_context, value_tags=value_tags
     )
 
     print("-- create export")

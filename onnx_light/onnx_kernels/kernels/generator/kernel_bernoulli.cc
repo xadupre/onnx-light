@@ -50,35 +50,6 @@ double DecodeHalf(uint16_t h) {
   return static_cast<double>(std::bit_cast<float>(f));
 }
 
-// Number of bytes per element for the supported output dtypes.
-std::size_t OutputElementSize(int32_t dtype) {
-  switch (static_cast<DataType>(dtype)) {
-  case DataType::FLOAT:
-    return sizeof(float);
-  case DataType::DOUBLE:
-    return sizeof(double);
-  case DataType::FLOAT16:
-    return 2;
-  case DataType::INT8:
-  case DataType::UINT8:
-  case DataType::BOOL:
-    return 1;
-  case DataType::INT16:
-  case DataType::UINT16:
-    return 2;
-  case DataType::INT32:
-  case DataType::UINT32:
-    return 4;
-  case DataType::INT64:
-  case DataType::UINT64:
-    return 8;
-  default:
-    EXT_ENFORCE_INVALID(false, "kernel::Bernoulli: unsupported output dtype ",
-                        std::to_string(dtype), ".");
-  }
-  return 0;
-}
-
 // Stores ``sample`` (either 0 or 1) at the byte position pointed to by ``out``
 // using the encoding for ``dtype``.  The caller is responsible for advancing
 // ``out`` by the element size between successive calls.
@@ -131,7 +102,7 @@ void StoreSample(int32_t dtype, uint8_t *out, int32_t sample) {
 Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
                              RuntimeContext *rt) const {
   const int32_t out_dtype = (dtype == 0) ? input.data_type : dtype;
-  const std::size_t es = OutputElementSize(out_dtype);
+  const std::size_t es = ElementSize(out_dtype);
   const int64_t n = input.element_count();
   EXT_ENFORCE_INVALID(n >= 0, "kernel::Bernoulli: input shape contains negative dimensions.");
   const std::size_t out_n_bytes = static_cast<std::size_t>(n) * es;
@@ -157,7 +128,7 @@ void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Ten
   std::mt19937 engine(engine_seed);
   std::uniform_real_distribution<double> uniform(0.0, 1.0);
 
-  const std::size_t es = OutputElementSize(out_dtype);
+  const std::size_t es = ElementSize(out_dtype);
   uint8_t *out_data = output.mutable_bytes();
 
   auto draw_samples = [&](auto probability_reader) {

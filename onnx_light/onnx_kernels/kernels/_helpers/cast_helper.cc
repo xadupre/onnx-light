@@ -325,12 +325,13 @@ Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values
   Tensor t = MakeTensor("", static_cast<std::int32_t>(DataType::FLOAT4E2M1), shape,
                         (values.size() + 1) / 2, allocator);
   std::uint8_t *bytes = t.mutable_bytes();
-  if (t.size_bytes() != 0) {
-    std::memset(bytes, 0, t.size_bytes());
-  }
   for (std::size_t i = 0; i < values.size(); ++i) {
     const std::uint8_t nibble = FloatToFloat4E2M1Nibble(values[i]);
-    bytes[i / 2] |= static_cast<std::uint8_t>(nibble << (4 * (i % 2)));
+    if ((i % 2) == 0) {
+      bytes[i / 2] = nibble;
+    } else {
+      bytes[i / 2] |= static_cast<std::uint8_t>(nibble << 4);
+    }
   }
   return t;
 }

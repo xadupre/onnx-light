@@ -305,9 +305,9 @@ TEST(KernelClass, CastHelperTensorBuildersUseAllocatorWhenProvided) {
   ASSERT_TRUE(i16_zp.has_allocation());
   EXPECT_EQ(i16_zp.AsInt16()[0], -3);
 
-  Tensor f8 =
-      onnx_kernels::kernel::MakeFloat8Tensor(onnx_kernels::DataType::FLOAT8E5M2, {2}, {0.0f, 1.0f},
-                                             &onnx_kernels::kernel::FloatToFloat8E5M2Bits, &alloc);
+  const auto encode_float8_e5m2 = &onnx_kernels::kernel::FloatToFloat8E5M2Bits;
+  Tensor f8 = onnx_kernels::kernel::MakeFloat8Tensor(onnx_kernels::DataType::FLOAT8E5M2, {2},
+                                                     {0.0f, 1.0f}, encode_float8_e5m2, &alloc);
   ASSERT_TRUE(f8.has_allocation());
   EXPECT_EQ(f8.bytes()[0], onnx_kernels::kernel::FloatToFloat8E5M2Bits(0.0f));
   EXPECT_EQ(f8.bytes()[1], onnx_kernels::kernel::FloatToFloat8E5M2Bits(1.0f));

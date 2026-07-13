@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_float8.h"
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/raw_buffer_allocator.h"
 
 #include <gtest/gtest.h>
 
@@ -242,6 +244,87 @@ TEST(KernelClass, MakeFloat16TensorAcceptsShape) {
   Tensor t = onnx_kernels::kernel::MakeFloat16Tensor("", shape, {1.0f, -2.0f});
   EXPECT_EQ(t.shape, shape);
   EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+}
+
+TEST(KernelClass, MakeFloat8TensorRejectsShapeMismatch) {
+  EXPECT_THROW((void)onnx_kernels::kernel::MakeFloat8Tensor(
+                   onnx_kernels::DataType::FLOAT8E5M2, {3}, {0.0f, 1.0f},
+                   &onnx_kernels::kernel::FloatToFloat8E5M2Bits),
+               std::invalid_argument);
+}
+
+TEST(KernelClass, AllocatorBackedTensorBuilders) {
+  onnx_kernels::SimpleRawBufferAllocator alloc(16);
+
+  Tensor f16 = onnx_kernels::kernel::MakeFloat16Tensor("f16", {2}, {1.0f, -2.0f}, &alloc);
+  ASSERT_TRUE(f16.has_allocation());
+  EXPECT_EQ(f16.allocation_owner(), &alloc);
+  EXPECT_TRUE(f16.data.empty());
+  EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(f16.bytes())[0],
+            onnx_kernels::kernel::FloatToFloat16Bits(1.0f));
+  EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(f16.bytes())[1],
+            onnx_kernels::kernel::FloatToFloat16Bits(-2.0f));
+
+  Tensor f16_scalar = onnx_kernels::kernel::MakeFloat16Scalar("f16s", 1.5f, &alloc);
+  ASSERT_TRUE(f16_scalar.has_allocation());
+  EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(f16_scalar.bytes())[0],
+            onnx_kernels::kernel::FloatToFloat16Bits(1.5f));
+
+  Tensor bf16 = onnx_kernels::kernel::MakeBfloat16Tensor("bf16", {2}, {1.0f, -2.0f}, &alloc);
+  ASSERT_TRUE(bf16.has_allocation());
+  EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(bf16.bytes())[0],
+            onnx_kernels::kernel::FloatToBfloat16Bits(1.0f));
+  EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(bf16.bytes())[1],
+            onnx_kernels::kernel::FloatToBfloat16Bits(-2.0f));
+
+  Tensor bf16_scalar = onnx_kernels::kernel::MakeBfloat16Scalar("bf16s", 1.5f, &alloc);
+  ASSERT_TRUE(bf16_scalar.has_allocation());
+  EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(bf16_scalar.bytes())[0],
+            onnx_kernels::kernel::FloatToBfloat16Bits(1.5f));
+
+  Tensor src = Tensor::FromFloat("src", {2}, {1.0f, -2.0f});
+  Tensor cast_f16 = onnx_kernels::kernel::FloatToFloat16Tensor("cast", src, &alloc);
+  ASSERT_TRUE(cast_f16.has_allocation());
+  EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(cast_f16.bytes())[0],
+            onnx_kernels::kernel::FloatToFloat16Bits(1.0f));
+  EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(cast_f16.bytes())[1],
+            onnx_kernels::kernel::FloatToFloat16Bits(-2.0f));
+
+  Tensor rounded =
+      onnx_kernels::kernel::RoundToFloat16(Tensor::FromFloat("round", {1}, {1.1f}), &alloc);
+  ASSERT_TRUE(rounded.has_allocation());
+  EXPECT_FLOAT_EQ(
+      reinterpret_cast<const float *>(rounded.bytes())[0],
+      onnx_kernels::kernel::Float16BitsToFloat(onnx_kernels::kernel::FloatToFloat16Bits(1.1f)));
+
+  Tensor u16_zp = onnx_kernels::kernel::Uint16ZeroPoint(7u, &alloc);
+  ASSERT_TRUE(u16_zp.has_allocation());
+  EXPECT_EQ(u16_zp.AsUint16()[0], 7u);
+
+  Tensor i16_zp = onnx_kernels::kernel::Int16ZeroPoint(-3, &alloc);
+  ASSERT_TRUE(i16_zp.has_allocation());
+  EXPECT_EQ(i16_zp.AsInt16()[0], -3);
+
+  const auto encode_float8_e5m2 = &onnx_kernels::kernel::FloatToFloat8E5M2Bits;
+  Tensor f8 = onnx_kernels::kernel::MakeFloat8Tensor(onnx_kernels::DataType::FLOAT8E5M2, {2},
+                                                     {0.0f, 1.0f}, encode_float8_e5m2, &alloc);
+  ASSERT_TRUE(f8.has_allocation());
+  EXPECT_EQ(f8.bytes()[0], onnx_kernels::kernel::FloatToFloat8E5M2Bits(0.0f));
+  EXPECT_EQ(f8.bytes()[1], onnx_kernels::kernel::FloatToFloat8E5M2Bits(1.0f));
+
+  Tensor subbyte = onnx_kernels::kernel::MakeSubByteTensor(onnx_kernels::DataType::UINT4, {3},
+                                                           {1, 2, 3}, /*bits=*/4, &alloc);
+  ASSERT_TRUE(subbyte.has_allocation());
+  const std::vector<std::uint8_t> expected_packed_bytes = {0x21u, 0x03u};
+  EXPECT_EQ(subbyte.size_bytes(), expected_packed_bytes.size());
+  EXPECT_EQ(std::vector<std::uint8_t>(subbyte.bytes(), subbyte.bytes() + subbyte.size_bytes()),
+            expected_packed_bytes);
+
+  Tensor float4 = onnx_kernels::kernel::MakeFloat4E2M1Tensor({2}, {0.0f, 1.0f}, &alloc);
+  ASSERT_TRUE(float4.has_allocation());
+  EXPECT_EQ(float4.bytes()[0],
+            static_cast<std::uint8_t>(onnx_kernels::kernel::FloatToFloat4E2M1Nibble(0.0f) |
+                                      (onnx_kernels::kernel::FloatToFloat4E2M1Nibble(1.0f) << 4)));
 }
 
 // Regression test for the FLOAT16 -> FLOAT8E5M2 underflow path: a subnormal

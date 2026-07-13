@@ -1792,7 +1792,9 @@ TEST(RunModel, DelayedInitializerUsesAllocatorWhenProvided) {
                                                    std::move(attrs));
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  onnx_kernels::SimpleRawBufferAllocator alloc(1);
+  // SimpleRawBufferAllocator capacity counts buffer slots, not bytes.
+  constexpr size_t kAllocatorSlotCapacity = 1;
+  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
   rt.set_allocator(&alloc);
 
   Tensor y = delayed(&rt);

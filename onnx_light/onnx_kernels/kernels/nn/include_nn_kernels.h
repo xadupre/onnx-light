@@ -72,17 +72,14 @@ public:
   /// All attributes explicit. ``strides`` may be empty (treated as all 1),
   /// ``pads`` may be empty (treated as all 0) and ``dilations`` may be
   /// empty (treated as all 1).
-  Tensor operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                    const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
-                    bool ceil_mode = false, bool count_include_pad = false,
-                    const std::vector<int64_t> &dilations = {},
-                    const std::string &auto_pad = "NOTSET", RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides = {},
+                    const Shape &pads = {}, bool ceil_mode = false, bool count_include_pad = false,
+                    const Shape &dilations = {}, const std::string &auto_pad = "NOTSET",
+                    RuntimeContext *rt = nullptr) const;
 
-  void operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                  const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                  bool ceil_mode, bool count_include_pad, Tensor &output,
-                  const std::vector<int64_t> &dilations = {},
-                  const std::string &auto_pad = "NOTSET") const;
+  void operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
+                  const Shape &pads, bool ceil_mode, bool count_include_pad, Tensor &output,
+                  const Shape &dilations = {}, const std::string &auto_pad = "NOTSET") const;
 
   /// Output shape generally differs from the input shape, so the output
   /// buffer cannot in general alias the input buffer.
@@ -468,9 +465,8 @@ public:
 
   /// Returns the primary output ``Y`` (tensor of the pooled values; same
   /// element type as ``x``).
-  Tensor operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                    const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
-                    bool ceil_mode = false, const std::vector<int64_t> &dilations = {},
+  Tensor operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides = {},
+                    const Shape &pads = {}, bool ceil_mode = false, const Shape &dilations = {},
                     int64_t storage_order = 0, const std::string &auto_pad = "NOTSET",
                     RuntimeContext *rt = nullptr) const;
 
@@ -479,11 +475,11 @@ public:
   /// input ``(N, C, D1, ..., Dk)`` buffer. ``storage_order`` selects the
   /// flattening of the selected spatial coordinate: ``0`` (row major) or
   /// ``1`` (column major).
-  std::pair<Tensor, Tensor>
-  WithIndices(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-              const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
-              bool ceil_mode = false, const std::vector<int64_t> &dilations = {},
-              int64_t storage_order = 0, const std::string &auto_pad = "NOTSET") const;
+  std::pair<Tensor, Tensor> WithIndices(const Tensor &x, const Shape &kernel_shape,
+                                        const Shape &strides = {}, const Shape &pads = {},
+                                        bool ceil_mode = false, const Shape &dilations = {},
+                                        int64_t storage_order = 0,
+                                        const std::string &auto_pad = "NOTSET") const;
 
   /// Output shape generally differs from the input shape.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -504,16 +500,14 @@ public:
 
   /// Two-input form: derives the output shape from ``kernel_shape``,
   /// ``strides`` and ``pads`` (defaults: 1 and 0).
-  Tensor operator()(const Tensor &x, const Tensor &indices,
-                    const std::vector<int64_t> &kernel_shape,
-                    const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
+  Tensor operator()(const Tensor &x, const Tensor &indices, const Shape &kernel_shape,
+                    const Shape &strides = {}, const Shape &pads = {},
                     RuntimeContext *rt = nullptr) const;
 
   /// Three-input form: ``output_shape`` is a rank-1 ``int64`` tensor giving
   /// the full output shape ``(N, C, D1, ..., Dk)``.
   Tensor operator()(const Tensor &x, const Tensor &indices, const Tensor &output_shape,
-                    const std::vector<int64_t> &kernel_shape,
-                    const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
+                    const Shape &kernel_shape, const Shape &strides = {}, const Shape &pads = {},
                     RuntimeContext *rt = nullptr) const;
 
   /// Output shape differs from input shape.

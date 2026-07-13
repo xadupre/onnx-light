@@ -94,7 +94,7 @@ def main() -> None:
 
     print("-- saves the onnx model")
     ol_save(onnx_model, filename, save_as_external_data=True)
-    onnx_model = ol_load(filename, load_external_data=False)
+    onnx_model = ol_load(filename, load_external_data=True)
     onnx_model = inliner.inline_local_functions(onnx_model)
     del onnx_model.graph.value_info[:]
 

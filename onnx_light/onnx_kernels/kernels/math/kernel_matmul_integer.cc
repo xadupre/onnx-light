@@ -143,7 +143,7 @@ ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t 
   return zps;
 }
 
-std::vector<int64_t> PromoteMatMulShape(const std::vector<int64_t> &shape, bool is_left) {
+Shape PromoteMatMulShape(const Shape &shape, bool is_left) {
   if (shape.size() == 1) {
     if (is_left) {
       return {1, shape[0]};
@@ -153,7 +153,7 @@ std::vector<int64_t> PromoteMatMulShape(const std::vector<int64_t> &shape, bool 
   return shape;
 }
 
-std::vector<int64_t> ComputeStrides(const std::vector<int64_t> &shape) {
+std::vector<int64_t> ComputeStrides(const Shape &shape) {
   std::vector<int64_t> strides(shape.size(), 1);
   for (int64_t i = static_cast<int64_t>(shape.size()) - 2; i >= 0; --i) {
     strides[static_cast<size_t>(i)] =
@@ -162,10 +162,10 @@ std::vector<int64_t> ComputeStrides(const std::vector<int64_t> &shape) {
   return strides;
 }
 
-std::vector<int64_t> BroadcastPrefix(const std::vector<int64_t> &a_prefix,
-                                     const std::vector<int64_t> &b_prefix) {
+Shape BroadcastPrefix(const Shape &a_prefix, const Shape &b_prefix) {
   const size_t rank = std::max(a_prefix.size(), b_prefix.size());
-  std::vector<int64_t> out(rank, 1);
+  Shape out;
+  out.assign(rank, 1);
   for (size_t i = 0; i < rank; ++i) {
     const bool has_a = i + a_prefix.size() >= rank;
     const bool has_b = i + b_prefix.size() >= rank;
@@ -182,17 +182,17 @@ std::vector<int64_t> BroadcastPrefix(const std::vector<int64_t> &a_prefix,
   return out;
 }
 
-std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &a_shape,
-                                        const std::vector<int64_t> &b_shape) {
+Shape ComputeOutputShape(const Shape &a_shape, const Shape &b_shape) {
   EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(), kName,
                       ": rank-0 inputs are not accepted.");
-  const std::vector<int64_t> a2 = PromoteMatMulShape(a_shape, true);
-  const std::vector<int64_t> b2 = PromoteMatMulShape(b_shape, false);
+  const Shape a2 = PromoteMatMulShape(a_shape, true);
+  const Shape b2 = PromoteMatMulShape(b_shape, false);
   EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2], kName,
                       ": incompatible inner dimensions.");
-  const std::vector<int64_t> a_prefix(a2.begin(), a2.end() - 2);
-  const std::vector<int64_t> b_prefix(b2.begin(), b2.end() - 2);
-  std::vector<int64_t> out_shape = BroadcastPrefix(a_prefix, b_prefix);
+  Shape a_prefix, b_prefix;
+  a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
+  b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
+  Shape out_shape = BroadcastPrefix(a_prefix, b_prefix);
   if (a_shape.size() != 1) {
     out_shape.push_back(a2[a2.size() - 2]);
   }
@@ -204,15 +204,16 @@ std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &a_shape,
 
 void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tensor &b,
                       const ZeroPointValues &b_zps, Tensor &output) {
-  const std::vector<int64_t> a2 = PromoteMatMulShape(a.shape, true);
-  const std::vector<int64_t> b2 = PromoteMatMulShape(b.shape, false);
+  const Shape a2 = PromoteMatMulShape(a.shape, true);
+  const Shape b2 = PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
   const int64_t K = a2[a2.size() - 1];
   const int64_t N = b2[b2.size() - 1];
 
-  const std::vector<int64_t> a_prefix(a2.begin(), a2.end() - 2);
-  const std::vector<int64_t> b_prefix(b2.begin(), b2.end() - 2);
-  const std::vector<int64_t> out_prefix = BroadcastPrefix(a_prefix, b_prefix);
+  Shape a_prefix, b_prefix;
+  a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
+  b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
+  const Shape out_prefix = BroadcastPrefix(a_prefix, b_prefix);
   const size_t batch_rank = out_prefix.size();
 
   const std::vector<int64_t> a_strides = ComputeStrides(a2);
@@ -298,7 +299,7 @@ void ComputeMatMulInteger(const Tensor &a, const Tensor &b, const Tensor &a_zero
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::INT32), kName,
                       ": output dtype must be INT32.");
 
-  const std::vector<int64_t> out_shape = ComputeOutputShape(a.shape, b.shape);
+  const Shape out_shape = ComputeOutputShape(a.shape, b.shape);
   EXT_ENFORCE_INVALID(output.shape == out_shape, kName, ": preallocated output has invalid shape.");
   int64_t total = 1;
   for (int64_t d : out_shape) {
@@ -307,8 +308,8 @@ void ComputeMatMulInteger(const Tensor &a, const Tensor &b, const Tensor &a_zero
   EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(int32_t), kName,
                       ": preallocated output buffer size does not match its shape.");
 
-  const std::vector<int64_t> a2 = PromoteMatMulShape(a.shape, true);
-  const std::vector<int64_t> b2 = PromoteMatMulShape(b.shape, false);
+  const Shape a2 = PromoteMatMulShape(a.shape, true);
+  const Shape b2 = PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
   const int64_t N = b2[b2.size() - 1];
 
@@ -325,7 +326,7 @@ Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor 
   EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": A must be INT8 or UINT8.");
   EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": B must be INT8 or UINT8.");
 
-  const std::vector<int64_t> out_shape = ComputeOutputShape(a.shape, b.shape);
+  const Shape out_shape = ComputeOutputShape(a.shape, b.shape);
   int64_t total = 1;
   for (int64_t d : out_shape) {
     total *= d;

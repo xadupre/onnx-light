@@ -65,7 +65,8 @@ Tensor Det::operator()(const Tensor &x, RuntimeContext *rt) const {
   const int64_t m = x.shape[x.shape.size() - 1];
   const int64_t m2 = x.shape[x.shape.size() - 2];
   EXT_ENFORCE_INVALID(m == m2, "kernel::Det requires the inner-most 2 dimensions to be equal.");
-  std::vector<int64_t> out_shape(x.shape.begin(), x.shape.end() - 2);
+  Shape out_shape;
+  out_shape.insert(out_shape.begin(), x.shape.begin(), x.shape.end() - 2);
   int64_t batch = 1;
   for (int64_t d : out_shape)
     batch *= d;
@@ -85,7 +86,8 @@ void Det::operator()(const Tensor &x, Tensor &output) const {
   const int64_t m2 = x.shape[x.shape.size() - 2];
   EXT_ENFORCE_INVALID(m == m2, "kernel::Det requires the inner-most 2 dimensions to be equal.");
 
-  std::vector<int64_t> expected_out_shape(x.shape.begin(), x.shape.end() - 2);
+  Shape expected_out_shape;
+  expected_out_shape.insert(expected_out_shape.begin(), x.shape.begin(), x.shape.end() - 2);
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
                       "kernel::Det preallocated output shape must match the batch dimensions "
                       "of the input.");

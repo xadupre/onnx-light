@@ -283,7 +283,7 @@ def expect(
     )
 
 
-def _collect_cc_test_cases() -> dict[str, TestCase]:
+def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
     """Collects backend test cases produced by the C++ ``lib_onnx_backend_test``.
 
     The C++ library implements the same data model as the Python infrastructure
@@ -432,7 +432,7 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         return arr
 
     result: dict[str, TestCase] = {}
-    for tc in _backend_test_cc.collect_test_cases():
+    for tc in _backend_test_cc.collect_test_cases(include_big=include_big):
         if tc.name.startswith("test_cc_zipmap_"):
             continue
         sequence_outputs = {o.name for o in tc.model.graph.output if o.type.has_sequence_type()}
@@ -456,7 +456,7 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
     return result
 
 
-def collect_test_case() -> dict[str, TestCase]:
+def collect_test_case(include_big: bool = False) -> dict[str, TestCase]:
     """
     Collects all backend test cases.
 
@@ -467,6 +467,11 @@ def collect_test_case() -> dict[str, TestCase]:
     class methods is executed so that downstream code can still register
     extra Python-defined cases through the :func:`expect` helper.
     Python-defined cases take precedence over C++ cases of the same name.
+
+    Args:
+        include_big: When ``True``, includes backend test cases whose name
+            contains ``"_big_"``. Defaults to ``False``, which keeps these
+            big cases excluded.
 
     Returns:
         A dictionary mapping test case names to TestCase instances.
@@ -487,7 +492,7 @@ def collect_test_case() -> dict[str, TestCase]:
 
     # merge in C++-generated backend test node cases (Python-defined cases win
     # on name collision to preserve backwards compatibility)
-    cc_cases = _collect_cc_test_cases()
+    cc_cases = _collect_cc_test_cases(include_big=include_big)
     for name, tc in cc_cases.items():
         ALL_TESTS.setdefault(name, tc)
 

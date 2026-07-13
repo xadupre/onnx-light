@@ -77,6 +77,12 @@ instance/
 # Scrapy stuff:
 .scrapy
 
+# Benchmark
+bench*.png
+bench*.xlsx
+benchmarks/*.png
+benchmarks/*.xlsx
+
 # Sphinx documentation
 docs/_build/
 docs/auto_examples
@@ -86,11 +92,6 @@ docs/sg_execution_times.rst
 docs/operators/
 docs/xml/
 docs/auto_*
-
-
-# PyBuilder
-.pybuilder/
-target/
 
 # Jupyter Notebook
 .ipynb_checkpoints

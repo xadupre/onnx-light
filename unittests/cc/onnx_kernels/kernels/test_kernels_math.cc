@@ -54,6 +54,9 @@ using onnx_kernels::kernel::Log;
 using onnx_kernels::kernel::LogSoftmax;
 using onnx_kernels::kernel::MatMul;
 using onnx_kernels::kernel::MatMulInteger;
+using onnx_kernels::kernel::Max;
+using onnx_kernels::kernel::Mean;
+using onnx_kernels::kernel::Min;
 using onnx_kernels::kernel::Mish;
 using onnx_kernels::kernel::Mod;
 using onnx_kernels::kernel::Mul;
@@ -72,6 +75,7 @@ using onnx_kernels::kernel::Softplus;
 using onnx_kernels::kernel::Softsign;
 using onnx_kernels::kernel::Sqrt;
 using onnx_kernels::kernel::Sub;
+using onnx_kernels::kernel::Sum;
 using onnx_kernels::kernel::Tan;
 using onnx_kernels::kernel::Tanh;
 using onnx_kernels::kernel::TopK;
@@ -542,6 +546,74 @@ TEST(KernelClass, Float16DemoteUsesAllocatorWhenRuntimeContextHasOne) {
   const float *py = roundtrip.AsFloat();
   for (int64_t i = 0; i < x32.element_count(); ++i) {
     EXPECT_FLOAT_EQ(py[i], x32.AsFloat()[i]);
+  }
+}
+
+TEST(KernelClass, MinMaxMeanSumUseAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Min min_kernel{ctx};
+  Max max_kernel{ctx};
+  Mean mean_kernel{ctx};
+  Sum sum_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 5.0f, 3.0f, 7.0f});
+  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 4.0f, 6.0f, 8.0f});
+
+  {
+    SimpleRawBufferAllocator alloc(1);
+    RuntimeContext rt;
+    rt.set_allocator(&alloc);
+    Tensor zmin = min_kernel({x, y}, &rt);
+    EXPECT_TRUE(zmin.has_allocation());
+    EXPECT_EQ(alloc.allocated_count(), 1u);
+    EXPECT_EQ(zmin.data.size(), 0u);
+    const float *pmin = zmin.AsFloat();
+    EXPECT_FLOAT_EQ(pmin[0], 1.0f);
+    EXPECT_FLOAT_EQ(pmin[1], 4.0f);
+    EXPECT_FLOAT_EQ(pmin[2], 3.0f);
+    EXPECT_FLOAT_EQ(pmin[3], 7.0f);
+  }
+  {
+    SimpleRawBufferAllocator alloc(1);
+    RuntimeContext rt;
+    rt.set_allocator(&alloc);
+    Tensor zmax = max_kernel({x, y}, &rt);
+    EXPECT_TRUE(zmax.has_allocation());
+    EXPECT_EQ(alloc.allocated_count(), 1u);
+    EXPECT_EQ(zmax.data.size(), 0u);
+    const float *pmax = zmax.AsFloat();
+    EXPECT_FLOAT_EQ(pmax[0], 2.0f);
+    EXPECT_FLOAT_EQ(pmax[1], 5.0f);
+    EXPECT_FLOAT_EQ(pmax[2], 6.0f);
+    EXPECT_FLOAT_EQ(pmax[3], 8.0f);
+  }
+  {
+    SimpleRawBufferAllocator alloc(1);
+    RuntimeContext rt;
+    rt.set_allocator(&alloc);
+    Tensor zmean = mean_kernel({x, y}, &rt);
+    EXPECT_TRUE(zmean.has_allocation());
+    EXPECT_EQ(alloc.allocated_count(), 1u);
+    EXPECT_EQ(zmean.data.size(), 0u);
+    const float *pmean = zmean.AsFloat();
+    EXPECT_FLOAT_EQ(pmean[0], 1.5f);
+    EXPECT_FLOAT_EQ(pmean[1], 4.5f);
+    EXPECT_FLOAT_EQ(pmean[2], 4.5f);
+    EXPECT_FLOAT_EQ(pmean[3], 7.5f);
+  }
+  {
+    SimpleRawBufferAllocator alloc(1);
+    RuntimeContext rt;
+    rt.set_allocator(&alloc);
+    Tensor zsum = sum_kernel({x, y}, &rt);
+    EXPECT_TRUE(zsum.has_allocation());
+    EXPECT_EQ(alloc.allocated_count(), 1u);
+    EXPECT_EQ(zsum.data.size(), 0u);
+    const float *psum = zsum.AsFloat();
+    EXPECT_FLOAT_EQ(psum[0], 3.0f);
+    EXPECT_FLOAT_EQ(psum[1], 9.0f);
+    EXPECT_FLOAT_EQ(psum[2], 9.0f);
+    EXPECT_FLOAT_EQ(psum[3], 15.0f);
   }
 }
 

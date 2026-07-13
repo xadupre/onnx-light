@@ -86,14 +86,15 @@ void AccumulateAndScale(const char *dtype_name, int32_t dtype, const std::vector
 }
 
 template <typename T>
-Tensor MeanAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs) {
+Tensor MeanAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
+                 RawBufferAllocator *allocator) {
   const std::vector<int64_t> out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {
     out_count *= d;
   }
   const size_t z_n_bytes = static_cast<size_t>(out_count) * sizeof(T);
-  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, nullptr);
+  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, allocator);
   AccumulateAndScale<T>(dtype_name, dtype, inputs, z);
   return z;
 }
@@ -117,11 +118,12 @@ void MeanInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor
 
 Tensor Mean::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMeanName, " requires at least one input.");
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
-    return MeanAlloc<float>("FLOAT", DataType::FLOAT, inputs);
+    return MeanAlloc<float>("FLOAT", DataType::FLOAT, inputs, allocator);
   case DataType::DOUBLE:
-    return MeanAlloc<double>("DOUBLE", DataType::DOUBLE, inputs);
+    return MeanAlloc<double>("DOUBLE", DataType::DOUBLE, inputs, allocator);
   default:
     EXT_THROW_INVALID(kMeanName, ": unsupported data type ", inputs[0].data_type,
                       kSupportedMeanTypesMsg);

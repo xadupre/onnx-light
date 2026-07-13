@@ -40,6 +40,18 @@ class TestCollectTestCasesByName(ExtTestCase):
         with self.assertRaises(ValueError):
             bt.collect_test_cases_by_name("(")
 
+    def test_collect_include_big(self):
+        without_big = bt.collect_test_cases_by_name(
+            r"^test_cc_shape_inference_big_qwen3_4_layers_like$"
+        )
+        with_big = bt.collect_test_cases_by_name(
+            r"^test_cc_shape_inference_big_qwen3_4_layers_like$", include_big=True
+        )
+        self.assertEqual(without_big, [])
+        self.assertEqual(
+            [tc.name for tc in with_big], ["test_cc_shape_inference_big_qwen3_4_layers_like"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

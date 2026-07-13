@@ -12,7 +12,9 @@ except ImportError as exc:  # pragma: no cover - exercised only in reduced build
 from ..onnx_lib.backend.test.case import collect_test_case, make_test_class  # type: ignore # noqa: F401
 
 
-def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCase]:
+def collect_test_cases_by_name(
+    pattern: Union[str, Pattern[str]], include_big: bool = False
+) -> list[TestCase]:
     """Returns the C++-implemented backend test cases whose name matches *pattern*.
 
     The actual filtering happens in C++
@@ -25,6 +27,8 @@ def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCa
         pattern: A regular expression (as a string or a pre-compiled
             :class:`re.Pattern`) matched against :attr:`TestCase.name`.
             Use ``"^...$"`` to require a full match.
+        include_big: Includes backend test cases whose name contains
+            ``"_big_"`` when ``True``. Keeps them excluded otherwise.
 
     Returns:
         The list of :class:`TestCase` instances (in their natural
@@ -45,4 +49,4 @@ def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCa
         )
     from ..onnx_py._onnxpybackend import backend_test as _C  # type: ignore[attr-defined]
 
-    return _C.collect_test_cases_by_name(source)
+    return _C.collect_test_cases_by_name(source, include_big=include_big)

@@ -222,6 +222,13 @@ class TestBackendFunction(ExtTestCase):
             self.assertIsInstance(tc.rtol, float)
             self.assertIsInstance(tc.atol, float)
 
+    def test_collect_test_case_include_big(self):
+        """Tests that include_big exposes backend test cases with `_big_` names."""
+        result = collect_test_case()
+        result_big = collect_test_case(include_big=True)
+        self.assertNotIn("test_cc_shape_inference_big_qwen3_4_layers_like", result)
+        self.assertIn("test_cc_shape_inference_big_qwen3_4_layers_like", result_big)
+
     def test_make_test_class_returns_test_class(self):
         """Verifies that make_test_class returns an ExtTestCase subclass."""
         from onnx_light.onnx_lib.backend.test.case import make_test_class

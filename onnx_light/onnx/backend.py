@@ -27,8 +27,9 @@ def collect_test_cases_by_name(
         pattern: A regular expression (as a string or a pre-compiled
             :class:`re.Pattern`) matched against :attr:`TestCase.name`.
             Use ``"^...$"`` to require a full match.
-        include_big: Includes backend test cases whose name contains
-            ``"_big_"`` when ``True``. Keeps them excluded otherwise.
+        include_big: When ``True``, includes backend test cases whose name
+            contains ``"_big_"``. Defaults to ``False``, which keeps these
+            big cases excluded.
 
     Returns:
         The list of :class:`TestCase` instances (in their natural

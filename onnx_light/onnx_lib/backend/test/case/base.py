@@ -469,8 +469,9 @@ def collect_test_case(include_big: bool = False) -> dict[str, TestCase]:
     Python-defined cases take precedence over C++ cases of the same name.
 
     Args:
-        include_big: Includes backend test cases whose name contains
-            ``"_big_"`` when ``True``. Keeps them excluded otherwise.
+        include_big: When ``True``, includes backend test cases whose name
+            contains ``"_big_"``. Defaults to ``False``, which keeps these
+            big cases excluded.
 
     Returns:
         A dictionary mapping test case names to TestCase instances.

@@ -83,8 +83,6 @@ struct ZeroPointValues {
     if (!is_allocator_backed()) {
       return fallback.data();
     }
-    EXT_ENFORCE_INVALID(reinterpret_cast<std::uintptr_t>(buffer->data()) % alignof(int32_t) == 0,
-                        kName, ": allocator returned misaligned zero-point buffer.");
     return reinterpret_cast<int32_t *>(buffer->data());
   }
   // Returns read-only zero-point values from the active storage backend.
@@ -92,8 +90,6 @@ struct ZeroPointValues {
     if (!is_allocator_backed()) {
       return fallback.data();
     }
-    EXT_ENFORCE_INVALID(reinterpret_cast<std::uintptr_t>(buffer->data()) % alignof(int32_t) == 0,
-                        kName, ": allocator returned misaligned zero-point buffer.");
     return reinterpret_cast<const int32_t *>(buffer->data());
   }
 };
@@ -133,6 +129,9 @@ ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t 
     // RawBufferAllocator::Allocate returns at least n_bytes, so >= is expected.
     EXT_ENFORCE_INVALID(zps.buffer->size() >= numel_u * sizeof(int32_t), kName,
                         ": zero-point allocator returned too small a buffer.");
+    EXT_ENFORCE_INVALID(reinterpret_cast<std::uintptr_t>(zps.buffer->data()) % alignof(int32_t) ==
+                            0,
+                        kName, ": allocator returned misaligned zero-point buffer.");
   } else {
     zps.fallback.resize(numel_u);
   }

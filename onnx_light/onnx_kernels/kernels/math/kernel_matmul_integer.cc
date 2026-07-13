@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -53,7 +52,8 @@ std::vector<int32_t> ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int
   EXT_ENFORCE_INVALID(numel == 1 || numel == expected_size, kName, ": '", name,
                       "' must be a scalar, a one-element 1-D tensor, or a 1-D tensor whose "
                       "size matches the corresponding matrix dimension.");
-  std::vector<int32_t> zps(static_cast<size_t>(numel), std::allocator<int32_t>{});
+  const std::vector<int32_t>::allocator_type zps_allocator{};
+  std::vector<int32_t> zps(static_cast<size_t>(numel), zps_allocator);
   for (int64_t i = 0; i < numel; ++i) {
     zps[static_cast<size_t>(i)] = ReadIntElem(t, i);
   }

@@ -19,8 +19,30 @@ namespace {
 constexpr std::int32_t kFloat32ExponentBias = 127;
 constexpr std::int32_t kFloat16ExponentBias = 15;
 
-Tensor MakeScalarTensor(std::int32_t data_type, const std::vector<std::uint8_t> &bytes) {
-  return Tensor("", data_type, /*shape=*/{}, bytes);
+void ValidateShapeAndElementCount(const Shape &shape, std::size_t n_values) {
+  int64_t expected = 1;
+  for (int64_t d : shape) {
+    EXT_ENFORCE_INVALID(d >= 0, "Tensor shape dimensions must be non-negative.");
+    expected *= d;
+  }
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(n_values) == expected,
+                      "Tensor values size does not match the product of shape.");
+}
+
+Tensor MakeTensor(const std::string &name, std::int32_t data_type, const Shape &shape,
+                  size_t n_bytes, RawBufferAllocator *allocator) {
+  Tensor t = MakeOutputTensor(data_type, shape, n_bytes, allocator);
+  t.name = name;
+  return t;
+}
+
+Tensor MakeScalarTensor(std::int32_t data_type, const std::vector<std::uint8_t> &bytes,
+                        RawBufferAllocator *allocator) {
+  Tensor t = MakeTensor("", data_type, /*shape=*/{}, bytes.size(), allocator);
+  if (!bytes.empty()) {
+    std::memcpy(t.mutable_bytes(), bytes.data(), bytes.size());
+  }
+  return t;
 }
 } // namespace
 
@@ -199,97 +221,114 @@ std::vector<std::uint8_t> Pack2Bit(const std::vector<std::int8_t> &values) {
 }
 
 Tensor MakeFloat16Tensor(const std::string &name, const Shape &shape,
-                         const std::vector<float> &values) {
-  std::vector<std::uint16_t> bits(values.size());
+                         const std::vector<float> &values, RawBufferAllocator *allocator) {
+  ValidateShapeAndElementCount(shape, values.size());
+  Tensor t = MakeTensor(name, static_cast<std::int32_t>(DataType::FLOAT16), shape,
+                        values.size() * sizeof(std::uint16_t), allocator);
+  std::uint16_t *bits = reinterpret_cast<std::uint16_t *>(t.mutable_bytes());
   for (std::size_t i = 0; i < values.size(); ++i) {
     bits[i] = FloatToFloat16Bits(values[i]);
   }
-  Tensor t = Tensor::FromUint16(name, shape, bits);
-  t.data_type = static_cast<std::int32_t>(DataType::FLOAT16);
   return t;
 }
 
-Tensor MakeFloat16Scalar(const std::string &name, float value) {
-  Tensor t = Tensor::FromUint16(name, {}, {FloatToFloat16Bits(value)});
-  t.data_type = static_cast<std::int32_t>(DataType::FLOAT16);
+Tensor MakeFloat16Scalar(const std::string &name, float value, RawBufferAllocator *allocator) {
+  Tensor t = MakeTensor(name, static_cast<std::int32_t>(DataType::FLOAT16), /*shape=*/{},
+                        sizeof(std::uint16_t), allocator);
+  *reinterpret_cast<std::uint16_t *>(t.mutable_bytes()) = FloatToFloat16Bits(value);
   return t;
 }
 
 Tensor MakeBfloat16Tensor(const std::string &name, const Shape &shape,
-                          const std::vector<float> &values) {
-  std::vector<std::uint16_t> bits(values.size());
+                          const std::vector<float> &values, RawBufferAllocator *allocator) {
+  ValidateShapeAndElementCount(shape, values.size());
+  Tensor t = MakeTensor(name, static_cast<std::int32_t>(DataType::BFLOAT16), shape,
+                        values.size() * sizeof(std::uint16_t), allocator);
+  std::uint16_t *bits = reinterpret_cast<std::uint16_t *>(t.mutable_bytes());
   for (std::size_t i = 0; i < values.size(); ++i) {
     bits[i] = FloatToBfloat16Bits(values[i]);
   }
-  Tensor t = Tensor::FromUint16(name, shape, bits);
-  t.data_type = static_cast<std::int32_t>(DataType::BFLOAT16);
   return t;
 }
 
-Tensor MakeBfloat16Scalar(const std::string &name, float value) {
-  Tensor t = Tensor::FromUint16(name, {}, {FloatToBfloat16Bits(value)});
-  t.data_type = static_cast<std::int32_t>(DataType::BFLOAT16);
+Tensor MakeBfloat16Scalar(const std::string &name, float value, RawBufferAllocator *allocator) {
+  Tensor t = MakeTensor(name, static_cast<std::int32_t>(DataType::BFLOAT16), /*shape=*/{},
+                        sizeof(std::uint16_t), allocator);
+  *reinterpret_cast<std::uint16_t *>(t.mutable_bytes()) = FloatToBfloat16Bits(value);
   return t;
 }
 
-Tensor FloatToFloat16Tensor(const std::string &name, const Tensor &f) {
+Tensor FloatToFloat16Tensor(const std::string &name, const Tensor &f,
+                            RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(f.data_type == DataType::FLOAT, "FloatToFloat16Tensor: input must be FLOAT.");
   const int64_t n = f.element_count();
-  std::vector<std::uint16_t> bits(static_cast<std::size_t>(n));
+  ValidateShapeAndElementCount(f.shape, static_cast<std::size_t>(n));
+  Tensor t = MakeTensor(name, static_cast<std::int32_t>(DataType::FLOAT16), f.shape,
+                        static_cast<std::size_t>(n) * sizeof(std::uint16_t), allocator);
+  std::uint16_t *bits = reinterpret_cast<std::uint16_t *>(t.mutable_bytes());
   const float *src = f.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     bits[static_cast<std::size_t>(i)] = FloatToFloat16Bits(src[i]);
   }
-  Tensor t = Tensor::FromUint16(name, f.shape, bits);
-  t.data_type = static_cast<std::int32_t>(DataType::FLOAT16);
   return t;
 }
 
-Tensor RoundToFloat16(const Tensor &f) {
+Tensor RoundToFloat16(const Tensor &f, RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(f.data_type == DataType::FLOAT, "RoundToFloat16: input must be FLOAT.");
   const int64_t n = f.element_count();
-  std::vector<float> rounded(static_cast<std::size_t>(n));
+  ValidateShapeAndElementCount(f.shape, static_cast<std::size_t>(n));
+  Tensor t = MakeTensor(f.name, static_cast<std::int32_t>(DataType::FLOAT), f.shape,
+                        static_cast<std::size_t>(n) * sizeof(float), allocator);
+  float *rounded = reinterpret_cast<float *>(t.mutable_bytes());
   const float *src = f.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     rounded[static_cast<std::size_t>(i)] = Float16BitsToFloat(FloatToFloat16Bits(src[i]));
   }
-  return Tensor::FromFloat(f.name, f.shape, rounded);
+  return t;
 }
 
-Tensor Uint16ZeroPoint(std::uint16_t value) {
+Tensor Uint16ZeroPoint(std::uint16_t value, RawBufferAllocator *allocator) {
   std::vector<std::uint8_t> bytes(sizeof(std::uint16_t));
   std::memcpy(bytes.data(), &value, sizeof(std::uint16_t));
-  return MakeScalarTensor(static_cast<std::int32_t>(DataType::UINT16), bytes);
+  return MakeScalarTensor(static_cast<std::int32_t>(DataType::UINT16), bytes, allocator);
 }
 
-Tensor Int16ZeroPoint(std::int16_t value) {
+Tensor Int16ZeroPoint(std::int16_t value, RawBufferAllocator *allocator) {
   std::vector<std::uint8_t> bytes(sizeof(std::int16_t));
   std::memcpy(bytes.data(), &value, sizeof(std::int16_t));
-  return MakeScalarTensor(static_cast<std::int32_t>(DataType::INT16), bytes);
+  return MakeScalarTensor(static_cast<std::int32_t>(DataType::INT16), bytes, allocator);
 }
 
 Tensor MakeFloat8Tensor(DataType dtype, const Shape &shape, const std::vector<float> &values,
-                        std::uint8_t (*encode)(float) noexcept) {
-  std::vector<std::uint8_t> bytes(values.size());
+                        std::uint8_t (*encode)(float) noexcept, RawBufferAllocator *allocator) {
+  Tensor t = MakeTensor("", static_cast<std::int32_t>(dtype), shape, values.size(), allocator);
+  std::uint8_t *bytes = t.mutable_bytes();
   for (std::size_t i = 0; i < values.size(); ++i) {
     bytes[i] = encode(values[i]);
   }
-  return Tensor("", static_cast<std::int32_t>(dtype), shape, std::move(bytes));
+  return t;
 }
 
 Tensor MakeSubByteTensor(DataType dtype, const Shape &shape, const std::vector<std::int8_t> &values,
-                         int bits) {
+                         int bits, RawBufferAllocator *allocator) {
   std::vector<std::uint8_t> bytes = (bits == 4) ? Pack4Bit(values) : Pack2Bit(values);
-  return Tensor("", static_cast<std::int32_t>(dtype), shape, std::move(bytes));
+  Tensor t = MakeTensor("", static_cast<std::int32_t>(dtype), shape, bytes.size(), allocator);
+  if (!bytes.empty()) {
+    std::memcpy(t.mutable_bytes(), bytes.data(), bytes.size());
+  }
+  return t;
 }
 
-Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values) {
-  std::vector<std::uint8_t> bytes((values.size() + 1) / 2, 0);
+Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values,
+                            RawBufferAllocator *allocator) {
+  Tensor t = MakeTensor("", static_cast<std::int32_t>(DataType::FLOAT4E2M1), shape,
+                        (values.size() + 1) / 2, allocator);
+  std::uint8_t *bytes = t.mutable_bytes();
   for (std::size_t i = 0; i < values.size(); ++i) {
     const std::uint8_t nibble = FloatToFloat4E2M1Nibble(values[i]);
     bytes[i / 2] |= static_cast<std::uint8_t>(nibble << (4 * (i % 2)));
   }
-  return Tensor("", static_cast<std::int32_t>(DataType::FLOAT4E2M1), shape, std::move(bytes));
+  return t;
 }
 
 } // namespace kernel

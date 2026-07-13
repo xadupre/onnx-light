@@ -80,36 +80,40 @@ std::vector<std::uint8_t> Pack2Bit(const std::vector<std::int8_t> &values);
 // Builds a FLOAT16 tensor of the requested shape from a flattened list of
 // float32 sample values rounded via :cpp:func:`FloatToFloat16Bits`.
 Tensor MakeFloat16Tensor(const std::string &name, const Shape &shape,
-                         const std::vector<float> &values);
+                         const std::vector<float> &values, RawBufferAllocator *allocator = nullptr);
 
 // Builds a FLOAT16 scalar tensor from a ``float`` sample value.
-Tensor MakeFloat16Scalar(const std::string &name, float value);
+Tensor MakeFloat16Scalar(const std::string &name, float value,
+                         RawBufferAllocator *allocator = nullptr);
 
 // Builds a BFLOAT16 tensor of the requested shape from a flattened list of
 // float32 sample values rounded via :cpp:func:`FloatToBfloat16Bits`.
 Tensor MakeBfloat16Tensor(const std::string &name, const Shape &shape,
-                          const std::vector<float> &values);
+                          const std::vector<float> &values,
+                          RawBufferAllocator *allocator = nullptr);
 
 // Builds a BFLOAT16 scalar tensor from a ``float`` sample value.
-Tensor MakeBfloat16Scalar(const std::string &name, float value);
+Tensor MakeBfloat16Scalar(const std::string &name, float value,
+                          RawBufferAllocator *allocator = nullptr);
 
 // Encodes a FLOAT tensor as a FLOAT16 tensor by round-tripping every
 // element through :cpp:func:`FloatToFloat16Bits`. The caller-provided
 // ``name`` becomes the tensor name on the resulting ``Tensor``.
-Tensor FloatToFloat16Tensor(const std::string &name, const Tensor &f);
+Tensor FloatToFloat16Tensor(const std::string &name, const Tensor &f,
+                            RawBufferAllocator *allocator = nullptr);
 
 // Round-trips every element of a FLOAT tensor through
 // :cpp:func:`FloatToFloat16Bits` / :cpp:func:`Float16BitsToFloat` and
 // returns a fresh FLOAT tensor reflecting the FP16 storage precision. Used
 // to simulate the input-side rounding that happens when FLOAT16 tensors
 // are fed into a backend that internally promotes to FLOAT.
-Tensor RoundToFloat16(const Tensor &f);
+Tensor RoundToFloat16(const Tensor &f, RawBufferAllocator *allocator = nullptr);
 
 // Builds a UINT16 scalar tensor carrying the supplied zero-point value.
-Tensor Uint16ZeroPoint(std::uint16_t value);
+Tensor Uint16ZeroPoint(std::uint16_t value, RawBufferAllocator *allocator = nullptr);
 
 // Builds an INT16 scalar tensor carrying the supplied zero-point value.
-Tensor Int16ZeroPoint(std::int16_t value);
+Tensor Int16ZeroPoint(std::int16_t value, RawBufferAllocator *allocator = nullptr);
 
 // Builds a 1-D float8 tensor from the float32 sample values in ``values``.
 // ``encode`` is the saturating ``FloatToFloat8*Bits`` encoder declared in
@@ -117,17 +121,19 @@ Tensor Int16ZeroPoint(std::int16_t value);
 // ``onnx.helper.make_tensor`` stores float8 scalars (one raw byte per
 // element).
 Tensor MakeFloat8Tensor(DataType dtype, const Shape &shape, const std::vector<float> &values,
-                        std::uint8_t (*encode)(float) noexcept);
+                        std::uint8_t (*encode)(float) noexcept,
+                        RawBufferAllocator *allocator = nullptr);
 
 // Builds a sub-byte tensor with the supplied ``dtype`` and ``shape`` from a
 // flattened list of element values. ``bits`` must be 4 or 2.
 Tensor MakeSubByteTensor(DataType dtype, const Shape &shape, const std::vector<std::int8_t> &values,
-                         int bits);
+                         int bits, RawBufferAllocator *allocator = nullptr);
 
 // Builds a FLOAT4E2M1 tensor of the requested shape from a flattened list
 // of float32 sample values; every input must be representable in FLOAT4E2M1
 // (see :cpp:func:`FloatToFloat4E2M1Nibble`).
-Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values);
+Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values,
+                            RawBufferAllocator *allocator = nullptr);
 
 } // namespace kernel
 } // namespace onnx_kernels

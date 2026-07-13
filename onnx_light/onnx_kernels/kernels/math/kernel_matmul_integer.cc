@@ -31,9 +31,12 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
   return static_cast<int32_t>(t.AsUint8()[idx]);
 }
 
+// Holds zero-point values either in a fallback std::vector<int32_t> or in an
+// allocator-backed RawBuffer. Owns allocator-backed storage and releases it on
+// destruction.
 struct ZeroPointValues {
   std::vector<int32_t> fallback;
-  // In allocator-backed mode, allocator and buffer are both non-null.
+  // In allocator-backed mode with size > 0, allocator and buffer are both non-null.
   RawBufferAllocator *allocator = nullptr;
   RawBuffer *buffer = nullptr;
   size_t size = 0;
@@ -216,6 +219,8 @@ void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tenso
 
   const bool a_per_row = a_zps.size > 1;
   const bool b_per_col = b_zps.size > 1;
+  const int32_t *a_values = a_zps.data();
+  const int32_t *b_values = b_zps.data();
 
   std::vector<int64_t> batch_idx(batch_rank, 0);
   for (int64_t batch = 0; batch < batch_count; ++batch) {
@@ -243,8 +248,6 @@ void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tenso
     const int64_t b_col_stride = b_strides[b2.size() - 1];
 
     for (int64_t i = 0; i < M; ++i) {
-      const int32_t *a_values = a_zps.data();
-      const int32_t *b_values = b_zps.data();
       const int32_t a_row_zp = a_per_row ? a_values[static_cast<size_t>(i)] : a_values[0];
       for (int64_t j = 0; j < N; ++j) {
         const int32_t b_col_zp = b_per_col ? b_values[static_cast<size_t>(j)] : b_values[0];

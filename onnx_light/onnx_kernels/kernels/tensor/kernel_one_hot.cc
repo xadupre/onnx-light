@@ -69,9 +69,9 @@ int64_t ResolveAxis(int64_t axis, int64_t out_rank) {
 
 // Computes the output shape: ``indices.shape`` with ``depth`` inserted at
 // position ``axis`` (already normalised to a non-negative value).
-std::vector<int64_t> ComputeOneHotShape(const std::vector<int64_t> &indices_shape, int64_t axis_pos,
-                                        int64_t depth) {
-  std::vector<int64_t> out_shape;
+onnx_kernels::Shape ComputeOneHotShape(const onnx_kernels::Shape &indices_shape, int64_t axis_pos,
+                                       int64_t depth) {
+  onnx_kernels::Shape out_shape;
   out_shape.reserve(indices_shape.size() + 1);
   for (int64_t i = 0; i < static_cast<int64_t>(indices_shape.size()) + 1; ++i) {
     if (i == axis_pos) {
@@ -105,7 +105,7 @@ Tensor OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tens
   const int64_t depth_val = ReadDepth(depth);
   const int64_t out_rank = static_cast<int64_t>(indices.shape.size()) + 1;
   const int64_t axis_pos = ResolveAxis(attrs.axis, out_rank);
-  const std::vector<int64_t> out_shape = ComputeOneHotShape(indices.shape, axis_pos, depth_val);
+  const onnx_kernels::Shape out_shape = ComputeOneHotShape(indices.shape, axis_pos, depth_val);
 
   Tensor output;
   output.name = "";
@@ -132,8 +132,7 @@ void OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor
   const int64_t depth_val = ReadDepth(depth);
   const int64_t out_rank = static_cast<int64_t>(indices.shape.size()) + 1;
   const int64_t axis_pos = ResolveAxis(attrs.axis, out_rank);
-  const std::vector<int64_t> expected_shape =
-      ComputeOneHotShape(indices.shape, axis_pos, depth_val);
+  const onnx_kernels::Shape expected_shape = ComputeOneHotShape(indices.shape, axis_pos, depth_val);
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
                       "kernel::OneHot: preallocated output shape mismatch.");
 

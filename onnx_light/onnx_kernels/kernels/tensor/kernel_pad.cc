@@ -87,7 +87,7 @@ std::vector<uint8_t> ResolveConstantBytes(const Tensor *cv, int32_t data_type,
 }
 
 // Pre-computed row-major strides (in elements).
-std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
+std::vector<int64_t> RowMajorStrides(const onnx_kernels::Shape &shape) {
   const std::size_t rank = shape.size();
   std::vector<int64_t> strides(rank, 0);
   if (rank > 0) {
@@ -170,7 +170,8 @@ Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *con
     pad_begin[axis] = pads_vec[i];
     pad_end[axis] = pads_vec[i + num_axes];
   }
-  std::vector<int64_t> out_shape(rank);
+  onnx_kernels::Shape out_shape;
+  out_shape.assign(rank, 0);
   for (std::size_t i = 0; i < rank; ++i) {
     out_shape[i] = data.shape[i] + pad_begin[i] + pad_end[i];
   }
@@ -207,7 +208,8 @@ void Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *const
     pad_begin[axis] = pads_vec[i];
     pad_end[axis] = pads_vec[i + num_axes];
   }
-  std::vector<int64_t> expected_shape(rank);
+  onnx_kernels::Shape expected_shape;
+  expected_shape.assign(rank, 0);
   for (std::size_t i = 0; i < rank; ++i) {
     expected_shape[i] = data.shape[i] + pad_begin[i] + pad_end[i];
   }

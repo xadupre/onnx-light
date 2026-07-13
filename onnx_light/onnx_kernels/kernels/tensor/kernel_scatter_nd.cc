@@ -97,8 +97,10 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
                       "kernel::ScatterND: last dim of 'indices' must be in [1, rank(data)].");
 
   // Expected updates shape = indices.shape[:-1] + data.shape[k:]
-  std::vector<int64_t> expected_updates_shape(
-      indices.shape.begin(), indices.shape.begin() + static_cast<std::ptrdiff_t>(q - 1));
+  onnx_kernels::Shape expected_updates_shape;
+  for (int64_t i = 0; i < q - 1; ++i) {
+    expected_updates_shape.push_back(indices.shape[static_cast<std::size_t>(i)]);
+  }
   for (std::size_t i = static_cast<std::size_t>(k); i < data.shape.size(); ++i) {
     expected_updates_shape.push_back(data.shape[i]);
   }

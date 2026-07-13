@@ -88,7 +88,7 @@ std::vector<Tensor> Split::operator()(const Tensor &input, int64_t axis,
   outputs.reserve(sizes.size());
   size_t offset = 0; // byte offset within each "row" of the input.
   for (int64_t size : sizes) {
-    std::vector<int64_t> out_shape = input.shape;
+    onnx_kernels::Shape out_shape = input.shape;
     out_shape[static_cast<size_t>(resolved_axis)] = size;
     int64_t total = 1;
     for (int64_t d : out_shape) {

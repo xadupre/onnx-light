@@ -16,7 +16,7 @@ namespace kernel {
 
 namespace {
 
-std::vector<int64_t> ReadShapeTensor(const Tensor &shape) {
+onnx_kernels::Shape ReadShapeTensor(const Tensor &shape) {
   EXT_ENFORCE_INVALID(shape.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::Reshape: 'shape' input must be INT64.");
   EXT_ENFORCE_INVALID(shape.shape.size() <= 1, "kernel::Reshape: 'shape' input must be 1-D.");
@@ -24,17 +24,18 @@ std::vector<int64_t> ReadShapeTensor(const Tensor &shape) {
     return {};
   }
   const int64_t n = shape.shape[0];
-  std::vector<int64_t> out(static_cast<std::size_t>(n));
+  onnx_kernels::Shape out;
+  out.assign(static_cast<std::size_t>(n), 0);
   if (n > 0) {
-    std::memcpy(out.data(), shape.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.begin(), shape.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   }
   return out;
 }
 
-std::vector<int64_t> ComputeOutputShape(const Tensor &data, const std::vector<int64_t> &target,
-                                        int64_t allowzero) {
+onnx_kernels::Shape ComputeOutputShape(const Tensor &data, const onnx_kernels::Shape &target,
+                                       int64_t allowzero) {
   const int64_t input_rank = static_cast<int64_t>(data.shape.size());
-  std::vector<int64_t> out;
+  onnx_kernels::Shape out;
   out.reserve(target.size());
 
   int64_t neg_one_axis = -1;
@@ -92,8 +93,8 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &data, const std::vector<in
 
 Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowzero,
                            RuntimeContext *rt) const {
-  const std::vector<int64_t> target = ReadShapeTensor(shape);
-  const std::vector<int64_t> out_shape = ComputeOutputShape(data, target, allowzero);
+  const onnx_kernels::Shape target = ReadShapeTensor(shape);
+  const onnx_kernels::Shape out_shape = ComputeOutputShape(data, target, allowzero);
   const std::size_t elem_size = ElementSize(data.data_type);
   int64_t element_count = 1;
   for (int64_t d : out_shape) {
@@ -108,8 +109,8 @@ Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allo
 
 void Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowzero,
                          Tensor &output) const {
-  const std::vector<int64_t> target = ReadShapeTensor(shape);
-  const std::vector<int64_t> out_shape = ComputeOutputShape(data, target, allowzero);
+  const onnx_kernels::Shape target = ReadShapeTensor(shape);
+  const onnx_kernels::Shape out_shape = ComputeOutputShape(data, target, allowzero);
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::Reshape: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,

@@ -57,7 +57,8 @@ size_t ElementBytes(int32_t dtype) {
 template <typename T>
 void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                const FlexAttention::ScoreModFn &score_mod,
-                               const FlexAttention::ProbModFn &prob_mod, Tensor &output) {
+                               const FlexAttention::ProbModFn &prob_mod, Tensor &output,
+                               RawBufferAllocator *allocator = nullptr) {
   constexpr int32_t kElementType = TensorElementType<T>::value;
 
   const int64_t batch_size = Q.shape[0];
@@ -126,7 +127,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   const onnx_kernels::Shape probs_shape = {batch_size, q_num_heads, q_seq_len, kv_seq_len};
   const int64_t probs_count = batch_size * q_num_heads * q_seq_len * kv_seq_len;
   const size_t probs_n_bytes = static_cast<size_t>(probs_count) * sizeof(T);
-  Tensor probs = MakeOutputTensor(kElementType, probs_shape, probs_n_bytes, nullptr);
+  Tensor probs = MakeOutputTensor(kElementType, probs_shape, probs_n_bytes, allocator);
   T *pProbs = probs.As<T>();
 
   const int64_t probs_head_stride = q_seq_len * kv_seq_len;
@@ -289,18 +290,19 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
 }
 
 void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                               Tensor &output) const {
-  (*this)(Q, K, V, scale, ScoreModFn{}, ProbModFn{}, output);
+                               Tensor &output, RuntimeContext *rt) const {
+  (*this)(Q, K, V, scale, ScoreModFn{}, ProbModFn{}, output, rt);
 }
 
 void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                               const ProbModFn &prob_mod, Tensor &output) const {
-  (*this)(Q, K, V, scale, ScoreModFn{}, prob_mod, output);
+                               const ProbModFn &prob_mod, Tensor &output,
+                               RuntimeContext *rt) const {
+  (*this)(Q, K, V, scale, ScoreModFn{}, prob_mod, output, rt);
 }
 
 void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                const ScoreModFn &score_mod, const ProbModFn &prob_mod,
-                               Tensor &output) const {
+                               Tensor &output, RuntimeContext *rt) const {
   // Half-precision fast path: promote Q/K/V to FLOAT32, run the reference
   // implementation, then demote the output back. ``score_mod`` and
   // ``prob_mod`` callbacks (if any) are wrapped so they see tensors in the
@@ -331,9 +333,10 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
     const onnx_kernels::Shape out_shape = {Q.shape[0], Q.shape[1], Q.shape[2], V.shape[3]};
     const int64_t out_count = out_shape[0] * out_shape[1] * out_shape[2] * out_shape[3];
     const size_t out_f_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
-    Tensor out_f =
-        MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_f_n_bytes, nullptr);
-    (*this)(Q_f, K_f, V_f, scale, score_mod_wrapped, prob_mod_wrapped, out_f);
+    RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+    Tensor out_f = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_f_n_bytes,
+                                    allocator);
+    (*this)(Q_f, K_f, V_f, scale, score_mod_wrapped, prob_mod_wrapped, out_f, rt);
     Tensor demoted = DemoteFromFloat32(out_f, target_dtype);
     EXT_ENFORCE_INVALID(output.shape == demoted.shape,
                         "kernel::FlexAttention preallocated output shape must be (batch_size, "
@@ -355,9 +358,11 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
   // floating-point storage type. (FLOAT16/BFLOAT16 are handled by the
   // promote/compute/demote fast path above.)
   if (Q.data_type == DataType::DOUBLE) {
-    ComputeFlexAttentionTyped<double>(Q, K, V, scale, score_mod, prob_mod, output);
+    ComputeFlexAttentionTyped<double>(Q, K, V, scale, score_mod, prob_mod, output,
+                                      rt ? rt->allocator() : nullptr);
   } else {
-    ComputeFlexAttentionTyped<float>(Q, K, V, scale, score_mod, prob_mod, output);
+    ComputeFlexAttentionTyped<float>(Q, K, V, scale, score_mod, prob_mod, output,
+                                     rt ? rt->allocator() : nullptr);
   }
 }
 

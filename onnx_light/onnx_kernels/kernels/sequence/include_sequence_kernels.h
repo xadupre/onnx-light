@@ -268,7 +268,7 @@ public:
   /// Computes the split. ``split`` may be ``nullptr`` (omitted), a
   /// scalar INT32/INT64 tensor, or a 1-D INT32/INT64 tensor.
   Sequence operator()(const Tensor &input, const Tensor *split, int64_t axis = 0,
-                      int64_t keepdims = 1) const;
+                      int64_t keepdims = 1, RuntimeContext *rt = nullptr) const;
 
   /// Output sequence elements are freshly allocated slices and do not
   /// share storage with ``input``.

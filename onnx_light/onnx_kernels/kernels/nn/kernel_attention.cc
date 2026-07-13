@@ -42,7 +42,8 @@ void CheckRank4Float(const Tensor &t, const char *label) {
 // into the rank-4 layout ``(batch, num_heads, seq, head_size)`` used by the
 // internal kernel. Returns the promoted tensor; ``num_heads`` must divide
 // ``hidden_size``.
-Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label) {
+Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label,
+                    RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, "kernel::Attention: '", label,
                       "' must be a FLOAT tensor.");
   EXT_ENFORCE_INVALID(t.shape.size() == 3, "kernel::Attention: '", label, "' must be rank-3.");
@@ -56,7 +57,7 @@ Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label) {
   const int64_t head_size = hidden / num_heads;
   const size_t out_n_bytes = t.size_bytes();
   Tensor out =
-      MakeOutputTensor(DataType::FLOAT, {batch, num_heads, seq, head_size}, out_n_bytes, nullptr);
+      MakeOutputTensor(DataType::FLOAT, {batch, num_heads, seq, head_size}, out_n_bytes, allocator);
   const float *src = t.AsFloat();
   float *dst = out.AsFloat();
   // src strides: (seq*hidden, hidden, 1) over (batch, seq, hidden).
@@ -79,7 +80,7 @@ Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label) {
 // Inverse of ``PromoteRank3``: collapses a rank-4 ``(batch, num_heads, seq,
 // head_size)`` tensor into the rank-3 fused layout
 // ``(batch, seq, num_heads * head_size)``.
-Tensor CollapseToRank3(const Tensor &t) {
+Tensor CollapseToRank3(const Tensor &t, RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, "kernel::Attention: must be FLOAT.");
   EXT_ENFORCE_INVALID(t.shape.size() == 4, "kernel::Attention: must be rank-4.");
   const int64_t batch = t.shape[0];
@@ -88,7 +89,7 @@ Tensor CollapseToRank3(const Tensor &t) {
   const int64_t head_size = t.shape[3];
   const int64_t hidden = num_heads * head_size;
   const size_t out_n_bytes = t.size_bytes();
-  Tensor out = MakeOutputTensor(DataType::FLOAT, {batch, seq, hidden}, out_n_bytes, nullptr);
+  Tensor out = MakeOutputTensor(DataType::FLOAT, {batch, seq, hidden}, out_n_bytes, allocator);
   const float *src = t.AsFloat();
   float *dst = out.AsFloat();
   for (int64_t b = 0; b < batch; ++b) {
@@ -107,7 +108,7 @@ Tensor CollapseToRank3(const Tensor &t) {
 // Concatenates two rank-4 FLOAT tensors along axis 2 (the sequence axis).
 // Returns a new tensor whose shape equals ``a.shape`` with axis 2 = ``a[2] +
 // b[2]``; axes 0, 1, 3 must match between ``a`` and ``b``.
-Tensor ConcatAxis2(const Tensor &a, const Tensor &b) {
+Tensor ConcatAxis2(const Tensor &a, const Tensor &b, RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(a.shape.size() == 4 && b.shape.size() == 4,
                       "kernel::Attention: concat inputs must be rank-4.");
   EXT_ENFORCE_INVALID(a.shape[0] == b.shape[0] && a.shape[1] == b.shape[1] &&
@@ -120,7 +121,7 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b) {
   const int64_t d = a.shape[3];
   const int64_t lc = la + lb;
   const size_t out_n_bytes = static_cast<size_t>(batch * heads * lc * d) * sizeof(float);
-  Tensor out = MakeOutputTensor(DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes, nullptr);
+  Tensor out = MakeOutputTensor(DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes, allocator);
   const float *pa = a.AsFloat();
   const float *pb = b.AsFloat();
   float *po = out.AsFloat();
@@ -244,7 +245,8 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
 Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
                                         const Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
-                                        const Tensor *nonpad_kv_seqlen) const {
+                                        const Tensor *nonpad_kv_seqlen, RuntimeContext *rt) const {
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   // ----- Half-precision fast path ----------------------------------------
   // FLOAT16 / BFLOAT16 inputs are promoted to FLOAT32 here, the reference
   // implementation runs in float32, and the result tensors are demoted
@@ -276,7 +278,7 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
       past_value_ptr = &past_value_f;
     }
     Result r_f = (*this)(Q_f, K_f, V_f, attrs, attn_mask_ptr, past_key_ptr, past_value_ptr,
-                         nonpad_kv_seqlen);
+                         nonpad_kv_seqlen, rt);
     Result r;
     r.Y = DemoteFromFloat32(r_f.Y, target_dtype);
     r.present_key = DemoteFromFloat32(r_f.present_key, target_dtype);
@@ -292,9 +294,9 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
                       "kernel::Attention: Q, K, V must be rank-3 or rank-4.");
   const bool rank3 = Q.shape.size() == 3;
 
-  Tensor Q4 = rank3 ? PromoteRank3(Q, attrs.q_num_heads, "Q") : Q;
-  Tensor K4 = rank3 ? PromoteRank3(K, attrs.kv_num_heads, "K") : K;
-  Tensor V4 = rank3 ? PromoteRank3(V, attrs.kv_num_heads, "V") : V;
+  Tensor Q4 = rank3 ? PromoteRank3(Q, attrs.q_num_heads, "Q", allocator) : Q;
+  Tensor K4 = rank3 ? PromoteRank3(K, attrs.kv_num_heads, "K", allocator) : K;
+  Tensor V4 = rank3 ? PromoteRank3(V, attrs.kv_num_heads, "V", allocator) : V;
   CheckRank4Float(Q4, "Q");
   CheckRank4Float(K4, "K");
   CheckRank4Float(V4, "V");
@@ -320,8 +322,8 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
   // ----- Build present_key / present_value -------------------------------
   // The upstream operator concatenates past_key/past_value with K/V along
   // the sequence axis. When neither is supplied, present == K/V.
-  Tensor present_key = past_key != nullptr ? ConcatAxis2(*past_key, K4) : K4;
-  Tensor present_value = past_value != nullptr ? ConcatAxis2(*past_value, V4) : V4;
+  Tensor present_key = past_key != nullptr ? ConcatAxis2(*past_key, K4, allocator) : K4;
+  Tensor present_value = past_value != nullptr ? ConcatAxis2(*past_value, V4, allocator) : V4;
   const int64_t total_kv_seq_len = present_key.shape[2];
   const int64_t past_kv_seq_len = past_key != nullptr ? past_key->shape[2] : 0;
   const int64_t v_head_size = present_value.shape[3];
@@ -349,12 +351,12 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
   const int64_t out_count_y = batch_size * q_num_heads * q_seq_len * v_head_size;
   const size_t Y_n_bytes = static_cast<size_t>(out_count_y) * sizeof(float);
   Tensor Y = MakeOutputTensor(DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
-                              Y_n_bytes, nullptr);
+                              Y_n_bytes, allocator);
   const int64_t qk_count = batch_size * q_num_heads * q_seq_len * total_kv_seq_len;
   const size_t qk_out_n_bytes = static_cast<size_t>(qk_count) * sizeof(float);
   Tensor qk_out =
       MakeOutputTensor(DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, total_kv_seq_len},
-                       qk_out_n_bytes, nullptr);
+                       qk_out_n_bytes, allocator);
 
   // ----- Compute ---------------------------------------------------------
   const int64_t group_size = q_num_heads / kv_num_heads;
@@ -514,7 +516,7 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
   }
 
   Result r;
-  r.Y = rank3 ? CollapseToRank3(Y) : std::move(Y);
+  r.Y = rank3 ? CollapseToRank3(Y, allocator) : std::move(Y);
   r.present_key = std::move(present_key);
   r.present_value = std::move(present_value);
   r.qk_matmul_output = std::move(qk_out);

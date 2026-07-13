@@ -604,7 +604,7 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int6
 }
 
 void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis,
-                                  Tensor &output) const {
+                                  Tensor &output, RuntimeContext *rt) const {
   if (x_scale.element_count() == 1) {
     return (*this)(x, x_scale, output);
   }
@@ -617,8 +617,9 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_
   // both per-axis (1-D) and blocked (N-D) layouts are handled.
   const int64_t scale_count = x_scale.element_count();
   const size_t zero_zero_point_n_bytes = PackedByteSize(x.data_type, scale_count);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   Tensor zero_zero_point =
-      MakeOutputTensor(x.data_type, x_scale.shape, zero_zero_point_n_bytes, nullptr);
+      MakeOutputTensor(x.data_type, x_scale.shape, zero_zero_point_n_bytes, allocator);
   (*this)(x, x_scale, zero_zero_point, axis, output);
 }
 

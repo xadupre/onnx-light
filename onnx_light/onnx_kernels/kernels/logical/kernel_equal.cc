@@ -67,10 +67,10 @@ StringEqualBroadcast CheckStringEqualInputs(const Tensor &x, const Tensor &y) {
   return bi;
 }
 
-Tensor EqualStringAlloc(const Tensor &x, const Tensor &y) {
+Tensor EqualStringAlloc(const Tensor &x, const Tensor &y, RawBufferAllocator *allocator = nullptr) {
   const StringEqualBroadcast bi = CheckStringEqualInputs(x, y);
   const size_t out_n_bytes = static_cast<size_t>(bi.element_count);
-  Tensor out = MakeOutputTensor(DataType::BOOL, bi.shape, out_n_bytes, nullptr);
+  Tensor out = MakeOutputTensor(DataType::BOOL, bi.shape, out_n_bytes, allocator);
   for (int64_t i = 0; i < bi.element_count; ++i) {
     const std::string &a = x.string_data[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
     const std::string &b = y.string_data[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
@@ -131,7 +131,7 @@ Tensor Equal::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) c
   case DataType::STRING:
     EXT_ENFORCE_INVALID(y.data_type == static_cast<int32_t>(DataType::STRING),
                         "kernel::Equal inputs must share the same dtype.");
-    return EqualStringAlloc(x, y);
+    return EqualStringAlloc(x, y, rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kEqualName, ": unsupported data type ", x.data_type,
                       ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "

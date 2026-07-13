@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -38,7 +37,7 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
 // - 1-D of size `expected_size`: returns all values (per-row or per-column).
 // Any other shape triggers an assertion failure.
 std::vector<int32_t> ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t expected_size,
-                                    const char *name) {
+                                    const char *name, RawBufferAllocator *allocator) {
   if (t.shape.empty() && t.size_bytes() == 0) {
     return {0};
   }
@@ -53,9 +52,24 @@ std::vector<int32_t> ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int
   EXT_ENFORCE_INVALID(numel == 1 || numel == expected_size, kName, ": '", name,
                       "' must be a scalar, a one-element 1-D tensor, or a 1-D tensor whose "
                       "size matches the corresponding matrix dimension.");
-  std::vector<int32_t> zps(static_cast<size_t>(numel), int32_t{}, std::allocator<int32_t>());
+  const size_t numel_u = static_cast<size_t>(numel);
+  RawBuffer *buffer = nullptr;
+  if (allocator != nullptr && numel_u > 0) {
+    buffer = allocator->Allocate(numel_u * sizeof(int32_t));
+    EXT_ENFORCE_INVALID(buffer != nullptr, kName, ": zero-point allocator returned null.");
+    EXT_ENFORCE_INVALID(buffer->size() >= numel_u * sizeof(int32_t), kName,
+                        ": zero-point allocator returned too small a buffer.");
+  }
+  std::vector<int32_t> zps(numel_u);
   for (int64_t i = 0; i < numel; ++i) {
-    zps[static_cast<size_t>(i)] = ReadIntElem(t, i);
+    const int32_t v = ReadIntElem(t, i);
+    if (buffer != nullptr) {
+      std::memcpy(buffer->data() + static_cast<size_t>(i) * sizeof(int32_t), &v, sizeof(int32_t));
+    }
+    zps[static_cast<size_t>(i)] = v;
+  }
+  if (buffer != nullptr) {
+    allocator->Free(buffer);
   }
   return zps;
 }
@@ -205,27 +219,9 @@ void RunMatMulInteger(const Tensor &a, const std::vector<int32_t> &a_zps, const 
   }
 }
 
-} // namespace
-
-Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
-                                 const Tensor &b_zero_point, RuntimeContext *rt) const {
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": A must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": B must be INT8 or UINT8.");
-
-  const std::vector<int64_t> out_shape = ComputeOutputShape(a.shape, b.shape);
-  int64_t total = 1;
-  for (int64_t d : out_shape) {
-    total *= d;
-  }
-  const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(int32_t);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT32), out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
-  (*this)(a, b, a_zero_point, b_zero_point, out);
-  return out;
-}
-
-void MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
-                               const Tensor &b_zero_point, Tensor &output) const {
+void ComputeMatMulInteger(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
+                          const Tensor &b_zero_point, Tensor &output,
+                          RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": A must be INT8 or UINT8.");
   EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": B must be INT8 or UINT8.");
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::INT32), kName,
@@ -245,10 +241,36 @@ void MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a
   const int64_t M = a2[a2.size() - 2];
   const int64_t N = b2[b2.size() - 1];
 
-  const std::vector<int32_t> a_zps = ReadZeroPoints(a_zero_point, a.data_type, M, "a_zero_point");
-  const std::vector<int32_t> b_zps = ReadZeroPoints(b_zero_point, b.data_type, N, "b_zero_point");
+  const std::vector<int32_t> a_zps =
+      ReadZeroPoints(a_zero_point, a.data_type, M, "a_zero_point", allocator);
+  const std::vector<int32_t> b_zps =
+      ReadZeroPoints(b_zero_point, b.data_type, N, "b_zero_point", allocator);
 
   RunMatMulInteger(a, a_zps, b, b_zps, output);
+}
+
+} // namespace
+
+Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
+                                 const Tensor &b_zero_point, RuntimeContext *rt) const {
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": A must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": B must be INT8 or UINT8.");
+
+  const std::vector<int64_t> out_shape = ComputeOutputShape(a.shape, b.shape);
+  int64_t total = 1;
+  for (int64_t d : out_shape) {
+    total *= d;
+  }
+  const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(int32_t);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT32), out_shape, out_n_bytes,
+                                rt ? rt->allocator() : nullptr);
+  ComputeMatMulInteger(a, b, a_zero_point, b_zero_point, out, rt ? rt->allocator() : nullptr);
+  return out;
+}
+
+void MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
+                               const Tensor &b_zero_point, Tensor &output) const {
+  ComputeMatMulInteger(a, b, a_zero_point, b_zero_point, output, nullptr);
 }
 
 } // namespace kernel

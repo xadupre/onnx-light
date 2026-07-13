@@ -47,7 +47,8 @@ Shape ComputeOutputShape(const Shape &input_shape, const std::vector<bool> &is_r
 // Row-major strides for ``shape``. Each stride is the number of elements one
 // must skip to advance by one along that dimension.
 Shape RowMajorStrides(const Shape &shape) {
-  std::vector<int64_t> strides(shape.size(), 1);
+  Shape strides;
+  strides.assign(shape.size(), 1);
   for (size_t i = shape.size(); i-- > 1;) {
     strides[i - 1] = strides[i] * shape[i];
   }

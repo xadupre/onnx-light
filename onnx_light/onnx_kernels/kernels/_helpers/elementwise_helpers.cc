@@ -22,6 +22,9 @@ Shape BroadcastShape(const char *op_name, const Shape &a, const Shape &b) {
     sb[rank - b.size() + i] = b[i];
   }
   for (size_t d = 0; d < rank; ++d) {
+    // Explicit branching is used rather than max() so that a size-1 dimension
+    // broadcasting against a size-0 dimension yields 0, not 1 -- otherwise
+    // the output element count is over-estimated.
     if (sa[d] == sb[d]) {
       out[d] = sa[d];
     } else if (sa[d] == 1) {

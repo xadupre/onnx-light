@@ -981,4 +981,128 @@ TEST(OnnxOptimShapeRange, RejectsBadOpType) {
   EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeRange(ctx, node), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Symbolic propagation tests — Range(start, limit, 1) where at least one
+// of start / limit is symbolic. The output shape must reuse the existing
+// symbolic tokens instead of introducing a fresh ``"Range_dim0"`` token.
+// ---------------------------------------------------------------------------
+
+// Range(0, sym, 1) → output dim equals the symbolic dim carried by limit.
+TEST(OnnxOptimShapeRange, SymbolicLimitDelta1PropagatesToOutput) {
+  NodeProto node = MakeRangeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+
+  // start = 0 (known integer)
+  onnx_optim::OptimTensor start = MakeScalar(onnx_optim::TensorType::kInt64);
+  start.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(INT64_C(0))});
+
+  // limit = symbolic "N" (value propagated via ValueAsShape)
+  onnx_optim::OptimTensor limit = MakeScalar(onnx_optim::TensorType::kInt64);
+  limit.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("N")});
+
+  // delta = 1 (known integer)
+  onnx_optim::OptimTensor delta = MakeScalar(onnx_optim::TensorType::kInt64);
+  delta.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(INT64_C(1))});
+
+  ctx.Set("start", std::move(start));
+  ctx.Set("limit", std::move(limit));
+  ctx.Set("delta", std::move(delta));
+
+  ctx.ComputeShapeNode(node);
+  ASSERT_TRUE(ctx.Has("y"));
+  ASSERT_EQ(ctx.Get("y").Shape().Rank(), 1u);
+  // Output dim must be symbolic and should encode "N" (possibly simplified
+  // from "N-0").
+  ASSERT_FALSE(ctx.Get("y").Shape()[0].IsInt());
+  const std::string &expr = ctx.Get("y").Shape()[0].AsExpr();
+  EXPECT_NE(expr.find('N'), std::string::npos) << "expected 'N' in output dim: " << expr;
+  EXPECT_EQ(expr.find("Range_dim0"), std::string::npos)
+      << "output must not introduce a new 'Range_dim0' token";
+}
+
+// Range(sym_start, sym_limit, 1) → output dim encodes the difference.
+TEST(OnnxOptimShapeRange, SymbolicStartAndLimitDelta1PropagatesDifference) {
+  NodeProto node = MakeRangeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+
+  // start = symbolic "S"
+  onnx_optim::OptimTensor start = MakeScalar(onnx_optim::TensorType::kInt64);
+  start.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("S")});
+
+  // limit = symbolic "L"
+  onnx_optim::OptimTensor limit = MakeScalar(onnx_optim::TensorType::kInt64);
+  limit.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("L")});
+
+  // delta = 1
+  onnx_optim::OptimTensor delta = MakeScalar(onnx_optim::TensorType::kInt64);
+  delta.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(INT64_C(1))});
+
+  ctx.Set("start", std::move(start));
+  ctx.Set("limit", std::move(limit));
+  ctx.Set("delta", std::move(delta));
+
+  ctx.ComputeShapeNode(node);
+  ASSERT_TRUE(ctx.Has("y"));
+  ASSERT_EQ(ctx.Get("y").Shape().Rank(), 1u);
+  ASSERT_FALSE(ctx.Get("y").Shape()[0].IsInt());
+  const std::string &expr = ctx.Get("y").Shape()[0].AsExpr();
+  EXPECT_EQ(expr.find("Range_dim0"), std::string::npos)
+      << "output must not introduce a new 'Range_dim0' token";
+}
+
+// Two independent Range nodes must NOT share the same symbolic dim name.
+TEST(OnnxOptimShapeRange, TwoRangesDoNotShareSymbol) {
+  onnx_optim::shapes::ShapesContext ctx;
+
+  // Range 1: Range(0, "A", 1)
+  {
+    NodeProto node;
+    node.set_op_type("Range");
+    node.add_input("start1");
+    node.add_input("limit1");
+    node.add_input("delta1");
+    node.add_output("y1");
+
+    onnx_optim::OptimTensor start = MakeScalar(onnx_optim::TensorType::kInt64);
+    start.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(INT64_C(0))});
+    onnx_optim::OptimTensor limit = MakeScalar(onnx_optim::TensorType::kInt64);
+    limit.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("A")});
+    onnx_optim::OptimTensor delta = MakeScalar(onnx_optim::TensorType::kInt64);
+    delta.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(INT64_C(1))});
+    ctx.Set("start1", std::move(start));
+    ctx.Set("limit1", std::move(limit));
+    ctx.Set("delta1", std::move(delta));
+    ctx.ComputeShapeNode(node);
+  }
+
+  // Range 2: Range(0, "B", 1)
+  {
+    NodeProto node;
+    node.set_op_type("Range");
+    node.add_input("start2");
+    node.add_input("limit2");
+    node.add_input("delta2");
+    node.add_output("y2");
+
+    onnx_optim::OptimTensor start = MakeScalar(onnx_optim::TensorType::kInt64);
+    start.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(INT64_C(0))});
+    onnx_optim::OptimTensor limit = MakeScalar(onnx_optim::TensorType::kInt64);
+    limit.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("B")});
+    onnx_optim::OptimTensor delta = MakeScalar(onnx_optim::TensorType::kInt64);
+    delta.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(INT64_C(1))});
+    ctx.Set("start2", std::move(start));
+    ctx.Set("limit2", std::move(limit));
+    ctx.Set("delta2", std::move(delta));
+    ctx.ComputeShapeNode(node);
+  }
+
+  ASSERT_TRUE(ctx.Has("y1"));
+  ASSERT_TRUE(ctx.Has("y2"));
+  ASSERT_EQ(ctx.Get("y1").Shape().Rank(), 1u);
+  ASSERT_EQ(ctx.Get("y2").Shape().Rank(), 1u);
+  // The two Range outputs must have different symbolic dim names.
+  EXPECT_NE(ctx.Get("y1").Shape()[0], ctx.Get("y2").Shape()[0])
+      << "two Range nodes with different limits must not share the same output dim";
+}
+
 } // namespace Test

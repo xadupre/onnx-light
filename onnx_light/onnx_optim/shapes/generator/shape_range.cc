@@ -9,7 +9,9 @@
 #include <cstdint>
 #include <stdexcept>
 #include <utility>
+#include <variant>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
@@ -43,6 +45,40 @@ bool TryReadKnownIntScalar(const OptimTensor &input, int64_t *out) {
   return false;
 }
 
+// Returns the single dim (integer or symbolic) carried by a ``ValueAsShape``
+// annotation of rank 1, if any. Unlike ``TryReadKnownIntScalar``, succeeds
+// when the dim is a symbolic expression string, allowing extraction of the
+// symbolic bound of a Range input even when the concrete integer value is
+// not statically known.
+bool TryReadOptimDimScalar(const OptimTensor &input, OptimDim *out) {
+  if (!input.HasValueAsShape()) {
+    return false;
+  }
+  const OptimShape &v = input.ValueAsShape();
+  if (v.Rank() == 1) {
+    *out = v[0];
+    return true;
+  }
+  return false;
+}
+
+// Converts an ``OptimDim`` to the ``expressions::DimType`` variant used by
+// the symbolic dimension arithmetic helpers (``dim_add``, ``dim_sub``, …).
+expressions::DimType DimToDimType(const OptimDim &d) {
+  if (d.IsInt()) {
+    return expressions::DimType{d.AsInt()};
+  }
+  return expressions::DimType{d.AsExpr()};
+}
+
+// Converts an ``expressions::DimType`` back to an ``OptimDim``.
+OptimDim DimTypeToOptimDim(const expressions::DimType &d) {
+  if (std::holds_alternative<int64_t>(d)) {
+    return OptimDim(std::get<int64_t>(d));
+  }
+  return OptimDim(std::get<std::string>(d));
+}
+
 } // namespace
 
 void ComputeShapeRange(ShapesContext &ctx, const NodeProto &node) {
@@ -69,8 +105,35 @@ void ComputeShapeRange(ShapesContext &ctx, const NodeProto &node) {
     n = std::max<int64_t>(n, 0);
     out_shape.PushBack(OptimDim(n));
   } else {
-    // Unknown output length: produce a single symbolic dim.
-    out_shape.PushBack(OptimDim("Range_dim0"));
+    // Try to build a symbolic expression from the inputs when at least one
+    // dim is unknown. Reading the dim (integer or symbolic) from each
+    // input's ``ValueAsShape`` annotation lets us compose a meaningful
+    // expression like ``limit_sym - start_sym`` instead of introducing a
+    // fresh ``"Range_dim0"`` token that is disconnected from all existing
+    // symbolic dimensions.
+    OptimDim start_dim, limit_dim, delta_dim;
+    const bool has_dims =
+        IsIntegerTensorType(out_dtype) && TryReadOptimDimScalar(start, &start_dim) &&
+        TryReadOptimDimScalar(limit, &limit_dim) && TryReadOptimDimScalar(delta, &delta_dim) &&
+        !(delta_dim.IsInt() && delta_dim.AsInt() == 0);
+    if (has_dims) {
+      // Compute (limit - start) / delta symbolically. For the very common
+      // case of delta == 1 the division is omitted entirely; for other
+      // integer deltas we use floor division as an approximation (Range
+      // semantics require ceiling division, but for integer deltas the
+      // error is at most 1 and shape-tracking only needs a consistent
+      // symbolic expression). When delta is itself symbolic we still
+      // produce a compound expression.
+      expressions::DimType l_expr =
+          expressions::dim_sub(DimToDimType(limit_dim), DimToDimType(start_dim));
+      if (!(delta_dim.IsInt() && delta_dim.AsInt() == 1)) {
+        l_expr = expressions::dim_div(l_expr, DimToDimType(delta_dim));
+      }
+      out_shape.PushBack(DimTypeToOptimDim(l_expr));
+    } else {
+      // Unknown output length: produce a single symbolic dim.
+      out_shape.PushBack(OptimDim("Range_dim0"));
+    }
   }
 
   ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));

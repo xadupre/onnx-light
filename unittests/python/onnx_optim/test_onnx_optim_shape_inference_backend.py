@@ -262,11 +262,11 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         node_meta = {entry.key: entry.value for entry in test.model.graph.node[0].metadata_props}
         self.assertEqual(node_meta.get(NODE_TAG_METADATA_KEY), "shape")
 
-        # Reshape (node 1) must have no node_tag.
+        # Reshape (node 1) must have node_tag = "weight" (inherited from graph input X).
         reshape_meta = {
             entry.key: entry.value for entry in test.model.graph.node[1].metadata_props
         }
-        self.assertNotIn(NODE_TAG_METADATA_KEY, reshape_meta)
+        self.assertEqual(reshape_meta.get(NODE_TAG_METADATA_KEY), "weight")
 
         # Make a blank copy (strip all metadata) and recompute.
         model_copy = onnxl.ModelProto()
@@ -301,7 +301,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
 
         Checks that the pre-embedded metadata is consistent and that
         write_value_and_node_tags_to_metadata reproduces it on a blank copy.
-        Expected tags: S1, S2, S_full → ``"shape"``; two → ``"weight"``.
+        Expected tags: S1, S2, S_full → ``"shape"``; two, X, Y → ``"weight"``.
         """
         tests = [
             test
@@ -334,7 +334,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         self.assertEqual(node3_meta.get(NODE_TAG_METADATA_KEY), "shape")  # Concat
 
         node4_meta = {entry.key: entry.value for entry in test.model.graph.node[4].metadata_props}
-        self.assertNotIn(NODE_TAG_METADATA_KEY, node4_meta)  # Reshape has no tag
+        self.assertEqual(node4_meta.get(NODE_TAG_METADATA_KEY), "weight")  # Reshape → "weight"
 
         # Make a blank copy (strip all metadata) and recompute.
         model_copy = onnxl.ModelProto()

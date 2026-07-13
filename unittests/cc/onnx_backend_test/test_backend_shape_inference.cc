@@ -2198,6 +2198,14 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
     const auto has_node_tag = [&](const auto &node) {
       return MetadataOf(node).contains(onnx_optim::annotations::kNodeTagMetadataKey);
     };
+    // Inputs, outputs, and initializers must always carry a value_tag after
+    // WriteValueAndNodeTagsToMetadata: this information is always known.
+    const auto expect_all_have_value_tag = [&](const auto &values, const char *kind) {
+      for (size_t idx = 0; idx < values.size(); ++idx) {
+        EXPECT_TRUE(has_value_tag(values[idx]))
+            << "missing value_tag on " << kind << "[" << idx << "] in case " << tc.name;
+      }
+    };
     const auto expect_matching_value_tags = [&](const auto &values, const auto &expected_values,
                                                 const char *kind) {
       ASSERT_EQ(values.size(), expected_values.size())
@@ -2218,12 +2226,13 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
     };
 
     expect_matching_node_tags(graph->ref_node(), original_graph.ref_node());
-    expect_matching_value_tags(graph->ref_input(), original_graph.ref_input(), "input");
+    // Every input, output, and initializer must have a value_tag (always known).
+    expect_all_have_value_tag(graph->ref_input(), "input");
+    expect_all_have_value_tag(graph->ref_output(), "output");
+    expect_all_have_value_tag(graph->ref_initializer(), "initializer");
+    // For intermediate value_info, check that presence matches the pre-embedded data.
     expect_matching_value_tags(graph->ref_value_info(), original_graph.ref_value_info(),
                                "value_info");
-    expect_matching_value_tags(graph->ref_output(), original_graph.ref_output(), "output");
-    expect_matching_value_tags(graph->ref_initializer(), original_graph.ref_initializer(),
-                               "initializer");
   }
   ASSERT_TRUE(found) << "no shape_tag backend cases were collected";
 }

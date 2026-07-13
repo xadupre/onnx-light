@@ -542,6 +542,10 @@ TEST(KernelClass, CastLikeWithSaturateUsesAllocatorWhenRuntimeContextHasOne) {
   EXPECT_TRUE(y.has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);
   ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], 1);
+  EXPECT_EQ(py[1], 2);
 }
 
 // ---------------------------------------------------------------------------

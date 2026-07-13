@@ -18,7 +18,7 @@ import argparse
 import matplotlib.pyplot as plt
 import pandas
 from onnx_light.onnx import load as ol_load, save as ol_save, inliner
-from onnx_light.onnx.backend import collect_test_case
+from onnx_light.onnx.backend import collect_test_cases_by_name
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
     ComputeContext,
@@ -162,7 +162,7 @@ def get_big_qwen3_test_case_model(output_prefix):
         The ``ModelProto`` from ``test_cc_shape_inference_big_qwen3_4_layers_like``.
     """
 
-    cases = collect_test_case()
+    cases = collect_test_cases_by_name(".*qwen.*", include_big=True)
     if TEST_CASE_NAME not in cases:
         available_qwen_cases = ", ".join(name for name in sorted(cases) if "qwen" in name.lower())
         raise ValueError(

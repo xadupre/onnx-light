@@ -33,9 +33,9 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
 
 struct ZeroPointValues {
   std::vector<int32_t> fallback;
+  // In allocator-backed mode, allocator and buffer are both non-null.
   RawBufferAllocator *allocator = nullptr;
   RawBuffer *buffer = nullptr;
-  int32_t *data = nullptr;
   size_t size = 0;
 
   ZeroPointValues() = default;
@@ -44,13 +44,9 @@ struct ZeroPointValues {
 
   ZeroPointValues(ZeroPointValues &&other) noexcept
       : fallback(std::move(other.fallback)), allocator(other.allocator), buffer(other.buffer),
-        data(other.data), size(other.size) {
-    if (!fallback.empty()) {
-      data = fallback.data();
-    }
+        size(other.size) {
     other.allocator = nullptr;
     other.buffer = nullptr;
-    other.data = nullptr;
     other.size = 0;
   }
 
@@ -62,14 +58,9 @@ struct ZeroPointValues {
       fallback = std::move(other.fallback);
       allocator = other.allocator;
       buffer = other.buffer;
-      data = other.data;
       size = other.size;
-      if (!fallback.empty()) {
-        data = fallback.data();
-      }
       other.allocator = nullptr;
       other.buffer = nullptr;
-      other.data = nullptr;
       other.size = 0;
     }
     return *this;
@@ -79,6 +70,13 @@ struct ZeroPointValues {
     if (buffer != nullptr && allocator != nullptr) {
       allocator->Free(buffer);
     }
+  }
+
+  int32_t *mutable_data() {
+    return buffer != nullptr ? reinterpret_cast<int32_t *>(buffer->data()) : fallback.data();
+  }
+  const int32_t *data() const {
+    return buffer != nullptr ? reinterpret_cast<const int32_t *>(buffer->data()) : fallback.data();
   }
 };
 
@@ -92,7 +90,6 @@ ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t 
   ZeroPointValues zps;
   if (t.shape.empty() && t.size_bytes() == 0) {
     zps.fallback = {0};
-    zps.data = zps.fallback.data();
     zps.size = 1;
     return zps;
   }
@@ -116,17 +113,17 @@ ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t 
     EXT_ENFORCE_INVALID(zps.buffer != nullptr, kName, ": zero-point allocator returned null.");
     EXT_ENFORCE_INVALID(zps.buffer->size() >= numel_u * sizeof(int32_t), kName,
                         ": zero-point allocator returned too small a buffer.");
-    zps.data = reinterpret_cast<int32_t *>(zps.buffer->data());
+    int32_t *out = zps.mutable_data();
     for (int64_t i = 0; i < numel; ++i) {
-      zps.data[static_cast<size_t>(i)] = ReadIntElem(t, i);
+      out[static_cast<size_t>(i)] = ReadIntElem(t, i);
     }
     return zps;
   }
 
   zps.fallback.resize(numel_u);
-  zps.data = zps.fallback.data();
+  int32_t *out = zps.mutable_data();
   for (int64_t i = 0; i < numel; ++i) {
-    zps.data[static_cast<size_t>(i)] = ReadIntElem(t, i);
+    out[static_cast<size_t>(i)] = ReadIntElem(t, i);
   }
   return zps;
 }
@@ -246,9 +243,11 @@ void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tenso
     const int64_t b_col_stride = b_strides[b2.size() - 1];
 
     for (int64_t i = 0; i < M; ++i) {
-      const int32_t a_row_zp = a_per_row ? a_zps.data[static_cast<size_t>(i)] : a_zps.data[0];
+      const int32_t *a_values = a_zps.data();
+      const int32_t *b_values = b_zps.data();
+      const int32_t a_row_zp = a_per_row ? a_values[static_cast<size_t>(i)] : a_values[0];
       for (int64_t j = 0; j < N; ++j) {
-        const int32_t b_col_zp = b_per_col ? b_zps.data[static_cast<size_t>(j)] : b_zps.data[0];
+        const int32_t b_col_zp = b_per_col ? b_values[static_cast<size_t>(j)] : b_values[0];
         int32_t acc = 0;
         for (int64_t kk = 0; kk < K; ++kk) {
           const int32_t av = ReadIntElem(a, a_base + i * a_row_stride + kk * a_k_stride);

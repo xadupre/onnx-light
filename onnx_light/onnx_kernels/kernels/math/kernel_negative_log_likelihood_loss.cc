@@ -112,8 +112,8 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
   }
 
   const size_t loss_n_bytes = sizeof(float);
-  Tensor loss = MakeOutputTensor(DataType::FLOAT, std::vector<int64_t>{}, loss_n_bytes,
-                                 rt ? rt->allocator() : nullptr);
+  Tensor loss =
+      MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, rt ? rt->allocator() : nullptr);
   loss.AsFloat()[0] = reduced;
   return loss;
 }

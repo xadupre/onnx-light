@@ -89,7 +89,10 @@ void PowLoop(const detail::BroadcastInfo &bi, const TBase *px, const TExp *py, T
 // ``x.data_type == y.data_type``) cannot be used.
 detail::BroadcastInfo BroadcastShape(const Tensor &x, const Tensor &y) {
   const size_t rank = x.shape.size() > y.shape.size() ? x.shape.size() : y.shape.size();
-  std::vector<int64_t> sx(rank, 1), sy(rank, 1), out(rank, 1);
+  Shape sx, sy, out;
+  sx.assign(rank, 1);
+  sy.assign(rank, 1);
+  out.assign(rank, 1);
   for (size_t i = 0; i < x.shape.size(); ++i) {
     sx[rank - x.shape.size() + i] = x.shape[i];
   }

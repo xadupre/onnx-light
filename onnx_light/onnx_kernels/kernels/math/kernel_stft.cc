@@ -127,7 +127,7 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
   const int64_t dft_unique_bins = onesided ? ((frame_length_value / 2) + 1) : frame_length_value;
   const int64_t n_frames = (signal_length - frame_length_value) / frame_step_value + 1;
 
-  std::vector<int64_t> out_shape = {batch_size, n_frames, dft_unique_bins, 2};
+  Shape out_shape = {batch_size, n_frames, dft_unique_bins, 2};
   int64_t out_total = batch_size * n_frames * dft_unique_bins * 2;
   const size_t output_n_bytes = static_cast<std::size_t>(out_total) * ElementSize(signal.data_type);
   Tensor output =

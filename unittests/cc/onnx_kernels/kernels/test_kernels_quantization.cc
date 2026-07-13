@@ -51,8 +51,8 @@ public:
 
   size_t TotalAllocatedSize() const override { return allocator_.TotalAllocatedSize(); }
 
-  size_t current_allocations() const noexcept { return current_allocations_; }
-  size_t max_concurrent_allocations() const noexcept { return max_concurrent_allocations_; }
+  size_t get_current_allocations() const noexcept { return current_allocations_; }
+  size_t get_max_concurrent_allocations() const noexcept { return max_concurrent_allocations_; }
 
 private:
   SimpleRawBufferAllocator allocator_;
@@ -153,13 +153,13 @@ TEST(KernelClass, QuantizeLinearPerAxisUint16ZeroPointUsesAllocator) {
     EXPECT_EQ(py[1], static_cast<uint16_t>(201));
     EXPECT_EQ(py[2], static_cast<uint16_t>(104));
     EXPECT_EQ(py[3], static_cast<uint16_t>(203));
-    EXPECT_EQ(alloc.current_allocations(), 1u);
-    EXPECT_EQ(alloc.max_concurrent_allocations(), 2u);
+    EXPECT_EQ(alloc.get_current_allocations(), 1u);
+    EXPECT_EQ(alloc.get_max_concurrent_allocations(), 2u);
     alloc.Free(y.allocation());
     y.ClearAllocation();
   }
 
-  EXPECT_EQ(alloc.current_allocations(), 0u);
+  EXPECT_EQ(alloc.get_current_allocations(), 0u);
 }
 
 TEST(KernelClass, QuantizeLinearPerAxisUint16ImplicitZeroPointUsesAllocator) {
@@ -181,13 +181,13 @@ TEST(KernelClass, QuantizeLinearPerAxisUint16ImplicitZeroPointUsesAllocator) {
     EXPECT_EQ(py[1], static_cast<uint16_t>(1));
     EXPECT_EQ(py[2], static_cast<uint16_t>(4));
     EXPECT_EQ(py[3], static_cast<uint16_t>(3));
-    EXPECT_EQ(alloc.current_allocations(), 1u);
-    EXPECT_EQ(alloc.max_concurrent_allocations(), 2u);
+    EXPECT_EQ(alloc.get_current_allocations(), 1u);
+    EXPECT_EQ(alloc.get_max_concurrent_allocations(), 2u);
     alloc.Free(y.allocation());
     y.ClearAllocation();
   }
 
-  EXPECT_EQ(alloc.current_allocations(), 0u);
+  EXPECT_EQ(alloc.get_current_allocations(), 0u);
 }
 
 TEST(KernelClass, QuantizeLinearRejectsBadInputs) {

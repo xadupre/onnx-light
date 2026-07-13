@@ -137,8 +137,8 @@ public:
 
   Tensor operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
-                  Tensor &output) const;
+  void operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs, Tensor &output,
+                  RawBufferAllocator *allocator = nullptr) const;
 
   /// Output shape and element layout differ from both inputs, so the
   /// output cannot share storage with any input buffer.

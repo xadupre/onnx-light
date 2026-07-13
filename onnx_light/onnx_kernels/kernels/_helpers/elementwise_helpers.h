@@ -47,6 +47,11 @@ struct BroadcastInfo {
   int64_t ny = 0;
 };
 
+/// Returns the multidirectional-broadcast output shape of ``a`` and ``b``.
+/// Throws ``std::invalid_argument`` with a message prefixed by ``op_name``
+/// when the shapes are not broadcastable.
+Shape BroadcastShape(const char *op_name, const Shape &a, const Shape &b);
+
 /// Verifies both inputs have ``expected_dtype`` and that their shapes are
 /// multidirectional-broadcastable per the standard NumPy/ONNX rules. Throws
 /// ``std::invalid_argument`` otherwise.

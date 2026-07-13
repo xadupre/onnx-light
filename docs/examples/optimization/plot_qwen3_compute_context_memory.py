@@ -5,9 +5,10 @@ Qwen3-like ComputeContext memory profile
 ========================================
 
 This example builds a random-weight Qwen3-like model aligned with
-``test_cc_shape_inference_big_qwen3_4_layers_like``, exports it to ONNX with
-``yobx``, computes :class:`~onnx_light.onnx_optim.shape_inference.ComputeContext`
-memory events, saves them to Excel, and prints the same profile as a table.
+``test_cc_shape_inference_big_qwen3_4_layers_like`` by retrieving it from
+backend test cases through :func:`onnx_light.onnx.backend.collect_test_case`,
+computes :class:`~onnx_light.onnx_optim.shape_inference.ComputeContext` memory
+events, saves them to Excel, and prints the same profile as a table.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import argparse
 import matplotlib.pyplot as plt
 import pandas
 from onnx_light.onnx import load as ol_load, save as ol_save, inliner
+from onnx_light.onnx.backend import collect_test_case
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
     ComputeContext,
@@ -27,13 +29,7 @@ from onnx_light.onnx_optim.shape_inference import (
 )
 
 TICK_INTERVAL = 10
-TEST_CASE_MODEL_TYPE = "qwen2"
-TEST_CASE_HIDDEN_SIZE = 1024
-TEST_CASE_INTERMEDIATE_SIZE = 3072
-TEST_CASE_NUM_ATTENTION_HEADS = 16
-TEST_CASE_NUM_KEY_VALUE_HEADS = 8
-TEST_CASE_HEAD_DIM = 128
-TEST_CASE_VOCAB_SIZE = 151936
+TEST_CASE_NAME = "test_cc_shape_inference_big_qwen3_4_layers_like"
 
 
 def parse_args() -> argparse.Namespace:
@@ -149,6 +145,23 @@ def model_to_onnx(output_prefix, num_hidden_layers, batch, sequence_length, past
     print("-- saves the onnx model")
     artifact.save(filename)
     return filename
+
+
+def get_big_qwen3_test_case_model():
+    """Returns the ONNX model from the backend test case collection.
+
+    Returns:
+        The ``ModelProto`` from ``test_cc_shape_inference_big_qwen3_4_layers_like``.
+    """
+
+    cases = collect_test_case()
+    if TEST_CASE_NAME not in cases:
+        available = ", ".join(name for name in sorted(cases) if "qwen" in name.lower())
+        raise ValueError(
+            f"{TEST_CASE_NAME!r} was not found in backend test cases. "
+            f"Available qwen-like names: {available}"
+        )
+    return cases[TEST_CASE_NAME].model
 
 
 def main() -> None:

@@ -66,8 +66,8 @@ template <typename ZP> ZP ReadScalarZeroPoint(const Tensor &y_zero_point) {
 }
 
 // Holds temporary typed storage for per-axis/blocked zero points. Uses the
-// allocator associated with the output allocation when provided and falls back
-// to std::vector otherwise. Owns any allocator-backed buffer until
+// allocator obtained from `output.allocation_owner()` when provided and falls
+// back to std::vector otherwise. Owns any allocator-backed buffer until
 // destruction, then frees it in the destructor, so the allocator pointer must
 // remain valid for this object's lifetime.
 template <typename T> struct TemporaryTypedBuffer {
@@ -88,7 +88,8 @@ template <typename T> struct TemporaryTypedBuffer {
 
   // Allocates space for `count` elements, uses `buffer_allocator` when
   // provided, validates the returned buffer before use, and may only be called
-  // once per instance. `name` is used to contextualize any allocation errors.
+  // once per instance; a second call raises an error. `name` is used to
+  // contextualize any allocation errors.
   void Allocate(size_t count, RawBufferAllocator *buffer_allocator, const char *name) {
     EXT_ENFORCE_INVALID(buffer == nullptr && fallback.empty(),
                         "kernel::QuantizeLinear: temporary buffer already allocated.");
@@ -109,7 +110,8 @@ template <typename T> struct TemporaryTypedBuffer {
   }
 
   // Returns the writable storage regardless of whether the active backend is
-  // the fallback vector or allocator-backed RawBuffer.
+  // the fallback vector or allocator-backed RawBuffer. Assumes `Allocate()`
+  // already ran unless `size == 0`.
   T *data() {
     EXT_ENFORCE_INVALID(buffer != nullptr || !fallback.empty() || size == 0,
                         "kernel::QuantizeLinear: temporary buffer not allocated.");

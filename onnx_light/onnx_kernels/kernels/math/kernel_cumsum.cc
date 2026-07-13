@@ -43,8 +43,7 @@ int64_t ReadAxisScalar(const char *op_name, const Tensor &axis) {
 
 // Computes strides such that ``outer = product of dims before axis``,
 // ``inner = product of dims after axis`` and ``dim = shape[axis]``.
-void SplitShape(const std::vector<int64_t> &shape, int64_t axis, int64_t &outer, int64_t &dim,
-                int64_t &inner) {
+void SplitShape(const Shape &shape, int64_t axis, int64_t &outer, int64_t &dim, int64_t &inner) {
   outer = 1;
   for (int64_t i = 0; i < axis; ++i) {
     outer *= shape[static_cast<size_t>(i)];

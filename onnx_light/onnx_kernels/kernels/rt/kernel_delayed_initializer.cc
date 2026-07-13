@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/rt/include_rt_kernels.h"
 
 #include "onnx_kernels/runtime_context.h"
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -44,6 +45,20 @@ DelayedInitializer::DelayedInitializer(const KernelContext &ctx, Attributes attr
 }
 
 Tensor DelayedInitializer::operator()(RuntimeContext *rt) const {
+  if (rt != nullptr && rt->allocator() != nullptr) {
+    const size_t byte_count = attrs_.load_device == "cpu"
+                                  ? loaded_bytes_.size()
+                                  : PackedByteSize(attrs_.dtype, ComputeElementCount(attrs_.shape));
+    Tensor output = MakeOutputTensor(attrs_.dtype, attrs_.shape, byte_count, rt->allocator());
+    if (attrs_.load_device == "cpu") {
+      if (byte_count != 0) {
+        std::memcpy(output.mutable_bytes(), loaded_bytes_.data(), loaded_bytes_.size());
+      }
+    } else {
+      LoadBytesInto(attrs_, output.mutable_bytes(), byte_count);
+    }
+    return output;
+  }
   if (attrs_.load_device == "cpu") {
     return Tensor("", attrs_.dtype, attrs_.shape, loaded_bytes_);
   }
@@ -70,9 +85,22 @@ std::vector<uint8_t> DelayedInitializer::LoadBytes(const Attributes &attrs) {
   const int64_t element_count = ComputeElementCount(attrs.shape);
   const size_t byte_count = PackedByteSize(attrs.dtype, element_count);
   std::vector<uint8_t> bytes(byte_count);
+  LoadBytesInto(attrs, bytes.data(), byte_count);
+  return bytes;
+}
+
+/// Loads bytes from ``attrs.filename`` at ``attrs.offset`` directly into
+/// ``destination``.
+///
+/// The destination buffer must be writable for ``byte_count`` bytes when
+/// ``byte_count`` is non-zero.
+void DelayedInitializer::LoadBytesInto(const Attributes &attrs, uint8_t *destination,
+                                       size_t byte_count) {
   if (byte_count == 0) {
-    return bytes;
+    return;
   }
+  EXT_ENFORCE_INVALID(destination != nullptr,
+                      "kernel::DelayedInitializer received a null destination buffer.");
 
   const std::filesystem::path path(attrs.filename);
   EXT_ENFORCE_INVALID(std::filesystem::is_regular_file(path),
@@ -101,11 +129,10 @@ std::vector<uint8_t> DelayedInitializer::LoadBytes(const Attributes &attrs) {
   EXT_ENFORCE_INVALID(stream.tellg() == static_cast<std::streamoff>(attrs.offset),
                       "kernel::DelayedInitializer seek landed at an unexpected offset in '",
                       attrs.filename, "'.");
-  stream.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(byte_count));
+  stream.read(reinterpret_cast<char *>(destination), static_cast<std::streamsize>(byte_count));
   EXT_ENFORCE_INVALID(stream.gcount() == static_cast<std::streamsize>(byte_count),
                       "kernel::DelayedInitializer read failed for '", attrs.filename,
                       "': expected ", byte_count, " bytes, got ", stream.gcount(), ".");
-  return bytes;
 }
 
 } // namespace kernel

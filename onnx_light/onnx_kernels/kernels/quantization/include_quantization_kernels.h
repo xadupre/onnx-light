@@ -134,7 +134,8 @@ public:
   /// Delegates to the per-tensor overload when ``x_scale`` is scalar.
   Tensor operator()(const Tensor &x, const Tensor &x_scale, int64_t axis,
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &x, const Tensor &x_scale, int64_t axis, Tensor &output) const;
+  void operator()(const Tensor &x, const Tensor &x_scale, int64_t axis, Tensor &output,
+                  RuntimeContext *rt = nullptr) const;
 
   /// Output element type (FLOAT) differs from the integer/float8 input
   /// element type, so storage can never be shared with an input.
@@ -153,7 +154,8 @@ public:
   using KernelBase::KernelBase;
 
   /// Returning overload: produces ``{y, y_scale, y_zero_point}``.
-  std::tuple<Tensor, Tensor, Tensor> operator()(const Tensor &x) const;
+  std::tuple<Tensor, Tensor, Tensor> operator()(const Tensor &x,
+                                                RuntimeContext *rt = nullptr) const;
 
   /// In-place overload writing into caller-allocated outputs.
   void operator()(const Tensor &x, Tensor &y, Tensor &y_scale, Tensor &y_zero_point) const;

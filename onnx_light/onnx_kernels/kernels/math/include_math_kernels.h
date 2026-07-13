@@ -420,7 +420,8 @@ public:
   ///         log-probability tensor (same shape and dtype as ``scores``).
   std::pair<Tensor, Tensor> operator()(const Tensor &scores, const Tensor &labels,
                                        const Tensor *weights, const std::string &reduction,
-                                       bool has_ignore_index, int64_t ignore_index) const;
+                                       bool has_ignore_index, int64_t ignore_index,
+                                       RuntimeContext *rt = nullptr) const;
 
   /// The kernel allocates new outputs; it does not support input/output aliasing.
   static constexpr bool CanRunInPlace() noexcept { return false; }

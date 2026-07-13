@@ -60,13 +60,13 @@ Tensor RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache,
       position_ids.shape.empty() && position_ids.size_bytes() == 0 && position_ids.data_type == 0
           ? nullptr
           : &position_ids;
-  (*this)(X, cos_cache, sin_cache, pos, attrs, output);
+  (*this)(X, cos_cache, sin_cache, pos, attrs, output, rt);
   return output;
 }
 
 void RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache, const Tensor &sin_cache,
                                  const Tensor *position_ids, const Attributes &attrs,
-                                 Tensor &output) const {
+                                 Tensor &output, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(X.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           X.data_type == static_cast<int32_t>(DataType::FLOAT16) ||
                           X.data_type == static_cast<int32_t>(DataType::BFLOAT16),
@@ -82,9 +82,10 @@ void RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache, const
     const Tensor cos_f = PromoteToFloat32(cos_cache);
     const Tensor sin_f = PromoteToFloat32(sin_cache);
     const size_t out_f_n_bytes = static_cast<size_t>(X.element_count()) * sizeof(float);
+    RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
     Tensor out_f =
-        MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), X.shape, out_f_n_bytes, nullptr);
-    (*this)(X_f, cos_f, sin_f, position_ids, attrs, out_f);
+        MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), X.shape, out_f_n_bytes, allocator);
+    (*this)(X_f, cos_f, sin_f, position_ids, attrs, out_f, rt);
     Tensor demoted = DemoteFromFloat32(out_f, target_dtype);
     EXT_ENFORCE_INVALID(output.size_bytes() == demoted.size_bytes(),
                         "kernel::RotaryEmbedding: output buffer has wrong byte size.");

@@ -121,22 +121,23 @@ public:
   /// ``output`` must already share ``Q``'s element type and have shape
   /// ``(batch_size, q_num_heads, q_seq_len, v_head_size)`` with its
   /// ``data`` buffer sized to match.
-  void operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                  Tensor &output) const;
+  void operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale, Tensor &output,
+                  RuntimeContext *rt = nullptr) const;
 
   /// In-place overload with ``prob_mod`` support. See the returning
   /// overload taking a ``ProbModFn`` for the semantics of ``prob_mod``;
   /// ``output`` has the same preconditions as the in-place overload
   /// without a callback.
   void operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                  const ProbModFn &prob_mod, Tensor &output) const;
+                  const ProbModFn &prob_mod, Tensor &output, RuntimeContext *rt = nullptr) const;
 
   /// In-place overload with ``score_mod`` and ``prob_mod`` support. See
   /// the returning overloads for the semantics of the callbacks;
   /// ``output`` has the same preconditions as the in-place overload
   /// without a callback.
   void operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                  const ScoreModFn &score_mod, const ProbModFn &prob_mod, Tensor &output) const;
+                  const ScoreModFn &score_mod, const ProbModFn &prob_mod, Tensor &output,
+                  RuntimeContext *rt = nullptr) const;
 
   /// FlexAttention computes a fresh output buffer from independent reads of
   /// Q, K, V and never aliases an input buffer.

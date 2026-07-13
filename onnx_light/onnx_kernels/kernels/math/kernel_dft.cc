@@ -187,7 +187,8 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
   }
 
   const size_t output_n_bytes = static_cast<std::size_t>(out_total) * ElementSize(input.data_type);
-  Tensor output = MakeOutputTensor(input.data_type, out_shape, output_n_bytes, nullptr);
+  Tensor output = MakeOutputTensor(input.data_type, out_shape, output_n_bytes,
+                                   rt ? rt->allocator() : nullptr);
 
   switch (input.data_type) {
   case DataType::FLOAT:

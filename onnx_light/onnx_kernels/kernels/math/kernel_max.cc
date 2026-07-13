@@ -43,14 +43,15 @@ Shape ValidateAndBroadcastShape(const std::vector<Tensor> &inputs, const char *d
 template <typename T> T MaxOf(T a, T b) { return a > b ? a : b; }
 
 template <typename T>
-Tensor MaxAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs) {
+Tensor MaxAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
+                RawBufferAllocator *allocator = nullptr) {
   const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {
     out_count *= d;
   }
   const size_t z_n_bytes = static_cast<size_t>(out_count) * sizeof(T);
-  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, nullptr);
+  Tensor z = MakeOutputTensor(dtype, out_shape, z_n_bytes, allocator);
   if (inputs.size() == 1) {
     std::memcpy(z.mutable_bytes(), inputs[0].bytes(),
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
@@ -153,7 +154,7 @@ Tensor Max::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) co
   switch (inputs[0].data_type) {
 #define ONNX_LIGHT_MAX_CASE_ALLOC(ENUM, CPP, NAME)                                                 \
   case DataType::ENUM:                                                                             \
-    return MaxAlloc<CPP>(NAME, DataType::ENUM, inputs);
+    return MaxAlloc<CPP>(NAME, DataType::ENUM, inputs, rt ? rt->allocator() : nullptr);
     ONNX_LIGHT_MAX_DISPATCH(ONNX_LIGHT_MAX_CASE_ALLOC)
 #undef ONNX_LIGHT_MAX_CASE_ALLOC
   case DataType::FLOAT16:

@@ -731,7 +731,8 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
   RunResize(X, scales_vec, out_shape, roi_start, roi_end, attrs, output);
 }
 
-Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs) const {
+Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs,
+                           RuntimeContext *rt) const {
   CheckSupportedAttrs(attrs);
   const std::size_t rank = X.shape.size();
   const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
@@ -763,7 +764,8 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
     total_elements *= d;
   }
   const size_t output_n_bytes = PackedByteSize(X.data_type, total_elements);
-  Tensor output = MakeOutputTensor(X.data_type, out_shape, output_n_bytes, nullptr);
+  Tensor output =
+      MakeOutputTensor(X.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
   std::vector<double> roi_start;
   std::vector<double> roi_end;
   BuildRoi(attrs, axes, rank, roi_start, roi_end);

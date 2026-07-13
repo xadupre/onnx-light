@@ -589,7 +589,8 @@ TEST(KernelClass, WhereRejectsNonBoolCondition) {
 TEST(KernelClass, WhereUsesAllocatorWhenRuntimeContextHasOne) {
   const KernelContext ctx{DefaultOpset(16)};
   Where where_kernel{ctx};
-  SimpleRawBufferAllocator alloc(1);
+  constexpr size_t kSingleAllocationCapacity = 1;
+  SimpleRawBufferAllocator alloc(kSingleAllocationCapacity);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
   Tensor condition = Tensor::FromBool("condition", {2, 2}, {1, 0, 1, 0});

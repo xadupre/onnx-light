@@ -8,6 +8,7 @@
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/raw_buffer_allocator.h"
+#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -20,6 +21,8 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_kernels::RuntimeContext;
+using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Cast;
 using onnx_kernels::kernel::CastLike;
@@ -498,6 +501,51 @@ TEST(KernelClass, CastLikeInPlaceRejectsDtypeMismatch) {
   // Pre-allocated output dtype does not match target_type.data_type.
   Tensor wrong_out("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
   EXPECT_THROW(castlike_kernel(x, target, wrong_out), std::invalid_argument);
+}
+
+TEST(KernelClass, CastLikeUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(15)};
+  CastLike castlike_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {-1.5f, 0.0f, 2.25f});
+  Tensor target = Tensor::FromDouble("", {1}, {0.0});
+
+  constexpr size_t kAllocatorSlotCapacity = 1;
+  SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = castlike_kernel(x, target, &rt);
+
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
+  const double *py = y.AsDouble();
+  EXPECT_DOUBLE_EQ(py[0], -1.5);
+  EXPECT_DOUBLE_EQ(py[1], 0.0);
+  EXPECT_DOUBLE_EQ(py[2], 2.25);
+}
+
+TEST(KernelClass, CastLikeWithSaturateUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(15)};
+  CastLike castlike_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor target = Tensor::FromInt32("", {1}, {0});
+
+  constexpr size_t kAllocatorSlotCapacity = 1;
+  SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = castlike_kernel(x, target, /*saturate=*/true, &rt);
+
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], 1);
+  EXPECT_EQ(py[1], 2);
 }
 
 // ---------------------------------------------------------------------------

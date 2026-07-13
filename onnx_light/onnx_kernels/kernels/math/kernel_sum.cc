@@ -59,7 +59,7 @@ std::vector<int64_t> ValidateAndBroadcastShape(const std::vector<Tensor> &inputs
 
 template <typename T>
 Tensor SumAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
-                RawBufferAllocator *allocator = nullptr) {
+                RawBufferAllocator *allocator) {
   const std::vector<int64_t> out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {

@@ -44,7 +44,7 @@ template <typename T> T MaxOf(T a, T b) { return a > b ? a : b; }
 
 template <typename T>
 Tensor MaxAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
-                RawBufferAllocator *allocator = nullptr) {
+                RawBufferAllocator *allocator) {
   const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {
@@ -151,10 +151,11 @@ void MaxFloat16InPlace(const std::vector<Tensor> &inputs, Tensor &output) {
 
 Tensor Max::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMaxName, " requires at least one input.");
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   switch (inputs[0].data_type) {
 #define ONNX_LIGHT_MAX_CASE_ALLOC(ENUM, CPP, NAME)                                                 \
   case DataType::ENUM:                                                                             \
-    return MaxAlloc<CPP>(NAME, DataType::ENUM, inputs, rt ? rt->allocator() : nullptr);
+    return MaxAlloc<CPP>(NAME, DataType::ENUM, inputs, allocator);
     ONNX_LIGHT_MAX_DISPATCH(ONNX_LIGHT_MAX_CASE_ALLOC)
 #undef ONNX_LIGHT_MAX_CASE_ALLOC
   case DataType::FLOAT16:

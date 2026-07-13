@@ -67,7 +67,7 @@ void AccumulateAndScale(const char *dtype_name, int32_t dtype, const std::vector
 
 template <typename T>
 Tensor MeanAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
-                 RawBufferAllocator *allocator = nullptr) {
+                 RawBufferAllocator *allocator) {
   const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {

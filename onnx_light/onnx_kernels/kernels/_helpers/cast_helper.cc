@@ -322,17 +322,15 @@ Tensor MakeSubByteTensor(DataType dtype, const Shape &shape, const std::vector<s
 
 Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values,
                             RawBufferAllocator *allocator) {
-  Tensor t = MakeTensor("", static_cast<std::int32_t>(DataType::FLOAT4E2M1), shape,
-                        (values.size() + 1) / 2, allocator);
-  std::uint8_t *bytes = t.mutable_bytes();
+  std::vector<std::uint8_t> bytes((values.size() + 1) / 2, 0);
   for (std::size_t i = 0; i < values.size(); ++i) {
     const std::uint8_t nibble = FloatToFloat4E2M1Nibble(values[i]);
-    if ((i % 2) == 0) {
-      bytes[i / 2] = 0;
-      bytes[i / 2] |= nibble;
-    } else {
-      bytes[i / 2] |= static_cast<std::uint8_t>(nibble << 4);
-    }
+    bytes[i / 2] |= static_cast<std::uint8_t>(nibble << (4 * (i % 2)));
+  }
+  Tensor t = MakeTensor("", static_cast<std::int32_t>(DataType::FLOAT4E2M1), shape, bytes.size(),
+                        allocator);
+  if (!bytes.empty()) {
+    std::memcpy(t.mutable_bytes(), bytes.data(), bytes.size());
   }
   return t;
 }

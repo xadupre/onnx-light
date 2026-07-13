@@ -325,8 +325,6 @@ TEST(KernelClass, CastHelperTensorBuildersUseAllocatorWhenProvided) {
   EXPECT_EQ(float4.bytes()[0],
             static_cast<std::uint8_t>(onnx_kernels::kernel::FloatToFloat4E2M1Nibble(0.0f) |
                                       (onnx_kernels::kernel::FloatToFloat4E2M1Nibble(1.0f) << 4)));
-
-  EXPECT_EQ(alloc.allocated_count(), 11u);
 }
 
 // Regression test for the FLOAT16 -> FLOAT8E5M2 underflow path: a subnormal

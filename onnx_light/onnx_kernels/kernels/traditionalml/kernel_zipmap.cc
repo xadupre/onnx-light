@@ -16,8 +16,8 @@ namespace kernel {
 namespace {
 
 template <typename T>
-std::vector<int64_t> ValidateAndComputeOutputShape(const Tensor &x,
-                                                   const std::vector<T> &class_labels) {
+onnx_kernels::Shape ValidateAndComputeOutputShape(const Tensor &x,
+                                                  const std::vector<T> &class_labels) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::ZipMap expects a float input tensor, got data_type=",
                       std::to_string(x.data_type), ".");
@@ -35,21 +35,21 @@ std::vector<int64_t> ValidateAndComputeOutputShape(const Tensor &x,
                       std::to_string(class_count), ".");
 
   if (x.shape.size() == 1) {
-    return std::vector<int64_t>{1, class_count};
+    return onnx_kernels::Shape{1, class_count};
   }
   return x.shape;
 }
 
 template <typename T>
 Tensor ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels) {
-  const std::vector<int64_t> output_shape = ValidateAndComputeOutputShape(x, class_labels);
+  const onnx_kernels::Shape output_shape = ValidateAndComputeOutputShape(x, class_labels);
   std::vector<uint8_t> output_bytes = x.data;
   return Tensor("", static_cast<int32_t>(DataType::FLOAT), output_shape, std::move(output_bytes));
 }
 
 template <typename T>
 void ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels, Tensor &output) {
-  const std::vector<int64_t> expected_shape = ValidateAndComputeOutputShape(x, class_labels);
+  const onnx_kernels::Shape expected_shape = ValidateAndComputeOutputShape(x, class_labels);
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::ZipMap preallocated output dtype must be float.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,

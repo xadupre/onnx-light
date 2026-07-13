@@ -34,7 +34,7 @@ template <typename Key> struct NgramNode {
 // convention: rank-1 input ``[C]`` reports ``B = 0`` so that the
 // output collapses to ``[C']``; rank-2 input ``[B, C]`` keeps the
 // batch dimension. Throws std::invalid_argument for any other rank.
-std::pair<int64_t, int64_t> BatchAndChannels(const std::vector<int64_t> &shape) {
+std::pair<int64_t, int64_t> BatchAndChannels(const onnx_kernels::Shape &shape) {
   if (shape.size() == 1) {
     return {0, shape[0]};
   }
@@ -272,8 +272,8 @@ TfIdfVectorizer::Mode TfIdfVectorizer::ParseMode(const std::string &value) {
                     "'. Valid values are \"TF\", \"IDF\", \"TFIDF\".");
 }
 
-std::vector<int64_t> TfIdfVectorizer::ComputeOutputShape(const std::vector<int64_t> &input_shape,
-                                                         int64_t output_size) {
+onnx_kernels::Shape TfIdfVectorizer::ComputeOutputShape(const onnx_kernels::Shape &input_shape,
+                                                        int64_t output_size) {
   if (input_shape.size() == 1) {
     return {output_size};
   }
@@ -338,7 +338,7 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
     }
   }
 
-  std::vector<int64_t> out_shape = ComputeOutputShape(x.shape, output_size);
+  onnx_kernels::Shape out_shape = ComputeOutputShape(x.shape, output_size);
   std::vector<float> out_values(static_cast<size_t>(num_rows * output_size), 0.0f);
   ApplyMode(num_rows, output_size, mode, frequencies, weights, out_values.data());
   return Tensor::FromFloat("", out_shape, out_values);

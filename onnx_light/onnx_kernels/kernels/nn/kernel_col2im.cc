@@ -55,12 +55,12 @@ std::vector<int64_t> ReadInt64Vector(const Tensor &t, const char *name) {
 
 Tensor Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Tensor &block_shape,
                           const Attributes &attrs, RuntimeContext *rt) const {
-  const std::vector<int64_t> image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
+  const onnx_kernels::Shape image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
   const std::vector<int64_t> block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
   EXT_ENFORCE_INVALID(image_shape_vec.size() == block_shape_vec.size(),
                       "kernel::Col2Im: 'image_shape' and 'block_shape' must have the same length.");
 
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_shape;
   out_shape.reserve(2 + image_shape_vec.size());
   EXT_ENFORCE_INVALID(input.shape.size() == 3, "kernel::Col2Im: 'input' must be rank 3.");
   out_shape.push_back(input.shape[0]);
@@ -94,7 +94,7 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
                       "kernel::Col2Im: 'input' must be FLOAT.");
   EXT_ENFORCE_INVALID(input.shape.size() == 3, "kernel::Col2Im: 'input' must be rank 3.");
 
-  const std::vector<int64_t> image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
+  const onnx_kernels::Shape image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
   const std::vector<int64_t> block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
   EXT_ENFORCE_INVALID(image_shape_vec.size() == block_shape_vec.size(),
                       "kernel::Col2Im: 'image_shape' and 'block_shape' must have the same length.");
@@ -132,7 +132,7 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
                       "kernel::Col2Im: input.shape[2] (L) does not match the number of blocks "
                       "implied by image_shape, block_shape, pads, strides and dilations.");
 
-  std::vector<int64_t> expected_out_shape;
+  onnx_kernels::Shape expected_out_shape;
   expected_out_shape.reserve(2 + n_spatial);
   expected_out_shape.push_back(N);
   expected_out_shape.push_back(C);

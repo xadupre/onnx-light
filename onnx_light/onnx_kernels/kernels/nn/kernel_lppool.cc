@@ -20,7 +20,7 @@ namespace {
 
 // Row-major strides for ``shape``. Each stride is the number of elements one
 // must skip to advance by one along that dimension.
-std::vector<int64_t> RowMajorStridesLpPool(const std::vector<int64_t> &shape) {
+std::vector<int64_t> RowMajorStridesLpPool(const onnx_kernels::Shape &shape) {
   std::vector<int64_t> strides(shape.size(), 1);
   for (size_t i = shape.size(); i-- > 1;) {
     strides[i - 1] = strides[i] * shape[i];
@@ -124,7 +124,8 @@ Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_sh
                         "kernel::LpPool: pads entries must be non-negative.");
   }
 
-  std::vector<int64_t> out_shape(x.shape.size());
+  onnx_kernels::Shape out_shape;
+  out_shape.assign(x.shape.size(), 0);
   out_shape[0] = x.shape[0];
   out_shape[1] = x.shape[1];
   for (size_t i = 0; i < k; ++i) {

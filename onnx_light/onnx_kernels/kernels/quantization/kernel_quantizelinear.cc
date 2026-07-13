@@ -222,7 +222,7 @@ void QuantizeAxisFloat8Loop(const Tensor &x, const float *scales, const std::uin
 }
 
 // Computes the stride of elements inner to ``axis`` for ``shape``.
-inline int64_t ComputeInnerStride(const std::vector<int64_t> &shape, int64_t axis) {
+inline int64_t ComputeInnerStride(const onnx_kernels::Shape &shape, int64_t axis) {
   int64_t stride = 1;
   for (int64_t d = axis + 1; d < static_cast<int64_t>(shape.size()); ++d) {
     stride *= shape[static_cast<std::size_t>(d)];
@@ -242,14 +242,14 @@ inline int64_t ComputeInnerStride(const std::vector<int64_t> &shape, int64_t axi
 #pragma GCC diagnostic ignored "-Wfree-nonheap-object"
 #endif
 std::vector<int64_t> ComputeScaleIndex(const Tensor &x, const Tensor &y_scale, int64_t axis) {
-  const std::vector<int64_t> &x_shape = x.shape;
+  const onnx_kernels::Shape &x_shape = x.shape;
   const std::size_t rank = x_shape.size();
   const int64_t n = x.element_count();
   std::vector<int64_t> scale_index(static_cast<std::size_t>(n));
 
   if (y_scale.shape.size() == rank) {
     // Blocked: scale shape matches x rank, each scale dim divides x dim.
-    const std::vector<int64_t> &s_shape = y_scale.shape;
+    const onnx_kernels::Shape &s_shape = y_scale.shape;
     std::vector<int64_t> repeats(rank);
     std::vector<int64_t> s_strides(rank);
     int64_t stride = 1;

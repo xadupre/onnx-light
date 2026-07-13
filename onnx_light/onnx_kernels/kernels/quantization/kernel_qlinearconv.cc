@@ -78,9 +78,10 @@ void ResolveAttributes(const Tensor &x, const Tensor &w, QLinearConv::Attributes
   }
 }
 
-std::vector<int64_t> ComputeOutputSpatial(const Tensor &x, QLinearConv::Attributes &attrs) {
+onnx_kernels::Shape ComputeOutputSpatial(const Tensor &x, QLinearConv::Attributes &attrs) {
   const size_t spatial_rank = x.shape.size() - 2;
-  std::vector<int64_t> out_spatial(spatial_rank);
+  onnx_kernels::Shape out_spatial;
+  out_spatial.assign(spatial_rank, 0);
   const bool use_auto_pad = !attrs.auto_pad.empty() && attrs.auto_pad != "NOTSET";
   for (size_t i = 0; i < spatial_rank; ++i) {
     const int64_t iD = x.shape[i + 2];
@@ -134,8 +135,8 @@ Tensor QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Ten
                                const Attributes &attrs, RuntimeContext *rt) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
-  std::vector<int64_t> out_spatial = ComputeOutputSpatial(x, resolved);
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_spatial = ComputeOutputSpatial(x, resolved);
+  onnx_kernels::Shape out_shape;
   out_shape.reserve(x.shape.size());
   out_shape.push_back(x.shape[0]);
   out_shape.push_back(w.shape[0]);
@@ -173,8 +174,8 @@ void QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tenso
                       ": x.shape[1] must equal w.shape[1] * group.");
   EXT_ENFORCE_INVALID(M % resolved.group == 0, kName, ": w.shape[0] must be divisible by group.");
 
-  std::vector<int64_t> out_spatial = ComputeOutputSpatial(x, resolved);
-  std::vector<int64_t> expected_shape;
+  onnx_kernels::Shape out_spatial = ComputeOutputSpatial(x, resolved);
+  onnx_kernels::Shape expected_shape;
   expected_shape.reserve(x.shape.size());
   expected_shape.push_back(x.shape[0]);
   expected_shape.push_back(M);
@@ -232,12 +233,14 @@ void QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tenso
   const int64_t C_per_group = w.shape[1];
   const int64_t M_per_group = M / resolved.group;
 
-  std::vector<int64_t> iD(spatial_rank), oD = out_spatial;
+  onnx_kernels::Shape iD;
+  iD.assign(spatial_rank, 0);
+  onnx_kernels::Shape oD = out_spatial;
   for (size_t i = 0; i < spatial_rank; ++i) {
     iD[i] = x.shape[i + 2];
   }
 
-  auto compute_strides = [](const std::vector<int64_t> &dims) {
+  auto compute_strides = [](const auto &dims) {
     std::vector<int64_t> strides(dims.size(), 1);
     for (int i = static_cast<int>(dims.size()) - 2; i >= 0; --i) {
       strides[i] = strides[i + 1] * dims[i + 1];

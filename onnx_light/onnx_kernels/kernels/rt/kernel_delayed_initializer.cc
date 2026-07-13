@@ -66,7 +66,7 @@ Tensor DelayedInitializer::operator()(RuntimeContext *rt) const {
 }
 
 /// Computes the total number of elements described by a shape.
-int64_t DelayedInitializer::ComputeElementCount(const std::vector<int64_t> &shape) {
+int64_t DelayedInitializer::ComputeElementCount(const onnx_kernels::Shape &shape) {
   int64_t count = 1;
   for (int64_t dim : shape) {
     EXT_ENFORCE_INVALID(dim >= 0,

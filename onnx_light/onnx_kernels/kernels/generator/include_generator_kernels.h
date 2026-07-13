@@ -172,9 +172,9 @@ public:
   /// ``1.0``). ``dtype`` defaults to ``DataType::FLOAT`` to mirror the
   /// schema default. ``seed`` selects the RNG seed; pass ``kNoSeed`` to
   /// use the kernel's default.
-  Tensor operator()(const std::vector<int64_t> &shape, double mean = 0.0, double scale = 1.0,
+  Tensor operator()(const onnx_kernels::Shape &shape, double mean = 0.0, double scale = 1.0,
                     int64_t seed = kNoSeed, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
-  void operator()(const std::vector<int64_t> &shape, double mean, double scale, int64_t seed,
+  void operator()(const onnx_kernels::Shape &shape, double mean, double scale, int64_t seed,
                   int32_t dtype, Tensor &output) const;
 
   /// Sentinel meaning ``seed`` attribute is absent.
@@ -199,9 +199,9 @@ public:
   /// ``1.0`` to mirror the schema. ``dtype`` defaults to
   /// ``DataType::FLOAT``. ``seed`` selects the RNG seed; pass ``kNoSeed``
   /// to use the kernel's default.
-  Tensor operator()(const std::vector<int64_t> &shape, double low = 0.0, double high = 1.0,
+  Tensor operator()(const onnx_kernels::Shape &shape, double low = 0.0, double high = 1.0,
                     int64_t seed = kNoSeed, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
-  void operator()(const std::vector<int64_t> &shape, double low, double high, int64_t seed,
+  void operator()(const onnx_kernels::Shape &shape, double low, double high, int64_t seed,
                   int32_t dtype, Tensor &output) const;
 
   /// Sentinel meaning ``seed`` attribute is absent.

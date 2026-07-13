@@ -121,7 +121,7 @@ Tensor CastMap::operator()(const std::vector<int64_t> &input_keys,
   (void)cast_to; // cast_to is encoded in OutT; only validated by the caller.
 
   const int64_t n = OutputLength(input_keys, map_form, max_map);
-  const std::vector<int64_t> shape{n};
+  const onnx_kernels::Shape shape{n};
 
   if constexpr (std::is_same_v<OutT, std::string>) {
     Tensor out =
@@ -149,14 +149,14 @@ void CastMap::operator()(const std::vector<int64_t> &input_keys, const std::vect
   if constexpr (std::is_same_v<OutT, std::string>) {
     EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::STRING),
                         "kernel::CastMap preallocated output dtype must be STRING.");
-    EXT_ENFORCE_INVALID(output.shape == std::vector<int64_t>{n},
+    EXT_ENFORCE_INVALID(output.shape == onnx_kernels::Shape{n},
                         "kernel::CastMap preallocated output shape must be [N].");
     output.string_data.assign(static_cast<std::size_t>(n), std::string());
     FillStringOutput<V>(input_keys, input_values, map_form, output.string_data);
   } else {
     EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorElementType<OutT>::value),
                         "kernel::CastMap preallocated output dtype must match 'cast_to'.");
-    EXT_ENFORCE_INVALID(output.shape == std::vector<int64_t>{n},
+    EXT_ENFORCE_INVALID(output.shape == onnx_kernels::Shape{n},
                         "kernel::CastMap preallocated output shape must be [N].");
     EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(n) * sizeof(OutT),
                         "kernel::CastMap preallocated output buffer is incorrectly sized.");

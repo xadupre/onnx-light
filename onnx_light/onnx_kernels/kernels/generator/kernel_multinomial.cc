@@ -155,7 +155,7 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
   const int32_t out_dtype = (dtype == 0) ? static_cast<int32_t>(DataType::INT32) : dtype;
   EXT_ENFORCE_INVALID(output.data_type == out_dtype,
                       "kernel::Multinomial preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == (std::vector<int64_t>{batch_size, sample_size}),
+  EXT_ENFORCE_INVALID(output.shape == (onnx_kernels::Shape{batch_size, sample_size}),
                       "kernel::Multinomial preallocated output shape must match the produced "
                       "tensor shape.");
 

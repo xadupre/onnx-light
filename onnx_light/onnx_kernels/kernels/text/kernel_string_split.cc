@@ -94,7 +94,7 @@ std::pair<Tensor, Tensor> StringSplit::operator()(const Tensor &x, const std::st
     max_length = std::max(max_length, size);
   }
 
-  std::vector<int64_t> y_shape = x.shape;
+  onnx_kernels::Shape y_shape = x.shape;
   y_shape.push_back(max_length);
   std::vector<std::string> y_data;
   y_data.reserve(static_cast<std::size_t>(x.element_count() * max_length));

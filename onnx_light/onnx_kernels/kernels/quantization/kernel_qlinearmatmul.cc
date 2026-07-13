@@ -52,7 +52,7 @@ float ReadScalarFloat(const Tensor &t, const char *name) {
                     "' must be a FLOAT or FLOAT16 scalar for the reference kernel.");
 }
 
-std::vector<int64_t> PromoteMatMulShape(const std::vector<int64_t> &shape, bool is_left) {
+onnx_kernels::Shape PromoteMatMulShape(const onnx_kernels::Shape &shape, bool is_left) {
   if (shape.size() == 1) {
     if (is_left) {
       return {1, shape[0]};
@@ -62,7 +62,7 @@ std::vector<int64_t> PromoteMatMulShape(const std::vector<int64_t> &shape, bool 
   return shape;
 }
 
-std::vector<int64_t> ComputeStrides(const std::vector<int64_t> &shape) {
+std::vector<int64_t> ComputeStrides(const onnx_kernels::Shape &shape) {
   std::vector<int64_t> strides(shape.size(), 1);
   for (int64_t i = static_cast<int64_t>(shape.size()) - 2; i >= 0; --i) {
     strides[static_cast<size_t>(i)] =
@@ -71,10 +71,11 @@ std::vector<int64_t> ComputeStrides(const std::vector<int64_t> &shape) {
   return strides;
 }
 
-std::vector<int64_t> BroadcastPrefix(const std::vector<int64_t> &a_prefix,
-                                     const std::vector<int64_t> &b_prefix) {
+onnx_kernels::Shape BroadcastPrefix(const onnx_kernels::Shape &a_prefix,
+                                    const onnx_kernels::Shape &b_prefix) {
   const size_t rank = std::max(a_prefix.size(), b_prefix.size());
-  std::vector<int64_t> out(rank, 1);
+  onnx_kernels::Shape out;
+  out.assign(rank, 1);
   for (size_t i = 0; i < rank; ++i) {
     const bool has_a = i + a_prefix.size() >= rank;
     const bool has_b = i + b_prefix.size() >= rank;
@@ -91,17 +92,19 @@ std::vector<int64_t> BroadcastPrefix(const std::vector<int64_t> &a_prefix,
   return out;
 }
 
-std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &a_shape,
-                                        const std::vector<int64_t> &b_shape) {
+onnx_kernels::Shape ComputeOutputShape(const onnx_kernels::Shape &a_shape,
+                                       const onnx_kernels::Shape &b_shape) {
   EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(), kName,
                       ": rank-0 inputs are not accepted.");
-  const std::vector<int64_t> a2 = PromoteMatMulShape(a_shape, true);
-  const std::vector<int64_t> b2 = PromoteMatMulShape(b_shape, false);
+  const onnx_kernels::Shape a2 = PromoteMatMulShape(a_shape, true);
+  const onnx_kernels::Shape b2 = PromoteMatMulShape(b_shape, false);
   EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2], kName,
                       ": incompatible inner dimensions.");
-  const std::vector<int64_t> a_prefix(a2.begin(), a2.end() - 2);
-  const std::vector<int64_t> b_prefix(b2.begin(), b2.end() - 2);
-  std::vector<int64_t> out_shape = BroadcastPrefix(a_prefix, b_prefix);
+  onnx_kernels::Shape a_prefix;
+  a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
+  onnx_kernels::Shape b_prefix;
+  b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
+  onnx_kernels::Shape out_shape = BroadcastPrefix(a_prefix, b_prefix);
   if (a_shape.size() != 1) {
     out_shape.push_back(a2[a2.size() - 2]);
   }
@@ -128,15 +131,17 @@ template <typename Y> void StoreSaturated(float v, float y_zp, Y *out, int64_t i
 
 void RunQLinearMatMul(const Tensor &a, int32_t a_zp, float a_scale, const Tensor &b, int32_t b_zp,
                       float b_scale, float y_scale, int32_t y_zp, Tensor &output) {
-  const std::vector<int64_t> a2 = PromoteMatMulShape(a.shape, true);
-  const std::vector<int64_t> b2 = PromoteMatMulShape(b.shape, false);
+  const onnx_kernels::Shape a2 = PromoteMatMulShape(a.shape, true);
+  const onnx_kernels::Shape b2 = PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
   const int64_t K = a2[a2.size() - 1];
   const int64_t N = b2[b2.size() - 1];
 
-  const std::vector<int64_t> a_prefix(a2.begin(), a2.end() - 2);
-  const std::vector<int64_t> b_prefix(b2.begin(), b2.end() - 2);
-  const std::vector<int64_t> out_prefix = BroadcastPrefix(a_prefix, b_prefix);
+  onnx_kernels::Shape a_prefix;
+  a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
+  onnx_kernels::Shape b_prefix;
+  b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
+  const onnx_kernels::Shape out_prefix = BroadcastPrefix(a_prefix, b_prefix);
   const size_t batch_rank = out_prefix.size();
 
   const std::vector<int64_t> a_strides = ComputeStrides(a2);
@@ -224,7 +229,7 @@ Tensor QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const T
   EXT_ENFORCE_INVALID(IsInt8OrUint8(y_zero_point.data_type), kName,
                       ": y_zero_point must be INT8 or UINT8.");
 
-  const std::vector<int64_t> out_shape = ComputeOutputShape(a.shape, b.shape);
+  const onnx_kernels::Shape out_shape = ComputeOutputShape(a.shape, b.shape);
   int64_t total = 1;
   for (int64_t d : out_shape) {
     total *= d;
@@ -249,7 +254,7 @@ void QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const Ten
   EXT_ENFORCE_INVALID(output.data_type == y_zero_point.data_type, kName,
                       ": output dtype must match y_zero_point.");
 
-  const std::vector<int64_t> out_shape = ComputeOutputShape(a.shape, b.shape);
+  const onnx_kernels::Shape out_shape = ComputeOutputShape(a.shape, b.shape);
   EXT_ENFORCE_INVALID(output.shape == out_shape, kName, ": preallocated output has invalid shape.");
 
   const int32_t a_zp = ReadScalarInt(a_zero_point, "a_zero_point");

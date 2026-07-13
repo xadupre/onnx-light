@@ -41,7 +41,7 @@ template <typename T> T *WhereTypedOutput(Tensor &t) {
 }
 
 struct TernaryBroadcastInfo {
-  std::vector<int64_t> shape;
+  onnx_kernels::Shape shape;
   std::vector<int64_t> strides_c;
   std::vector<int64_t> strides_x;
   std::vector<int64_t> strides_y;
@@ -56,7 +56,14 @@ TernaryBroadcastInfo CheckWhereBroadcast(const Tensor &condition, const Tensor &
                       "kernel::Where inputs ``x`` and ``y`` must share the same dtype.");
 
   const size_t rank = std::max(condition.shape.size(), std::max(x.shape.size(), y.shape.size()));
-  std::vector<int64_t> sc(rank, 1), sx(rank, 1), sy(rank, 1), out(rank, 1);
+  onnx_kernels::Shape sc;
+  onnx_kernels::Shape sx;
+  onnx_kernels::Shape sy;
+  onnx_kernels::Shape out;
+  sc.assign(rank, 1);
+  sx.assign(rank, 1);
+  sy.assign(rank, 1);
+  out.assign(rank, 1);
   for (size_t i = 0; i < condition.shape.size(); ++i) {
     sc[rank - condition.shape.size() + i] = condition.shape[i];
   }

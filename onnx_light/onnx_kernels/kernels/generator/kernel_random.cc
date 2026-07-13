@@ -21,7 +21,7 @@ namespace {
 
 // Validates the requested output shape: dims must be non-negative.
 // Returns the element count.
-int64_t CheckShape(const std::vector<int64_t> &shape, const char *op_name) {
+int64_t CheckShape(const onnx_kernels::Shape &shape, const char *op_name) {
   int64_t count = 1;
   for (int64_t dim : shape) {
     EXT_ENFORCE_INVALID(dim >= 0, "kernel::", op_name, ": shape must not contain negative dims.");
@@ -57,7 +57,7 @@ std::optional<uint64_t> NormalizeSeed(int64_t seed) {
   return static_cast<uint64_t>(seed);
 }
 
-Tensor MakeUniform(const std::vector<int64_t> &shape, double low, double high,
+Tensor MakeUniform(const onnx_kernels::Shape &shape, double low, double high,
                    std::optional<uint64_t> seed, int32_t dtype, const char *op_name,
                    RuntimeContext *rt) {
   const int64_t count = CheckShape(shape, op_name);
@@ -72,7 +72,7 @@ Tensor MakeUniform(const std::vector<int64_t> &shape, double low, double high,
   return out;
 }
 
-Tensor MakeNormal(const std::vector<int64_t> &shape, double mean, double scale,
+Tensor MakeNormal(const onnx_kernels::Shape &shape, double mean, double scale,
                   std::optional<uint64_t> seed, int32_t dtype, const char *op_name,
                   RuntimeContext *rt) {
   const int64_t count = CheckShape(shape, op_name);
@@ -87,7 +87,7 @@ Tensor MakeNormal(const std::vector<int64_t> &shape, double mean, double scale,
   return out;
 }
 
-void WriteUniformInto(Tensor &output, const std::vector<int64_t> &shape, double low, double high,
+void WriteUniformInto(Tensor &output, const onnx_kernels::Shape &shape, double low, double high,
                       std::optional<uint64_t> seed, int32_t out_dtype, const char *op_name) {
   EXT_ENFORCE_INVALID(output.data_type == out_dtype, "kernel::", op_name,
                       " preallocated output must have the expected dtype.");
@@ -103,7 +103,7 @@ void WriteUniformInto(Tensor &output, const std::vector<int64_t> &shape, double 
   }
 }
 
-void WriteNormalInto(Tensor &output, const std::vector<int64_t> &shape, double mean, double scale,
+void WriteNormalInto(Tensor &output, const onnx_kernels::Shape &shape, double mean, double scale,
                      std::optional<uint64_t> seed, int32_t out_dtype, const char *op_name) {
   EXT_ENFORCE_INVALID(output.data_type == out_dtype, "kernel::", op_name,
                       " preallocated output must have the expected dtype.");
@@ -121,19 +121,19 @@ void WriteNormalInto(Tensor &output, const std::vector<int64_t> &shape, double m
 
 } // namespace
 
-Tensor RandomNormal::operator()(const std::vector<int64_t> &shape, double mean, double scale,
+Tensor RandomNormal::operator()(const onnx_kernels::Shape &shape, double mean, double scale,
                                 int64_t seed, int32_t dtype, RuntimeContext *rt) const {
   const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomNormal");
   return MakeNormal(shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormal", rt);
 }
 
-void RandomNormal::operator()(const std::vector<int64_t> &shape, double mean, double scale,
+void RandomNormal::operator()(const onnx_kernels::Shape &shape, double mean, double scale,
                               int64_t seed, int32_t dtype, Tensor &output) const {
   const int32_t out_dtype = ResolveOutputDtype(dtype, DataType::FLOAT, "RandomNormal");
   WriteNormalInto(output, shape, mean, scale, NormalizeSeed(seed), out_dtype, "RandomNormal");
 }
 
-Tensor RandomUniform::operator()(const std::vector<int64_t> &shape, double low, double high,
+Tensor RandomUniform::operator()(const onnx_kernels::Shape &shape, double low, double high,
                                  int64_t seed, int32_t dtype, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(high >= low,
                       "kernel::RandomUniform: 'high' must be greater than or equal to 'low'.");
@@ -141,7 +141,7 @@ Tensor RandomUniform::operator()(const std::vector<int64_t> &shape, double low, 
   return MakeUniform(shape, low, high, NormalizeSeed(seed), out_dtype, "RandomUniform", rt);
 }
 
-void RandomUniform::operator()(const std::vector<int64_t> &shape, double low, double high,
+void RandomUniform::operator()(const onnx_kernels::Shape &shape, double low, double high,
                                int64_t seed, int32_t dtype, Tensor &output) const {
   EXT_ENFORCE_INVALID(high >= low,
                       "kernel::RandomUniform: 'high' must be greater than or equal to 'low'.");

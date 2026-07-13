@@ -17,7 +17,7 @@ namespace kernel {
 
 namespace {
 
-std::vector<int64_t> ComputeFlattenOutputShape(const std::vector<int64_t> &in_shape, int64_t axis) {
+onnx_kernels::Shape ComputeFlattenOutputShape(const onnx_kernels::Shape &in_shape, int64_t axis) {
   const int64_t rank = static_cast<int64_t>(in_shape.size());
   int64_t resolved_axis = axis;
   if (resolved_axis < 0) {
@@ -39,7 +39,7 @@ std::vector<int64_t> ComputeFlattenOutputShape(const std::vector<int64_t> &in_sh
 } // namespace
 
 Tensor Flatten::operator()(const Tensor &input, int64_t axis, RuntimeContext *rt) const {
-  const std::vector<int64_t> out_shape = ComputeFlattenOutputShape(input.shape, axis);
+  const onnx_kernels::Shape out_shape = ComputeFlattenOutputShape(input.shape, axis);
   const size_t output_n_bytes = PackedByteSize(input.data_type, input.element_count());
   Tensor output =
       MakeOutputTensor(input.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
@@ -48,7 +48,7 @@ Tensor Flatten::operator()(const Tensor &input, int64_t axis, RuntimeContext *rt
 }
 
 void Flatten::operator()(const Tensor &input, int64_t axis, Tensor &output) const {
-  const std::vector<int64_t> out_shape = ComputeFlattenOutputShape(input.shape, axis);
+  const onnx_kernels::Shape out_shape = ComputeFlattenOutputShape(input.shape, axis);
   EXT_ENFORCE_INVALID(output.data_type == input.data_type,
                       "kernel::Flatten: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,

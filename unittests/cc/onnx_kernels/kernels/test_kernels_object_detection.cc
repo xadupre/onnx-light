@@ -5,6 +5,8 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
+#include "onnx_kernels/raw_buffer_allocator.h"
+#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -15,6 +17,8 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_kernels::RuntimeContext;
+using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::NonMaxSuppression;
@@ -208,6 +212,35 @@ TEST(KernelClass, NonMaxSuppressionRejectsBadInputs) {
   // max_output_boxes_per_class must be INT64.
   Tensor bad_max = Tensor::FromInt32("", {1}, {1});
   EXPECT_THROW(nms(boxes, scores, &bad_max, nullptr, nullptr, attrs), std::invalid_argument);
+}
+
+TEST(KernelClass, NonMaxSuppressionUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{onnx_backend_test::DefaultOpset(11)};
+  NonMaxSuppression nms{ctx};
+  Tensor boxes =
+      Tensor::FromFloat("", {1, 2, 4}, {0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 10.0f, 1.0f, 11.0f});
+  Tensor scores = Tensor::FromFloat("", {1, 1, 2}, {0.9f, 0.8f});
+  Tensor max_out = Tensor::FromInt64("", {1}, {10});
+  NonMaxSuppression::Attributes attrs;
+
+  constexpr size_t kAllocatorSlotCapacity = 1;
+  constexpr size_t kExpectedAllocationCount = 1;
+  SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = nms(boxes, scores, &max_out, nullptr, nullptr, attrs, &rt);
+
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), kExpectedAllocationCount);
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 0);
+  EXPECT_EQ(py[2], 0);
+  EXPECT_EQ(py[3], 0);
+  EXPECT_EQ(py[4], 0);
+  EXPECT_EQ(py[5], 1);
 }
 
 } // namespace Test

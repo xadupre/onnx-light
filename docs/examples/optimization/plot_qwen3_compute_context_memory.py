@@ -16,10 +16,6 @@ import argparse
 
 import matplotlib.pyplot as plt
 import pandas
-import torch
-from transformers import AutoConfig, AutoModelForCausalLM, PretrainedConfig
-from yobx.torch import to_onnx
-
 from onnx_light.onnx import load as ol_load, save as ol_save, inliner
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
@@ -48,17 +44,27 @@ def parse_args() -> argparse.Namespace:
     """
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--layers", type=int, default=4, help="Number of hidden layers.")
-    parser.add_argument("--batch", type=int, default=1, help="Input batch size.")
-    parser.add_argument("--sequence-length", type=int, default=16, help="Input sequence length.")
+    parser.add_argument(
+        "--num_hidden_layers",
+        "-l",
+        type=int,
+        default=4,
+        help="Number of hidden num_hidden_layers.",
+    )
+    parser.add_argument("--batch", "-b", type=int, default=1, help="Input batch size.")
+    parser.add_argument(
+        "--sequence-length", "-s", type=int, default=16, help="Input sequence length."
+    )
     parser.add_argument(
         "--past-sequence-length",
+        "-p",
         type=int,
         default=8,
         help="Past key-value cache sequence length.",
     )
     parser.add_argument(
         "--output-prefix",
+        "o",
         default="bench_qwen3_compute_context_memory",
         help="Output file prefix for ONNX, PNG, and XLSX artifacts.",
     )
@@ -75,12 +81,12 @@ def make_tick_label(output_name: str, node_type: str) -> str:
     return f"{str(output_name)[:5]}-{node_type}"
 
 
-def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, PretrainedConfig]:
-    """Creates a random-weight Qwen3-like model matching the shape-inference test case.
-
-    Returns:
-        Tuple containing the created model and its configuration.
-    """
+def model_to_onnx(output_prefix, num_hidden_layers, batch, sequence_length, past_sequence_length):
+    import torch
+    from yobx.torch import to_onnx
+    from yobx.torch import apply_patches_for_model, register_flattening_functions
+    from yobx.torch.in_transformers.cache_helper import make_dynamic_cache
+    from transformers import AutoConfig, AutoModelForCausalLM
 
     config = AutoConfig.for_model(
         TEST_CASE_MODEL_TYPE,
@@ -94,28 +100,16 @@ def create_qwen3_like_model(num_hidden_layers: int) -> tuple[torch.nn.Module, Pr
         use_cache=True,
     )
     model = AutoModelForCausalLM.from_config(config).eval().to(torch.float16)
-    return model, config
-
-
-def main() -> None:
-    """Performs export/profiling, writes artifacts, and prints the XLSX profile table."""
-
-    args = parse_args()
-
-    model, config = create_qwen3_like_model(args.layers)
-
-    from yobx.torch import apply_patches_for_model, register_flattening_functions
-    from yobx.torch.in_transformers.cache_helper import make_dynamic_cache
 
     num_attention_heads = int(config.num_attention_heads)
     shape = (
-        args.batch,
+        batch,
         (
             int(config.num_key_value_heads)
             if hasattr(config, "num_key_value_heads")
             else num_attention_heads
         ),
-        args.past_sequence_length,
+        past_sequence_length,
         (
             int(config.head_dim)
             if hasattr(config, "head_dim")
@@ -124,10 +118,10 @@ def main() -> None:
     )
     sample_inputs = {
         "input_ids": torch.randint(
-            0, TEST_CASE_VOCAB_SIZE, (args.batch, args.sequence_length), dtype=torch.int64
+            0, TEST_CASE_VOCAB_SIZE, (batch, sequence_length), dtype=torch.int64
         ),
         "attention_mask": torch.ones(
-            (args.batch, args.past_sequence_length + args.sequence_length), dtype=torch.int64
+            (batch, past_sequence_length + sequence_length), dtype=torch.int64
         ),
         "past_key_values": make_dynamic_cache(
             [
@@ -150,11 +144,31 @@ def main() -> None:
         apply_patches_for_model(patch_transformers=True, patch_torch=False),
     ):
         artifact = to_onnx(model, kwargs=sample_inputs, dynamic_shapes=dynamic_shapes)
-    filename = f"{args.output_prefix}.onnx"
+    filename = f"{output_prefix}.onnx"
 
     print("-- saves the onnx model")
     artifact.save(filename)
-    print("-- loads the onnx model")
+    return filename
+
+
+def main() -> None:
+    """Performs export/profiling, writes artifacts, and prints the XLSX profile table."""
+
+    args = parse_args()
+    if args.num_hidden_layers != 4:
+        print("-- create the onnx model with transformers")
+        filename = model_to_onnx(
+            args.output_prefix,
+            args.num_hidden_layers,
+            args.batch,
+            args.sequence_length,
+            args.past_sequence_length,
+        )
+    else:
+        print("-- get the model from the backend tests")
+        # get the backend test
+        # todo
+
     onnx_model = ol_load(filename, load_external_data=False)
     onnx_model = inliner.inline_local_functions(onnx_model)
     del onnx_model.graph.value_info[:]
@@ -226,7 +240,8 @@ def main() -> None:
         tick_labels.append(make_tick_label(node.output[0] if node.output else "", node.op_type))
     ax.set_xticks(tick_indices, labels=tick_labels, rotation=45, ha="right")
     ax.set_title(
-        f"ComputeContext total bytes (qwen3_4_layers_like, layers={config.num_hidden_layers})"
+        f"ComputeContext total bytes (qwen3_4_layers_like, "
+        f"num_hidden_layers={args.num_hidden_layers})"
     )
     ax.set_xlabel("node index")
     ax.set_ylabel("total bytes")

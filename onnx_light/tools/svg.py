@@ -437,14 +437,19 @@ def _minimize_crossings(boxes: list[_Box], edges: list[tuple[int, int, str]]) ->
         for index, box in enumerate(layer_boxes):
             position[box.id] = index
 
-    def reorder(layer_index: int, neighbours: dict[int, list[int]]) -> None:
+    def reorder(layer_index: int, neighbours: dict[int, list[int]], adjacent_layer: int) -> None:
         layer_boxes = layers[layer_index]
 
         def barycenter(box: _Box) -> float:
-            ids = neighbours[box.id]
+            # Only consider neighbours that are actually in the adjacent layer so
+            # that positions from different layers are never mixed.  Long-range
+            # edges (skip connections) that skip one or more layers would otherwise
+            # contribute positions that are incomparable with those of the adjacent
+            # layer, producing incorrect barycentres and therefore more crossings.
+            ids = [nid for nid in neighbours[box.id] if boxes[nid].layer == adjacent_layer]
             if not ids:
                 return float(position[box.id])
-            return sum(position[i] for i in ids) / len(ids)
+            return sum(position[nid] for nid in ids) / len(ids)
 
         layer_boxes.sort(key=barycenter)
         for index, box in enumerate(layer_boxes):
@@ -452,10 +457,10 @@ def _minimize_crossings(boxes: list[_Box], edges: list[tuple[int, int, str]]) ->
 
     sorted_layers = sorted(layers)
     for _ in range(_CROSSING_SWEEPS):
-        for layer_index in sorted_layers[1:]:
-            reorder(layer_index, predecessors)
-        for layer_index in reversed(sorted_layers[:-1]):
-            reorder(layer_index, successors)
+        for i in range(1, len(sorted_layers)):
+            reorder(sorted_layers[i], predecessors, sorted_layers[i - 1])
+        for i in range(len(sorted_layers) - 2, -1, -1):
+            reorder(sorted_layers[i], successors, sorted_layers[i + 1])
 
     for layer_boxes in layers.values():
         for index, box in enumerate(layer_boxes):

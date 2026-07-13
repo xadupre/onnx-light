@@ -365,6 +365,51 @@ class TestSvg(unittest.TestCase):
         self.assertLess(after, before)
         self.assertEqual(after, 0)
 
+    def test_crossings_are_reduced_with_skip_edge(self) -> None:
+        from onnx_light.tools.svg import _assign_layers, _Box, _minimize_crossings
+
+        # X connects to three operators (adjacent edges) and also directly to
+        # Out3, which is a long "skip" edge that spans two layers.  Out3 is
+        # declared *first* among the outputs, so the naive insertion order
+        # produces two crossings.  When the barycenter is limited to the
+        # immediately adjacent layer (the fix), all crossings are resolved;
+        # without that restriction the long-range predecessor position leaks
+        # into the calculation and can delay convergence.
+        #
+        #   X(0)                      layer 0
+        #  / | \  \___________
+        # /  |  \             \
+        # Op1 Op2 Op3         |  layer 1
+        #  |   |   |          |
+        # Out1 Out2 Out3 <----+  layer 2  (Out3 declared first -- wrong order)
+        boxes = [
+            _Box(0, "input", ["X"]),
+            _Box(1, "op", ["Op1"]),
+            _Box(2, "op", ["Op2"]),
+            _Box(3, "op", ["Op3"]),
+            _Box(4, "output", ["Out3"]),  # declared first → wrong initial order
+            _Box(5, "output", ["Out1"]),
+            _Box(6, "output", ["Out2"]),
+        ]
+        # X feeds all three operators; Op1->Out1, Op2->Out2, Op3->Out3; plus
+        # the skip edge X->Out3 (X in layer 0, Out3 in layer 2).
+        edges = [
+            (0, 1, ""),
+            (0, 2, ""),
+            (0, 3, ""),
+            (1, 5, ""),
+            (2, 6, ""),
+            (3, 4, ""),
+            (0, 4, ""),  # skip: X -> Out3
+        ]
+        _assign_layers(boxes, edges)
+        before = _count_crossings(boxes, edges, by_order=False)
+        _minimize_crossings(boxes, edges)
+        after = _count_crossings(boxes, edges, by_order=True)
+        self.assertGreater(before, 0)
+        self.assertLess(after, before)
+        self.assertEqual(after, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

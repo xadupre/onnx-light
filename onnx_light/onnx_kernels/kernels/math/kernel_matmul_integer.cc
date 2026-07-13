@@ -36,7 +36,9 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
 // destruction.
 struct ZeroPointValues {
   std::vector<int32_t> fallback;
-  // In allocator-backed mode with size > 0, allocator and buffer are both non-null.
+  // In allocator-backed mode with size > 0, allocator and buffer are both
+  // non-null. In fallback mode, size may still be > 0 while allocator/buffer
+  // stay null.
   RawBufferAllocator *allocator = nullptr;
   RawBuffer *buffer = nullptr;
   size_t size = 0;
@@ -75,19 +77,22 @@ struct ZeroPointValues {
     }
   }
 
+  // Returns writable zero-point values from the active storage backend.
   int32_t *mutable_data() {
     return buffer != nullptr ? reinterpret_cast<int32_t *>(buffer->data()) : fallback.data();
   }
+  // Returns read-only zero-point values from the active storage backend.
   const int32_t *data() const {
     return buffer != nullptr ? reinterpret_cast<const int32_t *>(buffer->data()) : fallback.data();
   }
 };
 
-// Returns a vector of zero-point values for the given optional zero-point tensor.
+// Returns zero-point values for the given optional zero-point tensor.
 // - Empty tensor (absent input): returns {0} — scalar zero broadcast to all positions.
 // - Scalar (0-D) or 1-D of size 1: returns a one-element vector (per-tensor).
 // - 1-D of size `expected_size`: returns all values (per-row or per-column).
 // Any other shape triggers an assertion failure.
+// Uses allocator-backed storage when `allocator` is provided.
 ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t expected_size,
                                const char *name, RawBufferAllocator *allocator) {
   ZeroPointValues zps;

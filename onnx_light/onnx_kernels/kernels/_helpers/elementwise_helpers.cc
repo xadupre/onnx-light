@@ -9,6 +9,35 @@ namespace onnx_kernels {
 namespace kernel {
 namespace detail {
 
+Shape BroadcastShape(const char *op_name, const Shape &a, const Shape &b) {
+  const size_t rank = a.size() > b.size() ? a.size() : b.size();
+  Shape sa, sb, out;
+  sa.assign(rank, 1);
+  sb.assign(rank, 1);
+  out.assign(rank, 1);
+  for (size_t i = 0; i < a.size(); ++i) {
+    sa[rank - a.size() + i] = a[i];
+  }
+  for (size_t i = 0; i < b.size(); ++i) {
+    sb[rank - b.size() + i] = b[i];
+  }
+  for (size_t d = 0; d < rank; ++d) {
+    // Explicit branching is used rather than max() so that a size-1 dimension
+    // broadcasting against a size-0 dimension yields 0, not 1 -- otherwise
+    // the output element count is over-estimated.
+    if (sa[d] == sb[d]) {
+      out[d] = sa[d];
+    } else if (sa[d] == 1) {
+      out[d] = sb[d];
+    } else if (sb[d] == 1) {
+      out[d] = sa[d];
+    } else {
+      EXT_THROW_INVALID(op_name, " input shapes are not multidirectional-broadcastable.");
+    }
+  }
+  return out;
+}
+
 BroadcastInfo CheckBinaryBroadcast(const char *op_name, const char *dtype_name,
                                    int32_t expected_dtype, const Tensor &x, const Tensor &y) {
   EXT_ENFORCE_INVALID(x.data_type == expected_dtype && y.data_type == expected_dtype, op_name,

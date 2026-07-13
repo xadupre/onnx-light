@@ -328,7 +328,8 @@ Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values
   for (std::size_t i = 0; i < values.size(); ++i) {
     const std::uint8_t nibble = FloatToFloat4E2M1Nibble(values[i]);
     if ((i % 2) == 0) {
-      bytes[i / 2] = nibble;
+      bytes[i / 2] = 0;
+      bytes[i / 2] |= nibble;
     } else {
       bytes[i / 2] |= static_cast<std::uint8_t>(nibble << 4);
     }

@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-prefix",
-        "o",
+        "-o",
         default="bench_qwen3_compute_context_memory",
         help="Output file prefix for ONNX, PNG, and XLSX artifacts.",
     )
@@ -155,7 +155,7 @@ def model_to_onnx(output_prefix, num_hidden_layers, batch, sequence_length, past
     return filename
 
 
-def get_big_qwen3_test_case_model():
+def get_big_qwen3_test_case_model(output_prefix):
     """Returns the ONNX model from the backend test case collection.
 
     Returns:
@@ -169,7 +169,9 @@ def get_big_qwen3_test_case_model():
             f"{TEST_CASE_NAME!r} was not found in backend test cases. "
             f"Available qwen-like names: {available_qwen_cases}"
         )
-    return cases[TEST_CASE_NAME].model
+    filename = f"{output_prefix}.onnx"
+    ol_save(cases[TEST_CASE_NAME].model, filename)
+    return filename
 
 
 def main() -> None:
@@ -187,8 +189,7 @@ def main() -> None:
         )
     else:
         print("-- get the model from the backend tests")
-        # get the backend test
-        # todo
+        filename = get_big_qwen3_test_case_model(args.output_prefix)
 
     onnx_model = ol_load(filename, load_external_data=False)
     onnx_model = inliner.inline_local_functions(onnx_model)

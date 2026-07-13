@@ -61,7 +61,6 @@ Shape ValidateAndBroadcastShape(const std::vector<Tensor> &inputs, const char *d
 }
 
 template <typename T>
-template <typename T>
 Tensor SumAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
                 RawBufferAllocator *allocator) {
   const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);

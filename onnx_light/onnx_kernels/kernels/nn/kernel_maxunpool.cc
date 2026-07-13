@@ -27,10 +27,9 @@ namespace {
 //      offsets into that inferred-shape buffer, not per-channel offsets).
 //   3. If ``output_shape`` is provided, copy the inferred region into the
 //      top-left corner of a zero buffer of shape ``output_shape``.
-Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
-                    const std::vector<int64_t> &kernel_shape,
-                    const std::vector<int64_t> &strides_in, const std::vector<int64_t> &pads_in,
-                    const std::vector<int64_t> *explicit_output_shape) {
+Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_shape,
+                    const Shape &strides_in, const Shape &pads_in,
+                    const Shape *explicit_output_shape) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::MaxUnpool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64),
@@ -43,8 +42,18 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
   EXT_ENFORCE_INVALID(x.shape.size() == k + 2,
                       "kernel::MaxUnpool: x rank must equal kernel_shape.size() + 2.");
 
-  std::vector<int64_t> strides = strides_in.empty() ? std::vector<int64_t>(k, 1) : strides_in;
-  std::vector<int64_t> pads = pads_in.empty() ? std::vector<int64_t>(2 * k, 0) : pads_in;
+  Shape strides;
+  if (strides_in.empty()) {
+    strides.assign(k, 1);
+  } else {
+    strides = strides_in;
+  }
+  Shape pads;
+  if (pads_in.empty()) {
+    pads.assign(2 * k, 0);
+  } else {
+    pads = pads_in;
+  }
   EXT_ENFORCE_INVALID(strides.size() == k,
                       "kernel::MaxUnpool: strides must have one entry per spatial axis.");
   EXT_ENFORCE_INVALID(pads.size() == 2 * k,
@@ -57,7 +66,8 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
                         "kernel::MaxUnpool: pads entries must be non-negative.");
   }
 
-  std::vector<int64_t> inferred_shape(x.shape.size());
+  Shape inferred_shape;
+  inferred_shape.assign(x.shape.size(), 0);
   inferred_shape[0] = x.shape[0];
   inferred_shape[1] = x.shape[1];
   for (size_t i = 0; i < k; ++i) {
@@ -113,13 +123,16 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
 
   // Compute strides for both layouts and copy the inferred region into the
   // top-left corner of the output.
-  std::vector<int64_t> in_strides(x.shape.size(), 1);
-  std::vector<int64_t> out_strides(x.shape.size(), 1);
+  Shape in_strides;
+  in_strides.assign(x.shape.size(), 1);
+  Shape out_strides;
+  out_strides.assign(x.shape.size(), 1);
   for (size_t i = x.shape.size(); i-- > 1;) {
     in_strides[i - 1] = in_strides[i] * inferred_shape[i];
     out_strides[i - 1] = out_strides[i] * (*explicit_output_shape)[i];
   }
-  std::vector<int64_t> idx(x.shape.size(), 0);
+  Shape idx;
+  idx.assign(x.shape.size(), 0);
   for (int64_t flat = 0; flat < inferred_total; ++flat) {
     int64_t rem = flat;
     for (size_t i = inferred_shape.size(); i-- > 0;) {
@@ -139,16 +152,13 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
 
 } // namespace
 
-Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices,
-                             const std::vector<int64_t> &kernel_shape,
-                             const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                             RuntimeContext *rt) const {
+Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Shape &kernel_shape,
+                             const Shape &strides, const Shape &pads, RuntimeContext *rt) const {
   return RunMaxUnpool(x, indices, kernel_shape, strides, pads, /*explicit_output_shape=*/nullptr);
 }
 
 Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Tensor &output_shape,
-                             const std::vector<int64_t> &kernel_shape,
-                             const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
+                             const Shape &kernel_shape, const Shape &strides, const Shape &pads,
                              RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(output_shape.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::MaxUnpool: output_shape must be INT64.");
@@ -157,7 +167,8 @@ Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Tenso
   EXT_ENFORCE_INVALID(static_cast<size_t>(output_shape.shape[0]) == x.shape.size(),
                       "kernel::MaxUnpool: output_shape size must match x rank.");
   const int64_t *posh = output_shape.AsInt64();
-  std::vector<int64_t> shape_vec(static_cast<size_t>(output_shape.shape[0]));
+  Shape shape_vec;
+  shape_vec.assign(static_cast<size_t>(output_shape.shape[0]), 0);
   for (size_t i = 0; i < shape_vec.size(); ++i) {
     shape_vec[i] = posh[i];
   }

@@ -253,7 +253,7 @@ TEST(KernelClass, MakeFloat8TensorRejectsShapeMismatch) {
                std::invalid_argument);
 }
 
-TEST(KernelClass, CastHelperTensorBuildersUseAllocatorWhenProvided) {
+TEST(KernelClass, AllocatorBackedTensorBuilders) {
   onnx_kernels::SimpleRawBufferAllocator alloc(16);
 
   Tensor f16 = onnx_kernels::kernel::MakeFloat16Tensor("f16", {2}, {1.0f, -2.0f}, &alloc);

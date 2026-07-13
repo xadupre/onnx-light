@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -23,6 +24,8 @@ void ValidateShapeAndElementCount(const Shape &shape, std::size_t n_values) {
   int64_t expected = 1;
   for (int64_t d : shape) {
     EXT_ENFORCE_INVALID(d >= 0, "Tensor shape dimensions must be non-negative.");
+    EXT_ENFORCE_INVALID(d == 0 || expected <= std::numeric_limits<int64_t>::max() / d,
+                        "Tensor shape product exceeds int64_t range.");
     expected *= d;
   }
   EXT_ENFORCE_INVALID(static_cast<int64_t>(n_values) == expected,
@@ -30,8 +33,8 @@ void ValidateShapeAndElementCount(const Shape &shape, std::size_t n_values) {
 }
 
 Tensor MakeTensor(const std::string &name, std::int32_t data_type, const Shape &shape,
-                  size_t byte_count, RawBufferAllocator *allocator) {
-  Tensor t = MakeOutputTensor(data_type, shape, byte_count, allocator);
+                  size_t total_bytes, RawBufferAllocator *allocator) {
+  Tensor t = MakeOutputTensor(data_type, shape, total_bytes, allocator);
   t.name = name;
   return t;
 }

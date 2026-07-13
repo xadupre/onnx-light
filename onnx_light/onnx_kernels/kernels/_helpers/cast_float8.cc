@@ -8,8 +8,8 @@
 
 #include "onnx_kernels/kernels/_helpers/cast_float8.h"
 
+#include <bit>
 #include <cstdint>
-#include <cstring>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -17,17 +17,9 @@ namespace kernel {
 
 namespace {
 
-inline std::uint32_t BitcastFloatToU32(float v) noexcept {
-  std::uint32_t b;
-  std::memcpy(&b, &v, sizeof(b));
-  return b;
-}
+inline std::uint32_t BitcastFloatToU32(float v) noexcept { return std::bit_cast<std::uint32_t>(v); }
 
-inline float BitcastU32ToFloat(std::uint32_t b) noexcept {
-  float v;
-  std::memcpy(&v, &b, sizeof(v));
-  return v;
-}
+inline float BitcastU32ToFloat(std::uint32_t b) noexcept { return std::bit_cast<float>(b); }
 
 } // namespace
 

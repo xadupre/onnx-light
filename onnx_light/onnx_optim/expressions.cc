@@ -1466,43 +1466,31 @@ static void run_add_visitor(const Node &node, AddVisitorResult &res) {
         std::vector<NodePtr> num, den;
         flatten_mul_div(*b, num, den);
         if (den.empty()) {
-          // First pass: count constants and accumulate the integer coefficient
-          // without moving any nodes, so the second pass can safely read them.
+          // Single pass: accumulate the integer coefficient and collect each
+          // symbolic factor exactly once, pairing it with its unparsed key
+          // immediately so no second cast or second unparse is needed.
           int64_t num_c = 1;
-          size_t const_count = 0;
-          for (const auto &x : num) {
-            if (const auto *c = dynamic_cast<const Constant *>(x.get())) {
+          std::vector<std::pair<std::string, NodePtr>> sym_keyed;
+          sym_keyed.reserve(num.size());
+          for (auto &x : num) {
+            if (const auto *c = dynamic_cast<const Constant *>(x.get()))
               num_c *= c->value;
-              ++const_count;
-            }
+            else
+              sym_keyed.emplace_back(unparse(*x), std::move(x));
           }
-          if (const_count > 0) {
-            // At least one constant factor was found.
-            // Second pass: collect symbolic factors (move each exactly once).
-            std::vector<NodePtr> num_other;
-            num_other.reserve(num.size() - const_count);
-            for (auto &x : num) {
-              if (!dynamic_cast<const Constant *>(x.get()))
-                num_other.push_back(std::move(x));
-            }
-            if (num_other.empty()) {
+          if (sym_keyed.size() < num.size()) {
+            // At least one constant factor was extracted.
+            if (sym_keyed.empty()) {
               res.const_term += num_c;
               return;
             }
-            // Sort symbolic factors for a canonical key, caching the unparsed
-            // strings to avoid redundant work during the O(n log n) sort.
-            std::vector<std::string> keys;
-            keys.reserve(num_other.size());
-            for (const auto &x : num_other)
-              keys.push_back(unparse(*x));
-            std::vector<size_t> order(num_other.size());
-            std::iota(order.begin(), order.end(), 0u);
-            std::sort(order.begin(), order.end(),
-                      [&keys](size_t a, size_t b) { return keys[a] < keys[b]; });
-            NodePtr symbolic = std::move(num_other[order[0]]);
-            for (size_t i = 1; i < order.size(); ++i)
+            // Sort symbolic factors by their pre-computed key for a canonical form.
+            std::sort(sym_keyed.begin(), sym_keyed.end(),
+                      [](const auto &a, const auto &b) { return a.first < b.first; });
+            NodePtr symbolic = std::move(sym_keyed[0].second);
+            for (size_t i = 1; i < sym_keyed.size(); ++i)
               symbolic = std::make_unique<BinOp>(std::move(symbolic), BinOpKind::Mult,
-                                                 std::move(num_other[order[i]]));
+                                                 std::move(sym_keyed[i].second));
             AddVisitorResult simp;
             run_add_visitor(*symbolic, simp);
             for (const auto &[k, v] : simp.coeffs)

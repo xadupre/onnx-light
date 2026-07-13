@@ -21,20 +21,20 @@ constexpr std::int32_t kFloat32ExponentBias = 127;
 constexpr std::int32_t kFloat16ExponentBias = 15;
 
 void ValidateShapeAndElementCount(const Shape &shape, std::size_t n_values) {
-  int64_t expected = 1;
+  int64_t shape_product = 1;
   for (int64_t d : shape) {
     EXT_ENFORCE_INVALID(d >= 0, "Tensor shape dimensions must be non-negative.");
-    EXT_ENFORCE_INVALID(d == 0 || expected <= std::numeric_limits<int64_t>::max() / d,
+    EXT_ENFORCE_INVALID(d == 0 || shape_product <= std::numeric_limits<int64_t>::max() / d,
                         "Tensor shape product exceeds int64_t range.");
-    expected *= d;
+    shape_product *= d;
   }
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(n_values) == expected,
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(n_values) == shape_product,
                       "Tensor values size does not match the product of shape.");
 }
 
 Tensor MakeTensor(const std::string &name, std::int32_t data_type, const Shape &shape,
-                  size_t total_bytes, RawBufferAllocator *allocator) {
-  Tensor t = MakeOutputTensor(data_type, shape, total_bytes, allocator);
+                  size_t size_bytes, RawBufferAllocator *allocator) {
+  Tensor t = MakeOutputTensor(data_type, shape, size_bytes, allocator);
   t.name = name;
   return t;
 }

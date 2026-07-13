@@ -84,8 +84,8 @@ template <typename T> struct TemporaryTypedBuffer {
     }
   }
 
-  // Allocates space for ``count`` elements, preferring ``buffer_allocator``
-  // when provided and validating the returned buffer before use. ``name`` is
+  // Allocates space for `count` elements, preferring `buffer_allocator`
+  // when provided and validating the returned buffer before use. `name` is
   // used to contextualize any allocation errors.
   void Allocate(size_t count, RawBufferAllocator *buffer_allocator, const char *name) {
     size = count;
@@ -104,7 +104,7 @@ template <typename T> struct TemporaryTypedBuffer {
     fallback.resize(count);
   }
 
-  // Returns writable storage regardless of whether the active backend is the
+  // Returns the writable storage regardless of whether the active backend is the
   // fallback vector or allocator-backed RawBuffer.
   T *data() {
     if (buffer != nullptr) {
@@ -113,7 +113,7 @@ template <typename T> struct TemporaryTypedBuffer {
     return fallback.data();
   }
 
-  // Copies ``size`` elements from raw little-endian bytes into the active
+  // Copies `size` elements from raw little-endian bytes into the active
   // temporary storage.
   void CopyFromBytes(const std::uint8_t *bytes) { std::memcpy(data(), bytes, size * sizeof(T)); }
 

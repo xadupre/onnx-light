@@ -114,6 +114,14 @@ struct Shape {
   /// Returns ``true`` when there are no dimensions (scalar shape).
   bool empty() const noexcept { return size_ == 0; }
 
+  /// Returns the product of all dimensions; 1 for an empty (scalar) shape.
+  int64_t product() const noexcept {
+    int64_t n = 1;
+    for (size_t i = 0; i < size_; ++i)
+      n *= dims_[i];
+    return n;
+  }
+
   int64_t *begin() noexcept { return dims_; }
   const int64_t *begin() const noexcept { return dims_; }
   int64_t *end() noexcept { return dims_ + size_; }
@@ -562,11 +570,10 @@ ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint64_t, DataType::UINT64);
 
 template <typename T>
 Tensor Tensor::From(const std::string &name, const Shape &shape, const std::vector<T> &values) {
-  int64_t expected = 1;
   for (int64_t d : shape) {
     EXT_ENFORCE_INVALID(d >= 0, "Tensor shape dimensions must be non-negative.");
-    expected *= d;
   }
+  const int64_t expected = shape.product();
   EXT_ENFORCE_INVALID(static_cast<int64_t>(values.size()) == expected,
                       "Tensor values size does not match the product of shape.");
   std::vector<uint8_t> bytes(values.size() * sizeof(T));

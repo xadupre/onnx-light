@@ -12,28 +12,13 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-namespace {
-
-// Returns the product of ``shape``'s entries, i.e. the total number of
-// elements of a tensor with that shape. A 0-D tensor (empty ``shape``) has
-// exactly one element.
-int64_t ComputeNumElements(const std::vector<int64_t> &shape) {
-  int64_t n = 1;
-  for (int64_t d : shape) {
-    n *= d;
-  }
-  return n;
-}
-
-} // namespace
-
 Tensor Size::operator()(const Tensor &data, RuntimeContext *rt) const {
-  const int64_t n = ComputeNumElements(data.shape);
+  const int64_t n = data.shape.product();
   return Tensor::FromInt64("", {}, {n});
 }
 
 void Size::operator()(const Tensor &data, Tensor &output) const {
-  const int64_t n = ComputeNumElements(data.shape);
+  const int64_t n = data.shape.product();
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::Size: preallocated output dtype must be INT64.");
   EXT_ENFORCE_INVALID(output.shape == std::vector<int64_t>{},

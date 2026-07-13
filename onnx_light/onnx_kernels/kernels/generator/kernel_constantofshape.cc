@@ -41,16 +41,6 @@ bool IsSupportedConstantOfShapeDtype(int32_t dtype) {
   }
 }
 
-// Computes the total element count from a shape (1 for an empty shape).
-int64_t ProductOfShape(const Shape &shape) {
-  int64_t n = 1;
-  for (int64_t d : shape) {
-    EXT_ENFORCE_INVALID(d >= 0, "kernel::ConstantOfShape: shape entries must be non-negative.");
-    n *= d;
-  }
-  return n;
-}
-
 // Reads the output shape from the 1-D INT64 ``shape`` input tensor.
 Shape ReadShapeInput(const Tensor &shape) {
   EXT_ENFORCE_INVALID(shape.data_type == static_cast<int32_t>(DataType::INT64),
@@ -66,6 +56,9 @@ Shape ReadShapeInput(const Tensor &shape) {
   const int64_t *dims = shape.AsInt64();
   if (n > 0) {
     out.insert(out.end(), dims, dims + n);
+  }
+  for (int64_t d : out) {
+    EXT_ENFORCE_INVALID(d >= 0, "kernel::ConstantOfShape: shape entries must be non-negative.");
   }
   return out;
 }
@@ -92,7 +85,7 @@ Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value,
     elem_bytes.assign(value.bytes(), value.bytes() + value.size_bytes());
   }
 
-  const int64_t n = ProductOfShape(out_shape);
+  const int64_t n = out_shape.product();
   const std::size_t es = elem_bytes.size();
   std::vector<uint8_t> out_data(static_cast<std::size_t>(n) * es);
   for (int64_t i = 0; i < n; ++i) {

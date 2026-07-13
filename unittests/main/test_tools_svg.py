@@ -365,6 +365,44 @@ class TestSvg(unittest.TestCase):
         self.assertLess(after, before)
         self.assertEqual(after, 0)
 
+    def test_crossings_are_eliminated_with_skip_edge(self) -> None:
+        from onnx_light.tools.svg import _assign_layers, _Box, _minimize_crossings
+
+        # X feeds three operators (adjacent edges) and also directly Out3, a
+        # long skip edge spanning two layers.  Out3 is declared first so the
+        # naive insertion order produces crossings.  All crossings must be
+        # resolved after the crossing-reduction pass.
+        #
+        #   X (layer 0)
+        #   ├──→ Op1 → Out1 (layer 2)
+        #   ├──→ Op2 → Out2
+        #   ├──→ Op3 → Out3
+        #   └─────────→ Out3  ← skip edge
+        boxes = [
+            _Box(0, "input", ["X"]),
+            _Box(1, "op", ["Op1"]),
+            _Box(2, "op", ["Op2"]),
+            _Box(3, "op", ["Op3"]),
+            _Box(4, "output", ["Out3"]),  # declared first → wrong initial order
+            _Box(5, "output", ["Out1"]),
+            _Box(6, "output", ["Out2"]),
+        ]
+        edges = [
+            (0, 1, ""),
+            (0, 2, ""),
+            (0, 3, ""),
+            (1, 5, ""),
+            (2, 6, ""),
+            (3, 4, ""),
+            (0, 4, ""),  # skip edge: X -> Out3
+        ]
+        _assign_layers(boxes, edges)
+        before = _count_crossings(boxes, edges, by_order=False)
+        _minimize_crossings(boxes, edges)
+        after = _count_crossings(boxes, edges, by_order=True)
+        self.assertGreater(before, 0)
+        self.assertEqual(after, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

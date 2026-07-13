@@ -31,8 +31,8 @@ int64_t ResolveTopKAxis(int64_t axis, int64_t rank) {
 // Splits ``shape`` around ``axis`` into ``outer`` (product of dims before
 // ``axis``), ``axis_dim`` (shape[axis]) and ``inner`` (product of dims after
 // ``axis``).
-void SplitTopKShape(const std::vector<int64_t> &shape, int64_t axis, int64_t &outer,
-                    int64_t &axis_dim, int64_t &inner) {
+void SplitTopKShape(const Shape &shape, int64_t axis, int64_t &outer, int64_t &axis_dim,
+                    int64_t &inner) {
   outer = 1;
   for (int64_t i = 0; i < axis; ++i) {
     outer *= shape[static_cast<std::size_t>(i)];
@@ -146,13 +146,13 @@ void RunTopK(const Tensor &x, int64_t k, int64_t axis, bool largest, bool sorted
   }
 }
 
-std::vector<int64_t> MakeOutputShape(const std::vector<int64_t> &shape, int64_t axis, int64_t k) {
-  std::vector<int64_t> out = shape;
+Shape MakeOutputShape(const Shape &shape, int64_t axis, int64_t k) {
+  Shape out = shape;
   out[static_cast<std::size_t>(axis)] = k;
   return out;
 }
 
-Tensor AllocateOutput(int32_t dtype, const std::vector<int64_t> &shape) {
+Tensor AllocateOutput(int32_t dtype, const Shape &shape) {
   Tensor t;
   t.name = "";
   t.data_type = dtype;
@@ -176,7 +176,7 @@ std::pair<Tensor, Tensor> TopK::operator()(const Tensor &x, int64_t k, int64_t a
   EXT_ENFORCE_INVALID(k <= x.shape[static_cast<std::size_t>(resolved_axis)], kTopKName,
                       ": k is larger than the axis dimension.");
 
-  const std::vector<int64_t> out_shape = MakeOutputShape(x.shape, resolved_axis, k);
+  const Shape out_shape = MakeOutputShape(x.shape, resolved_axis, k);
   Tensor values = AllocateOutput(x.data_type, out_shape);
   Tensor indices = AllocateOutput(static_cast<int32_t>(DataType::INT64), out_shape);
   RunTopK(x, k, resolved_axis, largest, sorted, values, indices);
@@ -192,7 +192,7 @@ void TopK::operator()(const Tensor &x, int64_t k, int64_t axis, bool largest, bo
   EXT_ENFORCE_INVALID(k <= x.shape[static_cast<std::size_t>(resolved_axis)], kTopKName,
                       ": k is larger than the axis dimension.");
 
-  const std::vector<int64_t> out_shape = MakeOutputShape(x.shape, resolved_axis, k);
+  const Shape out_shape = MakeOutputShape(x.shape, resolved_axis, k);
   EXT_ENFORCE_INVALID(values.data_type == x.data_type, kTopKName,
                       " preallocated Values output must share the input dtype.");
   EXT_ENFORCE_INVALID(values.shape == out_shape, kTopKName,

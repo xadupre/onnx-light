@@ -568,7 +568,7 @@ rename_dynamic_expression(const std::string &expression,
  *          that was successfully resolved.
  *
  * @code{.cpp}
- * std::map<std::string, std::unordered_set<std::string>> constraints = {
+ * std::unordered_map<std::string, std::unordered_set<std::string>> constraints = {
  *     {"s0", {"batch", "s12"}},
  *     {"s12", {"batch", "s0"}},
  * };
@@ -578,10 +578,9 @@ rename_dynamic_expression(const std::string &expression,
  * // renamed["s12"] == "batch"
  * @endcode
  */
-std::map<std::string, std::string>
-rename_dynamic_dimensions(const std::map<std::string, std::unordered_set<std::string>> &constraints,
-                          const std::unordered_set<std::string> &original,
-                          const std::string &ban_prefix = "DYN");
+std::unordered_map<std::string, std::string> rename_dynamic_dimensions(
+    const std::unordered_map<std::string, std::unordered_set<std::string>> &constraints,
+    const std::unordered_set<std::string> &original, const std::string &ban_prefix = "DYN");
 
 // ─────────────────── dimension operation types ────────────────────────
 

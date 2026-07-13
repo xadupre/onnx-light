@@ -105,10 +105,14 @@ can be set on the ``cmake`` command line with ``-D<NAME>=<VALUE>``.
         ``-Werror=format-security``, ``-z noexecstack``, ``-z relro``,
         ``-z now``, on GCC/Clang and ``/GS``,
         ``/guard:cf``, ``/Qspectre``, ``/sdl``, ``/DYNAMICBASE``,
-        ``/NXCOMPAT``, ``/CETCOMPAT`` on MSVC).  Each flag is probed by
-        the configure step and silently skipped when the active toolchain
-        does not accept it.  See ``cmake/Hardening.cmake`` for the full
-        list.
+        ``/NXCOMPAT``, ``/CETCOMPAT`` on MSVC).  When ``/Qspectre`` is
+        enabled on MSVC, the configure step also prepends the matching
+        ``VCToolsInstallDir/lib/spectre/<arch>`` directory to the linker
+        search path so the Spectre-mitigated CRT/STL libraries are used
+        when that Visual Studio component is installed.  Each flag is
+        probed by the configure step and silently skipped when the active
+        toolchain does not accept it.  See ``cmake/Hardening.cmake`` for
+        the full list.
 
 .. _l-design-cpp-linking-no-kernels:
 

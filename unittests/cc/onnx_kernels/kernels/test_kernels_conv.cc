@@ -85,6 +85,35 @@ TEST(KernelClass, ConvSameUpperMatchesInputShape) {
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 4}));
 }
 
+// SAME_UPPER auto_pad with stride=2: asymmetric padding (pad_begin=0,
+// pad_end=1). Reproduces the scenario from microsoft/onnxruntime#26734 where
+// stride > 1 with SAME_UPPER produced incorrect values in some ORT backends.
+// Input [1,1,4,4], kernel 3x3, stride=2 → pads resolved to [0,0,1,1].
+TEST(KernelClass, ConvSameUpperStride2AsymmetricPadding) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const Conv conv{ctx};
+  std::vector<float> Xv(16);
+  for (int i = 0; i < 16; ++i) {
+    Xv[i] = static_cast<float>(i);
+  }
+  Tensor x = Tensor::FromFloat("", {1, 1, 4, 4}, Xv);
+  Tensor w = Tensor::FromFloat("", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+  Tensor b;
+  Conv::Attributes attrs;
+  attrs.kernel_shape = {3, 3};
+  attrs.auto_pad = "SAME_UPPER";
+  attrs.strides = {2, 2};
+  Tensor y = conv(x, w, b, attrs);
+  // pads resolved to [begin_h=0, begin_w=0, end_h=1, end_w=1].
+  // Output shape [1, 1, 2, 2]:
+  //   y[0,0] = X[0..2, 0..2].sum()        = 0+1+2+4+5+6+8+9+10 = 45
+  //   y[0,1] = X[0..2, 2..3+pad].sum()    = 2+3+0+6+7+0+10+11+0 = 39
+  //   y[1,0] = X[2..3+pad, 0..2].sum()    = 8+9+10+12+13+14+0+0+0 = 66
+  //   y[1,1] = X[2..3+pad, 2..3+pad].sum()= 10+11+0+14+15+0+0+0+0 = 50
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
+  ExpectNear(y, {45.f, 39.f, 66.f, 50.f});
+}
+
 TEST(KernelClass, ConvCanRunInPlaceIsFalse) { EXPECT_FALSE(Conv::CanRunInPlace()); }
 
 } // namespace Test

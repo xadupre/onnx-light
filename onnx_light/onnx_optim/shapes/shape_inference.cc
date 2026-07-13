@@ -642,17 +642,16 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
   if (preferred.empty()) {
     return;
   }
-  std::map<std::string, std::unordered_set<std::string>> constraints;
+  std::unordered_map<std::string, std::unordered_set<std::string>> constraints;
   for (const auto &c : ctx.Constraints()) {
     constraints[c.first].insert(c.second);
     constraints[c.second].insert(c.first);
   }
-  const std::map<std::string, std::string> rep =
+  std::unordered_map<std::string, std::string> replacements =
       expressions::rename_dynamic_dimensions(constraints, preferred);
-  if (rep.empty()) {
+  if (replacements.empty()) {
     return;
   }
-  std::unordered_map<std::string, std::string> replacements(rep.begin(), rep.end());
 
   // Graph-input symbols (e.g. ``total_seq``) are authoritative anchors a
   // compound expression of other input symbols may collapse onto.

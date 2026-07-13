@@ -244,30 +244,33 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   bt_mod.def(
       "collect_test_cases",
-      [](const std::string &op_type_or_cat) {
-        return onnx_backend_test::CollectTestCases(op_type_or_cat);
+      [](const std::string &op_type_or_cat, bool include_big) {
+        return onnx_backend_test::CollectTestCases(op_type_or_cat, include_big);
       },
-      nb::arg("op_type_or_cat") = std::string(),
+      nb::arg("op_type_or_cat") = std::string(), nb::arg("include_big") = false,
       "Returns the list of C++-implemented backend test node cases. When "
       "``op_type_or_cat`` is non-empty, only cases whose top-level graph "
       "contains a node with that operator type are returned. It can also "
       "be 'shape', 'inference', 'nan_inf' to get other backend tests "
       "not testing a specific operator but specific issues in one "
-      "algorithm.");
+      "algorithm. Test cases whose name contains ``'_big_'`` are excluded "
+      "by default; pass ``include_big=True`` to include them.");
 
   bt_mod.def(
       "collect_test_cases_by_name",
-      [](const std::string &name_regex) {
+      [](const std::string &name_regex, bool include_big) {
         try {
-          return onnx_backend_test::CollectTestCasesByName(name_regex);
+          return onnx_backend_test::CollectTestCasesByName(name_regex, include_big);
         } catch (const std::regex_error &e) {
           throw nb::value_error(e.what());
         }
       },
-      nb::arg("name_regex") = std::string(),
+      nb::arg("name_regex") = std::string(), nb::arg("include_big") = false,
       "Returns the C++-implemented backend test node cases whose ``name`` matches "
       "the ECMAScript regular expression ``name_regex`` (``std::regex_search`` "
       "semantics: substring match by default; anchor with ``^...$`` to require a "
-      "full match). An empty pattern returns every case. Raises ``ValueError`` if "
-      "``name_regex`` is not a valid regular expression.");
+      "full match). An empty pattern returns every case. Test cases whose name "
+      "contains ``'_big_'`` are excluded by default; pass ``include_big=True`` "
+      "to include them. Raises ``ValueError`` if ``name_regex`` is not a valid "
+      "regular expression.");
 }

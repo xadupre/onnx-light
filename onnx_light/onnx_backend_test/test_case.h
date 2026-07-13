@@ -259,14 +259,19 @@ void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string
  * deterministic and independent: the result owns its ``ModelProto``s and
  * ``Tensor`` data.
  *
- * @param op_type Optional operator type filter. When non-empty, only test
- *                cases whose top-level graph contains a node with this
- *                ``op_type`` are returned.
+ * @param op_type    Optional operator type filter. When non-empty, only test
+ *                   cases whose top-level graph contains a node with this
+ *                   ``op_type`` are returned.
+ * @param include_big When ``false`` (the default), test cases whose name
+ *                   contains the substring ``"_big_"`` are excluded from the
+ *                   result. Pass ``true`` to include them; the big models are
+ *                   intentionally opt-in because they carry large weight
+ *                   tensors that make exhaustive test loops slow.
  *
  * @return A fresh registry of test cases (Abs, Add equal-shape, Add scalar
  *         broadcast).
  */
-std::vector<TestCase> CollectTestCases(const std::string &op_type = "");
+std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool include_big = false);
 
 /**
  * Collects C++-implemented backend test node cases whose
@@ -274,9 +279,12 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type = "");
  * ``std::regex_search`` semantics (substring match by default; anchor with
  * ``^...$`` to require a full match).
  *
- * @param name_regex ECMAScript regular expression matched against each
- *                   test case name. An empty string matches every case
- *                   (equivalent to :func:`CollectTestCases`).
+ * @param name_regex  ECMAScript regular expression matched against each
+ *                    test case name. An empty string matches every case
+ *                    (equivalent to :func:`CollectTestCases`).
+ * @param include_big When ``false`` (the default), test cases whose name
+ *                    contains ``"_big_"`` are excluded before the regex
+ *                    filter is applied. Pass ``true`` to include them.
  *
  * @return The subset of cases whose ``name`` matches ``name_regex``,
  *         in the same registration order as :func:`CollectTestCases`.
@@ -284,7 +292,8 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type = "");
  * @throws std::regex_error if ``name_regex`` is not a valid ECMAScript
  *         regular expression.
  */
-std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex);
+std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
+                                             bool include_big = false);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

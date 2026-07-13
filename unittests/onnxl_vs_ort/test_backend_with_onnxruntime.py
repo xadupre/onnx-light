@@ -152,6 +152,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_qlinearmatmul_2D_int8_float16$",
     r"^test_cc_qlinearmatmul_3D_uint8_float16$",
     r"^test_cc_qlinearmatmul_3D_int8_float16$",
+    # ORT 1.27 still mishandles the opset-18 ceil_mode+count_include_pad
+    # AveragePool tail windows tracked by microsoft/onnxruntime#29629.
+    r"^test_cc_averagepool_18_ceil_count_include_pad_1d$",
+    r"^test_cc_averagepool_18_ceil_count_include_pad_2d$",
     # ORT is missing kernels for these ops or dtypes.
     r"^test_cc_globallppool_",
     r"^test_cc_maxroipool_",

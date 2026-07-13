@@ -123,11 +123,11 @@ Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const
   // ``CausalConvWithState`` function (which lowers to a half-precision Conv)
   // run through this kernel.
   if (IsHalfPrecision(x.data_type)) {
-    const Tensor x_f = PromoteToFloat32(x);
-    const Tensor w_f = PromoteToFloat32(w);
-    const Tensor b_f = b.shape.empty() ? b : PromoteToFloat32(b);
+    const Tensor x_f = PromoteToFloat32(x, rt);
+    const Tensor w_f = PromoteToFloat32(w, rt);
+    const Tensor b_f = b.shape.empty() ? b : PromoteToFloat32(b, rt);
     Tensor y = (*this)(x_f, w_f, b_f, attrs, rt);
-    return DemoteFromFloat32(y, x.data_type);
+    return DemoteFromFloat32(y, x.data_type, rt);
   }
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);

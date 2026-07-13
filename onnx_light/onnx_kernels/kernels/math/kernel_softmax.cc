@@ -31,9 +31,9 @@ Tensor Softmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) co
   // FLOAT16/BFLOAT16 inputs are computed in float32 and demoted back, mirroring
   // the half-precision handling in the other math kernels.
   if (IsHalfPrecision(x.data_type)) {
-    const Tensor x_f = PromoteToFloat32(x);
+    const Tensor x_f = PromoteToFloat32(x, rt);
     Tensor y_f = (*this)(x_f, axis, rt);
-    return DemoteFromFloat32(y_f, x.data_type);
+    return DemoteFromFloat32(y_f, x.data_type, rt);
   }
   const int32_t out_dtype = (static_cast<DataType>(x.data_type) == DataType::DOUBLE)
                                 ? static_cast<int32_t>(DataType::DOUBLE)

@@ -210,10 +210,10 @@ Tensor MatMul::operator()(const Tensor &a, const Tensor &b, RuntimeContext *rt) 
     return MatMulAlloc<uint64_t>(a, b);
   case DataType::FLOAT16:
   case DataType::BFLOAT16: {
-    const Tensor a_f = PromoteToFloat32(a);
-    const Tensor b_f = PromoteToFloat32(b);
+    const Tensor a_f = PromoteToFloat32(a, rt);
+    const Tensor b_f = PromoteToFloat32(b, rt);
     Tensor y = MatMulAlloc<float>(a_f, b_f);
-    return DemoteFromFloat32(y, a.data_type);
+    return DemoteFromFloat32(y, a.data_type, rt);
   }
   default:
     EXT_THROW_INVALID(kMatMulName, ": unsupported data type ", a.data_type,

@@ -175,7 +175,35 @@ void RegisterConvCases(std::vector<TestCase> &registry) {
   }
 
   // -------------------------------------------------------------------
-  // Case 7: FLOAT16 inputs with bias. Exercises the half-precision dispatch
+  // Case 7: SAME_UPPER auto_pad with stride=2 and asymmetric padding.
+  // Reproduces the scenario from microsoft/onnxruntime#26734 where stride>1
+  // with SAME_UPPER produced incorrect values in some ORT backends.
+  // Input [1,1,4,4], kernel 3x3, stride=[2,2] → pads resolved to [0,0,1,1]
+  // (pad_begin=0, pad_end=1 on each spatial axis), output shape [1,1,2,2].
+  {
+    std::vector<float> Xv(16);
+    for (int i = 0; i < 16; ++i) {
+      Xv[i] = static_cast<float>(i);
+    }
+    Tensor X = Tensor::FromFloat("X", {1, 1, 4, 4}, Xv);
+    Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+    Tensor B;
+    kernel::Conv::Attributes attrs;
+    attrs.kernel_shape = {3, 3};
+    attrs.auto_pad = "SAME_UPPER";
+    attrs.strides = {2, 2};
+    Tensor Y = conv(X, W, B, attrs);
+    Y.name = "Y";
+    NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    Expect(node, {X, W}, {Y}, "test_cc_conv_with_autopad_same_stride2", {opset}, "backend-test",
+           registry);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 8: FLOAT16 inputs with bias. Exercises the half-precision dispatch
   // (promote to float32, compute, demote) that the expanded
   // ``CausalConvWithState`` function relies on.
   {

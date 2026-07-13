@@ -14,13 +14,13 @@ Tensor CastLike::operator()(const Tensor &x, const Tensor &target_type, RuntimeC
   // taken from the second input's element type. The values of ``target_type``
   // are ignored — only its ``data_type`` is observed.
   const Cast cast_kernel{ctx_};
-  return cast_kernel(x, target_type.data_type);
+  return cast_kernel(x, target_type.data_type, rt);
 }
 
 Tensor CastLike::operator()(const Tensor &x, const Tensor &target_type, bool saturate,
                             RuntimeContext *rt) const {
   const Cast cast_kernel{ctx_};
-  return cast_kernel(x, target_type.data_type, saturate);
+  return cast_kernel(x, target_type.data_type, saturate, rt);
 }
 
 void CastLike::operator()(const Tensor &x, const Tensor &target_type, Tensor &output) const {

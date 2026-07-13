@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -34,15 +35,17 @@ inline float SaturateUint8(float v) {
 
 } // namespace
 
-std::tuple<Tensor, Tensor, Tensor> DynamicQuantizeLinear::operator()(const Tensor &x) const {
+std::tuple<Tensor, Tensor, Tensor> DynamicQuantizeLinear::operator()(const Tensor &x,
+                                                                     RuntimeContext *rt) const {
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   const size_t y_n_bytes = static_cast<size_t>(x.element_count());
-  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), x.shape, y_n_bytes, nullptr);
+  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), x.shape, y_n_bytes, allocator);
   const size_t y_scale_n_bytes = sizeof(float);
   Tensor y_scale = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), /*shape=*/{},
-                                    y_scale_n_bytes, nullptr);
+                                    y_scale_n_bytes, allocator);
   const size_t y_zero_point_n_bytes = 1;
   Tensor y_zero_point = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), /*shape=*/{},
-                                         y_zero_point_n_bytes, nullptr);
+                                         y_zero_point_n_bytes, allocator);
   (*this)(x, y, y_scale, y_zero_point);
   return std::tuple<Tensor, Tensor, Tensor>(std::move(y), std::move(y_scale),
                                             std::move(y_zero_point));

@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -102,10 +103,9 @@ Shape ReducedShape(const Shape &x_shape, int64_t axis) {
 
 } // namespace
 
-std::tuple<Tensor, Tensor, Tensor> LayerNormalization::operator()(const Tensor &x,
-                                                                  const Tensor &scale,
-                                                                  const Tensor &b, int64_t axis,
-                                                                  float epsilon) const {
+std::tuple<Tensor, Tensor, Tensor>
+LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &b, int64_t axis,
+                               float epsilon, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LayerNormalization: X must be FLOAT.");
   const int64_t rank = static_cast<int64_t>(x.shape.size());
@@ -118,14 +118,15 @@ std::tuple<Tensor, Tensor, Tensor> LayerNormalization::operator()(const Tensor &
   }
   const size_t reduced_bytes = static_cast<size_t>(reduced_elem) * sizeof(float);
 
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   const size_t y_n_bytes = x.size_bytes();
-  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, y_n_bytes, nullptr);
+  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, y_n_bytes, allocator);
   const size_t mean_n_bytes = reduced_bytes;
-  Tensor mean =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape, mean_n_bytes, nullptr);
+  Tensor mean = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape, mean_n_bytes,
+                                 allocator);
   const size_t inv_std_dev_n_bytes = reduced_bytes;
   Tensor inv_std_dev = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape,
-                                        inv_std_dev_n_bytes, nullptr);
+                                        inv_std_dev_n_bytes, allocator);
   (*this)(x, scale, b, y, mean, inv_std_dev, axis, epsilon);
   return {std::move(y), std::move(mean), std::move(inv_std_dev)};
 }

@@ -342,7 +342,8 @@ public:
   /// Computes the split. Exactly one of ``split`` (non-empty) or
   /// ``num_outputs`` (> 0) must be provided.
   std::vector<Tensor> operator()(const Tensor &input, int64_t axis,
-                                 const std::vector<int64_t> &split, int64_t num_outputs) const;
+                                 const std::vector<int64_t> &split, int64_t num_outputs,
+                                 RuntimeContext *rt = nullptr) const;
 
   /// Output buffers are strict subsets of the input and have a different
   /// shape, so storage can not generally be shared.
@@ -1038,7 +1039,8 @@ public:
 
   /// Resize using the ``sizes`` input (1-D INT64 tensor giving the target
   /// shape). The ``scales`` input must be empty.
-  Tensor ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs) const;
+  Tensor ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs,
+                     RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from input shape, so storage cannot be
   /// shared with the input buffer.
@@ -1087,7 +1089,7 @@ public:
   using KernelBase::KernelBase;
 
   Outputs operator()(const Tensor &x) const;
-  Outputs operator()(const Tensor &x, const Attributes &attrs) const;
+  Outputs operator()(const Tensor &x, const Attributes &attrs, RuntimeContext *rt = nullptr) const;
 
   /// The outputs have different dtypes (Y matches X; the others are INT64)
   /// and different shapes, so storage cannot be shared with the input.

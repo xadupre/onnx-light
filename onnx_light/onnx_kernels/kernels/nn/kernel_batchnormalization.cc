@@ -115,7 +115,7 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
 std::tuple<Tensor, Tensor, Tensor>
 BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const Tensor &bias,
                                     const Tensor &input_mean, const Tensor &input_var,
-                                    float epsilon, float momentum) const {
+                                    float epsilon, float momentum, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::BatchNormalization: X must be FLOAT.");
   EXT_ENFORCE_INVALID(!x.shape.empty(), "kernel::BatchNormalization: X must have rank >= 1.");
@@ -180,12 +180,13 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
   }
 
   // Normalize Y using the batch statistics via the inference path.
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   const size_t saved_mean_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
   Tensor saved_mean_t =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_mean_t_n_bytes, nullptr);
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_mean_t_n_bytes, allocator);
   const size_t saved_var_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
   Tensor saved_var_t =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_var_t_n_bytes, nullptr);
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_var_t_n_bytes, allocator);
   std::copy(saved_mean.begin(), saved_mean.end(), saved_mean_t.AsFloat());
   std::copy(saved_var.begin(), saved_var.end(), saved_var_t.AsFloat());
   Tensor y = (*this)(x, scale, bias, saved_mean_t, saved_var_t, epsilon);
@@ -193,10 +194,10 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
   // Update the running estimates: running = input * momentum + saved * (1 - m).
   const size_t running_mean_n_bytes = static_cast<size_t>(C) * sizeof(float);
   Tensor running_mean =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_mean_n_bytes, nullptr);
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_mean_n_bytes, allocator);
   const size_t running_var_n_bytes = static_cast<size_t>(C) * sizeof(float);
   Tensor running_var =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_var_n_bytes, nullptr);
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_var_n_bytes, allocator);
   float *p_run_mean = running_mean.AsFloat();
   float *p_run_var = running_var.AsFloat();
   for (int64_t c = 0; c < C; ++c) {

@@ -90,7 +90,7 @@ double Reflect(double x, double x_min, double x_max) {
 // Compute the per-dimension reflection borders. The Python reference uses
 // ``[-0.5, dim - 0.5]`` (align_corners=0) or ``[0, dim - 1]``
 // (align_corners=1).
-void PrepareBorders(const std::vector<int64_t> &dims, bool align_corners, std::vector<double> &lo,
+void PrepareBorders(const onnx_kernels::Shape &dims, bool align_corners, std::vector<double> &lo,
                     std::vector<double> &hi) {
   const size_t r = dims.size();
   lo.resize(r);
@@ -125,7 +125,7 @@ void CubicCoeffs(double x, double coeffs[4]) {
 // ``border``, indices are clamped. For ``reflection``, indices are
 // reflected using ``lo[k]`` / ``hi[k]``.
 template <typename T>
-double PixelAtND(const T *x_data, const std::vector<int64_t> &spatial_dims,
+double PixelAtND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
                  const std::vector<int64_t> &spatial_strides, const std::vector<int64_t> &idx,
                  Padding pad, const std::vector<double> &lo, const std::vector<double> &hi) {
   const size_t r = spatial_dims.size();
@@ -166,7 +166,7 @@ double PixelAtND(const T *x_data, const std::vector<int64_t> &spatial_dims,
 // committed for earlier dims (those will be the same for all recursion
 // branches); on entry only dims < cur_dim are filled.
 template <typename T>
-double LinearInterpND(const T *x_data, const std::vector<int64_t> &spatial_dims,
+double LinearInterpND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
                       const std::vector<int64_t> &spatial_strides,
                       const std::vector<double> &x_coords, Padding pad,
                       const std::vector<double> &lo, const std::vector<double> &hi,
@@ -193,7 +193,7 @@ double LinearInterpND(const T *x_data, const std::vector<int64_t> &spatial_dims,
 }
 
 template <typename T>
-double CubicInterpND(const T *x_data, const std::vector<int64_t> &spatial_dims,
+double CubicInterpND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
                      const std::vector<int64_t> &spatial_strides,
                      const std::vector<double> &x_coords, Padding pad,
                      const std::vector<double> &lo, const std::vector<double> &hi,
@@ -242,8 +242,8 @@ void ValidateInputs(const Tensor &X, const Tensor &grid) {
                       "kernel::GridSample: only FLOAT and DOUBLE element types are supported.");
 }
 
-std::vector<int64_t> ComputeOutputShape(const Tensor &X, const Tensor &grid) {
-  std::vector<int64_t> out;
+onnx_kernels::Shape ComputeOutputShape(const Tensor &X, const Tensor &grid) {
+  onnx_kernels::Shape out;
   out.reserve(X.shape.size());
   out.push_back(X.shape[0]); // N
   out.push_back(X.shape[1]); // C
@@ -256,7 +256,7 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &X, const Tensor &grid) {
 // Iterate over all combinations of ``shape`` indices, writing them to
 // ``idx`` and invoking ``fn`` for each. ``idx`` is resized as needed.
 template <typename Fn>
-void ForEachIndex(const std::vector<int64_t> &shape, std::vector<int64_t> &idx, Fn &&fn) {
+void ForEachIndex(const onnx_kernels::Shape &shape, std::vector<int64_t> &idx, Fn &&fn) {
   const size_t r = shape.size();
   idx.assign(r, 0);
   if (r == 0) {
@@ -289,7 +289,7 @@ void ForEachIndex(const std::vector<int64_t> &shape, std::vector<int64_t> &idx, 
 // Main per-channel computation, templated on the element type ``T``.
 template <typename T>
 void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, bool align_corners,
-              RawBuffer &out_bytes, const std::vector<int64_t> &out_shape) {
+              RawBuffer &out_bytes, const onnx_kernels::Shape &out_shape) {
   const T *x_data = reinterpret_cast<const T *>(X.bytes());
   const T *grid_data = reinterpret_cast<const T *>(grid.bytes());
   T *y_data = reinterpret_cast<T *>(out_bytes.data());
@@ -298,7 +298,8 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
   const int64_t C = X.shape[1];
   const size_t r = X.shape.size() - 2;
 
-  std::vector<int64_t> spatial_dims(X.shape.begin() + 2, X.shape.end());
+  onnx_kernels::Shape spatial_dims;
+  spatial_dims.insert(spatial_dims.begin(), X.shape.begin() + 2, X.shape.end());
   std::vector<int64_t> spatial_strides(r);
   if (r > 0) {
     spatial_strides[r - 1] = 1;
@@ -311,7 +312,8 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
     spatial_count *= d;
   }
 
-  std::vector<int64_t> out_spatial_dims(grid.shape.begin() + 1, grid.shape.end() - 1);
+  onnx_kernels::Shape out_spatial_dims;
+  out_spatial_dims.insert(out_spatial_dims.begin(), grid.shape.begin() + 1, grid.shape.end() - 1);
   int64_t out_spatial_count = 1;
   for (int64_t d : out_spatial_dims) {
     out_spatial_count *= d;
@@ -407,7 +409,7 @@ void GridSample::operator()(const Tensor &X, const Tensor &grid, const Attribute
                             Tensor &output) const {
   (void)ctx_;
   ValidateInputs(X, grid);
-  const std::vector<int64_t> expected_shape = ComputeOutputShape(X, grid);
+  const onnx_kernels::Shape expected_shape = ComputeOutputShape(X, grid);
   EXT_ENFORCE_INVALID(output.data_type == X.data_type,
                       "kernel::GridSample: preallocated output element type does not match X.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,

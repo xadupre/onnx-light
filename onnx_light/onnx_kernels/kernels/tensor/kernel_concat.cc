@@ -20,7 +20,7 @@ namespace {
 // output shape and the element size in bytes of ``inputs[0].data_type``.
 struct ConcatLayout {
   int64_t axis;
-  std::vector<int64_t> shape;
+  onnx_kernels::Shape shape;
   size_t elem_size;
 };
 
@@ -28,7 +28,7 @@ ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t
   EXT_ENFORCE_INVALID(!inputs.empty(), "kernel::Concat requires at least one input tensor.");
 
   const int32_t dtype = inputs[0].data_type;
-  const std::vector<int64_t> &shape0 = inputs[0].shape;
+  const onnx_kernels::Shape &shape0 = inputs[0].shape;
   const int64_t rank = static_cast<int64_t>(shape0.size());
   EXT_ENFORCE_INVALID(rank != 0, "kernel::Concat cannot concatenate scalar tensors.");
 
@@ -37,7 +37,7 @@ ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t
   EXT_ENFORCE_INVALID(resolved_axis >= 0 && resolved_axis < rank,
                       "kernel::Concat axis is out of range.");
 
-  std::vector<int64_t> out_shape = shape0;
+  onnx_kernels::Shape out_shape = shape0;
   out_shape[static_cast<size_t>(resolved_axis)] = 0;
   for (const Tensor &t : inputs) {
     EXT_ENFORCE_INVALID(t.data_type == dtype,
@@ -85,7 +85,7 @@ void Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis, Tensor 
   // Outer is the product of dimensions before ``axis``; inner_bytes is the
   // product of dimensions after ``axis`` multiplied by the element size.
   const int64_t resolved_axis = layout.axis;
-  const std::vector<int64_t> &shape0 = inputs[0].shape;
+  const onnx_kernels::Shape &shape0 = inputs[0].shape;
   const int64_t rank = static_cast<int64_t>(shape0.size());
   int64_t outer = 1;
   for (int64_t d = 0; d < resolved_axis; ++d) {

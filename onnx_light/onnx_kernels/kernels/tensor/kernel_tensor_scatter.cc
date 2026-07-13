@@ -24,7 +24,7 @@ int64_t NormalizeAxis(int64_t axis, int64_t rank) {
 }
 
 // Row-major strides in elements.
-std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
+std::vector<int64_t> RowMajorStrides(const onnx_kernels::Shape &shape) {
   const std::size_t r = shape.size();
   std::vector<int64_t> strides(r, 1);
   for (std::size_t i = r; i-- > 1;) {

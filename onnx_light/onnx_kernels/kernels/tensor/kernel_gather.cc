@@ -53,7 +53,7 @@ Tensor Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axi
                           RuntimeContext *rt) const {
   const int64_t r = static_cast<int64_t>(data.shape.size());
   const int64_t a = NormalizeAxis(axis, r);
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_shape;
   out_shape.reserve(data.shape.size() + indices.shape.size() - 1);
   for (int64_t k = 0; k < a; ++k) {
     out_shape.push_back(data.shape[static_cast<std::size_t>(k)]);

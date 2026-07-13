@@ -84,7 +84,7 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
   }
 
   // Build output shape: same as input but with axis_dim replaced by selected_count.
-  std::vector<int64_t> out_shape = input.shape;
+  onnx_kernels::Shape out_shape = input.shape;
   out_shape[static_cast<std::size_t>(a)] = selected_count;
 
   // Compute strides (in elements) for the input tensor.

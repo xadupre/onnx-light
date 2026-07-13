@@ -18,14 +18,15 @@ namespace kernel {
 namespace {
 
 // Reads a 1-D INT32 or INT64 ``shape`` tensor into a ``std::vector<int64_t>``.
-std::vector<int64_t> ReadShapeTensor(const Tensor &t) {
+onnx_kernels::Shape ReadShapeTensor(const Tensor &t) {
   EXT_ENFORCE_INVALID(t.shape.size() == 1,
                       "kernel::CenterCropPad: 'shape' input must be a 1-D tensor.");
   const std::size_t n = static_cast<std::size_t>(t.shape[0]);
-  std::vector<int64_t> out(n);
+  onnx_kernels::Shape out;
+  out.assign(n, 0);
   if (t.data_type == DataType::INT64) {
     if (n > 0) {
-      std::memcpy(out.data(), t.bytes(), n * sizeof(int64_t));
+      std::memcpy(out.begin(), t.bytes(), n * sizeof(int64_t));
     }
   } else if (t.data_type == DataType::INT32) {
     const int32_t *p = reinterpret_cast<const int32_t *>(t.bytes());
@@ -56,8 +57,8 @@ Tensor CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
                                  const CenterCropPad::Attributes &attrs, RuntimeContext *rt) const {
   // Resolve the output shape from the input shape, ``shape`` and ``axes``.
   const std::size_t rank = input_data.shape.size();
-  std::vector<int64_t> out_shape = input_data.shape;
-  const std::vector<int64_t> shape_values = ReadShapeTensor(shape);
+  onnx_kernels::Shape out_shape = input_data.shape;
+  const onnx_kernels::Shape shape_values = ReadShapeTensor(shape);
 
   std::vector<int64_t> axes;
   if (attrs.axes_present) {
@@ -100,7 +101,7 @@ void CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
                       "kernel::CenterCropPad: output rank must match input rank.");
 
   // Resolve axes and per-axis target ``shape``.
-  const std::vector<int64_t> shape_values = ReadShapeTensor(shape);
+  const onnx_kernels::Shape shape_values = ReadShapeTensor(shape);
   std::vector<int64_t> axes;
   if (attrs.axes_present) {
     axes = NormalizeAxes(attrs.axes, static_cast<int64_t>(rank));

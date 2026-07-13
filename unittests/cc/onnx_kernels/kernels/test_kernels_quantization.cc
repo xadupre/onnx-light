@@ -6,6 +6,8 @@
 #include "onnx_kernels/kernels/_helpers/cast_float8.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
+#include "onnx_kernels/raw_buffer_allocator.h"
+#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -17,6 +19,10 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_kernels::RawBuffer;
+using onnx_kernels::RawBufferAllocator;
+using onnx_kernels::RuntimeContext;
+using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::DequantizeLinear;
 using onnx_kernels::kernel::DynamicQuantizeLinear;
@@ -24,6 +30,35 @@ using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::QuantizeLinear;
 
 namespace Test {
+
+class TrackingRawBufferAllocator : public RawBufferAllocator {
+public:
+  explicit TrackingRawBufferAllocator(size_t capacity) : allocator_(capacity) {}
+
+  RawBuffer *Allocate(size_t n_bytes) override {
+    RawBuffer *buffer = allocator_.Allocate(n_bytes);
+    ++current_allocations_;
+    if (current_allocations_ > max_concurrent_allocations_) {
+      max_concurrent_allocations_ = current_allocations_;
+    }
+    return buffer;
+  }
+
+  void Free(RawBuffer *buffer) override {
+    allocator_.Free(buffer);
+    --current_allocations_;
+  }
+
+  size_t TotalAllocatedSize() const override { return allocator_.TotalAllocatedSize(); }
+
+  size_t current_allocations() const noexcept { return current_allocations_; }
+  size_t max_concurrent_allocations() const noexcept { return max_concurrent_allocations_; }
+
+private:
+  SimpleRawBufferAllocator allocator_;
+  size_t current_allocations_ = 0;
+  size_t max_concurrent_allocations_ = 0;
+};
 
 TEST(KernelClass, QuantizeLinearDefaultUint8) {
   const KernelContext ctx{DefaultOpset(13)};
@@ -96,6 +131,63 @@ TEST(KernelClass, QuantizeLinearInt16WithZeroPoint) {
   EXPECT_EQ(py[1], static_cast<int16_t>(-1023));
   EXPECT_EQ(py[2], static_cast<int16_t>(-1022));
   EXPECT_EQ(py[3], std::numeric_limits<int16_t>::min());
+}
+
+TEST(KernelClass, QuantizeLinearPerAxisUint16ZeroPointUsesAllocator) {
+  const KernelContext ctx{DefaultOpset(21)};
+  QuantizeLinear q{ctx};
+  RuntimeContext rt;
+  TrackingRawBufferAllocator alloc(4);
+  rt.set_allocator(&alloc);
+
+  Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 2.0f, 4.0f, 6.0f});
+  Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor zp = Tensor::FromUint16("", {2}, {100, 200});
+
+  {
+    Tensor y = q(x, scale, zp, 1, &rt);
+    ASSERT_TRUE(y.has_allocation());
+    ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT16));
+    const uint16_t *py = reinterpret_cast<const uint16_t *>(y.bytes());
+    EXPECT_EQ(py[0], static_cast<uint16_t>(100));
+    EXPECT_EQ(py[1], static_cast<uint16_t>(201));
+    EXPECT_EQ(py[2], static_cast<uint16_t>(104));
+    EXPECT_EQ(py[3], static_cast<uint16_t>(203));
+    EXPECT_EQ(alloc.current_allocations(), 1u);
+    EXPECT_EQ(alloc.max_concurrent_allocations(), 2u);
+    alloc.Free(y.allocation());
+    y.ClearAllocation();
+  }
+
+  EXPECT_EQ(alloc.current_allocations(), 0u);
+}
+
+TEST(KernelClass, QuantizeLinearPerAxisUint16ImplicitZeroPointUsesAllocator) {
+  const KernelContext ctx{DefaultOpset(21)};
+  QuantizeLinear q{ctx};
+  RuntimeContext rt;
+  TrackingRawBufferAllocator alloc(4);
+  rt.set_allocator(&alloc);
+
+  Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 2.0f, 4.0f, 6.0f});
+  Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+
+  {
+    Tensor y = q(x, scale, 1, static_cast<int32_t>(onnx_kernels::DataType::UINT16), &rt);
+    ASSERT_TRUE(y.has_allocation());
+    ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT16));
+    const uint16_t *py = reinterpret_cast<const uint16_t *>(y.bytes());
+    EXPECT_EQ(py[0], static_cast<uint16_t>(0));
+    EXPECT_EQ(py[1], static_cast<uint16_t>(1));
+    EXPECT_EQ(py[2], static_cast<uint16_t>(4));
+    EXPECT_EQ(py[3], static_cast<uint16_t>(3));
+    EXPECT_EQ(alloc.current_allocations(), 1u);
+    EXPECT_EQ(alloc.max_concurrent_allocations(), 2u);
+    alloc.Free(y.allocation());
+    y.ClearAllocation();
+  }
+
+  EXPECT_EQ(alloc.current_allocations(), 0u);
 }
 
 TEST(KernelClass, QuantizeLinearRejectsBadInputs) {

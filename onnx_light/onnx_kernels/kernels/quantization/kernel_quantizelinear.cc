@@ -65,6 +65,51 @@ template <typename ZP> ZP ReadScalarZeroPoint(const Tensor &y_zero_point) {
   return value;
 }
 
+template <typename T> struct TemporaryTypedBuffer {
+  std::vector<T> fallback;
+  RawBufferAllocator *allocator = nullptr;
+  RawBuffer *buffer = nullptr;
+  size_t size = 0;
+
+  TemporaryTypedBuffer() = default;
+  TemporaryTypedBuffer(const TemporaryTypedBuffer &) = delete;
+  TemporaryTypedBuffer &operator=(const TemporaryTypedBuffer &) = delete;
+
+  ~TemporaryTypedBuffer() {
+    if (buffer != nullptr && allocator != nullptr) {
+      allocator->Free(buffer);
+    }
+  }
+
+  void Allocate(size_t count, RawBufferAllocator *buffer_allocator, const char *name) {
+    size = count;
+    if (buffer_allocator != nullptr) {
+      allocator = buffer_allocator;
+      buffer = allocator->Allocate(count * sizeof(T));
+      EXT_ENFORCE_INVALID(buffer != nullptr, "kernel::QuantizeLinear: ", name,
+                          " allocator returned null.");
+      EXT_ENFORCE_INVALID(buffer->size() >= count * sizeof(T), "kernel::QuantizeLinear: ", name,
+                          " allocator returned too small a buffer.");
+      EXT_ENFORCE_INVALID(reinterpret_cast<std::uintptr_t>(buffer->data()) % alignof(T) == 0,
+                          "kernel::QuantizeLinear: ", name,
+                          " allocator returned a misaligned buffer.");
+      return;
+    }
+    fallback.resize(count);
+  }
+
+  T *data() {
+    if (buffer != nullptr) {
+      return reinterpret_cast<T *>(buffer->data());
+    }
+    return fallback.data();
+  }
+
+  void CopyFromBytes(const std::uint8_t *bytes) { std::memcpy(data(), bytes, size * sizeof(T)); }
+
+  void ZeroFill() { std::memset(data(), 0, size * sizeof(T)); }
+};
+
 // Helper to decode float8 bits to float for QuantizeLinear zero-point.
 inline float Float8BitsToFloat(std::uint8_t byte, int32_t dtype) {
   switch (static_cast<DataType>(dtype)) {
@@ -599,6 +644,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   const int64_t *idx = scale_index.data();
   const float *scales = y_scale.AsFloat();
   const std::uint8_t *zp_bytes = y_zero_point.bytes();
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
 
   switch (output.data_type) {
   case static_cast<int32_t>(DataType::UINT8):
@@ -609,15 +655,17 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
     break;
   case static_cast<int32_t>(DataType::UINT16): {
     const int64_t n_zp = y_zero_point.element_count();
-    std::vector<uint16_t> zp_vec(static_cast<std::size_t>(n_zp));
-    std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(uint16_t));
+    TemporaryTypedBuffer<uint16_t> zp_vec;
+    zp_vec.Allocate(static_cast<std::size_t>(n_zp), allocator, "zero-point");
+    zp_vec.CopyFromBytes(zp_bytes);
     QuantizeBlockLoop<uint16_t>(x, scales, zp_vec.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT16): {
     const int64_t n_zp = y_zero_point.element_count();
-    std::vector<int16_t> zp_vec(static_cast<std::size_t>(n_zp));
-    std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(int16_t));
+    TemporaryTypedBuffer<int16_t> zp_vec;
+    zp_vec.Allocate(static_cast<std::size_t>(n_zp), allocator, "zero-point");
+    zp_vec.CopyFromBytes(zp_bytes);
     QuantizeBlockLoop<int16_t>(x, scales, zp_vec.data(), idx, output);
     break;
   }
@@ -688,27 +736,36 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_t 
   const std::vector<int64_t> scale_index = ComputeScaleIndex(x, y_scale, axis);
   const int64_t *idx = scale_index.data();
   const float *scales = y_scale.AsFloat();
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
 
   // Zero ZP buffer (all zeros) for the symmetric case.
   const int64_t n_scale = y_scale.element_count();
   switch (output.data_type) {
   case static_cast<int32_t>(DataType::UINT8): {
-    std::vector<uint8_t> zp(static_cast<std::size_t>(n_scale), 0);
+    TemporaryTypedBuffer<uint8_t> zp;
+    zp.Allocate(static_cast<std::size_t>(n_scale), allocator, "symmetric zero-point");
+    zp.ZeroFill();
     QuantizeBlockLoop<uint8_t>(x, scales, zp.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT8): {
-    std::vector<int8_t> zp(static_cast<std::size_t>(n_scale), 0);
+    TemporaryTypedBuffer<int8_t> zp;
+    zp.Allocate(static_cast<std::size_t>(n_scale), allocator, "symmetric zero-point");
+    zp.ZeroFill();
     QuantizeBlockLoop<int8_t>(x, scales, zp.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::UINT16): {
-    std::vector<uint16_t> zp(static_cast<std::size_t>(n_scale), 0);
+    TemporaryTypedBuffer<uint16_t> zp;
+    zp.Allocate(static_cast<std::size_t>(n_scale), allocator, "symmetric zero-point");
+    zp.ZeroFill();
     QuantizeBlockLoop<uint16_t>(x, scales, zp.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT16): {
-    std::vector<int16_t> zp(static_cast<std::size_t>(n_scale), 0);
+    TemporaryTypedBuffer<int16_t> zp;
+    zp.Allocate(static_cast<std::size_t>(n_scale), allocator, "symmetric zero-point");
+    zp.ZeroFill();
     QuantizeBlockLoop<int16_t>(x, scales, zp.data(), idx, output);
     break;
   }

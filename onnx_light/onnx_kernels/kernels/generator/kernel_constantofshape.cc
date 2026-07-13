@@ -87,11 +87,13 @@ Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value,
 
   const int64_t n = out_shape.product();
   const std::size_t es = elem_bytes.size();
-  std::vector<uint8_t> out_data(static_cast<std::size_t>(n) * es);
+  Tensor out = MakeOutputTensor(out_dtype, out_shape, static_cast<std::size_t>(n) * es,
+                                rt ? rt->allocator() : nullptr);
+  uint8_t *out_ptr = out.mutable_bytes();
   for (int64_t i = 0; i < n; ++i) {
-    std::memcpy(out_data.data() + static_cast<std::size_t>(i) * es, elem_bytes.data(), es);
+    std::memcpy(out_ptr + static_cast<std::size_t>(i) * es, elem_bytes.data(), es);
   }
-  return Tensor("", out_dtype, out_shape, std::move(out_data));
+  return out;
 }
 
 void ConstantOfShape::operator()(const Tensor &shape, const Tensor &value, Tensor &output) const {

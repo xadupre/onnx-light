@@ -96,20 +96,6 @@ double BuildRowCdf<uint16_t>(const uint16_t *row, int64_t class_size, std::vecto
   return sum;
 }
 
-// Returns the byte stride of the supported output dtypes.
-std::size_t OutputElementSize(int32_t dtype) {
-  switch (static_cast<DataType>(dtype)) {
-  case DataType::INT32:
-    return sizeof(int32_t);
-  case DataType::INT64:
-    return sizeof(int64_t);
-  default:
-    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported output dtype ",
-                        std::to_string(dtype), "; only INT32 and INT64 are supported.");
-  }
-  return 0;
-}
-
 // Stores ``sample`` (a class index) at the byte position pointed to by ``out``
 // using the encoding for ``dtype``. The caller is responsible for advancing
 // ``out`` by the element size between successive calls.
@@ -140,7 +126,7 @@ Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t
 
   const int64_t batch_size = input.shape[0];
   const int32_t out_dtype = (dtype == 0) ? static_cast<int32_t>(DataType::INT32) : dtype;
-  const std::size_t es = OutputElementSize(out_dtype);
+  const std::size_t es = ElementSize(out_dtype);
   const int64_t n_out = batch_size * sample_size;
   const std::size_t out_n_bytes = static_cast<std::size_t>(n_out) * es;
 
@@ -173,7 +159,7 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
                       "kernel::Multinomial preallocated output shape must match the produced "
                       "tensor shape.");
 
-  const std::size_t es = OutputElementSize(out_dtype);
+  const std::size_t es = ElementSize(out_dtype);
   uint8_t *out_data = output.mutable_bytes();
 
   const uint32_t engine_seed =

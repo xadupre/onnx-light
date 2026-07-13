@@ -148,6 +148,8 @@ void CollectGraphSeedTags(const GraphProto &graph,
     const auto &value = graph.input()[i];
     std::string tag = ReadMetadataValue(value, kValueTagMetadataKey);
     if (tag.empty()) {
+      // All graph inputs are unconditionally seeded as "weight": they represent
+      // model data or parameters, and this tag is always known at graph level.
       tag = "weight";
     }
     SetValueTag(value_tags, value.name().as_string(), tag);

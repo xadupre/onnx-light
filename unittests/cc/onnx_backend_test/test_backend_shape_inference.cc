@@ -2202,7 +2202,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
     // WriteValueAndNodeTagsToMetadata: this information is always known.
     const auto expect_all_have_value_tag = [&](const auto &values, const char *kind) {
       for (size_t idx = 0; idx < values.size(); ++idx) {
-        EXPECT_TRUE(has_value_tag(values[idx]))
+        ASSERT_TRUE(has_value_tag(values[idx]))
             << "missing value_tag on " << kind << "[" << idx << "] in case " << tc.name;
       }
     };

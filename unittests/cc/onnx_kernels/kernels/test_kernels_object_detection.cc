@@ -223,14 +223,16 @@ TEST(KernelClass, NonMaxSuppressionUsesAllocatorWhenRuntimeContextHasOne) {
   Tensor max_out = Tensor::FromInt64("", {1}, {10});
   NonMaxSuppression::Attributes attrs;
 
-  SimpleRawBufferAllocator alloc(1);
+  constexpr size_t kAllocatorSlotCapacity = 1;
+  constexpr size_t kExpectedAllocationCount = 1;
+  SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
 
   Tensor y = nms(boxes, scores, &max_out, nullptr, nullptr, attrs, &rt);
 
   EXPECT_TRUE(y.has_allocation());
-  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(alloc.allocated_count(), kExpectedAllocationCount);
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 0);

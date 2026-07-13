@@ -19,6 +19,8 @@ namespace kernel {
 
 namespace {
 
+constexpr int64_t kSelectedIndexTupleWidth = 3;
+
 // Returns (y1, x1, y2, x2) in canonical "corner" order regardless of
 // ``center_point_box`` and regardless of whether the upstream y1<y2/x1<x2
 // ordering holds (the schema explicitly allows flipped coordinates).
@@ -145,7 +147,7 @@ Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
   if (max_boxes > 0) {
     const int64_t max_per_pair = std::min<int64_t>(spatial, max_boxes);
     const int64_t max_selected = num_batches * num_classes * max_per_pair;
-    selected.reserve(static_cast<size_t>(max_selected * 3));
+    selected.reserve(static_cast<size_t>(max_selected * kSelectedIndexTupleWidth));
   }
   std::vector<int32_t> candidate_indices;
   candidate_indices.reserve(static_cast<size_t>(spatial));
@@ -188,13 +190,13 @@ Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
     }
   }
 
-  const int64_t num_selected = static_cast<int64_t>(selected.size()) / 3;
-  Tensor output = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), {num_selected, 3},
-                                   static_cast<size_t>(selected.size()) * sizeof(int64_t),
+  const int64_t num_selected = static_cast<int64_t>(selected.size()) / kSelectedIndexTupleWidth;
+  const size_t selected_n_bytes = static_cast<size_t>(selected.size()) * sizeof(int64_t);
+  Tensor output = MakeOutputTensor(static_cast<int32_t>(DataType::INT64),
+                                   {num_selected, kSelectedIndexTupleWidth}, selected_n_bytes,
                                    rt ? rt->allocator() : nullptr);
   if (!selected.empty()) {
-    std::memcpy(output.mutable_bytes(), selected.data(),
-                static_cast<size_t>(selected.size()) * sizeof(int64_t));
+    std::memcpy(output.mutable_bytes(), selected.data(), selected_n_bytes);
   }
   return output;
 }

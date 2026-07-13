@@ -102,10 +102,11 @@ TernaryBroadcastInfo CheckWhereBroadcast(const Tensor &condition, const Tensor &
 }
 
 template <typename T>
-Tensor WhereAllocTyped(const Tensor &condition, const Tensor &x, const Tensor &y) {
+Tensor WhereAllocTyped(const Tensor &condition, const Tensor &x, const Tensor &y,
+                       RawBufferAllocator *allocator) {
   const TernaryBroadcastInfo bi = CheckWhereBroadcast(condition, x, y);
   const size_t out_n_bytes = static_cast<size_t>(bi.element_count) * sizeof(T);
-  Tensor out = MakeOutputTensor(x.data_type, bi.shape, out_n_bytes, nullptr);
+  Tensor out = MakeOutputTensor(x.data_type, bi.shape, out_n_bytes, allocator);
   const uint8_t *pc = condition.AsBool();
   const T *px = WhereTypedInput<T>(x);
   const T *py = WhereTypedInput<T>(y);
@@ -238,29 +239,30 @@ void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &
 
 Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
                          RuntimeContext *rt) const {
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   switch (x.data_type) {
   case DataType::BOOL:
-    return WhereAllocTyped<uint8_t>(condition, x, y);
+    return WhereAllocTyped<uint8_t>(condition, x, y, allocator);
   case DataType::FLOAT:
-    return WhereAllocTyped<float>(condition, x, y);
+    return WhereAllocTyped<float>(condition, x, y, allocator);
   case DataType::DOUBLE:
-    return WhereAllocTyped<double>(condition, x, y);
+    return WhereAllocTyped<double>(condition, x, y, allocator);
   case DataType::INT8:
-    return WhereAllocTyped<int8_t>(condition, x, y);
+    return WhereAllocTyped<int8_t>(condition, x, y, allocator);
   case DataType::INT16:
-    return WhereAllocTyped<int16_t>(condition, x, y);
+    return WhereAllocTyped<int16_t>(condition, x, y, allocator);
   case DataType::INT32:
-    return WhereAllocTyped<int32_t>(condition, x, y);
+    return WhereAllocTyped<int32_t>(condition, x, y, allocator);
   case DataType::INT64:
-    return WhereAllocTyped<int64_t>(condition, x, y);
+    return WhereAllocTyped<int64_t>(condition, x, y, allocator);
   case DataType::UINT8:
-    return WhereAllocTyped<uint8_t>(condition, x, y);
+    return WhereAllocTyped<uint8_t>(condition, x, y, allocator);
   case DataType::UINT16:
-    return WhereAllocTyped<uint16_t>(condition, x, y);
+    return WhereAllocTyped<uint16_t>(condition, x, y, allocator);
   case DataType::UINT32:
-    return WhereAllocTyped<uint32_t>(condition, x, y);
+    return WhereAllocTyped<uint32_t>(condition, x, y, allocator);
   case DataType::UINT64:
-    return WhereAllocTyped<uint64_t>(condition, x, y);
+    return WhereAllocTyped<uint64_t>(condition, x, y, allocator);
   case DataType::STRING:
     return WhereAllocString(condition, x, y);
   default:

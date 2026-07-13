@@ -315,10 +315,10 @@ TEST(KernelClass, CastHelperTensorBuildersUseAllocatorWhenProvided) {
   Tensor subbyte = onnx_kernels::kernel::MakeSubByteTensor(onnx_kernels::DataType::UINT4, {3},
                                                            {1, 2, 3}, /*bits=*/4, &alloc);
   ASSERT_TRUE(subbyte.has_allocation());
-  const std::vector<std::uint8_t> packed4 = {0x21u, 0x03u};
-  EXPECT_EQ(subbyte.size_bytes(), packed4.size());
+  const std::vector<std::uint8_t> expected_packed_bytes = {0x21u, 0x03u};
+  EXPECT_EQ(subbyte.size_bytes(), expected_packed_bytes.size());
   EXPECT_EQ(std::vector<std::uint8_t>(subbyte.bytes(), subbyte.bytes() + subbyte.size_bytes()),
-            packed4);
+            expected_packed_bytes);
 
   Tensor float4 = onnx_kernels::kernel::MakeFloat4E2M1Tensor({2}, {0.0f, 1.0f}, &alloc);
   ASSERT_TRUE(float4.has_allocation());

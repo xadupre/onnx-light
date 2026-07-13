@@ -30,8 +30,8 @@ void ValidateShapeAndElementCount(const Shape &shape, std::size_t n_values) {
 }
 
 Tensor MakeTensor(const std::string &name, std::int32_t data_type, const Shape &shape,
-                  size_t n_bytes, RawBufferAllocator *allocator) {
-  Tensor t = MakeOutputTensor(data_type, shape, n_bytes, allocator);
+                  size_t byte_count, RawBufferAllocator *allocator) {
+  Tensor t = MakeOutputTensor(data_type, shape, byte_count, allocator);
   t.name = name;
   return t;
 }

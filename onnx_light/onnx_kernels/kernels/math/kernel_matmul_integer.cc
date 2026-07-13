@@ -114,20 +114,16 @@ ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t 
   const size_t numel_u = static_cast<size_t>(numel);
 
   zps.size = numel_u;
-  if (allocator != nullptr && numel_u > 0) {
+  if (allocator != nullptr) {
     zps.allocator = allocator;
     zps.buffer = allocator->Allocate(numel_u * sizeof(int32_t));
     EXT_ENFORCE_INVALID(zps.buffer != nullptr, kName, ": zero-point allocator returned null.");
     EXT_ENFORCE_INVALID(zps.buffer->size() >= numel_u * sizeof(int32_t), kName,
                         ": zero-point allocator returned too small a buffer.");
-    int32_t *out = zps.mutable_data();
-    for (int64_t i = 0; i < numel; ++i) {
-      out[static_cast<size_t>(i)] = ReadIntElem(t, i);
-    }
-    return zps;
+  } else {
+    zps.fallback.resize(numel_u);
   }
 
-  zps.fallback.resize(numel_u);
   int32_t *out = zps.mutable_data();
   for (int64_t i = 0; i < numel; ++i) {
     out[static_cast<size_t>(i)] = ReadIntElem(t, i);

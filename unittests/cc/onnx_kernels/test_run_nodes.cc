@@ -1474,6 +1474,30 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
 }
 
 // ---------------------------------------------------------------------------
+// Shape::product() tests
+// ---------------------------------------------------------------------------
+
+TEST(ShapeProduct, EmptyShapeIsScalarWithProduct1) {
+  const onnx_kernels::Shape s{};
+  EXPECT_EQ(s.product(), 1);
+}
+
+TEST(ShapeProduct, SingleDimensionEqualsItself) {
+  const onnx_kernels::Shape s{7};
+  EXPECT_EQ(s.product(), 7);
+}
+
+TEST(ShapeProduct, MultipleDimensionsMultipliedTogether) {
+  const onnx_kernels::Shape s{2, 3, 4};
+  EXPECT_EQ(s.product(), 24);
+}
+
+TEST(ShapeProduct, ZeroDimensionProducesZero) {
+  const onnx_kernels::Shape s{4, 0, 3};
+  EXPECT_EQ(s.product(), 0);
+}
+
+// ---------------------------------------------------------------------------
 // TensorFromProto tests
 // ---------------------------------------------------------------------------
 

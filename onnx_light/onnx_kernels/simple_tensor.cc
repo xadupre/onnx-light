@@ -45,12 +45,7 @@ size_t ElementSize(int32_t dtype) {
   }
 }
 
-int64_t Tensor::element_count() const {
-  int64_t n = 1;
-  for (int64_t d : shape)
-    n *= d;
-  return n;
-}
+int64_t Tensor::element_count() const { return shape.product(); }
 
 size_t Tensor::element_size() const { return ElementSize(data_type); }
 

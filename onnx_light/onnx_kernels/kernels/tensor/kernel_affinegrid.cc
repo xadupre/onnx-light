@@ -123,7 +123,7 @@ void ApplyAffine(const float *theta, int64_t out_dim, int64_t in_dim, const floa
 Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                               RuntimeContext *rt) const {
   ValidateInputs(theta, size);
-  const std::vector<int64_t> out_shape = ComputeOutputShape(size);
+  const onnx_kernels::Shape out_shape = ComputeOutputShape(size);
   int64_t total = 1;
   for (int64_t d : out_shape) {
     total *= d;

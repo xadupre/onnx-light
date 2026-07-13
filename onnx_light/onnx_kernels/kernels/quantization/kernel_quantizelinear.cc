@@ -68,8 +68,8 @@ template <typename ZP> ZP ReadScalarZeroPoint(const Tensor &y_zero_point) {
 // Holds temporary typed storage for per-axis/blocked zero points. Uses the
 // allocator associated with the output allocation when provided and falls back
 // to std::vector otherwise. Owns any allocator-backed buffer until
-// destruction, so the allocator pointer must remain valid for this object's
-// lifetime.
+// destruction, then frees it in the destructor, so the allocator pointer must
+// remain valid for this object's lifetime.
 template <typename T> struct TemporaryTypedBuffer {
   std::vector<T> fallback;
   RawBufferAllocator *allocator = nullptr;
@@ -87,8 +87,8 @@ template <typename T> struct TemporaryTypedBuffer {
   }
 
   // Allocates space for `count` elements, uses `buffer_allocator` when
-  // provided, and validates the returned buffer before use. `name` is used to
-  // contextualize any allocation errors.
+  // provided, validates the returned buffer before use, and may only be called
+  // once per instance. `name` is used to contextualize any allocation errors.
   void Allocate(size_t count, RawBufferAllocator *buffer_allocator, const char *name) {
     EXT_ENFORCE_INVALID(buffer == nullptr && fallback.empty(),
                         "kernel::QuantizeLinear: temporary buffer already allocated.");
@@ -119,8 +119,8 @@ template <typename T> struct TemporaryTypedBuffer {
     return fallback.data();
   }
 
-  // Copies `size` elements from raw little-endian bytes into the active
-  // temporary storage.
+  // Copies `size` elements from the raw input bytes into the active temporary
+  // storage.
   void CopyFromBytes(const std::uint8_t *bytes) { std::memcpy(data(), bytes, size * sizeof(T)); }
 
   // Fills the active temporary storage with zeros.

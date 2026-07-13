@@ -53,23 +53,24 @@ std::vector<int32_t> ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int
                       "' must be a scalar, a one-element 1-D tensor, or a 1-D tensor whose "
                       "size matches the corresponding matrix dimension.");
   const size_t numel_u = static_cast<size_t>(numel);
-  RawBuffer *buffer = nullptr;
   if (allocator != nullptr && numel_u > 0) {
-    buffer = allocator->Allocate(numel_u * sizeof(int32_t));
+    RawBuffer *buffer = allocator->Allocate(numel_u * sizeof(int32_t));
     EXT_ENFORCE_INVALID(buffer != nullptr, kName, ": zero-point allocator returned null.");
     EXT_ENFORCE_INVALID(buffer->size() >= numel_u * sizeof(int32_t), kName,
                         ": zero-point allocator returned too small a buffer.");
+    int32_t *scratch = reinterpret_cast<int32_t *>(buffer->data());
+    for (int64_t i = 0; i < numel; ++i) {
+      scratch[static_cast<size_t>(i)] = ReadIntElem(t, i);
+    }
+    std::vector<int32_t> zps(numel_u);
+    std::memcpy(zps.data(), scratch, numel_u * sizeof(int32_t));
+    allocator->Free(buffer);
+    return zps;
   }
+
   std::vector<int32_t> zps(numel_u);
   for (int64_t i = 0; i < numel; ++i) {
-    const int32_t v = ReadIntElem(t, i);
-    if (buffer != nullptr) {
-      std::memcpy(buffer->data() + static_cast<size_t>(i) * sizeof(int32_t), &v, sizeof(int32_t));
-    }
-    zps[static_cast<size_t>(i)] = v;
-  }
-  if (buffer != nullptr) {
-    allocator->Free(buffer);
+    zps[static_cast<size_t>(i)] = ReadIntElem(t, i);
   }
   return zps;
 }

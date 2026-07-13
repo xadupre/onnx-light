@@ -173,7 +173,7 @@ double TransformCoord(int64_t out_coord, int64_t in_dim, int64_t out_dim, double
 // ``[0, in_dim - 1]`` on any axis, the output element is set to
 // ``extrapolation_value`` rather than clamped.
 void ResizeNearest(const Tensor &input, const std::vector<float> &scales,
-                   const std::vector<int64_t> &out_shape, const std::string &nearest_mode,
+                   const onnx_kernels::Shape &out_shape, const std::string &nearest_mode,
                    const std::string &coord_mode, const std::vector<double> &roi_start,
                    const std::vector<double> &roi_end, double extrapolation_value, Tensor &output) {
   const std::size_t elem_size = ElementSize(input.data_type);
@@ -511,7 +511,7 @@ double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t ou
 // upstream reference's fully-nested 1-D interpolation because the operation
 // is a tensor product of per-axis linear combinations.
 void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
-                     const std::vector<int64_t> &out_shape, const std::string &coord_mode,
+                     const onnx_kernels::Shape &out_shape, const std::string &coord_mode,
                      const std::vector<double> &roi_start, const std::vector<double> &roi_end,
                      const std::string &interp_mode, double cubic_a, bool exclude_outside,
                      bool antialias, double extrapolation_value, Tensor &output) {
@@ -526,7 +526,7 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
 
   // Start from a double-precision copy of the input. We then interpolate
   // axis-by-axis, replacing the working buffer at each step.
-  std::vector<int64_t> cur_shape(input.shape.begin(), input.shape.end());
+  onnx_kernels::Shape cur_shape = input.shape;
   int64_t cur_elems = 1;
   for (int64_t d : cur_shape) {
     cur_elems *= d;
@@ -555,7 +555,7 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
     for (std::size_t k = axis + 1; k < rank; ++k) {
       inner *= cur_shape[k];
     }
-    std::vector<int64_t> new_shape = cur_shape;
+    onnx_kernels::Shape new_shape = cur_shape;
     new_shape[axis] = out_dim;
     int64_t new_elems = 1;
     for (int64_t d : new_shape) {
@@ -667,7 +667,7 @@ void BuildRoi(const Resize::Attributes &attrs, const std::vector<int64_t> &axes,
 // Dispatches to the nearest or separable (linear/cubic) implementation
 // according to ``attrs.mode``.
 void RunResize(const Tensor &X, const std::vector<float> &scales_vec,
-               const std::vector<int64_t> &out_shape, const std::vector<double> &roi_start,
+               const onnx_kernels::Shape &out_shape, const std::vector<double> &roi_start,
                const std::vector<double> &roi_end, const Resize::Attributes &attrs,
                Tensor &output) {
   if (IsNearestMode(attrs.mode)) {
@@ -691,7 +691,8 @@ Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attribute
   const std::vector<float> scales_in = ReadResizeScales(scales, axes.size());
   // Expand to per-axis (rank-length) scales, defaulting non-resized axes to 1.
   const std::vector<float> scales_vec = ScatterByAxes<float>(scales_in, axes, rank, 1.0f);
-  std::vector<int64_t> out_shape(rank);
+  onnx_kernels::Shape out_shape;
+  out_shape.assign(rank, 0);
   for (std::size_t k = 0; k < rank; ++k) {
     const double scaled = static_cast<double>(X.shape[k]) * static_cast<double>(scales_vec[k]);
     out_shape[k] = static_cast<int64_t>(std::floor(scaled));
@@ -714,7 +715,8 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
   const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
   const std::vector<float> scales_in = ReadResizeScales(scales, axes.size());
   const std::vector<float> scales_vec = ScatterByAxes<float>(scales_in, axes, rank, 1.0f);
-  std::vector<int64_t> out_shape(rank);
+  onnx_kernels::Shape out_shape;
+  out_shape.assign(rank, 0);
   for (std::size_t k = 0; k < rank; ++k) {
     const double scaled = static_cast<double>(X.shape[k]) * static_cast<double>(scales_vec[k]);
     out_shape[k] = static_cast<int64_t>(std::floor(scaled));
@@ -745,7 +747,7 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   const std::vector<int64_t> effective =
       ApplyKeepAspectRatioPolicy(requested, in_axes_shape, attrs.keep_aspect_ratio_policy);
   // Build the full output shape, leaving non-resized axes untouched.
-  std::vector<int64_t> out_shape(X.shape.begin(), X.shape.end());
+  onnx_kernels::Shape out_shape = X.shape;
   for (std::size_t i = 0; i < axes.size(); ++i) {
     out_shape[static_cast<std::size_t>(axes[i])] = effective[i];
   }

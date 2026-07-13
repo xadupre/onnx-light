@@ -46,7 +46,7 @@ Tensor NonZero::operator()(const Tensor &x, RuntimeContext *rt) const {
   }
 
   const std::size_t elem_size = ElementSize(x.data_type);
-  const std::vector<int64_t> &shape = x.shape;
+  const onnx_kernels::Shape &shape = x.shape;
   const std::size_t rank = shape.size();
   const int64_t total = x.element_count();
 
@@ -62,7 +62,7 @@ Tensor NonZero::operator()(const Tensor &x, RuntimeContext *rt) const {
   const int64_t nnz = static_cast<int64_t>(nz_indices.size());
   // Output shape: (rank, nnz). For scalar input (rank == 0), shape is (0, nnz),
   // mirroring the upstream NonZero spec (different from numpy.nonzero).
-  const std::vector<int64_t> out_shape{static_cast<int64_t>(rank), nnz};
+  const onnx_kernels::Shape out_shape{static_cast<int64_t>(rank), nnz};
 
   // Build the row-major (rank, nnz) index matrix: row r lists the r-th
   // coordinate of every non-zero element, in row-major scan order of the input.

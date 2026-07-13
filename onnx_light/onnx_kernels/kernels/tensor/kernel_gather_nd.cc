@@ -16,9 +16,9 @@ namespace kernel {
 
 namespace {
 
-std::vector<int64_t> ComputeGatherNDOutputShape(const std::vector<int64_t> &data_shape,
-                                                const std::vector<int64_t> &idx_shape,
-                                                int64_t batch_dims) {
+onnx_kernels::Shape ComputeGatherNDOutputShape(const onnx_kernels::Shape &data_shape,
+                                               const onnx_kernels::Shape &idx_shape,
+                                               int64_t batch_dims) {
   const int64_t r = static_cast<int64_t>(data_shape.size());
   const int64_t q = static_cast<int64_t>(idx_shape.size());
   EXT_ENFORCE_INVALID(r >= 1 && q >= 1,
@@ -33,7 +33,7 @@ std::vector<int64_t> ComputeGatherNDOutputShape(const std::vector<int64_t> &data
   const int64_t k_last = idx_shape[static_cast<std::size_t>(q - 1)];
   EXT_ENFORCE_INVALID(k_last >= 1 && batch_dims + k_last <= r,
                       "kernel::GatherND: indices last dim out of range.");
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_shape;
   out_shape.reserve(static_cast<std::size_t>(q - 1 + (r - batch_dims - k_last)));
   for (int64_t k = 0; k < q - 1; ++k) {
     out_shape.push_back(idx_shape[static_cast<std::size_t>(k)]);
@@ -59,8 +59,7 @@ std::vector<int64_t> ReadGatherNDIndices(const Tensor &indices) {
 
 Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims,
                             RuntimeContext *rt) const {
-  std::vector<int64_t> out_shape =
-      ComputeGatherNDOutputShape(data.shape, indices.shape, batch_dims);
+  onnx_kernels::Shape out_shape = ComputeGatherNDOutputShape(data.shape, indices.shape, batch_dims);
   int64_t total = 1;
   for (int64_t d : out_shape) {
     total *= d;
@@ -75,8 +74,7 @@ Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t b
 
 void GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims,
                           Tensor &output) const {
-  std::vector<int64_t> out_shape =
-      ComputeGatherNDOutputShape(data.shape, indices.shape, batch_dims);
+  onnx_kernels::Shape out_shape = ComputeGatherNDOutputShape(data.shape, indices.shape, batch_dims);
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::GatherND: output dtype must match data dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape, "kernel::GatherND: output shape mismatch.");

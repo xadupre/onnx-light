@@ -21,7 +21,7 @@ void Size::operator()(const Tensor &data, Tensor &output) const {
   const int64_t n = data.shape.product();
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::Size: preallocated output dtype must be INT64.");
-  EXT_ENFORCE_INVALID(output.shape == std::vector<int64_t>{},
+  EXT_ENFORCE_INVALID(output.shape == onnx_kernels::Shape{},
                       "kernel::Size: preallocated output shape must be scalar.");
   EXT_ENFORCE_INVALID(output.size_bytes() == sizeof(int64_t),
                       "kernel::Size: preallocated output byte-size mismatch.");

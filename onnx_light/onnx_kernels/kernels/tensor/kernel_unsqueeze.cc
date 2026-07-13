@@ -31,12 +31,12 @@ std::vector<int64_t> ResolveAxes(const std::vector<int64_t> &axes, int64_t outpu
   return resolved;
 }
 
-std::vector<int64_t> ComputeUnsqueezedShape(const Tensor &data, const std::vector<int64_t> &axes) {
+onnx_kernels::Shape ComputeUnsqueezedShape(const Tensor &data, const std::vector<int64_t> &axes) {
   const int64_t input_rank = static_cast<int64_t>(data.shape.size());
   const int64_t output_rank = input_rank + static_cast<int64_t>(axes.size());
   const std::vector<int64_t> resolved_axes = ResolveAxes(axes, output_rank);
 
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_shape;
   out_shape.reserve(static_cast<size_t>(output_rank));
   size_t axis_index = 0;
   size_t input_index = 0;
@@ -56,7 +56,7 @@ std::vector<int64_t> ComputeUnsqueezedShape(const Tensor &data, const std::vecto
 
 Tensor Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
                              RuntimeContext *rt) const {
-  const std::vector<int64_t> out_shape = ComputeUnsqueezedShape(data, axes);
+  const onnx_kernels::Shape out_shape = ComputeUnsqueezedShape(data, axes);
   Tensor output = data;
   output.name.clear();
   output.shape = out_shape;
@@ -65,7 +65,7 @@ Tensor Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axe
 
 void Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
                            Tensor &output) const {
-  const std::vector<int64_t> out_shape = ComputeUnsqueezedShape(data, axes);
+  const onnx_kernels::Shape out_shape = ComputeUnsqueezedShape(data, axes);
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::Unsqueeze: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,

@@ -35,9 +35,10 @@ std::vector<int64_t> ReadTileRepeatsInput(const Tensor &repeats, std::size_t inp
   return out;
 }
 
-std::vector<int64_t> ComputeTileOutputShape(const std::vector<int64_t> &in_shape,
-                                            const std::vector<int64_t> &repeats) {
-  std::vector<int64_t> out_shape(in_shape.size());
+onnx_kernels::Shape ComputeTileOutputShape(const onnx_kernels::Shape &in_shape,
+                                           const std::vector<int64_t> &repeats) {
+  onnx_kernels::Shape out_shape;
+  out_shape.assign(in_shape.size(), 0);
   for (std::size_t k = 0; k < in_shape.size(); ++k) {
     out_shape[k] = in_shape[k] * repeats[k];
   }
@@ -48,7 +49,7 @@ std::vector<int64_t> ComputeTileOutputShape(const std::vector<int64_t> &in_shape
 
 Tensor Tile::operator()(const Tensor &input, const Tensor &repeats, RuntimeContext *rt) const {
   const std::vector<int64_t> reps = ReadTileRepeatsInput(repeats, input.shape.size());
-  const std::vector<int64_t> out_shape = ComputeTileOutputShape(input.shape, reps);
+  const onnx_kernels::Shape out_shape = ComputeTileOutputShape(input.shape, reps);
   const std::size_t elem_size = ElementSize(input.data_type);
   int64_t total_elements = 1;
   for (int64_t d : out_shape) {
@@ -63,7 +64,7 @@ Tensor Tile::operator()(const Tensor &input, const Tensor &repeats, RuntimeConte
 
 void Tile::operator()(const Tensor &input, const Tensor &repeats, Tensor &output) const {
   const std::vector<int64_t> reps = ReadTileRepeatsInput(repeats, input.shape.size());
-  const std::vector<int64_t> out_shape = ComputeTileOutputShape(input.shape, reps);
+  const onnx_kernels::Shape out_shape = ComputeTileOutputShape(input.shape, reps);
 
   EXT_ENFORCE_INVALID(output.data_type == input.data_type,
                       "kernel::Tile: preallocated output dtype must match input dtype.");

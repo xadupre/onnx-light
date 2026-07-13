@@ -6,6 +6,7 @@
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/kernels/rt/include_rt_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/run_nodes.h"
@@ -1764,6 +1765,44 @@ TEST(RunModel, DelayedInitializerLoadsIntoCpuAtKernelInitialization) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 3.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 4.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[2], 5.0f);
+  fs::remove(weights_path);
+}
+
+TEST(RunModel, DelayedInitializerUsesAllocatorWhenProvided) {
+  namespace fs = std::filesystem;
+
+  const fs::path weights_path =
+      fs::temp_directory_path() / "onnx_light_delayed_initializer_allocator.bin";
+  fs::remove(weights_path);
+  {
+    std::ofstream out(weights_path, std::ios::binary);
+    ASSERT_TRUE(out.good());
+    const float values[2] = {10.0f, -3.5f};
+    out.write(reinterpret_cast<const char *>(values), sizeof(values));
+  }
+
+  onnx_kernels::kernel::DelayedInitializer::Attributes attrs;
+  attrs.shape = {2};
+  attrs.dtype = static_cast<int32_t>(TensorProto::DataType::FLOAT);
+  attrs.load_device = "file";
+  attrs.runtime_device = "cpu";
+  attrs.filename = weights_path.string();
+  attrs.offset = 0;
+  onnx_kernels::kernel::DelayedInitializer delayed(KernelContext(DefaultOpset(18)),
+                                                   std::move(attrs));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  onnx_kernels::SimpleRawBufferAllocator alloc(1);
+  rt.set_allocator(&alloc);
+
+  Tensor y = delayed(&rt);
+  ASSERT_TRUE(y.has_allocation());
+  EXPECT_EQ(y.allocation_owner(), &alloc);
+  ASSERT_EQ(y.shape.size(), 1u);
+  EXPECT_EQ(y.shape[0], 2);
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 10.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], -3.5f);
+
   fs::remove(weights_path);
 }
 

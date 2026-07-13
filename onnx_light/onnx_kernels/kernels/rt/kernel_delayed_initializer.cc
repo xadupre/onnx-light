@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/rt/include_rt_kernels.h"
 
 #include "onnx_kernels/runtime_context.h"
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -44,10 +45,15 @@ DelayedInitializer::DelayedInitializer(const KernelContext &ctx, Attributes attr
 }
 
 Tensor DelayedInitializer::operator()(RuntimeContext *rt) const {
-  if (attrs_.load_device == "cpu") {
-    return Tensor("", attrs_.dtype, attrs_.shape, loaded_bytes_);
+  std::vector<uint8_t> bytes = attrs_.load_device == "cpu" ? loaded_bytes_ : LoadBytes(attrs_);
+  if (rt != nullptr && rt->allocator() != nullptr) {
+    Tensor output = MakeOutputTensor(attrs_.dtype, attrs_.shape, bytes.size(), rt->allocator());
+    if (!bytes.empty()) {
+      std::memcpy(output.mutable_bytes(), bytes.data(), bytes.size());
+    }
+    return output;
   }
-  return Tensor("", attrs_.dtype, attrs_.shape, LoadBytes(attrs_));
+  return Tensor("", attrs_.dtype, attrs_.shape, std::move(bytes));
 }
 
 /// Computes the total number of elements described by a shape.

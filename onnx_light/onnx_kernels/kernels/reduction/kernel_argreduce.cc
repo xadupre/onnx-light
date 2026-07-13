@@ -26,9 +26,8 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 // Output shape of an argmax/argmin reduction along ``axis``: the reduced
 // dimension is either dropped (``keepdims=false``) or replaced by 1.
-std::vector<int64_t> ArgReduceOutputShape(const std::vector<int64_t> &in_shape, int64_t axis,
-                                          bool keepdims) {
-  std::vector<int64_t> out;
+Shape ArgReduceOutputShape(const Shape &in_shape, int64_t axis, bool keepdims) {
+  Shape out;
   out.reserve(in_shape.size());
   for (int64_t d = 0; d < static_cast<int64_t>(in_shape.size()); ++d) {
     if (d == axis) {
@@ -61,7 +60,7 @@ Tensor ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims,
   EXT_ENFORCE_INVALID(rank > 0, "kernel::ArgReduce: data must have at least one dimension.");
   const int64_t resolved_axis = ResolveAxis(axis, rank);
 
-  const std::vector<int64_t> out_shape = ArgReduceOutputShape(data.shape, resolved_axis, keepdims);
+  const Shape out_shape = ArgReduceOutputShape(data.shape, resolved_axis, keepdims);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {
     out_count *= d;
@@ -81,8 +80,7 @@ void ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims, bool
   EXT_ENFORCE_INVALID(rank > 0, "kernel::ArgReduce: data must have at least one dimension.");
   const int64_t resolved_axis = ResolveAxis(axis, rank);
 
-  const std::vector<int64_t> expected_out_shape =
-      ArgReduceOutputShape(data.shape, resolved_axis, keepdims);
+  const Shape expected_out_shape = ArgReduceOutputShape(data.shape, resolved_axis, keepdims);
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
                       "kernel::ArgReduce preallocated output shape does not match expected.");
   const int64_t out_count = output.element_count();

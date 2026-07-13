@@ -25,9 +25,9 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
   return resolved;
 }
 
-std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &input_shape,
-                                        const std::vector<bool> &is_reduced, bool keepdims) {
-  std::vector<int64_t> out_shape;
+Shape ComputeOutputShape(const Shape &input_shape, const std::vector<bool> &is_reduced,
+                         bool keepdims) {
+  Shape out_shape;
   out_shape.reserve(input_shape.size());
   for (size_t d = 0; d < input_shape.size(); ++d) {
     if (is_reduced[d]) {
@@ -41,7 +41,7 @@ std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &input_shape,
   return out_shape;
 }
 
-std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
+Shape RowMajorStrides(const Shape &shape) {
   std::vector<int64_t> strides(shape.size(), 1);
   for (size_t i = shape.size(); i-- > 1;) {
     strides[i - 1] = strides[i] * shape[i];
@@ -58,8 +58,8 @@ void ValidateFloat(const Tensor &t, const char *name) {
 // identity for ``prod`` is ``1`` so the output buffer is initialized to
 // ``1.0f`` before the reduction loop.
 void ProdReduce(const Tensor &data, const std::vector<bool> &is_reduced,
-                const std::vector<int64_t> &output_shape_noreduce, Tensor &output) {
-  const std::vector<int64_t> out_strides = RowMajorStrides(output_shape_noreduce);
+                const Shape &output_shape_noreduce, Tensor &output) {
+  const Shape out_strides = RowMajorStrides(output_shape_noreduce);
   float *py = output.AsFloat();
   const int64_t out_count = output.element_count();
   for (int64_t i = 0; i < out_count; ++i) {
@@ -100,7 +100,7 @@ Tensor ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_
   if (!noop_with_empty_axes) {
     std::fill(is_reduced.begin(), is_reduced.end(), true);
   }
-  const std::vector<int64_t> out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
+  const Shape out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {
     out_count *= d;
@@ -121,8 +121,7 @@ void ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_em
   if (!noop_with_empty_axes) {
     std::fill(is_reduced.begin(), is_reduced.end(), true);
   }
-  const std::vector<int64_t> expected_out_shape =
-      ComputeOutputShape(data.shape, is_reduced, keepdims);
+  const Shape expected_out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
   EXT_ENFORCE_INVALID(
       output.shape == expected_out_shape,
       "kernel::ReduceProd preallocated output shape does not match expected shape.");
@@ -135,8 +134,7 @@ void ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_em
     std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
     return;
   }
-  const std::vector<int64_t> out_shape_noreduce =
-      ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
+  const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
   ProdReduce(data, is_reduced, out_shape_noreduce, output);
 }
 
@@ -159,7 +157,7 @@ Tensor ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepd
       is_reduced[static_cast<size_t>(a)] = true;
     }
   }
-  const std::vector<int64_t> out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
+  const Shape out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {
     out_count *= d;
@@ -192,8 +190,7 @@ void ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepdim
       is_reduced[static_cast<size_t>(a)] = true;
     }
   }
-  const std::vector<int64_t> expected_out_shape =
-      ComputeOutputShape(data.shape, is_reduced, keepdims);
+  const Shape expected_out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
   EXT_ENFORCE_INVALID(
       output.shape == expected_out_shape,
       "kernel::ReduceProd preallocated output shape does not match expected shape.");
@@ -206,8 +203,7 @@ void ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepdim
     std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
     return;
   }
-  const std::vector<int64_t> out_shape_noreduce =
-      ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
+  const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
   ProdReduce(data, is_reduced, out_shape_noreduce, output);
 }
 

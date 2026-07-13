@@ -28,9 +28,9 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 // Computes the output shape of a ReduceSum: dimensions in ``reduce_axes`` are
 // either dropped (when ``keepdims`` is false) or replaced by 1.
-std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &input_shape,
-                                        const std::vector<bool> &is_reduced, bool keepdims) {
-  std::vector<int64_t> out_shape;
+Shape ComputeOutputShape(const Shape &input_shape, const std::vector<bool> &is_reduced,
+                         bool keepdims) {
+  Shape out_shape;
   out_shape.reserve(input_shape.size());
   for (size_t d = 0; d < input_shape.size(); ++d) {
     if (is_reduced[d]) {
@@ -46,7 +46,7 @@ std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &input_shape,
 
 // Row-major strides for ``shape``. Each stride is the number of elements one
 // must skip to advance by one along that dimension.
-std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
+Shape RowMajorStrides(const Shape &shape) {
   std::vector<int64_t> strides(shape.size(), 1);
   for (size_t i = shape.size(); i-- > 1;) {
     strides[i - 1] = strides[i] * shape[i];
@@ -60,8 +60,8 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 // keepdims layout reshape the same byte buffer afterwards.
 template <typename T>
 void SumReduceT(const Tensor &data, const std::vector<bool> &is_reduced,
-                const std::vector<int64_t> &output_shape_noreduce, Tensor &output) {
-  const std::vector<int64_t> out_strides = RowMajorStrides(output_shape_noreduce);
+                const Shape &output_shape_noreduce, Tensor &output) {
+  const Shape out_strides = RowMajorStrides(output_shape_noreduce);
 
   // Zero-initialize the output bytes so we can accumulate into it.
   std::memset(output.mutable_bytes(), 0, output.size_bytes());
@@ -97,7 +97,7 @@ void SumReduceT(const Tensor &data, const std::vector<bool> &is_reduced,
 }
 
 void SumReduce(const Tensor &data, const std::vector<bool> &is_reduced,
-               const std::vector<int64_t> &output_shape_noreduce, Tensor &output) {
+               const Shape &output_shape_noreduce, Tensor &output) {
   if (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
     SumReduceT<double>(data, is_reduced, output_shape_noreduce, output);
   } else {
@@ -126,7 +126,7 @@ Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_e
     std::fill(is_reduced.begin(), is_reduced.end(), true);
   }
 
-  const std::vector<int64_t> out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
+  const Shape out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
   const int64_t out_count = out_shape.empty() ? 1 : [&out_shape]() {
     int64_t n = 1;
     for (int64_t d : out_shape) {
@@ -154,8 +154,7 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
     std::fill(is_reduced.begin(), is_reduced.end(), true);
   }
 
-  const std::vector<int64_t> expected_out_shape =
-      ComputeOutputShape(data.shape, is_reduced, keepdims);
+  const Shape expected_out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
                       "kernel::ReduceSum preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
@@ -167,8 +166,7 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
     return;
   }
 
-  const std::vector<int64_t> out_shape_noreduce =
-      ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
+  const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
   SumReduce(data, is_reduced, out_shape_noreduce, output);
 }
 
@@ -195,7 +193,7 @@ Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdi
     }
   }
 
-  const std::vector<int64_t> out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
+  const Shape out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {
     out_count *= d;
@@ -231,8 +229,7 @@ void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims
     }
   }
 
-  const std::vector<int64_t> expected_out_shape =
-      ComputeOutputShape(data.shape, is_reduced, keepdims);
+  const Shape expected_out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
                       "kernel::ReduceSum preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
@@ -244,8 +241,7 @@ void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims
     return;
   }
 
-  const std::vector<int64_t> out_shape_noreduce =
-      ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
+  const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
   SumReduce(data, is_reduced, out_shape_noreduce, output);
 }
 

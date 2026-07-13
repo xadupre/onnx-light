@@ -218,9 +218,8 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
   // WriteInPlaceReuseToMetadata for this model. They allow
   // TestBackendMetadataCoverage to verify that the computed metadata matches.
   //
-  // Value-tag seeds: all initializers → "weight"; mask_axes upgraded to "axes"
-  // by Unsqueeze's input[1] rule.  The input_ids / past_key / past_value graph
-  // inputs are NOT rank-2 FLOAT, so they have no tag.
+  // Value-tag seeds: all graph inputs and initializers → "weight"; mask_axes
+  // upgraded to "axes" by Unsqueeze's input[1] rule.
   // mask_float and mask_4d are tagged "weight" via Sub backward propagation:
   // Sub(mask_one, mask_4d)→mask_inv tags mask_4d "weight", then Unsqueeze
   // backward tags mask_float "weight".  Cast backward (Cast propagates from its
@@ -237,6 +236,7 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
                         "\"gate\":\"weight\",\"gate_proj.weight\":\"weight\","
                         "\"gate_sigmoid\":\"weight\",\"gate_silu\":\"weight\","
                         "\"hidden\":\"weight\",\"hidden2\":\"weight\",\"hidden3\":\"weight\","
+                        "\"input_ids\":\"weight\","
                         "\"input_layernorm.weight\":\"weight\","
                         "\"k_proj.weight\":\"weight\",\"key\":\"weight\","
                         "\"lm_head.weight\":\"weight\",\"logits\":\"weight\","
@@ -247,6 +247,7 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
                         "\"norm.weight\":\"weight\","
                         "\"normed1\":\"weight\",\"normed2\":\"weight\",\"normed_final\":\"weight\","
                         "\"o_proj.weight\":\"weight\","
+                        "\"past_key\":\"weight\",\"past_value\":\"weight\","
                         "\"post_attention_layernorm.weight\":\"weight\","
                         "\"present_key\":\"weight\",\"present_value\":\"weight\","
                         "\"q_proj.weight\":\"weight\",\"query\":\"weight\","
@@ -493,15 +494,30 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
     }
 
     // Per-value kValueTagMetadataKey on graph inputs.
-    // input[0] input_ids → no tag (INT64, not rank-2 FLOAT)
+    // input[0] input_ids → "weight" (direct graph input seed)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
     // input[1] attention_mask → "weight" (Cast backward propagation)
     {
       StringStringEntryProto *entry = graph->mutable_input(1)->add_metadata_props();
       entry->set_key(ann::kValueTagMetadataKey);
       entry->set_value("weight");
     }
-    // input[2] past_key → no tag (not rank-2 FLOAT)
-    // input[3] past_value → no tag (not rank-2 FLOAT)
+    // input[2] past_key → "weight" (direct graph input seed)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(2)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // input[3] past_value → "weight" (direct graph input seed)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(3)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
 
     // Per-value kValueTagMetadataKey on initializers (insertion order, see
     // AddInitializer calls above).
@@ -810,6 +826,7 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
                         "\"gate_sigmoid\":\"weight\",\"gate_silu\":\"weight\","
                         "\"head_shape\":\"shape\","
                         "\"hidden\":\"weight\",\"hidden2\":\"weight\",\"hidden3\":\"weight\","
+                        "\"input_ids\":\"weight\","
                         "\"input_layernorm.weight\":\"weight\","
                         "\"k_proj.weight\":\"weight\",\"key\":\"weight\","
                         "\"key_4d\":\"weight\",\"key_heads\":\"weight\","
@@ -1389,7 +1406,12 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
     }
 
     // Per-value kValueTagMetadataKey on graph inputs.
-    // input[0] input_ids → no tag (INT64, not rank-2 FLOAT)
+    // input[0] input_ids → "weight" (direct graph input seed)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
     // input[1] attention_mask → "weight" (Cast backward propagation)
     {
       StringStringEntryProto *entry = graph->mutable_input(1)->add_metadata_props();

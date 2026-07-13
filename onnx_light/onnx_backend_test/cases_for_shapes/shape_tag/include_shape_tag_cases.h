@@ -28,13 +28,14 @@ namespace onnx_backend_test {
 void RegisterShapeTagCases(std::vector<TestCase> &registry);
 
 /// Registers a ``Constant → Reshape`` case whose intermediate tensor ``S``
-/// should receive the ``"ambiguous"`` value tag because the ``Constant``
-/// node's output is tagged ``"weight"`` while the ``Reshape`` node consumes
-/// it as its *shape* input (pushing tag ``"shape"``); the conflict promotes
-/// it to ``"ambiguous"``. The ``Constant`` node itself is also tagged
-/// ``"ambiguous"`` on the second inference pass. The expected metadata is
-/// pre-embedded into the model so the test can verify that
-/// ``WriteValueAndNodeTagsToMetadata`` produces identical results.
+/// should receive the ``"shape"`` value tag: the ``Constant`` node initially
+/// tags it ``"weight"``, but the ``Reshape`` node consumes it as its *shape*
+/// input (pushing tag ``"shape"``), and ``"shape"`` has higher priority than
+/// ``"weight"``.  The ``Constant`` node itself is also tagged ``"shape"`` on
+/// the second inference pass.  Graph input ``X`` and output ``Y`` are tagged
+/// ``"weight"``.  The expected metadata is pre-embedded into the model so the
+/// test can verify that ``WriteValueAndNodeTagsToMetadata`` produces identical
+/// results.
 void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry);
 
 /// Registers a ``Constant → Mul → Concat → Reshape`` case.  A ``Constant``
@@ -44,8 +45,9 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry);
 /// used as the *shape* input of ``Reshape``.  Because ``S_full`` is consumed
 /// as a shape input, all shape-carrying intermediates (``S1``, ``S2``,
 /// ``S_full``) receive the ``"shape"`` value tag, while the scalar multiplier
-/// constant ``two`` keeps its ``"weight"`` tag.  The expected metadata is
-/// pre-embedded into the model so the test can verify that
+/// constant ``two`` keeps its ``"weight"`` tag.  Graph input ``X`` and output
+/// ``Y`` receive the ``"weight"`` tag.  The expected metadata is pre-embedded
+/// into the model so the test can verify that
 /// ``WriteValueAndNodeTagsToMetadata`` produces identical results.
 void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &registry);
 
@@ -57,19 +59,19 @@ void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &regist
 void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry);
 
 /// Registers a ``Concat (weight wins)`` case. PAST (rank-3 FLOAT graph input,
-/// no seed tag) and KH (rank-3 FLOAT initializer, "weight") are concatenated
+/// seeded "weight") and KH (rank-3 FLOAT initializer, "weight") are concatenated
 /// along axis 1.  Because KH is "weight", the output C inherits "weight"
 /// (weight-wins rule).  Concat backward then also tags PAST as "weight".
 void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry);
 
-/// Registers a ``Cast backward`` case. X (INT64 graph input, no seed tag) is
+/// Registers a ``Cast backward`` case. X (INT64 graph input, seeded "weight") is
 /// cast to FLOAT as Y.  W (FLOAT initializer, "weight") is added to Y to
 /// produce Z.  Z inherits "weight" from W; Add backward tags Y as "weight";
 /// Cast backward then tags X as "weight".
 void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry);
 
-/// Registers a ``Reshape backward`` case. X (rank-1 FLOAT graph input, no
-/// seed tag) is reshaped into Y (FLOAT [2,3]).  W (FLOAT [2,3] initializer,
+/// Registers a ``Reshape backward`` case. X (rank-1 FLOAT graph input, seeded
+/// "weight") is reshaped into Y (FLOAT [2,3]).  W (FLOAT [2,3] initializer,
 /// "weight") is added to Y to produce Z.  Z inherits "weight" from W; Add
 /// backward tags Y as "weight"; Reshape backward then tags X as "weight".
 void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry);

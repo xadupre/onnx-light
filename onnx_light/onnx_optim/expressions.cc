@@ -1455,7 +1455,48 @@ static void run_add_visitor(const Node &node, AddVisitorResult &res) {
         res.const_term += simp.const_term * value;
         return;
       }
-      // Both sides symbolic: fall through to generic_visit
+      // Neither direct child is a constant.  Flatten the whole multiplication
+      // chain to extract any embedded integer coefficient.  For example,
+      // ``4096*batch_size*sequence_length`` parses as
+      //   Mult(Mult(4096, batch_size), sequence_length)
+      // so the direct-child check above misses the constant 4096.  By
+      // collecting and separating all factors we can still combine
+      // ``4096*a*b + 8*a*b`` into ``4104*a*b``.
+      {
+        std::vector<NodePtr> num, den;
+        flatten_mul_div(*b, num, den);
+        if (den.empty()) {
+          int64_t num_c = 1;
+          std::vector<NodePtr> num_other;
+          for (auto &x : num) {
+            if (const auto *c = dynamic_cast<const Constant *>(x.get()))
+              num_c *= c->value;
+            else
+              num_other.push_back(std::move(x));
+          }
+          if (num_other.size() < num.size()) {
+            // At least one constant factor was found.
+            if (num_other.empty()) {
+              res.const_term += num_c;
+              return;
+            }
+            // Sort symbolic factors for a canonical key.
+            std::sort(num_other.begin(), num_other.end(),
+                      [](const NodePtr &a, const NodePtr &b) { return unparse(*a) < unparse(*b); });
+            NodePtr symbolic = std::move(num_other[0]);
+            for (size_t i = 1; i < num_other.size(); ++i)
+              symbolic = std::make_unique<BinOp>(std::move(symbolic), BinOpKind::Mult,
+                                                 std::move(num_other[i]));
+            AddVisitorResult simp;
+            run_add_visitor(*symbolic, simp);
+            for (const auto &[k, v] : simp.coeffs)
+              res.add_coeff(k, num_c * v);
+            res.const_term += simp.const_term * num_c;
+            return;
+          }
+        }
+      }
+      // All factors are symbolic (no extractable constant): fall through to generic_visit
     }
     // For UnaryOp and other BinOps: generic_visit
   }

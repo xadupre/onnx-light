@@ -180,6 +180,27 @@ TEST(KernelClass, ConstantOfShapeRejectsNonInt64Shape) {
   EXPECT_THROW(kernel(bad_shape, value), std::invalid_argument);
 }
 
+TEST(KernelClass, ConstantOfShapeUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(20)};
+  ConstantOfShape kernel{ctx};
+  const Tensor shape = Tensor::FromInt64("", {2}, {3, 2});
+  const Tensor value = Tensor::FromFloat("", {1}, {1.5f});
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+  Tensor y = kernel(shape, value, &rt);
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(y.data.size(), 0u);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y.shape, (Shape{3, 2}));
+  ASSERT_EQ(y.element_count(), 6);
+  const float *py = y.AsFloat();
+  for (int i = 0; i < 6; ++i) {
+    EXPECT_FLOAT_EQ(py[i], 1.5f);
+  }
+}
+
 TEST(KernelClass, EyeLikeDefaultDtypeAndMainDiagonal) {
   const KernelContext ctx{DefaultOpset(22)};
   EyeLike kernel{ctx};

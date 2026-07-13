@@ -262,7 +262,6 @@ Tensor FloatToFloat16Tensor(const std::string &name, const Tensor &f,
                             RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(f.data_type == DataType::FLOAT, "FloatToFloat16Tensor: input must be FLOAT.");
   const int64_t n = f.element_count();
-  ValidateShapeAndElementCount(f.shape, static_cast<std::size_t>(n));
   Tensor t = MakeTensor(name, static_cast<std::int32_t>(DataType::FLOAT16), f.shape,
                         static_cast<std::size_t>(n) * sizeof(std::uint16_t), allocator);
   std::uint16_t *bits = reinterpret_cast<std::uint16_t *>(t.mutable_bytes());
@@ -276,7 +275,6 @@ Tensor FloatToFloat16Tensor(const std::string &name, const Tensor &f,
 Tensor RoundToFloat16(const Tensor &f, RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(f.data_type == DataType::FLOAT, "RoundToFloat16: input must be FLOAT.");
   const int64_t n = f.element_count();
-  ValidateShapeAndElementCount(f.shape, static_cast<std::size_t>(n));
   Tensor t = MakeTensor(f.name, static_cast<std::int32_t>(DataType::FLOAT), f.shape,
                         static_cast<std::size_t>(n) * sizeof(float), allocator);
   float *rounded = reinterpret_cast<float *>(t.mutable_bytes());

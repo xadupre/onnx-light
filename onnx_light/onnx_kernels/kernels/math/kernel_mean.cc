@@ -21,38 +21,18 @@ constexpr const char *kMeanName = "kernel::Mean";
 
 constexpr const char *kSupportedMeanTypesMsg = " only supports FLOAT and DOUBLE inputs.";
 
-// Returns the multidirectional-broadcast output shape of ``a`` and ``b``.
-std::vector<int64_t> BroadcastShape(const std::vector<int64_t> &a, const std::vector<int64_t> &b) {
-  const size_t rank = a.size() > b.size() ? a.size() : b.size();
-  std::vector<int64_t> sa(rank, 1), sb(rank, 1), out(rank, 1);
-  for (size_t i = 0; i < a.size(); ++i) {
-    sa[rank - a.size() + i] = a[i];
-  }
-  for (size_t i = 0; i < b.size(); ++i) {
-    sb[rank - b.size() + i] = b[i];
-  }
-  for (size_t d = 0; d < rank; ++d) {
-    if (sa[d] == sb[d] || sa[d] == 1 || sb[d] == 1) {
-      out[d] = sa[d] >= sb[d] ? sa[d] : sb[d];
-    } else {
-      EXT_THROW_INVALID(kMeanName, " input shapes are not multidirectional-broadcastable.");
-    }
-  }
-  return out;
-}
-
 // Computes the broadcast shape of every tensor in ``inputs``. ``inputs`` must
 // be non-empty and all tensors must share ``expected_dtype``.
-std::vector<int64_t> ValidateAndBroadcastShape(const std::vector<Tensor> &inputs,
-                                               const char *dtype_name, int32_t expected_dtype) {
+Shape ValidateAndBroadcastShape(const std::vector<Tensor> &inputs, const char *dtype_name,
+                                int32_t expected_dtype) {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMeanName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
     EXT_ENFORCE_INVALID(inputs[i].data_type == expected_dtype, kMeanName, " only supports ",
                         dtype_name, " tensors.");
   }
-  std::vector<int64_t> shape = inputs[0].shape;
+  Shape shape = inputs[0].shape;
   for (size_t i = 1; i < inputs.size(); ++i) {
-    shape = BroadcastShape(shape, inputs[i].shape);
+    shape = detail::BroadcastShape(kMeanName, shape, inputs[i].shape);
   }
   return shape;
 }
@@ -88,7 +68,7 @@ void AccumulateAndScale(const char *dtype_name, int32_t dtype, const std::vector
 template <typename T>
 Tensor MeanAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
                  RawBufferAllocator *allocator) {
-  const std::vector<int64_t> out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
+  const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {
     out_count *= d;
@@ -102,7 +82,7 @@ Tensor MeanAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor
 template <typename T>
 void MeanInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
                  Tensor &output) {
-  const std::vector<int64_t> out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
+  const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   const size_t expected_bytes = [&]() {
     int64_t n = 1;
     for (int64_t d : out_shape) {

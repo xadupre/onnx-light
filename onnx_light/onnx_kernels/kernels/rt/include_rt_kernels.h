@@ -40,6 +40,7 @@ public:
 
 private:
   static std::vector<uint8_t> LoadBytes(const Attributes &attrs);
+  static void LoadBytesInto(const Attributes &attrs, uint8_t *destination, size_t byte_count);
   static int64_t ComputeElementCount(const std::vector<int64_t> &shape);
 
   Attributes attrs_;

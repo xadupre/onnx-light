@@ -21,8 +21,9 @@ namespace kernel {
 namespace {
 
 // Row-major strides for ``shape``.
-std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
-  std::vector<int64_t> strides(shape.size(), 1);
+Shape RowMajorStrides(const Shape &shape) {
+  Shape strides;
+  strides.assign(shape.size(), 1);
   for (size_t i = shape.size(); i-- > 1;) {
     strides[i - 1] = strides[i] * shape[i];
   }
@@ -94,11 +95,9 @@ template <typename T> constexpr T MaxPoolInitial() {
 // ``storage_order == 1``.
 template <typename T>
 void MaxPoolLoop(const T *px, T *py, int64_t *pi, bool produce_indices, int64_t N, int64_t C,
-                 const std::vector<int64_t> &x_shape, const std::vector<int64_t> &in_strides,
-                 const std::vector<int64_t> &out_strides, const std::vector<int64_t> &out_spatial,
-                 const std::vector<int64_t> &kernel_shape, const std::vector<int64_t> &strides,
-                 const std::vector<int64_t> &dilations, const std::vector<int64_t> &pads,
-                 const std::vector<int64_t> &index_spatial_strides) {
+                 const Shape &x_shape, const Shape &in_strides, const Shape &out_strides,
+                 const Shape &out_spatial, const Shape &kernel_shape, const Shape &strides,
+                 const Shape &dilations, const Shape &pads, const Shape &index_spatial_strides) {
   const size_t k = kernel_shape.size();
   int64_t spatial_out_count = 1;
   for (int64_t d : out_spatial) {
@@ -108,9 +107,12 @@ void MaxPoolLoop(const T *px, T *py, int64_t *pi, bool produce_indices, int64_t 
   for (size_t i = 0; i < k; ++i) {
     kernel_volume *= kernel_shape[i];
   }
-  std::vector<int64_t> out_idx(k);
-  std::vector<int64_t> kidx(k);
-  std::vector<int64_t> best_p(k);
+  Shape out_idx;
+  out_idx.assign(k, 0);
+  Shape kidx;
+  kidx.assign(k, 0);
+  Shape best_p;
+  best_p.assign(k, 0);
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c = 0; c < C; ++c) {
       const int64_t in_base = n * in_strides[0] + c * in_strides[1];
@@ -173,12 +175,10 @@ void MaxPoolLoop(const T *px, T *py, int64_t *pi, bool produce_indices, int64_t 
 // Validates inputs and resolves output spatial shape and effective pads,
 // producing both Y and (optionally) Indices. ``produce_indices`` controls
 // whether the second output buffer is allocated and populated.
-std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                                     const std::vector<int64_t> &strides_in,
-                                     const std::vector<int64_t> &pads_in, bool ceil_mode,
-                                     const std::vector<int64_t> &dilations_in,
-                                     int64_t storage_order, const std::string &auto_pad,
-                                     bool produce_indices) {
+std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const Shape &kernel_shape,
+                                     const Shape &strides_in, const Shape &pads_in, bool ceil_mode,
+                                     const Shape &dilations_in, int64_t storage_order,
+                                     const std::string &auto_pad, bool produce_indices) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           x.data_type == static_cast<int32_t>(DataType::DOUBLE) ||
                           x.data_type == static_cast<int32_t>(DataType::INT8) ||
@@ -192,8 +192,18 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
                       "kernel::MaxPool: storage_order must be 0 (row major) or 1 (column major).");
 
   const size_t k = kernel_shape.size();
-  std::vector<int64_t> strides = strides_in.empty() ? std::vector<int64_t>(k, 1) : strides_in;
-  std::vector<int64_t> dilations = dilations_in.empty() ? std::vector<int64_t>(k, 1) : dilations_in;
+  Shape strides;
+  if (strides_in.empty()) {
+    strides.assign(k, 1);
+  } else {
+    strides = strides_in;
+  }
+  Shape dilations;
+  if (dilations_in.empty()) {
+    dilations.assign(k, 1);
+  } else {
+    dilations = dilations_in;
+  }
   EXT_ENFORCE_INVALID(strides.size() == k,
                       "kernel::MaxPool: strides must have one entry per spatial axis.");
   EXT_ENFORCE_INVALID(dilations.size() == k,
@@ -205,11 +215,15 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
   EXT_ENFORCE_INVALID(!use_auto_pad || pads_in.empty(),
                       "kernel::MaxPool: pads must be empty when auto_pad is not NOTSET.");
 
-  std::vector<int64_t> pads;
+  Shape pads;
   if (use_auto_pad) {
     pads.assign(2 * k, 0);
   } else {
-    pads = pads_in.empty() ? std::vector<int64_t>(2 * k, 0) : pads_in;
+    if (pads_in.empty()) {
+      pads.assign(2 * k, 0);
+    } else {
+      pads = pads_in;
+    }
   }
   EXT_ENFORCE_INVALID(pads.size() == 2 * k,
                       "kernel::MaxPool: pads must have 2 * k entries (begins then ends).");
@@ -222,7 +236,8 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
                         "kernel::MaxPool: pads entries must be non-negative.");
   }
 
-  std::vector<int64_t> out_shape(x.shape.size());
+  Shape out_shape;
+  out_shape.assign(x.shape.size(), 0);
   out_shape[0] = x.shape[0];
   out_shape[1] = x.shape[1];
   for (size_t i = 0; i < k; ++i) {
@@ -254,13 +269,14 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
                      std::vector<uint8_t>(static_cast<size_t>(n_out) * sizeof(int64_t)));
   }
 
-  const std::vector<int64_t> in_strides = RowMajorStrides(x.shape);
-  const std::vector<int64_t> out_strides = RowMajorStrides(out_shape);
+  const Shape in_strides = RowMajorStrides(x.shape);
+  const Shape out_strides = RowMajorStrides(out_shape);
 
   const int64_t N = x.shape[0];
   const int64_t C = x.shape[1];
 
-  std::vector<int64_t> out_spatial(k);
+  Shape out_spatial;
+  out_spatial.assign(k, 0);
   for (size_t i = 0; i < k; ++i) {
     out_spatial[i] = out_shape[i + 2];
   }
@@ -269,7 +285,8 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
   // into the ``Indices`` value. ``storage_order == 0`` uses row-major strides
   // (matching ``in_strides`` over the spatial axes); ``storage_order == 1``
   // uses column-major strides over the spatial axes.
-  std::vector<int64_t> index_spatial_strides(k);
+  Shape index_spatial_strides;
+  index_spatial_strides.assign(k, 0);
   if (storage_order == 0) {
     for (size_t i = 0; i < k; ++i) {
       index_spatial_strides[i] = in_strides[i + 2];
@@ -313,9 +330,8 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
 
 } // namespace
 
-Tensor MaxPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                           const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                           bool ceil_mode, const std::vector<int64_t> &dilations,
+Tensor MaxPool::operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
+                           const Shape &pads, bool ceil_mode, const Shape &dilations,
                            int64_t storage_order, const std::string &auto_pad,
                            RuntimeContext *rt) const {
   auto result = RunMaxPool(x, kernel_shape, strides, pads, ceil_mode, dilations, storage_order,
@@ -323,11 +339,11 @@ Tensor MaxPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_s
   return std::move(result.first);
 }
 
-std::pair<Tensor, Tensor>
-MaxPool::WithIndices(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                     const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                     bool ceil_mode, const std::vector<int64_t> &dilations, int64_t storage_order,
-                     const std::string &auto_pad) const {
+std::pair<Tensor, Tensor> MaxPool::WithIndices(const Tensor &x, const Shape &kernel_shape,
+                                               const Shape &strides, const Shape &pads,
+                                               bool ceil_mode, const Shape &dilations,
+                                               int64_t storage_order,
+                                               const std::string &auto_pad) const {
   return RunMaxPool(x, kernel_shape, strides, pads, ceil_mode, dilations, storage_order, auto_pad,
                     /*produce_indices=*/true);
 }

@@ -277,8 +277,9 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
     node_meta(5, ann::kNodeTagMetadataKey, "weight");
     // node[6]  Unsqueeze(mask_float, mask_axes) → mask_4d
     //   mask_float inherits "weight" via Sub backward propagation; mask_float
-    //   last used here → released.
+    //   last used here → released; same total byte size → inplace.
     node_meta(6, ann::kNodeTagMetadataKey, "weight");
+    node_meta(6, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(6, ann::kReleaseAfterMetadataKey, "mask_float");
     // node[7]  Sub(mask_one, mask_4d) → mask_inv
     //   mask_4d last used here (output 0 = mask_inv reuses mask_4d buffer).
@@ -891,8 +892,9 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
     node_meta(10, ann::kNodeTagMetadataKey, "weight");
     // node[11] Unsqueeze(mask_float, mask_axes) → mask_4d
     //   mask_float inherits "weight" via Sub backward propagation; mask_float
-    //   released here.
+    //   released here; same total byte size → inplace.
     node_meta(11, ann::kNodeTagMetadataKey, "weight");
+    node_meta(11, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(11, ann::kReleaseAfterMetadataKey, "mask_float");
     // node[12] Sub(mask_one, mask_4d) → mask_inv
     //   mask_4d last used here; mask_inv reuses mask_4d (input index=1).

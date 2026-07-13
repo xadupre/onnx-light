@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -20,8 +19,9 @@ namespace {
 
 // Row-major strides for ``shape``. Each stride is the number of elements one
 // must skip to advance by one along that dimension.
-std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
-  std::vector<int64_t> strides(shape.size(), 1);
+Shape RowMajorStrides(const Shape &shape) {
+  Shape strides;
+  strides.assign(shape.size(), 1);
   for (size_t i = shape.size(); i-- > 1;) {
     strides[i - 1] = strides[i] * shape[i];
   }
@@ -86,11 +86,10 @@ void ResolveAutoPadAxis(const std::string &auto_pad, int64_t in_dim, int64_t ker
 
 } // namespace
 
-Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                               const std::vector<int64_t> &strides,
-                               const std::vector<int64_t> &pads, bool ceil_mode,
-                               bool count_include_pad, const std::vector<int64_t> &dilations,
-                               const std::string &auto_pad, RuntimeContext *rt) const {
+Tensor AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
+                               const Shape &pads, bool ceil_mode, bool count_include_pad,
+                               const Shape &dilations, const std::string &auto_pad,
+                               RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(),
@@ -99,8 +98,18 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
       x.shape.size() == kernel_shape.size() + 2,
       "kernel::AveragePool: x must have rank == kernel_shape.size() + 2 (N, C, D1, ..., Dk).");
   const size_t k = kernel_shape.size();
-  std::vector<int64_t> eff_strides = strides.empty() ? std::vector<int64_t>(k, 1) : strides;
-  std::vector<int64_t> eff_dilations = dilations.empty() ? std::vector<int64_t>(k, 1) : dilations;
+  Shape eff_strides;
+  if (strides.empty()) {
+    eff_strides.assign(k, 1);
+  } else {
+    eff_strides = strides;
+  }
+  Shape eff_dilations;
+  if (dilations.empty()) {
+    eff_dilations.assign(k, 1);
+  } else {
+    eff_dilations = dilations;
+  }
   EXT_ENFORCE_INVALID(
       eff_strides.size() == k,
       "kernel::AveragePool: strides must be empty or have one entry per spatial axis.");
@@ -114,11 +123,15 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
   const bool use_auto_pad = auto_pad != "NOTSET";
   EXT_ENFORCE_INVALID(!use_auto_pad || pads.empty(),
                       "kernel::AveragePool: pads must be empty when auto_pad is not NOTSET.");
-  std::vector<int64_t> eff_pads;
+  Shape eff_pads;
   if (use_auto_pad) {
     eff_pads.assign(2 * k, 0);
   } else {
-    eff_pads = pads.empty() ? std::vector<int64_t>(2 * k, 0) : pads;
+    if (pads.empty()) {
+      eff_pads.assign(2 * k, 0);
+    } else {
+      eff_pads = pads;
+    }
   }
   EXT_ENFORCE_INVALID(
       eff_pads.size() == 2 * k,
@@ -135,7 +148,8 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
                         "kernel::AveragePool: pads entries must be non-negative.");
   }
 
-  std::vector<int64_t> out_shape(x.shape.size());
+  Shape out_shape;
+  out_shape.assign(x.shape.size(), 0);
   out_shape[0] = x.shape[0];
   out_shape[1] = x.shape[1];
   for (size_t i = 0; i < k; ++i) {
@@ -169,10 +183,9 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
   return out;
 }
 
-void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                             const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                             bool ceil_mode, bool count_include_pad, Tensor &output,
-                             const std::vector<int64_t> &dilations,
+void AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
+                             const Shape &pads, bool ceil_mode, bool count_include_pad,
+                             Tensor &output, const Shape &dilations,
                              const std::string &auto_pad) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AveragePool: x must be FLOAT.");
@@ -190,11 +203,16 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
   const bool use_auto_pad = auto_pad != "NOTSET";
   EXT_ENFORCE_INVALID(!use_auto_pad || pads.empty(),
                       "kernel::AveragePool: pads must be empty when auto_pad is not NOTSET.");
-  std::vector<int64_t> eff_dilations = dilations.empty() ? std::vector<int64_t>(k, 1) : dilations;
+  Shape eff_dilations;
+  if (dilations.empty()) {
+    eff_dilations.assign(k, 1);
+  } else {
+    eff_dilations = dilations;
+  }
   EXT_ENFORCE_INVALID(
       eff_dilations.size() == k,
       "kernel::AveragePool: dilations must be empty or have one entry per spatial axis.");
-  std::vector<int64_t> eff_pads;
+  Shape eff_pads;
   if (use_auto_pad) {
     eff_pads.assign(2 * k, 0);
     for (size_t i = 0; i < k; ++i) {
@@ -240,15 +258,16 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(output.mutable_bytes());
 
-  const std::vector<int64_t> in_strides = RowMajorStrides(x.shape);
-  const std::vector<int64_t> out_strides = RowMajorStrides(output.shape);
+  const Shape in_strides = RowMajorStrides(x.shape);
+  const Shape out_strides = RowMajorStrides(output.shape);
 
   const int64_t N = x.shape[0];
   const int64_t C = x.shape[1];
 
   // Iterate over (n, c) and then over the k-D spatial output grid using a
   // row-major counter over ``out_spatial_dims``.
-  std::vector<int64_t> out_spatial(k);
+  Shape out_spatial;
+  out_spatial.assign(k, 0);
   for (size_t i = 0; i < k; ++i) {
     out_spatial[i] = output.shape[i + 2];
   }
@@ -257,7 +276,8 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
     spatial_out_count *= d;
   }
 
-  std::vector<int64_t> out_idx(k);
+  Shape out_idx;
+  out_idx.assign(k, 0);
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c = 0; c < C; ++c) {
       const int64_t in_base = n * in_strides[0] + c * in_strides[1];
@@ -296,7 +316,8 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
           }
           return v;
         }();
-        std::vector<int64_t> kidx(k);
+        Shape kidx;
+        kidx.assign(k, 0);
         for (int64_t kflat = 0; kflat < kernel_volume; ++kflat) {
           int64_t krem = kflat;
           for (size_t i = k; i-- > 0;) {

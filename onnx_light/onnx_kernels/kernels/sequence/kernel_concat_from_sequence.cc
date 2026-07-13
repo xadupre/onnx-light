@@ -19,7 +19,7 @@ namespace kernel {
 namespace {
 
 // Computes the product of the first ``count`` dimensions of ``shape``.
-int64_t PrefixProduct(const std::vector<int64_t> &shape, std::size_t count) {
+int64_t PrefixProduct(const onnx_kernels::Shape &shape, std::size_t count) {
   int64_t product = 1;
   for (std::size_t i = 0; i < count; ++i) {
     product *= shape[i];
@@ -28,7 +28,7 @@ int64_t PrefixProduct(const std::vector<int64_t> &shape, std::size_t count) {
 }
 
 // Computes the product of dimensions ``[from, shape.size())`` of ``shape``.
-int64_t SuffixProduct(const std::vector<int64_t> &shape, std::size_t from) {
+int64_t SuffixProduct(const onnx_kernels::Shape &shape, std::size_t from) {
   int64_t product = 1;
   for (std::size_t i = from; i < shape.size(); ++i) {
     product *= shape[i];
@@ -41,7 +41,7 @@ int64_t SuffixProduct(const std::vector<int64_t> &shape, std::size_t from) {
 //   * ``out_shape``    : the output tensor shape;
 //   * ``elem_size``    : the size in bytes of one input element.
 void ResolveAndValidate(const std::vector<Tensor> &inputs, int64_t axis, int64_t new_axis,
-                        int &resolved_axis, std::vector<int64_t> &out_shape, size_t &elem_size) {
+                        int &resolved_axis, onnx_kernels::Shape &out_shape, size_t &elem_size) {
   EXT_ENFORCE_INVALID(new_axis == 0 || new_axis == 1,
                       "kernel::ConcatFromSequence: new_axis must be either 0 or 1.");
   EXT_ENFORCE_INVALID(!inputs.empty(),
@@ -76,7 +76,7 @@ void ResolveAndValidate(const std::vector<Tensor> &inputs, int64_t axis, int64_t
           inputs[i].shape == first.shape,
           "kernel::ConcatFromSequence: with new_axis=1 all inputs must share the same shape.");
     }
-    out_shape.clear();
+    out_shape.assign(0, 0);
     out_shape.reserve(static_cast<std::size_t>(rank + 1));
     for (int d = 0; d <= rank; ++d) {
       if (d == resolved_axis) {
@@ -110,7 +110,7 @@ void ResolveAndValidate(const std::vector<Tensor> &inputs, int64_t axis, int64_t
 // row-major layout. ``out_shape`` and ``resolved_axis`` describe the
 // output tensor; ``elem_size`` is the per-element byte size.
 void CopyConcatenated(const std::vector<Tensor> &inputs, int resolved_axis,
-                      const std::vector<int64_t> &out_shape, size_t elem_size,
+                      const onnx_kernels::Shape &out_shape, size_t elem_size,
                       RawBuffer &output_bytes) {
   // Block of consecutive bytes that the concat sees as a "row" of the
   // outer block: outer * inner * elem_size bytes per input contribute
@@ -143,7 +143,7 @@ void CopyConcatenated(const std::vector<Tensor> &inputs, int resolved_axis,
 Tensor ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t axis,
                                       int64_t new_axis, RuntimeContext *rt) const {
   int resolved_axis = 0;
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_shape;
   size_t elem_size = 0;
   ResolveAndValidate(inputs, axis, new_axis, resolved_axis, out_shape, elem_size);
   const size_t total_bytes = static_cast<size_t>(elem_size) *
@@ -173,7 +173,7 @@ Tensor ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t
 void ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t axis,
                                     int64_t new_axis, Tensor &output) const {
   int resolved_axis = 0;
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_shape;
   size_t elem_size = 0;
   ResolveAndValidate(inputs, axis, new_axis, resolved_axis, out_shape, elem_size);
   EXT_ENFORCE_INVALID(

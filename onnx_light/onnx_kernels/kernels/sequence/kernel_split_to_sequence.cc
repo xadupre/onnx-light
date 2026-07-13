@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -91,7 +92,7 @@ std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, const Tensor *split) {
 } // namespace
 
 Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, int64_t axis,
-                                     int64_t keepdims) const {
+                                     int64_t keepdims, RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(input.shape.size());
   EXT_ENFORCE_INVALID(rank > 0, "kernel::SplitToSequence cannot split a scalar tensor.");
 
@@ -120,9 +121,10 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
 
   std::vector<Tensor> outputs;
   outputs.reserve(sizes.size());
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   std::size_t offset = 0; // byte offset within each "row" of the input.
   for (int64_t size : sizes) {
-    std::vector<int64_t> out_shape;
+    onnx_kernels::Shape out_shape;
     out_shape.reserve(static_cast<std::size_t>(rank));
     for (int64_t d = 0; d < rank; ++d) {
       if (d == resolved_axis) {
@@ -140,7 +142,7 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
       total *= d;
     }
     const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
-    Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, nullptr);
+    Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, allocator);
     const std::size_t out_row_bytes = static_cast<std::size_t>(size) * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
       std::memcpy(out.mutable_bytes() + static_cast<std::size_t>(o) * out_row_bytes,

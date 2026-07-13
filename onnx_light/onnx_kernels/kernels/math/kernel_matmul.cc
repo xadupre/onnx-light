@@ -171,10 +171,11 @@ template <typename T> void MatMulCompute(const Tensor &a, const Tensor &b, Tenso
   }
 }
 
-template <typename T> Tensor MatMulAlloc(const Tensor &a, const Tensor &b) {
+template <typename T>
+Tensor MatMulAlloc(const Tensor &a, const Tensor &b, RawBufferAllocator *allocator = nullptr) {
   const Shape out_shape = ComputeMatMulOutputShape(a.shape, b.shape);
   const size_t y_n_bytes = static_cast<size_t>(NumElements(out_shape)) * sizeof(T);
-  Tensor y = MakeOutputTensor(a.data_type, out_shape, y_n_bytes, nullptr);
+  Tensor y = MakeOutputTensor(a.data_type, out_shape, y_n_bytes, allocator);
   MatMulCompute<T>(a, b, y);
   return y;
 }
@@ -196,24 +197,25 @@ template <typename T> void MatMulInPlace(const Tensor &a, const Tensor &b, Tenso
 Tensor MatMul::operator()(const Tensor &a, const Tensor &b, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(a.data_type == b.data_type, kMatMulName,
                       " inputs must share the same dtype.");
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   switch (a.data_type) {
   case DataType::FLOAT:
-    return MatMulAlloc<float>(a, b);
+    return MatMulAlloc<float>(a, b, allocator);
   case DataType::DOUBLE:
-    return MatMulAlloc<double>(a, b);
+    return MatMulAlloc<double>(a, b, allocator);
   case DataType::INT32:
-    return MatMulAlloc<int32_t>(a, b);
+    return MatMulAlloc<int32_t>(a, b, allocator);
   case DataType::INT64:
-    return MatMulAlloc<int64_t>(a, b);
+    return MatMulAlloc<int64_t>(a, b, allocator);
   case DataType::UINT32:
-    return MatMulAlloc<uint32_t>(a, b);
+    return MatMulAlloc<uint32_t>(a, b, allocator);
   case DataType::UINT64:
-    return MatMulAlloc<uint64_t>(a, b);
+    return MatMulAlloc<uint64_t>(a, b, allocator);
   case DataType::FLOAT16:
   case DataType::BFLOAT16: {
     const Tensor a_f = PromoteToFloat32(a, rt);
     const Tensor b_f = PromoteToFloat32(b, rt);
-    Tensor y = MatMulAlloc<float>(a_f, b_f);
+    Tensor y = MatMulAlloc<float>(a_f, b_f, allocator);
     return DemoteFromFloat32(y, a.data_type, rt);
   }
   default:

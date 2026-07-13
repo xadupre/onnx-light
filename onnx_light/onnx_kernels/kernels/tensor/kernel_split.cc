@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -55,8 +56,8 @@ std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, const std::vector<int64
 } // namespace
 
 std::vector<Tensor> Split::operator()(const Tensor &input, int64_t axis,
-                                      const std::vector<int64_t> &split,
-                                      int64_t num_outputs) const {
+                                      const std::vector<int64_t> &split, int64_t num_outputs,
+                                      RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(input.shape.size());
   EXT_ENFORCE_INVALID(rank > 0, "kernel::Split cannot split a scalar tensor.");
 
@@ -86,6 +87,7 @@ std::vector<Tensor> Split::operator()(const Tensor &input, int64_t axis,
 
   std::vector<Tensor> outputs;
   outputs.reserve(sizes.size());
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   size_t offset = 0; // byte offset within each "row" of the input.
   for (int64_t size : sizes) {
     onnx_kernels::Shape out_shape = input.shape;
@@ -95,7 +97,7 @@ std::vector<Tensor> Split::operator()(const Tensor &input, int64_t axis,
       total *= d;
     }
     const size_t out_n_bytes = static_cast<size_t>(total) * elem_size;
-    Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, nullptr);
+    Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, allocator);
     const size_t out_row_bytes = static_cast<size_t>(size) * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
       std::memcpy(out.mutable_bytes() + static_cast<size_t>(o) * out_row_bytes,

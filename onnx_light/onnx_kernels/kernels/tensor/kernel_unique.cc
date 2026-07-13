@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -182,7 +183,8 @@ UniqueGroups ComputeUniqueGroups(int64_t count, const Cmp &cmp, bool sorted) {
 
 Unique::Outputs Unique::operator()(const Tensor &x) const { return (*this)(x, Attributes{}); }
 
-Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) const {
+Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
+                                   RuntimeContext *rt) const {
   const DataType dt = static_cast<DataType>(x.data_type);
   const bool is_string = (dt == DataType::STRING);
   if (!is_string) {
@@ -310,6 +312,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
   const int64_t n_unique = static_cast<int64_t>(groups.first_occurrence.size());
 
   // Build Y.
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   Outputs out;
   if (!axis.has_value()) {
     // Y is 1-D of length n_unique.
@@ -322,7 +325,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
       out.y = Tensor::FromStrings("", {n_unique}, y_strs);
     } else {
       const size_t y_n_bytes = static_cast<std::size_t>(n_unique) * elem_size;
-      Tensor y = MakeOutputTensor(x.data_type, {n_unique}, y_n_bytes, nullptr);
+      Tensor y = MakeOutputTensor(x.data_type, {n_unique}, y_n_bytes, allocator);
       for (int64_t g = 0; g < n_unique; ++g) {
         const std::size_t src_off =
             static_cast<std::size_t>(groups.first_occurrence[static_cast<std::size_t>(g)]) *
@@ -358,7 +361,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
     } else {
       const std::size_t block_bytes = static_cast<std::size_t>(inner_elems) * elem_size;
       const size_t y_n_bytes = static_cast<std::size_t>(y_total) * elem_size;
-      Tensor y = MakeOutputTensor(x.data_type, y_shape, y_n_bytes, nullptr);
+      Tensor y = MakeOutputTensor(x.data_type, y_shape, y_n_bytes, allocator);
       for (int64_t o = 0; o < outer; ++o) {
         for (int64_t g = 0; g < n_unique; ++g) {
           const int64_t k = groups.first_occurrence[static_cast<std::size_t>(g)];

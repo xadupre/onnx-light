@@ -197,7 +197,8 @@ public:
   std::tuple<Tensor, Tensor, Tensor> TrainingForward(const Tensor &x, const Tensor &scale,
                                                      const Tensor &bias, const Tensor &input_mean,
                                                      const Tensor &input_var, float epsilon = 1e-5f,
-                                                     float momentum = 0.9f) const;
+                                                     float momentum = 0.9f,
+                                                     RuntimeContext *rt = nullptr) const;
 
   /// Output ``Y`` has the same shape as ``X`` so the output buffer may
   /// alias the input ``X`` buffer.
@@ -284,7 +285,8 @@ public:
   /// absent.
   std::tuple<Tensor, Tensor, Tensor> operator()(const Tensor &x, const Tensor &scale,
                                                 const Tensor &b, int64_t axis = -1,
-                                                float epsilon = 1e-5f) const;
+                                                float epsilon = 1e-5f,
+                                                RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``y`` must have the same shape and dtype as ``x``.
   /// ``mean`` and ``inv_std_dev`` must have ``x``'s outer shape (i.e.
@@ -385,7 +387,8 @@ public:
   using KernelBase::KernelBase;
 
   std::pair<Tensor, Tensor> operator()(const Tensor &data, float ratio = 0.5f,
-                                       bool training_mode = false, int64_t seed = kNoSeed) const;
+                                       bool training_mode = false, int64_t seed = kNoSeed,
+                                       RuntimeContext *rt = nullptr) const;
 
   Tensor operator()(const Tensor &data, float ratio, bool training_mode, Tensor &mask,
                     int64_t seed = kNoSeed, RuntimeContext *rt = nullptr) const;
@@ -585,8 +588,8 @@ public:
   /// on exit so the core time-major loop is unchanged.
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                        const Tensor &b = Tensor{},
-                                       const Tensor &initial_h = Tensor{},
-                                       int64_t layout = 0) const;
+                                       const Tensor &initial_h = Tensor{}, int64_t layout = 0,
+                                       RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.
@@ -637,7 +640,8 @@ public:
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                        const Tensor &b = Tensor{},
                                        const Tensor &initial_h = Tensor{},
-                                       int64_t linear_before_reset = 0, int64_t layout = 0) const;
+                                       int64_t linear_before_reset = 0, int64_t layout = 0,
+                                       RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.
@@ -689,11 +693,10 @@ public:
   /// to indicate that the corresponding optional input is missing.
   /// ``layout`` selects between the two ONNX layouts (``0`` or ``1``);
   /// any other value is rejected.
-  std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
-                                       const Tensor &b = Tensor{},
-                                       const Tensor &initial_h = Tensor{},
-                                       const Tensor &initial_c = Tensor{},
-                                       const Tensor &p = Tensor{}, int64_t layout = 0) const;
+  std::pair<Tensor, Tensor>
+  operator()(const Tensor &x, const Tensor &w, const Tensor &r, const Tensor &b = Tensor{},
+             const Tensor &initial_h = Tensor{}, const Tensor &initial_c = Tensor{},
+             const Tensor &p = Tensor{}, int64_t layout = 0, RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.
@@ -807,8 +810,8 @@ public:
   /// ``batch_size`` masking out trailing (padding) key/value positions.
   Result operator()(const Tensor &Q, const Tensor &K, const Tensor &V, const Attributes &attrs,
                     const Tensor *attn_mask = nullptr, const Tensor *past_key = nullptr,
-                    const Tensor *past_value = nullptr,
-                    const Tensor *nonpad_kv_seqlen = nullptr) const;
+                    const Tensor *past_value = nullptr, const Tensor *nonpad_kv_seqlen = nullptr,
+                    RuntimeContext *rt = nullptr) const;
 
   /// Attention computes a fresh output buffer from independent reads of
   /// Q, K, V and never aliases an input buffer.
@@ -1063,7 +1066,8 @@ public:
   /// In-place overload writing into a caller-allocated output of the same
   /// shape and dtype as ``X``.
   void operator()(const Tensor &X, const Tensor &cos_cache, const Tensor &sin_cache,
-                  const Tensor *position_ids, const Attributes &attrs, Tensor &output) const;
+                  const Tensor *position_ids, const Attributes &attrs, Tensor &output,
+                  RuntimeContext *rt = nullptr) const;
 
   /// Output shape matches input shape; storage could theoretically alias
   /// ``X`` but the in-place overload above does not exploit it.

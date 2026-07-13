@@ -54,16 +54,14 @@ void ComputeDropout(const T *src, T *dst, uint8_t *mask_data, int64_t n, float r
 } // namespace
 
 std::pair<Tensor, Tensor> Dropout::operator()(const Tensor &data, float ratio, bool training_mode,
-                                              int64_t seed) const {
+                                              int64_t seed, RuntimeContext *rt) const {
   ValidateInput(data, ratio);
 
-  const size_t output_n_bytes = data.size_bytes();
-  Tensor output = MakeOutputTensor(data.data_type, data.shape, output_n_bytes, nullptr);
   const size_t mask_n_bytes = static_cast<std::size_t>(data.element_count());
-  Tensor mask =
-      MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), data.shape, mask_n_bytes, nullptr);
+  Tensor mask = MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), data.shape, mask_n_bytes,
+                                 rt ? rt->allocator() : nullptr);
 
-  output = (*this)(data, ratio, training_mode, mask, seed);
+  Tensor output = (*this)(data, ratio, training_mode, mask, seed, rt);
   return {std::move(output), std::move(mask)};
 }
 

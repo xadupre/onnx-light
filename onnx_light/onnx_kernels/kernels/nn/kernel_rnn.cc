@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <utility>
@@ -31,7 +32,7 @@ const float *AsFloatOrNull(const Tensor &t, const char *role) {
 
 std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, const Tensor &r,
                                           const Tensor &b, const Tensor &initial_h_in,
-                                          int64_t layout) const {
+                                          int64_t layout, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(layout == 0 || layout == 1, "kernel::RNN: layout must be 0 or 1, got ",
                       std::to_string(layout), ".");
   EXT_ENFORCE_INVALID(x_in.data_type == static_cast<int32_t>(DataType::FLOAT),
@@ -128,10 +129,11 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
   const std::vector<int64_t> y_h_shape{1, batch_size, hidden_size};
   const size_t y_n_bytes =
       static_cast<size_t>(seq_length * batch_size * hidden_size) * sizeof(float);
-  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, nullptr);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, allocator);
   const size_t y_h_n_bytes = static_cast<size_t>(batch_size * hidden_size) * sizeof(float);
   Tensor y_h =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_h_shape, y_h_n_bytes, nullptr);
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_h_shape, y_h_n_bytes, allocator);
   float *py = y.AsFloat();
   float *py_h = y_h.AsFloat();
 

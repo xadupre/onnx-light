@@ -36,9 +36,8 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
 // destruction.
 struct ZeroPointValues {
   std::vector<int32_t> fallback;
-  // In allocator-backed mode with size > 0, allocator and buffer are both
-  // non-null. In fallback mode, size may still be > 0 while allocator/buffer
-  // stay null.
+  // `buffer` is the active-storage discriminator: non-null means allocator-backed
+  // storage, null means fallback vector storage.
   RawBufferAllocator *allocator = nullptr;
   RawBuffer *buffer = nullptr;
   size_t size = 0;
@@ -305,10 +304,8 @@ void ComputeMatMulInteger(const Tensor &a, const Tensor &b, const Tensor &a_zero
   const int64_t M = a2[a2.size() - 2];
   const int64_t N = b2[b2.size() - 1];
 
-  const ZeroPointValues a_zps =
-      ReadZeroPoints(a_zero_point, a.data_type, M, "a_zero_point", allocator);
-  const ZeroPointValues b_zps =
-      ReadZeroPoints(b_zero_point, b.data_type, N, "b_zero_point", allocator);
+  ZeroPointValues a_zps = ReadZeroPoints(a_zero_point, a.data_type, M, "a_zero_point", allocator);
+  ZeroPointValues b_zps = ReadZeroPoints(b_zero_point, b.data_type, N, "b_zero_point", allocator);
 
   RunMatMulInteger(a, a_zps, b, b_zps, output);
 }

@@ -365,7 +365,7 @@ class TestSvg(unittest.TestCase):
         self.assertLess(after, before)
         self.assertEqual(after, 0)
 
-    def test_crossings_are_reduced_with_skip_edge(self) -> None:
+    def test_crossings_are_eliminated_with_skip_edge(self) -> None:
         from onnx_light.tools.svg import _assign_layers, _Box, _minimize_crossings
 
         # X connects to three operators (adjacent edges) and also directly to

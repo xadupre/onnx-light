@@ -444,8 +444,8 @@ def _minimize_crossings(boxes: list[_Box], edges: list[tuple[int, int, str]]) ->
     # (skip connections) that span more than one layer would otherwise contribute
     # positions that are incomparable with those of the adjacent layer, producing
     # incorrect barycentres and therefore more crossings.
-    # pred_adj[L][box_id] = ids of predecessors that are in sorted_layers[i-1].
-    # succ_adj[L][box_id] = ids of successors that are in sorted_layers[i+1].
+    # pred_adj[layer][box_id] = predecessor ids in the immediately preceding layer.
+    # succ_adj[layer][box_id] = successor ids in the immediately following layer.
     pred_adj: dict[int, dict[int, list[int]]] = {}
     succ_adj: dict[int, dict[int, list[int]]] = {}
     for idx, cur in enumerate(sorted_layers):

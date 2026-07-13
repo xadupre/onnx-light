@@ -437,47 +437,25 @@ def _minimize_crossings(boxes: list[_Box], edges: list[tuple[int, int, str]]) ->
         for index, box in enumerate(layer_boxes):
             position[box.id] = index
 
-    sorted_layers = sorted(layers)
-
-    # Pre-build adjacency lists restricted to the immediately adjacent layer so
-    # that positions from different layers are never mixed.  Long-range edges
-    # (skip connections) that span more than one layer would otherwise contribute
-    # positions that are incomparable with those of the adjacent layer, producing
-    # incorrect barycentres and therefore more crossings.
-    # pred_adj[layer][box_id] = predecessor ids in the immediately preceding layer.
-    # succ_adj[layer][box_id] = successor ids in the immediately following layer.
-    pred_adj: dict[int, dict[int, list[int]]] = {}
-    succ_adj: dict[int, dict[int, list[int]]] = {}
-    for idx, cur in enumerate(sorted_layers):
-        prev = sorted_layers[idx - 1] if idx > 0 else -1
-        nxt = sorted_layers[idx + 1] if idx < len(sorted_layers) - 1 else -1
-        pred_adj[cur] = {
-            box.id: [nid for nid in predecessors[box.id] if boxes[nid].layer == prev]
-            for box in layers[cur]
-        }
-        succ_adj[cur] = {
-            box.id: [nid for nid in successors[box.id] if boxes[nid].layer == nxt]
-            for box in layers[cur]
-        }
-
-    def reorder(layer_index: int, adj: dict[int, list[int]]) -> None:
+    def reorder(layer_index: int, neighbours: dict[int, list[int]]) -> None:
         layer_boxes = layers[layer_index]
 
         def barycenter(box: _Box) -> float:
-            ids = adj[box.id]
+            ids = neighbours[box.id]
             if not ids:
                 return float(position[box.id])
-            return sum(position[nid] for nid in ids) / len(ids)
+            return sum(position[i] for i in ids) / len(ids)
 
         layer_boxes.sort(key=barycenter)
         for index, box in enumerate(layer_boxes):
             position[box.id] = index
 
+    sorted_layers = sorted(layers)
     for _ in range(_CROSSING_SWEEPS):
-        for i in range(1, len(sorted_layers)):
-            reorder(sorted_layers[i], pred_adj[sorted_layers[i]])
-        for i in range(len(sorted_layers) - 2, -1, -1):
-            reorder(sorted_layers[i], succ_adj[sorted_layers[i]])
+        for layer_index in sorted_layers[1:]:
+            reorder(layer_index, predecessors)
+        for layer_index in reversed(sorted_layers[:-1]):
+            reorder(layer_index, successors)
 
     for layer_boxes in layers.values():
         for index, box in enumerate(layer_boxes):

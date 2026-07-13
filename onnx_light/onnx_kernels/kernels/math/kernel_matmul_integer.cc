@@ -31,15 +31,70 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
   return static_cast<int32_t>(t.AsUint8()[idx]);
 }
 
+struct ZeroPointValues {
+  std::vector<int32_t> fallback;
+  RawBufferAllocator *allocator = nullptr;
+  RawBuffer *buffer = nullptr;
+  int32_t *data = nullptr;
+  size_t size = 0;
+
+  ZeroPointValues() = default;
+  ZeroPointValues(const ZeroPointValues &) = delete;
+  ZeroPointValues &operator=(const ZeroPointValues &) = delete;
+
+  ZeroPointValues(ZeroPointValues &&other) noexcept
+      : fallback(std::move(other.fallback)), allocator(other.allocator), buffer(other.buffer),
+        data(other.data), size(other.size) {
+    if (!fallback.empty()) {
+      data = fallback.data();
+    }
+    other.allocator = nullptr;
+    other.buffer = nullptr;
+    other.data = nullptr;
+    other.size = 0;
+  }
+
+  ZeroPointValues &operator=(ZeroPointValues &&other) noexcept {
+    if (this != &other) {
+      if (buffer != nullptr && allocator != nullptr) {
+        allocator->Free(buffer);
+      }
+      fallback = std::move(other.fallback);
+      allocator = other.allocator;
+      buffer = other.buffer;
+      data = other.data;
+      size = other.size;
+      if (!fallback.empty()) {
+        data = fallback.data();
+      }
+      other.allocator = nullptr;
+      other.buffer = nullptr;
+      other.data = nullptr;
+      other.size = 0;
+    }
+    return *this;
+  }
+
+  ~ZeroPointValues() {
+    if (buffer != nullptr && allocator != nullptr) {
+      allocator->Free(buffer);
+    }
+  }
+};
+
 // Returns a vector of zero-point values for the given optional zero-point tensor.
 // - Empty tensor (absent input): returns {0} — scalar zero broadcast to all positions.
 // - Scalar (0-D) or 1-D of size 1: returns a one-element vector (per-tensor).
 // - 1-D of size `expected_size`: returns all values (per-row or per-column).
 // Any other shape triggers an assertion failure.
-std::vector<int32_t> ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t expected_size,
-                                    const char *name, RawBufferAllocator *allocator) {
+ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t expected_size,
+                               const char *name, RawBufferAllocator *allocator) {
+  ZeroPointValues zps;
   if (t.shape.empty() && t.size_bytes() == 0) {
-    return {0};
+    zps.fallback = {0};
+    zps.data = zps.fallback.data();
+    zps.size = 1;
+    return zps;
   }
   EXT_ENFORCE_INVALID(t.data_type == expected_dtype, kName, ": '", name,
                       "' dtype must match its data input.");
@@ -53,24 +108,25 @@ std::vector<int32_t> ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int
                       "' must be a scalar, a one-element 1-D tensor, or a 1-D tensor whose "
                       "size matches the corresponding matrix dimension.");
   const size_t numel_u = static_cast<size_t>(numel);
+
+  zps.size = numel_u;
   if (allocator != nullptr && numel_u > 0) {
-    RawBuffer *buffer = allocator->Allocate(numel_u * sizeof(int32_t));
-    EXT_ENFORCE_INVALID(buffer != nullptr, kName, ": zero-point allocator returned null.");
-    EXT_ENFORCE_INVALID(buffer->size() >= numel_u * sizeof(int32_t), kName,
+    zps.allocator = allocator;
+    zps.buffer = allocator->Allocate(numel_u * sizeof(int32_t));
+    EXT_ENFORCE_INVALID(zps.buffer != nullptr, kName, ": zero-point allocator returned null.");
+    EXT_ENFORCE_INVALID(zps.buffer->size() >= numel_u * sizeof(int32_t), kName,
                         ": zero-point allocator returned too small a buffer.");
-    int32_t *scratch = reinterpret_cast<int32_t *>(buffer->data());
+    zps.data = reinterpret_cast<int32_t *>(zps.buffer->data());
     for (int64_t i = 0; i < numel; ++i) {
-      scratch[static_cast<size_t>(i)] = ReadIntElem(t, i);
+      zps.data[static_cast<size_t>(i)] = ReadIntElem(t, i);
     }
-    std::vector<int32_t> zps(numel_u);
-    std::memcpy(zps.data(), scratch, numel_u * sizeof(int32_t));
-    allocator->Free(buffer);
     return zps;
   }
 
-  std::vector<int32_t> zps(numel_u);
+  zps.fallback.resize(numel_u);
+  zps.data = zps.fallback.data();
   for (int64_t i = 0; i < numel; ++i) {
-    zps[static_cast<size_t>(i)] = ReadIntElem(t, i);
+    zps.data[static_cast<size_t>(i)] = ReadIntElem(t, i);
   }
   return zps;
 }
@@ -134,8 +190,8 @@ std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &a_shape,
   return out_shape;
 }
 
-void RunMatMulInteger(const Tensor &a, const std::vector<int32_t> &a_zps, const Tensor &b,
-                      const std::vector<int32_t> &b_zps, Tensor &output) {
+void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tensor &b,
+                      const ZeroPointValues &b_zps, Tensor &output) {
   const std::vector<int64_t> a2 = PromoteMatMulShape(a.shape, true);
   const std::vector<int64_t> b2 = PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
@@ -161,8 +217,8 @@ void RunMatMulInteger(const Tensor &a, const std::vector<int32_t> &a_zps, const 
 
   int32_t *py = output.AsInt32();
 
-  const bool a_per_row = a_zps.size() > 1;
-  const bool b_per_col = b_zps.size() > 1;
+  const bool a_per_row = a_zps.size > 1;
+  const bool b_per_col = b_zps.size > 1;
 
   std::vector<int64_t> batch_idx(batch_rank, 0);
   for (int64_t batch = 0; batch < batch_count; ++batch) {
@@ -190,9 +246,9 @@ void RunMatMulInteger(const Tensor &a, const std::vector<int32_t> &a_zps, const 
     const int64_t b_col_stride = b_strides[b2.size() - 1];
 
     for (int64_t i = 0; i < M; ++i) {
-      const int32_t a_row_zp = a_per_row ? a_zps[static_cast<size_t>(i)] : a_zps[0];
+      const int32_t a_row_zp = a_per_row ? a_zps.data[static_cast<size_t>(i)] : a_zps.data[0];
       for (int64_t j = 0; j < N; ++j) {
-        const int32_t b_col_zp = b_per_col ? b_zps[static_cast<size_t>(j)] : b_zps[0];
+        const int32_t b_col_zp = b_per_col ? b_zps.data[static_cast<size_t>(j)] : b_zps.data[0];
         int32_t acc = 0;
         for (int64_t kk = 0; kk < K; ++kk) {
           const int32_t av = ReadIntElem(a, a_base + i * a_row_stride + kk * a_k_stride);
@@ -242,9 +298,9 @@ void ComputeMatMulInteger(const Tensor &a, const Tensor &b, const Tensor &a_zero
   const int64_t M = a2[a2.size() - 2];
   const int64_t N = b2[b2.size() - 1];
 
-  const std::vector<int32_t> a_zps =
+  const ZeroPointValues a_zps =
       ReadZeroPoints(a_zero_point, a.data_type, M, "a_zero_point", allocator);
-  const std::vector<int32_t> b_zps =
+  const ZeroPointValues b_zps =
       ReadZeroPoints(b_zero_point, b.data_type, N, "b_zero_point", allocator);
 
   RunMatMulInteger(a, a_zps, b, b_zps, output);

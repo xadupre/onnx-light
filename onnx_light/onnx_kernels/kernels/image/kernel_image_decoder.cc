@@ -4,6 +4,9 @@
 
 #include "onnx_kernels/kernels/image/include_image_kernels.h"
 
+#include "onnx_kernels/raw_buffer_allocator.h"
+#include "onnx_kernels/runtime_context.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -18,7 +21,6 @@
 #if defined(_WIN32)
 #include <windows.h>
 #elif defined(__APPLE__) || defined(__linux__) || defined(__unix__)
-#include "onnx_kernels/runtime_context.h"
 #include <dlfcn.h>
 #endif
 
@@ -449,6 +451,55 @@ bool TryDecodeTiff(const uint8_t *data, size_t size, const std::string &pixel_fo
 // scope and fall through to the empty-matrix path.
 // ---------------------------------------------------------------------------
 
+// RAII wrapper for a temporary byte buffer backed by either an
+// allocator-owned RawBuffer (when an allocator is provided) or a
+// fallback std::vector<uint8_t>. Non-copyable and non-moveable to keep
+// ownership clear.
+struct ByteBuffer {
+  ByteBuffer() = default;
+  ByteBuffer(const ByteBuffer &) = delete;
+  ByteBuffer &operator=(const ByteBuffer &) = delete;
+
+  ~ByteBuffer() {
+    if (buffer_ != nullptr) {
+      allocator_->Free(buffer_);
+    }
+  }
+
+  // Allocates n_bytes zero-initialized bytes. Uses allocator-backed
+  // storage when alloc is non-null; falls back to a plain
+  // std::vector<uint8_t> otherwise.
+  void assign(size_t n_bytes, RawBufferAllocator *alloc) {
+    if (alloc != nullptr) {
+      allocator_ = alloc;
+      buffer_ = alloc->Allocate(n_bytes);
+    } else {
+      fallback_.assign(n_bytes, uint8_t{0});
+    }
+  }
+
+  uint8_t *data() noexcept { return buffer_ != nullptr ? buffer_->data() : fallback_.data(); }
+  const uint8_t *data() const noexcept {
+    return buffer_ != nullptr ? buffer_->data() : fallback_.data();
+  }
+  uint8_t &operator[](size_t i) noexcept {
+    return buffer_ != nullptr ? (*buffer_)[i] : fallback_[i];
+  }
+  const uint8_t &operator[](size_t i) const noexcept {
+    return buffer_ != nullptr ? (*buffer_)[i] : fallback_[i];
+  }
+  size_t size() const noexcept { return buffer_ != nullptr ? buffer_->size() : fallback_.size(); }
+  uint8_t *begin() noexcept { return data(); }
+  uint8_t *end() noexcept { return data() + size(); }
+  const uint8_t *begin() const noexcept { return data(); }
+  const uint8_t *end() const noexcept { return data() + size(); }
+
+private:
+  std::vector<uint8_t> fallback_;
+  RawBufferAllocator *allocator_ = nullptr;
+  RawBuffer *buffer_ = nullptr;
+};
+
 // Inverse zig-zag: ``kZigZagInverse[k]`` is the natural-order row-major
 // 8x8 position of the k-th coefficient in zig-zag scan order.
 constexpr std::array<uint8_t, 64> kZigZagInverse = {
@@ -473,7 +524,7 @@ struct ComponentInfo {
   int dc_table_id = 0;
   int ac_table_id = 0;
   int32_t prev_dc = 0;
-  std::vector<uint8_t> samples;
+  ByteBuffer samples;
   int sample_width = 0;
   int sample_height = 0;
 };
@@ -694,7 +745,8 @@ bool DecodeBlock(JpegBitReader &reader, const HuffmanTable &dc_table, const Huff
 }
 
 bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_format,
-                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                   RawBufferAllocator *allocator) {
   // SOI marker.
   if (size < 4 || data[0] != 0xFF || data[1] != 0xD8) {
     return false;
@@ -912,7 +964,7 @@ bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_fo
     ComponentInfo &c = components[i];
     c.sample_width = mcu_cols * c.h_sampling * 8;
     c.sample_height = mcu_rows * c.v_sampling * 8;
-    c.samples.assign(static_cast<size_t>(c.sample_width) * c.sample_height, 0);
+    c.samples.assign(static_cast<size_t>(c.sample_width) * c.sample_height, allocator);
     c.prev_dc = 0;
   }
 
@@ -1336,7 +1388,8 @@ bool Inflate(DeflateBitReader &br, std::vector<uint8_t> &out) {
 }
 
 bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_format,
-                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                  RawBufferAllocator *allocator) {
   static const uint8_t kSig[8] = {137, 80, 78, 71, 13, 10, 26, 10};
   // 8-byte signature + minimum IHDR (4 len + 4 tag + 13 data + 4 CRC) +
   // minimum IEND (4 + 4 + 0 + 4) = 8 + 25 + 12 = 45.
@@ -1432,7 +1485,8 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
   if (raw.size() < expected)
     return false;
 
-  std::vector<uint8_t> rows(static_cast<size_t>(height) * row_bytes);
+  ByteBuffer rows;
+  rows.assign(static_cast<size_t>(height) * row_bytes, allocator);
   const int bpp = src_channels;
   for (int r = 0; r < height; ++r) {
     uint8_t filt_type = raw[static_cast<size_t>(r) * (1u + row_bytes)];
@@ -1527,7 +1581,8 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
 
 #if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
 bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_format,
-                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                   RawBufferAllocator *allocator) {
   using GetInfoFn = int (*)(const uint8_t *, size_t, int *, int *);
   using DecodeRgbIntoFn = uint8_t *(*)(const uint8_t *, size_t, uint8_t *, size_t, int);
 
@@ -1605,7 +1660,8 @@ bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_fo
     return false;
   }
 
-  std::vector<uint8_t> rgb(pixel_count * 3u);
+  ByteBuffer rgb;
+  rgb.assign(pixel_count * 3u, allocator);
   const int rgb_stride = width * 3;
   const uint8_t *decoded =
       s_webp_api.decode_rgb_into(data, size, rgb.data(), rgb.size(), rgb_stride);
@@ -1692,7 +1748,8 @@ bool PnmReadUint(const uint8_t *data, size_t size, size_t &pos, long &value) {
 }
 
 bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_format,
-                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                  RawBufferAllocator *allocator) {
   if (size < 2 || data[0] != 'P') {
     return false;
   }
@@ -1734,7 +1791,8 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
   }
   const size_t sample_count = pixel_count * static_cast<size_t>(src_channels);
 
-  std::vector<uint8_t> src(sample_count);
+  ByteBuffer src;
+  src.assign(sample_count, allocator);
   const bool is_binary = (magic == '4' || magic == '5' || magic == '6');
   if (is_binary) {
     // Exactly one whitespace byte separates the header from the binary data.
@@ -1925,7 +1983,8 @@ int32_t OpjMemSeek(int64_t nb_bytes, void *user_data) {
 }
 
 bool TryDecodeJpeg2000(const uint8_t *data, size_t size, const std::string &pixel_format,
-                       int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                       int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                       RawBufferAllocator *allocator) {
   // OpenJPEG codec identifiers (``OPJ_CODEC_FORMAT``).
   constexpr int kCodecJ2k = 0;
   constexpr int kCodecJp2 = 2;
@@ -2078,7 +2137,8 @@ bool TryDecodeJpeg2000(const uint8_t *data, size_t size, const std::string &pixe
   // ``opj_dparameters_t`` is large (over 8 KiB) and version-dependent. Default
   // initialize it through the library and pass it straight back, so its layout
   // never has to be mirrored here.
-  std::vector<unsigned char> params(16384, 0);
+  ByteBuffer params;
+  params.assign(16384, allocator);
 
   s_api.set_default_params(params.data());
   s_api.stream_set_read(stream, &OpjMemRead);
@@ -2185,16 +2245,17 @@ Tensor ImageDecoder::operator()(const Tensor &encoded_stream, const std::string 
   int64_t height = 0;
   int64_t width = 0;
   std::vector<uint8_t> pixels;
-  if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels) ||
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels, allocator) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels, allocator) ||
 #if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
       TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels, allocator) ||
 #endif
-      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels)
+      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels, allocator)
 #if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
-      || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels)
+      || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels, allocator)
 #endif
   ) {
     return Tensor::FromUint8("", {height, width, channels}, std::move(pixels));
@@ -2227,16 +2288,16 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
   int64_t height = 0;
   int64_t width = 0;
   std::vector<uint8_t> pixels;
-  if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels) ||
+  if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels, nullptr) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels, nullptr) ||
 #if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
       TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels, nullptr) ||
 #endif
-      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels)
+      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels, nullptr)
 #if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
-      || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels)
+      || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels, nullptr)
 #endif
   ) {
     EXT_ENFORCE_INVALID(output.shape[0] == height && output.shape[1] == width,

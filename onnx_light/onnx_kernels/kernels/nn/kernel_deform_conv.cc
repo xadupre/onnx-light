@@ -121,8 +121,8 @@ void ValidateInputs(const Tensor &x, const Tensor &w, const Tensor &offset, cons
   }
 }
 
-std::vector<int64_t> InferOutputShape(const Tensor &x, const Tensor &w, const Tensor &offset,
-                                      const DeformConv::Attributes &attrs) {
+onnx_kernels::Shape InferOutputShape(const Tensor &x, const Tensor &w, const Tensor &offset,
+                                     const DeformConv::Attributes &attrs) {
   const int64_t N = x.shape[0];
   const int64_t oC = w.shape[0];
   const int64_t oH = offset.shape[2];
@@ -160,7 +160,7 @@ Tensor DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &of
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, offset, b, mask, resolved);
-  std::vector<int64_t> out_shape = InferOutputShape(x, w, offset, resolved);
+  onnx_kernels::Shape out_shape = InferOutputShape(x, w, offset, resolved);
   int64_t total = 1;
   for (int64_t d : out_shape) {
     total *= d;
@@ -177,7 +177,7 @@ void DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &offs
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, offset, b, mask, resolved);
-  const std::vector<int64_t> expected_shape = InferOutputShape(x, w, offset, resolved);
+  const onnx_kernels::Shape expected_shape = InferOutputShape(x, w, offset, resolved);
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::DeformConv preallocated output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,

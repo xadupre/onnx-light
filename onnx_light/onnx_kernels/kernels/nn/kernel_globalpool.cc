@@ -45,7 +45,8 @@ Tensor GlobalAveragePool::operator()(const Tensor &x, RuntimeContext *rt) const 
   const int64_t spatial = SpatialCount(x);
 
   // Build output shape: (N, C, 1, 1, ..., 1).
-  std::vector<int64_t> out_shape(x.shape.size(), 1);
+  onnx_kernels::Shape out_shape;
+  out_shape.assign(x.shape.size(), 1);
   out_shape[0] = N;
   out_shape[1] = C;
 
@@ -85,7 +86,8 @@ Tensor GlobalMaxPool::operator()(const Tensor &x, RuntimeContext *rt) const {
   const int64_t C = x.shape[1];
   const int64_t spatial = SpatialCount(x);
 
-  std::vector<int64_t> out_shape(x.shape.size(), 1);
+  onnx_kernels::Shape out_shape;
+  out_shape.assign(x.shape.size(), 1);
   out_shape[0] = N;
   out_shape[1] = C;
 
@@ -124,7 +126,8 @@ Tensor GlobalLpPool::operator()(const Tensor &x, int64_t p, RuntimeContext *rt) 
   const int64_t C = x.shape[1];
   const int64_t spatial = SpatialCount(x);
 
-  std::vector<int64_t> out_shape(x.shape.size(), 1);
+  onnx_kernels::Shape out_shape;
+  out_shape.assign(x.shape.size(), 1);
   out_shape[0] = N;
   out_shape[1] = C;
 

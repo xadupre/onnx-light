@@ -41,7 +41,7 @@ template <typename T> void ValidateInput(const Tensor &x) {
                       "kernel::Normalizer requires an input of rank 1 ([C]) or rank 2 ([N,C]).");
 }
 
-void RowExtent(const std::vector<int64_t> &shape, int64_t &rows, int64_t &cols) {
+void RowExtent(const onnx_kernels::Shape &shape, int64_t &rows, int64_t &cols) {
   if (shape.size() == 1u) {
     rows = 1;
     cols = shape[0];

@@ -57,7 +57,7 @@ Tensor DictVectorizer::operator()(const std::vector<K> &input_keys,
                                   const std::vector<V> &input_values,
                                   const std::vector<K> &vocabulary, RuntimeContext *rt) const {
   const int64_t c = static_cast<int64_t>(vocabulary.size());
-  const std::vector<int64_t> shape{c};
+  const onnx_kernels::Shape shape{c};
   if constexpr (std::is_same_v<V, std::string>) {
     Tensor out = Tensor::FromStrings("", shape, std::vector<std::string>(vocabulary.size()));
     FillImpl(input_keys, input_values, vocabulary,
@@ -79,7 +79,7 @@ void DictVectorizer::operator()(const std::vector<K> &input_keys,
   if constexpr (std::is_same_v<V, std::string>) {
     EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::STRING),
                         "kernel::DictVectorizer preallocated output dtype must be STRING.");
-    EXT_ENFORCE_INVALID(output.shape == std::vector<int64_t>{c},
+    EXT_ENFORCE_INVALID(output.shape == onnx_kernels::Shape{c},
                         "kernel::DictVectorizer preallocated output shape must be [vocab_size].");
     output.string_data.assign(static_cast<size_t>(c), std::string());
     FillImpl(input_keys, input_values, vocabulary,
@@ -87,7 +87,7 @@ void DictVectorizer::operator()(const std::vector<K> &input_keys,
   } else {
     EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorElementType<V>::value),
                         "kernel::DictVectorizer preallocated output dtype must match value type.");
-    EXT_ENFORCE_INVALID(output.shape == std::vector<int64_t>{c},
+    EXT_ENFORCE_INVALID(output.shape == onnx_kernels::Shape{c},
                         "kernel::DictVectorizer preallocated output shape must be [vocab_size].");
     EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(c) * sizeof(V),
                         "kernel::DictVectorizer preallocated output buffer is incorrectly sized.");

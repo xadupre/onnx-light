@@ -49,7 +49,7 @@ void ValidateImputedValues(const std::vector<T> &imputed_values, int64_t last_di
       "the last dimension of the input.");
 }
 
-int64_t LastDim(const std::vector<int64_t> &shape) { return shape.empty() ? 1 : shape.back(); }
+int64_t LastDim(const onnx_kernels::Shape &shape) { return shape.empty() ? 1 : shape.back(); }
 
 template <typename T>
 void ApplyImputer(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value, T *out) {

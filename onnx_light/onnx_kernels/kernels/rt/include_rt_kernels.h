@@ -22,7 +22,7 @@ namespace kernel {
 class DelayedInitializer : public KernelBase {
 public:
   struct Attributes {
-    std::vector<int64_t> shape;
+    onnx_kernels::Shape shape;
     int32_t dtype = 0;
     std::string load_device;
     std::string runtime_device;
@@ -41,7 +41,7 @@ public:
 private:
   static std::vector<uint8_t> LoadBytes(const Attributes &attrs);
   static void LoadBytesInto(const Attributes &attrs, uint8_t *destination, size_t byte_count);
-  static int64_t ComputeElementCount(const std::vector<int64_t> &shape);
+  static int64_t ComputeElementCount(const onnx_kernels::Shape &shape);
 
   Attributes attrs_;
   std::vector<uint8_t> loaded_bytes_;

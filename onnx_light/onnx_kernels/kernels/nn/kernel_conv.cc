@@ -133,7 +133,7 @@ Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, b, resolved);
   std::vector<int64_t> out_spatial = ComputeOutputSpatial(x, resolved);
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_shape;
   out_shape.reserve(x.shape.size());
   out_shape.push_back(x.shape[0]);
   out_shape.push_back(w.shape[0]);
@@ -168,7 +168,7 @@ void Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const A
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, b, resolved);
   std::vector<int64_t> out_spatial = ComputeOutputSpatial(x, resolved);
-  std::vector<int64_t> expected_shape;
+  onnx_kernels::Shape expected_shape;
   expected_shape.reserve(x.shape.size());
   expected_shape.push_back(x.shape[0]);
   expected_shape.push_back(w.shape[0]);

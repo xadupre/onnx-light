@@ -175,8 +175,8 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
   }
 
   // Output allocations.
-  const std::vector<int64_t> y_shape{seq_length, 1, batch_size, hidden_size};
-  const std::vector<int64_t> y_h_shape{1, batch_size, hidden_size};
+  const onnx_kernels::Shape y_shape{seq_length, 1, batch_size, hidden_size};
+  const onnx_kernels::Shape y_h_shape{1, batch_size, hidden_size};
   const size_t y_n_bytes =
       static_cast<size_t>(seq_length * batch_size * hidden_size) * sizeof(float);
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;

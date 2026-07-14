@@ -145,7 +145,7 @@ Tensor ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor 
   ValidateInputs(x, w, b, resolved);
   std::vector<int64_t> out_spatial = ComputeOutputShape(x, resolved);
   const int64_t M = w.shape[1] * resolved.group;
-  std::vector<int64_t> out_shape;
+  onnx_kernels::Shape out_shape;
   out_shape.reserve(x.shape.size());
   out_shape.push_back(x.shape[0]);
   out_shape.push_back(M);
@@ -170,7 +170,7 @@ void ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor &b
   ValidateInputs(x, w, b, resolved);
   std::vector<int64_t> out_spatial = ComputeOutputShape(x, resolved);
   const int64_t M = w.shape[1] * resolved.group;
-  std::vector<int64_t> expected_shape;
+  onnx_kernels::Shape expected_shape;
   expected_shape.reserve(x.shape.size());
   expected_shape.push_back(x.shape[0]);
   expected_shape.push_back(M);

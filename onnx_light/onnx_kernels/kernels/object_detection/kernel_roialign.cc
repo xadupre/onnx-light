@@ -121,7 +121,7 @@ Tensor RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &b
   ValidateInputs(x, rois, batch_indices, attrs);
   const int64_t num_rois = rois.shape[0];
   const int64_t C = x.shape[1];
-  const std::vector<int64_t> out_shape = {num_rois, C, attrs.output_height, attrs.output_width};
+  const onnx_kernels::Shape out_shape = {num_rois, C, attrs.output_height, attrs.output_width};
   int64_t out_elements = 1;
   for (int64_t d : out_shape) {
     out_elements *= d;
@@ -145,7 +145,7 @@ void RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &bat
   const int64_t out_h = attrs.output_height;
   const int64_t out_w = attrs.output_width;
 
-  const std::vector<int64_t> expected_shape = {num_rois, C, out_h, out_w};
+  const onnx_kernels::Shape expected_shape = {num_rois, C, out_h, out_w};
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RoiAlign preallocated output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,

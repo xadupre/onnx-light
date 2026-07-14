@@ -90,7 +90,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
 
   EXT_ENFORCE_INVALID(output.data_type == kElementType,
                       "kernel::FlexAttention preallocated output must share Q's element type.");
-  const std::vector<int64_t> expected_out_shape = {batch_size, q_num_heads, q_seq_len, v_head_size};
+  const onnx_kernels::Shape expected_out_shape = {batch_size, q_num_heads, q_seq_len, v_head_size};
   EXT_ENFORCE_INVALID(
       output.shape == expected_out_shape,
       "kernel::FlexAttention preallocated output shape must be (batch_size, q_num_heads, "
@@ -124,7 +124,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   // optional ``score_mod`` and ``prob_mod`` callbacks — which operate on
   // the whole tensor in ONNX — can rewrite it in place before the
   // softmax and the final ``probs @ V`` matmul, respectively.
-  const std::vector<int64_t> probs_shape = {batch_size, q_num_heads, q_seq_len, kv_seq_len};
+  const onnx_kernels::Shape probs_shape = {batch_size, q_num_heads, q_seq_len, kv_seq_len};
   const int64_t probs_count = batch_size * q_num_heads * q_seq_len * kv_seq_len;
   const size_t probs_n_bytes = static_cast<size_t>(probs_count) * sizeof(T);
   Tensor probs = MakeOutputTensor(kElementType, probs_shape, probs_n_bytes, allocator);
@@ -330,7 +330,7 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
     ScoreModFn score_mod_wrapped = wrap_callback(score_mod);
     ProbModFn prob_mod_wrapped = wrap_callback(prob_mod);
 
-    const std::vector<int64_t> out_shape = {Q.shape[0], Q.shape[1], Q.shape[2], V.shape[3]};
+    const onnx_kernels::Shape out_shape = {Q.shape[0], Q.shape[1], Q.shape[2], V.shape[3]};
     const int64_t out_count = out_shape[0] * out_shape[1] * out_shape[2] * out_shape[3];
     const size_t out_f_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
     RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;

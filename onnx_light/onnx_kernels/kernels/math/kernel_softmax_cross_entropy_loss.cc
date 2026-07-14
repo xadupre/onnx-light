@@ -149,7 +149,7 @@ std::pair<Tensor, Tensor> SoftmaxCrossEntropyLoss::operator()(
   }
 
   const size_t loss_n_bytes = sizeof(float);
-  Tensor loss = MakeOutputTensor(DataType::FLOAT, std::vector<int64_t>{}, loss_n_bytes, allocator);
+  Tensor loss = MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, allocator);
   loss.AsFloat()[0] = reduced;
   return std::make_pair(std::move(loss), std::move(log_prob));
 }

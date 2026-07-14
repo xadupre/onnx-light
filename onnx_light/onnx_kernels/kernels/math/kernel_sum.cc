@@ -22,9 +22,12 @@ constexpr const char *kSumName = "kernel::Sum";
 constexpr const char *kSupportedSumTypesMsg = " only supports FLOAT and DOUBLE inputs.";
 
 // Returns the multidirectional-broadcast output shape of ``a`` and ``b``.
-std::vector<int64_t> BroadcastShape(const std::vector<int64_t> &a, const std::vector<int64_t> &b) {
+Shape BroadcastShape(const Shape &a, const Shape &b) {
   const size_t rank = a.size() > b.size() ? a.size() : b.size();
-  std::vector<int64_t> sa(rank, 1), sb(rank, 1), out(rank, 1);
+  Shape sa, sb, out;
+  sa.assign(rank, 1);
+  sb.assign(rank, 1);
+  out.assign(rank, 1);
   for (size_t i = 0; i < a.size(); ++i) {
     sa[rank - a.size() + i] = a[i];
   }
@@ -43,14 +46,14 @@ std::vector<int64_t> BroadcastShape(const std::vector<int64_t> &a, const std::ve
 
 // Computes the broadcast shape of every tensor in ``inputs``. ``inputs`` must
 // be non-empty and all tensors must share ``expected_dtype``.
-std::vector<int64_t> ValidateAndBroadcastShape(const std::vector<Tensor> &inputs,
-                                               const char *dtype_name, int32_t expected_dtype) {
+Shape ValidateAndBroadcastShape(const std::vector<Tensor> &inputs, const char *dtype_name,
+                                int32_t expected_dtype) {
   EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
     EXT_ENFORCE_INVALID(inputs[i].data_type == expected_dtype, kSumName, " only supports ",
                         dtype_name, " tensors.");
   }
-  std::vector<int64_t> shape = inputs[0].shape;
+  Shape shape = inputs[0].shape;
   for (size_t i = 1; i < inputs.size(); ++i) {
     shape = BroadcastShape(shape, inputs[i].shape);
   }
@@ -60,7 +63,7 @@ std::vector<int64_t> ValidateAndBroadcastShape(const std::vector<Tensor> &inputs
 template <typename T>
 Tensor SumAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
                 RawBufferAllocator *allocator) {
-  const std::vector<int64_t> out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
+  const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   int64_t out_count = 1;
   for (int64_t d : out_shape) {
     out_count *= d;
@@ -92,7 +95,7 @@ Tensor SumAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
 template <typename T>
 void SumInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
                 Tensor &output) {
-  const std::vector<int64_t> out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
+  const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   const size_t expected_bytes = [&]() {
     int64_t n = 1;
     for (int64_t d : out_shape) {

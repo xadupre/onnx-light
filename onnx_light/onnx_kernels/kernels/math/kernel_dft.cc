@@ -177,7 +177,7 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
 
   // Build output shape: same rank as input. Axis dim becomes out_axis; trailing
   // dim becomes out_last.
-  std::vector<int64_t> out_shape = input.shape;
+  Shape out_shape = input.shape;
   out_shape[static_cast<std::size_t>(a)] = out_axis;
   out_shape[static_cast<std::size_t>(rank - 1)] = out_last;
 

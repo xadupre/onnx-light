@@ -1479,29 +1479,38 @@ TEST(KernelClass, MatMulAndMatMulIntegerShareOutputShapeRules) {
   const KernelContext mmi_ctx{DefaultOpset(10)};
   MatMul matmul_kernel{matmul_ctx};
   MatMulInteger mmi{mmi_ctx};
-  Tensor a_zp;
-  Tensor b_zp;
+  Tensor a_zero_point;
+  Tensor b_zero_point;
 
   {
     Tensor a = Tensor::FromInt32("", {3}, {2, 3, 4});
     Tensor b = Tensor::FromInt32("", {3, 2}, {1, 5, 2, 6, 3, 7});
     Tensor a_q = Tensor::FromUint8("", {3}, {2, 3, 4});
     Tensor b_q = Tensor::FromUint8("", {3, 2}, {1, 5, 2, 6, 3, 7});
-    EXPECT_EQ(matmul_kernel(a, b).shape, mmi(a_q, b_q, a_zp, b_zp).shape);
+    const Tensor y = matmul_kernel(a, b);
+    const Tensor y_q = mmi(a_q, b_q, a_zero_point, b_zero_point);
+    EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+    EXPECT_EQ(y.shape, y_q.shape);
   }
   {
     Tensor a = Tensor::FromInt32("", {2, 1, 3}, {1, 2, 3, 4, 5, 6});
     Tensor b = Tensor::FromInt32("", {1, 3, 4}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
     Tensor a_q = Tensor::FromUint8("", {2, 1, 3}, {1, 2, 3, 4, 5, 6});
     Tensor b_q = Tensor::FromUint8("", {1, 3, 4}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
-    EXPECT_EQ(matmul_kernel(a, b).shape, mmi(a_q, b_q, a_zp, b_zp).shape);
+    const Tensor y = matmul_kernel(a, b);
+    const Tensor y_q = mmi(a_q, b_q, a_zero_point, b_zero_point);
+    EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 1, 4}));
+    EXPECT_EQ(y.shape, y_q.shape);
   }
   {
     Tensor a = Tensor::FromInt32("", {3}, {1, 2, 3});
     Tensor b = Tensor::FromInt32("", {3}, {4, 5, 6});
     Tensor a_q = Tensor::FromUint8("", {3}, {1, 2, 3});
     Tensor b_q = Tensor::FromUint8("", {3}, {4, 5, 6});
-    EXPECT_EQ(matmul_kernel(a, b).shape, mmi(a_q, b_q, a_zp, b_zp).shape);
+    const Tensor y = matmul_kernel(a, b);
+    const Tensor y_q = mmi(a_q, b_q, a_zero_point, b_zero_point);
+    EXPECT_EQ(y.shape, (std::vector<int64_t>{}));
+    EXPECT_EQ(y.shape, y_q.shape);
   }
 }
 

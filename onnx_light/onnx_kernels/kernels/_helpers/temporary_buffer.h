@@ -22,11 +22,10 @@ template <typename T> struct TemporaryTypedBuffer {
   std::vector<T> fallback;
   RawBufferAllocator *allocator = nullptr;
   RawBuffer *buffer = nullptr;
-  const char *buffer_name;
   std::size_t size = 0;
 
   TemporaryTypedBuffer(std::size_t count, RawBufferAllocator *buffer_allocator, const char *name)
-      : fallback(), allocator(nullptr), buffer(nullptr), buffer_name(name), size(count) {
+      : size(count) {
     if (buffer_allocator != nullptr) {
       RawBuffer *allocated = buffer_allocator->Allocate(count * sizeof(T));
       if (allocated == nullptr) {
@@ -61,8 +60,6 @@ template <typename T> struct TemporaryTypedBuffer {
   }
 
   T *data() {
-    EXT_ENFORCE_INVALID(buffer != nullptr || !fallback.empty() || size == 0, buffer_name,
-                        " not allocated.");
     if (buffer != nullptr) {
       return reinterpret_cast<T *>(buffer->data());
     }

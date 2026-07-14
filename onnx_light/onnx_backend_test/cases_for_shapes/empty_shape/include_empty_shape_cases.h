@@ -21,28 +21,30 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers backend test cases that add tensors with empty shapes.
-void RegisterAddEmptyShapeCases(std::vector<TestCase> &registry);
+void RegisterAddEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers backend test cases that subtract tensors with empty shapes.
-void RegisterSubEmptyShapeCases(std::vector<TestCase> &registry);
+void RegisterSubEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers backend test cases that multiply tensors with empty shapes.
-void RegisterMulEmptyShapeCases(std::vector<TestCase> &registry);
+void RegisterMulEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers backend test cases that divide tensors with empty shapes.
-void RegisterDivEmptyShapeCases(std::vector<TestCase> &registry);
+void RegisterDivEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers backend test cases that apply ``PRelu`` to tensors with empty
 /// shapes.
-void RegisterPReluEmptyShapeCases(std::vector<TestCase> &registry);
+void RegisterPReluEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers backend test cases that run the ``Compress`` node on tensors
 /// with empty shapes (and/or producing outputs with empty shapes).
-void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry);
+void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry,
+                                     TestMode mode = TestMode::TEST);
 
 /// Collects all empty-shape backend test cases by invoking every
 /// ``Register*EmptyShapeCases`` helper declared in this header.
-void CollectEmptyShapeTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
+void CollectEmptyShapeTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
+                                TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

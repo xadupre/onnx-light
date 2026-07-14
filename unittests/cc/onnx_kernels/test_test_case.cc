@@ -33,6 +33,10 @@
 #include <string>
 #include <vector>
 
+#include <chrono>
+#include <iostream>
+#include <utility>
+
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTestCases;
 using onnx_backend_test::CollectTestCasesByName;
@@ -636,6 +640,58 @@ TEST(BackendTestCase, CollectEmptyFilterReturnsAllCases) {
   std::vector<TestCase> all_math_default;
   onnx_backend_test::CollectMathTestCases(all_math_default, "");
   EXPECT_EQ(all_math.size(), all_math_default.size());
+}
+
+TEST(BackendTestCase, DISABLED_BenchmarkModeCollectsAllCategories) {
+  // Heavy: BENCHMARK collection executes every kernel on large inputs, so it is
+  // disabled by default. Run manually with
+  // ``--gtest_also_run_disabled_tests --gtest_filter=*BenchmarkModeCollectsAll*``
+  // to validate that every category's benchmark branch is runnable and to time
+  // each category so pathologically-sized benchmark shapes can be found.
+  using onnx_backend_test::TestMode;
+  const std::vector<
+      std::pair<std::string, void (*)(std::vector<TestCase> &, const std::string &, TestMode)>>
+      collectors = {
+          {"Controlflow", onnx_backend_test::CollectControlflowTestCases},
+          {"Generator", onnx_backend_test::CollectGeneratorTestCases},
+          {"Image", onnx_backend_test::CollectImageTestCases},
+          {"Logical", onnx_backend_test::CollectLogicalTestCases},
+          {"Math", onnx_backend_test::CollectMathTestCases},
+          {"NN", onnx_backend_test::CollectNNTestCases},
+          {"ObjectDetection", onnx_backend_test::CollectObjectDetectionTestCases},
+          {"Optional", onnx_backend_test::CollectOptionalTestCases},
+          {"Preview", onnx_backend_test::CollectPreviewTestCases},
+          {"Quantization", onnx_backend_test::CollectQuantizationTestCases},
+          {"Reduction", onnx_backend_test::CollectReductionTestCases},
+          {"Sequence", onnx_backend_test::CollectSequenceTestCases},
+          {"Tensor", onnx_backend_test::CollectTensorTestCases},
+          {"Text", onnx_backend_test::CollectTextTestCases},
+          {"TraditionalML", onnx_backend_test::CollectTraditionalMLTestCases},
+          {"Training", onnx_backend_test::CollectTrainingTestCases},
+          {"EmptyShape", onnx_backend_test::CollectEmptyShapeTestCases},
+          {"InPlace", onnx_backend_test::CollectInPlaceTestCases},
+          {"Release", onnx_backend_test::CollectReleaseTestCases},
+          {"ShapeTag", onnx_backend_test::CollectShapeTagTestCases},
+          {"NanInf", onnx_backend_test::CollectNanInfTestCases},
+      };
+  size_t benchmark_cases = 0;
+  for (const auto &[name, fn] : collectors) {
+    std::vector<TestCase> reg;
+    const auto t0 = std::chrono::steady_clock::now();
+    fn(reg, "", TestMode::BENCHMARK);
+    const auto t1 = std::chrono::steady_clock::now();
+    const double secs = std::chrono::duration<double>(t1 - t0).count();
+    size_t cat_bench = 0;
+    for (const auto &tc : reg) {
+      if (tc.name.find("_benchmark") != std::string::npos) {
+        ++cat_bench;
+        ++benchmark_cases;
+      }
+    }
+    std::cout << "[bench-collect] " << name << ": " << secs << " s, cases=" << reg.size()
+              << ", benchmark_cases=" << cat_bench << std::endl;
+  }
+  EXPECT_GT(benchmark_cases, 0u);
 }
 
 } // namespace Test

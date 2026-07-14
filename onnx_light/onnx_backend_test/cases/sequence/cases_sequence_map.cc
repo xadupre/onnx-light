@@ -707,7 +707,7 @@ void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
 // assembles the per-iteration outputs into output sequences, so each
 // case ships the expected per-iteration outputs already computed.
 // ---------------------------------------------------------------------------
-void RegisterSequenceMapCases(std::vector<TestCase> &registry) {
+void RegisterSequenceMapCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(17);
 
   // Case 1: three FLOAT tensors of shape [2, 3] (1 seq, Identity body).

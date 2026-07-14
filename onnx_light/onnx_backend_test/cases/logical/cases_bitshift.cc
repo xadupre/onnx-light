@@ -35,10 +35,23 @@ NodeProto MakeBitShiftNode(const char *direction) {
 // (since opset 11). Mirrors the upstream
 // ``onnx.backend.test.case.node.bitshift.BitShift`` class.
 // ---------------------------------------------------------------------------
-void RegisterBitShiftCases(std::vector<TestCase> &registry) {
+void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
   const kernel::BitShift k{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeBitShiftNode("RIGHT");
+    Tensor x =
+        Tensor::FromUint8("", {kBenchmarkElementwiseSize},
+                          RandUint<uint8_t>(256, {kBenchmarkElementwiseSize}, /*seed=*/9501));
+    Tensor y = Tensor::FromUint8("", {kBenchmarkElementwiseSize},
+                                 RandUint<uint8_t>(8, {kBenchmarkElementwiseSize}, /*seed=*/9502));
+    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
+    Expect(node, {x, y}, {z}, "test_cc_bitshift_right_u8_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Fixed-vector smoke variant matching the docstring example
   // (X=[1, 4], S=[1, 1], direction="RIGHT" => Z=[0, 2]).

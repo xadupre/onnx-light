@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/reduction/include_reduction_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/random.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -144,9 +145,24 @@ void RegisterReduceMinMaxOnnxCases(std::vector<TestCase> &registry, const std::s
 
 } // namespace
 
-void RegisterReduceMaxCases(std::vector<TestCase> &registry) {
+void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceMax reduce_max_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ReduceMax");
+    node.add_input("data");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    Tensor data =
+        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+    Tensor reduced = reduce_max_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+    Expect(node, {data}, {reduced}, "test_cc_reducemax_default_axes_keepdims_benchmark",
+           {DefaultOpset(18)}, "backend-test", registry);
+    return;
+  }
   RegisterReduceMinMaxCases(registry, "ReduceMax", reduce_max_kernel, "reducemax");
   RegisterReduceMinMaxOnnxCases(registry, "ReduceMax", reduce_max_kernel, "reduce_max");
   // Upstream uses a singular "keepdim" typo for the ``_example`` variant of
@@ -178,9 +194,24 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry) {
   }
 }
 
-void RegisterReduceMinCases(std::vector<TestCase> &registry) {
+void RegisterReduceMinCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceMin reduce_min_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ReduceMin");
+    node.add_input("data");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    Tensor data =
+        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+    Tensor reduced = reduce_min_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+    Expect(node, {data}, {reduced}, "test_cc_reducemin_default_axes_keepdims_benchmark",
+           {DefaultOpset(18)}, "backend-test", registry);
+    return;
+  }
   RegisterReduceMinMaxCases(registry, "ReduceMin", reduce_min_kernel, "reducemin");
   RegisterReduceMinMaxOnnxCases(registry, "ReduceMin", reduce_min_kernel, "reduce_min");
   EmitReduceMinMaxDefaultAxesCase(

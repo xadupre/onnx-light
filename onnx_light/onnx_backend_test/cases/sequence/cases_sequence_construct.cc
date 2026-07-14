@@ -30,7 +30,7 @@ namespace onnx_backend_test {
 //   * ``test_cc_sequence_construct_int64_single``: a single INT64 tensor of
 //     shape [4] stacked into a ``Tensor<INT64, [1, 4]>``.
 // ---------------------------------------------------------------------------
-void RegisterSequenceConstructCases(std::vector<TestCase> &registry) {
+void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
 

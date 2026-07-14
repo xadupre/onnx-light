@@ -18,10 +18,15 @@ namespace onnx_backend_test {
 // ONNX backend test cases (``test_sin_example`` and ``test_sin``) mirrored
 // from ``onnx.backend.test.case.node.sin.Sin`` for the FLOAT variant.
 // ---------------------------------------------------------------------------
-void RegisterSinCases(std::vector<TestCase> &registry) {
+void RegisterSinCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Sin sin_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Sin", sin_kernel, "test_cc_sin_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

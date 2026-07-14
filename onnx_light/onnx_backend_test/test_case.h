@@ -6,6 +6,7 @@
 
 #include "onnx.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/random.h"
 #include "onnx_kernels/simple_map.h"
 #include "onnx_kernels/simple_tensor.h"
 
@@ -22,6 +23,18 @@ namespace onnx_backend_test {
 using namespace onnx_kernels;
 using OpsetId = onnx_kernels::kernel::OpsetId;
 using onnx_kernels::kernel::DefaultOpset;
+
+/**
+ * Selects how a ``Register*Cases`` / ``Collect*`` helper generates its cases.
+ *
+ * - ``TEST`` (the default) produces the standard correctness cases with small,
+ *   fixed inputs. The generated cases are byte-for-byte unchanged from before
+ *   this mode existed.
+ * - ``BENCHMARK`` produces cases whose inputs are enlarged so a single kernel
+ *   evaluation processes enough elements to run long enough (~0.1 s) to be
+ *   timed reliably. The exact sizes are hand-tuned per operator.
+ */
+enum class TestMode { TEST, BENCHMARK };
 
 /// A single (inputs, expected outputs) data set associated with a TestCase.
 struct DataSet {
@@ -245,6 +258,15 @@ using RegisterCasesFn = void (*)(std::vector<TestCase> &);
 /// function-local ``static const`` so lookup is amortised O(1).
 using OpRegisterMap = std::unordered_map<std::string_view, RegisterCasesFn>;
 
+/// Mode-aware variant of :ref:`RegisterCasesFn`. In addition to the output
+/// ``registry`` it receives a :ref:`TestMode` selecting standard (``TEST``) or
+/// benchmark-sized (``BENCHMARK``) case generation.
+using RegisterCasesModeFn = void (*)(std::vector<TestCase> &, TestMode);
+
+/// Mode-aware variant of :ref:`OpRegisterMap` whose values are
+/// :ref:`RegisterCasesModeFn`.
+using OpRegisterModeMap = std::unordered_map<std::string_view, RegisterCasesModeFn>;
+
 /// Invokes the ``Register*Cases`` functions declared in ``entries``.
 /// When ``op_type`` is empty, every entry is invoked (order is unspecified).
 /// Otherwise, only the entry whose key matches ``op_type`` (case-sensitive)
@@ -253,6 +275,67 @@ using OpRegisterMap = std::unordered_map<std::string_view, RegisterCasesFn>;
 /// instead of an explicit ``if`` chain or linear scan.
 void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
                               const OpRegisterMap &entries);
+
+/// Mode-aware overload of :ref:`DispatchRegisterByOpType`. Forwards ``mode`` to
+/// each invoked :ref:`RegisterCasesModeFn` so a category can generate either the
+/// standard (``TestMode::TEST``) or benchmark-sized (``TestMode::BENCHMARK``)
+/// cases.
+void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
+                              const OpRegisterModeMap &entries, TestMode mode);
+
+/// Default element count for a 1-D float benchmark input of a cheap
+/// element-wise operator. Sized (4M floats = 16 MiB) so a single kernel
+/// evaluation processes enough data to be timed reliably (~0.1 s). Operators
+/// with heavier per-element cost (transcendental, matmul, ...) pass a smaller
+/// explicit size to the benchmark helpers below.
+inline constexpr int64_t kBenchmarkElementwiseSize = 1 << 22;
+
+/**
+ * Appends a single benchmark :ref:`TestCase` for a unary element-wise float
+ * operator. ``kernel`` is any callable mapping the input ``Tensor`` to the
+ * output ``Tensor`` (typically the operator's kernel functor); the expected
+ * output is computed by invoking it. The generated node carries no attributes,
+ * so operators whose behaviour depends on attributes should build their own
+ * benchmark case instead.
+ */
+template <typename Kernel>
+void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
+                               const std::string &name, const OpsetId &opset,
+                               std::vector<TestCase> &registry,
+                               int64_t size = kBenchmarkElementwiseSize,
+                               uint64_t seed = 987654321ULL, const std::string &input_name = "x",
+                               const std::string &output_name = "y") {
+  NodeProto node;
+  node.set_op_type(op_type);
+  node.add_input(input_name);
+  node.add_output(output_name);
+  Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
+  Tensor y = kernel(x);
+  Expect(node, {x}, {y}, name, {opset}, "backend-test", registry);
+}
+
+/**
+ * Appends a single benchmark :ref:`TestCase` for a binary element-wise float
+ * operator with two equally-shaped 1-D inputs. ``kernel`` is any callable
+ * mapping the two input ``Tensor``s to the output ``Tensor``; the expected
+ * output is computed by invoking it. The generated node carries no attributes.
+ */
+template <typename Kernel>
+void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel,
+                                const std::string &name, const OpsetId &opset,
+                                std::vector<TestCase> &registry,
+                                int64_t size = kBenchmarkElementwiseSize,
+                                uint64_t seed = 987654321ULL) {
+  NodeProto node;
+  node.set_op_type(op_type);
+  node.add_input("x");
+  node.add_input("y");
+  node.add_output("z");
+  Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
+  Tensor y = Tensor::FromFloat("", {size}, Randn<float>({size}, seed + 1));
+  Tensor z = kernel(x, y);
+  Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
+}
 
 /**
  * Collects all C++-implemented backend test node cases. Each call is
@@ -267,11 +350,16 @@ void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string
  *                   result. Pass ``true`` to include them; the big models are
  *                   intentionally opt-in because they carry large weight
  *                   tensors that make exhaustive test loops slow.
+ * @param mode       When :cpp:enumerator:`TestMode::BENCHMARK`, categories that
+ *                   support it emit benchmark-sized cases (large inputs) instead
+ *                   of the standard correctness cases. Defaults to
+ *                   :cpp:enumerator:`TestMode::TEST`.
  *
  * @return A fresh registry of test cases (Abs, Add equal-shape, Add scalar
  *         broadcast).
  */
-std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool include_big = false);
+std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool include_big = false,
+                                       TestMode mode = TestMode::TEST);
 
 /**
  * Collects C++-implemented backend test node cases whose
@@ -285,6 +373,8 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool inc
  * @param include_big When ``false`` (the default), test cases whose name
  *                    contains ``"_big_"`` are excluded before the regex
  *                    filter is applied. Pass ``true`` to include them.
+ * @param mode        Forwarded to :func:`CollectTestCases`; selects standard
+ *                    or benchmark-sized case generation.
  *
  * @return The subset of cases whose ``name`` matches ``name_regex``,
  *         in the same registration order as :func:`CollectTestCases`.
@@ -293,7 +383,8 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool inc
  *         regular expression.
  */
 std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
-                                             bool include_big = false);
+                                             bool include_big = false,
+                                             TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

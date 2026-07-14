@@ -25,10 +25,18 @@ NodeProto MakeNonZeroNode() {
 
 } // namespace
 
-void RegisterNonZeroCases(std::vector<TestCase> &registry) {
+void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::NonZero nonzero_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor x = Tensor::FromFloat("X", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+    const Tensor y = nonzero_kernel(x);
+    Expect(MakeNonZeroNode(), {x}, {y}, "test_cc_nonzero_2d_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // test_cc_nonzero_2d
   {

@@ -43,10 +43,21 @@ NodeProto MakeConcatNode(int64_t axis) {
 
 } // namespace
 
-void RegisterConcatCases(std::vector<TestCase> &registry) {
+void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Concat concat_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> shape = {kBenchmarkElementwiseSize / 2};
+    Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 2001));
+    Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 2002));
+    NodeProto node = MakeConcatNode(0);
+    Tensor y = concat_kernel({x0, x1}, 0);
+    Expect(node, {x0, x1}, {y}, "test_cc_concat_1d_axis_0_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Inputs mirror the upstream ``test_cases`` dict in
   // ``onnx/backend/test/case/node/concat.py``.

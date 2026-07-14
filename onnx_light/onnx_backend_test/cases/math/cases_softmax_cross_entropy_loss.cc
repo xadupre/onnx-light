@@ -110,10 +110,31 @@ std::vector<int64_t> MakeLabelRange(int64_t count, int64_t n_classes) {
 
 } // namespace
 
-void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry) {
+void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::SoftmaxCrossEntropyLoss sce_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("SoftmaxCrossEntropyLoss");
+    node.add_input("scores");
+    node.add_input("labels");
+    node.add_output("output");
+    constexpr int64_t kN = 8192;
+    constexpr int64_t kC = 1024;
+    Tensor scores = Tensor::FromFloat("", {kN, kC}, Randn<float>({kN, kC}, 443));
+    std::vector<int64_t> label_values(kN);
+    for (int64_t i = 0; i < kN; ++i) {
+      label_values[i] = i % kC;
+    }
+    Tensor labels = Tensor::FromInt64("", {kN}, label_values);
+    auto [loss, log_prob] = sce_kernel(scores, labels, /*weights=*/nullptr, /*reduction=*/"mean",
+                                       /*has_ignore_index=*/false, /*ignore_index=*/0);
+    Expect(node, {scores, labels}, {std::move(loss)},
+           "test_cc_softmax_cross_entropy_loss_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // 3 samples x 5 classes — simple "mean" reduction (default).
   {

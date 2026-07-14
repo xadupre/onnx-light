@@ -14,7 +14,7 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterWhereNanInfCases(std::vector<TestCase> &registry) {
+void RegisterWhereNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
   const kernel::KernelContext ctx{opset};
   const kernel::Where where_kernel{ctx};

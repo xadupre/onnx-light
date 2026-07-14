@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/reduction/include_reduction_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/random.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -70,9 +71,24 @@ void EmitReduceMeanDefaultAxesCase(std::vector<TestCase> &registry,
 // input, ``keepdims`` and ``noop_with_empty_axes`` attributes) as the other
 // simple reductions added in opset 18.
 // ---------------------------------------------------------------------------
-void RegisterReduceMeanCases(std::vector<TestCase> &registry) {
+void RegisterReduceMeanCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceMean kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ReduceMean");
+    node.add_input("data");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    Tensor data =
+        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+    Tensor reduced = kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+    Expect(node, {data}, {reduced}, "test_cc_reducemean_default_axes_keepdims_benchmark",
+           {DefaultOpset(18)}, "backend-test", registry);
+    return;
+  }
 
   const std::vector<int64_t> shape = {3, 2, 2};
   // Same ``[3, 2, 2]`` ``arange(1, 13)`` payload used by the sibling

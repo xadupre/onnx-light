@@ -44,10 +44,19 @@ Tensor MakeRepeatsTensor(const std::vector<int64_t> &repeats) {
 
 } // namespace
 
-void RegisterTileCases(std::vector<TestCase> &registry) {
+void RegisterTileCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Tile tile_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor input = Tensor::FromFloat("", {1024, 1024}, Randn<float>({1024, 1024}, 2001));
+    const Tensor repeats = MakeRepeatsTensor({2, 2});
+    const Tensor output = tile_kernel(input, repeats);
+    Expect(MakeTileNode(), {input, repeats}, {output}, "test_cc_tile_precomputed_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_tile_precomputed — matches the upstream ``test_tile_precomputed``
   // node test exactly (small deterministic case suitable for parity checks).

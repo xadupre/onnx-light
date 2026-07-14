@@ -101,11 +101,25 @@ Tensor MakeSizesTensor(const std::vector<int64_t> &sizes) {
 // reproduces.
 void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry);
 
-void RegisterResizeCases(std::vector<TestCase> &registry) {
+void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset13 = DefaultOpset(13);
   const OpsetId opset18 = DefaultOpset(18);
   const kernel::KernelContext ctx{opset13};
   const kernel::Resize resize_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor X =
+        Tensor::FromFloat("", {1, 1, 1024, 1024}, Randn<float>({1, 1, 1024, 1024}, 2001));
+    const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
+    kernel::Resize::Attributes attrs;
+    attrs.mode = "nearest";
+    attrs.coordinate_transformation_mode = "asymmetric";
+    const Tensor Y = resize_kernel(X, scales, attrs);
+    Expect(MakeResizeNodeScales("nearest", "asymmetric"), {X, scales}, {Y},
+           "test_cc_resize_upsample_scales_nearest_asymmetric_benchmark", {opset13}, "backend-test",
+           registry);
+    return;
+  }
 
   // test_cc_resize_upsample_scales_nearest_asymmetric — NCHW input shape
   // [1, 1, 2, 2] upsampled by [1, 1, 2, 3] using nearest mode and the

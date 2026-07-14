@@ -29,10 +29,23 @@ NodeProto MakeGatherNode(int64_t axis) {
 
 } // namespace
 
-void RegisterGatherCases(std::vector<TestCase> &registry) {
+void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Gather gather_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor data = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+    std::vector<int64_t> index_values(4096);
+    for (int64_t i = 0; i < 4096; ++i) {
+      index_values[static_cast<std::size_t>(i)] = i;
+    }
+    Tensor indices = Tensor::FromInt64("", {4096}, index_values);
+    Tensor output = gather_kernel(data, indices, 0);
+    Expect(MakeGatherNode(0), {data, indices}, {output}, "test_cc_gather_0_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // test_cc_gather_0 — mirrors the upstream ``test_gather_0`` node test:
   // gather along axis=0 with 2-D indices.

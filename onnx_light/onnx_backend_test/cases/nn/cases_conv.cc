@@ -32,10 +32,25 @@ NodeProto MakeConvNode(const std::vector<std::string> &inputs,
 
 } // namespace
 
-void RegisterConvCases(std::vector<TestCase> &registry) {
+void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Conv conv{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor X = Tensor::FromFloat("X", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1001));
+    Tensor W = Tensor::FromFloat("W", {32, 32, 3, 3}, Randn<float>({32, 32, 3, 3}, 1002));
+    Tensor B;
+    kernel::Conv::Attributes attrs;
+    attrs.kernel_shape = {3, 3};
+    Tensor Y = conv(X, W, B, attrs);
+    Y.name = "Y";
+    NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    Expect(node, {X, W}, {Y}, "test_cc_basic_conv_without_padding_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // -------------------------------------------------------------------
   // Case 1: basic 3x3 kernel without padding

@@ -55,7 +55,8 @@ constexpr int64_t kDefaultIrVersion = 10;
 // The reference DataSet uses concrete sizes (M=2, D1=3, K=4, D2=5) so the
 // case is executable end-to-end by ``BackendTestCaseRunModel``.
 // ---------------------------------------------------------------------------
-void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &registry,
+                                                    TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 

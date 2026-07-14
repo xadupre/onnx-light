@@ -29,7 +29,7 @@ namespace onnx_backend_test {
 //   * ``test_cc_lstm_batchwise`` — ``layout=1`` variant where ``X`` is laid
 //     out as ``[batch_size, seq_length, input_size]``, hidden_size=7.
 // ---------------------------------------------------------------------------
-void RegisterLSTMCases(std::vector<TestCase> &registry) {
+void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::LSTM lstm_kernel{ctx};

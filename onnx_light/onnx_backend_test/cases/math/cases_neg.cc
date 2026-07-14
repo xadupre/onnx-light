@@ -20,10 +20,15 @@ namespace onnx_backend_test {
 // ONNX backend test cases (``test_neg_example`` and ``test_neg``) mirrored
 // from ``onnx.backend.test.case.node.neg.Neg``.
 // ---------------------------------------------------------------------------
-void RegisterNegCases(std::vector<TestCase> &registry) {
+void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Neg neg_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Neg", neg_kernel, "test_cc_neg_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

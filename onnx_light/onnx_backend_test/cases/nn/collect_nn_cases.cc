@@ -7,8 +7,9 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static const OpRegisterMap kEntries = {
+void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_type,
+                        TestMode mode) {
+  static const OpRegisterModeMap kEntries = {
       {"Attention", &RegisterAttentionCases},
       {"AveragePool", &RegisterAveragePoolCases},
       {"BatchNormalization", &RegisterBatchNormalizationCases},
@@ -40,7 +41,7 @@ void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_t
       {"RMSNormalization", &RegisterRMSNormalizationCases},
       {"RotaryEmbedding", &RegisterRotaryEmbeddingCases},
   };
-  DispatchRegisterByOpType(registry, op_type, kEntries);
+  DispatchRegisterByOpType(registry, op_type, kEntries, mode);
 }
 
 } // namespace onnx_backend_test

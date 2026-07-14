@@ -19,10 +19,15 @@ namespace onnx_backend_test {
 // ONNX backend test cases (``test_acos_example`` and ``test_acos``) mirrored
 // from ``onnx.backend.test.case.node.acos.Acos`` for the FLOAT variant.
 // ---------------------------------------------------------------------------
-void RegisterAcosCases(std::vector<TestCase> &registry) {
+void RegisterAcosCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Acos acos_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Acos", acos_kernel, "test_cc_acos_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

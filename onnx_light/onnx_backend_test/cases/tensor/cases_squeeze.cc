@@ -56,10 +56,20 @@ NodeProto MakeSqueezeNodeEmptyAxes() {
 
 } // namespace
 
-void RegisterSqueezeCases(std::vector<TestCase> &registry) {
+void RegisterSqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Squeeze squeeze_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor data =
+        Tensor::FromFloat("", {2048, 1, 2048, 1}, Randn<float>({2048, 1, 2048, 1}, 2001));
+    const Tensor axes = MakeAxesTensor({1, 3});
+    const Tensor squeezed = squeeze_kernel(data, {1, 3});
+    Expect(MakeSqueezeNode(), {data, axes}, {squeezed}, "test_cc_squeeze_axes_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // test_cc_squeeze_axes
   {

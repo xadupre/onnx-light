@@ -18,12 +18,31 @@ namespace onnx_backend_test {
 // from a ``[C]`` or ``[1, C]`` ``tensor(string)`` and applies the requested
 // ``case_change_action`` (since opset 10 in the ai.onnx domain).
 // ---------------------------------------------------------------------------
-void RegisterStringNormalizerCases(std::vector<TestCase> &registry) {
+void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const kernel::KernelContext ctx{opset};
   const kernel::StringNormalizer string_normalizer{ctx};
 
   using CaseChangeAction = kernel::StringNormalizer::CaseChangeAction;
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("StringNormalizer");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute(node, "case_change_action", std::string("LOWER"));
+
+    std::vector<std::string> values(262144);
+    for (size_t i = 0; i < values.size(); ++i) {
+      values[i] = (i % 3 == 0) ? "Hello" : ((i % 3 == 1) ? "World" : "FOO");
+    }
+    Tensor x = Tensor::FromStrings("", {static_cast<int64_t>(values.size())}, values);
+    Tensor y = string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/false, {});
+
+    Expect(node, {x}, {y}, "test_cc_string_normalizer_lower_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Plain lowercase variant on a 1-D ``[C]`` input. No stopwords are
   // dropped; every element is lowercased in place.

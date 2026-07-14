@@ -25,7 +25,7 @@ namespace onnx_backend_test {
 //     ``output_shape`` provided.
 //   * ``test_cc_maxunpool_export_without_output_shape`` — two-input form.
 // ---------------------------------------------------------------------------
-void RegisterMaxUnpoolCases(std::vector<TestCase> &registry) {
+void RegisterMaxUnpoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::MaxUnpool maxunpool_kernel{ctx};

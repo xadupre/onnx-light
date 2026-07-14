@@ -11,9 +11,21 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterEyeLikeCases(std::vector<TestCase> &registry) {
+void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("EyeLike");
+    node.add_input("x");
+    node.add_output("y");
+    const Tensor x = Tensor::FromFloat("x", {2048, 2048}, Randn<float>({2048, 2048}, 987654321ULL));
+    const Tensor y = kernel::EyeLike(ctx)(x, /*k=*/0, /*dtype=*/0);
+    Expect(node, {x}, {y}, "test_eyelike_without_dtype_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Upstream-style case without dtype attribute: output dtype follows input.
   {

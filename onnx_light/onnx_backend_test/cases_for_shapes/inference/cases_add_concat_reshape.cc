@@ -41,7 +41,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // The reference DataSet still uses concrete sizes (``batch=2, seq=5,
 // d_model=8``) for the actual tensor values, so the case is executable.
 // ---------------------------------------------------------------------------
-void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 

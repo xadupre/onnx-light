@@ -32,11 +32,49 @@ namespace onnx_backend_test {
 //     ``test_ai_onnx_ml_label_encoder_tensor_mapping`` and
 //     ``test_ai_onnx_ml_label_encoder_tensor_value_only_mapping`` tests.
 // ---------------------------------------------------------------------------
-void RegisterLabelEncoderCases(std::vector<TestCase> &registry) {
+void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 4);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::LabelEncoder label_encoder{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("LabelEncoder");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+
+    const std::vector<int64_t> keys{0, 1, 2};
+    const std::vector<float> values{0.5f, 1.5f, 2.5f};
+    const float default_value = -1.0f;
+
+    AttributeProto *keys_attr = node.add_attribute();
+    keys_attr->set_name("keys_int64s");
+    keys_attr->set_type(AttributeProto::AttributeType::INTS);
+    for (int64_t v : keys) {
+      keys_attr->ints().push_back(v);
+    }
+
+    AttributeProto *values_attr = node.add_attribute();
+    values_attr->set_name("values_floats");
+    values_attr->set_type(AttributeProto::AttributeType::FLOATS);
+    for (float v : values) {
+      values_attr->floats().push_back(v);
+    }
+
+    AttributeProto *default_attr = node.add_attribute();
+    default_attr->set_name("default_float");
+    default_attr->set_type(AttributeProto::AttributeType::FLOAT);
+    default_attr->set_f(default_value);
+
+    Tensor x = Tensor::FromInt64("", {8192}, RandnInt<int64_t>({8192}, 2641));
+    Tensor y = label_encoder.operator()<int64_t, float>(x, keys, values, default_value);
+
+    Expect(node, {x}, {y}, "test_cc_label_encoder_int64_to_float_benchmark", {default_opset, opset},
+           "backend-test", registry);
+    return;
+  }
 
   // int64 -> float variant.
   {

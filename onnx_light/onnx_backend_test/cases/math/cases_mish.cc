@@ -11,10 +11,15 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterMishCases(std::vector<TestCase> &registry) {
+void RegisterMishCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Mish mish_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Mish", mish_kernel, "test_cc_mish_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

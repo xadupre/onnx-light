@@ -30,10 +30,23 @@ NodeProto MakeCompressNode(std::optional<int64_t> axis) {
 
 } // namespace
 
-void RegisterCompressCases(std::vector<TestCase> &registry) {
+void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
   const kernel::Compress compress_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor input = Tensor::FromFloat("input", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+    std::vector<uint8_t> condition_values(kBenchmarkElementwiseSize);
+    for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
+      condition_values[static_cast<std::size_t>(i)] = static_cast<uint8_t>((i % 2) == 0);
+    }
+    Tensor condition = Tensor::FromBool("condition", {kBenchmarkElementwiseSize}, condition_values);
+    Tensor output = compress_kernel(input, condition, std::nullopt);
+    Expect(MakeCompressNode(std::nullopt), {input, condition}, {output},
+           "test_cc_compress_no_axis_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_compress_no_axis — flatten then select elements.
   {

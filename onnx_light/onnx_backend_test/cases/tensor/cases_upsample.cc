@@ -43,10 +43,22 @@ Tensor MakeScalesTensor(const std::vector<float> &scales) {
 
 } // namespace
 
-void RegisterUpsampleCases(std::vector<TestCase> &registry) {
+void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(9);
   const kernel::KernelContext ctx{opset};
   const kernel::Upsample upsample_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor X =
+        Tensor::FromFloat("", {1, 1, 1024, 1024}, Randn<float>({1, 1, 1024, 1024}, 2001));
+    const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
+    kernel::Upsample::Attributes attrs;
+    attrs.mode = "nearest";
+    const Tensor Y = upsample_kernel(X, scales, attrs);
+    Expect(MakeUpsampleNode("nearest"), {X, scales}, {Y}, "test_cc_upsample_nearest_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_upsample_nearest — mirrors the upstream ``test_upsample_nearest``
   // node test exactly. NCHW input of shape [1, 1, 2, 2], scales

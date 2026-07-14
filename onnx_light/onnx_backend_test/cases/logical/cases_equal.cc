@@ -21,10 +21,26 @@ namespace onnx_backend_test {
 // STRING inputs since opset 19). Inputs are tensors of the same dtype,
 // the output is BOOL.
 // ---------------------------------------------------------------------------
-void RegisterEqualCases(std::vector<TestCase> &registry) {
+void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(19);
   const kernel::KernelContext ctx{opset};
   const kernel::Equal equal_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Equal");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    const std::vector<int64_t> shape = {1024, 4096};
+    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9201));
+    Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9202));
+    Tensor z = equal_kernel(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_equal_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Equal-shape variant.
   {

@@ -64,13 +64,30 @@ namespace {
 // ``test_quantizelinear_blocked_asymmetric`` — are not imported because the
 // reference Tensor helpers do not support the blocked layout yet.
 // ---------------------------------------------------------------------------
-void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
+void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(25);
   const OpsetId opset_v21 = DefaultOpset(25); // For FLOAT8, INT4, UINT4
   const OpsetId opset_v23 = DefaultOpset(25); // For FLOAT4E2M1
   const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
   const kernel::KernelContext ctx{opset};
   const kernel::QuantizeLinear quantize_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("QuantizeLinear");
+    node.add_input("x");
+    node.add_input("y_scale");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 2501));
+    Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
+    Tensor y = quantize_kernel(x, y_scale);
+
+    Expect(node, {x, y_scale}, {y}, "test_cc_quantizelinear_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Default UINT8 output (y_zero_point omitted).
   {

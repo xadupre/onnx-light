@@ -136,7 +136,7 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
 
 } // namespace
 
-void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterNonZeroChainCase("test_cc_shape_inference_nonzero_chain_named", registry);
 }
 

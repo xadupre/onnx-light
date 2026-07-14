@@ -30,7 +30,7 @@ namespace onnx_backend_test {
 //     out as ``[batch_size, seq_length, input_size]``, hidden_size=6;
 //     both Y and Y_h are produced.
 // ---------------------------------------------------------------------------
-void RegisterGRUCases(std::vector<TestCase> &registry) {
+void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::GRU gru_kernel{ctx};

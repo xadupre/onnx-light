@@ -15,10 +15,27 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterDropoutCases(std::vector<TestCase> &registry) {
+void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Dropout dropout_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Dropout");
+    node.add_input("data");
+    node.add_output("output");
+
+    Tensor data = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                    Randn<float>({kBenchmarkElementwiseSize}, 1601));
+    Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
+                std::vector<uint8_t>(static_cast<size_t>(kBenchmarkElementwiseSize), 1));
+    Tensor output = dropout_kernel(data, /*ratio=*/0.5f, /*training_mode=*/false, mask,
+                                   kernel::Dropout::kNoSeed);
+    Expect(node, {data}, {output}, "test_cc_dropout_default_inference_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // Inference-mode Dropout (default training_mode=false): output copies input.
   {

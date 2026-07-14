@@ -40,7 +40,7 @@ NodeProto MakeRotaryNode(const std::vector<std::string> &inputs,
 
 } // namespace
 
-void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry) {
+void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
   const kernel::KernelContext ctx{opset};
   const kernel::RotaryEmbedding kernel{ctx};

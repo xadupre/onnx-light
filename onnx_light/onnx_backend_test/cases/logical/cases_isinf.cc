@@ -26,10 +26,19 @@ namespace onnx_backend_test {
 // ``test_isinf_negative``) mirrored from
 // ``onnx.backend.test.case.node.isinf.IsInf``.
 // ---------------------------------------------------------------------------
-void RegisterIsInfCases(std::vector<TestCase> &registry) {
+void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
   const kernel::KernelContext ctx{opset};
   const kernel::IsInf isinf_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
+    Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, /*seed=*/9301));
+    Tensor y = isinf_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_isinf_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
   const float nan_v = std::numeric_limits<float>::quiet_NaN();
   const float inf_v = std::numeric_limits<float>::infinity();
 

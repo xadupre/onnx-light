@@ -29,10 +29,19 @@ NodeProto MakeHardmaxNode(int64_t axis, bool include_axis = true) {
 
 } // namespace
 
-void RegisterHardmaxCases(std::vector<TestCase> &registry) {
+void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Hardmax hardmax_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeHardmaxNode(/*axis=*/1);
+    const std::vector<int64_t> shape = {2048, 2048};
+    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 429));
+    Tensor y = hardmax_kernel(x, 1);
+    Expect(node, {x}, {y}, "test_cc_hardmax_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Two-dimensional input with explicit axis attribute.
   {

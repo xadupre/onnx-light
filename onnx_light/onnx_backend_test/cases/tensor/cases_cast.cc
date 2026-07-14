@@ -105,13 +105,24 @@ std::vector<CastDtype> SupportedCastDtypes() {
 
 } // namespace
 
-void RegisterCastCases(std::vector<TestCase> &registry) {
+void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(19);
   const OpsetId opset_v21 = DefaultOpset(21); // For FLOAT8, INT4, UINT4
   const OpsetId opset_v23 = DefaultOpset(23); // For FLOAT4E2M1
   const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
   const kernel::KernelContext ctx{opset};
   const kernel::Cast cast_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const int64_t to_attr = static_cast<int64_t>(DataType::DOUBLE);
+    NodeProto node = MakeCastNode(to_attr);
+    Tensor input = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                     Randn<float>({kBenchmarkElementwiseSize}, 2001));
+    Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+    Expect(node, {input}, {output}, "test_cc_cast_FLOAT_to_DOUBLE_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   const auto dtypes = SupportedCastDtypes();
   for (const auto &from : dtypes) {

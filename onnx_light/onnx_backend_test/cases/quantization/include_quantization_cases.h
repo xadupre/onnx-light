@@ -18,23 +18,25 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``QuantizeLinear`` backend test node case(s).
-void RegisterQuantizeLinearCases(std::vector<TestCase> &registry);
+void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``DequantizeLinear`` backend test node case(s).
-void RegisterDequantizeLinearCases(std::vector<TestCase> &registry);
+void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``DynamicQuantizeLinear`` backend test node case(s).
-void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry);
+void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry,
+                                        TestMode mode = TestMode::TEST);
 
 /// Registers the ``QLinearMatMul`` backend test node case(s).
-void RegisterQLinearMatMulCases(std::vector<TestCase> &registry);
+void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``QLinearConv`` backend test node case(s).
-void RegisterQLinearConvCases(std::vector<TestCase> &registry);
+void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Collects all ``quantization`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.
-void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
+void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
+                                  TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

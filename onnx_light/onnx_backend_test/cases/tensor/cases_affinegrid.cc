@@ -68,10 +68,29 @@ Tensor MakeUpstreamTheta3D() {
 // which mirrors the upstream Python reference in
 // ``onnx/reference/ops/op_affine_grid.py``.
 // ---------------------------------------------------------------------------
-void RegisterAffineGridCases(std::vector<TestCase> &registry) {
+void RegisterAffineGridCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
   const kernel::KernelContext ctx{opset};
   const kernel::AffineGrid ag_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("AffineGrid");
+    node.add_input("theta");
+    node.add_input("size");
+    node.add_output("grid");
+    AddAttribute<int64_t>(node, "align_corners", 0);
+
+    const Tensor theta = Tensor::FromFloat("", {1, 2, 3}, {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f});
+    const Tensor size = Tensor::FromInt64("", {4}, {1, 1, 1448, 1448});
+    kernel::AffineGrid::Attributes attrs;
+    attrs.align_corners = 0;
+    Tensor grid = ag_kernel(theta, size, attrs);
+
+    Expect(node, {theta, size}, {grid}, "test_affine_grid_2d_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Helper that registers one case for the requested rank
   // (``size_dims`` is {N, C, H, W} for 2D or {N, C, D, H, W} for 3D).

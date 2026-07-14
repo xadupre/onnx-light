@@ -35,10 +35,22 @@ NodeProto MakeDepthToSpaceNode(int64_t blocksize, const std::string &mode) {
 // SpaceToDepth). Available since opset 1 in the ai.onnx domain; the ``mode``
 // attribute (DCR / CRD) was added in opset 11.
 // ---------------------------------------------------------------------------
-void RegisterDepthToSpaceCases(std::vector<TestCase> &registry) {
+void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::DepthToSpace d2s{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor input =
+        Tensor::FromFloat("", {1, 8, 512, 1024}, Randn<float>({1, 8, 512, 1024}, 2001));
+    kernel::DepthToSpace::Attributes attrs;
+    attrs.blocksize = 2;
+    attrs.mode = "DCR";
+    const Tensor output = d2s(input, attrs);
+    Expect(MakeDepthToSpaceNode(2, "DCR"), {input}, {output}, "test_cc_depthtospace_dcr_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_depthtospace_dcr — N=1, C=8 (=2*2*2), H=2, W=3, blocksize=2.
   // Input values are simply [0, 1, ..., 47] so the output ordering is easy

@@ -32,10 +32,30 @@ NodeProto MakeLinearAttentionNode(const std::vector<std::string> &inputs,
 
 } // namespace
 
-void RegisterLinearAttentionCases(std::vector<TestCase> &registry) {
+void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(27);
   const kernel::KernelContext ctx{opset};
   const kernel::LinearAttention kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor query = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2701));
+    Tensor key = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2702));
+    Tensor value = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2703));
+
+    kernel::LinearAttention::Attributes attrs;
+    attrs.update_rule = "linear";
+    attrs.q_num_heads = 8;
+    attrs.kv_num_heads = 8;
+    auto result = kernel(query, key, value, attrs);
+    NodeProto node =
+        MakeLinearAttentionNode({"query", "key", "value"}, {"output", "present_state"});
+    AddAttribute<std::string>(node, "update_rule", "linear");
+    AddAttribute<int64_t>(node, "q_num_heads", 8);
+    AddAttribute<int64_t>(node, "kv_num_heads", 8);
+    Expect(node, {query, key, value}, {result.output, result.present_state},
+           "test_cc_linear_attention_linear_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Small shapes: B=1, T=2, H_q=2, H_kv=2, d_k=2, d_v=2
   // query: (1, 2, 4), key: (1, 2, 4), value: (1, 2, 4)

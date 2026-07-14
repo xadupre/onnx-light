@@ -27,10 +27,15 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // Registers both a small deterministic ``test_cc_exp`` case and upstream ONNX
 // backend test cases (``test_exp_example`` and ``test_exp``) for FLOAT.
 // ---------------------------------------------------------------------------
-void RegisterExpCases(std::vector<TestCase> &registry) {
+void RegisterExpCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Exp exp_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Exp", exp_kernel, "test_cc_exp_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

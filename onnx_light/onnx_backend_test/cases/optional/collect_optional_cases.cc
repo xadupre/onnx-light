@@ -7,13 +7,14 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectOptionalTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static const OpRegisterMap kEntries = {
+void CollectOptionalTestCases(std::vector<TestCase> &registry, const std::string &op_type,
+                              TestMode mode) {
+  static const OpRegisterModeMap kEntries = {
       {"Optional", &RegisterOptionalCases},
       {"OptionalGetElement", &RegisterOptionalGetElementCases},
       {"OptionalHasElement", &RegisterOptionalHasElementCases},
   };
-  DispatchRegisterByOpType(registry, op_type, kEntries);
+  DispatchRegisterByOpType(registry, op_type, kEntries, mode);
 }
 
 } // namespace onnx_backend_test

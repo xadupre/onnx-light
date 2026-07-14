@@ -57,13 +57,23 @@ NodeProto MakeDFTNodeV20(bool inverse, bool onesided) {
 // attribute) and v20 (axis as input) signatures, including the forward,
 // inverse, RFFT, and IRFFT modes.
 // ---------------------------------------------------------------------------
-void RegisterDFTCases(std::vector<TestCase> &registry) {
+void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v17 = DefaultOpset(17);
   const OpsetId opset_v20 = DefaultOpset(20);
   const kernel::KernelContext ctx_v17{opset_v17};
   const kernel::KernelContext ctx_v20{opset_v20};
   const kernel::DFT dft_v17{ctx_v17};
   const kernel::DFT dft_v20{ctx_v20};
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> shape = {4, 4096, 1};
+    Tensor x_real_b = Tensor::FromFloat("x", shape, Randn<float>(shape, 445));
+    Tensor axis = Tensor::FromInt64("axis", {}, {1});
+    Tensor y = dft_v20(x_real_b, /*dft_length=*/nullptr, 1, /*onesided=*/false, /*inverse=*/false);
+    Expect(MakeDFTNodeV20(/*inverse=*/false, /*onesided=*/false), {x_real_b, axis}, {y},
+           "test_cc_dft_benchmark", {opset_v20}, "backend-test", registry);
+    return;
+  }
 
   // Simple real-valued input of shape [1, N, 1].
   Tensor x_real = Tensor::FromFloat("x", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});

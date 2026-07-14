@@ -11,10 +11,22 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterDetCases(std::vector<TestCase> &registry) {
+void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
   const kernel::Det det_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Det");
+    node.add_input("X");
+    node.add_output("Y");
+    const std::vector<int64_t> shape = {512, 64, 64};
+    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 439));
+    Tensor y = det_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_det_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // 2-D input: output is a scalar (matches ONNX ``test_det_2d``).
   {

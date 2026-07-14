@@ -81,23 +81,23 @@ void RegisterBinaryEmptyShape(std::vector<TestCase> &registry, const char *op_ty
 
 } // namespace
 
-void RegisterAddEmptyShapeCases(std::vector<TestCase> &registry) {
+void RegisterAddEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterBinaryEmptyShape<kernel::Add>(registry, "Add", 14, "add");
 }
 
-void RegisterSubEmptyShapeCases(std::vector<TestCase> &registry) {
+void RegisterSubEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterBinaryEmptyShape<kernel::Sub>(registry, "Sub", 14, "sub");
 }
 
-void RegisterMulEmptyShapeCases(std::vector<TestCase> &registry) {
+void RegisterMulEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterBinaryEmptyShape<kernel::Mul>(registry, "Mul", 14, "mul");
 }
 
-void RegisterDivEmptyShapeCases(std::vector<TestCase> &registry) {
+void RegisterDivEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterBinaryEmptyShape<kernel::Div>(registry, "Div", 14, "div");
 }
 
-void RegisterPReluEmptyShapeCases(std::vector<TestCase> &registry) {
+void RegisterPReluEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterBinaryEmptyShape<kernel::PRelu>(registry, "PRelu", 16, "prelu", kSecondInputSlope);
 }
 

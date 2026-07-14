@@ -150,7 +150,7 @@ void RegisterDelayedInitializerCase(std::vector<TestCase> &registry, const std::
 
 // Registers backend cases covering both supported load-device modes:
 // eager CPU loading and deferred file loading.
-void RegisterDelayedInitializerCases(std::vector<TestCase> &registry) {
+void RegisterDelayedInitializerCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterDelayedInitializerCase(
       registry, "test_cc_delayedinitializer_file", "onnx_light_backend_delayedinitializer_file.bin",
       "file", 8, std::vector<uint8_t>(8, 0), Tensor::FromFloat("", {2}, {1.5f, -2.0f}));

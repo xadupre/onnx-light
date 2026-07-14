@@ -20,11 +20,39 @@ namespace onnx_backend_test {
 // input shape extended by one trailing dimension (``cats.size()``). Since
 // opset 1 in the ``ai.onnx.ml`` domain.
 // ---------------------------------------------------------------------------
-void RegisterOneHotEncoderCases(std::vector<TestCase> &registry) {
+void RegisterOneHotEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::OneHotEncoder one_hot{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("OneHotEncoder");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+
+    const std::vector<int64_t> cats{0, 1, 2, 3};
+    AttributeProto *cats_attr = node.add_attribute();
+    cats_attr->set_name("cats_int64s");
+    cats_attr->set_type(AttributeProto::AttributeType::INTS);
+    for (int64_t v : cats) {
+      cats_attr->ints().push_back(v);
+    }
+
+    AttributeProto *zeros_attr = node.add_attribute();
+    zeros_attr->set_name("zeros");
+    zeros_attr->set_type(AttributeProto::AttributeType::INT);
+    zeros_attr->set_i(static_cast<int64_t>(1));
+
+    Tensor x = Tensor::FromInt64("", {8192}, RandnInt<int64_t>({8192}, 2691));
+    Tensor y = one_hot.operator()<int64_t>(x, cats, /*zeros=*/true);
+
+    Expect(node, {x}, {y}, "test_cc_one_hot_encoder_int64_benchmark", {default_opset, opset},
+           "backend-test", registry);
+    return;
+  }
 
   // int64 categories with int64 input (canonical "label -> one-hot" case).
   {

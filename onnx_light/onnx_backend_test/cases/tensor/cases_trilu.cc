@@ -35,10 +35,19 @@ NodeProto MakeTriluNode(bool with_k, bool upper, bool set_upper_attr) {
 
 } // namespace
 
-void RegisterTriluCases(std::vector<TestCase> &registry) {
+void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
   const kernel::KernelContext ctx{opset};
   const kernel::Trilu trilu_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor x = Tensor::FromFloat("X", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+    kernel::Trilu::Attributes attrs;
+    const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+    Expect(MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false), {x}, {y},
+           "test_cc_trilu_upper_default_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_trilu_upper_default: 3x3 upper triangle (k=0, default attrs).
   {

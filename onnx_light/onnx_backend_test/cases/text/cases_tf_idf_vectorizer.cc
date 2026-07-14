@@ -43,12 +43,33 @@ NodeProto MakeTfIdfNode(int64_t min_gram_length, int64_t max_gram_length, int64_
 // (since opset 9 in the ai.onnx domain). Test cases mirror the upstream
 // ``onnx.backend.test.case.node.tfidfvectorizer`` exporters.
 // ---------------------------------------------------------------------------
-void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry) {
+void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(9);
   const kernel::KernelContext ctx{opset};
   const kernel::TfIdfVectorizer tf_idf{ctx};
 
   using Mode = kernel::TfIdfVectorizer::Mode;
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> default_pool{2, 3, 5, 4, 5, 6, 7, 8, 6, 7};
+    const std::vector<int64_t> default_ngram_counts{0, 4};
+    const std::vector<int64_t> default_ngram_indexes{0, 1, 2, 3, 4, 5, 6};
+    NodeProto node = MakeTfIdfNode(/*min_gram_length=*/2, /*max_gram_length=*/2,
+                                   /*max_skip_count=*/0, default_ngram_counts,
+                                   default_ngram_indexes, default_pool);
+    std::vector<int32_t> values(196608);
+    const std::vector<int32_t> base{1, 1, 3, 3, 3, 7, 8, 6, 7, 5, 6, 8};
+    for (size_t i = 0; i < values.size(); ++i) {
+      values[i] = base[i % base.size()];
+    }
+    Tensor x = Tensor::FromInt32("X", {static_cast<int64_t>(values.size())}, values);
+    Tensor y = tf_idf(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
+                      /*max_skip_count=*/0, default_ngram_counts, default_ngram_indexes,
+                      default_pool, {}, {});
+    Expect(node, {x}, {y}, "test_cc_tfidfvectorizer_tf_only_bigrams_skip0_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // Shared pool / indexing used by most of the upstream cases.
   const std::vector<int64_t> default_pool{2, 3, 5, 4, 5, 6, 7, 8, 6, 7};

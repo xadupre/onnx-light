@@ -18,23 +18,24 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``StringConcat`` backend test node case(s).
-void RegisterStringConcatCases(std::vector<TestCase> &registry);
+void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``StringSplit`` backend test node case(s).
-void RegisterStringSplitCases(std::vector<TestCase> &registry);
+void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``StringNormalizer`` backend test node case(s).
-void RegisterStringNormalizerCases(std::vector<TestCase> &registry);
+void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``RegexFullMatch`` backend test node case(s).
-void RegisterRegexFullMatchCases(std::vector<TestCase> &registry);
+void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``TfIdfVectorizer`` backend test node case(s).
-void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry);
+void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Collects all ``text`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
-void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
+void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
+                          TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

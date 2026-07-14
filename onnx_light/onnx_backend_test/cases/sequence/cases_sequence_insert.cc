@@ -97,7 +97,7 @@ void RegisterSequenceInsertCase(const std::string &name, const std::vector<Tenso
 
 } // namespace
 
-void RegisterSequenceInsertCases(std::vector<TestCase> &registry) {
+void RegisterSequenceInsertCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
 
   const std::vector<int64_t> elem_shape = {2, 3};

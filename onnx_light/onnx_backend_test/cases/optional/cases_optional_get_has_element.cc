@@ -288,7 +288,7 @@ void RegisterOptionalHasElementEmptyCase(const std::string &name, bool with_empt
 //     Optional → OptionalGetElement on the same Sequence<Tensor<INT32,
 //     [4]>> input (opset 15).
 // ---------------------------------------------------------------------------
-void RegisterOptionalGetElementCases(std::vector<TestCase> &registry) {
+void RegisterOptionalGetElementCases(std::vector<TestCase> &registry, TestMode mode) {
   const std::vector<int64_t> shape = {2, 3};
   Tensor input = Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
 
@@ -358,7 +358,7 @@ void RegisterOptionalGetElementCases(std::vector<TestCase> &registry) {
 //     the same zero-graph-input model and rely on the no-input
 //     ``OptionalHasElement()`` kernel overload to produce ``false``.
 // ---------------------------------------------------------------------------
-void RegisterOptionalHasElementCases(std::vector<TestCase> &registry) {
+void RegisterOptionalHasElementCases(std::vector<TestCase> &registry, TestMode mode) {
   const std::vector<int64_t> shape = {2, 3};
   Tensor input = Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
 

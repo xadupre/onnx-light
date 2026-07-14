@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/reduction/include_reduction_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/random.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -139,10 +140,24 @@ void RegisterReduceSumOnnxCases(std::vector<TestCase> &registry, const kernel::R
 //     ``axes = [2]``, ``keepdims = 1``) the result preserves the empty
 //     dimension and contains no elements.
 // ---------------------------------------------------------------------------
-void RegisterReduceSumCases(std::vector<TestCase> &registry) {
+void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::ReduceSum reduce_sum_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ReduceSum");
+    node.add_input("data");
+    node.add_output("reduced");
+
+    Tensor data =
+        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+    Tensor reduced = reduce_sum_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+    Expect(node, {data}, {reduced}, "test_cc_reducesum_default_axes_keepdims_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // Upstream ``test_reduce_sum_*`` cases all share the same ``[3, 2, 2]``
   // example input ``[[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]]]``.

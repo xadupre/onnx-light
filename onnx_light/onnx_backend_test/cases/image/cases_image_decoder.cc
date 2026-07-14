@@ -2259,7 +2259,7 @@ constexpr int64_t kImageDecoderSinceVersion = 20;
 // self-contained and does not require any image-decoding library at
 // build or run time.
 // ---------------------------------------------------------------------------
-void RegisterImageDecoderCases(std::vector<TestCase> &registry) {
+void RegisterImageDecoderCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(kImageDecoderSinceVersion);
 
   struct Entry {

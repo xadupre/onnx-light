@@ -41,9 +41,22 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 // uses a deterministic ``std::mt19937`` engine so these cases produce
 // stable expected outputs.
 // ---------------------------------------------------------------------------
-void RegisterMultinomialCases(std::vector<TestCase> &registry) {
+void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor x = Tensor::FromFloat("x", {1024, 4096}, Randn<float>({1024, 4096}, 987654321ULL));
+
+    NodeProto node;
+    node.set_op_type("Multinomial");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor y = kernel::Multinomial(ctx)(x);
+    Expect(node, {x}, {y}, "test_cc_multinomial_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Default attributes (sample_size=1, no seed, dtype=INT32). Two
   // batch rows of three classes; the second row strongly favors class 2.

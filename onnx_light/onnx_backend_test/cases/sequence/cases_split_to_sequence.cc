@@ -114,7 +114,18 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
 //     ``axis=1`` and ``keepdims=0`` (no ``split`` input) → six chunks of
 //     shape ``[3]``.
 // ---------------------------------------------------------------------------
-void RegisterSplitToSequenceCases(std::vector<TestCase> &registry) {
+void RegisterSplitToSequenceCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::BENCHMARK) {
+    const OpsetId opset = DefaultOpset(11);
+    const std::vector<int64_t> data_shape = {4096, 1024};
+    Tensor data = Tensor::FromFloat("data", data_shape, Randn<float>(data_shape, 654));
+    Tensor split_scalar = Tensor::FromInt64("split", {}, {256});
+    RegisterSplitToSequenceCase("test_cc_split_to_sequence_1_benchmark", data, &split_scalar,
+                                /*axis=*/1, /*keepdims=*/1, /*elem_shape=*/{4096, 256}, opset,
+                                registry);
+    return;
+  }
+
   const OpsetId opset = DefaultOpset(11);
 
   // arange(18) reshaped to [3, 6] as the data input for cases 1 and nokeepdims.

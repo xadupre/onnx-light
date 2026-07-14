@@ -28,10 +28,15 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // Add — z = x + y, element-wise with broadcasting (since opset 14).
 // This is the case exercised by examples/run_add_node_test/main.cc.
 // ---------------------------------------------------------------------------
-void RegisterAddCases(std::vector<TestCase> &registry) {
+void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
   const kernel::KernelContext ctx{opset};
   const kernel::Add add_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkBinaryFloat("Add", add_kernel, "test_cc_add_benchmark", opset, registry);
+    return;
+  }
 
   // Equal-shape variant.
   {

@@ -7,8 +7,9 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static const OpRegisterMap kEntries = {
+void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::string &op_type,
+                               TestMode mode) {
+  static const OpRegisterModeMap kEntries = {
       {"Bernoulli", &RegisterBernoulliCases},
       {"Constant", &RegisterConstantCases},
       {"ConstantOfShape", &RegisterConstantOfShapeCases},
@@ -21,7 +22,7 @@ void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::strin
       {"Range", &RegisterRangeCases},
       {"Multinomial", &RegisterMultinomialCases},
   };
-  DispatchRegisterByOpType(registry, op_type, kEntries);
+  DispatchRegisterByOpType(registry, op_type, kEntries, mode);
 }
 
 } // namespace onnx_backend_test

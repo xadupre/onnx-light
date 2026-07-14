@@ -91,19 +91,19 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
 
 } // namespace
 
-void RegisterAddNanInfCases(std::vector<TestCase> &registry) {
+void RegisterAddNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterBinaryNanInf<kernel::Add>(registry, "Add", 14, "add");
 }
 
-void RegisterSubNanInfCases(std::vector<TestCase> &registry) {
+void RegisterSubNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterBinaryNanInf<kernel::Sub>(registry, "Sub", 14, "sub");
 }
 
-void RegisterMulNanInfCases(std::vector<TestCase> &registry) {
+void RegisterMulNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterBinaryNanInf<kernel::Mul>(registry, "Mul", 14, "mul");
 }
 
-void RegisterDivNanInfCases(std::vector<TestCase> &registry) {
+void RegisterDivNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterBinaryNanInf<kernel::Div>(registry, "Div", 14, "div");
 }
 

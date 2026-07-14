@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/reduction/include_reduction_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/random.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -181,9 +182,24 @@ void RegisterReduceLogSumOnnxCases(std::vector<TestCase> &registry,
 
 } // namespace
 
-void RegisterReduceLogSumCases(std::vector<TestCase> &registry) {
+void RegisterReduceLogSumCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceLogSum kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ReduceLogSum");
+    node.add_input("data");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    Tensor data =
+        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+    Tensor reduced = kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+    Expect(node, {data}, {reduced}, "test_cc_reducelogsum_default_axes_keepdims_benchmark",
+           {DefaultOpset(18)}, "backend-test", registry);
+    return;
+  }
   RegisterReduceLogSumOpCases(registry, "ReduceLogSum", kernel, "reducelogsum");
   RegisterReduceLogSumOnnxCases(registry, kernel);
 
@@ -206,9 +222,24 @@ void RegisterReduceLogSumCases(std::vector<TestCase> &registry) {
   }
 }
 
-void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry) {
+void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceLogSumExp kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ReduceLogSumExp");
+    node.add_input("data");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    Tensor data =
+        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+    Tensor reduced = kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+    Expect(node, {data}, {reduced}, "test_cc_reducelogsumexp_default_axes_keepdims_benchmark",
+           {DefaultOpset(18)}, "backend-test", registry);
+    return;
+  }
   RegisterReduceLogSumOpCases(registry, "ReduceLogSumExp", kernel, "reducelogsumexp");
   RegisterReduceLogSumExpOnnxCases(registry, kernel);
 

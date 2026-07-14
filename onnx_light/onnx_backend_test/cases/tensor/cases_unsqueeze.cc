@@ -63,10 +63,20 @@ void RegisterUnsqueezeOneAxisCase(std::vector<TestCase> &registry, const OpsetId
 
 } // namespace
 
-void RegisterUnsqueezeCases(std::vector<TestCase> &registry) {
+void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Unsqueeze unsqueeze_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor data = Tensor::FromFloat("", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+    const std::vector<int64_t> axes{0, 2};
+    const Tensor axes_tensor = MakeAxesTensor(axes);
+    const Tensor expanded = unsqueeze_kernel(data, axes);
+    Expect(MakeUnsqueezeNode(), {data, axes_tensor}, {expanded}, "test_cc_unsqueeze_axes_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_unsqueeze_axes
   {

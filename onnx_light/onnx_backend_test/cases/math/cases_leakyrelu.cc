@@ -11,10 +11,16 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterLeakyReluCases(std::vector<TestCase> &registry) {
+void RegisterLeakyReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
   const kernel::KernelContext ctx{opset};
   const kernel::LeakyRelu leakyrelu_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("LeakyRelu", leakyrelu_kernel, "test_cc_leakyrelu_benchmark", opset,
+                              registry);
+    return;
+  }
 
   {
     NodeProto node;

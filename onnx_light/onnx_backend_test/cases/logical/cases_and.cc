@@ -38,10 +38,22 @@ void RegisterAndOnnxCase(const std::string &name, const std::vector<int64_t> &x_
 // And — z = x AND y, element-wise with broadcasting (since opset 7).
 // Inputs and outputs are BOOL tensors (one byte per element).
 // ---------------------------------------------------------------------------
-void RegisterAndCases(std::vector<TestCase> &registry) {
+void RegisterAndCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(7);
   const kernel::KernelContext ctx{opset};
   const kernel::And and_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeNode("And", {"x", "y"}, {"z"});
+
+    const std::vector<int64_t> shape = {1024, 4096};
+    Tensor x = Tensor::FromBool("", shape, RandUint<uint8_t>(2, shape, /*seed=*/9101));
+    Tensor y = Tensor::FromBool("", shape, RandUint<uint8_t>(2, shape, /*seed=*/9102));
+    Tensor z = and_kernel(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_and_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Equal-shape variant.
   {

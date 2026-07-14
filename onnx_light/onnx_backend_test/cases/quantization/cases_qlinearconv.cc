@@ -28,10 +28,47 @@ namespace onnx_backend_test {
 //   * ``test_cc_qlinearconv_int8`` — self-contained 2x2 INT8 convolution
 //     covering signed zero-points and a negative INT8 output.
 // ---------------------------------------------------------------------------
-void RegisterQLinearConvCases(std::vector<TestCase> &registry) {
+void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const kernel::KernelContext ctx{opset};
   const kernel::QLinearConv qc{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> x_shape{1, 1, 1024, 1024};
+    Tensor x = Tensor::FromUint8("x", x_shape, RandUint<uint8_t>(256, x_shape, 2541));
+    Tensor x_scale = Tensor::FromFloat("x_scale", {}, {0.00369204697f});
+    Tensor x_zero_point("x_zero_point", static_cast<int32_t>(DataType::UINT8), {},
+                        std::vector<uint8_t>{132});
+    Tensor w = Tensor::FromUint8("w", {1, 1, 1, 1}, {0});
+    Tensor w_scale = Tensor::FromFloat("w_scale", {1}, {0.00172794575f});
+    Tensor w_zero_point("w_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
+                        std::vector<uint8_t>{255});
+    Tensor y_scale = Tensor::FromFloat("y_scale", {}, {0.00162681262f});
+    Tensor y_zero_point("y_zero_point", static_cast<int32_t>(DataType::UINT8), {},
+                        std::vector<uint8_t>{123});
+    Tensor B;
+
+    kernel::QLinearConv::Attributes attrs;
+    Tensor y =
+        qc(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point, B, attrs);
+    y.name = "y";
+
+    NodeProto node;
+    node.set_op_type("QLinearConv");
+    node.add_input("x");
+    node.add_input("x_scale");
+    node.add_input("x_zero_point");
+    node.add_input("w");
+    node.add_input("w_scale");
+    node.add_input("w_zero_point");
+    node.add_input("y_scale");
+    node.add_input("y_zero_point");
+    node.add_output("y");
+
+    Expect(node, {x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point}, {y},
+           "test_cc_qlinearconv_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   {
     // 1x1 conv over a 7x7 UINT8 plane, mirroring the shape and dtype layout

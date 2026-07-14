@@ -50,7 +50,8 @@ constexpr const char *kFuncOuterName = "func_outer_add";
 // ``func_inner_add``) and propagate the symbolic ``(batch, d_model)`` shape
 // from the inputs through the two levels of expansion to the output ``Z``.
 // ---------------------------------------------------------------------------
-void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry,
+                                                       TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext kctx{opset};
 

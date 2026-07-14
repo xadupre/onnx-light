@@ -40,7 +40,8 @@ constexpr int64_t kDefaultIrVersion = 10;
 // any equivalent regression in onnx-light's data propagation would be caught
 // by the generic ``BackendTestCaseShapeInference`` tests.
 // ---------------------------------------------------------------------------
-void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registry,
+                                                       TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 

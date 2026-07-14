@@ -20,10 +20,34 @@ namespace onnx_backend_test {
 // cases below mirror the upstream ``test_group_normalization_*`` ONNX
 // reference cases.
 // ---------------------------------------------------------------------------
-void RegisterGroupNormalizationCases(std::vector<TestCase> &registry) {
+void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(21);
   const kernel::KernelContext ctx{opset};
   const kernel::GroupNormalization groupnorm_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("GroupNormalization");
+    node.add_input("x");
+    node.add_input("scale");
+    node.add_input("bias");
+    node.add_output("y");
+    AddAttribute<int64_t>(node, "num_groups", 2);
+
+    constexpr int64_t N = 1;
+    constexpr int64_t C = 64;
+    constexpr int64_t H = 128;
+    constexpr int64_t W = 128;
+    Tensor x = Tensor::FromFloat("", {N, C, H, W}, Randn<float>({N, C, H, W}, 1901));
+    Tensor scale = Tensor::FromFloat("", {C}, Randn<float>({C}, 1902));
+    Tensor bias = Tensor::FromFloat("", {C}, Randn<float>({C}, 1903));
+
+    Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2);
+
+    Expect(node, {x, scale, bias}, {y}, "test_cc_group_normalization_example_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // ``group_normalization_example``: N=3, C=4, num_groups=2, 2x2 spatial.
   // Inputs are built deterministically (instead of np.random) so the case

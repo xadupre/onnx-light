@@ -999,7 +999,7 @@ void RegisterLoop16SeqNoneCase(std::vector<TestCase> &registry) {
 
 } // namespace
 
-void RegisterLoopCases(std::vector<TestCase> &registry) {
+void RegisterLoopCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterTripCountVariants(registry);
   RegisterLoop11Case(registry);
   RegisterMultiCarriedCase(registry);

@@ -57,10 +57,23 @@ Tensor MakeRangeTensor20x10x5() {
 
 } // namespace
 
-void RegisterSliceCases(std::vector<TestCase> &registry) {
+void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Slice slice_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor data = Tensor::FromFloat("", {4096, 4096}, Randn<float>({4096, 4096}, 2001));
+    const Tensor starts = MakeInt64VectorTensor({0, 0});
+    const Tensor ends = MakeInt64VectorTensor({4096, 2048});
+    const Tensor axes = MakeInt64VectorTensor({0, 1});
+    const Tensor steps = MakeInt64VectorTensor({1, 2});
+    const Tensor output = slice_kernel(data, starts, ends, &axes, &steps);
+    Expect(MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true),
+           {data, starts, ends, axes, steps}, {output}, "test_cc_slice_axes_steps_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   {
     const Tensor data = Tensor::FromFloat("", {2, 4},

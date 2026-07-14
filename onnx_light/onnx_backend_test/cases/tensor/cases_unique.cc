@@ -44,10 +44,32 @@ NodeProto MakeUniqueNode(std::optional<int64_t> sorted_attr, std::optional<int64
 // and three optional companion outputs (indices, inverse_indices, counts).
 // Mirrors the upstream ``onnx.backend.test.case.node.unique`` cases.
 // ---------------------------------------------------------------------------
-void RegisterUniqueCases(std::vector<TestCase> &registry) {
+void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
   const kernel::Unique unique_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeUniqueNode(/*sorted_attr=*/0, /*axis_attr=*/std::nullopt);
+    // The reference kernel groups values in O(count * unique) time, so the
+    // benchmark feeds a large input drawn from a small value set to keep the
+    // number of distinct groups bounded while still processing many elements.
+    constexpr int64_t kUniqueBenchmarkSize = 1 << 20;
+    constexpr int64_t kDistinctValues = 256;
+    std::vector<float> values(static_cast<std::size_t>(kUniqueBenchmarkSize));
+    for (int64_t i = 0; i < kUniqueBenchmarkSize; ++i) {
+      values[static_cast<std::size_t>(i)] = static_cast<float>(i % kDistinctValues);
+    }
+    const Tensor x = Tensor::FromFloat("X", {kUniqueBenchmarkSize}, values);
+    kernel::Unique::Attributes attrs;
+    attrs.sorted = false;
+    auto out = unique_kernel(x, attrs);
+    Expect(node, {x},
+           {std::move(out.y), std::move(out.indices), std::move(out.inverse_indices),
+            std::move(out.counts)},
+           "test_cc_unique_not_sorted_without_axis_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_unique_not_sorted_without_axis — 1-D float input, sorted=0.
   {

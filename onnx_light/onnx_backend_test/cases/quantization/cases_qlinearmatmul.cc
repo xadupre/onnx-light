@@ -81,10 +81,29 @@ Tensor MakeQuantTensor(const std::string &name, DataType dtype, const std::vecto
 // This keeps the cases matching ``onnx.backend.test.case.node.qlinearmatmul``
 // byte-for-byte.
 // ---------------------------------------------------------------------------
-void RegisterQLinearMatMulCases(std::vector<TestCase> &registry) {
+void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const kernel::KernelContext ctx{opset};
   const kernel::QLinearMatMul ql{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> a_shape{512, 512};
+    const std::vector<int64_t> b_shape{512, 512};
+    Tensor a_2d = Tensor::FromUint8("a", a_shape, RandUint<uint8_t>(256, a_shape, 2531));
+    Tensor b_2d = Tensor::FromUint8("b", b_shape, RandUint<uint8_t>(256, b_shape, 2532));
+    Tensor a_scale_f = Tensor::FromFloat("a_scale", {}, {0.0066f});
+    Tensor b_scale_f = Tensor::FromFloat("b_scale", {}, {0.00705f});
+    Tensor y_scale_f = Tensor::FromFloat("y_scale", {}, {0.0107f});
+    Tensor a_zp = MakeQuantScalar("a_zero_point", DataType::UINT8, 113);
+    Tensor b_zp_2d = MakeQuantScalar("b_zero_point", DataType::UINT8, 114);
+    Tensor y_zp = MakeQuantScalar("y_zero_point", DataType::UINT8, 118);
+    Tensor y_2d = ql(a_2d, a_scale_f, a_zp, b_2d, b_scale_f, b_zp_2d, y_scale_f, y_zp);
+    y_2d.name = "y";
+    NodeProto node = MakeQLinearMatMulNode();
+    Expect(node, {a_2d, a_scale_f, a_zp, b_2d, b_scale_f, b_zp_2d, y_scale_f, y_zp}, {y_2d},
+           "test_cc_qlinearmatmul_2D_uint8_float32_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Upstream UINT8 raw values; for INT8 each element is shifted by -127.
   const std::vector<int32_t> a_2d_raw = {208, 236, 0, 238, 3, 214, 255, 29};

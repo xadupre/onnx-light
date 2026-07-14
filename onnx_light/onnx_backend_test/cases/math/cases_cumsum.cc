@@ -41,10 +41,20 @@ NodeProto MakeCumSumNode(bool exclusive, bool reverse) {
 // CumSum — cumulative sum of the input tensor along a selected axis.
 // Mirrors the upstream ``onnx.backend.test.case.node.cumsum`` cases.
 // ---------------------------------------------------------------------------
-void RegisterCumSumCases(std::vector<TestCase> &registry) {
+void RegisterCumSumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
   const kernel::KernelContext ctx{opset};
   const kernel::CumSum cumsum_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeCumSumNode(/*exclusive=*/false, /*reverse=*/false);
+    const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
+    Tensor x = Tensor::FromDouble("", shape, std::vector<double>(kBenchmarkElementwiseSize, 1.0));
+    Tensor axis = Tensor::FromInt32("", {}, {0});
+    Tensor y = cumsum_kernel(x, axis);
+    Expect(node, {x, axis}, {y}, "test_cc_cumsum_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // 1-D inclusive cumulative sum (axis = 0).
   {

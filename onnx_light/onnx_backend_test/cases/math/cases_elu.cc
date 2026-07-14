@@ -12,10 +12,15 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterEluCases(std::vector<TestCase> &registry) {
+void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(6);
   const kernel::KernelContext ctx{opset};
   const kernel::Elu elu_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Elu", elu_kernel, "test_cc_elu_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

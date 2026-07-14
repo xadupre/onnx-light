@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -1245,6 +1246,41 @@ TEST(BackendTestCase, ClipDefaultMaxNodeOmitsTrailingMinInput) {
   ASSERT_EQ(node_inputs.size(), 3u);
   EXPECT_EQ(std::string(node_inputs[1].data(), node_inputs[1].size()), "");
   ASSERT_EQ(tc->data_sets[0].inputs.size(), 2u);
+}
+
+TEST(BackendTestCase, BenchmarkModeProducesLargeInputCases) {
+  std::vector<TestCase> registry;
+  // The following function builds the onnx models. It should not.
+  // It should return a function doing it.
+  CollectMathTestCases(registry, "", onnx_backend_test::TestMode::BENCHMARK);
+  ASSERT_FALSE(registry.empty());
+  size_t benchmark_cases = 0;
+  for (const auto &c : registry) {
+    ASSERT_EQ(c.data_sets.size(), 1u) << "case: " << c.name;
+    const auto &ds = c.data_sets[0];
+    ASSERT_FALSE(ds.inputs.empty()) << "case: " << c.name;
+    ASSERT_FALSE(ds.outputs.empty()) << "case: " << c.name;
+    if (c.name.find("_benchmark") != std::string::npos) {
+      ++benchmark_cases;
+      int64_t max_elems = 0;
+      for (const auto &in : ds.inputs) {
+        max_elems = std::max(max_elems, in.element_count());
+      }
+      for (const auto &out : ds.outputs) {
+        max_elems = std::max(max_elems, out.element_count());
+      }
+      EXPECT_GE(max_elems, 1 << 13) << "benchmark case too small: " << c.name;
+    }
+  }
+  EXPECT_GT(benchmark_cases, 0u);
+}
+
+TEST(BackendTestCase, TestModeHasNoBenchmarkCases) {
+  auto cases = CollectTestCases();
+  for (const auto &c : cases) {
+    EXPECT_EQ(c.name.find("_benchmark"), std::string::npos)
+        << "TEST mode leaked benchmark case: " << c.name;
+  }
 }
 
 } // namespace Test

@@ -10,10 +10,25 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterWhereCases(std::vector<TestCase> &registry) {
+void RegisterWhereCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
   const kernel::KernelContext ctx{opset};
   const kernel::Where where_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});
+
+    const std::vector<int64_t> shape = {1024, 4096};
+    Tensor condition =
+        Tensor::FromBool("condition", shape, RandUint<uint8_t>(2, shape, /*seed=*/9401));
+    Tensor x = Tensor::FromFloat("x", shape, Randn<float>(shape, /*seed=*/9402));
+    Tensor y = Tensor::FromFloat("y", shape, Randn<float>(shape, /*seed=*/9403));
+    Tensor output = where_kernel(condition, x, y);
+
+    Expect(node, {condition, x, y}, {output}, "test_where_example_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   {
     NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});

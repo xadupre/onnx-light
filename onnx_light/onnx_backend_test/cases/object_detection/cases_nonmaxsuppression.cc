@@ -70,7 +70,7 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &case_name,
 // expected ``selected_indices`` outputs match ``test_nonmaxsuppression_*``
 // exactly; each case is registered under ``test_cc_<upstream_name>``).
 // ---------------------------------------------------------------------------
-void RegisterNonMaxSuppressionCases(std::vector<TestCase> &registry) {
+void RegisterNonMaxSuppressionCases(std::vector<TestCase> &registry, TestMode mode) {
   // Shared boxes/scores fixtures used by the corner-format cases (1 batch, 6
   // boxes, 1 class — three "groups" of boxes, two of which overlap heavily).
   const std::vector<int64_t> kCornerBoxesShape = {1, 6, 4};

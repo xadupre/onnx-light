@@ -42,10 +42,21 @@ NodeProto MakeTopKNode(int64_t axis, int64_t largest = 1, int64_t sorted_attr = 
 // TopK — selects the top-K largest or smallest values along an axis.
 // Mirrors the upstream ``onnx.backend.test.case.node.topk`` cases.
 // ---------------------------------------------------------------------------
-void RegisterTopKCases(std::vector<TestCase> &registry) {
+void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
   const kernel::TopK topk_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeTopKNode(/*axis=*/1);
+    const std::vector<int64_t> shape = {1024, 4096};
+    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 442));
+    Tensor k = Tensor::FromInt64("", {1}, {100});
+    auto [values, indices] = topk_kernel(x, 100, /*axis=*/1, /*largest=*/true, /*sorted=*/true);
+    Expect(node, {x, k}, {std::move(values), std::move(indices)}, "test_cc_top_k_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_top_k — 3x4 float input, axis=1, k=3, largest=1 (default).
   {

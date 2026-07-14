@@ -20,10 +20,15 @@ namespace onnx_backend_test {
 // ONNX backend test cases (``test_ceil_example`` and ``test_ceil``) mirrored
 // from ``onnx.backend.test.case.node.ceil.Ceil``.
 // ---------------------------------------------------------------------------
-void RegisterCeilCases(std::vector<TestCase> &registry) {
+void RegisterCeilCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Ceil ceil_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Ceil", ceil_kernel, "test_cc_ceil_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

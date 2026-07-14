@@ -30,11 +30,27 @@ void AddStringAttr(NodeProto &node, const char *name, const std::string &value) 
 // float. Mirrors the upstream ``ai.onnx.ml::Normalizer`` operator (since
 // opset 1 in the ``ai.onnx.ml`` domain).
 // ---------------------------------------------------------------------------
-void RegisterNormalizerCases(std::vector<TestCase> &registry) {
+void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::Normalizer normalizer{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Normalizer");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+    AddStringAttr(node, "norm", "L2");
+
+    Tensor x = Tensor::FromFloat("", {8192, 3}, Randn<float>({8192, 3}, 2621));
+    Tensor y = normalizer.operator()<float>(x, "L2");
+
+    Expect(node, {x}, {y}, "test_cc_normalizer_l2_float_benchmark", {default_opset, opset},
+           "backend-test", registry);
+    return;
+  }
 
   // L2 normalization on a [2, 3] float input — rows normalized independently.
   {

@@ -40,11 +40,41 @@ OpsetId TrainingOpset(int64_t version) { return OpsetId(kOnnxPreviewTrainingDoma
 // ``epsilon`` and ``decay_factor`` and use the un-corrected learning-rate
 // path (``T == 0``).
 // ---------------------------------------------------------------------------
-void RegisterAdagradCases(std::vector<TestCase> &registry) {
+void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = TrainingOpset(1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::Adagrad adagrad{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Adagrad");
+    node.set_domain(kOnnxPreviewTrainingDomain);
+    AddInputs(node, {"R", "T", "X", "G", "H"});
+    AddOutputs(node, {"X_new", "H_new"});
+
+    const float norm_coefficient = 0.001f;
+    const float epsilon = 1e-5f;
+    const float decay_factor = 0.1f;
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "epsilon", epsilon);
+    AddFloatAttribute(node, "decay_factor", decay_factor);
+
+    Tensor R = Tensor::FromFloat("", {}, {0.1f});
+    Tensor T = Tensor::FromInt64("", {}, {0});
+    Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+    Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
+    Tensor H = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
+
+    std::vector<Tensor> outs =
+        adagrad(R, T, {X}, {G}, {H}, epsilon, decay_factor, norm_coefficient);
+    Expect(node, {R, T, X, G, H}, {outs[0], outs[1]}, "test_adagrad_benchmark",
+           {default_opset, opset}, "backend-test", registry);
+    return;
+  }
 
   // From Adagrad.export_adagrad():
   {

@@ -65,10 +65,15 @@ std::vector<TUInt> RandUintNonZero(int64_t high, const std::vector<int64_t> &sha
 // ---------------------------------------------------------------------------
 // Div — z = x / y, element-wise with broadcasting (since opset 14).
 // ---------------------------------------------------------------------------
-void RegisterDivCases(std::vector<TestCase> &registry) {
+void RegisterDivCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
   const kernel::KernelContext ctx{opset};
   const kernel::Div div_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkBinaryFloat("Div", div_kernel, "test_cc_div_benchmark", opset, registry);
+    return;
+  }
 
   // Equal-shape variant.
   {

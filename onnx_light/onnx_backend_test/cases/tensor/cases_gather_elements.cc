@@ -29,10 +29,23 @@ NodeProto MakeGatherElementsNode(int64_t axis) {
 
 } // namespace
 
-void RegisterGatherElementsCases(std::vector<TestCase> &registry) {
+void RegisterGatherElementsCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::GatherElements ge_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor data = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+    std::vector<int64_t> index_values(kBenchmarkElementwiseSize);
+    for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
+      index_values[static_cast<std::size_t>(i)] = i % 1024;
+    }
+    Tensor indices = Tensor::FromInt64("", {4096, 1024}, index_values);
+    Tensor output = ge_kernel(data, indices, 1);
+    Expect(MakeGatherElementsNode(1), {data, indices}, {output},
+           "test_cc_gather_elements_0_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_gather_elements_0 — axis=1, mirrors upstream
   // ``test_gather_elements_0`` (small 2x2 example).

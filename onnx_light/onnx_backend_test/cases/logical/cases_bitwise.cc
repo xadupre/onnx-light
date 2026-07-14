@@ -123,10 +123,21 @@ void RegisterBitwiseBinUint32Case(const std::string &name, const char *op,
 // Mirrors the upstream ``onnx.backend.test.case.node.bitwiseand.BitwiseAnd``
 // class.
 // ---------------------------------------------------------------------------
-void RegisterBitwiseAndCases(std::vector<TestCase> &registry) {
+void RegisterBitwiseAndCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
   const kernel::BitwiseAnd k{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeNode("BitwiseAnd", {"x", "y"}, {"z"});
+    Tensor x = Tensor::FromInt32("", {kBenchmarkElementwiseSize},
+                                 RandnInt<int32_t>({kBenchmarkElementwiseSize}, /*seed=*/9601));
+    Tensor y = Tensor::FromInt32("", {kBenchmarkElementwiseSize},
+                                 RandnInt<int32_t>({kBenchmarkElementwiseSize}, /*seed=*/9602));
+    Tensor z = k(x, y);
+    Expect(node, {x, y}, {z}, "test_cc_bitwise_and_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Fixed-vector smoke variant (mirrors the And ``test_cc_and`` style).
   {
@@ -160,10 +171,21 @@ void RegisterBitwiseAndCases(std::vector<TestCase> &registry) {
 // ---------------------------------------------------------------------------
 // BitwiseOr — z = x | y, element-wise with broadcasting (since opset 18).
 // ---------------------------------------------------------------------------
-void RegisterBitwiseOrCases(std::vector<TestCase> &registry) {
+void RegisterBitwiseOrCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
   const kernel::BitwiseOr k{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeNode("BitwiseOr", {"x", "y"}, {"z"});
+    Tensor x = Tensor::FromInt32("", {kBenchmarkElementwiseSize},
+                                 RandnInt<int32_t>({kBenchmarkElementwiseSize}, /*seed=*/9601));
+    Tensor y = Tensor::FromInt32("", {kBenchmarkElementwiseSize},
+                                 RandnInt<int32_t>({kBenchmarkElementwiseSize}, /*seed=*/9602));
+    Tensor z = k(x, y);
+    Expect(node, {x, y}, {z}, "test_cc_bitwise_or_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   {
     NodeProto node = MakeNode("BitwiseOr", {"x", "y"}, {"z"});
@@ -196,10 +218,21 @@ void RegisterBitwiseOrCases(std::vector<TestCase> &registry) {
 // ---------------------------------------------------------------------------
 // BitwiseXor — z = x ^ y, element-wise with broadcasting (since opset 18).
 // ---------------------------------------------------------------------------
-void RegisterBitwiseXorCases(std::vector<TestCase> &registry) {
+void RegisterBitwiseXorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
   const kernel::BitwiseXor k{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeNode("BitwiseXor", {"x", "y"}, {"z"});
+    Tensor x = Tensor::FromInt32("", {kBenchmarkElementwiseSize},
+                                 RandnInt<int32_t>({kBenchmarkElementwiseSize}, /*seed=*/9601));
+    Tensor y = Tensor::FromInt32("", {kBenchmarkElementwiseSize},
+                                 RandnInt<int32_t>({kBenchmarkElementwiseSize}, /*seed=*/9602));
+    Tensor z = k(x, y);
+    Expect(node, {x, y}, {z}, "test_cc_bitwise_xor_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   {
     NodeProto node = MakeNode("BitwiseXor", {"x", "y"}, {"z"});
@@ -234,10 +267,19 @@ void RegisterBitwiseXorCases(std::vector<TestCase> &registry) {
 // Mirrors the upstream ``onnx.backend.test.case.node.bitwisenot.BitwiseNot``
 // class.
 // ---------------------------------------------------------------------------
-void RegisterBitwiseNotCases(std::vector<TestCase> &registry) {
+void RegisterBitwiseNotCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
   const kernel::BitwiseNot k{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeNode("BitwiseNot", {"x"}, {"y"});
+    Tensor x = Tensor::FromInt32("", {kBenchmarkElementwiseSize},
+                                 RandnInt<int32_t>({kBenchmarkElementwiseSize}, /*seed=*/9603));
+    Tensor y = k(x);
+    Expect(node, {x}, {y}, "test_cc_bitwise_not_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   {
     NodeProto node = MakeNode("BitwiseNot", {"x"}, {"y"});

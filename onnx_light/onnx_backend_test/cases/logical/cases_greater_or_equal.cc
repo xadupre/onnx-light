@@ -28,10 +28,27 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // GreaterOrEqual — z = x >= y, element-wise with broadcasting (since opset 12).
 // Inputs are numeric tensors of the same dtype, the output is BOOL.
 // ---------------------------------------------------------------------------
-void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry) {
+void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
   const kernel::KernelContext ctx{opset};
   const kernel::GreaterOrEqual ge_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("GreaterOrEqual");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    const std::vector<int64_t> shape = {1024, 4096};
+    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9201));
+    Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9202));
+    Tensor z = ge_kernel(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_greater_or_equal_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Equal-shape variant.
   {

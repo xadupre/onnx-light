@@ -26,10 +26,37 @@ namespace onnx_backend_test {
 //   * ``test_cc_batchnorm_epsilon_training_mode`` — 2x3x4x5 input with
 //     ``training_mode = 1`` and epsilon = 1e-2.
 // ---------------------------------------------------------------------------
-void RegisterBatchNormalizationCases(std::vector<TestCase> &registry) {
+void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
   const kernel::KernelContext ctx{opset};
   const kernel::BatchNormalization batchnorm_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("BatchNormalization");
+    node.add_input("x");
+    node.add_input("scale");
+    node.add_input("B");
+    node.add_input("input_mean");
+    node.add_input("input_var");
+    node.add_output("y");
+
+    constexpr int64_t N = 1;
+    constexpr int64_t C = 64;
+    constexpr int64_t H = 128;
+    constexpr int64_t W = 128;
+    Tensor x = Tensor::FromFloat("", {N, C, H, W}, Randn<float>({N, C, H, W}, 1201));
+    Tensor scale = Tensor::FromFloat("", {C}, Randn<float>({C}, 1202));
+    Tensor bias = Tensor::FromFloat("", {C}, Randn<float>({C}, 1203));
+    Tensor mean = Tensor::FromFloat("", {C}, Randn<float>({C}, 1204));
+    Tensor var = Tensor::FromFloat("", {C}, std::vector<float>(static_cast<size_t>(C), 1.0f));
+
+    Tensor y = batchnorm_kernel(x, scale, bias, mean, var);
+
+    Expect(node, {x, scale, bias, mean, var}, {y}, "test_cc_batchnorm_example_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // ``batchnorm_example``: a tiny 1x2x1x3 input where C=2 lets us see the
   // per-channel scale / bias / mean / variance applied independently.

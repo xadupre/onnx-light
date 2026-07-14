@@ -35,10 +35,20 @@ NodeProto MakeBitCastNode(int32_t to) {
 // (since opset 26). Mirrors the upstream
 // ``onnx.backend.test.case.node.bitcast.BitCast`` class.
 // ---------------------------------------------------------------------------
-void RegisterBitCastCases(std::vector<TestCase> &registry) {
+void RegisterBitCastCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(26);
   const kernel::KernelContext ctx{opset};
   const kernel::BitCast k{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeBitCastNode(DataType::INT32);
+    Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 2001));
+    Tensor y = k(x, DataType::INT32);
+    Expect(node, {x}, {y}, "test_cc_bitcast_float_to_int32_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // 32-bit reinterpret: FLOAT <-> INT32 (same bit-width).
   {

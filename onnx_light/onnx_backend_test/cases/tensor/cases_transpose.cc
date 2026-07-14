@@ -30,10 +30,18 @@ NodeProto MakeTransposeNode(const std::vector<int64_t> &perm = {}) {
 
 } // namespace
 
-void RegisterTransposeCases(std::vector<TestCase> &registry) {
+void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Transpose transpose_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor data = Tensor::FromFloat("", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+    const Tensor transposed = transpose_kernel(data, /*perm=*/{});
+    Expect(MakeTransposeNode(), {data}, {transposed}, "test_cc_transpose_default_perm_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_transpose_default_perm
   {

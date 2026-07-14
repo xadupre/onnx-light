@@ -71,7 +71,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // dispatch table, the concrete shape tensors are resolved manually in the
 // DataSet builder below.
 // ---------------------------------------------------------------------------
-void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 
@@ -221,7 +221,7 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
 // executable (``c`` is even and divisible by 2 so the inferred ``c//2``
 // resolves to a concrete int64).
 // ---------------------------------------------------------------------------
-void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 
@@ -294,7 +294,8 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry) 
 // is executable. The ``A``/``B``/``C`` matrices are part of the graph as
 // FLOAT[256, 256] initializers.
 // ---------------------------------------------------------------------------
-void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &registry,
+                                                    TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 

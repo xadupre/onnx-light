@@ -122,7 +122,7 @@ void AddCase(std::vector<TestCase> &registry, const OpsetId &opset, const std::s
 // Inputs/outputs match the upstream cases in
 // ``onnx/backend/test/case/node/gridsample.py``.
 // ---------------------------------------------------------------------------
-void RegisterGridSampleCases(std::vector<TestCase> &registry) {
+void RegisterGridSampleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
 
   // ---- test_gridsample ----------------------------------------------------

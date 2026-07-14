@@ -23,10 +23,27 @@ namespace onnx_backend_test {
 //   * test_cc_lrn_default — only ``size`` specified, default alpha/beta/bias
 //     (mirrors upstream ``test_lrn_default``).
 // ---------------------------------------------------------------------------
-void RegisterLRNCases(std::vector<TestCase> &registry) {
+void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::LRN kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor x = Tensor::FromFloat("", {1, 64, 128, 128}, Randn<float>({1, 64, 128, 128}, 2201));
+
+    NodeProto node;
+    node.set_op_type("LRN");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<float>(node, "alpha", 0.0002f);
+    AddAttribute<float>(node, "beta", 0.5f);
+    AddAttribute<float>(node, "bias", 2.0f);
+    AddAttribute<int64_t>(node, "size", 3);
+
+    Tensor y = kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f, /*bias=*/2.0f);
+    Expect(node, {x}, {y}, "test_cc_lrn_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Build a deterministic 2x4x5x5 input shared between both cases. Using
   // distinct N and C dimensions guards against regressions where the channel

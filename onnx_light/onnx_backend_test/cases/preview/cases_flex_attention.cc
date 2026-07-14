@@ -484,7 +484,7 @@ Tensor ComputeFlexAttentionExpected(const Tensor &Q, const Tensor &K, const Tens
 // Inputs are small, fully deterministic tensors so this library does not
 // depend on a PRNG.
 // ---------------------------------------------------------------------------
-void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
+void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = PreviewOpset(1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
@@ -500,6 +500,17 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     node.add_output("Y");
     return node;
   };
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor Q = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654321ULL));
+    Tensor K = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654322ULL));
+    Tensor V = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654323ULL));
+    Tensor Y = flex(Q, K, V);
+    NodeProto node = make_node();
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_basic_benchmark", {default_opset, opset},
+           "backend-test", registry);
+    return;
+  }
 
   // ----- Case 1: basic MHA, batch_size=1, q_num_heads=kv_num_heads=2,
   // q_seq_len=kv_seq_len=2, head_size=v_head_size=2.
@@ -641,11 +652,15 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     Tensor V = Tensor::FromFloat("", {1, 2, 2, 2},
                                  {
                                      // head 0
-                                     1.0f, 2.0f,  // v0
-                                     3.0f, 4.0f,  // v1
-                                                  // head 1
-                                     -1.0f, 0.0f, // v0
-                                     0.0f, 1.0f,  // v1
+                                     1.0f,
+                                     2.0f, // v0
+                                     3.0f,
+                                     4.0f, // v1
+                                           // head 1
+                                     -1.0f,
+                                     0.0f, // v0
+                                     0.0f,
+                                     1.0f, // v1
                                  });
     // Modifier shape: (B, Hq, Lq, Lkv) = (1, 2, 2, 2).
     const std::vector<int64_t> modifier_shape = {1, 2, 2, 2};
@@ -683,11 +698,15 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     Tensor V = Tensor::FromFloat("", {1, 2, 2, 2},
                                  {
                                      // head 0
-                                     1.0f, 2.0f,  // v0
-                                     3.0f, 4.0f,  // v1
-                                                  // head 1
-                                     -1.0f, 0.0f, // v0
-                                     0.0f, 1.0f,  // v1
+                                     1.0f,
+                                     2.0f, // v0
+                                     3.0f,
+                                     4.0f, // v1
+                                           // head 1
+                                     -1.0f,
+                                     0.0f, // v0
+                                     0.0f,
+                                     1.0f, // v1
                                  });
     const std::vector<int64_t> modifier_shape = {1, 2, 2, 2};
     constexpr float kScale = 0.5f;
@@ -743,11 +762,15 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     Tensor V = Tensor::FromFloat("", {1, 2, 2, 3},
                                  {
                                      // kv head 0
-                                     1.0f, 2.0f, 3.0f,  // v0
-                                     4.0f, 5.0f, 6.0f,  // v1
-                                                        // kv head 1
-                                     -1.0f, 0.0f, 1.0f, // v0
-                                     0.0f, 1.0f, -1.0f, // v1
+                                     1.0f, 2.0f,
+                                     3.0f, // v0
+                                     4.0f, 5.0f,
+                                     6.0f, // v1
+                                           // kv head 1
+                                     -1.0f, 0.0f,
+                                     1.0f, // v0
+                                     0.0f, 1.0f,
+                                     -1.0f, // v1
                                  });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
@@ -868,20 +891,28 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     Tensor K = Tensor::FromDouble("", {1, 2, 2, 2},
                                   {
                                       // head 0
-                                      1.0, 0.0,  // k0
-                                      0.0, 1.0,  // k1
-                                                 // head 1
-                                      1.0, 1.0,  // k0
-                                      -1.0, 1.0, // k1
+                                      1.0,
+                                      0.0, // k0
+                                      0.0,
+                                      1.0, // k1
+                                           // head 1
+                                      1.0,
+                                      1.0, // k0
+                                      -1.0,
+                                      1.0, // k1
                                   });
     Tensor V = Tensor::FromDouble("", {1, 2, 2, 2},
                                   {
                                       // head 0
-                                      1.0, 2.0,  // v0
-                                      3.0, 4.0,  // v1
-                                                 // head 1
-                                      -1.0, 0.0, // v0
-                                      0.0, 1.0,  // v1
+                                      1.0,
+                                      2.0, // v0
+                                      3.0,
+                                      4.0, // v1
+                                           // head 1
+                                      -1.0,
+                                      0.0, // v0
+                                      0.0,
+                                      1.0, // v1
                                   });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
@@ -906,20 +937,28 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     Tensor K = kernel::MakeFloat16Tensor("", {1, 2, 2, 2},
                                          {
                                              // head 0
-                                             1.0f, 0.0f,  // k0
-                                             0.0f, 1.0f,  // k1
-                                                          // head 1
-                                             1.0f, 1.0f,  // k0
-                                             -1.0f, 1.0f, // k1
+                                             1.0f,
+                                             0.0f, // k0
+                                             0.0f,
+                                             1.0f, // k1
+                                                   // head 1
+                                             1.0f,
+                                             1.0f, // k0
+                                             -1.0f,
+                                             1.0f, // k1
                                          });
     Tensor V = kernel::MakeFloat16Tensor("", {1, 2, 2, 2},
                                          {
                                              // head 0
-                                             1.0f, 2.0f,  // v0
-                                             3.0f, 4.0f,  // v1
-                                                          // head 1
-                                             -1.0f, 0.0f, // v0
-                                             0.0f, 1.0f,  // v1
+                                             1.0f,
+                                             2.0f, // v0
+                                             3.0f,
+                                             4.0f, // v1
+                                                   // head 1
+                                             -1.0f,
+                                             0.0f, // v0
+                                             0.0f,
+                                             1.0f, // v1
                                          });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();

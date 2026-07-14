@@ -16,7 +16,7 @@ namespace onnx_backend_test {
 // ``sample_rate`` (int32), ``lower_edge_hertz`` (float) and
 // ``upper_edge_hertz`` (float).
 // ---------------------------------------------------------------------------
-void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry) {
+void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry, TestMode mode) {
   constexpr int32_t kNumMelBins = 8;
   constexpr int32_t kDftLength = 16;
   constexpr int32_t kSampleRate = 8192;
@@ -26,6 +26,28 @@ void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(17);
   const kernel::KernelContext ctx{opset};
   const kernel::MelWeightMatrix mel_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto bench_node;
+    bench_node.set_op_type("MelWeightMatrix");
+    bench_node.add_input("num_mel_bins");
+    bench_node.add_input("dft_length");
+    bench_node.add_input("sample_rate");
+    bench_node.add_input("lower_edge_hertz");
+    bench_node.add_input("upper_edge_hertz");
+    bench_node.add_output("output");
+    Tensor b_num_mel_bins = Tensor::FromInt32("", {}, {2048});
+    Tensor b_dft_length = Tensor::FromInt32("", {}, {8192});
+    Tensor b_sample_rate = Tensor::FromInt32("", {}, {16000});
+    Tensor b_lower_edge_hertz = Tensor::FromFloat("", {}, {0.0f});
+    Tensor b_upper_edge_hertz = Tensor::FromFloat("", {}, {8000.0f});
+    Tensor b_output = mel_kernel(b_num_mel_bins, b_dft_length, b_sample_rate, b_lower_edge_hertz,
+                                 b_upper_edge_hertz, DataType::FLOAT);
+    Expect(bench_node,
+           {b_num_mel_bins, b_dft_length, b_sample_rate, b_lower_edge_hertz, b_upper_edge_hertz},
+           {b_output}, "test_cc_melweightmatrix_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   NodeProto node;
   node.set_op_type("MelWeightMatrix");

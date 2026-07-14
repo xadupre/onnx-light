@@ -7,8 +7,9 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static const OpRegisterMap kEntries = {
+void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::string &op_type,
+                                   TestMode mode) {
+  static const OpRegisterModeMap kEntries = {
       {"ArrayFeatureExtractor", &RegisterArrayFeatureExtractorCases},
       {"Binarizer", &RegisterBinarizerCases},
       {"CastMap", &RegisterCastMapCases},
@@ -29,7 +30,7 @@ void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::s
       {"TreeEnsembleRegressor", &RegisterTreeEnsembleRegressorCases},
       {"ZipMap", &RegisterZipMapCases},
   };
-  DispatchRegisterByOpType(registry, op_type, kEntries);
+  DispatchRegisterByOpType(registry, op_type, kEntries, mode);
 }
 
 } // namespace onnx_backend_test

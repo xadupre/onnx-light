@@ -79,10 +79,69 @@ Tensor MakeUpstreamFeatureMap() {
 //     ``coordinate_transformation_mode = "output_half_pixel"`` (mirrors
 //     ``test_roialign_mode_max``).
 // ---------------------------------------------------------------------------
-void RegisterRoiAlignCases(std::vector<TestCase> &registry) {
+void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
   const kernel::KernelContext ctx{opset};
   const kernel::RoiAlign roialign_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("RoiAlign");
+    node.add_input("X");
+    node.add_input("rois");
+    node.add_input("batch_indices");
+    node.add_output("Y");
+
+    AttributeProto *mode_attr = node.add_attribute();
+    mode_attr->set_name("mode");
+    mode_attr->set_type(AttributeProto::AttributeType::STRING);
+    mode_attr->set_s("avg");
+
+    AttributeProto *oh = node.add_attribute();
+    oh->set_name("output_height");
+    oh->set_type(AttributeProto::AttributeType::INT);
+    oh->set_i(5);
+
+    AttributeProto *ow = node.add_attribute();
+    ow->set_name("output_width");
+    ow->set_type(AttributeProto::AttributeType::INT);
+    ow->set_i(5);
+
+    AttributeProto *sr = node.add_attribute();
+    sr->set_name("sampling_ratio");
+    sr->set_type(AttributeProto::AttributeType::INT);
+    sr->set_i(2);
+
+    AttributeProto *ss = node.add_attribute();
+    ss->set_name("spatial_scale");
+    ss->set_type(AttributeProto::AttributeType::FLOAT);
+    ss->set_f(1.0f);
+
+    constexpr int64_t roi_count = 4096;
+    Tensor x = Tensor::FromFloat("", {1, 1, 64, 64}, Randn<float>({1, 1, 64, 64}, 987654321ULL));
+    std::vector<float> rois_values;
+    rois_values.reserve(roi_count * 4);
+    for (int64_t i = 0; i < roi_count; ++i) {
+      const float y0 = static_cast<float>(i % 48);
+      const float x0 = static_cast<float>((i / 48) % 48);
+      rois_values.insert(rois_values.end(), {x0, y0, x0 + 15.0f, y0 + 15.0f});
+    }
+    Tensor rois = Tensor::FromFloat("", {roi_count, 4}, rois_values);
+    Tensor batch_indices = Tensor::FromInt64("", {roi_count}, std::vector<int64_t>(roi_count, 0));
+
+    kernel::RoiAlign::Attributes attrs;
+    attrs.mode = "avg";
+    attrs.output_height = 5;
+    attrs.output_width = 5;
+    attrs.sampling_ratio = 2;
+    attrs.spatial_scale = 1.0f;
+    attrs.coordinate_transformation_mode = "half_pixel";
+    Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+
+    Expect(node, {x, rois, batch_indices}, {y}, "test_cc_roialign_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // Two RoIs over the 10x10 feature map.
   const std::vector<int64_t> rois_shape = {2, 4};

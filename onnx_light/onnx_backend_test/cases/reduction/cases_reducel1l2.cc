@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/reduction/include_reduction_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/random.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -158,16 +159,46 @@ void RegisterReduceL1L2OnnxCases(std::vector<TestCase> &registry, const std::str
 
 } // namespace
 
-void RegisterReduceL1Cases(std::vector<TestCase> &registry) {
+void RegisterReduceL1Cases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceL1 reduce_l1_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ReduceL1");
+    node.add_input("data");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    Tensor data =
+        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+    Tensor reduced = reduce_l1_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+    Expect(node, {data}, {reduced}, "test_cc_reducel1_default_axes_keepdims_benchmark",
+           {DefaultOpset(18)}, "backend-test", registry);
+    return;
+  }
   RegisterReduceL1L2Cases(registry, "ReduceL1", reduce_l1_kernel, "reducel1");
   RegisterReduceL1L2OnnxCases(registry, "ReduceL1", reduce_l1_kernel, "reduce_l1");
 }
 
-void RegisterReduceL2Cases(std::vector<TestCase> &registry) {
+void RegisterReduceL2Cases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceL2 reduce_l2_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ReduceL2");
+    node.add_input("data");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    Tensor data =
+        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+    Tensor reduced = reduce_l2_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+    Expect(node, {data}, {reduced}, "test_cc_reducel2_default_axes_keepdims_benchmark",
+           {DefaultOpset(18)}, "backend-test", registry);
+    return;
+  }
   RegisterReduceL1L2Cases(registry, "ReduceL2", reduce_l2_kernel, "reducel2");
   RegisterReduceL1L2OnnxCases(registry, "ReduceL2", reduce_l2_kernel, "reduce_l2");
 }

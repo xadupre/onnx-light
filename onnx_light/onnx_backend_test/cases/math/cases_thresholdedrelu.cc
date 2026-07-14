@@ -11,10 +11,26 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterThresholdedReluCases(std::vector<TestCase> &registry) {
+void RegisterThresholdedReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const kernel::KernelContext ctx{opset};
   const kernel::ThresholdedRelu thresholdedrelu_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ThresholdedRelu");
+    node.add_input("x");
+    node.add_output("y");
+    AttributeProto *alpha = node.add_attribute();
+    alpha->set_name("alpha");
+    alpha->set_type(AttributeProto::FLOAT);
+    alpha->set_f(2.0f);
+    Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+    Tensor y = thresholdedrelu_kernel(x, 2.0f);
+    Expect(node, {x}, {y}, "test_cc_thresholdedrelu_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   {
     NodeProto node;

@@ -93,7 +93,7 @@ void RegisterSequenceEmptyCase(const std::string &name, bool has_dtype, int64_t 
 // and the test harness compares the resulting scalar INT64 length (always
 // ``0``) to the expected value computed by the reference kernels.
 // ---------------------------------------------------------------------------
-void RegisterSequenceEmptyCases(std::vector<TestCase> &registry) {
+void RegisterSequenceEmptyCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
 
   RegisterSequenceEmptyCase("test_cc_sequence_empty_default", /*has_dtype=*/false,

@@ -56,11 +56,31 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 // ``ai.onnx.ml::Imputer`` operator (since opset 1 in the ``ai.onnx.ml``
 // domain).
 // ---------------------------------------------------------------------------
-void RegisterImputerCases(std::vector<TestCase> &registry) {
+void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::Imputer imputer{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Imputer");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+
+    const float replaced_value = 0.0f;
+    const std::vector<float> imputed_values{1.0f, 2.0f, 3.0f};
+    AddFloatAttr(node, "replaced_value_float", replaced_value);
+    AddFloatsAttr(node, "imputed_value_floats", imputed_values);
+
+    Tensor x = Tensor::FromFloat("", {8192, 3}, Randn<float>({8192, 3}, 2631));
+    Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
+
+    Expect(node, {x}, {y}, "test_cc_imputer_float_benchmark", {default_opset, opset},
+           "backend-test", registry);
+    return;
+  }
 
   // Float case: replace 0.0 with a per-feature replacement value.
   {

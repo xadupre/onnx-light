@@ -42,7 +42,18 @@ Tensor MakeShapeTensor(const std::vector<int64_t> &dims) {
 
 } // namespace
 
-void RegisterReshapeCases(std::vector<TestCase> &registry) {
+void RegisterReshapeCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::BENCHMARK) {
+    const OpsetId opset = DefaultOpset(13);
+    const kernel::KernelContext ctx{opset};
+    const kernel::Reshape reshape_kernel{ctx};
+    const Tensor data = Tensor::FromFloat("", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+    const Tensor shape = MakeShapeTensor({4096, 1024});
+    const Tensor output = reshape_kernel(data, shape);
+    Expect(MakeReshapeNode(), {data, shape}, {output}, "test_cc_reshape_reordered_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
   {
     const OpsetId opset = DefaultOpset(13);
     const kernel::KernelContext ctx{opset};

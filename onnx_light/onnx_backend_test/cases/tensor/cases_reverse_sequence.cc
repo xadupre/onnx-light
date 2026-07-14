@@ -39,10 +39,22 @@ NodeProto MakeReverseSequenceNode(int64_t time_axis, int64_t batch_axis, bool se
 
 } // namespace
 
-void RegisterReverseSequenceCases(std::vector<TestCase> &registry) {
+void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const kernel::KernelContext ctx{opset};
   const kernel::ReverseSequence reverse_seq_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor x = Tensor::FromFloat("X", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+    const Tensor seq = Tensor::FromInt64("sequence_lens", {1024}, std::vector<int64_t>(1024, 4096));
+    kernel::ReverseSequence::Attributes attrs;
+    attrs.time_axis = 0;
+    attrs.batch_axis = 1;
+    const Tensor y = reverse_seq_kernel(x, seq, attrs);
+    Expect(MakeReverseSequenceNode(0, 1, /*set_time_attr=*/true, /*set_batch_attr=*/true), {x, seq},
+           {y}, "test_cc_reversesequence_time_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_reversesequence_time: 4x4 input, time_axis=0, batch_axis=1.
   // Matches Example 1 in the ONNX spec.

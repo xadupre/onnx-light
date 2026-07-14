@@ -36,7 +36,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 //   * node 1 (Reshape): ``onnx_light.release_after = "S"``,
 //                       ``onnx_light.not_used_after = "X"``.
 // ---------------------------------------------------------------------------
-void RegisterReleaseCases(std::vector<TestCase> &registry) {
+void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 

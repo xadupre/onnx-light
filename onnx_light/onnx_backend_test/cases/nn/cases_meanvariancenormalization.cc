@@ -12,7 +12,26 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry) {
+void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
+
+  if (mode == TestMode::BENCHMARK) {
+    const OpsetId opset = DefaultOpset(13);
+    const kernel::KernelContext ctx{opset};
+    const kernel::MeanVarianceNormalization mvn_kernel{ctx};
+
+    NodeProto node;
+    node.set_op_type("MeanVarianceNormalization");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromFloat("", {32, 64, 64, 1, 16}, Randn<float>({32, 64, 64, 1, 16}, 2401));
+
+    Tensor y = mvn_kernel(x);
+
+    Expect(node, {x}, {y}, "test_cc_mvn_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
+
   // ``mvn``: default axes [0,2,3].
   {
     const OpsetId opset = DefaultOpset(13);

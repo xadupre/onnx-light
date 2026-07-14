@@ -22,7 +22,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 
 } // namespace
 
-void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const std::string name("test_cc_shape_inference_slice_symbolic_end");

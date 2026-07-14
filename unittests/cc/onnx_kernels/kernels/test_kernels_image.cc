@@ -630,7 +630,7 @@ TEST(KernelClass, ImageDecoderDecodesAsciiPgmGraymap) {
 }
 
 TEST(KernelClass, ImageDecoderPngUsesAllocatorForInternalBuffers) {
-  // Verifies that TryDecodePng allocates its temporary ``rows`` buffer through
+  // Verifies that TryDecodePng allocates its temporary `rows` buffer through
   // the provided allocator and releases it before returning. The decoded pixels
   // must match the reference values.
   // clang-format off
@@ -662,7 +662,7 @@ TEST(KernelClass, ImageDecoderPngUsesAllocatorForInternalBuffers) {
 }
 
 TEST(KernelClass, ImageDecoderJpegUsesAllocatorForInternalBuffers) {
-  // Verifies that TryDecodeJpeg allocates the per-component ``samples``
+  // Verifies that TryDecodeJpeg allocates the per-component `samples`
   // buffer through the provided allocator and releases it before returning.
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
@@ -686,7 +686,7 @@ TEST(KernelClass, ImageDecoderJpegUsesAllocatorForInternalBuffers) {
 }
 
 TEST(KernelClass, ImageDecoderPnmUsesAllocatorForInternalBuffers) {
-  // Verifies that TryDecodePnm allocates its temporary ``src`` buffer through
+  // Verifies that TryDecodePnm allocates its temporary `src` buffer through
   // the provided allocator and releases it before returning.
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};

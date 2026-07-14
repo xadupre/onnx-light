@@ -461,7 +461,7 @@ struct ByteBuffer {
   ByteBuffer &operator=(const ByteBuffer &) = delete;
 
   ~ByteBuffer() {
-    if (buffer_ != nullptr) {
+    if (buffer_ != nullptr && allocator_ != nullptr) {
       allocator_->Free(buffer_);
     }
   }

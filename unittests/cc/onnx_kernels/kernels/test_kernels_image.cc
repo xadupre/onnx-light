@@ -646,7 +646,8 @@ TEST(KernelClass, ImageDecoderPngUsesAllocatorForInternalBuffers) {
   Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(png_bytes.size())}, png_bytes);
 
   // Allocator with enough capacity for the internal temporary buffers.
-  SimpleRawBufferAllocator alloc(8);
+  constexpr size_t kAllocatorCapacity = 8; // enough slots for all internal temporaries
+  SimpleRawBufferAllocator alloc(kAllocatorCapacity);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
 
@@ -670,7 +671,8 @@ TEST(KernelClass, ImageDecoderJpegUsesAllocatorForInternalBuffers) {
       Tensor::FromUint8("", {static_cast<int64_t>(sizeof(k_jpeg_rgb_in))},
                         std::vector<uint8_t>(k_jpeg_rgb_in, k_jpeg_rgb_in + sizeof(k_jpeg_rgb_in)));
 
-  SimpleRawBufferAllocator alloc(8);
+  constexpr size_t kAllocatorCapacity = 8; // enough slots for all internal temporaries
+  SimpleRawBufferAllocator alloc(kAllocatorCapacity);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
 
@@ -694,7 +696,8 @@ TEST(KernelClass, ImageDecoderPnmUsesAllocatorForInternalBuffers) {
   std::vector<uint8_t> bytes(pgm.begin(), pgm.end());
   Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(bytes.size())}, bytes);
 
-  SimpleRawBufferAllocator alloc(8);
+  constexpr size_t kAllocatorCapacity = 8; // enough slots for all internal temporaries
+  SimpleRawBufferAllocator alloc(kAllocatorCapacity);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
 

@@ -470,7 +470,8 @@ struct ByteBuffer {
   // Allocates n_bytes bytes. Uses allocator-backed storage when alloc is
   // non-null (initialization depends on the allocator implementation); falls
   // back to a zero-initialized std::vector<uint8_t> otherwise. Must be called
-  // exactly once before any accessor.
+  // exactly once before any accessor. Allocators must not return nullptr from
+  // Allocate(); they must throw (e.g., std::bad_alloc) on failure instead.
   void assign(size_t n_bytes, RawBufferAllocator *alloc) {
     if (alloc != nullptr) {
       allocator_ = alloc;

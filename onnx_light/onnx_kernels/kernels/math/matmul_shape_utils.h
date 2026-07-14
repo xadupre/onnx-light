@@ -13,6 +13,10 @@ namespace onnx_kernels {
 namespace kernel {
 namespace detail {
 
+/// Promotes a 1-D MatMul operand to its logical 2-D shape.
+///
+/// For the left operand, ``[K]`` becomes ``[1, K]``. For the right operand,
+/// ``[K]`` becomes ``[K, 1]``. Higher-rank shapes are returned unchanged.
 inline Shape PromoteMatMulShape(const Shape &shape, bool is_left) {
   if (shape.size() == 1) {
     if (is_left) {
@@ -23,6 +27,11 @@ inline Shape PromoteMatMulShape(const Shape &shape, bool is_left) {
   return shape;
 }
 
+/// Broadcasts MatMul batch-prefix dimensions with NumPy/ONNX rules.
+///
+/// ``a_prefix`` and ``b_prefix`` are the prefixes before trailing matrix
+/// dimensions. ``op_name`` and ``broadcast_error_suffix`` build kernel-specific
+/// error messages when prefixes are incompatible.
 inline Shape BroadcastMatMulPrefix(const Shape &a_prefix, const Shape &b_prefix,
                                    const char *op_name, const char *broadcast_error_suffix) {
   const size_t rank = std::max(a_prefix.size(), b_prefix.size());
@@ -44,6 +53,11 @@ inline Shape BroadcastMatMulPrefix(const Shape &a_prefix, const Shape &b_prefix,
   return out;
 }
 
+/// Computes the MatMul output shape for two input shapes.
+///
+/// The helper applies 1-D promotions, validates inner dimensions, broadcasts
+/// batch prefixes, and appends matrix dimensions according to MatMul rules.
+/// Error-message suffixes are provided by callers to preserve per-kernel text.
 inline Shape ComputeMatMulOutputShape(const Shape &a_shape, const Shape &b_shape,
                                       const char *op_name, const char *rank0_error_suffix,
                                       const char *inner_dim_error_suffix,

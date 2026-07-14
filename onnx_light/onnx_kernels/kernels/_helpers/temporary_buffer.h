@@ -22,12 +22,13 @@ template <typename T> struct TemporaryTypedBuffer {
   std::vector<T> fallback;
   RawBufferAllocator *allocator = nullptr;
   RawBuffer *buffer = nullptr;
+  const char *name = "temporary buffer";
   std::size_t size = 0;
 
   TemporaryTypedBuffer() = default;
 
   TemporaryTypedBuffer(std::size_t count, RawBufferAllocator *buffer_allocator, const char *name)
-      : size(count) {
+      : name(name), size(count) {
     if (buffer_allocator != nullptr) {
       RawBuffer *allocated = buffer_allocator->Allocate(count * sizeof(T));
       if (allocated == nullptr) {
@@ -36,6 +37,10 @@ template <typename T> struct TemporaryTypedBuffer {
       if (allocated->size() < count * sizeof(T)) {
         buffer_allocator->Free(allocated);
         EXT_THROW_INVALID(name, " allocator returned too small a buffer.");
+      }
+      if (allocated->data() == nullptr) {
+        buffer_allocator->Free(allocated);
+        EXT_THROW_INVALID(name, " allocator returned a null data pointer.");
       }
       if (reinterpret_cast<std::uintptr_t>(allocated->data()) % alignof(T) != 0) {
         buffer_allocator->Free(allocated);
@@ -58,8 +63,8 @@ template <typename T> struct TemporaryTypedBuffer {
   }
 
   T *data() {
-    EXT_ENFORCE_INVALID(buffer != nullptr || !fallback.empty() || size == 0,
-                        "temporary buffer not allocated.");
+    EXT_ENFORCE_INVALID(buffer != nullptr || !fallback.empty() || size == 0, name,
+                        " not allocated.");
     if (buffer != nullptr) {
       return reinterpret_cast<T *>(buffer->data());
     }

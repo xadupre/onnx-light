@@ -58,6 +58,7 @@ using onnx_kernels::kernel::MatMul;
 using onnx_kernels::kernel::MatMulInteger;
 using onnx_kernels::kernel::Max;
 using onnx_kernels::kernel::Mean;
+using onnx_kernels::kernel::MelWeightMatrix;
 using onnx_kernels::kernel::Min;
 using onnx_kernels::kernel::Mish;
 using onnx_kernels::kernel::Mod;
@@ -2295,6 +2296,30 @@ TEST(KernelClass, MatMulHalfPrecisionMatchesFloatReference) {
              std::vector<uint8_t>(4 * sizeof(uint16_t)));
   matmul_kernel(a_h, b_h, y_h);
   EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16));
+}
+
+TEST(KernelClass, MelWeightMatrixUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(17)};
+  MelWeightMatrix kernel{ctx};
+
+  const Tensor num_mel_bins = Tensor::FromInt64("", {}, {4});
+  const Tensor dft_length = Tensor::FromInt64("", {}, {8});
+  const Tensor sample_rate = Tensor::FromInt64("", {}, {8000});
+  const Tensor lower_edge_hertz = Tensor::FromFloat("", {}, {0.0f});
+  const Tensor upper_edge_hertz = Tensor::FromFloat("", {}, {4000.0f});
+
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = kernel(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz,
+                    onnx_kernels::DataType::FLOAT, &rt);
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(y.data.size(), 0u);
+  ASSERT_EQ(y.shape.size(), 2u);
+  EXPECT_EQ(y.shape[0], 5); // floor(8/2) + 1
+  EXPECT_EQ(y.shape[1], 4); // num_mel_bins
 }
 
 } // namespace Test

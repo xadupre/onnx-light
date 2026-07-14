@@ -63,7 +63,8 @@ Shape PromoteMatMulShape(const Shape &shape, bool is_left) {
 }
 
 Shape ComputeStrides(const Shape &shape) {
-  Shape strides(std::vector<int64_t>(shape.size(), 1));
+  Shape strides;
+  strides.assign(shape.size(), 1);
   for (int64_t i = static_cast<int64_t>(shape.size()) - 2; i >= 0; --i) {
     strides[static_cast<size_t>(i)] =
         strides[static_cast<size_t>(i + 1)] * shape[static_cast<size_t>(i + 1)];

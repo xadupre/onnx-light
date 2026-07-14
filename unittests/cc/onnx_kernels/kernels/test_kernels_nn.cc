@@ -6,6 +6,7 @@
 #include "onnx_kernels/kernels/_helpers/float16_promote.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -16,6 +17,8 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_kernels::RuntimeContext;
+using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Attention;
 using onnx_kernels::kernel::AveragePool;
@@ -315,6 +318,32 @@ TEST(KernelClass, BatchNormalizationTrainingModeMatchesReference) {
   EXPECT_NEAR(prm[1], 2.0f * momentum + saved_mean1 * (1.0f - momentum), 1e-5f);
   EXPECT_NEAR(prv[0], 1.0f * momentum + saved_var * (1.0f - momentum), 1e-5f);
   EXPECT_NEAR(prv[1], 2.0f * momentum + saved_var * (1.0f - momentum), 1e-5f);
+}
+
+TEST(KernelClass, BatchNormalizationTrainingModeUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(15)};
+  BatchNormalization bn{ctx};
+  // 3 outputs: y, running_mean, running_var.
+  constexpr size_t kMaxAllocations = 5;
+  SimpleRawBufferAllocator alloc(kMaxAllocations);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+  Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
+  Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  Tensor mean = Tensor::FromFloat("", {2}, {0.5f, 2.0f});
+  Tensor var = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  const float epsilon = 1e-5f;
+  const float momentum = 0.9f;
+  auto [y, running_mean, running_var] =
+      bn.TrainingForward(x, scale, bias, mean, var, epsilon, momentum, &rt);
+
+  ASSERT_TRUE(y.has_allocation());
+  ASSERT_TRUE(running_mean.has_allocation());
+  ASSERT_TRUE(running_var.has_allocation());
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2, 1, 3}));
+  ASSERT_EQ(running_mean.shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(running_var.shape, (std::vector<int64_t>{2}));
 }
 
 TEST(KernelClass, MeanVarianceNormalizationDefaultAxes) {

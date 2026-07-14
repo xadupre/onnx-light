@@ -5,6 +5,8 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/image/include_image_kernels.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/raw_buffer_allocator.h"
+#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -17,6 +19,8 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_kernels::DataType;
+using onnx_kernels::RuntimeContext;
+using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::ImageDecoder;
 using onnx_kernels::kernel::KernelContext;
@@ -619,6 +623,91 @@ TEST(KernelClass, ImageDecoderDecodesAsciiPgmGraymap) {
   Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(bytes.size())}, bytes);
 
   Tensor out = decoder(encoded, "Grayscale");
+  const std::vector<int64_t> expected_shape = {2, 2, 1};
+  EXPECT_EQ(out.shape, expected_shape);
+  const std::vector<uint8_t> expected_pixels = {0, 64, 128, 255};
+  EXPECT_EQ(out.data, expected_pixels);
+}
+
+// Capacity for the SimpleRawBufferAllocator used in allocator tests below.
+// Must be at least the maximum number of concurrent TemporaryTypedBuffer
+// allocations made by a single TryDecode* call: PNG uses 1 (rows), PNM uses 1
+// (src), JPEG uses up to 4 (one samples buffer per colour component).
+constexpr size_t kAllocatorTestCapacity = 8;
+
+TEST(KernelClass, ImageDecoderPngUsesAllocatorForInternalBuffers) {
+  // Verifies that TryDecodePng allocates its temporary `rows` buffer through
+  // the provided allocator and releases it before returning. The decoded pixels
+  // must match the reference values.
+  // clang-format off
+  const std::vector<uint8_t> png_bytes = {
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 2, 8, 2,
+    0, 0, 0, 253, 212, 154, 115, 0, 0, 0, 22, 73, 68, 65, 84, 120, 156, 99, 140, 10, 112, 147,
+    147, 147, 99, 148, 19, 225, 146, 147, 147, 3, 0, 16, 149, 1, 227, 30, 13, 52, 10, 0, 0, 0,
+    0, 73, 69, 78, 68, 174, 66, 96, 130,
+  };
+  // clang-format on
+  const KernelContext ctx{DefaultOpset(20)};
+  const ImageDecoder decoder{ctx};
+  Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(png_bytes.size())}, png_bytes);
+
+  SimpleRawBufferAllocator alloc(kAllocatorTestCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor out = decoder(encoded, "RGB", &rt);
+
+  // All temporary buffers must be freed after decoding.
+  EXPECT_EQ(alloc.allocated_count(), 0u);
+  // Output pixels must match the reference values.
+  const std::vector<int64_t> expected_shape = {2, 2, 3};
+  EXPECT_EQ(out.shape, expected_shape);
+  const std::vector<uint8_t> expected_pixels = {90, 80, 70, 120, 110, 100, 30, 20, 10, 60, 50, 40};
+  EXPECT_EQ(out.data, expected_pixels);
+}
+
+TEST(KernelClass, ImageDecoderJpegUsesAllocatorForInternalBuffers) {
+  // Verifies that TryDecodeJpeg allocates the per-component `samples`
+  // buffer through the provided allocator and releases it before returning.
+  const KernelContext ctx{DefaultOpset(20)};
+  const ImageDecoder decoder{ctx};
+  Tensor encoded =
+      Tensor::FromUint8("", {static_cast<int64_t>(sizeof(k_jpeg_rgb_in))},
+                        std::vector<uint8_t>(k_jpeg_rgb_in, k_jpeg_rgb_in + sizeof(k_jpeg_rgb_in)));
+
+  SimpleRawBufferAllocator alloc(kAllocatorTestCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor out = decoder(encoded, "RGB", &rt);
+
+  // All temporary buffers must be freed after decoding.
+  EXPECT_EQ(alloc.allocated_count(), 0u);
+  // Output must be a non-empty 16x16x3 tensor.
+  ASSERT_EQ(out.shape.size(), 3u);
+  EXPECT_EQ(out.shape[0], 16);
+  EXPECT_EQ(out.shape[1], 16);
+  EXPECT_EQ(out.shape[2], 3);
+}
+
+TEST(KernelClass, ImageDecoderPnmUsesAllocatorForInternalBuffers) {
+  // Verifies that TryDecodePnm allocates its temporary `src` buffer through
+  // the provided allocator and releases it before returning.
+  const KernelContext ctx{DefaultOpset(20)};
+  const ImageDecoder decoder{ctx};
+  const std::string pgm = "P2\n# graymap\n2 2\n255\n0 64\n128 255\n";
+  std::vector<uint8_t> bytes(pgm.begin(), pgm.end());
+  Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(bytes.size())}, bytes);
+
+  SimpleRawBufferAllocator alloc(kAllocatorTestCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor out = decoder(encoded, "Grayscale", &rt);
+
+  // All temporary buffers must be freed after decoding.
+  EXPECT_EQ(alloc.allocated_count(), 0u);
+  // Output pixels must match the reference values.
   const std::vector<int64_t> expected_shape = {2, 2, 1};
   EXPECT_EQ(out.shape, expected_shape);
   const std::vector<uint8_t> expected_pixels = {0, 64, 128, 255};

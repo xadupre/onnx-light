@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/kernels/math/matmul_shape_utils.h"
 
 #include "onnx_kernels/runtime_context.h"
-#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -143,16 +143,6 @@ ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t 
   return zps;
 }
 
-Shape PromoteMatMulShape(const Shape &shape, bool is_left) {
-  if (shape.size() == 1) {
-    if (is_left) {
-      return {1, shape[0]};
-    }
-    return {shape[0], 1};
-  }
-  return shape;
-}
-
 Shape ComputeStrides(const Shape &shape) {
   Shape strides;
   strides.assign(shape.size(), 1);
@@ -163,50 +153,17 @@ Shape ComputeStrides(const Shape &shape) {
   return strides;
 }
 
-Shape BroadcastPrefix(const Shape &a_prefix, const Shape &b_prefix) {
-  const size_t rank = std::max(a_prefix.size(), b_prefix.size());
-  Shape out;
-  out.assign(rank, 1);
-  for (size_t i = 0; i < rank; ++i) {
-    const bool has_a = i + a_prefix.size() >= rank;
-    const bool has_b = i + b_prefix.size() >= rank;
-    const int64_t da = has_a ? a_prefix[i - (rank - a_prefix.size())] : 1;
-    const int64_t db = has_b ? b_prefix[i - (rank - b_prefix.size())] : 1;
-    if (da == db || da == 1) {
-      out[i] = db;
-    } else if (db == 1) {
-      out[i] = da;
-    } else {
-      EXT_THROW_INVALID(kName, ": inputs are not broadcast-compatible on batch dimensions.");
-    }
-  }
-  return out;
-}
-
 Shape ComputeOutputShape(const Shape &a_shape, const Shape &b_shape) {
-  EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(), kName,
-                      ": rank-0 inputs are not accepted.");
-  const Shape a2 = PromoteMatMulShape(a_shape, true);
-  const Shape b2 = PromoteMatMulShape(b_shape, false);
-  EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2], kName,
-                      ": incompatible inner dimensions.");
-  Shape a_prefix, b_prefix;
-  a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
-  b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
-  Shape out_shape = BroadcastPrefix(a_prefix, b_prefix);
-  if (a_shape.size() != 1) {
-    out_shape.push_back(a2[a2.size() - 2]);
-  }
-  if (b_shape.size() != 1) {
-    out_shape.push_back(b2[b2.size() - 1]);
-  }
-  return out_shape;
+  return detail::ComputeMatMulOutputShape(
+      a_shape, b_shape, kName, ": rank-0 inputs are not accepted.",
+      ": incompatible inner dimensions.",
+      ": inputs are not broadcast-compatible on batch dimensions.");
 }
 
 void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tensor &b,
                       const ZeroPointValues &b_zps, Tensor &output) {
-  const Shape a2 = PromoteMatMulShape(a.shape, true);
-  const Shape b2 = PromoteMatMulShape(b.shape, false);
+  const Shape a2 = detail::PromoteMatMulShape(a.shape, true);
+  const Shape b2 = detail::PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
   const int64_t K = a2[a2.size() - 1];
   const int64_t N = b2[b2.size() - 1];
@@ -214,7 +171,8 @@ void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tenso
   Shape a_prefix, b_prefix;
   a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
   b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
-  const Shape out_prefix = BroadcastPrefix(a_prefix, b_prefix);
+  const Shape out_prefix = detail::BroadcastMatMulPrefix(
+      a_prefix, b_prefix, kName, ": inputs are not broadcast-compatible on batch dimensions.");
   const size_t batch_rank = out_prefix.size();
 
   const Shape a_strides = ComputeStrides(a2);
@@ -309,8 +267,8 @@ void ComputeMatMulInteger(const Tensor &a, const Tensor &b, const Tensor &a_zero
   EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(int32_t), kName,
                       ": preallocated output buffer size does not match its shape.");
 
-  const Shape a2 = PromoteMatMulShape(a.shape, true);
-  const Shape b2 = PromoteMatMulShape(b.shape, false);
+  const Shape a2 = detail::PromoteMatMulShape(a.shape, true);
+  const Shape b2 = detail::PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
   const int64_t N = b2[b2.size() - 1];
 

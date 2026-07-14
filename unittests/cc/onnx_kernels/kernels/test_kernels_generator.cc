@@ -534,6 +534,26 @@ TEST(KernelClass, RangeFloatPositiveDelta) {
   EXPECT_FLOAT_EQ(py[1], 3.0f);
 }
 
+TEST(KernelClass, RangeFloat16UsesExpectedBitPatterns) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Range kernel{ctx};
+  const Tensor start("", onnx_kernels::DataType::FLOAT16, {}, {0x00, 0x3C}); // 1.0f
+  const Tensor limit("", onnx_kernels::DataType::FLOAT16, {}, {0x00, 0x45}); // 5.0f
+  const Tensor delta("", onnx_kernels::DataType::FLOAT16, {}, {0x00, 0x40}); // 2.0f
+
+  const Tensor y = kernel(start, limit, delta);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(ReadUint16Element(y, 0), 0x3C00);
+  EXPECT_EQ(ReadUint16Element(y, 1), 0x4200);
+
+  Tensor y_in_place("", onnx_kernels::DataType::FLOAT16, {2},
+                    std::vector<uint8_t>(2 * sizeof(uint16_t)));
+  kernel(start, limit, delta, y_in_place);
+  EXPECT_EQ(ReadUint16Element(y_in_place, 0), 0x3C00);
+  EXPECT_EQ(ReadUint16Element(y_in_place, 1), 0x4200);
+}
+
 TEST(KernelClass, RangeInt32NegativeDelta) {
   const KernelContext ctx{DefaultOpset(11)};
   Range kernel{ctx};

@@ -4,6 +4,9 @@
 
 #include "onnx_kernels/kernels/image/include_image_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/temporary_buffer.h"
+#include "onnx_kernels/runtime_context.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -11,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -18,7 +22,6 @@
 #if defined(_WIN32)
 #include <windows.h>
 #elif defined(__APPLE__) || defined(__linux__) || defined(__unix__)
-#include "onnx_kernels/runtime_context.h"
 #include <dlfcn.h>
 #endif
 
@@ -473,7 +476,7 @@ struct ComponentInfo {
   int dc_table_id = 0;
   int ac_table_id = 0;
   int32_t prev_dc = 0;
-  std::vector<uint8_t> samples;
+  std::unique_ptr<detail::TemporaryTypedBuffer<uint8_t>> samples;
   int sample_width = 0;
   int sample_height = 0;
 };
@@ -694,7 +697,8 @@ bool DecodeBlock(JpegBitReader &reader, const HuffmanTable &dc_table, const Huff
 }
 
 bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_format,
-                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                   RawBufferAllocator *allocator) {
   // SOI marker.
   if (size < 4 || data[0] != 0xFF || data[1] != 0xD8) {
     return false;
@@ -912,7 +916,8 @@ bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_fo
     ComponentInfo &c = components[i];
     c.sample_width = mcu_cols * c.h_sampling * 8;
     c.sample_height = mcu_rows * c.v_sampling * 8;
-    c.samples.assign(static_cast<size_t>(c.sample_width) * c.sample_height, 0);
+    c.samples = std::make_unique<detail::TemporaryTypedBuffer<uint8_t>>(
+        static_cast<size_t>(c.sample_width) * c.sample_height, allocator, "JPEG samples");
     c.prev_dc = 0;
   }
 
@@ -934,7 +939,7 @@ bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_fo
             const int sample_x0 = (mx * c.h_sampling + bx) * 8;
             const int sample_y0 = (my * c.v_sampling + by) * 8;
             for (int yy = 0; yy < 8; ++yy) {
-              uint8_t *dst = c.samples.data() +
+              uint8_t *dst = c.samples->data() +
                              static_cast<size_t>(sample_y0 + yy) * c.sample_width + sample_x0;
               const uint8_t *src = block_samples.data() + yy * 8;
               for (int xx = 0; xx < 8; ++xx) {
@@ -995,10 +1000,10 @@ bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_fo
     const int wy2 = fancy_w2(vfac);
     const int wx1 = fancy_w1(hfac);
     const int wx2 = fancy_w2(hfac);
-    const int v11 = c.samples[static_cast<size_t>(sy1) * c.sample_width + sx1];
-    const int v12 = c.samples[static_cast<size_t>(sy1) * c.sample_width + sx2];
-    const int v21 = c.samples[static_cast<size_t>(sy2) * c.sample_width + sx1];
-    const int v22 = c.samples[static_cast<size_t>(sy2) * c.sample_width + sx2];
+    const int v11 = c.samples->data()[static_cast<size_t>(sy1) * c.sample_width + sx1];
+    const int v12 = c.samples->data()[static_cast<size_t>(sy1) * c.sample_width + sx2];
+    const int v21 = c.samples->data()[static_cast<size_t>(sy2) * c.sample_width + sx1];
+    const int v22 = c.samples->data()[static_cast<size_t>(sy2) * c.sample_width + sx2];
     const int total = (wy1 + wy2) * (wx1 + wx2);
     const int sum = wy1 * wx1 * v11 + wy1 * wx2 * v12 + wy2 * wx1 * v21 + wy2 * wx2 * v22;
     return static_cast<uint8_t>((sum + total / 2) / total);
@@ -1336,7 +1341,8 @@ bool Inflate(DeflateBitReader &br, std::vector<uint8_t> &out) {
 }
 
 bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_format,
-                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                  RawBufferAllocator *allocator) {
   static const uint8_t kSig[8] = {137, 80, 78, 71, 13, 10, 26, 10};
   // 8-byte signature + minimum IHDR (4 len + 4 tag + 13 data + 4 CRC) +
   // minimum IEND (4 + 4 + 0 + 4) = 8 + 25 + 12 = 45.
@@ -1432,7 +1438,8 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
   if (raw.size() < expected)
     return false;
 
-  std::vector<uint8_t> rows(static_cast<size_t>(height) * row_bytes);
+  detail::TemporaryTypedBuffer<uint8_t> rows(static_cast<size_t>(height) * row_bytes, allocator,
+                                             "PNG rows");
   const int bpp = src_channels;
   for (int r = 0; r < height; ++r) {
     uint8_t filt_type = raw[static_cast<size_t>(r) * (1u + row_bytes)];
@@ -1527,7 +1534,8 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
 
 #if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
 bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_format,
-                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                   RawBufferAllocator *allocator) {
   using GetInfoFn = int (*)(const uint8_t *, size_t, int *, int *);
   using DecodeRgbIntoFn = uint8_t *(*)(const uint8_t *, size_t, uint8_t *, size_t, int);
 
@@ -1605,19 +1613,20 @@ bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_fo
     return false;
   }
 
-  std::vector<uint8_t> rgb(pixel_count * 3u);
+  const size_t rgb_byte_count = pixel_count * 3u;
+  detail::TemporaryTypedBuffer<uint8_t> rgb(rgb_byte_count, allocator, "WebP rgb");
   const int rgb_stride = width * 3;
   const uint8_t *decoded =
-      s_webp_api.decode_rgb_into(data, size, rgb.data(), rgb.size(), rgb_stride);
+      s_webp_api.decode_rgb_into(data, size, rgb.data(), rgb_byte_count, rgb_stride);
   if (decoded != rgb.data()) {
     return false;
   }
 
   out_pixels.resize(pixel_count * static_cast<size_t>(channels));
   for (size_t i = 0; i < pixel_count; ++i) {
-    const uint8_t r = rgb[i * 3u + 0u];
-    const uint8_t g = rgb[i * 3u + 1u];
-    const uint8_t b = rgb[i * 3u + 2u];
+    const uint8_t r = rgb.data()[i * 3u + 0u];
+    const uint8_t g = rgb.data()[i * 3u + 1u];
+    const uint8_t b = rgb.data()[i * 3u + 2u];
     if (pixel_format == "RGB") {
       out_pixels[i * 3u + 0u] = r;
       out_pixels[i * 3u + 1u] = g;
@@ -1692,7 +1701,8 @@ bool PnmReadUint(const uint8_t *data, size_t size, size_t &pos, long &value) {
 }
 
 bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_format,
-                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                  RawBufferAllocator *allocator) {
   if (size < 2 || data[0] != 'P') {
     return false;
   }
@@ -1734,7 +1744,7 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
   }
   const size_t sample_count = pixel_count * static_cast<size_t>(src_channels);
 
-  std::vector<uint8_t> src(sample_count);
+  detail::TemporaryTypedBuffer<uint8_t> src(sample_count, allocator, "PNM src");
   const bool is_binary = (magic == '4' || magic == '5' || magic == '6');
   if (is_binary) {
     // Exactly one whitespace byte separates the header from the binary data.
@@ -1753,7 +1763,7 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
         for (size_t x = 0; x < w; ++x) {
           const uint8_t bit = (row[x >> 3] >> (7u - (x & 7u))) & 1u;
           // In PBM a set bit means black; map to 0 (black) / 255 (white).
-          src[y * w + x] = bit ? 0u : 255u;
+          src.data()[y * w + x] = bit ? 0u : 255u;
         }
       }
     } else {
@@ -1771,7 +1781,7 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
       if (pos >= size || (data[pos] != '0' && data[pos] != '1')) {
         return false;
       }
-      src[idx++] = (data[pos] == '1') ? 0u : 255u;
+      src.data()[idx++] = (data[pos] == '1') ? 0u : 255u;
       ++pos;
     }
   } else {
@@ -1784,14 +1794,15 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
       if (v > maxval) {
         v = maxval;
       }
-      src[i] = static_cast<uint8_t>(v);
+      src.data()[i] = static_cast<uint8_t>(v);
     }
   }
 
   // Scale 8-bit samples from ``[0, maxval]`` to ``[0, 255]`` when needed.
   if (!is_bitmap && maxval != 255) {
-    for (uint8_t &s : src) {
-      s = static_cast<uint8_t>((static_cast<int>(s) * 255 + maxval / 2) / maxval);
+    for (size_t i = 0; i < sample_count; ++i) {
+      src.data()[i] =
+          static_cast<uint8_t>((static_cast<int>(src.data()[i]) * 255 + maxval / 2) / maxval);
     }
   }
 
@@ -1802,11 +1813,11 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
     uint8_t g;
     uint8_t b;
     if (src_channels == 3) {
-      r = src[i * 3u + 0u];
-      g = src[i * 3u + 1u];
-      b = src[i * 3u + 2u];
+      r = src.data()[i * 3u + 0u];
+      g = src.data()[i * 3u + 1u];
+      b = src.data()[i * 3u + 2u];
     } else {
-      r = g = b = src[i];
+      r = g = b = src.data()[i];
     }
     if (pixel_format == "RGB") {
       out_pixels[i * 3u + 0u] = r;
@@ -1925,7 +1936,8 @@ int32_t OpjMemSeek(int64_t nb_bytes, void *user_data) {
 }
 
 bool TryDecodeJpeg2000(const uint8_t *data, size_t size, const std::string &pixel_format,
-                       int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                       int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                       RawBufferAllocator *allocator) {
   // OpenJPEG codec identifiers (``OPJ_CODEC_FORMAT``).
   constexpr int kCodecJ2k = 0;
   constexpr int kCodecJp2 = 2;
@@ -2078,7 +2090,7 @@ bool TryDecodeJpeg2000(const uint8_t *data, size_t size, const std::string &pixe
   // ``opj_dparameters_t`` is large (over 8 KiB) and version-dependent. Default
   // initialize it through the library and pass it straight back, so its layout
   // never has to be mirrored here.
-  std::vector<unsigned char> params(16384, 0);
+  detail::TemporaryTypedBuffer<uint8_t> params(16384, allocator, "JPEG2000 params");
 
   s_api.set_default_params(params.data());
   s_api.stream_set_read(stream, &OpjMemRead);
@@ -2185,16 +2197,17 @@ Tensor ImageDecoder::operator()(const Tensor &encoded_stream, const std::string 
   int64_t height = 0;
   int64_t width = 0;
   std::vector<uint8_t> pixels;
-  if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels) ||
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels, allocator) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels, allocator) ||
 #if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
       TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels, allocator) ||
 #endif
-      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels)
+      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels, allocator)
 #if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
-      || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels)
+      || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels, allocator)
 #endif
   ) {
     return Tensor::FromUint8("", {height, width, channels}, std::move(pixels));
@@ -2227,16 +2240,16 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
   int64_t height = 0;
   int64_t width = 0;
   std::vector<uint8_t> pixels;
-  if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels) ||
+  if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels, nullptr) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels, nullptr) ||
 #if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
       TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels, nullptr) ||
 #endif
-      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels)
+      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels, nullptr)
 #if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
-      || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels)
+      || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels, nullptr)
 #endif
   ) {
     EXT_ENFORCE_INVALID(output.shape[0] == height && output.shape[1] == width,

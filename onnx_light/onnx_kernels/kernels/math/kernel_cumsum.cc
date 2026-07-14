@@ -110,9 +110,9 @@ void CumulativeInPlace(const Tensor &x, int64_t axis, bool exclusive, bool rever
   }
 }
 
-template <typename T> Tensor CumAlloc(const Tensor &x) {
-  return Tensor("", x.data_type, x.shape,
-                std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(T)));
+template <typename T> Tensor CumAlloc(const Tensor &x, RawBufferAllocator *allocator) {
+  return MakeOutputTensor(x.data_type, x.shape, static_cast<size_t>(x.element_count()) * sizeof(T),
+                          allocator);
 }
 
 void ValidateOutput(const char *op_name, const Tensor &x, const Tensor &output) {
@@ -166,19 +166,20 @@ Tensor CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, b
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, kCumSumName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumSumName, ReadAxisScalar(kCumSumName, axis), rank);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   Tensor out;
   switch (x.data_type) {
   case DataType::FLOAT:
-    out = CumAlloc<float>(x);
+    out = CumAlloc<float>(x, allocator);
     break;
   case DataType::DOUBLE:
-    out = CumAlloc<double>(x);
+    out = CumAlloc<double>(x, allocator);
     break;
   case DataType::INT32:
-    out = CumAlloc<int32_t>(x);
+    out = CumAlloc<int32_t>(x, allocator);
     break;
   case DataType::INT64:
-    out = CumAlloc<int64_t>(x);
+    out = CumAlloc<int64_t>(x, allocator);
     break;
   default:
     EXT_THROW_INVALID(kCumSumName, ": unsupported data type ", x.data_type,
@@ -202,19 +203,20 @@ Tensor CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive, 
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, kCumProdName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumProdName, ReadAxisScalar(kCumProdName, axis), rank);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   Tensor out;
   switch (x.data_type) {
   case DataType::FLOAT:
-    out = CumAlloc<float>(x);
+    out = CumAlloc<float>(x, allocator);
     break;
   case DataType::DOUBLE:
-    out = CumAlloc<double>(x);
+    out = CumAlloc<double>(x, allocator);
     break;
   case DataType::INT32:
-    out = CumAlloc<int32_t>(x);
+    out = CumAlloc<int32_t>(x, allocator);
     break;
   case DataType::INT64:
-    out = CumAlloc<int64_t>(x);
+    out = CumAlloc<int64_t>(x, allocator);
     break;
   default:
     EXT_THROW_INVALID(kCumProdName, ": unsupported data type ", x.data_type,

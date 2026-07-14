@@ -78,6 +78,49 @@ def make_tick_label(output_name: str, node_type: str) -> str:
     return f"{str(output_name)[:5]}-{node_type}"
 
 
+def make_plot_assignments(args: argparse.Namespace) -> list[tuple[str, dict[str, int]]]:
+    """Builds the four configurations displayed on the memory plot."""
+
+    return [
+        (
+            f"current (past={args.past_sequence_length}, seq={args.sequence_length})",
+            {
+                "batch_size": args.batch,
+                "sequence_length": args.sequence_length,
+                "past_sequence_length": args.past_sequence_length,
+                "total_sequence_length": args.sequence_length + args.past_sequence_length,
+            },
+        ),
+        (
+            "past=0, seq=128",
+            {
+                "batch_size": args.batch,
+                "sequence_length": 128,
+                "past_sequence_length": 0,
+                "total_sequence_length": 128,
+            },
+        ),
+        (
+            "past=129, seq=1",
+            {
+                "batch_size": args.batch,
+                "sequence_length": 1,
+                "past_sequence_length": 129,
+                "total_sequence_length": 130,
+            },
+        ),
+        (
+            "past=256, seq=1",
+            {
+                "batch_size": args.batch,
+                "sequence_length": 1,
+                "past_sequence_length": 256,
+                "total_sequence_length": 257,
+            },
+        ),
+    ]
+
+
 def model_to_onnx(output_prefix, num_hidden_layers, batch, sequence_length, past_sequence_length):
     import torch
     from yobx.torch import to_onnx
@@ -208,12 +251,8 @@ def main() -> None:
     )
 
     print("-- create export")
-    assignment = {
-        "batch_size": args.batch,
-        "sequence_length": args.sequence_length,
-        "past_sequence_length": args.past_sequence_length,
-        "total_sequence_length": args.sequence_length + args.past_sequence_length,
-    }
+    plot_assignments = make_plot_assignments(args)
+    assignment = plot_assignments[0][1]
     total_bytes = [
         evaluate_memory_scalar(profile[NODE_MEMORY_TOTAL_BYTES_KEY], assignment)
         for profile in compute_context.memory
@@ -255,7 +294,12 @@ def main() -> None:
         print(memory_df.to_string(index=False))
 
     fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(node_indices, total_bytes, linewidth=1)
+    for label, plot_assignment in plot_assignments:
+        plot_total_bytes = [
+            evaluate_memory_scalar(profile[NODE_MEMORY_TOTAL_BYTES_KEY], plot_assignment)
+            for profile in compute_context.memory
+        ]
+        ax.plot(node_indices, plot_total_bytes, linewidth=1, label=label)
     tick_indices = [
         index
         for index in range(0, len(node_indices), TICK_INTERVAL)
@@ -273,6 +317,7 @@ def main() -> None:
     ax.set_xlabel("node index")
     ax.set_ylabel("total bytes")
     ax.grid(True, alpha=0.3)
+    ax.legend()
     fig.tight_layout()
     fig.savefig(f"{args.output_prefix}.png")
 

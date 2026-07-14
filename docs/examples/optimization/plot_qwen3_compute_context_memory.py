@@ -22,6 +22,7 @@ from onnx_light.onnx.backend import collect_test_cases_by_name
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
     ComputeContext,
+    NODE_MEMORY_INITIALIZERS_KEY,
     NODE_MEMORY_TOTAL_BYTES_KEY,
     ShapesContext,
     apply_inferred_shapes_to_model,
@@ -217,6 +218,13 @@ def main() -> None:
         evaluate_memory_scalar(profile[NODE_MEMORY_TOTAL_BYTES_KEY], assignment)
         for profile in compute_context.memory
     ]
+    initializer_bytes_per_node = [
+        sum(
+            evaluate_memory_scalar(v, assignment)
+            for v in profile.get(NODE_MEMORY_INITIALIZERS_KEY, {}).values()
+        )
+        for profile in compute_context.memory
+    ]
     node_indices = list(range(len(total_bytes)))
     event_key = "event"
     extra_keys = sorted(
@@ -233,6 +241,7 @@ def main() -> None:
             "input": ", ".join(map(str, node.input)) if node else "",
             "output": ", ".join(map(str, node.output)) if node else "",
             "memory": total_bytes[index],
+            "memory_without_initializers": total_bytes[index] - initializer_bytes_per_node[index],
             "event": profile.get(event_key, ""),
         }
         row.update({key: profile.get(key, "") for key in extra_keys})

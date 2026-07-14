@@ -1055,7 +1055,8 @@ class TopK : public KernelBase {
 public:
   using KernelBase::KernelBase;
   std::pair<Tensor, Tensor> operator()(const Tensor &x, int64_t k, int64_t axis = -1,
-                                       bool largest = true, bool sorted = true) const;
+                                       bool largest = true, bool sorted = true,
+                                       RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, int64_t k, int64_t axis, bool largest, bool sorted,
                   Tensor &values, Tensor &indices) const;
 

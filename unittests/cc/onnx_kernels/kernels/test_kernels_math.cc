@@ -1840,6 +1840,27 @@ TEST(KernelClass, TopKTieBreaksOnLowerIndex) {
   EXPECT_FLOAT_EQ(values.AsFloat()[1], 1.0f);
 }
 
+TEST(KernelClass, TopKClassUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(11)};
+  TopK topk_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {1, 4}, {3.0f, 1.0f, 4.0f, 2.0f});
+  SimpleRawBufferAllocator alloc(2);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  auto [values, indices] =
+      topk_kernel(x, /*k=*/2, /*axis=*/-1, /*largest=*/true, /*sorted=*/true, &rt);
+  EXPECT_TRUE(values.has_allocation());
+  EXPECT_TRUE(indices.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 2u);
+  ASSERT_EQ(values.shape, (std::vector<int64_t>{1, 2}));
+  EXPECT_FLOAT_EQ(values.AsFloat()[0], 4.0f);
+  EXPECT_FLOAT_EQ(values.AsFloat()[1], 3.0f);
+  EXPECT_EQ(indices.AsInt64()[0], 2);
+  EXPECT_EQ(indices.AsInt64()[1], 0);
+}
+
 // ---------------------------------------------------------------------------
 // PRelu kernel tests
 // ---------------------------------------------------------------------------

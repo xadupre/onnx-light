@@ -3,8 +3,11 @@ import pathlib
 import types
 import unittest
 
+from onnx_light.ext_test_case import import_or_skip
+
 
 def _load_example_module():
+    import_or_skip("onnx_light.onnx.backend")
     root = pathlib.Path(__file__).resolve().parents[2]
     source_path = (
         root / "docs" / "examples" / "optimization" / "plot_qwen3_compute_context_memory.py"

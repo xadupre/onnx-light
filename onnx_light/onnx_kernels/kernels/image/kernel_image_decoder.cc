@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -473,6 +474,8 @@ struct ByteBuffer {
   // exactly once before any accessor. Allocators must not return nullptr from
   // Allocate(); they must throw (e.g., std::bad_alloc) on failure instead.
   void assign(size_t n_bytes, RawBufferAllocator *alloc) {
+    assert(buffer_ == nullptr && fallback_.empty() &&
+           "ByteBuffer::assign() must be called exactly once");
     if (alloc != nullptr) {
       allocator_ = alloc;
       buffer_ = alloc->Allocate(n_bytes);
@@ -483,8 +486,14 @@ struct ByteBuffer {
 
   // Accessors below are only valid after a call to assign().
   bool is_allocator_backed() const noexcept { return buffer_ != nullptr; }
-  uint8_t *data() noexcept { return is_allocator_backed() ? buffer_->data() : fallback_.data(); }
+  uint8_t *data() noexcept {
+    assert((buffer_ != nullptr || !fallback_.empty()) &&
+           "ByteBuffer::data() called before assign()");
+    return is_allocator_backed() ? buffer_->data() : fallback_.data();
+  }
   const uint8_t *data() const noexcept {
+    assert((buffer_ != nullptr || !fallback_.empty()) &&
+           "ByteBuffer::data() called before assign()");
     return is_allocator_backed() ? buffer_->data() : fallback_.data();
   }
   uint8_t &operator[](size_t i) noexcept {

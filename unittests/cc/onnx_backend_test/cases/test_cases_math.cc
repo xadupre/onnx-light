@@ -996,9 +996,9 @@ TEST(BackendTestCase, BlackmanWindowCasesArePresent) {
     ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape[0], 10);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-    ASSERT_EQ(tc->model.ref_opset_import().size(), 1u);
-    EXPECT_EQ(tc->model.ref_opset_import()[0].version(), 17);
-    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(tc->model().ref_opset_import().size(), 1u);
+    EXPECT_EQ(tc->model().ref_opset_import()[0].version(), 17);
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const auto &op_type = graph.ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "BlackmanWindow");
@@ -1006,12 +1006,12 @@ TEST(BackendTestCase, BlackmanWindowCasesArePresent) {
 
   // The symmetric variant carries a ``periodic = 0`` attribute; the periodic
   // variant relies on the default and has no attribute.
-  ASSERT_EQ(symmetric->model.ref_graph().ref_node()[0].ref_attribute().size(), 1u);
-  const auto &attr = symmetric->model.ref_graph().ref_node()[0].ref_attribute()[0];
+  ASSERT_EQ(symmetric->model().ref_graph().ref_node()[0].ref_attribute().size(), 1u);
+  const auto &attr = symmetric->model().ref_graph().ref_node()[0].ref_attribute()[0];
   EXPECT_EQ(std::string(attr.ref_name().data(), attr.ref_name().size()), "periodic");
   EXPECT_EQ(attr.type(), AttributeProto::AttributeType::INT);
   EXPECT_EQ(attr.i(), 0);
-  EXPECT_EQ(periodic->model.ref_graph().ref_node()[0].ref_attribute().size(), 0u);
+  EXPECT_EQ(periodic->model().ref_graph().ref_node()[0].ref_attribute().size(), 0u);
 
   // Output values match the Blackman window reference formula.
   constexpr double kPi = 3.14159265358979323846;
@@ -1114,9 +1114,9 @@ TEST(BackendTestCase, HannWindowCasesArePresent) {
     ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape[0], 10);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-    ASSERT_EQ(tc->model.ref_opset_import().size(), 1u);
-    EXPECT_EQ(tc->model.ref_opset_import()[0].version(), 17);
-    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(tc->model().ref_opset_import().size(), 1u);
+    EXPECT_EQ(tc->model().ref_opset_import()[0].version(), 17);
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const auto &op_type = graph.ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "HannWindow");
@@ -1162,9 +1162,9 @@ TEST(BackendTestCase, HammingWindowCasesArePresent) {
     ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape[0], 10);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-    ASSERT_EQ(tc->model.ref_opset_import().size(), 1u);
-    EXPECT_EQ(tc->model.ref_opset_import()[0].version(), 17);
-    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(tc->model().ref_opset_import().size(), 1u);
+    EXPECT_EQ(tc->model().ref_opset_import()[0].version(), 17);
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const auto &op_type = graph.ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "HammingWindow");
@@ -1240,7 +1240,7 @@ TEST(BackendTestCase, ClipDefaultMaxNodeOmitsTrailingMinInput) {
   // *named* tensors (x and max).
   const TestCase *tc = FindCase(cases, "test_clip_default_max");
   ASSERT_NE(tc, nullptr);
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const auto &node_inputs = graph.ref_node()[0].ref_input();
   ASSERT_EQ(node_inputs.size(), 3u);
@@ -1250,24 +1250,25 @@ TEST(BackendTestCase, ClipDefaultMaxNodeOmitsTrailingMinInput) {
 
 TEST(BackendTestCase, BenchmarkModeProducesLargeInputCases) {
   std::vector<TestCase> registry;
-  // The following function builds the onnx models. It should not.
-  // It should return a function doing it.
+  // Collection must stay cheap: benchmark cases are lazy, so neither the
+  // ``ModelProto`` nor the (multi-million-element) input/output tensors are
+  // built here. We validate the declared element counts instead of
+  // materializing the cases.
   CollectMathTestCases(registry, "", onnx_backend_test::TestMode::BENCHMARK);
   ASSERT_FALSE(registry.empty());
   size_t benchmark_cases = 0;
   for (const auto &c : registry) {
-    ASSERT_EQ(c.data_sets.size(), 1u) << "case: " << c.name;
-    const auto &ds = c.data_sets[0];
-    ASSERT_FALSE(ds.inputs.empty()) << "case: " << c.name;
-    ASSERT_FALSE(ds.outputs.empty()) << "case: " << c.name;
     if (c.name.find("_benchmark") != std::string::npos) {
       ++benchmark_cases;
+      // Lazy cases must not have been materialized during collection.
+      EXPECT_TRUE(c.data_sets.empty()) << "benchmark case materialized eagerly: " << c.name;
+      EXPECT_TRUE(static_cast<bool>(c.build)) << "benchmark case missing builder: " << c.name;
       int64_t max_elems = 0;
-      for (const auto &in : ds.inputs) {
-        max_elems = std::max(max_elems, in.element_count());
+      for (int64_t n : c.declared_input_element_counts) {
+        max_elems = std::max(max_elems, n);
       }
-      for (const auto &out : ds.outputs) {
-        max_elems = std::max(max_elems, out.element_count());
+      for (int64_t n : c.declared_output_element_counts) {
+        max_elems = std::max(max_elems, n);
       }
       EXPECT_GE(max_elems, 1 << 13) << "benchmark case too small: " << c.name;
     }

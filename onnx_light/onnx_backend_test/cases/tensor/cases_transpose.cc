@@ -36,10 +36,14 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::Transpose transpose_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor data = Tensor::FromFloat("", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
-    const Tensor transposed = transpose_kernel(data, /*perm=*/{});
-    Expect(MakeTransposeNode(), {data}, {transposed}, "test_cc_transpose_default_perm_benchmark",
-           {opset}, "backend-test", registry);
+    NodeProto node = MakeTransposeNode();
+    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_transpose_default_perm_benchmark",
+                              {opset}, {4194304}, {4194304}, [transpose_kernel]() -> IoData {
+                                Tensor data = Tensor::FromFloat("", {2048, 2048},
+                                                                Randn<float>({2048, 2048}, 2001));
+                                Tensor transposed = transpose_kernel(data, /*perm=*/{});
+                                return IoData{{std::move(data)}, {std::move(transposed)}};
+                              });
     return;
   }
 

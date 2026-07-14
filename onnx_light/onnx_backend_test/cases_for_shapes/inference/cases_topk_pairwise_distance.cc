@@ -196,7 +196,7 @@ void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();
@@ -314,7 +314,7 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();
@@ -426,7 +426,7 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();
@@ -542,7 +542,7 @@ void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry, Te
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();
@@ -635,7 +635,7 @@ void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registr
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();

@@ -108,16 +108,19 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::Resize resize_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor X =
-        Tensor::FromFloat("", {1, 1, 1024, 1024}, Randn<float>({1, 1, 1024, 1024}, 2001));
-    const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
-    kernel::Resize::Attributes attrs;
-    attrs.mode = "nearest";
-    attrs.coordinate_transformation_mode = "asymmetric";
-    const Tensor Y = resize_kernel(X, scales, attrs);
-    Expect(MakeResizeNodeScales("nearest", "asymmetric"), {X, scales}, {Y},
-           "test_cc_resize_upsample_scales_nearest_asymmetric_benchmark", {opset13}, "backend-test",
-           registry);
+    NodeProto node = MakeResizeNodeScales("nearest", "asymmetric");
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_resize_upsample_scales_nearest_asymmetric_benchmark",
+        {opset13}, {1048576, 4}, {6291456}, [resize_kernel]() -> IoData {
+          Tensor X =
+              Tensor::FromFloat("", {1, 1, 1024, 1024}, Randn<float>({1, 1, 1024, 1024}, 2001));
+          Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
+          kernel::Resize::Attributes attrs;
+          attrs.mode = "nearest";
+          attrs.coordinate_transformation_mode = "asymmetric";
+          Tensor Y = resize_kernel(X, scales, attrs);
+          return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
+        });
     return;
   }
 

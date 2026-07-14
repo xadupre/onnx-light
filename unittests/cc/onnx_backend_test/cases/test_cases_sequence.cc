@@ -35,7 +35,7 @@ TEST(BackendTestCase, SequenceConstructCaseIsPresent) {
   }
   ASSERT_NE(seq_case, nullptr);
 
-  const GraphProto &graph = seq_case->model.ref_graph();
+  const GraphProto &graph = seq_case->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();
@@ -89,7 +89,7 @@ TEST(BackendTestCase, ConcatFromSequenceCasesAreRegistered) {
   // SequenceConstruct that bundles tensor inputs into a sequence, then
   // a ConcatFromSequence node that consumes the sequence.
   for (const TestCase *tc : {axis_0, axis_1, new_axis}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 2u) << tc->name;
     const NodeProto &seq_node = graph.ref_node()[0];
     EXPECT_EQ(seq_node.ref_op_type().as_string(), "SequenceConstruct");
@@ -132,7 +132,7 @@ TEST(BackendTestCase, SequenceLengthCaseIsPresent) {
   }
   ASSERT_NE(length_case, nullptr);
 
-  const GraphProto &graph = length_case->model.ref_graph();
+  const GraphProto &graph = length_case->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 2u);
   EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
   EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceLength");
@@ -172,7 +172,7 @@ TEST(BackendTestCase, SequenceEraseCasesAreRegistered) {
 
   // All cases share the same in-graph topology: SequenceConstruct → SequenceErase.
   for (const TestCase *tc : {default_case, pos1_case, neg_case}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
     EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
     EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceErase");
@@ -210,7 +210,7 @@ TEST(BackendTestCase, SequenceInsertCasesAreRegistered) {
   ASSERT_NE(neg_case, nullptr);
 
   for (const TestCase *tc : {default_case, pos1_case, neg_case}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
     EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
     EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceInsert");
@@ -245,7 +245,7 @@ TEST(BackendTestCase, SequenceAtCasesAreRegistered) {
 
   // All cases share the same in-graph topology: SequenceConstruct → SequenceAt.
   for (const TestCase *tc : {pos0_case, pos2_case, neg_case}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
     EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
     EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceAt");
@@ -291,7 +291,7 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   ASSERT_NE(extract_shapes, nullptr);
 
   for (const TestCase *tc : {float_case, int64_case}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
     EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
     EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceMap");
@@ -317,7 +317,7 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
 
   // identity_2_sequences: 2 SequenceConstruct + 1 SequenceMap → 2 output sequences.
   {
-    const GraphProto &g = identity_2_seq->model.ref_graph();
+    const GraphProto &g = identity_2_seq->model().ref_graph();
     ASSERT_EQ(g.ref_node().size(), 3u);
     EXPECT_EQ(g.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
     EXPECT_EQ(g.ref_node()[1].ref_op_type().as_string(), "SequenceConstruct");
@@ -335,7 +335,7 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
 
   // add_2_sequences: 2 SequenceConstruct + 1 SequenceMap → 1 output sequence.
   {
-    const GraphProto &g = add_2_seq->model.ref_graph();
+    const GraphProto &g = add_2_seq->model().ref_graph();
     ASSERT_EQ(g.ref_node().size(), 3u);
     EXPECT_EQ(g.ref_node()[2].ref_op_type().as_string(), "SequenceMap");
     const NodeProto &map_node = g.ref_node()[2];
@@ -357,7 +357,7 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   // add_1_sequence_1_tensor: 1 SequenceConstruct + 1 SequenceMap, with a
   // broadcast tensor as the second SequenceMap input.
   {
-    const GraphProto &g = add_1_seq_1_tensor->model.ref_graph();
+    const GraphProto &g = add_1_seq_1_tensor->model().ref_graph();
     ASSERT_EQ(g.ref_node().size(), 2u);
     EXPECT_EQ(g.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
     EXPECT_EQ(g.ref_node()[1].ref_op_type().as_string(), "SequenceMap");
@@ -377,7 +377,7 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   // extract_shapes: 1 SequenceConstruct + 1 SequenceMap with Shape body
   // and 3 inputs of distinct rank-3 shapes → INT64[3, 3] output.
   {
-    const GraphProto &g = extract_shapes->model.ref_graph();
+    const GraphProto &g = extract_shapes->model().ref_graph();
     ASSERT_EQ(g.ref_node().size(), 2u);
     EXPECT_EQ(g.ref_node()[1].ref_op_type().as_string(), "SequenceMap");
     const NodeProto &map_node = g.ref_node()[1];
@@ -428,7 +428,7 @@ TEST(BackendTestCase, SequenceEmptyCasesAreRegistered) {
 
   // Both cases share the same in-graph topology: SequenceEmpty → SequenceLength.
   for (const TestCase *tc : {default_case, int64_case}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 2u) << tc->name;
     EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceEmpty");
     EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceLength");
@@ -447,9 +447,10 @@ TEST(BackendTestCase, SequenceEmptyCasesAreRegistered) {
   }
 
   // The default case has no 'dtype' attribute; the int64 case sets it to INT64.
-  EXPECT_EQ(default_case->model.ref_graph().ref_node()[0].ref_attribute().size(), 0u);
-  ASSERT_EQ(int64_case->model.ref_graph().ref_node()[0].ref_attribute().size(), 1u);
-  const AttributeProto &dtype_attr = int64_case->model.ref_graph().ref_node()[0].ref_attribute()[0];
+  EXPECT_EQ(default_case->model().ref_graph().ref_node()[0].ref_attribute().size(), 0u);
+  ASSERT_EQ(int64_case->model().ref_graph().ref_node()[0].ref_attribute().size(), 1u);
+  const AttributeProto &dtype_attr =
+      int64_case->model().ref_graph().ref_node()[0].ref_attribute()[0];
   EXPECT_EQ(dtype_attr.ref_name().as_string(), "dtype");
   EXPECT_EQ(dtype_attr.ref_type(), AttributeProto::AttributeType::INT);
   EXPECT_EQ(dtype_attr.ref_i(), static_cast<int64_t>(TensorProto::INT64));
@@ -475,7 +476,7 @@ TEST(BackendTestCase, SplitToSequenceCasesAreRegistered) {
 
   // All cases have a single SplitToSequence node and a sequence-typed output.
   for (const TestCase *tc : {case1, case2, case_nokd}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u) << tc->name;
     EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SplitToSequence") << tc->name;
     ASSERT_EQ(graph.ref_output().size(), 1u);

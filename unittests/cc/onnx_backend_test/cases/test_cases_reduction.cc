@@ -42,7 +42,7 @@ void CheckReduceSumCasePresent(const std::vector<TestCase> &cases, const std::st
   const TestCase *tc = FindCase(cases, name);
   ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();
@@ -132,7 +132,7 @@ TEST(BackendTestCase, ReduceMaxCasesRegistered) {
   const auto cases = CollectTestCases("ReduceMax");
   const TestCase *keepdims = FindCase(cases, "test_cc_reducemax_keepdims");
   ASSERT_NE(keepdims, nullptr);
-  const GraphProto &graph = keepdims->model.ref_graph();
+  const GraphProto &graph = keepdims->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op = node.ref_op_type();
@@ -185,7 +185,7 @@ TEST(BackendTestCase, ReduceMinCasesRegistered) {
   const auto cases = CollectTestCases("ReduceMin");
   const TestCase *keepdims = FindCase(cases, "test_cc_reducemin_keepdims");
   ASSERT_NE(keepdims, nullptr);
-  const GraphProto &graph = keepdims->model.ref_graph();
+  const GraphProto &graph = keepdims->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op = node.ref_op_type();
@@ -241,7 +241,7 @@ TEST(BackendTestCase, ReduceL1CasesRegistered) {
   const auto cases = CollectTestCases("ReduceL1");
   const TestCase *keepdims = FindCase(cases, "test_cc_reducel1_keepdims");
   ASSERT_NE(keepdims, nullptr);
-  const GraphProto &graph = keepdims->model.ref_graph();
+  const GraphProto &graph = keepdims->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op = node.ref_op_type();
@@ -289,7 +289,7 @@ TEST(BackendTestCase, ReduceL2CasesRegistered) {
   const auto cases = CollectTestCases("ReduceL2");
   const TestCase *keepdims = FindCase(cases, "test_cc_reducel2_keepdims");
   ASSERT_NE(keepdims, nullptr);
-  const GraphProto &graph = keepdims->model.ref_graph();
+  const GraphProto &graph = keepdims->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op = node.ref_op_type();
@@ -330,7 +330,7 @@ TEST(BackendTestCase, ReduceSumSquareCasesRegistered) {
   const auto cases = CollectTestCases("ReduceSumSquare");
   const TestCase *keepdims = FindCase(cases, "test_cc_reducesumsquare_keepdims");
   ASSERT_NE(keepdims, nullptr);
-  const GraphProto &graph = keepdims->model.ref_graph();
+  const GraphProto &graph = keepdims->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op = node.ref_op_type();
@@ -387,7 +387,7 @@ TEST(BackendTestCase, ReduceProdCasesRegistered) {
   const auto cases = CollectTestCases("ReduceProd");
   const TestCase *keepdims = FindCase(cases, "test_cc_reduceprod_keepdims");
   ASSERT_NE(keepdims, nullptr);
-  const GraphProto &graph = keepdims->model.ref_graph();
+  const GraphProto &graph = keepdims->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op = node.ref_op_type();
@@ -437,7 +437,7 @@ TEST(BackendTestCase, ReduceMeanCasesRegistered) {
   const auto cases = CollectTestCases("ReduceMean");
   const TestCase *keepdims = FindCase(cases, "test_cc_reducemean_keepdims");
   ASSERT_NE(keepdims, nullptr);
-  const GraphProto &graph = keepdims->model.ref_graph();
+  const GraphProto &graph = keepdims->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op = node.ref_op_type();
@@ -477,7 +477,7 @@ void CheckArgReduceCasePresent(const std::vector<TestCase> &cases, const std::st
   const TestCase *tc = FindCase(cases, name);
   ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op = node.ref_op_type();

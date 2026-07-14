@@ -94,13 +94,16 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
     node.add_input("x_scale");
     node.add_output("y");
 
-    Tensor x = Tensor::FromUint8("", {kBenchmarkElementwiseSize},
-                                 RandUint<uint8_t>(256, {kBenchmarkElementwiseSize}, 2511));
-    Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
-    Tensor y = dequantize_kernel(x, x_scale);
-
-    Expect(node, {x, x_scale}, {y}, "test_cc_dequantizelinear_benchmark", {opset}, "backend-test",
-           registry);
+    const int64_t count = kBenchmarkElementwiseSize;
+    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_dequantizelinear_benchmark",
+                              {opset}, {count, 1}, {count}, [dequantize_kernel]() -> IoData {
+                                Tensor x = Tensor::FromUint8(
+                                    "", {kBenchmarkElementwiseSize},
+                                    RandUint<uint8_t>(256, {kBenchmarkElementwiseSize}, 2511));
+                                Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
+                                Tensor y = dequantize_kernel(x, x_scale);
+                                return IoData{{std::move(x), std::move(x_scale)}, {std::move(y)}};
+                              });
     return;
   }
 

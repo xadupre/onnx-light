@@ -130,12 +130,15 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCastLikeNode();
-    Tensor input = Tensor::FromFloat("input", {kBenchmarkElementwiseSize},
-                                     Randn<float>({kBenchmarkElementwiseSize}, 2001));
-    Tensor target_type = Tensor::FromDouble("target_type", {1}, {0.0});
-    Tensor output = castlike_kernel(input, target_type);
-    Expect(node, {input, target_type}, {output}, "test_cc_castlike_FLOAT_to_DOUBLE_benchmark",
-           {opset}, "backend-test", registry);
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_castlike_FLOAT_to_DOUBLE_benchmark", {opset},
+        {kBenchmarkElementwiseSize, 1}, {kBenchmarkElementwiseSize}, [castlike_kernel]() -> IoData {
+          Tensor input = Tensor::FromFloat("input", {kBenchmarkElementwiseSize},
+                                           Randn<float>({kBenchmarkElementwiseSize}, 2001));
+          Tensor target_type = Tensor::FromDouble("target_type", {1}, {0.0});
+          Tensor output = castlike_kernel(input, target_type);
+          return IoData{{std::move(input), std::move(target_type)}, {std::move(output)}};
+        });
     return;
   }
 

@@ -25,9 +25,13 @@ void RegisterHannWindowCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("HannWindow");
     node.add_input("x");
     node.add_output("y");
-    Tensor x = Tensor::FromInt32("", {}, {1 << 22});
-    Tensor y = hann_kernel(x, /*periodic=*/true);
-    Expect(node, {x}, {y}, "test_cc_hannwindow_benchmark", {opset}, "backend-test", registry);
+    const int64_t size = 1 << 22;
+    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_hannwindow_benchmark", {opset},
+                              {1}, {size}, [hann_kernel, size]() -> IoData {
+                                Tensor x = Tensor::FromInt32("", {}, {static_cast<int32_t>(size)});
+                                Tensor y = hann_kernel(x, /*periodic=*/true);
+                                return IoData{{std::move(x)}, {std::move(y)}};
+                              });
     return;
   }
 

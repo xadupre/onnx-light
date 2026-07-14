@@ -47,11 +47,15 @@ void RegisterReshapeCases(std::vector<TestCase> &registry, TestMode mode) {
     const OpsetId opset = DefaultOpset(13);
     const kernel::KernelContext ctx{opset};
     const kernel::Reshape reshape_kernel{ctx};
-    const Tensor data = Tensor::FromFloat("", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
-    const Tensor shape = MakeShapeTensor({4096, 1024});
-    const Tensor output = reshape_kernel(data, shape);
-    Expect(MakeReshapeNode(), {data, shape}, {output}, "test_cc_reshape_reordered_benchmark",
-           {opset}, "backend-test", registry);
+    NodeProto node = MakeReshapeNode();
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_reshape_reordered_benchmark", {opset},
+        {kBenchmarkElementwiseSize, 2}, {kBenchmarkElementwiseSize}, [reshape_kernel]() -> IoData {
+          Tensor data = Tensor::FromFloat("", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+          Tensor shape = MakeShapeTensor({4096, 1024});
+          Tensor output = reshape_kernel(data, shape);
+          return IoData{{std::move(data), std::move(shape)}, {std::move(output)}};
+        });
     return;
   }
   {

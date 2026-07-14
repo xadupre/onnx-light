@@ -37,20 +37,25 @@ void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::GatherND gnd_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    std::vector<int32_t> data_values(kBenchmarkElementwiseSize);
-    for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
-      data_values[static_cast<std::size_t>(i)] = static_cast<int32_t>(i % 65536);
-    }
-    Tensor data = Tensor::FromInt32("", {4096, 1024}, data_values);
-    std::vector<int64_t> index_values(kBenchmarkElementwiseSize * 2);
-    for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
-      index_values[static_cast<std::size_t>(2 * i)] = i % 4096;
-      index_values[static_cast<std::size_t>(2 * i + 1)] = i % 1024;
-    }
-    Tensor indices = Tensor::FromInt64("", {kBenchmarkElementwiseSize, 2}, index_values);
-    Tensor output = gnd_kernel(data, indices, 0);
-    Expect(MakeGatherNDNode(0, true), {data, indices}, {output},
-           "test_cc_gathernd_example_int32_benchmark", {opset}, "backend-test", registry);
+    NodeProto node = MakeGatherNDNode(0, true);
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_gathernd_example_int32_benchmark", {opset},
+        {kBenchmarkElementwiseSize, kBenchmarkElementwiseSize * 2}, {kBenchmarkElementwiseSize},
+        [gnd_kernel]() -> IoData {
+          std::vector<int32_t> data_values(kBenchmarkElementwiseSize);
+          for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
+            data_values[static_cast<std::size_t>(i)] = static_cast<int32_t>(i % 65536);
+          }
+          Tensor data = Tensor::FromInt32("", {4096, 1024}, data_values);
+          std::vector<int64_t> index_values(kBenchmarkElementwiseSize * 2);
+          for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
+            index_values[static_cast<std::size_t>(2 * i)] = i % 4096;
+            index_values[static_cast<std::size_t>(2 * i + 1)] = i % 1024;
+          }
+          Tensor indices = Tensor::FromInt64("", {kBenchmarkElementwiseSize, 2}, index_values);
+          Tensor output = gnd_kernel(data, indices, 0);
+          return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+        });
     return;
   }
 

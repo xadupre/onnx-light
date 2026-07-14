@@ -32,10 +32,14 @@ void RegisterMinCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_1");
     node.add_output("result");
     const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
-    Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 421));
-    Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 422));
-    Tensor z = min_kernel({x0, x1});
-    Expect(node, {x0, x1}, {z}, "test_cc_min_benchmark", {opset}, "backend-test", registry);
+    const int64_t count = kBenchmarkElementwiseSize;
+    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_min_benchmark", {opset},
+                              {count, count}, {count}, [min_kernel, shape]() -> IoData {
+                                Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 421));
+                                Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 422));
+                                Tensor z = min_kernel({x0, x1});
+                                return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+                              });
     return;
   }
 

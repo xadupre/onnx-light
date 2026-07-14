@@ -621,7 +621,7 @@ void RegisterLoop13SeqCase(std::vector<TestCase> &registry) {
                  FloatBytes({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}));
 
   TestCase tc(name, name);
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, /*ir_version=*/13, {opset});
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
@@ -918,7 +918,7 @@ void RegisterLoop16SeqNoneCase(std::vector<TestCase> &registry) {
                  FloatBytes({0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f}));
 
   TestCase tc(name, name);
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, /*ir_version=*/9, {opset});
   GraphProto *graph = model.add_graph();
   graph->set_name(name);

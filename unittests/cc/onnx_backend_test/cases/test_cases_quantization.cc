@@ -86,7 +86,7 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
 
   // Default UINT8 case: two inputs (x, y_scale), single UINT8 output.
   {
-    const GraphProto &graph = uint8_case->model.ref_graph();
+    const GraphProto &graph = uint8_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -107,7 +107,7 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
 
   // INT8 case: three inputs (x, y_scale, y_zero_point), single INT8 output.
   {
-    const GraphProto &graph = int8_case->model.ref_graph();
+    const GraphProto &graph = int8_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     EXPECT_EQ(graph.ref_input().size(), 3u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
@@ -162,7 +162,7 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
 
   // Upstream per-axis UINT8 case (test_quantizelinear_axis).
   {
-    const GraphProto &graph = axis_case->model.ref_graph();
+    const GraphProto &graph = axis_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &n = graph.ref_node()[0];
     ASSERT_EQ(n.ref_attribute().size(), 1u);
@@ -316,7 +316,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
 
   // Default UINT8 case: two inputs (x, x_scale), single FLOAT output.
   {
-    const GraphProto &graph = uint8_case->model.ref_graph();
+    const GraphProto &graph = uint8_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -338,7 +338,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
 
   // INT8 case: three inputs (x, x_scale, x_zero_point), single FLOAT output.
   {
-    const GraphProto &graph = int8_case->model.ref_graph();
+    const GraphProto &graph = int8_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     EXPECT_EQ(graph.ref_input().size(), 3u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
@@ -445,7 +445,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   // the default ``axis`` (1), so the saved NodeProto has no explicit ``axis``
   // attribute; the per-channel layout is inferred from the scale shape.
   {
-    const GraphProto &graph = axis_case->model.ref_graph();
+    const GraphProto &graph = axis_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &n = graph.ref_node()[0];
     EXPECT_EQ(n.ref_attribute().size(), 0u);
@@ -469,7 +469,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   // Upstream blocked UINT8 case (test_dequantizelinear_blocked): axis=1,
   // block_size=2.
   {
-    const GraphProto &graph = blocked_case->model.ref_graph();
+    const GraphProto &graph = blocked_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &n = graph.ref_node()[0];
     ASSERT_EQ(n.ref_attribute().size(), 2u);
@@ -504,7 +504,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   // Upstream FLOAT8E4M3FN -> FLOAT16 case (test_dequantizelinear_e4m3fn_float16):
   // axis=0, scalar FLOAT16 x_scale, FLOAT16 output.
   {
-    const GraphProto &graph = e4m3fn_float16_case->model.ref_graph();
+    const GraphProto &graph = e4m3fn_float16_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &n = graph.ref_node()[0];
     ASSERT_EQ(n.ref_attribute().size(), 1u);

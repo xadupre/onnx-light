@@ -41,12 +41,15 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_output("z");
 
     const std::vector<int64_t> shape = {1024, 4096};
-    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9201));
-    Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9202));
-    Tensor z = ge_kernel(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_greater_or_equal_benchmark", {opset}, "backend-test",
-           registry);
+    const int64_t count = 1024 * 4096;
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_greater_or_equal_benchmark", {opset}, {count, count},
+        {count}, [ge_kernel, shape]() -> IoData {
+          Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9201));
+          Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9202));
+          Tensor z = ge_kernel(x, y);
+          return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+        });
     return;
   }
 

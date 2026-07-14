@@ -53,7 +53,7 @@ TEST(BackendTestCase, ConstantCaseIsPresent) {
 
   // Single-node ``Constant`` topology: no graph inputs, one tensor output
   // declared from the ``value`` attribute.
-  const GraphProto &graph = constant->model.ref_graph();
+  const GraphProto &graph = constant->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();
@@ -93,7 +93,7 @@ TEST(BackendTestCase, ConstantUpstreamOnnxCaseHasExpectedShape) {
   const TestCase *tc = FindCase(cases, "test_constant");
   ASSERT_NE(tc, nullptr);
 
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();
@@ -166,7 +166,7 @@ TEST(BackendTestCase, ConstantAttributeVariantCasesArePresent) {
     SCOPED_TRACE(v.name);
     const TestCase *tc = FindCase(cases, v.name);
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -193,7 +193,7 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_constantofshape_float_ones");
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -263,7 +263,7 @@ TEST(BackendTestCase, EyeLikeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_eyelike_without_dtype");
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -279,7 +279,7 @@ TEST(BackendTestCase, EyeLikeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_eyelike_with_dtype");
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 2u);
@@ -293,7 +293,7 @@ TEST(BackendTestCase, EyeLikeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_eyelike_populate_off_main_diagonal");
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 2u);
@@ -318,7 +318,7 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
   ASSERT_NE(seeded, nullptr);
 
   for (const TestCase *tc : {plain, doubled, seeded}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -334,7 +334,7 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
 
   // Plain case: no attributes, output dtype matches input (FLOAT).
   {
-    const NodeProto &node = plain->model.ref_graph().ref_node()[0];
+    const NodeProto &node = plain->model().ref_graph().ref_node()[0];
     EXPECT_EQ(node.ref_attribute().size(), 0u);
     EXPECT_EQ(plain->data_sets[0].outputs[0].data_type,
               static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
@@ -342,7 +342,7 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
 
   // DOUBLE case: ``dtype`` attribute promotes the output to DOUBLE.
   {
-    const NodeProto &node = doubled->model.ref_graph().ref_node()[0];
+    const NodeProto &node = doubled->model().ref_graph().ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 1u);
     const auto &attr = node.ref_attribute()[0];
     const auto &attr_name = attr.ref_name();
@@ -355,7 +355,7 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
 
   // Seeded case: ``seed`` attribute is present.
   {
-    const NodeProto &node = seeded->model.ref_graph().ref_node()[0];
+    const NodeProto &node = seeded->model().ref_graph().ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 1u);
     const auto &attr = node.ref_attribute()[0];
     const auto &attr_name = attr.ref_name();
@@ -388,7 +388,7 @@ TEST(BackendTestCase, DelayedInitializerCasesArePresent) {
   for (const auto &entry : expected) {
     const TestCase *tc = FindCase(cases, entry.name);
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     EXPECT_EQ(ConvertUtilsString(node.ref_op_type()), "DelayedInitializer");
@@ -432,7 +432,7 @@ void CheckRandomCasePresent(const std::vector<TestCase> &cases, const std::strin
                             const std::string &expected_op_type, int expected_inputs) {
   const TestCase *tc = FindCase(cases, name);
   ASSERT_NE(tc, nullptr) << "missing case: " << name;
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();

@@ -137,7 +137,7 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
 
   // Default 2x2 case: single input, single output of shape 1x1x3x3.
   {
-    const GraphProto &graph = def->model.ref_graph();
+    const GraphProto &graph = def->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -239,7 +239,7 @@ TEST(BackendTestCase, BatchNormalizationCasesArePresent) {
   // Example case: BatchNormalization node with 5 inputs and 1 output of shape
   // 1x2x1x3.
   {
-    const GraphProto &graph = example->model.ref_graph();
+    const GraphProto &graph = example->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -270,7 +270,7 @@ TEST(BackendTestCase, BatchNormalizationCasesArePresent) {
       }
     }
     ASSERT_NE(training, nullptr);
-    const GraphProto &graph = training->model.ref_graph();
+    const GraphProto &graph = training->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     EXPECT_EQ(graph.ref_input().size(), 5u);
     ASSERT_EQ(graph.ref_output().size(), 3u);
@@ -415,7 +415,7 @@ TEST(BackendTestCase, RNNCasesArePresent) {
   // ``simple_rnn_defaults``: RNN node with X/W/R inputs and Y_h output only
   // (Y is skipped via an empty output name). Y_h has shape [1, 3, 4].
   {
-    const GraphProto &graph = defaults->model.ref_graph();
+    const GraphProto &graph = defaults->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -433,7 +433,7 @@ TEST(BackendTestCase, RNNCasesArePresent) {
 
   // ``simple_rnn_with_initial_bias``: full Y output too, shape [2, 1, 3, 4].
   {
-    const GraphProto &graph = with_initial_bias->model.ref_graph();
+    const GraphProto &graph = with_initial_bias->model().ref_graph();
     ASSERT_EQ(graph.ref_output().size(), 2u);
     const auto &ds = with_initial_bias->data_sets[0];
     ASSERT_EQ(ds.outputs.size(), 2u);
@@ -444,7 +444,7 @@ TEST(BackendTestCase, RNNCasesArePresent) {
   // ``rnn_seq_length``: X/W/R/B inputs, Y_h-only output with shape
   // [1, 3, 5] (num_directions=1, batch_size=3, hidden_size=5).
   {
-    const GraphProto &graph = seq_length->model.ref_graph();
+    const GraphProto &graph = seq_length->model().ref_graph();
     ASSERT_EQ(graph.ref_input().size(), 4u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
     const auto &ds = seq_length->data_sets[0];
@@ -457,7 +457,7 @@ TEST(BackendTestCase, RNNCasesArePresent) {
   // Y has shape [batch, seq, num_directions, hidden] = [3, 1, 1, 4] and
   // Y_h has shape [batch, num_directions, hidden] = [3, 1, 4].
   {
-    const GraphProto &graph = batchwise->model.ref_graph();
+    const GraphProto &graph = batchwise->model().ref_graph();
     ASSERT_EQ(graph.ref_input().size(), 3u);
     ASSERT_EQ(graph.ref_output().size(), 2u);
     const auto &ds = batchwise->data_sets[0];
@@ -484,7 +484,7 @@ TEST(BackendTestCase, AttentionCasesArePresent) {
   ASSERT_NE(gqa, nullptr);
 
   for (const TestCase *tc : {basic, gqa}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -521,7 +521,7 @@ TEST(BackendTestCase, DropoutCasesArePresent) {
   ASSERT_NE(training, nullptr);
 
   {
-    const GraphProto &graph = inference->model.ref_graph();
+    const GraphProto &graph = inference->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "Dropout");
@@ -534,7 +534,7 @@ TEST(BackendTestCase, DropoutCasesArePresent) {
   }
 
   {
-    const GraphProto &graph = training->model.ref_graph();
+    const GraphProto &graph = training->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "Dropout");
@@ -617,7 +617,7 @@ TEST(BackendTestCase, LSTMCasesArePresent) {
   // ``lstm_defaults``: LSTM node with X/W/R inputs and Y_h output only.
   // Y_h has shape [1, 3, 3] (num_directions=1, batch=3, hidden=3).
   {
-    const GraphProto &graph = defaults->model.ref_graph();
+    const GraphProto &graph = defaults->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "LSTM");
@@ -635,7 +635,7 @@ TEST(BackendTestCase, LSTMCasesArePresent) {
   // ``lstm_with_initial_bias``: X/W/R/B inputs, Y_h-only output of shape
   // [1, 3, 4] (num_directions=1, batch=3, hidden=4).
   {
-    const GraphProto &graph = with_initial_bias->model.ref_graph();
+    const GraphProto &graph = with_initial_bias->model().ref_graph();
     ASSERT_EQ(graph.ref_input().size(), 4u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
     const auto &ds = with_initial_bias->data_sets[0];
@@ -647,7 +647,7 @@ TEST(BackendTestCase, LSTMCasesArePresent) {
   // ``lstm_with_peepholes``: 8 inputs (X, W, R, B, sequence_lens,
   // initial_h, initial_c, P), Y_h-only output of shape [1, 2, 3].
   {
-    const GraphProto &graph = with_peepholes->model.ref_graph();
+    const GraphProto &graph = with_peepholes->model().ref_graph();
     ASSERT_EQ(graph.ref_input().size(), 8u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
     const auto &ds = with_peepholes->data_sets[0];
@@ -662,7 +662,7 @@ TEST(BackendTestCase, LSTMCasesArePresent) {
   // hidden_size=7. Y has shape [batch, seq, num_directions, hidden] =
   // [3, 1, 1, 7] and Y_h has shape [batch, num_directions, hidden] = [3, 1, 7].
   {
-    const GraphProto &graph = batchwise->model.ref_graph();
+    const GraphProto &graph = batchwise->model().ref_graph();
     ASSERT_EQ(graph.ref_input().size(), 3u);
     ASSERT_EQ(graph.ref_output().size(), 2u);
     const auto &ds = batchwise->data_sets[0];
@@ -700,7 +700,7 @@ TEST(BackendTestCase, GRUCasesArePresent) {
   // (Y is skipped via an empty output name). Y_h has shape [1, 3, 5]
   // (num_directions=1, batch=3, hidden=5).
   {
-    const GraphProto &graph = defaults->model.ref_graph();
+    const GraphProto &graph = defaults->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "GRU");
@@ -718,7 +718,7 @@ TEST(BackendTestCase, GRUCasesArePresent) {
   // ``gru_with_initial_bias``: X/W/R/B inputs, Y_h-only output of shape
   // [1, 3, 3] (num_directions=1, batch=3, hidden=3).
   {
-    const GraphProto &graph = with_initial_bias->model.ref_graph();
+    const GraphProto &graph = with_initial_bias->model().ref_graph();
     ASSERT_EQ(graph.ref_input().size(), 4u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
     const auto &ds = with_initial_bias->data_sets[0];
@@ -730,7 +730,7 @@ TEST(BackendTestCase, GRUCasesArePresent) {
   // ``gru_seq_length``: X/W/R/B inputs, Y_h-only output with shape
   // [1, 3, 5] (num_directions=1, batch_size=3, hidden_size=5).
   {
-    const GraphProto &graph = seq_length->model.ref_graph();
+    const GraphProto &graph = seq_length->model().ref_graph();
     ASSERT_EQ(graph.ref_input().size(), 4u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
     const auto &ds = seq_length->data_sets[0];
@@ -743,7 +743,7 @@ TEST(BackendTestCase, GRUCasesArePresent) {
   // hidden_size=6. Y has shape [batch, seq, num_directions, hidden] =
   // [3, 1, 1, 6] and Y_h has shape [batch, num_directions, hidden] = [3, 1, 6].
   {
-    const GraphProto &graph = batchwise->model.ref_graph();
+    const GraphProto &graph = batchwise->model().ref_graph();
     ASSERT_EQ(graph.ref_input().size(), 3u);
     ASSERT_EQ(graph.ref_output().size(), 2u);
     const auto &ds = batchwise->data_sets[0];

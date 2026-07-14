@@ -51,7 +51,7 @@ void ExpectModelMatchesDataSets(const TestCase &tc) {
     for (const Tensor &in : ds.inputs) {
       rt.Set(in.name, in);
     }
-    ASSERT_NO_THROW(RunModel(tc.model, rt)) << "case: " << tc.name;
+    ASSERT_NO_THROW(RunModel(tc.model(), rt)) << "case: " << tc.name;
     for (const Tensor &expected : ds.outputs) {
       ASSERT_TRUE(rt.Has(expected.name))
           << "case: " << tc.name << " missing output '" << expected.name << "'";
@@ -73,7 +73,7 @@ TEST(LocalFunctionRuntimeCases, CrossDomainModelHasFunctions) {
   ASSERT_NE(tc, nullptr);
   // The model must carry both FunctionProto entries so RunModel can
   // resolve the cross-domain dispatch.
-  ASSERT_EQ(tc->model.ref_functions().size(), 2u);
+  ASSERT_EQ(tc->model().ref_functions().size(), 2u);
 }
 
 TEST(LocalFunctionRuntimeCases, CrossDomainRunModelMatchesExpected) {

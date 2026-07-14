@@ -86,9 +86,30 @@ void RegisterLayerNormalizationCases(std::vector<TestCase> &registry, TestMode m
 
   if (mode == TestMode::BENCHMARK) {
     constexpr float kDefaultEpsilon = 1e-5f;
-    RegisterCase(registry, layernorm_kernel, opset, "layer_normalization_2d_axis0_benchmark",
-                 {2048, 2048}, /*axis=*/0, /*include_axis_attr=*/true, kDefaultEpsilon,
-                 /*include_epsilon_attr=*/false);
+    const std::vector<int64_t> x_shape = {2048, 2048};
+    const std::vector<int64_t> normalized_shape = {2048, 2048};
+    NodeProto node;
+    node.set_op_type("LayerNormalization");
+    node.add_input("X");
+    node.add_input("W");
+    node.add_input("B");
+    node.add_output("Y");
+    node.add_output("Mean");
+    node.add_output("InvStdDev");
+    AddAttribute<int64_t>(node, "axis", 0);
+
+    constexpr int64_t x_count = 2048 * 2048;
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_layer_normalization_2d_axis0_benchmark", {opset},
+        {x_count, x_count, x_count}, {x_count, 1, 1},
+        [layernorm_kernel, x_shape, normalized_shape, kDefaultEpsilon]() -> IoData {
+          Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
+          Tensor w = MakeFloatTensor("", normalized_shape, 0.02f, 0.5f);
+          Tensor b = MakeFloatTensor("", normalized_shape, 0.01f, -0.25f);
+          auto [y, mean, inv_std_dev] = layernorm_kernel(x, w, b, /*axis=*/0, kDefaultEpsilon);
+          return IoData{{std::move(x), std::move(w), std::move(b)},
+                        {std::move(y), std::move(mean), std::move(inv_std_dev)}};
+        });
     return;
   }
 

@@ -170,11 +170,15 @@ void RegisterReduceL1Cases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
 
-    Tensor data =
-        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
-    Tensor reduced = reduce_l1_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-    Expect(node, {data}, {reduced}, "test_cc_reducel1_default_axes_keepdims_benchmark",
-           {DefaultOpset(18)}, "backend-test", registry);
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_reducel1_default_axes_keepdims_benchmark",
+        {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_l1_kernel]() -> IoData {
+          Tensor data =
+              Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+          Tensor reduced =
+              reduce_l1_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+          return IoData{{std::move(data)}, {std::move(reduced)}};
+        });
     return;
   }
   RegisterReduceL1L2Cases(registry, "ReduceL1", reduce_l1_kernel, "reducel1");
@@ -192,11 +196,15 @@ void RegisterReduceL2Cases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
 
-    Tensor data =
-        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
-    Tensor reduced = reduce_l2_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-    Expect(node, {data}, {reduced}, "test_cc_reducel2_default_axes_keepdims_benchmark",
-           {DefaultOpset(18)}, "backend-test", registry);
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_reducel2_default_axes_keepdims_benchmark",
+        {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_l2_kernel]() -> IoData {
+          Tensor data =
+              Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+          Tensor reduced =
+              reduce_l2_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+          return IoData{{std::move(data)}, {std::move(reduced)}};
+        });
     return;
   }
   RegisterReduceL1L2Cases(registry, "ReduceL2", reduce_l2_kernel, "reducel2");

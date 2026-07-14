@@ -11,6 +11,8 @@
 #include "onnx_kernels/simple_tensor.h"
 
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -44,10 +46,35 @@ struct DataSet {
   std::vector<Map> maps;
 };
 
+struct TestCase;
+
+/**
+ * Product of a lazily-built :ref:`TestCase`: the single-node ``ModelProto``
+ * together with its input/output data sets. A ``TestCase`` stores a builder
+ * returning this so that constructing the (potentially large) model and
+ * running the kernel that computes the expected outputs is deferred until a
+ * consumer actually needs them. Collecting a large family of cases (in
+ * particular the ``BENCHMARK`` cases whose inputs contain millions of
+ * elements) therefore stays cheap.
+ */
+struct BuiltCase {
+  ModelProto model;
+  std::vector<DataSet> data_sets;
+};
+
 /**
  * A backend test case mirroring ``onnx_light.backend.test.case.base.TestCase``.
  * It bundles a single-node ``ModelProto`` together with the expected input/
  * output data sets a runtime must reproduce.
+ *
+ * The model is not stored directly. Instead a case is either *eager* — its
+ * ``ModelProto`` and ``data_sets`` are materialized at registration time (the
+ * default for the small correctness cases) — or *lazy*: it carries a ``build``
+ * closure that produces the :ref:`BuiltCase` on first access via
+ * :func:`model` / :func:`Materialize`. Lazy cases (used by ``BENCHMARK`` mode)
+ * additionally record ``declared_input_element_counts`` /
+ * ``declared_output_element_counts`` so their sizing can be checked without
+ * running the (expensive) builder.
  *
  * The string-typed fields (``name``, ``model_name``, ``kind``, ``tag``) are
  * declared ``const`` and must therefore be supplied at construction time.
@@ -66,8 +93,23 @@ struct TestCase {
   const std::string tag;
   double rtol = 1e-3;
   double atol = 1e-7;
-  ModelProto model;
+
+  /// Data sets. Populated eagerly for the small correctness cases and lazily
+  /// (via ``build``) for cases that defer materialization. Accessing them for a
+  /// lazy case therefore requires :func:`Materialize` (or :func:`model`) first;
+  /// the public accessors below take care of that.
   std::vector<DataSet> data_sets;
+
+  /// Optional builder producing the model + data sets on demand. When set the
+  /// case is *lazy*: ``data_sets`` starts empty and the model is unbuilt until
+  /// :func:`Materialize` / :func:`model` runs the builder once.
+  std::function<BuiltCase()> build;
+
+  /// Declared element count of each input/output, recorded without
+  /// materializing tensor data. Empty for eager cases; used to validate the
+  /// sizing of lazy (benchmark) cases without running ``build``.
+  std::vector<int64_t> declared_input_element_counts;
+  std::vector<int64_t> declared_output_element_counts;
 
   TestCase() : kind("node"), tag() {}
   explicit TestCase(std::string name_, std::string model_name_ = "", std::string kind_ = "node",
@@ -79,22 +121,76 @@ struct TestCase {
   // members would otherwise cause the implicit move constructor to fall
   // back to ``std::string`` copy construction (and therefore not be
   // ``noexcept``), which in turn forces ``std::vector<TestCase>`` to
-  // copy-construct existing elements on reallocation — impossible because
-  // ``ModelProto`` is move-only. The ``const_cast`` is well-defined here:
-  // every ``TestCase`` is originally allocated as a non-const object, so
-  // casting away the member-level ``const`` to invoke ``std::string``'s
-  // move constructor on the moved-from source does not modify an
-  // actually-const object.
+  // copy-construct existing elements on reallocation — impossible because the
+  // ``std::unique_ptr`` model cache is move-only. The ``const_cast`` is
+  // well-defined here: every ``TestCase`` is originally allocated as a
+  // non-const object, so casting away the member-level ``const`` to invoke
+  // ``std::string``'s move constructor on the moved-from source does not
+  // modify an actually-const object.
   TestCase(TestCase &&other) noexcept
       : name(std::move(const_cast<std::string &>(other.name))),
         model_name(std::move(const_cast<std::string &>(other.model_name))),
         kind(std::move(const_cast<std::string &>(other.kind))),
         tag(std::move(const_cast<std::string &>(other.tag))), rtol(other.rtol), atol(other.atol),
-        model(std::move(other.model)), data_sets(std::move(other.data_sets)) {}
+        data_sets(std::move(other.data_sets)), build(std::move(other.build)),
+        declared_input_element_counts(std::move(other.declared_input_element_counts)),
+        declared_output_element_counts(std::move(other.declared_output_element_counts)),
+        model_(std::move(other.model_)) {}
 
   TestCase(const TestCase &) = delete;
   TestCase &operator=(const TestCase &) = delete;
   TestCase &operator=(TestCase &&) = delete;
+
+  /// Creates (if needed) and returns the mutable model cache. Used by eager
+  /// case builders that populate the ``ModelProto`` in place. Clears any
+  /// previously-built cache.
+  ModelProto &emplace_model() {
+    model_ = std::make_unique<ModelProto>();
+    return *model_;
+  }
+
+  /// Stores an already-built model into the cache.
+  void set_model(ModelProto model) { model_ = std::make_unique<ModelProto>(std::move(model)); }
+
+  /// Runs the ``build`` closure once (if the case is lazy and not yet built),
+  /// materializing the model cache and ``data_sets``. No-op for eager cases.
+  void Materialize() {
+    if (model_ || !build) {
+      return;
+    }
+    BuiltCase built = build();
+    model_ = std::make_unique<ModelProto>(std::move(built.model));
+    if (data_sets.empty()) {
+      data_sets = std::move(built.data_sets);
+    }
+  }
+
+  /// Lazily builds (once) and returns the model.
+  ModelProto &model() {
+    Materialize();
+    if (!model_) {
+      model_ = std::make_unique<ModelProto>();
+    }
+    return *model_;
+  }
+
+  /// Const overload. For a not-yet-built lazy case it builds and caches the
+  /// model (discarding the freshly-built data sets, which a const accessor
+  /// cannot store); ``data_sets`` then remains empty until a non-const
+  /// :func:`Materialize` runs.
+  const ModelProto &model() const {
+    if (!model_) {
+      if (build) {
+        model_ = std::make_unique<ModelProto>(build().model);
+      } else {
+        model_ = std::make_unique<ModelProto>();
+      }
+    }
+    return *model_;
+  }
+
+private:
+  mutable std::unique_ptr<ModelProto> model_;
 };
 
 /**
@@ -249,6 +345,56 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             std::vector<TestCase> &registry, const std::string &tag = "",
             const std::vector<TypeSpec> &output_types = {});
 
+/// Materialized inputs/outputs produced by a lazy case builder.
+struct IoData {
+  std::vector<Tensor> inputs;
+  std::vector<Tensor> outputs;
+};
+
+/**
+ * Builds a single-node ``ModelProto`` and its one data set from ``node`` and
+ * the provided typed inputs/outputs. This is the shared core of :func:`Expect`
+ * (which stores the result eagerly) and :func:`RegisterLazyBenchmarkCase`
+ * (which produces it on demand). Only the inputs and outputs whose name is
+ * non-empty in the node are wired into the graph.
+ *
+ * @throws std::invalid_argument under the same conditions as :func:`Expect`.
+ */
+BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
+                              std::vector<Tensor> outputs, const std::string &name,
+                              const std::vector<OpsetId> &opset_imports,
+                              const std::string &producer_name,
+                              const std::vector<TypeSpec> &output_types = {});
+
+/**
+ * Registers a *lazy* single-node benchmark :ref:`TestCase`. The model and data
+ * set are not built at registration time; instead ``make_io`` (which performs
+ * the expensive input generation and kernel evaluation) is invoked only when
+ * the case is materialized via :func:`TestCase::model` /
+ * :func:`TestCase::Materialize`. ``in_counts`` / ``out_counts`` record the
+ * declared element count of each input/output so the sizing can be validated
+ * without running ``make_io``.
+ *
+ * @param registry Output registry (appended to).
+ * @param node Single-node template; its ``op_type``, ``domain`` and
+ *             ``attribute``s are kept. Consumed (moved).
+ * @param name Unique test name.
+ * @param opset_imports Opset imports for the generated model.
+ * @param in_counts Declared element count of each (non-empty) input.
+ * @param out_counts Declared element count of each (non-empty) output.
+ * @param make_io Callable producing the concrete inputs/outputs on demand.
+ * @param producer_name Producer name written into the model.
+ * @param tag Optional grouping tag (defaults to the node domain for
+ *            non-default operator domains).
+ * @param output_types Optional per-output declared type specs (see
+ *                     :func:`Expect`).
+ */
+void RegisterLazyBenchmarkCase(std::vector<TestCase> &registry, NodeProto node, std::string name,
+                               std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
+                               std::vector<int64_t> out_counts, std::function<IoData()> make_io,
+                               std::string producer_name = "backend-test", std::string tag = "",
+                               std::vector<TypeSpec> output_types = {});
+
 /// Function pointer registering one or more :ref:`TestCase` entries into the
 /// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.
 using RegisterCasesFn = void (*)(std::vector<TestCase> &);
@@ -309,9 +455,13 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
   node.set_op_type(op_type);
   node.add_input(input_name);
   node.add_output(output_name);
-  Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
-  Tensor y = kernel(x);
-  Expect(node, {x}, {y}, name, {opset}, "backend-test", registry);
+  Kernel k = kernel;
+  RegisterLazyBenchmarkCase(registry, std::move(node), name, {opset}, {size}, {size},
+                            [k, size, seed]() -> IoData {
+                              Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
+                              Tensor y = k(x);
+                              return IoData{{std::move(x)}, {std::move(y)}};
+                            });
 }
 
 /**
@@ -319,6 +469,8 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
  * operator with two equally-shaped 1-D inputs. ``kernel`` is any callable
  * mapping the two input ``Tensor``s to the output ``Tensor``; the expected
  * output is computed by invoking it. The generated node carries no attributes.
+ * The inputs and expected output are produced lazily (see
+ * :func:`RegisterLazyBenchmarkCase`).
  */
 template <typename Kernel>
 void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel,
@@ -331,10 +483,14 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
   node.add_input("x");
   node.add_input("y");
   node.add_output("z");
-  Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
-  Tensor y = Tensor::FromFloat("", {size}, Randn<float>({size}, seed + 1));
-  Tensor z = kernel(x, y);
-  Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
+  Kernel k = kernel;
+  RegisterLazyBenchmarkCase(
+      registry, std::move(node), name, {opset}, {size, size}, {size}, [k, size, seed]() -> IoData {
+        Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
+        Tensor y = Tensor::FromFloat("", {size}, Randn<float>({size}, seed + 1));
+        Tensor z = k(x, y);
+        return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+      });
 }
 
 /**

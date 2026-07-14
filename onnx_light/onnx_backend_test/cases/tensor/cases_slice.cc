@@ -63,15 +63,20 @@ void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::Slice slice_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor data = Tensor::FromFloat("", {4096, 4096}, Randn<float>({4096, 4096}, 2001));
-    const Tensor starts = MakeInt64VectorTensor({0, 0});
-    const Tensor ends = MakeInt64VectorTensor({4096, 2048});
-    const Tensor axes = MakeInt64VectorTensor({0, 1});
-    const Tensor steps = MakeInt64VectorTensor({1, 2});
-    const Tensor output = slice_kernel(data, starts, ends, &axes, &steps);
-    Expect(MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true),
-           {data, starts, ends, axes, steps}, {output}, "test_cc_slice_axes_steps_benchmark",
-           {opset}, "backend-test", registry);
+    NodeProto node = MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true);
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_slice_axes_steps_benchmark", {opset},
+        {16777216, 2, 2, 2, 2}, {4194304}, [slice_kernel]() -> IoData {
+          Tensor data = Tensor::FromFloat("", {4096, 4096}, Randn<float>({4096, 4096}, 2001));
+          Tensor starts = MakeInt64VectorTensor({0, 0});
+          Tensor ends = MakeInt64VectorTensor({4096, 2048});
+          Tensor axes = MakeInt64VectorTensor({0, 1});
+          Tensor steps = MakeInt64VectorTensor({1, 2});
+          Tensor output = slice_kernel(data, starts, ends, &axes, &steps);
+          return IoData{{std::move(data), std::move(starts), std::move(ends), std::move(axes),
+                         std::move(steps)},
+                        {std::move(output)}};
+        });
     return;
   }
 

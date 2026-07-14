@@ -42,7 +42,7 @@ TEST(BackendTestCase, StringConcatCaseIsPresent) {
   // producing a STRING output of the same shape, with the expected
   // element-wise concatenated values.
   {
-    const GraphProto &graph = equal_case->model.ref_graph();
+    const GraphProto &graph = equal_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -104,7 +104,7 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
 
   // Lowercase variant: 1-D input, every element lowercased, no stopwords.
   {
-    const GraphProto &graph = lower_case->model.ref_graph();
+    const GraphProto &graph = lower_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -186,7 +186,7 @@ TEST(BackendTestCase, StringSplitCaseIsPresent) {
   ASSERT_NE(empty_tensor_case, nullptr);
 
   {
-    const GraphProto &graph = basic_case->model.ref_graph();
+    const GraphProto &graph = basic_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -239,7 +239,7 @@ TEST(BackendTestCase, RegexFullMatchCasesArePresent) {
   ASSERT_NE(empty_case, nullptr);
 
   {
-    const GraphProto &graph = basic_case->model.ref_graph();
+    const GraphProto &graph = basic_case->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();

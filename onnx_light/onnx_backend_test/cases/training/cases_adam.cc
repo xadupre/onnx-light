@@ -65,21 +65,28 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
     AddFloatAttribute(node, "norm_coefficient_post", norm_coefficient_post);
 
-    Tensor R = Tensor::FromFloat("", {}, {0.1f});
-    Tensor T = Tensor::FromInt64("", {}, {0});
-    Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                 Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
-    Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                 Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
-    Tensor V = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                 Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
-    Tensor H = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                 Randn<float>({kBenchmarkElementwiseSize}, 987654324ULL));
-
-    std::vector<Tensor> outs = adam(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon,
-                                    norm_coefficient, norm_coefficient_post);
-    Expect(node, {R, T, X, G, V, H}, {outs[0], outs[1], outs[2]}, "test_cc_adam_single_benchmark",
-           {default_opset, opset}, "backend-test", registry);
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_adam_single_benchmark", {default_opset, opset},
+        {1, 1, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize,
+         kBenchmarkElementwiseSize},
+        {kBenchmarkElementwiseSize, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
+        [adam, alpha, beta, epsilon, norm_coefficient, norm_coefficient_post]() -> IoData {
+          Tensor R = Tensor::FromFloat("", {}, {0.1f});
+          Tensor T = Tensor::FromInt64("", {}, {0});
+          Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                       Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+          Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                       Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
+          Tensor V = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                       Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
+          Tensor H = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                       Randn<float>({kBenchmarkElementwiseSize}, 987654324ULL));
+          std::vector<Tensor> outs = adam(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon,
+                                          norm_coefficient, norm_coefficient_post);
+          return IoData{
+              {std::move(R), std::move(T), std::move(X), std::move(G), std::move(V), std::move(H)},
+              {std::move(outs[0]), std::move(outs[1]), std::move(outs[2])}};
+        });
     return;
   }
 

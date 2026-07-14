@@ -39,10 +39,14 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_1");
     node.add_output("sum");
     const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
-    Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 423));
-    Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 424));
-    Tensor z = sum_kernel({x0, x1});
-    Expect(node, {x0, x1}, {z}, "test_cc_sum_benchmark", {opset}, "backend-test", registry);
+    const int64_t count = kBenchmarkElementwiseSize;
+    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_sum_benchmark", {opset},
+                              {count, count}, {count}, [sum_kernel, shape]() -> IoData {
+                                Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 423));
+                                Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 424));
+                                Tensor z = sum_kernel({x0, x1});
+                                return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+                              });
     return;
   }
 

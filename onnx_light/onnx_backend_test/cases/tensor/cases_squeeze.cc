@@ -62,12 +62,16 @@ void RegisterSqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::Squeeze squeeze_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor data =
-        Tensor::FromFloat("", {2048, 1, 2048, 1}, Randn<float>({2048, 1, 2048, 1}, 2001));
-    const Tensor axes = MakeAxesTensor({1, 3});
-    const Tensor squeezed = squeeze_kernel(data, {1, 3});
-    Expect(MakeSqueezeNode(), {data, axes}, {squeezed}, "test_cc_squeeze_axes_benchmark", {opset},
-           "backend-test", registry);
+    NodeProto node = MakeSqueezeNode();
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_squeeze_axes_benchmark", {opset}, {4194304, 2},
+        {4194304}, [squeeze_kernel]() -> IoData {
+          Tensor data =
+              Tensor::FromFloat("", {2048, 1, 2048, 1}, Randn<float>({2048, 1, 2048, 1}, 2001));
+          Tensor axes = MakeAxesTensor({1, 3});
+          Tensor squeezed = squeeze_kernel(data, {1, 3});
+          return IoData{{std::move(data), std::move(axes)}, {std::move(squeezed)}};
+        });
     return;
   }
 

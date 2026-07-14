@@ -20,7 +20,7 @@ namespace {
 // the actual map(key_type, value_type) type expected by the DictVectorizer
 // schema. Mirrors ``cases_zipmap.cc``'s output-side helper.
 void PromoteInputToMapType(std::vector<TestCase> &registry, int32_t key_type, int32_t value_type) {
-  GraphProto &graph = registry.back().model.ref_graph();
+  GraphProto &graph = registry.back().model().ref_graph();
   ValueInfoProto &in_vi = *graph.mutable_input(0);
   TypeProto &in_tp = in_vi.ref_type();
   TypeProto::Map *in_map = in_tp.mutable_map_type();
@@ -142,12 +142,14 @@ void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mo
 
     AddIntsAttr(node, "inputdimensions", {2, 1});
 
-    Tensor x0 = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2711));
-    Tensor x1 = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2712));
-    Tensor y = fv({x0, x1}, {2, 1});
-
-    Expect(node, {x0, x1}, {y}, "test_cc_feature_vectorizer_two_float_benchmark",
-           {default_opset, opset}, "backend-test", registry);
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_feature_vectorizer_two_float_benchmark",
+        {default_opset, opset}, {16384, 8192}, {24576}, [fv]() -> IoData {
+          Tensor x0 = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2711));
+          Tensor x1 = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2712));
+          Tensor y = fv({x0, x1}, {2, 1});
+          return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
+        });
     return;
   }
 

@@ -139,15 +139,15 @@ TEST(BackendTestCase, ExpectBuildsSingleNodeModel) {
   EXPECT_EQ(tc.data_sets[0].inputs.size(), 2u);
   EXPECT_EQ(tc.data_sets[0].outputs.size(), 1u);
 
-  const GraphProto &graph = tc.model.ref_graph();
+  const GraphProto &graph = tc.model().ref_graph();
   EXPECT_EQ(graph.ref_node().size(), 1u);
   EXPECT_EQ(graph.ref_input().size(), 2u);
   EXPECT_EQ(graph.ref_output().size(), 1u);
   EXPECT_EQ(std::string(graph.ref_node()[0].ref_op_type().data(),
                         graph.ref_node()[0].ref_op_type().size()),
             "Add");
-  ASSERT_EQ(tc.model.ref_opset_import().size(), 1u);
-  EXPECT_EQ(tc.model.ref_opset_import()[0].version(), 14);
+  ASSERT_EQ(tc.model().ref_opset_import().size(), 1u);
+  EXPECT_EQ(tc.model().ref_opset_import()[0].version(), 14);
 }
 
 TEST(BackendTestCase, DefaultOpsetUsesEmptyDomain) {
@@ -465,8 +465,8 @@ TEST(BackendTestCase, CollectTestCasesFilterByOpTypeKeepsOnlyMatchingOps) {
   ASSERT_FALSE(abs_only.empty());
   EXPECT_LT(abs_only.size(), all.size());
   for (const auto &tc : abs_only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "Abs");
   }
 }
@@ -477,8 +477,8 @@ TEST(BackendTestCase, CollectCategoryFilterByOpTypeReturnsOnlyMatchingCases) {
   onnx_backend_test::CollectMathTestCases(add_only, "Add");
   ASSERT_FALSE(add_only.empty());
   for (const auto &tc : add_only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "Add");
   }
 
@@ -499,8 +499,8 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsArrayFeatureExtractorCases)
                                                    "ArrayFeatureExtractor");
   ASSERT_FALSE(array_feature_extractor_only.empty());
   for (const auto &tc : array_feature_extractor_only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "ArrayFeatureExtractor");
   }
 }
@@ -510,8 +510,8 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsOneHotEncoderCases) {
   onnx_backend_test::CollectTraditionalMLTestCases(one_hot_only, "OneHotEncoder");
   ASSERT_FALSE(one_hot_only.empty());
   for (const auto &tc : one_hot_only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "OneHotEncoder");
   }
 }
@@ -521,11 +521,11 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsZipMapCases) {
   onnx_backend_test::CollectTraditionalMLTestCases(zipmap_only, "ZipMap");
   ASSERT_FALSE(zipmap_only.empty());
   for (const auto &tc : zipmap_only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "ZipMap");
-    ASSERT_FALSE(tc.model.ref_graph().ref_output().empty());
-    const TypeProto &out_type = tc.model.ref_graph().ref_output()[0].ref_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_output().empty());
+    const TypeProto &out_type = tc.model().ref_graph().ref_output()[0].ref_type();
     ASSERT_TRUE(out_type.has_sequence_type());
     ASSERT_TRUE(out_type.ref_sequence_type().ref_elem_type().has_map_type());
   }
@@ -536,8 +536,8 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsSVMClassifierCases) {
   onnx_backend_test::CollectTraditionalMLTestCases(svm_only, "SVMClassifier");
   ASSERT_FALSE(svm_only.empty());
   for (const auto &tc : svm_only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "SVMClassifier");
   }
 }
@@ -547,8 +547,8 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsSVMRegressorCases) {
   onnx_backend_test::CollectTraditionalMLTestCases(svm_only, "SVMRegressor");
   ASSERT_FALSE(svm_only.empty());
   for (const auto &tc : svm_only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "SVMRegressor");
   }
 }
@@ -558,8 +558,8 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsLinearClassifierCases) {
   onnx_backend_test::CollectTraditionalMLTestCases(only, "LinearClassifier");
   ASSERT_FALSE(only.empty());
   for (const auto &tc : only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "LinearClassifier");
   }
 }
@@ -569,8 +569,8 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsLinearRegressorCases) {
   onnx_backend_test::CollectTraditionalMLTestCases(only, "LinearRegressor");
   ASSERT_FALSE(only.empty());
   for (const auto &tc : only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "LinearRegressor");
   }
 }
@@ -580,8 +580,8 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsTreeEnsembleRegressorCases)
   onnx_backend_test::CollectTraditionalMLTestCases(only, "TreeEnsembleRegressor");
   ASSERT_FALSE(only.empty());
   for (const auto &tc : only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "TreeEnsembleRegressor");
   }
 }
@@ -591,8 +591,8 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsTreeEnsembleClassifierCases
   onnx_backend_test::CollectTraditionalMLTestCases(only, "TreeEnsembleClassifier");
   ASSERT_FALSE(only.empty());
   for (const auto &tc : only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "TreeEnsembleClassifier");
   }
 }
@@ -602,8 +602,8 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsTreeEnsembleCases) {
   onnx_backend_test::CollectTraditionalMLTestCases(only, "TreeEnsemble");
   ASSERT_FALSE(only.empty());
   for (const auto &tc : only) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    ASSERT_FALSE(tc.model().ref_graph().ref_node().empty());
+    const auto &op = tc.model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "TreeEnsemble");
   }
 }
@@ -629,7 +629,7 @@ TEST(BackendTestCase, CollectPreservesPreExistingEntries) {
   ASSERT_GE(registry.size(), 2u);
   EXPECT_EQ(registry[0].name, "pre_existing_add");
   for (size_t i = 1; i < registry.size(); ++i) {
-    const auto &op = registry[i].model.ref_graph().ref_node()[0].ref_op_type();
+    const auto &op = registry[i].model().ref_graph().ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op.data(), op.size()), "If");
   }
 }
@@ -692,6 +692,77 @@ TEST(BackendTestCase, DISABLED_BenchmarkModeCollectsAllCategories) {
               << ", benchmark_cases=" << cat_bench << std::endl;
   }
   EXPECT_GT(benchmark_cases, 0u);
+}
+
+TEST(BackendTestCase, DISABLED_BenchmarkModeMaterializesAllCategories) {
+  // Heavy: forces every benchmark case's lazy builder to run (generating large
+  // inputs and evaluating the reference kernel), so it is disabled by default.
+  // Run manually with
+  // ``--gtest_also_run_disabled_tests --gtest_filter=*BenchmarkModeMaterializesAll*``.
+  // Validates that every lazy benchmark builder is runnable and that the tensors
+  // it produces have the element counts declared at collection time.
+  using onnx_backend_test::TestMode;
+  const std::vector<
+      std::pair<std::string, void (*)(std::vector<TestCase> &, const std::string &, TestMode)>>
+      collectors = {
+          {"Controlflow", onnx_backend_test::CollectControlflowTestCases},
+          {"Generator", onnx_backend_test::CollectGeneratorTestCases},
+          {"Image", onnx_backend_test::CollectImageTestCases},
+          {"Logical", onnx_backend_test::CollectLogicalTestCases},
+          {"Math", onnx_backend_test::CollectMathTestCases},
+          {"NN", onnx_backend_test::CollectNNTestCases},
+          {"ObjectDetection", onnx_backend_test::CollectObjectDetectionTestCases},
+          {"Optional", onnx_backend_test::CollectOptionalTestCases},
+          {"Preview", onnx_backend_test::CollectPreviewTestCases},
+          {"Quantization", onnx_backend_test::CollectQuantizationTestCases},
+          {"Reduction", onnx_backend_test::CollectReductionTestCases},
+          {"Sequence", onnx_backend_test::CollectSequenceTestCases},
+          {"Tensor", onnx_backend_test::CollectTensorTestCases},
+          {"Text", onnx_backend_test::CollectTextTestCases},
+          {"TraditionalML", onnx_backend_test::CollectTraditionalMLTestCases},
+          {"Training", onnx_backend_test::CollectTrainingTestCases},
+          {"EmptyShape", onnx_backend_test::CollectEmptyShapeTestCases},
+          {"InPlace", onnx_backend_test::CollectInPlaceTestCases},
+          {"Release", onnx_backend_test::CollectReleaseTestCases},
+          {"ShapeTag", onnx_backend_test::CollectShapeTagTestCases},
+          {"NanInf", onnx_backend_test::CollectNanInfTestCases},
+      };
+  size_t materialized = 0;
+  for (const auto &[name, fn] : collectors) {
+    std::vector<TestCase> reg;
+    fn(reg, "", TestMode::BENCHMARK);
+    for (auto &tc : reg) {
+      if (tc.name.find("_benchmark") == std::string::npos) {
+        continue;
+      }
+      // Lazy cases declared their sizing; verify materialization reproduces it.
+      const bool was_lazy = static_cast<bool>(tc.build);
+      tc.Materialize();
+      ASSERT_FALSE(tc.data_sets.empty()) << "no data set materialized: " << tc.name;
+      const auto &ds = tc.data_sets[0];
+      if (was_lazy && !tc.declared_input_element_counts.empty()) {
+        ASSERT_EQ(ds.inputs.size(), tc.declared_input_element_counts.size())
+            << "input count mismatch: " << tc.name;
+        for (size_t i = 0; i < ds.inputs.size(); ++i) {
+          EXPECT_EQ(ds.inputs[i].element_count(), tc.declared_input_element_counts[i])
+              << "input[" << i << "] size mismatch: " << tc.name;
+        }
+      }
+      if (was_lazy && !tc.declared_output_element_counts.empty()) {
+        ASSERT_EQ(ds.outputs.size(), tc.declared_output_element_counts.size())
+            << "output count mismatch: " << tc.name;
+        for (size_t i = 0; i < ds.outputs.size(); ++i) {
+          EXPECT_EQ(ds.outputs[i].element_count(), tc.declared_output_element_counts[i])
+              << "output[" << i << "] size mismatch: " << tc.name;
+        }
+      }
+      // The model must build too.
+      EXPECT_TRUE(tc.model().has_graph()) << "no graph in materialized model: " << tc.name;
+      ++materialized;
+    }
+    std::cout << "[bench-materialize] " << name << ": done" << std::endl;
+  }
+  EXPECT_GT(materialized, 0u);
 }
 
 } // namespace Test

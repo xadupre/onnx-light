@@ -75,9 +75,25 @@ void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mod
 
   if (mode == TestMode::BENCHMARK) {
     constexpr float kDefaultEpsilon = 1e-5f;
-    RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_2d_axis0_benchmark",
-                 {2048, 2048}, {2048, 2048}, /*axis=*/0, /*include_axis_attr=*/true,
-                 kDefaultEpsilon, /*include_epsilon_attr=*/false);
+    const std::vector<int64_t> x_shape = {2048, 2048};
+    const std::vector<int64_t> scale_shape = {2048, 2048};
+    NodeProto node;
+    node.set_op_type("RMSNormalization");
+    node.add_input("x");
+    node.add_input("scale");
+    node.add_output("y");
+    AddAttribute<int64_t>(node, "axis", 0);
+
+    constexpr int64_t count = 2048 * 2048;
+    RegisterLazyBenchmarkCase(registry, std::move(node),
+                              "test_cc_rms_normalization_2d_axis0_benchmark", {opset},
+                              {count, count}, {count},
+                              [rmsnorm_kernel, x_shape, scale_shape, kDefaultEpsilon]() -> IoData {
+                                Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
+                                Tensor scale = MakeFloatTensor("", scale_shape, 0.02f, 0.5f);
+                                Tensor y = rmsnorm_kernel(x, scale, /*axis=*/0, kDefaultEpsilon);
+                                return IoData{{std::move(x), std::move(scale)}, {std::move(y)}};
+                              });
     return;
   }
 

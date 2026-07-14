@@ -25,10 +25,15 @@ void RegisterThresholdedReluCases(std::vector<TestCase> &registry, TestMode mode
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
     alpha->set_f(2.0f);
-    Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                 Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
-    Tensor y = thresholdedrelu_kernel(x, 2.0f);
-    Expect(node, {x}, {y}, "test_cc_thresholdedrelu_benchmark", {opset}, "backend-test", registry);
+    const int64_t count = kBenchmarkElementwiseSize;
+    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_thresholdedrelu_benchmark",
+                              {opset}, {count}, {count}, [thresholdedrelu_kernel]() -> IoData {
+                                Tensor x = Tensor::FromFloat(
+                                    "", {kBenchmarkElementwiseSize},
+                                    Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+                                Tensor y = thresholdedrelu_kernel(x, 2.0f);
+                                return IoData{{std::move(x)}, {std::move(y)}};
+                              });
     return;
   }
 

@@ -42,11 +42,15 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::Identity identity_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
+    NodeProto node = MakeIdentityNode();
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_identity_benchmark", {opset},
+        {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [identity_kernel]() -> IoData {
+          Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
                                        Randn<float>({kBenchmarkElementwiseSize}, 2001));
-    const Tensor y = Rename(identity_kernel(x), "y");
-    Expect(MakeIdentityNode(), {x}, {y}, "test_cc_identity_benchmark", {opset}, "backend-test",
-           registry);
+          Tensor y = Rename(identity_kernel(x), "y");
+          return IoData{{std::move(x)}, {std::move(y)}};
+        });
     return;
   }
 
@@ -98,7 +102,7 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
     }
 
     TestCase tc(name, name);
-    ModelProto &model = tc.model;
+    ModelProto &model = tc.emplace_model();
     InitModel(model, /*ir_version=*/9, {opset14});
     GraphProto *graph = model.add_graph();
     graph->set_name(name);
@@ -154,7 +158,7 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor stacked = Tensor::FromFloat("res", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
 
     TestCase tc(name, name);
-    ModelProto &model = tc.model;
+    ModelProto &model = tc.emplace_model();
     InitModel(model, /*ir_version=*/9, {opset16});
     GraphProto *graph = model.add_graph();
     graph->set_name(name);

@@ -59,7 +59,7 @@ void RegisterOptionalInputCase(const std::string &name, const std::string &op_ty
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   model.set_ir_version(kDefaultIrVersion);
   model.set_producer_name("backend-test");
   OperatorSetIdProto proto;
@@ -148,7 +148,7 @@ void RegisterOptionalGetElementSequenceCase(const std::string &name, bool with_o
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   model.set_ir_version(kDefaultIrVersion);
   model.set_producer_name("backend-test");
   OperatorSetIdProto proto;
@@ -241,7 +241,7 @@ void RegisterOptionalHasElementEmptyCase(const std::string &name, bool with_empt
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   model.set_ir_version(kDefaultIrVersion);
   model.set_producer_name("backend-test");
   OperatorSetIdProto proto;

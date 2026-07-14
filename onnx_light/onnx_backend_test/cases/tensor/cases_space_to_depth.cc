@@ -37,13 +37,16 @@ void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::SpaceToDepth s2d{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor input =
-        Tensor::FromFloat("", {1, 2, 1024, 2048}, Randn<float>({1, 2, 1024, 2048}, 2001));
-    kernel::SpaceToDepth::Attributes attrs;
-    attrs.blocksize = 2;
-    const Tensor output = s2d(input, attrs);
-    Expect(MakeSpaceToDepthNode(2), {input}, {output}, "test_cc_spacetodepth_example_benchmark",
-           {opset}, "backend-test", registry);
+    NodeProto node = MakeSpaceToDepthNode(2);
+    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_spacetodepth_example_benchmark",
+                              {opset}, {4194304}, {4194304}, [s2d]() -> IoData {
+                                Tensor input = Tensor::FromFloat(
+                                    "", {1, 2, 1024, 2048}, Randn<float>({1, 2, 1024, 2048}, 2001));
+                                kernel::SpaceToDepth::Attributes attrs;
+                                attrs.blocksize = 2;
+                                Tensor output = s2d(input, attrs);
+                                return IoData{{std::move(input)}, {std::move(output)}};
+                              });
     return;
   }
 

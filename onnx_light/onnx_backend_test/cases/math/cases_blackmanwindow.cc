@@ -25,9 +25,13 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry, TestMode mode)
     node.set_op_type("BlackmanWindow");
     node.add_input("x");
     node.add_output("y");
-    Tensor x = Tensor::FromInt32("", {}, {1 << 22});
-    Tensor y = blackman_kernel(x, /*periodic=*/true);
-    Expect(node, {x}, {y}, "test_cc_blackmanwindow_benchmark", {opset}, "backend-test", registry);
+    constexpr int32_t size = 1 << 22;
+    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_blackmanwindow_benchmark",
+                              {opset}, {1}, {size}, [blackman_kernel, size]() -> IoData {
+                                Tensor x = Tensor::FromInt32("", {}, {size});
+                                Tensor y = blackman_kernel(x, /*periodic=*/true);
+                                return IoData{{std::move(x)}, {std::move(y)}};
+                              });
     return;
   }
 

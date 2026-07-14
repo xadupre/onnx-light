@@ -78,7 +78,7 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
 
   TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();

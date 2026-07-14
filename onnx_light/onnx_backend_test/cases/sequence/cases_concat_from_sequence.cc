@@ -44,7 +44,7 @@ void RegisterConcatFromSequenceCase(const std::string &name, const std::vector<i
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   model.set_ir_version(kDefaultIrVersion);
   model.set_producer_name("backend-test");
   OperatorSetIdProto proto;

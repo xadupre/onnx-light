@@ -59,23 +59,29 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     AddAttribute<std::vector<int64_t>>(node, "pooled_shape", {2, 2});
 
-    Tensor x = Tensor::FromFloat("", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 2801));
-    const std::vector<int64_t> rois_shape = {64, 5};
-    std::vector<float> rois_values;
-    rois_values.reserve(64 * 5);
-    for (int64_t i = 0; i < 64; ++i) {
-      const float start = static_cast<float>(i % 32);
-      rois_values.insert(rois_values.end(), {0.0f, start, start, start + 63.0f, start + 63.0f});
-    }
-    Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
-
-    kernel::MaxRoiPool::Attributes attrs;
-    attrs.pooled_shape = {2, 2};
-    attrs.spatial_scale = 1.0f;
-    Tensor y = maxroipool_kernel(x, rois, attrs);
-
-    Expect(node, {x, rois}, {y}, "test_cc_maxroipool_default_benchmark", {opset}, "backend-test",
-           registry);
+    constexpr int64_t x_count = 1 * 32 * 128 * 128;
+    constexpr int64_t rois_count = 64 * 5;
+    constexpr int64_t y_count = 64 * 32 * 2 * 2;
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_maxroipool_default_benchmark", {opset},
+        {x_count, rois_count}, {y_count}, [maxroipool_kernel]() -> IoData {
+          Tensor x =
+              Tensor::FromFloat("", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 2801));
+          const std::vector<int64_t> rois_shape = {64, 5};
+          std::vector<float> rois_values;
+          rois_values.reserve(64 * 5);
+          for (int64_t i = 0; i < 64; ++i) {
+            const float start = static_cast<float>(i % 32);
+            rois_values.insert(rois_values.end(),
+                               {0.0f, start, start, start + 63.0f, start + 63.0f});
+          }
+          Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
+          kernel::MaxRoiPool::Attributes attrs;
+          attrs.pooled_shape = {2, 2};
+          attrs.spatial_scale = 1.0f;
+          Tensor y = maxroipool_kernel(x, rois, attrs);
+          return IoData{{std::move(x), std::move(rois)}, {std::move(y)}};
+        });
     return;
   }
 

@@ -19,7 +19,7 @@ namespace {
 // Promotes the single input ValueInfoProto from its placeholder tensor type to
 // the actual map(int64, value_type) type expected by the CastMap schema.
 void PromoteInputToMapType(std::vector<TestCase> &registry, int32_t value_type) {
-  GraphProto &graph = registry.back().model.ref_graph();
+  GraphProto &graph = registry.back().model().ref_graph();
   ValueInfoProto &in_vi = *graph.mutable_input(0);
   TypeProto &in_tp = in_vi.ref_type();
   TypeProto::Map *in_map = in_tp.mutable_map_type();

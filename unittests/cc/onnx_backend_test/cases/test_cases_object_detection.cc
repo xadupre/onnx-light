@@ -42,7 +42,7 @@ TEST(BackendTestCase, RoiAlignCasesArePresent) {
   // Avg case: three inputs (X, rois, batch_indices), single output of shape
   // (num_rois, C, output_height, output_width) = (2, 1, 5, 5).
   {
-    const GraphProto &graph = avg->model.ref_graph();
+    const GraphProto &graph = avg->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -105,7 +105,7 @@ TEST(BackendTestCase, RoiAlignUpstreamCasesArePresent) {
   ASSERT_NE(mode_max, nullptr);
 
   for (const TestCase *tc : {aligned_false, aligned_true, mode_max}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -150,7 +150,7 @@ TEST(BackendTestCase, NonMaxSuppressionUpstreamCasesArePresent) {
       }
     }
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();

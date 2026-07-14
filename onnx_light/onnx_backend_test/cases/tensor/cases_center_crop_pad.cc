@@ -41,13 +41,17 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
   const kernel::CenterCropPad op{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor input =
-        Tensor::FromFloat("", {4096, 2048, 1}, Randn<float>({4096, 2048, 1}, 2001));
-    const Tensor shape = Tensor::FromInt64("", {3}, std::vector<int64_t>{2048, 2048, 1});
-    kernel::CenterCropPad::Attributes attrs;
-    const Tensor output = op(input, shape, attrs);
-    Expect(MakeCenterCropPadNode({}), {input, shape}, {output},
-           "test_cc_center_crop_pad_crop_benchmark", {opset}, "backend-test", registry);
+    NodeProto node = MakeCenterCropPadNode({});
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_center_crop_pad_crop_benchmark", {opset},
+        {4096 * 2048, 3}, {2048 * 2048}, [op]() -> IoData {
+          Tensor input =
+              Tensor::FromFloat("", {4096, 2048, 1}, Randn<float>({4096, 2048, 1}, 2001));
+          Tensor shape = Tensor::FromInt64("", {3}, std::vector<int64_t>{2048, 2048, 1});
+          kernel::CenterCropPad::Attributes attrs;
+          Tensor output = op(input, shape, attrs);
+          return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
+        });
     return;
   }
 

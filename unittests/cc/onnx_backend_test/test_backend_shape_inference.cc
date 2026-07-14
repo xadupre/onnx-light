@@ -331,12 +331,12 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
     // model so we can wipe out those intermediate values (and the recorded
     // output shapes) without mutating the original test case, then verify
     // shape inference recovers them.
-    ModelProto *model_ptr = &tc.model;
+    ModelProto *model_ptr = &tc.model();
     ModelProto model_copy;
     std::vector<ExpectedOutput> expected_value_info;
     if (tc.kind == "model") {
       std::string serialized;
-      tc.model.SerializeToString(serialized);
+      tc.model().SerializeToString(serialized);
       model_copy.ParseFromString(serialized);
       model_ptr = &model_copy;
       expected_value_info = SnapshotAndStripValueInfo(*model_ptr);
@@ -401,7 +401,7 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
 
       ModelProto ds_model;
       std::string ds_serialized;
-      tc.model.SerializeToString(ds_serialized);
+      tc.model().SerializeToString(ds_serialized);
       ds_model.ParseFromString(ds_serialized);
 
       auto &ds_inputs = ds_model.mutable_graph()->ref_input();
@@ -489,11 +489,11 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
 
   for (TestCase &tc : cases) {
     SCOPED_TRACE(tc.name);
-    const auto expected = SnapshotAndStripOutputs(tc.model);
+    const auto expected = SnapshotAndStripOutputs(tc.model());
 
     // Replace every input dim_value with a dim_param keyed by its value so
     // that equal numeric dims across all inputs share the same symbol.
-    auto &inputs = tc.model.mutable_graph()->ref_input();
+    auto &inputs = tc.model().mutable_graph()->ref_input();
     for (size_t i = 0; i < inputs.size(); ++i) {
       auto &vi = inputs[i];
       if (!vi.has_type() || !vi.ref_type().has_tensor_type()) {
@@ -516,9 +516,9 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
       }
     }
 
-    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model)) << "case: " << tc.name;
+    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model())) << "case: " << tc.name;
 
-    const auto &outputs = tc.model.ref_graph().ref_output();
+    const auto &outputs = tc.model().ref_graph().ref_output();
     ASSERT_EQ(outputs.size(), expected.size());
 
     // Describes an output dim in the symbolic run: either a concrete value or
@@ -636,7 +636,8 @@ TEST(BackendTestCaseShapeInference, OnnxOptimSupportsNestedLocalFunctionCall) {
 
     ModelProto model_copy;
     std::string serialized;
-    ASSERT_TRUE(tc.model.SerializeToString(serialized)) << "failed to serialize case: " << tc.name;
+    ASSERT_TRUE(tc.model().SerializeToString(serialized))
+        << "failed to serialize case: " << tc.name;
     ASSERT_TRUE(model_copy.ParseFromString(serialized)) << "failed to parse case: " << tc.name;
 
     // Strip the recorded output shape so optim shape inference has to
@@ -696,7 +697,8 @@ TEST(BackendTestCaseShapeInference, OnnxOptimPropagatesValueAsShapeInLocalFuncti
 
     ModelProto model_copy;
     std::string serialized;
-    ASSERT_TRUE(tc.model.SerializeToString(serialized)) << "failed to serialize case: " << tc.name;
+    ASSERT_TRUE(tc.model().SerializeToString(serialized))
+        << "failed to serialize case: " << tc.name;
     ASSERT_TRUE(model_copy.ParseFromString(serialized)) << "failed to parse case: " << tc.name;
 
     // Strip the recorded output shape so optim shape inference has to
@@ -748,7 +750,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopSubgraph) {
 
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     // Strip the recorded output shape so optim shape inference must
@@ -793,7 +795,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeScanSubgraph) {
 
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     // Strip the recorded output shape so optim shape inference must
@@ -837,7 +839,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapePairwiseDistanceScan) {
 
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     // Strip recorded output shapes so optim shape inference must recover
@@ -896,13 +898,13 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
     found = true;
 
     onnx_optim::shapes::ShapesContext ctx;
-    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
     const std::vector<std::unordered_map<std::string, std::string>> expected_metadata = {
         {{"onnx_light.not_used_after", "X"}},
         {{"onnx_light.inplace_reuse", "0:0:equal"}, {"onnx_light.release_after", "A"}},
         {{"onnx_light.inplace_reuse", "0:0:equal"}, {"onnx_light.release_after", "B"}}};
-    const auto &nodes = tc.model.ref_graph().ref_node();
+    const auto &nodes = tc.model().ref_graph().ref_node();
     ASSERT_EQ(nodes.size(), expected_metadata.size());
     for (size_t i = 0; i < nodes.size(); ++i) {
       EXPECT_EQ(MetadataOf(nodes[i]), expected_metadata[i])
@@ -910,7 +912,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
     }
 
     std::vector<std::vector<onnx_optim::annotations::InPlaceReuse>> reuse_with_inputs =
-        onnx_optim::annotations::ComputeInPlaceReuse(tc.model.ref_graph(), ctx,
+        onnx_optim::annotations::ComputeInPlaceReuse(tc.model().ref_graph(), ctx,
                                                      /*allow_input_overwrite=*/true);
     ASSERT_EQ(reuse_with_inputs.size(), 3u);
     ASSERT_EQ(reuse_with_inputs[0].size(), 1u);
@@ -940,7 +942,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopPairwiseDistance) {
 
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     // Strip the recorded output shape so optim shape inference must
@@ -994,7 +996,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTopKPairwiseDistance) {
 
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     // Strip the recorded output / intermediate shapes so shape inference must
@@ -1130,7 +1132,7 @@ TEST(BackendTestCaseShapeInference, DISABLED_OnnxOptimInfersShapeLoopTopKPairwis
     found = true;
 
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
 
     ModelProto optim_copy;
     optim_copy.ParseFromString(serialized);
@@ -1201,7 +1203,7 @@ TEST(BackendTestCaseShapeInference, DISABLED_OnnxOptimInfersShapeScanTopKPairwis
     found = true;
 
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
 
     ModelProto optim_copy;
     optim_copy.ParseFromString(serialized);
@@ -1273,7 +1275,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKSameK) {
 
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     // Strip output and intermediate shapes so shape inference must recover them.
@@ -1412,7 +1414,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKDifferentK) {
 
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     // Strip output and intermediate shapes so shape inference must recover them.
@@ -1553,7 +1555,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimPropagatesGatherValueAsShape) {
     found = true;
 
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
 
     // --- onnx_optim pass ---
     ModelProto optim_copy;
@@ -1702,11 +1704,11 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
     found = true;
 
     // Collect the expected graph-level metadata pre-embedded in the case model.
-    const MetadataMap expected_graph_meta = MetadataOf(tc.model.ref_graph());
+    const MetadataMap expected_graph_meta = MetadataOf(tc.model().ref_graph());
     ASSERT_FALSE(expected_graph_meta.empty()) << "no graph metadata pre-embedded in case";
 
     // Collect per-node expected metadata from the pre-embedded model.
-    const auto &src_nodes = tc.model.ref_graph().ref_node();
+    const auto &src_nodes = tc.model().ref_graph().ref_node();
     std::vector<MetadataMap> expected_node_meta;
     expected_node_meta.reserve(src_nodes.size());
     for (const auto &node : src_nodes) {
@@ -1714,13 +1716,13 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
     }
 
     // Collect expected input and output metadata from the pre-embedded model.
-    const auto &src_inputs = tc.model.ref_graph().ref_input();
+    const auto &src_inputs = tc.model().ref_graph().ref_input();
     std::vector<MetadataMap> expected_input_meta;
     expected_input_meta.reserve(src_inputs.size());
     for (const auto &vi : src_inputs) {
       expected_input_meta.push_back(MetadataOf(vi));
     }
-    const auto &src_outputs = tc.model.ref_graph().ref_output();
+    const auto &src_outputs = tc.model().ref_graph().ref_output();
     std::vector<MetadataMap> expected_output_meta;
     expected_output_meta.reserve(src_outputs.size());
     for (const auto &vi : src_outputs) {
@@ -1731,7 +1733,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
     // WriteValueAndNodeTagsToMetadata starts from a blank slate.
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     GraphProto *graph = model_copy.mutable_graph();
@@ -1767,7 +1769,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
     // Verify that WriteValueAndNodeTagsToMetadata also writes onnx_light.value_tag
     // on the value_info entry for "S".
     const auto &result_vis = graph->ref_value_info();
-    const auto &src_vis = tc.model.ref_graph().ref_value_info();
+    const auto &src_vis = tc.model().ref_graph().ref_value_info();
     ASSERT_EQ(result_vis.size(), src_vis.size());
     for (size_t vi = 0; vi < result_vis.size(); ++vi) {
       EXPECT_EQ(MetadataOf(result_vis[vi]), MetadataOf(src_vis[vi]))
@@ -1814,11 +1816,11 @@ TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
     found = true;
 
     onnx_optim::shapes::ShapesContext ctx;
-    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
     onnx_optim::annotations::ComputeContext inplace;
     inplace.set_events_enabled(true);
-    ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(tc.model.ref_graph(), ctx, false, {}))
+    ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(tc.model().ref_graph(), ctx, false, {}))
         << "case: " << tc.name;
 
     // Exactly one kRelease event must be emitted, for "S" at node 1
@@ -1841,7 +1843,7 @@ TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
         {},
         {{std::string(onnx_optim::annotations::kReleaseAfterMetadataKey), "S"},
          {std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey), "X"}}};
-    const auto &nodes = tc.model.ref_graph().ref_node();
+    const auto &nodes = tc.model().ref_graph().ref_node();
     ASSERT_EQ(nodes.size(), expected_node_meta.size());
     for (size_t i = 0; i < nodes.size(); ++i) {
       EXPECT_EQ(MetadataOf(nodes[i]), expected_node_meta[i])
@@ -1868,11 +1870,11 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnConstantRes
     found = true;
 
     // Collect the expected graph-level metadata pre-embedded in the case model.
-    const MetadataMap expected_graph_meta = MetadataOf(tc.model.ref_graph());
+    const MetadataMap expected_graph_meta = MetadataOf(tc.model().ref_graph());
     ASSERT_FALSE(expected_graph_meta.empty()) << "no graph metadata pre-embedded in case";
 
     // Collect per-node expected metadata from the pre-embedded model.
-    const auto &src_nodes = tc.model.ref_graph().ref_node();
+    const auto &src_nodes = tc.model().ref_graph().ref_node();
     std::vector<MetadataMap> expected_node_meta;
     expected_node_meta.reserve(src_nodes.size());
     for (const auto &node : src_nodes) {
@@ -1880,13 +1882,13 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnConstantRes
     }
 
     // Collect expected input and output metadata from the pre-embedded model.
-    const auto &src_inputs = tc.model.ref_graph().ref_input();
+    const auto &src_inputs = tc.model().ref_graph().ref_input();
     std::vector<MetadataMap> expected_input_meta;
     expected_input_meta.reserve(src_inputs.size());
     for (const auto &vi : src_inputs) {
       expected_input_meta.push_back(MetadataOf(vi));
     }
-    const auto &src_outputs = tc.model.ref_graph().ref_output();
+    const auto &src_outputs = tc.model().ref_graph().ref_output();
     std::vector<MetadataMap> expected_output_meta;
     expected_output_meta.reserve(src_outputs.size());
     for (const auto &vi : src_outputs) {
@@ -1897,7 +1899,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnConstantRes
     // WriteValueAndNodeTagsToMetadata starts from a blank slate.
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     GraphProto *graph = model_copy.mutable_graph();
@@ -1933,7 +1935,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnConstantRes
     // Verify that WriteValueAndNodeTagsToMetadata also writes
     // onnx_light.value_tag = "shape" on the value_info entry for "S".
     const auto &result_vis = graph->ref_value_info();
-    const auto &src_vis = tc.model.ref_graph().ref_value_info();
+    const auto &src_vis = tc.model().ref_graph().ref_value_info();
     ASSERT_EQ(result_vis.size(), src_vis.size());
     for (size_t vi = 0; vi < result_vis.size(); ++vi) {
       EXPECT_EQ(MetadataOf(result_vis[vi]), MetadataOf(src_vis[vi]))
@@ -1977,11 +1979,11 @@ TEST(BackendTestCaseShapeInference,
     found = true;
 
     // Collect the expected graph-level metadata pre-embedded in the case model.
-    const MetadataMap expected_graph_meta = MetadataOf(tc.model.ref_graph());
+    const MetadataMap expected_graph_meta = MetadataOf(tc.model().ref_graph());
     ASSERT_FALSE(expected_graph_meta.empty()) << "no graph metadata pre-embedded in case";
 
     // Collect per-node expected metadata from the pre-embedded model.
-    const auto &src_nodes = tc.model.ref_graph().ref_node();
+    const auto &src_nodes = tc.model().ref_graph().ref_node();
     std::vector<MetadataMap> expected_node_meta;
     expected_node_meta.reserve(src_nodes.size());
     for (const auto &node : src_nodes) {
@@ -1989,13 +1991,13 @@ TEST(BackendTestCaseShapeInference,
     }
 
     // Collect expected input and output metadata from the pre-embedded model.
-    const auto &src_inputs = tc.model.ref_graph().ref_input();
+    const auto &src_inputs = tc.model().ref_graph().ref_input();
     std::vector<MetadataMap> expected_input_meta;
     expected_input_meta.reserve(src_inputs.size());
     for (const auto &vi : src_inputs) {
       expected_input_meta.push_back(MetadataOf(vi));
     }
-    const auto &src_outputs = tc.model.ref_graph().ref_output();
+    const auto &src_outputs = tc.model().ref_graph().ref_output();
     std::vector<MetadataMap> expected_output_meta;
     expected_output_meta.reserve(src_outputs.size());
     for (const auto &vi : src_outputs) {
@@ -2006,7 +2008,7 @@ TEST(BackendTestCaseShapeInference,
     // WriteValueAndNodeTagsToMetadata starts from a blank slate.
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     GraphProto *graph = model_copy.mutable_graph();
@@ -2042,7 +2044,7 @@ TEST(BackendTestCaseShapeInference,
     // Verify that WriteValueAndNodeTagsToMetadata also writes
     // onnx_light.value_tag on each value_info entry.
     const auto &result_vis = graph->ref_value_info();
-    const auto &src_vis = tc.model.ref_graph().ref_value_info();
+    const auto &src_vis = tc.model().ref_graph().ref_value_info();
     ASSERT_EQ(result_vis.size(), src_vis.size());
     for (size_t vi = 0; vi < result_vis.size(); ++vi) {
       EXPECT_EQ(MetadataOf(result_vis[vi]), MetadataOf(src_vis[vi]))
@@ -2082,10 +2084,10 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagToOutputWhenOutputIsS
     found = true;
 
     // Collect the expected metadata from the pre-embedded model.
-    const MetadataMap expected_graph_meta = MetadataOf(tc.model.ref_graph());
+    const MetadataMap expected_graph_meta = MetadataOf(tc.model().ref_graph());
     ASSERT_FALSE(expected_graph_meta.empty()) << "no graph metadata pre-embedded in case";
 
-    const auto &src_nodes = tc.model.ref_graph().ref_node();
+    const auto &src_nodes = tc.model().ref_graph().ref_node();
     std::vector<MetadataMap> expected_node_meta;
     expected_node_meta.reserve(src_nodes.size());
     for (const auto &node : src_nodes) {
@@ -2093,13 +2095,13 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagToOutputWhenOutputIsS
     }
 
     // Collect expected input and output metadata from the pre-embedded model.
-    const auto &src_inputs = tc.model.ref_graph().ref_input();
+    const auto &src_inputs = tc.model().ref_graph().ref_input();
     std::vector<MetadataMap> expected_input_meta;
     expected_input_meta.reserve(src_inputs.size());
     for (const auto &vi : src_inputs) {
       expected_input_meta.push_back(MetadataOf(vi));
     }
-    const auto &src_outputs = tc.model.ref_graph().ref_output();
+    const auto &src_outputs = tc.model().ref_graph().ref_output();
     std::vector<MetadataMap> expected_output_meta;
     expected_output_meta.reserve(src_outputs.size());
     for (const auto &vi : src_outputs) {
@@ -2110,7 +2112,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagToOutputWhenOutputIsS
     // has to infer everything from scratch.
     ModelProto model_copy;
     std::string serialized;
-    tc.model.SerializeToString(serialized);
+    tc.model().SerializeToString(serialized);
     model_copy.ParseFromString(serialized);
 
     GraphProto *graph = model_copy.mutable_graph();
@@ -2171,7 +2173,8 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
 
     ModelProto model_copy;
     std::string serialized;
-    ASSERT_TRUE(tc.model.SerializeToString(serialized)) << "failed to serialize case: " << tc.name;
+    ASSERT_TRUE(tc.model().SerializeToString(serialized))
+        << "failed to serialize case: " << tc.name;
     ASSERT_TRUE(model_copy.ParseFromString(serialized)) << "failed to parse case: " << tc.name;
 
     GraphProto *graph = model_copy.mutable_graph();
@@ -2190,7 +2193,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
     ASSERT_NO_THROW(onnx_optim::annotations::WriteValueAndNodeTagsToMetadata(*graph))
         << "case: " << tc.name;
 
-    const GraphProto &original_graph = tc.model.ref_graph();
+    const GraphProto &original_graph = tc.model().ref_graph();
 
     const auto has_value_tag = [&](const auto &value) {
       return MetadataOf(value).contains(onnx_optim::annotations::kValueTagMetadataKey);
@@ -2271,7 +2274,7 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
     found = true;
     SCOPED_TRACE(tc.name);
 
-    ModelProto model_copy = DeepCopyModel(tc.model, tc.name);
+    ModelProto model_copy = DeepCopyModel(tc.model(), tc.name);
 
     for (auto &out : model_copy.mutable_graph()->ref_output()) {
       if (auto *ott = MutableTensorTypeOf(*out.mutable_type()); ott != nullptr) {
@@ -2302,11 +2305,11 @@ TEST(BackendTestCaseShapeInference, BigModelsReleaseInfo) {
     SCOPED_TRACE(tc.name);
 
     onnx_optim::shapes::ShapesContext ctx;
-    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
     onnx_optim::annotations::ComputeContext inplace;
     inplace.set_events_enabled(true);
-    ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(tc.model.ref_graph(), ctx, false, {}))
+    ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(tc.model().ref_graph(), ctx, false, {}))
         << "case: " << tc.name;
   }
   EXPECT_TRUE(found) << "no big-model backend cases were collected";
@@ -2322,7 +2325,7 @@ TEST(BackendTestCaseShapeInference, BigModelsShapeTag) {
     found = true;
     SCOPED_TRACE(tc.name);
 
-    ModelProto model_copy = DeepCopyModel(tc.model, tc.name);
+    ModelProto model_copy = DeepCopyModel(tc.model(), tc.name);
 
     GraphProto *graph = model_copy.mutable_graph();
     graph->mutable_metadata_props()->clear();
@@ -2354,9 +2357,9 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
     SCOPED_TRACE(tc.name);
 
     onnx_optim::shapes::ShapesContext ctx;
-    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
-    ASSERT_NO_THROW(onnx_optim::annotations::ComputeInPlaceReuse(tc.model.ref_graph(), ctx,
+    ASSERT_NO_THROW(onnx_optim::annotations::ComputeInPlaceReuse(tc.model().ref_graph(), ctx,
                                                                  /*allow_input_overwrite=*/true))
         << "case: " << tc.name;
   }

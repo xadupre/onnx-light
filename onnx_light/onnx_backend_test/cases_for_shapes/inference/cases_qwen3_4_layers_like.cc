@@ -51,7 +51,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   tc.rtol = 1e-3f;
   tc.atol = 1e-5f;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, /*ir_version=*/10, {opset});
 
   GraphProto *graph = model.add_graph();

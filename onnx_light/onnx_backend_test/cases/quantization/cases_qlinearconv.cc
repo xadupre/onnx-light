@@ -34,25 +34,6 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::QLinearConv qc{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const std::vector<int64_t> x_shape{1, 1, 1024, 1024};
-    Tensor x = Tensor::FromUint8("x", x_shape, RandUint<uint8_t>(256, x_shape, 2541));
-    Tensor x_scale = Tensor::FromFloat("x_scale", {}, {0.00369204697f});
-    Tensor x_zero_point("x_zero_point", static_cast<int32_t>(DataType::UINT8), {},
-                        std::vector<uint8_t>{132});
-    Tensor w = Tensor::FromUint8("w", {1, 1, 1, 1}, {0});
-    Tensor w_scale = Tensor::FromFloat("w_scale", {1}, {0.00172794575f});
-    Tensor w_zero_point("w_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
-                        std::vector<uint8_t>{255});
-    Tensor y_scale = Tensor::FromFloat("y_scale", {}, {0.00162681262f});
-    Tensor y_zero_point("y_zero_point", static_cast<int32_t>(DataType::UINT8), {},
-                        std::vector<uint8_t>{123});
-    Tensor B;
-
-    kernel::QLinearConv::Attributes attrs;
-    Tensor y =
-        qc(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point, B, attrs);
-    y.name = "y";
-
     NodeProto node;
     node.set_op_type("QLinearConv");
     node.add_input("x");
@@ -65,8 +46,33 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y_zero_point");
     node.add_output("y");
 
-    Expect(node, {x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point}, {y},
-           "test_cc_qlinearconv_benchmark", {opset}, "backend-test", registry);
+    const std::vector<int64_t> x_shape{1, 1, 1024, 1024};
+    const int64_t count = 1024 * 1024;
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_qlinearconv_benchmark", {opset},
+        {count, 1, 1, 1, 1, 1, 1, 1}, {count}, [qc, x_shape]() -> IoData {
+          Tensor x = Tensor::FromUint8("x", x_shape, RandUint<uint8_t>(256, x_shape, 2541));
+          Tensor x_scale = Tensor::FromFloat("x_scale", {}, {0.00369204697f});
+          Tensor x_zero_point("x_zero_point", static_cast<int32_t>(DataType::UINT8), {},
+                              std::vector<uint8_t>{132});
+          Tensor w = Tensor::FromUint8("w", {1, 1, 1, 1}, {0});
+          Tensor w_scale = Tensor::FromFloat("w_scale", {1}, {0.00172794575f});
+          Tensor w_zero_point("w_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
+                              std::vector<uint8_t>{255});
+          Tensor y_scale = Tensor::FromFloat("y_scale", {}, {0.00162681262f});
+          Tensor y_zero_point("y_zero_point", static_cast<int32_t>(DataType::UINT8), {},
+                              std::vector<uint8_t>{123});
+          Tensor B;
+
+          kernel::QLinearConv::Attributes attrs;
+          Tensor y = qc(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point,
+                        B, attrs);
+          y.name = "y";
+          return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point), std::move(w),
+                         std::move(w_scale), std::move(w_zero_point), std::move(y_scale),
+                         std::move(y_zero_point)},
+                        {std::move(y)}};
+        });
     return;
   }
 

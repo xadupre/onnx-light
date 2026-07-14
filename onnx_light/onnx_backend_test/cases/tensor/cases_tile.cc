@@ -50,11 +50,15 @@ void RegisterTileCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::Tile tile_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor input = Tensor::FromFloat("", {1024, 1024}, Randn<float>({1024, 1024}, 2001));
-    const Tensor repeats = MakeRepeatsTensor({2, 2});
-    const Tensor output = tile_kernel(input, repeats);
-    Expect(MakeTileNode(), {input, repeats}, {output}, "test_cc_tile_precomputed_benchmark",
-           {opset}, "backend-test", registry);
+    NodeProto node = MakeTileNode();
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_tile_precomputed_benchmark", {opset}, {1048576, 2},
+        {4194304}, [tile_kernel]() -> IoData {
+          Tensor input = Tensor::FromFloat("", {1024, 1024}, Randn<float>({1024, 1024}, 2001));
+          Tensor repeats = MakeRepeatsTensor({2, 2});
+          Tensor output = tile_kernel(input, repeats);
+          return IoData{{std::move(input), std::move(repeats)}, {std::move(output)}};
+        });
     return;
   }
 

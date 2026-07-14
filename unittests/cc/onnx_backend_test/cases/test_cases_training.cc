@@ -47,7 +47,7 @@ TEST(BackendTestCase, AdamCasesArePresent) {
   ASSERT_NE(multiple, nullptr);
 
   for (const TestCase *tc : {single, multiple}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -64,7 +64,7 @@ TEST(BackendTestCase, AdamCasesArePresent) {
 
     // Model must import the ``ai.onnx.preview.training`` opset at version 1.
     bool has_training_opset = false;
-    for (const auto &osid : tc->model.ref_opset_import()) {
+    for (const auto &osid : tc->model().ref_opset_import()) {
       const auto &d = osid.ref_domain();
       if (std::string(d.data(), d.size()) == "ai.onnx.preview.training") {
         EXPECT_EQ(osid.version(), 1);
@@ -133,7 +133,7 @@ TEST(BackendTestCase, AdamOnnxCasesArePresent) {
   ASSERT_NE(multiple, nullptr);
 
   for (const TestCase *tc : {single, multiple}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -201,7 +201,7 @@ TEST(BackendTestCase, AdamCasesPassShapeInference) {
 
   for (auto &tc : cases) {
     SCOPED_TRACE(tc.name);
-    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model));
+    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model()));
   }
 }
 
@@ -216,7 +216,7 @@ TEST(BackendTestCase, AdagradOnnxCasesArePresent) {
   ASSERT_NE(multiple, nullptr);
 
   for (const TestCase *tc : {single, multiple}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -232,7 +232,7 @@ TEST(BackendTestCase, AdagradOnnxCasesArePresent) {
     }
 
     bool has_training_opset = false;
-    for (const auto &osid : tc->model.ref_opset_import()) {
+    for (const auto &osid : tc->model().ref_opset_import()) {
       const auto &d = osid.ref_domain();
       if (std::string(d.data(), d.size()) == "ai.onnx.preview.training") {
         EXPECT_EQ(osid.version(), 1);
@@ -293,7 +293,7 @@ TEST(BackendTestCase, AdagradCasesPassShapeInference) {
   ASSERT_FALSE(cases.empty());
   for (auto &tc : cases) {
     SCOPED_TRACE(tc.name);
-    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model));
+    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model()));
   }
 }
 
@@ -310,7 +310,7 @@ TEST(BackendTestCase, MomentumOnnxCasesArePresent) {
   ASSERT_NE(multiple, nullptr);
 
   for (const TestCase *tc : {standard, nesterov, multiple}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -383,7 +383,7 @@ TEST(BackendTestCase, MomentumCasesPassShapeInference) {
   ASSERT_FALSE(cases.empty());
   for (auto &tc : cases) {
     SCOPED_TRACE(tc.name);
-    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model));
+    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model()));
   }
 }
 

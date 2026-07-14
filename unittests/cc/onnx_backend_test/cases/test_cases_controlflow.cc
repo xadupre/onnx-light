@@ -40,7 +40,7 @@ TEST(BackendTestCase, IfCasesArePresent) {
   // Both cases share the same single-node ``If`` topology: scalar BOOL ``cond``
   // input and one tensor output.
   for (const TestCase *tc : {if_true, if_false}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -105,7 +105,7 @@ TEST(BackendTestCase, LoopCasesArePresent) {
   ASSERT_NE(loop11, nullptr);
 
   for (const TestCase *tc : {trip3, trip0}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -139,7 +139,7 @@ TEST(BackendTestCase, LoopCasesArePresent) {
   // scan output. Inputs are ``(trip_count, cond, y)`` and outputs are
   // ``(res_y, res_scan)``.
   {
-    const GraphProto &graph = loop11->model.ref_graph();
+    const GraphProto &graph = loop11->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "Loop");
@@ -184,7 +184,7 @@ TEST(BackendTestCase, ScanCasesArePresent) {
   ASSERT_NE(trip0, nullptr);
 
   for (const TestCase *tc : {trip3, trip0}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();

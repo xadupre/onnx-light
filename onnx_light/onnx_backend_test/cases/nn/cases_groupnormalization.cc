@@ -38,14 +38,16 @@ void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode m
     constexpr int64_t C = 64;
     constexpr int64_t H = 128;
     constexpr int64_t W = 128;
-    Tensor x = Tensor::FromFloat("", {N, C, H, W}, Randn<float>({N, C, H, W}, 1901));
-    Tensor scale = Tensor::FromFloat("", {C}, Randn<float>({C}, 1902));
-    Tensor bias = Tensor::FromFloat("", {C}, Randn<float>({C}, 1903));
-
-    Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2);
-
-    Expect(node, {x, scale, bias}, {y}, "test_cc_group_normalization_example_benchmark", {opset},
-           "backend-test", registry);
+    constexpr int64_t x_count = N * C * H * W;
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_group_normalization_example_benchmark", {opset},
+        {x_count, C, C}, {x_count}, [groupnorm_kernel]() -> IoData {
+          Tensor x = Tensor::FromFloat("", {N, C, H, W}, Randn<float>({N, C, H, W}, 1901));
+          Tensor scale = Tensor::FromFloat("", {C}, Randn<float>({C}, 1902));
+          Tensor bias = Tensor::FromFloat("", {C}, Randn<float>({C}, 1903));
+          Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2);
+          return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
+        });
     return;
   }
 

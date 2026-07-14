@@ -65,7 +65,7 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
                                              scaled,   diff_heads, score_mod,   causal,
                                              soft_cap, rel_pos};
   for (const TestCase *tc : all) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -88,7 +88,7 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
 
     // Model must import the ``ai.onnx.preview`` opset at version 1.
     bool has_preview_opset = false;
-    for (const auto &osid : tc->model.ref_opset_import()) {
+    for (const auto &osid : tc->model().ref_opset_import()) {
       const auto &d = osid.ref_domain();
       if (std::string(d.data(), d.size()) == "ai.onnx.preview") {
         EXPECT_EQ(osid.version(), 1);
@@ -107,13 +107,13 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
 
   // The basic / gqa / diff_head_sizes cases must not carry any modifier
   // attributes.
-  EXPECT_EQ(basic->model.ref_graph().ref_node()[0].ref_attribute().size(), 0u);
-  EXPECT_EQ(gqa->model.ref_graph().ref_node()[0].ref_attribute().size(), 0u);
-  EXPECT_EQ(diff_heads->model.ref_graph().ref_node()[0].ref_attribute().size(), 0u);
+  EXPECT_EQ(basic->model().ref_graph().ref_node()[0].ref_attribute().size(), 0u);
+  EXPECT_EQ(gqa->model().ref_graph().ref_node()[0].ref_attribute().size(), 0u);
+  EXPECT_EQ(diff_heads->model().ref_graph().ref_node()[0].ref_attribute().size(), 0u);
 
   // The scaled case carries exactly one FLOAT attribute named ``scale``.
   {
-    const NodeProto &node = scaled->model.ref_graph().ref_node()[0];
+    const NodeProto &node = scaled->model().ref_graph().ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 1u);
     const AttributeProto &attr = node.ref_attribute()[0];
     EXPECT_EQ(std::string(attr.ref_name().data(), attr.ref_name().size()), "scale");
@@ -124,7 +124,7 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
   // ``prob_mod``, with a structurally non-empty body (``node_size() > 0``)
   // so the function-body builder does not skip it as an identity.
   for (const TestCase *tc : {prob_mod_id, prob_mod_scale}) {
-    const NodeProto &node = tc->model.ref_graph().ref_node()[0];
+    const NodeProto &node = tc->model().ref_graph().ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 1u) << tc->name;
     const AttributeProto &attr = node.ref_attribute()[0];
     EXPECT_EQ(std::string(attr.ref_name().data(), attr.ref_name().size()), "prob_mod") << tc->name;
@@ -163,7 +163,7 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
   // ``score_mod``, with a structurally non-empty body so the function-body
   // builder does not skip it as an identity.
   for (const TestCase *tc : {score_mod, causal, soft_cap, rel_pos}) {
-    const NodeProto &node = tc->model.ref_graph().ref_node()[0];
+    const NodeProto &node = tc->model().ref_graph().ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 1u) << tc->name;
     const AttributeProto &attr = node.ref_attribute()[0];
     EXPECT_EQ(std::string(attr.ref_name().data(), attr.ref_name().size()), "score_mod") << tc->name;
@@ -195,7 +195,7 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
   const TestCase *dbl = FindCase(cases, "test_cc_flexattention_double");
   ASSERT_NE(dbl, nullptr);
   {
-    const GraphProto &graph = dbl->model.ref_graph();
+    const GraphProto &graph = dbl->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     EXPECT_EQ(node.ref_attribute().size(), 0u);

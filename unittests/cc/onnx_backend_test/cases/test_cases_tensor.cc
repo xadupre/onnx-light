@@ -41,7 +41,7 @@ void CheckCastCasePresent(const std::vector<TestCase> &cases, const std::string 
   const TestCase *tc = FindCase(cases, name);
   ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();
@@ -162,7 +162,7 @@ void CheckCastLikeCasePresent(const std::vector<TestCase> &cases, const std::str
   const TestCase *tc = FindCase(cases, name);
   ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();
@@ -302,7 +302,7 @@ TEST(BackendTestCase, AffineGridUpstreamCasesArePresent) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -389,7 +389,7 @@ TEST(BackendTestCase, GridSampleUpstreamCasesArePresent) {
   for (const Expected &exp : expected) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -598,7 +598,7 @@ TEST(BackendTestCase, ExpandDimChangedAndDimUnchangedCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -635,7 +635,7 @@ TEST(BackendTestCase, ReshapeCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -676,7 +676,7 @@ TEST(BackendTestCase, SliceCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -709,7 +709,7 @@ TEST(BackendTestCase, DepthToSpaceCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -744,7 +744,7 @@ TEST(BackendTestCase, SpaceToDepthCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -780,7 +780,7 @@ TEST(BackendTestCase, TransposeDefaultAndPermCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -817,7 +817,7 @@ TEST(BackendTestCase, TilePrecomputedAndOtherCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -865,7 +865,7 @@ TEST(BackendTestCase, SqueezeCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -889,7 +889,7 @@ TEST(BackendTestCase, UnsqueezeCasesRegistered) {
   const TestCase *tc = FindCase(cases, "test_cc_unsqueeze_axes");
   ASSERT_NE(tc, nullptr);
 
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();
@@ -926,7 +926,7 @@ TEST(BackendTestCase, NonZeroCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -960,7 +960,7 @@ TEST(BackendTestCase, TriluCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -994,7 +994,7 @@ TEST(BackendTestCase, ReverseSequenceCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -1029,7 +1029,7 @@ TEST(BackendTestCase, UpsampleCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -1078,7 +1078,7 @@ TEST(BackendTestCase, TensorScatterCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -1115,7 +1115,7 @@ TEST(BackendTestCase, OneHotCasesRegistered) {
     const TestCase *tc = FindCase(cases, exp.name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
 
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();

@@ -61,12 +61,16 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::Split split_kernel{kernel::KernelContext{opset18}};
 
   if (mode == TestMode::BENCHMARK) {
-    Tensor x = Tensor::FromFloat("", {4194303}, Randn<float>({4194303}, 2001));
     NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3"}, /*axis=*/0,
                                    /*has_axis=*/true);
-    std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
-    Expect(node, {x}, outs, "test_cc_split_equal_parts_1d_opset13_benchmark", {opset13},
-           "backend-test", registry);
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_split_equal_parts_1d_opset13_benchmark", {opset13},
+        {4194303}, {1398101, 1398101, 1398101}, [split_kernel]() -> IoData {
+          Tensor x = Tensor::FromFloat("", {4194303}, Randn<float>({4194303}, 2001));
+          std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
+          return IoData{{std::move(x)},
+                        {std::move(outs[0]), std::move(outs[1]), std::move(outs[2])}};
+        });
     return;
   }
 

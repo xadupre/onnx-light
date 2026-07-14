@@ -34,7 +34,7 @@ TEST(BackendTestCase, OptionalCaseIsPresent) {
   }
   ASSERT_NE(opt_case, nullptr);
 
-  const GraphProto &graph = opt_case->model.ref_graph();
+  const GraphProto &graph = opt_case->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();

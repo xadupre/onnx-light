@@ -61,7 +61,7 @@ void RegisterFunctionCallsFunctionAcrossDomainsCase(std::vector<TestCase> &regis
   const std::string name = "test_cc_local_function_calls_function_across_domains";
 
   TestCase tc(name, name, "node", "local_function");
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   model.set_ir_version(kIrVersion);
   model.set_producer_name("backend-test");
   AddOpsetImport(model, "", kOnnxOpsetVersion);
@@ -126,7 +126,7 @@ void RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry, 
   const std::string name = "test_cc_local_function_three_level_nested_calls";
 
   TestCase tc(name, name, "node", "local_function");
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   model.set_ir_version(kIrVersion);
   model.set_producer_name("backend-test");
   AddOpsetImport(model, "", kOnnxOpsetVersion);
@@ -196,7 +196,7 @@ void RegisterFunctionLinkedAttributeCase(std::vector<TestCase> &registry, TestMo
   const std::string name = "test_cc_local_function_linked_attribute";
 
   TestCase tc(name, name, "node", "local_function");
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   model.set_ir_version(kIrVersion);
   model.set_producer_name("backend-test");
   AddOpsetImport(model, "", kOnnxOpsetVersion);

@@ -45,14 +45,18 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
   const kernel::ReverseSequence reverse_seq_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor x = Tensor::FromFloat("X", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
-    const Tensor seq = Tensor::FromInt64("sequence_lens", {1024}, std::vector<int64_t>(1024, 4096));
-    kernel::ReverseSequence::Attributes attrs;
-    attrs.time_axis = 0;
-    attrs.batch_axis = 1;
-    const Tensor y = reverse_seq_kernel(x, seq, attrs);
-    Expect(MakeReverseSequenceNode(0, 1, /*set_time_attr=*/true, /*set_batch_attr=*/true), {x, seq},
-           {y}, "test_cc_reversesequence_time_benchmark", {opset}, "backend-test", registry);
+    NodeProto node = MakeReverseSequenceNode(0, 1, /*set_time_attr=*/true, /*set_batch_attr=*/true);
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_reversesequence_time_benchmark", {opset},
+        {4194304, 1024}, {4194304}, [reverse_seq_kernel]() -> IoData {
+          Tensor x = Tensor::FromFloat("X", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+          Tensor seq = Tensor::FromInt64("sequence_lens", {1024}, std::vector<int64_t>(1024, 4096));
+          kernel::ReverseSequence::Attributes attrs;
+          attrs.time_axis = 0;
+          attrs.batch_axis = 1;
+          Tensor y = reverse_seq_kernel(x, seq, attrs);
+          return IoData{{std::move(x), std::move(seq)}, {std::move(y)}};
+        });
     return;
   }
 

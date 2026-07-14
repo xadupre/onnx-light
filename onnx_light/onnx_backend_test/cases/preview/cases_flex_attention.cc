@@ -502,13 +502,20 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
   };
 
   if (mode == TestMode::BENCHMARK) {
-    Tensor Q = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654321ULL));
-    Tensor K = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654322ULL));
-    Tensor V = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654323ULL));
-    Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_basic_benchmark", {default_opset, opset},
-           "backend-test", registry);
+    const int64_t count = 1 * 8 * 128 * 64;
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_flexattention_basic_benchmark", {default_opset, opset},
+        {count, count, count}, {count}, [flex]() -> IoData {
+          Tensor Q =
+              Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654321ULL));
+          Tensor K =
+              Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654322ULL));
+          Tensor V =
+              Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654323ULL));
+          Tensor Y = flex(Q, K, V);
+          return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+        });
     return;
   }
 
@@ -762,14 +769,18 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor V = Tensor::FromFloat("", {1, 2, 2, 3},
                                  {
                                      // kv head 0
-                                     1.0f, 2.0f,
+                                     1.0f,
+                                     2.0f,
                                      3.0f, // v0
-                                     4.0f, 5.0f,
+                                     4.0f,
+                                     5.0f,
                                      6.0f, // v1
                                            // kv head 1
-                                     -1.0f, 0.0f,
+                                     -1.0f,
+                                     0.0f,
                                      1.0f, // v0
-                                     0.0f, 1.0f,
+                                     0.0f,
+                                     1.0f,
                                      -1.0f, // v1
                                  });
     Tensor Y = flex(Q, K, V);

@@ -44,11 +44,13 @@ void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddStringAttr(node, "norm", "L2");
 
-    Tensor x = Tensor::FromFloat("", {8192, 3}, Randn<float>({8192, 3}, 2621));
-    Tensor y = normalizer.operator()<float>(x, "L2");
-
-    Expect(node, {x}, {y}, "test_cc_normalizer_l2_float_benchmark", {default_opset, opset},
-           "backend-test", registry);
+    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_normalizer_l2_float_benchmark",
+                              {default_opset, opset}, {24576}, {24576}, [normalizer]() -> IoData {
+                                Tensor x =
+                                    Tensor::FromFloat("", {8192, 3}, Randn<float>({8192, 3}, 2621));
+                                Tensor y = normalizer.operator()<float>(x, "L2");
+                                return IoData{{std::move(x)}, {std::move(y)}};
+                              });
     return;
   }
 

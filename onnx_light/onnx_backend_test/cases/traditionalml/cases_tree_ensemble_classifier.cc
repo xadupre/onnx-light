@@ -97,17 +97,21 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
     const std::vector<int64_t> class_ids{0, 1};
     const std::vector<float> class_weights{1.0f, 1.0f};
 
-    Tensor x = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2721));
-    auto yz =
-        cls.operator()<float>(x, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values,
-                              nodes_modes, nodes_truenodeids, nodes_falsenodeids, nodes_missing,
-                              class_treeids, class_nodeids, class_ids, class_weights,
-                              /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
-                              /*base_values=*/{}, /*post_transform=*/"NONE");
-
-    Expect(node, {x}, {yz.first, yz.second},
-           "test_cc_treeensembleclassifier_int64_binary_benchmark", {default_opset, opset},
-           "backend-test", registry);
+    RegisterLazyBenchmarkCase(
+        registry, std::move(node), "test_cc_treeensembleclassifier_int64_binary_benchmark",
+        {default_opset, opset}, {8192}, {8192, 16384},
+        [cls, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+         nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids, class_nodeids,
+         class_ids, class_weights]() -> IoData {
+          Tensor x = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2721));
+          auto [y, z] = cls.operator()<float>(x, nodes_treeids, nodes_nodeids, nodes_featureids,
+                                              nodes_values, nodes_modes, nodes_truenodeids,
+                                              nodes_falsenodeids, nodes_missing, class_treeids,
+                                              class_nodeids, class_ids, class_weights,
+                                              /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
+                                              /*base_values=*/{}, /*post_transform=*/"NONE");
+          return IoData{{std::move(x)}, {std::move(y), std::move(z)}};
+        });
     return;
   }
 

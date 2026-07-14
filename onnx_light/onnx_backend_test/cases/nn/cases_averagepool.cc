@@ -94,11 +94,15 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
 
-    Tensor x = Tensor::FromFloat("", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1101));
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2});
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_default_benchmark", {opset}, "backend-test",
-           registry);
+    constexpr int64_t in_count = 1 * 32 * 128 * 128;
+    constexpr int64_t out_count = 1 * 32 * 127 * 127;
+    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_averagepool_2d_default_benchmark",
+                              {opset}, {in_count}, {out_count}, [average_pool_kernel]() -> IoData {
+                                Tensor x = Tensor::FromFloat("", {1, 32, 128, 128},
+                                                             Randn<float>({1, 32, 128, 128}, 1101));
+                                Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2});
+                                return IoData{{std::move(x)}, {std::move(y)}};
+                              });
     return;
   }
 

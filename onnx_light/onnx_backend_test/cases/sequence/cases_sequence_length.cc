@@ -57,7 +57,7 @@ void RegisterSequenceLengthCase(const std::string &name, const OpsetId &opset,
   TestCase tc(name, name);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
-  tc.model = std::move(model);
+  tc.set_model(std::move(model));
   DataSet ds;
   ds.inputs = {a, b, c};
   ds.outputs = {expected};

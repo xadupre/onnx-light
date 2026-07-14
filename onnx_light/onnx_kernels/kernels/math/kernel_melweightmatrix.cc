@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_kernels/runtime_context.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -40,10 +41,44 @@ double ReadFloatScalar(const Tensor &t, const char *what) {
   EXT_THROW("kernel::MelWeightMatrix ", what, " must be a FLOAT or DOUBLE tensor.");
 }
 
-template <typename T> void FillOutput(const std::vector<double> &values, Tensor &output) {
-  T *po = reinterpret_cast<T *>(output.mutable_bytes());
-  for (size_t i = 0; i < values.size(); ++i) {
-    po[i] = static_cast<T>(values[i]);
+/// Computes the triangular Mel filter-bank weights directly into ``out``,
+/// avoiding any intermediate heap allocation. ``out`` must point to a
+/// zero-initialised buffer of ``num_spectrogram_bins * num_mel_bins_v``
+/// elements of type ``T``.
+template <typename T>
+void ComputeMelMatrix(T *out, int64_t num_mel_bins_v, int64_t num_spectrogram_bins,
+                      const std::vector<int64_t> &bin_indices) {
+  const size_t total = static_cast<size_t>(num_spectrogram_bins * num_mel_bins_v);
+  std::fill(out, out + total, T(0));
+  for (int64_t i = 0; i < num_mel_bins_v; ++i) {
+    const int64_t lower = bin_indices[static_cast<size_t>(i)];
+    const int64_t center = bin_indices[static_cast<size_t>(i + 1)];
+    const int64_t higher = bin_indices[static_cast<size_t>(i + 2)];
+
+    const int64_t low_to_center = center - lower;
+    if (low_to_center == 0) {
+      if (center >= 0 && center < num_spectrogram_bins) {
+        out[static_cast<size_t>(center * num_mel_bins_v + i)] = T(1);
+      }
+    } else {
+      for (int64_t j = lower; j <= center; ++j) {
+        if (j < 0 || j >= num_spectrogram_bins) {
+          continue;
+        }
+        out[static_cast<size_t>(j * num_mel_bins_v + i)] =
+            static_cast<T>(static_cast<double>(j - lower) / static_cast<double>(low_to_center));
+      }
+    }
+    const int64_t center_to_high = higher - center;
+    if (center_to_high > 0) {
+      for (int64_t j = center; j < higher; ++j) {
+        if (j < 0 || j >= num_spectrogram_bins) {
+          continue;
+        }
+        out[static_cast<size_t>(j * num_mel_bins_v + i)] =
+            static_cast<T>(static_cast<double>(higher - j) / static_cast<double>(center_to_high));
+      }
+    }
   }
 }
 
@@ -118,43 +153,12 @@ void MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft_l
     bin_indices[static_cast<size_t>(i)] = static_cast<int64_t>(std::floor(scaled));
   }
 
-  const size_t total = static_cast<size_t>(num_spectrogram_bins * num_mel_bins_v);
-  std::vector<double> values(total, 0.0);
-  for (int64_t i = 0; i < num_mel_bins_v; ++i) {
-    const int64_t lower = bin_indices[static_cast<size_t>(i)];
-    const int64_t center = bin_indices[static_cast<size_t>(i + 1)];
-    const int64_t higher = bin_indices[static_cast<size_t>(i + 2)];
-
-    const int64_t low_to_center = center - lower;
-    if (low_to_center == 0) {
-      if (center >= 0 && center < num_spectrogram_bins) {
-        values[static_cast<size_t>(center * num_mel_bins_v + i)] = 1.0;
-      }
-    } else {
-      for (int64_t j = lower; j <= center; ++j) {
-        if (j < 0 || j >= num_spectrogram_bins) {
-          continue;
-        }
-        values[static_cast<size_t>(j * num_mel_bins_v + i)] =
-            static_cast<double>(j - lower) / static_cast<double>(low_to_center);
-      }
-    }
-    const int64_t center_to_high = higher - center;
-    if (center_to_high > 0) {
-      for (int64_t j = center; j < higher; ++j) {
-        if (j < 0 || j >= num_spectrogram_bins) {
-          continue;
-        }
-        values[static_cast<size_t>(j * num_mel_bins_v + i)] =
-            static_cast<double>(higher - j) / static_cast<double>(center_to_high);
-      }
-    }
-  }
-
   if (output_dtype == DataType::FLOAT) {
-    FillOutput<float>(values, output);
+    ComputeMelMatrix<float>(reinterpret_cast<float *>(output.mutable_bytes()), num_mel_bins_v,
+                            num_spectrogram_bins, bin_indices);
   } else if (output_dtype == DataType::DOUBLE) {
-    FillOutput<double>(values, output);
+    ComputeMelMatrix<double>(reinterpret_cast<double *>(output.mutable_bytes()), num_mel_bins_v,
+                             num_spectrogram_bins, bin_indices);
   } else {
     EXT_THROW("kernel::MelWeightMatrix output_dtype must be FLOAT or DOUBLE.");
   }

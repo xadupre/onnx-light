@@ -460,8 +460,9 @@ struct ByteBuffer {
   ByteBuffer(const ByteBuffer &) = delete;
   ByteBuffer &operator=(const ByteBuffer &) = delete;
 
+  // Invariant: buffer_ != nullptr implies allocator_ != nullptr.
   ~ByteBuffer() {
-    if (buffer_ != nullptr && allocator_ != nullptr) {
+    if (buffer_ != nullptr) {
       allocator_->Free(buffer_);
     }
   }
@@ -469,7 +470,7 @@ struct ByteBuffer {
   // Allocates n_bytes bytes. Uses allocator-backed storage when alloc is
   // non-null (initialization depends on the allocator implementation); falls
   // back to a zero-initialized std::vector<uint8_t> otherwise. Must be called
-  // before any accessor.
+  // exactly once before any accessor.
   void assign(size_t n_bytes, RawBufferAllocator *alloc) {
     if (alloc != nullptr) {
       allocator_ = alloc;
@@ -480,17 +481,20 @@ struct ByteBuffer {
   }
 
   // Accessors below are only valid after a call to assign().
-  uint8_t *data() noexcept { return buffer_ != nullptr ? buffer_->data() : fallback_.data(); }
+  bool is_allocator_backed() const noexcept { return buffer_ != nullptr; }
+  uint8_t *data() noexcept { return is_allocator_backed() ? buffer_->data() : fallback_.data(); }
   const uint8_t *data() const noexcept {
-    return buffer_ != nullptr ? buffer_->data() : fallback_.data();
+    return is_allocator_backed() ? buffer_->data() : fallback_.data();
   }
   uint8_t &operator[](size_t i) noexcept {
-    return buffer_ != nullptr ? (*buffer_)[i] : fallback_[i];
+    return is_allocator_backed() ? (*buffer_)[i] : fallback_[i];
   }
   const uint8_t &operator[](size_t i) const noexcept {
-    return buffer_ != nullptr ? (*buffer_)[i] : fallback_[i];
+    return is_allocator_backed() ? (*buffer_)[i] : fallback_[i];
   }
-  size_t size() const noexcept { return buffer_ != nullptr ? buffer_->size() : fallback_.size(); }
+  size_t size() const noexcept {
+    return is_allocator_backed() ? buffer_->size() : fallback_.size();
+  }
   uint8_t *begin() noexcept { return data(); }
   uint8_t *end() noexcept { return data() + size(); }
   const uint8_t *begin() const noexcept { return data(); }

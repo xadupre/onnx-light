@@ -18,10 +18,15 @@ namespace onnx_backend_test {
 // upstream ONNX backend test cases (``test_sinh_example`` and ``test_sinh``)
 // mirrored from ``onnx.backend.test.case.node.sinh.Sinh`` for FLOAT.
 // ---------------------------------------------------------------------------
-void RegisterSinhCases(std::vector<TestCase> &registry) {
+void RegisterSinhCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Sinh sinh_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Sinh", sinh_kernel, "test_cc_sinh_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

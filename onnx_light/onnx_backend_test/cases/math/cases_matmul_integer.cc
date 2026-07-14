@@ -58,10 +58,26 @@ NodeProto MakeMatMulIntegerNodeNoBZP() {
 // points. Computes ``Y = matmul(A - a_zp, B - b_zp)`` with INT32 output. The
 // case below reproduces the ONNX reference ``test_matmulinteger`` example.
 // ---------------------------------------------------------------------------
-void RegisterMatMulIntegerCases(std::vector<TestCase> &registry) {
+void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const kernel::KernelContext ctx{opset};
   const kernel::MatMulInteger mmi{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> shape = {512, 512};
+    Tensor A = Tensor::FromUint8("A", shape, RandUint<uint8_t>(255, shape, 437));
+    Tensor B = Tensor::FromUint8("B", shape, RandUint<uint8_t>(255, shape, 438));
+    Tensor a_zp("a_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
+                std::vector<uint8_t>{0});
+    Tensor b_zp("b_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
+                std::vector<uint8_t>{0});
+    Tensor Y = mmi(A, B, a_zp, b_zp);
+    Y.name = "Y";
+    NodeProto node = MakeMatMulIntegerNode();
+    Expect(node, {A, B, a_zp, b_zp}, {Y}, "test_cc_matmulinteger_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // 2-D UINT8 case, mirrors ``test_matmulinteger`` from onnx/backend.
   {

@@ -27,10 +27,24 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // Sum — element-wise variadic sum with NumPy-style broadcasting (since
 // opset 8; opset 13 widens the type constraint to include bfloat16).
 // ---------------------------------------------------------------------------
-void RegisterSumCases(std::vector<TestCase> &registry) {
+void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Sum sum_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Sum");
+    node.add_input("data_0");
+    node.add_input("data_1");
+    node.add_output("sum");
+    const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
+    Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 423));
+    Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 424));
+    Tensor z = sum_kernel({x0, x1});
+    Expect(node, {x0, x1}, {z}, "test_cc_sum_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Single-input variant: Sum acts as Identity.
   {

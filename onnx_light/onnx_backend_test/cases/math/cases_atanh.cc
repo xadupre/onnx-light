@@ -20,10 +20,15 @@ namespace onnx_backend_test {
 // ``test_atanh``) mirrored from ``onnx.backend.test.case.node.atanh.Atanh``
 // for the FLOAT variant. atanh is defined on the open interval (-1, 1).
 // ---------------------------------------------------------------------------
-void RegisterAtanhCases(std::vector<TestCase> &registry) {
+void RegisterAtanhCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Atanh atanh_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Atanh", atanh_kernel, "test_cc_atanh_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

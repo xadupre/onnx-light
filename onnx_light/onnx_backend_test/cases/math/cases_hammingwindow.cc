@@ -14,11 +14,22 @@ namespace onnx_backend_test {
 // 17). Registers both the default periodic case and the symmetric variant
 // (``periodic = 0``).
 // ---------------------------------------------------------------------------
-void RegisterHammingWindowCases(std::vector<TestCase> &registry) {
+void RegisterHammingWindowCases(std::vector<TestCase> &registry, TestMode mode) {
   constexpr int32_t kSize = 10;
   const OpsetId opset = DefaultOpset(17);
   const kernel::KernelContext ctx{opset};
   const kernel::HammingWindow hamming_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("HammingWindow");
+    node.add_input("x");
+    node.add_output("y");
+    Tensor x = Tensor::FromInt32("", {}, {1 << 22});
+    Tensor y = hamming_kernel(x, /*periodic=*/true);
+    Expect(node, {x}, {y}, "test_cc_hammingwindow_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Default periodic variant.
   {

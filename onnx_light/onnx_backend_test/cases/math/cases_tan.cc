@@ -18,10 +18,15 @@ namespace onnx_backend_test {
 // ONNX backend test cases (``test_tan_example`` and ``test_tan``) mirrored
 // from ``onnx.backend.test.case.node.tan.Tan`` for the FLOAT variant.
 // ---------------------------------------------------------------------------
-void RegisterTanCases(std::vector<TestCase> &registry) {
+void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Tan tan_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Tan", tan_kernel, "test_cc_tan_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

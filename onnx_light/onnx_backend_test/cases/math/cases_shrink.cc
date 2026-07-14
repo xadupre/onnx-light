@@ -11,10 +11,26 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterShrinkCases(std::vector<TestCase> &registry) {
+void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(9);
   const kernel::KernelContext ctx{opset};
   const kernel::Shrink shrink_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Shrink");
+    node.add_input("x");
+    node.add_output("y");
+    AttributeProto *lambd = node.add_attribute();
+    lambd->set_name("lambd");
+    lambd->set_type(AttributeProto::FLOAT);
+    lambd->set_f(1.5f);
+    Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+    Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f);
+    Expect(node, {x}, {y}, "test_cc_shrink_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   {
     // Mirrors the ONNX test_shrink_hard reference (bias=0.0, lambd=1.5).

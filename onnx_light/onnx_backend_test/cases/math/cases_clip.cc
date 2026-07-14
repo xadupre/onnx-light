@@ -62,7 +62,7 @@ std::vector<int8_t> ToInt8(const std::vector<float> &v) {
 // inputs since opset 11, widened to all numeric types in opset 12). Mirrors
 // the upstream ``onnx.backend.test.case.node.clip.Clip`` cases.
 // ---------------------------------------------------------------------------
-void RegisterClipCases(std::vector<TestCase> &registry) {
+void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Clip clip_kernel{ctx};

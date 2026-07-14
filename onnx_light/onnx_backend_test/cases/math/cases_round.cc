@@ -17,10 +17,15 @@ namespace onnx_backend_test {
 // upstream ONNX backend test case (``test_round``) mirrored from
 // ``onnx.backend.test.case.node.round.Round``.
 // ---------------------------------------------------------------------------
-void RegisterRoundCases(std::vector<TestCase> &registry) {
+void RegisterRoundCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Round round_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Round", round_kernel, "test_cc_round_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

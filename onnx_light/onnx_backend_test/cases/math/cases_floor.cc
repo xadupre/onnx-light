@@ -20,10 +20,15 @@ namespace onnx_backend_test {
 // ONNX backend test cases (``test_floor_example`` and ``test_floor``)
 // mirrored from ``onnx.backend.test.case.node.floor.Floor``.
 // ---------------------------------------------------------------------------
-void RegisterFloorCases(std::vector<TestCase> &registry) {
+void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Floor floor_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Floor", floor_kernel, "test_cc_floor_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

@@ -31,10 +31,15 @@ Tensor PositiveRandFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // Registers both a small deterministic ``test_cc_log`` case and upstream ONNX
 // backend test cases (``test_log_example`` and ``test_log``) for FLOAT.
 // ---------------------------------------------------------------------------
-void RegisterLogCases(std::vector<TestCase> &registry) {
+void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Log log_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Log", log_kernel, "test_cc_log_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

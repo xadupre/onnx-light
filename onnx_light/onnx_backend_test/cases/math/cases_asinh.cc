@@ -32,10 +32,15 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ``test_asinh``) mirrored from ``onnx.backend.test.case.node.asinh.Asinh``
 // for the FLOAT variant.
 // ---------------------------------------------------------------------------
-void RegisterAsinhCases(std::vector<TestCase> &registry) {
+void RegisterAsinhCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Asinh asinh_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Asinh", asinh_kernel, "test_cc_asinh_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

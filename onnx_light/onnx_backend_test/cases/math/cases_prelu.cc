@@ -29,10 +29,15 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // PRelu — y = x when x >= 0, slope * x otherwise. Element-wise with
 // unidirectional broadcasting of ``slope`` to ``x`` (since opset 16).
 // ---------------------------------------------------------------------------
-void RegisterPReluCases(std::vector<TestCase> &registry) {
+void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
   const kernel::KernelContext ctx{opset};
   const kernel::PRelu prelu_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkBinaryFloat("PRelu", prelu_kernel, "test_cc_prelu_benchmark", opset, registry);
+    return;
+  }
 
   // Equal-shape variant.
   {

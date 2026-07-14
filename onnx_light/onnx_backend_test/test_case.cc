@@ -275,13 +275,28 @@ void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string
   }
 }
 
-std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_big) {
+void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
+                              const OpRegisterModeMap &entries, TestMode mode) {
+  if (op_type.empty()) {
+    for (const auto &entry : entries) {
+      entry.second(registry, mode);
+    }
+    return;
+  }
+  auto it = entries.find(op_type);
+  if (it != entries.end()) {
+    it->second(registry, mode);
+  }
+}
+
+std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_big,
+                                       TestMode mode) {
   std::vector<TestCase> registry;
   CollectControlflowTestCases(registry, op_type);
   CollectGeneratorTestCases(registry, op_type);
   CollectImageTestCases(registry, op_type);
   CollectLogicalTestCases(registry, op_type);
-  CollectMathTestCases(registry, op_type);
+  CollectMathTestCases(registry, op_type, mode);
   CollectNNTestCases(registry, op_type);
   CollectObjectDetectionTestCases(registry, op_type);
   CollectOptionalTestCases(registry, op_type);
@@ -312,8 +327,9 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_
   return filtered;
 }
 
-std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex, bool include_big) {
-  std::vector<TestCase> all_cases = CollectTestCases("", include_big);
+std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex, bool include_big,
+                                             TestMode mode) {
+  std::vector<TestCase> all_cases = CollectTestCases("", include_big, mode);
   if (name_regex.empty()) {
     return all_cases;
   }

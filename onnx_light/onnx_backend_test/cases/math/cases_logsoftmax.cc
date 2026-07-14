@@ -11,7 +11,26 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterLogSoftmaxCases(std::vector<TestCase> &registry) {
+void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::BENCHMARK) {
+    const OpsetId opset = DefaultOpset(13);
+    const kernel::KernelContext ctx{opset};
+    const kernel::LogSoftmax logsoftmax_kernel{ctx};
+    NodeProto node;
+    node.set_op_type("LogSoftmax");
+    node.add_input("input");
+    node.add_output("output");
+    AttributeProto *axis = node.add_attribute();
+    axis->set_name("axis");
+    axis->set_type(AttributeProto::INT);
+    axis->set_i(1);
+    const std::vector<int64_t> shape = {2048, 2048};
+    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 432));
+    Tensor y = logsoftmax_kernel(x, 1);
+    Expect(node, {x}, {y}, "test_cc_logsoftmax_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
+
   {
     const OpsetId opset = DefaultOpset(13);
     const kernel::KernelContext ctx{opset};

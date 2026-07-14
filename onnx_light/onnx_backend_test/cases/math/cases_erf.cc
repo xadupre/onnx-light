@@ -19,10 +19,15 @@ namespace onnx_backend_test {
 // Registers both a small deterministic ``test_cc_erf`` case and upstream ONNX
 // backend test cases (``test_erf_example`` and ``test_erf``) for FLOAT.
 // ---------------------------------------------------------------------------
-void RegisterErfCases(std::vector<TestCase> &registry) {
+void RegisterErfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Erf erf_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Erf", erf_kernel, "test_cc_erf_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

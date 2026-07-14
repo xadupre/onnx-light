@@ -11,10 +11,15 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterSwishCases(std::vector<TestCase> &registry) {
+void RegisterSwishCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(24);
   const kernel::KernelContext ctx{opset};
   const kernel::Swish swish_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Swish", swish_kernel, "test_cc_swish_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

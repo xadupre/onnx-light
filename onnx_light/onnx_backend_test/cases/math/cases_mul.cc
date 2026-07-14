@@ -27,10 +27,15 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 // Mul — z = x * y, element-wise with broadcasting (since opset 14).
 // ---------------------------------------------------------------------------
-void RegisterMulCases(std::vector<TestCase> &registry) {
+void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
   const kernel::KernelContext ctx{opset};
   const kernel::Mul mul_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkBinaryFloat("Mul", mul_kernel, "test_cc_mul_benchmark", opset, registry);
+    return;
+  }
 
   // Equal-shape variant.
   {

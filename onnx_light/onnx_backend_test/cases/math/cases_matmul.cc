@@ -12,10 +12,24 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterMatMulCases(std::vector<TestCase> &registry) {
+void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::MatMul matmul_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("MatMul");
+    node.add_input("A");
+    node.add_input("B");
+    node.add_output("Y");
+    const std::vector<int64_t> shape = {512, 512};
+    Tensor a = Tensor::FromFloat("", shape, Randn<float>(shape, 435));
+    Tensor b = Tensor::FromFloat("", shape, Randn<float>(shape, 436));
+    Tensor y = matmul_kernel(a, b);
+    Expect(node, {a, b}, {y}, "test_cc_matmul_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // 2-D x 2-D matrix product.
   {

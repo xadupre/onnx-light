@@ -20,10 +20,24 @@ namespace onnx_backend_test {
 // opset 8; opset 12 widens to all numeric types; opset 13 widens further to
 // include bfloat16). Mirrors ``onnx.backend.test.case.node.max.Max``.
 // ---------------------------------------------------------------------------
-void RegisterMaxCases(std::vector<TestCase> &registry) {
+void RegisterMaxCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Max max_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Max");
+    node.add_input("data_0");
+    node.add_input("data_1");
+    node.add_output("result");
+    const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
+    Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 401));
+    Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 402));
+    Tensor z = max_kernel({x0, x1});
+    Expect(node, {x0, x1}, {z}, "test_cc_max_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // ``Max.export()`` -- three-input example mirroring the upstream Python
   // reference test ``test_max_example``.

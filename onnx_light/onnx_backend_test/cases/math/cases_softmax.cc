@@ -11,7 +11,26 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterSoftmaxCases(std::vector<TestCase> &registry) {
+void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::BENCHMARK) {
+    const OpsetId opset = DefaultOpset(13);
+    const kernel::KernelContext ctx{opset};
+    const kernel::Softmax softmax_kernel{ctx};
+    NodeProto node;
+    node.set_op_type("Softmax");
+    node.add_input("input");
+    node.add_output("output");
+    AttributeProto *axis = node.add_attribute();
+    axis->set_name("axis");
+    axis->set_type(AttributeProto::INT);
+    axis->set_i(1);
+    const std::vector<int64_t> shape = {2048, 2048};
+    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 431));
+    Tensor y = softmax_kernel(x, 1);
+    Expect(node, {x}, {y}, "test_cc_softmax_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
+
   {
     const OpsetId opset = DefaultOpset(13);
     const kernel::KernelContext ctx{opset};

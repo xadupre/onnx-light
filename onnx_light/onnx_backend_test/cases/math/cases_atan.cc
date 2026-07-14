@@ -31,10 +31,15 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ONNX backend test cases (``test_atan_example`` and ``test_atan``) mirrored
 // from ``onnx.backend.test.case.node.atan.Atan`` for the FLOAT variant.
 // ---------------------------------------------------------------------------
-void RegisterAtanCases(std::vector<TestCase> &registry) {
+void RegisterAtanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Atan atan_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Atan", atan_kernel, "test_cc_atan_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

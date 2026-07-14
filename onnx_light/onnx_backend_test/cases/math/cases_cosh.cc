@@ -31,10 +31,15 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ONNX backend test cases (``test_cosh_example`` and ``test_cosh``) mirrored
 // from ``onnx.backend.test.case.node.cosh.Cosh`` for the FLOAT variant.
 // ---------------------------------------------------------------------------
-void RegisterCoshCases(std::vector<TestCase> &registry) {
+void RegisterCoshCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Cosh cosh_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Cosh", cosh_kernel, "test_cc_cosh_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

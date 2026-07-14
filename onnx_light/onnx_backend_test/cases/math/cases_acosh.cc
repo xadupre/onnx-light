@@ -36,10 +36,15 @@ Tensor RandFloatInRange(const std::vector<int64_t> &shape, float low, float high
 // ``test_acosh``) mirrored from ``onnx.backend.test.case.node.acosh.Acosh``
 // for the FLOAT variant.
 // ---------------------------------------------------------------------------
-void RegisterAcoshCases(std::vector<TestCase> &registry) {
+void RegisterAcoshCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::Acosh acosh_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Acosh", acosh_kernel, "test_cc_acosh_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

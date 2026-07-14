@@ -11,10 +11,30 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterHardSigmoidCases(std::vector<TestCase> &registry) {
+void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::HardSigmoid hard_sigmoid_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("HardSigmoid");
+    node.add_input("x");
+    node.add_output("y");
+    AttributeProto *alpha = node.add_attribute();
+    alpha->set_name("alpha");
+    alpha->set_type(AttributeProto::FLOAT);
+    alpha->set_f(0.5f);
+    AttributeProto *beta = node.add_attribute();
+    beta->set_name("beta");
+    beta->set_type(AttributeProto::FLOAT);
+    beta->set_f(0.6f);
+    Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+    Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
+    Expect(node, {x}, {y}, "test_cc_hardsigmoid_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   {
     NodeProto node;

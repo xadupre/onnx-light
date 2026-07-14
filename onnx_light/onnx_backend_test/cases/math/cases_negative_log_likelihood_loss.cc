@@ -16,10 +16,31 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry) {
+void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::NegativeLogLikelihoodLoss nll_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("NegativeLogLikelihoodLoss");
+    node.add_input("input");
+    node.add_input("target");
+    node.add_output("loss");
+    constexpr int64_t kN = 8192;
+    constexpr int64_t kC = 1024;
+    Tensor input = Tensor::FromFloat("", {kN, kC}, Randn<float>({kN, kC}, 444));
+    std::vector<int64_t> target_values(kN);
+    for (int64_t i = 0; i < kN; ++i) {
+      target_values[i] = i % kC;
+    }
+    Tensor target = Tensor::FromInt64("", {kN}, target_values);
+    Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"mean",
+                             /*has_ignore_index=*/false, /*ignore_index=*/0);
+    Expect(node, {input, target}, {std::move(loss)},
+           "test_cc_negative_log_likelihood_loss_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // 3 samples x 5 classes — default "mean" reduction. The ``input`` tensor is
   // assumed to already contain log-probabilities.

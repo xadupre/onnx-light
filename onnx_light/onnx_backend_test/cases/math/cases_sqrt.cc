@@ -34,10 +34,15 @@ Tensor NonNegativeRandFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // Registers a small deterministic ``test_cc_sqrt`` case and upstream ONNX
 // backend test cases (``test_sqrt_example`` and ``test_sqrt``) for FLOAT.
 // ---------------------------------------------------------------------------
-void RegisterSqrtCases(std::vector<TestCase> &registry) {
+void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Sqrt sqrt_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Sqrt", sqrt_kernel, "test_cc_sqrt_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

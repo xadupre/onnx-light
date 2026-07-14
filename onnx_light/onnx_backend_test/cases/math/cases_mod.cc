@@ -54,10 +54,20 @@ std::vector<int32_t> Arange30() {
 // ---------------------------------------------------------------------------
 // Mod — z = x mod y, element-wise with broadcasting (since opset 13).
 // ---------------------------------------------------------------------------
-void RegisterModCases(std::vector<TestCase> &registry) {
+void RegisterModCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Mod mod_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeModNode(/*fmod=*/1);
+    const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
+    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 427));
+    Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, 428));
+    Tensor z = mod_kernel(x, y, /*fmod=*/1);
+    Expect(node, {x, y}, {z}, "test_cc_mod_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Upstream ONNX backend test cases for the ``Mod`` operator (mirror the
   // ``onnx.backend.test.case.node.mod.Mod`` Python class). Floating-point

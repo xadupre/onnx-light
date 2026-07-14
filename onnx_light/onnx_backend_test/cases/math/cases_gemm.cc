@@ -58,10 +58,20 @@ NodeProto MakeGemmNode(bool has_bias, float alpha = 1.0f, float beta = 1.0f, int
 
 } // namespace
 
-void RegisterGemmCases(std::vector<TestCase> &registry) {
+void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Gemm gemm_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeGemmNode(/*has_bias=*/false);
+    const std::vector<int64_t> shape = {512, 512};
+    Tensor a = Tensor::FromFloat("", shape, Randn<float>(shape, 433));
+    Tensor b = Tensor::FromFloat("", shape, Randn<float>(shape, 434));
+    Tensor y = gemm_kernel(a, b, nullptr, 1.0f, 1.0f, 0, 0);
+    Expect(node, {a, b}, {y}, "test_cc_gemm_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_gemm_default — Y = A * B, no bias, default attributes.
   {

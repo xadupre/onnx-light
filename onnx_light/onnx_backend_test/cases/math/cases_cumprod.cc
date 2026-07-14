@@ -41,10 +41,20 @@ NodeProto MakeCumProdNode(bool exclusive, bool reverse) {
 // CumProd — cumulative product of the input tensor along a selected axis.
 // Mirrors the docstring example in the upstream ``CumProd`` schema (opset 26).
 // ---------------------------------------------------------------------------
-void RegisterCumProdCases(std::vector<TestCase> &registry) {
+void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(26);
   const kernel::KernelContext ctx{opset};
   const kernel::CumProd cumprod_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);
+    const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
+    Tensor x = Tensor::FromDouble("", shape, std::vector<double>(kBenchmarkElementwiseSize, 1.0));
+    Tensor axis = Tensor::FromInt32("", {}, {0});
+    Tensor y = cumprod_kernel(x, axis);
+    Expect(node, {x, axis}, {y}, "test_cc_cumprod_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // 1-D inclusive cumulative product (axis = 0).
   {

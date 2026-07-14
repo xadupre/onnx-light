@@ -36,10 +36,21 @@ NodeProto MakeEinsumNode(int n_inputs, const std::string &equation) {
 // ---------------------------------------------------------------------------
 // Einsum — Einstein summation (since opset 12).
 // ---------------------------------------------------------------------------
-void RegisterEinsumCases(std::vector<TestCase> &registry) {
+void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Einsum einsum_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::string eq = "ij,jk->ik";
+    NodeProto node = MakeEinsumNode(2, eq);
+    const std::vector<int64_t> shape = {512, 512};
+    Tensor a = Tensor::FromFloat("", shape, Randn<float>(shape, 440));
+    Tensor b = Tensor::FromFloat("", shape, Randn<float>(shape, 441));
+    Tensor z = einsum_kernel({a, b}, eq);
+    Expect(node, {a, b}, {z}, "test_cc_einsum_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Transpose: "ij->ji" (explicit).
   {

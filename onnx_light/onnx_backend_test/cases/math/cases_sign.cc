@@ -18,10 +18,15 @@ namespace onnx_backend_test {
 // Registers a small deterministic ``test_cc_sign`` case and the upstream
 // ONNX backend test case ``test_sign``.
 // ---------------------------------------------------------------------------
-void RegisterSignCases(std::vector<TestCase> &registry) {
+void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Sign sign_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkUnaryFloat("Sign", sign_kernel, "test_cc_sign_benchmark", opset, registry);
+    return;
+  }
 
   {
     NodeProto node;

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/kernels/math/matmul_shape_utils.h"
 
 #include "onnx_kernels/kernels/_helpers/float16_promote.h"
 
@@ -40,55 +41,19 @@ std::vector<int64_t> ComputeStrides(const Shape &shape) {
 }
 
 Shape PromoteMatMulShape(const Shape &shape, bool is_left) {
-  if (shape.size() == 1) {
-    if (is_left) {
-      return {1, shape[0]};
-    }
-    return {shape[0], 1};
-  }
-  return shape;
+  return detail::PromoteMatMulShape(shape, is_left);
 }
 
 Shape BroadcastPrefix(const Shape &a_prefix, const Shape &b_prefix) {
-  const size_t rank = std::max(a_prefix.size(), b_prefix.size());
-  Shape out;
-  out.assign(rank, 1);
-  for (size_t i = 0; i < rank; ++i) {
-    const bool has_a = i + a_prefix.size() >= rank;
-    const bool has_b = i + b_prefix.size() >= rank;
-    const int64_t da = has_a ? a_prefix[i - (rank - a_prefix.size())] : 1;
-    const int64_t db = has_b ? b_prefix[i - (rank - b_prefix.size())] : 1;
-    if (da == db || da == 1) {
-      out[i] = db;
-    } else if (db == 1) {
-      out[i] = da;
-    } else {
-      EXT_THROW_INVALID(kMatMulName, " inputs are not broadcast-compatible on batch dimensions.");
-    }
-  }
-  return out;
+  return detail::BroadcastMatMulPrefix(a_prefix, b_prefix, kMatMulName,
+                                       " inputs are not broadcast-compatible on batch dimensions.");
 }
 
 Shape ComputeMatMulOutputShape(const Shape &a_shape, const Shape &b_shape) {
-  EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(), kMatMulName,
-                      " does not accept rank-0 inputs.");
-  const Shape a2 = PromoteMatMulShape(a_shape, true);
-  const Shape b2 = PromoteMatMulShape(b_shape, false);
-  EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2], kMatMulName,
-                      " got incompatible inner dimensions.");
-
-  Shape a_prefix, b_prefix;
-  a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
-  b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
-  Shape out_shape = BroadcastPrefix(a_prefix, b_prefix);
-
-  if (a_shape.size() != 1) {
-    out_shape.push_back(a2[a2.size() - 2]);
-  }
-  if (b_shape.size() != 1) {
-    out_shape.push_back(b2[b2.size() - 1]);
-  }
-  return out_shape;
+  return detail::ComputeMatMulOutputShape(
+      a_shape, b_shape, kMatMulName, " does not accept rank-0 inputs.",
+      " got incompatible inner dimensions.",
+      " inputs are not broadcast-compatible on batch dimensions.");
 }
 
 template <typename T> void MatMulCompute(const Tensor &a, const Tensor &b, Tensor &output) {

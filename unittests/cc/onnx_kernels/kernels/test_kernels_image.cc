@@ -630,9 +630,9 @@ TEST(KernelClass, ImageDecoderDecodesAsciiPgmGraymap) {
 }
 
 // Capacity for the SimpleRawBufferAllocator used in allocator tests below.
-// Must be at least the maximum number of concurrent ByteBuffer allocations
-// made by a single TryDecode* call: PNG uses 1 (rows), PNM uses 1 (src),
-// JPEG uses up to 4 (one samples buffer per colour component).
+// Must be at least the maximum number of concurrent TemporaryTypedBuffer
+// allocations made by a single TryDecode* call: PNG uses 1 (rows), PNM uses 1
+// (src), JPEG uses up to 4 (one samples buffer per colour component).
 constexpr size_t kAllocatorTestCapacity = 8;
 
 TEST(KernelClass, ImageDecoderPngUsesAllocatorForInternalBuffers) {

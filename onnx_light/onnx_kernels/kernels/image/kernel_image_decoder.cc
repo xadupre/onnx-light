@@ -4,17 +4,17 @@
 
 #include "onnx_kernels/kernels/image/include_image_kernels.h"
 
-#include "onnx_kernels/raw_buffer_allocator.h"
+#include "onnx_kernels/kernels/_helpers/temporary_buffer.h"
 #include "onnx_kernels/runtime_context.h"
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -452,82 +452,6 @@ bool TryDecodeTiff(const uint8_t *data, size_t size, const std::string &pixel_fo
 // scope and fall through to the empty-matrix path.
 // ---------------------------------------------------------------------------
 
-// RAII wrapper for a temporary byte buffer backed by either an
-// allocator-owned RawBuffer (when an allocator is provided) or a
-// fallback std::vector<uint8_t>. Non-copyable and non-moveable to keep
-// ownership clear.
-struct ByteBuffer {
-  ByteBuffer() = default;
-  ByteBuffer(const ByteBuffer &) = delete;
-  ByteBuffer &operator=(const ByteBuffer &) = delete;
-
-  // Invariant: buffer_ != nullptr implies allocator_ != nullptr.
-  ~ByteBuffer() {
-    if (buffer_ != nullptr) {
-      allocator_->Free(buffer_);
-    }
-  }
-
-  // Allocates n_bytes bytes. Uses allocator-backed storage when alloc is
-  // non-null (initialization depends on the allocator); falls back to a
-  // zero-initialized std::vector<uint8_t> otherwise. Must be called exactly
-  // once before any accessor is used; subsequent calls trigger the debug
-  // assertion. The allocator must throw (e.g. std::bad_alloc) on failure
-  // rather than returning nullptr.
-  void assign(size_t n_bytes, RawBufferAllocator *alloc) {
-    assert(buffer_ == nullptr && fallback_.empty() &&
-           "ByteBuffer::assign() must be called exactly once");
-    if (alloc != nullptr) {
-      allocator_ = alloc;
-      buffer_ = alloc->Allocate(n_bytes);
-    } else {
-      fallback_.assign(n_bytes, uint8_t{0});
-    }
-  }
-
-  // Returns true when the buffer is backed by the allocator, false when backed
-  // by the fallback vector. Valid only after assign().
-  bool is_allocator_backed() const noexcept { return buffer_ != nullptr; }
-
-  // Returns a pointer to the first byte. Valid only after assign().
-  uint8_t *data() noexcept {
-    assert((buffer_ != nullptr || !fallback_.empty()) &&
-           "ByteBuffer::data() called before assign()");
-    return is_allocator_backed() ? buffer_->data() : fallback_.data();
-  }
-  // Returns a const pointer to the first byte. Valid only after assign().
-  const uint8_t *data() const noexcept {
-    assert((buffer_ != nullptr || !fallback_.empty()) &&
-           "ByteBuffer::data() called before assign()");
-    return is_allocator_backed() ? buffer_->data() : fallback_.data();
-  }
-  // Returns a reference to the byte at index i. Valid only after assign().
-  uint8_t &operator[](size_t i) noexcept {
-    return is_allocator_backed() ? (*buffer_)[i] : fallback_[i];
-  }
-  // Returns a const reference to the byte at index i. Valid only after assign().
-  const uint8_t &operator[](size_t i) const noexcept {
-    return is_allocator_backed() ? (*buffer_)[i] : fallback_[i];
-  }
-  // Returns the number of bytes in the buffer. Valid only after assign().
-  size_t size() const noexcept {
-    return is_allocator_backed() ? buffer_->size() : fallback_.size();
-  }
-  // Returns a pointer to the first byte, for range-for compatibility.
-  uint8_t *begin() noexcept { return data(); }
-  // Returns a pointer one past the last byte, for range-for compatibility.
-  uint8_t *end() noexcept { return data() + size(); }
-  // Returns a const pointer to the first byte, for range-for compatibility.
-  const uint8_t *begin() const noexcept { return data(); }
-  // Returns a const pointer one past the last byte, for range-for compatibility.
-  const uint8_t *end() const noexcept { return data() + size(); }
-
-private:
-  std::vector<uint8_t> fallback_;
-  RawBufferAllocator *allocator_ = nullptr;
-  RawBuffer *buffer_ = nullptr;
-};
-
 // Inverse zig-zag: ``kZigZagInverse[k]`` is the natural-order row-major
 // 8x8 position of the k-th coefficient in zig-zag scan order.
 constexpr std::array<uint8_t, 64> kZigZagInverse = {
@@ -552,7 +476,7 @@ struct ComponentInfo {
   int dc_table_id = 0;
   int ac_table_id = 0;
   int32_t prev_dc = 0;
-  ByteBuffer samples;
+  std::unique_ptr<detail::TemporaryTypedBuffer<uint8_t>> samples;
   int sample_width = 0;
   int sample_height = 0;
 };
@@ -992,7 +916,8 @@ bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_fo
     ComponentInfo &c = components[i];
     c.sample_width = mcu_cols * c.h_sampling * 8;
     c.sample_height = mcu_rows * c.v_sampling * 8;
-    c.samples.assign(static_cast<size_t>(c.sample_width) * c.sample_height, allocator);
+    c.samples = std::make_unique<detail::TemporaryTypedBuffer<uint8_t>>(
+        static_cast<size_t>(c.sample_width) * c.sample_height, allocator, "JPEG samples");
     c.prev_dc = 0;
   }
 
@@ -1014,7 +939,7 @@ bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_fo
             const int sample_x0 = (mx * c.h_sampling + bx) * 8;
             const int sample_y0 = (my * c.v_sampling + by) * 8;
             for (int yy = 0; yy < 8; ++yy) {
-              uint8_t *dst = c.samples.data() +
+              uint8_t *dst = c.samples->data() +
                              static_cast<size_t>(sample_y0 + yy) * c.sample_width + sample_x0;
               const uint8_t *src = block_samples.data() + yy * 8;
               for (int xx = 0; xx < 8; ++xx) {
@@ -1075,10 +1000,10 @@ bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_fo
     const int wy2 = fancy_w2(vfac);
     const int wx1 = fancy_w1(hfac);
     const int wx2 = fancy_w2(hfac);
-    const int v11 = c.samples[static_cast<size_t>(sy1) * c.sample_width + sx1];
-    const int v12 = c.samples[static_cast<size_t>(sy1) * c.sample_width + sx2];
-    const int v21 = c.samples[static_cast<size_t>(sy2) * c.sample_width + sx1];
-    const int v22 = c.samples[static_cast<size_t>(sy2) * c.sample_width + sx2];
+    const int v11 = c.samples->data()[static_cast<size_t>(sy1) * c.sample_width + sx1];
+    const int v12 = c.samples->data()[static_cast<size_t>(sy1) * c.sample_width + sx2];
+    const int v21 = c.samples->data()[static_cast<size_t>(sy2) * c.sample_width + sx1];
+    const int v22 = c.samples->data()[static_cast<size_t>(sy2) * c.sample_width + sx2];
     const int total = (wy1 + wy2) * (wx1 + wx2);
     const int sum = wy1 * wx1 * v11 + wy1 * wx2 * v12 + wy2 * wx1 * v21 + wy2 * wx2 * v22;
     return static_cast<uint8_t>((sum + total / 2) / total);
@@ -1513,8 +1438,8 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
   if (raw.size() < expected)
     return false;
 
-  ByteBuffer rows;
-  rows.assign(static_cast<size_t>(height) * row_bytes, allocator);
+  detail::TemporaryTypedBuffer<uint8_t> rows(static_cast<size_t>(height) * row_bytes, allocator,
+                                             "PNG rows");
   const int bpp = src_channels;
   for (int r = 0; r < height; ++r) {
     uint8_t filt_type = raw[static_cast<size_t>(r) * (1u + row_bytes)];
@@ -1688,20 +1613,20 @@ bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_fo
     return false;
   }
 
-  ByteBuffer rgb;
-  rgb.assign(pixel_count * 3u, allocator);
+  const size_t rgb_byte_count = pixel_count * 3u;
+  detail::TemporaryTypedBuffer<uint8_t> rgb(rgb_byte_count, allocator, "WebP rgb");
   const int rgb_stride = width * 3;
   const uint8_t *decoded =
-      s_webp_api.decode_rgb_into(data, size, rgb.data(), rgb.size(), rgb_stride);
+      s_webp_api.decode_rgb_into(data, size, rgb.data(), rgb_byte_count, rgb_stride);
   if (decoded != rgb.data()) {
     return false;
   }
 
   out_pixels.resize(pixel_count * static_cast<size_t>(channels));
   for (size_t i = 0; i < pixel_count; ++i) {
-    const uint8_t r = rgb[i * 3u + 0u];
-    const uint8_t g = rgb[i * 3u + 1u];
-    const uint8_t b = rgb[i * 3u + 2u];
+    const uint8_t r = rgb.data()[i * 3u + 0u];
+    const uint8_t g = rgb.data()[i * 3u + 1u];
+    const uint8_t b = rgb.data()[i * 3u + 2u];
     if (pixel_format == "RGB") {
       out_pixels[i * 3u + 0u] = r;
       out_pixels[i * 3u + 1u] = g;
@@ -1819,8 +1744,7 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
   }
   const size_t sample_count = pixel_count * static_cast<size_t>(src_channels);
 
-  ByteBuffer src;
-  src.assign(sample_count, allocator);
+  detail::TemporaryTypedBuffer<uint8_t> src(sample_count, allocator, "PNM src");
   const bool is_binary = (magic == '4' || magic == '5' || magic == '6');
   if (is_binary) {
     // Exactly one whitespace byte separates the header from the binary data.
@@ -1839,7 +1763,7 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
         for (size_t x = 0; x < w; ++x) {
           const uint8_t bit = (row[x >> 3] >> (7u - (x & 7u))) & 1u;
           // In PBM a set bit means black; map to 0 (black) / 255 (white).
-          src[y * w + x] = bit ? 0u : 255u;
+          src.data()[y * w + x] = bit ? 0u : 255u;
         }
       }
     } else {
@@ -1857,7 +1781,7 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
       if (pos >= size || (data[pos] != '0' && data[pos] != '1')) {
         return false;
       }
-      src[idx++] = (data[pos] == '1') ? 0u : 255u;
+      src.data()[idx++] = (data[pos] == '1') ? 0u : 255u;
       ++pos;
     }
   } else {
@@ -1870,14 +1794,15 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
       if (v > maxval) {
         v = maxval;
       }
-      src[i] = static_cast<uint8_t>(v);
+      src.data()[i] = static_cast<uint8_t>(v);
     }
   }
 
   // Scale 8-bit samples from ``[0, maxval]`` to ``[0, 255]`` when needed.
   if (!is_bitmap && maxval != 255) {
-    for (uint8_t &s : src) {
-      s = static_cast<uint8_t>((static_cast<int>(s) * 255 + maxval / 2) / maxval);
+    for (size_t i = 0; i < sample_count; ++i) {
+      src.data()[i] =
+          static_cast<uint8_t>((static_cast<int>(src.data()[i]) * 255 + maxval / 2) / maxval);
     }
   }
 
@@ -1888,11 +1813,11 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
     uint8_t g;
     uint8_t b;
     if (src_channels == 3) {
-      r = src[i * 3u + 0u];
-      g = src[i * 3u + 1u];
-      b = src[i * 3u + 2u];
+      r = src.data()[i * 3u + 0u];
+      g = src.data()[i * 3u + 1u];
+      b = src.data()[i * 3u + 2u];
     } else {
-      r = g = b = src[i];
+      r = g = b = src.data()[i];
     }
     if (pixel_format == "RGB") {
       out_pixels[i * 3u + 0u] = r;
@@ -2165,8 +2090,7 @@ bool TryDecodeJpeg2000(const uint8_t *data, size_t size, const std::string &pixe
   // ``opj_dparameters_t`` is large (over 8 KiB) and version-dependent. Default
   // initialize it through the library and pass it straight back, so its layout
   // never has to be mirrored here.
-  ByteBuffer params;
-  params.assign(16384, allocator);
+  detail::TemporaryTypedBuffer<uint8_t> params(16384, allocator, "JPEG2000 params");
 
   s_api.set_default_params(params.data());
   s_api.stream_set_read(stream, &OpjMemRead);

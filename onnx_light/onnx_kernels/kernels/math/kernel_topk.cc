@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -152,23 +153,10 @@ Shape MakeOutputShape(const Shape &shape, int64_t axis, int64_t k) {
   return out;
 }
 
-Tensor AllocateOutput(int32_t dtype, const Shape &shape) {
-  Tensor t;
-  t.name = "";
-  t.data_type = dtype;
-  t.shape = shape;
-  int64_t count = 1;
-  for (int64_t d : shape) {
-    count *= d;
-  }
-  t.data.assign(static_cast<std::size_t>(count) * ElementSize(dtype), 0);
-  return t;
-}
-
 } // namespace
 
 std::pair<Tensor, Tensor> TopK::operator()(const Tensor &x, int64_t k, int64_t axis, bool largest,
-                                           bool sorted) const {
+                                           bool sorted, RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank > 0, kTopKName, " requires a non-scalar input.");
   EXT_ENFORCE_INVALID(k > 0, kTopKName, " requires k > 0.");
@@ -177,8 +165,20 @@ std::pair<Tensor, Tensor> TopK::operator()(const Tensor &x, int64_t k, int64_t a
                       ": k is larger than the axis dimension.");
 
   const Shape out_shape = MakeOutputShape(x.shape, resolved_axis, k);
-  Tensor values = AllocateOutput(x.data_type, out_shape);
-  Tensor indices = AllocateOutput(static_cast<int32_t>(DataType::INT64), out_shape);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  const int64_t out_count = [&] {
+    int64_t n = 1;
+    for (int64_t d : out_shape) {
+      n *= d;
+    }
+    return n;
+  }();
+  Tensor values =
+      MakeOutputTensor(x.data_type, out_shape,
+                       static_cast<std::size_t>(out_count) * ElementSize(x.data_type), allocator);
+  Tensor indices =
+      MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape,
+                       static_cast<std::size_t>(out_count) * sizeof(int64_t), allocator);
   RunTopK(x, k, resolved_axis, largest, sorted, values, indices);
   return std::pair<Tensor, Tensor>(std::move(values), std::move(indices));
 }

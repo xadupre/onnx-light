@@ -51,7 +51,7 @@ void ApplyScaler(const Tensor &x, const std::vector<float> &offset, const std::v
   }
 }
 
-int64_t LastDim(const std::vector<int64_t> &shape) { return shape.empty() ? 1 : shape.back(); }
+int64_t LastDim(const onnx_kernels::Shape &shape) { return shape.empty() ? 1 : shape.back(); }
 
 } // namespace
 

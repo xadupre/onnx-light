@@ -32,8 +32,8 @@ int64_t NormalizeAxis(int64_t axis, int64_t rank) {
 
 // Validates that ``scale``'s shape is unidirectionally broadcastable to the
 // normalized shape ``X.shape[axis:]``.
-void CheckScaleBroadcast(const std::vector<int64_t> &x_shape, int64_t axis,
-                         const std::vector<int64_t> &scale_shape) {
+void CheckScaleBroadcast(const onnx_kernels::Shape &x_shape, int64_t axis,
+                         const onnx_kernels::Shape &scale_shape) {
   const int64_t normalized_rank = static_cast<int64_t>(x_shape.size()) - axis;
   EXT_ENFORCE_INVALID(static_cast<int64_t>(scale_shape.size()) <= normalized_rank,
                       "kernel::RMSNormalization: scale rank cannot exceed normalized rank.");

@@ -38,8 +38,7 @@ Tensor MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attribu
   ValidateInputs(x, rois, attrs);
   const int64_t num_rois = rois.shape[0];
   const int64_t C = x.shape[1];
-  const std::vector<int64_t> out_shape = {num_rois, C, attrs.pooled_shape[0],
-                                          attrs.pooled_shape[1]};
+  const onnx_kernels::Shape out_shape = {num_rois, C, attrs.pooled_shape[0], attrs.pooled_shape[1]};
   int64_t out_elements = 1;
   for (int64_t d : out_shape) {
     out_elements *= d;
@@ -63,7 +62,7 @@ void MaxRoiPool::operator()(const Tensor &x, const Tensor &rois, const Attribute
   const int64_t pooled_h = attrs.pooled_shape[0];
   const int64_t pooled_w = attrs.pooled_shape[1];
 
-  const std::vector<int64_t> expected_shape = {num_rois, C, pooled_h, pooled_w};
+  const onnx_kernels::Shape expected_shape = {num_rois, C, pooled_h, pooled_w};
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::MaxRoiPool preallocated output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,

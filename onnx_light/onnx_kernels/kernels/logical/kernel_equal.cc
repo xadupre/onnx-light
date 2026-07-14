@@ -43,7 +43,7 @@ void EqualInPlace(const char *in_dtype_name, int32_t in_dtype, const Tensor &x, 
 // broadcasting here, which is enough for the upstream ``test_equal_string``
 // and ``test_equal_string_broadcast`` cases.
 struct StringEqualBroadcast {
-  std::vector<int64_t> shape;
+  onnx_kernels::Shape shape;
   int64_t element_count = 0;
   int64_t nx = 0;
   int64_t ny = 0;

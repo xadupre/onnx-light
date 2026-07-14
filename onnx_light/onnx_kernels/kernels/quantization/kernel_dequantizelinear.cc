@@ -155,7 +155,7 @@ inline float ReadSubByteScalarZP(const Tensor &x_zero_point) {
 }
 
 // Computes the stride of elements inner to ``axis`` for ``shape``.
-inline int64_t ComputeInnerStride(const std::vector<int64_t> &shape, int64_t axis) {
+inline int64_t ComputeInnerStride(const onnx_kernels::Shape &shape, int64_t axis) {
   int64_t stride = 1;
   for (int64_t d = axis + 1; d < static_cast<int64_t>(shape.size()); ++d) {
     stride *= shape[static_cast<std::size_t>(d)];
@@ -172,7 +172,7 @@ inline int64_t ComputeInnerStride(const std::vector<int64_t> &shape, int64_t axi
 // share one scale. This mirrors the upstream ``np.repeat`` expansion of the
 // scale tensor.
 std::vector<int64_t> ComputeScaleIndex(const Tensor &x, const Tensor &x_scale, int64_t axis) {
-  const std::vector<int64_t> &x_shape = x.shape;
+  const onnx_kernels::Shape &x_shape = x.shape;
   const std::size_t rank = x_shape.size();
   const int64_t n = x.element_count();
   std::vector<int64_t> scale_index(static_cast<std::size_t>(n));
@@ -181,7 +181,7 @@ std::vector<int64_t> ComputeScaleIndex(const Tensor &x, const Tensor &x_scale, i
     // Blocked: scale shape matches x rank, divides x element-wise (only ``axis``
     // is coarser in practice). The scale flat index is obtained by dividing each
     // coordinate by the per-dimension repeat factor.
-    const std::vector<int64_t> &s_shape = x_scale.shape;
+    const onnx_kernels::Shape &s_shape = x_scale.shape;
     std::vector<int64_t> repeats(rank);
     std::vector<int64_t> s_strides(rank);
     int64_t stride = 1;

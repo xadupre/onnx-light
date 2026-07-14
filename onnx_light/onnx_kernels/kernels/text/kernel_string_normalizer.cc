@@ -43,7 +43,7 @@ std::string AsciiToUpper(const std::string &s) {
 
 // Returns the ``[C]`` slice of a ``[C]`` or ``[1, C]`` input shape.
 // Throws std::invalid_argument when the shape is neither.
-int64_t ExtractC(const std::vector<int64_t> &shape) {
+int64_t ExtractC(const onnx_kernels::Shape &shape) {
   if (shape.size() == 1) {
     return shape[0];
   }
@@ -70,8 +70,8 @@ StringNormalizer::ParseCaseChangeAction(const std::string &value) {
                     "'. Valid values are \"NONE\", \"LOWER\", \"UPPER\".");
 }
 
-std::vector<int64_t> StringNormalizer::ComputeOutputShape(const std::vector<int64_t> &input_shape,
-                                                          int64_t kept) {
+onnx_kernels::Shape StringNormalizer::ComputeOutputShape(const onnx_kernels::Shape &input_shape,
+                                                         int64_t kept) {
   ExtractC(input_shape);
   const int64_t out_c = std::max<int64_t>(kept, 1);
   if (input_shape.size() == 1) {
@@ -126,7 +126,7 @@ Tensor StringNormalizer::operator()(const Tensor &x, CaseChangeAction case_chang
     break;
   }
 
-  std::vector<int64_t> out_shape = ComputeOutputShape(x.shape, static_cast<int64_t>(kept.size()));
+  onnx_kernels::Shape out_shape = ComputeOutputShape(x.shape, static_cast<int64_t>(kept.size()));
   std::vector<std::string> out_data;
   if (kept.empty()) {
     // All elements dropped → produce a single empty string.

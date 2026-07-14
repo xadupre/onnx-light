@@ -152,7 +152,7 @@ void FeatureVectorizer::operator()(const std::vector<Tensor> &inputs,
   }
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::FeatureVectorizer preallocated output dtype must be FLOAT.");
-  EXT_ENFORCE_INVALID(output.shape == (std::vector<int64_t>{n, total_features}),
+  EXT_ENFORCE_INVALID(output.shape == (onnx_kernels::Shape{n, total_features}),
                       "kernel::FeatureVectorizer preallocated output shape must be "
                       "[batch, sum(input_dims)].");
   EXT_ENFORCE_INVALID(output.size_bytes() ==

@@ -22,7 +22,7 @@ constexpr const char *kAdagradName = "kernel::Adagrad";
 
 // Returns the product of all dimensions in ``shape``; ``1`` for a scalar
 // (empty shape). Throws on negative dimensions.
-int64_t ShapeElementCount(const std::vector<int64_t> &shape, const char *label) {
+int64_t ShapeElementCount(const onnx_kernels::Shape &shape, const char *label) {
   int64_t count = 1;
   for (int64_t d : shape) {
     EXT_ENFORCE_INVALID(d >= 0, kAdagradName, ": '", label, "' has a negative dimension.");

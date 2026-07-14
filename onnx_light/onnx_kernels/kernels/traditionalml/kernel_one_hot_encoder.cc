@@ -36,8 +36,8 @@ void ValidateStringInput(const Tensor &x, const std::vector<std::string> &cats) 
                       "kernel::OneHotEncoder requires at least one category in cats_strings.");
 }
 
-std::vector<int64_t> OneHotShape(const std::vector<int64_t> &input_shape, int64_t num_cats) {
-  std::vector<int64_t> out_shape = input_shape;
+onnx_kernels::Shape OneHotShape(const onnx_kernels::Shape &input_shape, int64_t num_cats) {
+  onnx_kernels::Shape out_shape = input_shape;
   out_shape.push_back(num_cats);
   return out_shape;
 }
@@ -85,7 +85,7 @@ void FillOneHotString(const Tensor &x, const std::vector<std::string> &cats, boo
   }
 }
 
-void ValidatePreallocatedOutput(const Tensor &output, const std::vector<int64_t> &expected_shape) {
+void ValidatePreallocatedOutput(const Tensor &output, const onnx_kernels::Shape &expected_shape) {
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::OneHotEncoder preallocated output dtype must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
@@ -105,7 +105,7 @@ template <typename T>
 Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
                                  RuntimeContext *rt) const {
   ValidateNumericInput<T>(x, cats);
-  const std::vector<int64_t> out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
+  const onnx_kernels::Shape out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
   std::vector<uint8_t> bytes(static_cast<size_t>(total) * sizeof(float));
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape, std::move(bytes));
@@ -116,7 +116,7 @@ Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &ca
 Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
                                  RuntimeContext *rt) const {
   ValidateStringInput(x, cats);
-  const std::vector<int64_t> out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
+  const onnx_kernels::Shape out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
   std::vector<uint8_t> bytes(static_cast<size_t>(total) * sizeof(float));
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape, std::move(bytes));
@@ -128,7 +128,7 @@ template <typename T>
 void OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
                                Tensor &output) const {
   ValidateNumericInput<T>(x, cats);
-  const std::vector<int64_t> expected_shape =
+  const onnx_kernels::Shape expected_shape =
       OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   ValidatePreallocatedOutput(output, expected_shape);
   FillOneHotNumeric<T>(x, cats, zeros, output.AsFloat());
@@ -137,7 +137,7 @@ void OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats
 void OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
                                Tensor &output) const {
   ValidateStringInput(x, cats);
-  const std::vector<int64_t> expected_shape =
+  const onnx_kernels::Shape expected_shape =
       OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   ValidatePreallocatedOutput(output, expected_shape);
   FillOneHotString(x, cats, zeros, output.AsFloat());

@@ -132,8 +132,8 @@ public:
   /// Computes the output shape given the input shape and the number
   /// of surviving (non-stopword) elements. Encapsulates the
   /// ``[C] → [max(1, kept)]`` / ``[1, C] → [1, max(1, kept)]`` rule.
-  static std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &input_shape,
-                                                 int64_t kept);
+  static onnx_kernels::Shape ComputeOutputShape(const onnx_kernels::Shape &input_shape,
+                                                int64_t kept);
 
   /// Output bytes depend on the input contents and on the
   /// ``stopwords`` set; the output buffer cannot safely alias the
@@ -223,8 +223,8 @@ public:
   /// Computes the output shape of a TfIdfVectorizer node given the
   /// input shape and the size of the ``ngram_indexes`` attribute.
   /// Input rank must be 1 or 2.
-  static std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &input_shape,
-                                                 int64_t output_size);
+  static onnx_kernels::Shape ComputeOutputShape(const onnx_kernels::Shape &input_shape,
+                                                int64_t output_size);
 
   /// Allocating overload. ``pool_int64s`` must be non-empty when ``x``
   /// is an integer tensor; ``pool_strings`` must be non-empty when

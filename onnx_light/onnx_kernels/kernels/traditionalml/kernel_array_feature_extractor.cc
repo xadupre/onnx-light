@@ -15,10 +15,10 @@ namespace kernel {
 
 namespace {
 
-std::vector<int64_t> ComputeOutputShape(const Tensor &x, const Tensor &indices) {
+onnx_kernels::Shape ComputeOutputShape(const Tensor &x, const Tensor &indices) {
   EXT_ENFORCE_INVALID(!x.shape.empty(),
                       "kernel::ArrayFeatureExtractor expects input X to have rank >= 1.");
-  std::vector<int64_t> out_shape = x.shape;
+  onnx_kernels::Shape out_shape = x.shape;
   out_shape.back() = indices.element_count();
   return out_shape;
 }
@@ -52,7 +52,7 @@ template <typename T> void ValidateInput(const Tensor &x) {
 }
 
 template <typename T>
-void GatherLastAxis(const Tensor &x, const Tensor &indices, const std::vector<int64_t> &out_shape,
+void GatherLastAxis(const Tensor &x, const Tensor &indices, const onnx_kernels::Shape &out_shape,
                     T *out) {
   const T *px = x.As<T>();
   const int64_t *py = indices.AsInt64();
@@ -74,7 +74,7 @@ Tensor ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices,
                                          RuntimeContext *rt) const {
   ValidateInput<T>(x);
   ValidateIndices(x, indices);
-  const std::vector<int64_t> out_shape = ComputeOutputShape(x, indices);
+  const onnx_kernels::Shape out_shape = ComputeOutputShape(x, indices);
   const int64_t outer = OuterSize(x);
   std::vector<uint8_t> bytes(static_cast<size_t>(indices.element_count() * outer) * sizeof(T));
   Tensor out("", TensorElementType<T>::value, out_shape, std::move(bytes));
@@ -87,7 +87,7 @@ void ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices,
                                        Tensor &output) const {
   ValidateInput<T>(x);
   ValidateIndices(x, indices);
-  const std::vector<int64_t> expected_shape = ComputeOutputShape(x, indices);
+  const onnx_kernels::Shape expected_shape = ComputeOutputShape(x, indices);
   const int64_t outer = OuterSize(x);
   EXT_ENFORCE_INVALID(
       output.data_type == TensorElementType<T>::value,

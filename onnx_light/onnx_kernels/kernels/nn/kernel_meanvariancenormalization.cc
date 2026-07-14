@@ -33,7 +33,7 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes, int64_t ran
   return normalized;
 }
 
-int64_t ComputeLane(int64_t idx, const std::vector<int64_t> &dims,
+int64_t ComputeLane(int64_t idx, const onnx_kernels::Shape &dims,
                     const std::vector<uint8_t> &reduce_mask) {
   const int64_t rank = static_cast<int64_t>(dims.size());
   int64_t lane = 0;
@@ -52,7 +52,7 @@ int64_t ComputeLane(int64_t idx, const std::vector<int64_t> &dims,
 
 template <typename T>
 void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axes) {
-  const std::vector<int64_t> &dims = x.shape;
+  const onnx_kernels::Shape &dims = x.shape;
   const int64_t rank = static_cast<int64_t>(dims.size());
   const int64_t total = x.element_count();
   if (total == 0) {

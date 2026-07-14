@@ -21,7 +21,7 @@ namespace {
 // existing element-wise binary helpers (And/Or/Xor). Returns the broadcasted
 // shape, total element count, and the individual input element counts.
 struct StringBroadcast {
-  std::vector<int64_t> shape;
+  onnx_kernels::Shape shape;
   int64_t element_count = 0;
   int64_t nx = 0;
   int64_t ny = 0;

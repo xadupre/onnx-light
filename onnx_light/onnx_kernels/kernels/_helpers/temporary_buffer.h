@@ -59,9 +59,9 @@ template <typename T> struct TemporaryTypedBuffer {
     }
   }
 
-  // This method returns the temporary storage pointer. The constructor has
-  // already completed successfully, so either the allocator-backed buffer or
-  // the fallback vector storage is available.
+  // Returns the temporary storage pointer. The constructor has already
+  // completed successfully, so either the allocator-backed buffer or the
+  // fallback vector storage is available.
   T *data() {
     if (buffer != nullptr) {
       return reinterpret_cast<T *>(buffer->data());
@@ -69,11 +69,10 @@ template <typename T> struct TemporaryTypedBuffer {
     return fallback.data();
   }
 
-  // This method copies `size` elements from raw input bytes into the temporary
-  // storage.
+  // Copies `size` elements from raw input bytes into the temporary storage.
   void CopyFromBytes(const std::uint8_t *bytes) { std::memcpy(data(), bytes, size * sizeof(T)); }
 
-  // This method fills the temporary storage with zeros.
+  // Fills the temporary storage with zeros.
   void ZeroFill() { std::memset(data(), 0, size * sizeof(T)); }
 };
 

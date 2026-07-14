@@ -466,9 +466,10 @@ struct ByteBuffer {
     }
   }
 
-  // Allocates n_bytes zero-initialized bytes. Uses allocator-backed
-  // storage when alloc is non-null; falls back to a plain
-  // std::vector<uint8_t> otherwise.
+  // Allocates n_bytes bytes. Uses allocator-backed storage when alloc is
+  // non-null (initialization depends on the allocator implementation); falls
+  // back to a zero-initialized std::vector<uint8_t> otherwise. Must be called
+  // before any accessor.
   void assign(size_t n_bytes, RawBufferAllocator *alloc) {
     if (alloc != nullptr) {
       allocator_ = alloc;
@@ -478,6 +479,7 @@ struct ByteBuffer {
     }
   }
 
+  // Accessors below are only valid after a call to assign().
   uint8_t *data() noexcept { return buffer_ != nullptr ? buffer_->data() : fallback_.data(); }
   const uint8_t *data() const noexcept {
     return buffer_ != nullptr ? buffer_->data() : fallback_.data();

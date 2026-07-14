@@ -42,9 +42,9 @@ double ReadFloatScalar(const Tensor &t, const char *what) {
 }
 
 /// Computes the triangular Mel filter-bank weights directly into ``out``,
-/// avoiding any intermediate heap allocation. ``out`` must point to a
-/// zero-initialised buffer of ``num_spectrogram_bins * num_mel_bins_v``
-/// elements of type ``T``.
+/// avoiding any intermediate heap allocation. The buffer is zero-initialized
+/// before filling; ``out`` must point to a writable region of
+/// ``num_spectrogram_bins * num_mel_bins_v`` elements of type ``T``.
 template <typename T>
 void ComputeMelMatrix(T *out, int64_t num_mel_bins_v, int64_t num_spectrogram_bins,
                       const std::vector<int64_t> &bin_indices) {

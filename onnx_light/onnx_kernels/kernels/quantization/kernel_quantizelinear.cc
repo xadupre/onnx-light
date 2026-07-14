@@ -7,6 +7,7 @@
 #include "onnx_kernels/kernels/_helpers/cast_float8.h"
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
+#include "onnx_kernels/kernels/_helpers/temporary_buffer.h"
 
 #include "onnx_kernels/runtime_context.h"
 #include <cmath>
@@ -599,6 +600,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   const int64_t *idx = scale_index.data();
   const float *scales = y_scale.AsFloat();
   const std::uint8_t *zp_bytes = y_zero_point.bytes();
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
 
   switch (output.data_type) {
   case static_cast<int32_t>(DataType::UINT8):
@@ -609,15 +611,17 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
     break;
   case static_cast<int32_t>(DataType::UINT16): {
     const int64_t n_zp = y_zero_point.element_count();
-    std::vector<uint16_t> zp_vec(static_cast<std::size_t>(n_zp));
-    std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(uint16_t));
+    detail::TemporaryTypedBuffer<uint16_t> zp_vec(static_cast<std::size_t>(n_zp), allocator,
+                                                  "kernel::QuantizeLinear: zero-point");
+    zp_vec.CopyFromBytes(zp_bytes);
     QuantizeBlockLoop<uint16_t>(x, scales, zp_vec.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT16): {
     const int64_t n_zp = y_zero_point.element_count();
-    std::vector<int16_t> zp_vec(static_cast<std::size_t>(n_zp));
-    std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(int16_t));
+    detail::TemporaryTypedBuffer<int16_t> zp_vec(static_cast<std::size_t>(n_zp), allocator,
+                                                 "kernel::QuantizeLinear: zero-point");
+    zp_vec.CopyFromBytes(zp_bytes);
     QuantizeBlockLoop<int16_t>(x, scales, zp_vec.data(), idx, output);
     break;
   }
@@ -688,27 +692,36 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_t 
   const std::vector<int64_t> scale_index = ComputeScaleIndex(x, y_scale, axis);
   const int64_t *idx = scale_index.data();
   const float *scales = y_scale.AsFloat();
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
 
   // Zero ZP buffer (all zeros) for the symmetric case.
   const int64_t n_scale = y_scale.element_count();
   switch (output.data_type) {
   case static_cast<int32_t>(DataType::UINT8): {
-    std::vector<uint8_t> zp(static_cast<std::size_t>(n_scale), 0);
+    detail::TemporaryTypedBuffer<uint8_t> zp(static_cast<std::size_t>(n_scale), allocator,
+                                             "kernel::QuantizeLinear: symmetric zero-point");
+    zp.ZeroFill();
     QuantizeBlockLoop<uint8_t>(x, scales, zp.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT8): {
-    std::vector<int8_t> zp(static_cast<std::size_t>(n_scale), 0);
+    detail::TemporaryTypedBuffer<int8_t> zp(static_cast<std::size_t>(n_scale), allocator,
+                                            "kernel::QuantizeLinear: symmetric zero-point");
+    zp.ZeroFill();
     QuantizeBlockLoop<int8_t>(x, scales, zp.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::UINT16): {
-    std::vector<uint16_t> zp(static_cast<std::size_t>(n_scale), 0);
+    detail::TemporaryTypedBuffer<uint16_t> zp(static_cast<std::size_t>(n_scale), allocator,
+                                              "kernel::QuantizeLinear: symmetric zero-point");
+    zp.ZeroFill();
     QuantizeBlockLoop<uint16_t>(x, scales, zp.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT16): {
-    std::vector<int16_t> zp(static_cast<std::size_t>(n_scale), 0);
+    detail::TemporaryTypedBuffer<int16_t> zp(static_cast<std::size_t>(n_scale), allocator,
+                                             "kernel::QuantizeLinear: symmetric zero-point");
+    zp.ZeroFill();
     QuantizeBlockLoop<int16_t>(x, scales, zp.data(), idx, output);
     break;
   }

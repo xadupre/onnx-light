@@ -36,6 +36,8 @@ using onnx_kernels::kernel::Ceil;
 using onnx_kernels::kernel::Clip;
 using onnx_kernels::kernel::Cos;
 using onnx_kernels::kernel::Cosh;
+using onnx_kernels::kernel::CumProd;
+using onnx_kernels::kernel::CumSum;
 using onnx_kernels::kernel::Det;
 using onnx_kernels::kernel::Div;
 using onnx_kernels::kernel::Einsum;
@@ -573,6 +575,7 @@ TEST(KernelClass, MinMaxMeanSumUseAllocatorWhenRuntimeContextHasOne) {
     EXPECT_FLOAT_EQ(pmin[2], 3.0f);
     EXPECT_FLOAT_EQ(pmin[3], 7.0f);
   }
+
   {
     SimpleRawBufferAllocator alloc(1);
     RuntimeContext rt;
@@ -615,6 +618,50 @@ TEST(KernelClass, MinMaxMeanSumUseAllocatorWhenRuntimeContextHasOne) {
     EXPECT_FLOAT_EQ(psum[2], 9.0f);
     EXPECT_FLOAT_EQ(psum[3], 15.0f);
   }
+}
+
+TEST(KernelClass, CumSumClassUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(14)};
+  CumSum cumsum_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor axis = Tensor::FromInt32("", {}, {1});
+
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = cumsum_kernel(x, axis, false, false, &rt);
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(y.data.size(), 0u);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 3.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.0f);
+  EXPECT_FLOAT_EQ(py[3], 7.0f);
+}
+
+TEST(KernelClass, CumProdClassUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(14)};
+  CumProd cumprod_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor axis = Tensor::FromInt32("", {}, {1});
+
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = cumprod_kernel(x, axis, false, false, &rt);
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(y.data.size(), 0u);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.0f);
+  EXPECT_FLOAT_EQ(py[3], 12.0f);
 }
 
 TEST(KernelClass, LogSoftmaxClassMatchesReferenceAxis1) {

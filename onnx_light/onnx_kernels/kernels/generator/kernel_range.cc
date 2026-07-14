@@ -58,7 +58,7 @@ Tensor ComputeRange(const Tensor &start, const Tensor &limit, const Tensor &delt
   EXT_ENFORCE_INVALID(d != T(0), "kernel::Range: 'delta' must be non-zero.");
 
   const int64_t n = ComputeRangeCount(s, l, d);
-  std::vector<uint8_t> out_data(static_cast<std::size_t>(n) * sizeof(T));
+  std::vector<uint8_t> out_data(PackedByteSize(dtype, n));
   FillRangeBuffer(s, d, n, reinterpret_cast<T *>(out_data.data()));
   return Tensor("", dtype, {n}, std::move(out_data));
 }
@@ -77,7 +77,7 @@ void ComputeRangeInto(const Tensor &start, const Tensor &limit, const Tensor &de
   EXT_ENFORCE_INVALID(output.shape.size() == 1 && output.shape[0] == n,
                       "kernel::Range preallocated output shape must match the produced tensor "
                       "shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(n) * sizeof(T),
+  EXT_ENFORCE_INVALID(output.size_bytes() == PackedByteSize(expected_dtype, n),
                       "kernel::Range preallocated output buffer has unexpected size in bytes.");
   if (n > 0) {
     FillRangeBuffer(s, d, n, reinterpret_cast<T *>(output.mutable_bytes()));
@@ -118,7 +118,7 @@ Tensor ComputeRangeHalf(const Tensor &start, const Tensor &limit, const Tensor &
   EXT_ENFORCE_INVALID(d != 0.0f, "kernel::Range: 'delta' must be non-zero.");
 
   const int64_t n = ComputeRangeCount(s, l, d);
-  std::vector<uint8_t> out_data(static_cast<std::size_t>(n) * sizeof(uint16_t));
+  std::vector<uint8_t> out_data(PackedByteSize(dtype, n));
   FillRangeHalfBuffer(s, d, n, reinterpret_cast<uint16_t *>(out_data.data()), encode);
   return Tensor("", dtype, {n}, std::move(out_data));
 }
@@ -137,7 +137,7 @@ void ComputeRangeHalfInto(const Tensor &start, const Tensor &limit, const Tensor
   EXT_ENFORCE_INVALID(output.shape.size() == 1 && output.shape[0] == n,
                       "kernel::Range preallocated output shape must match the produced tensor "
                       "shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(n) * sizeof(uint16_t),
+  EXT_ENFORCE_INVALID(output.size_bytes() == PackedByteSize(expected_dtype, n),
                       "kernel::Range preallocated output buffer has unexpected size in bytes.");
   if (n > 0) {
     FillRangeHalfBuffer(s, d, n, reinterpret_cast<uint16_t *>(output.mutable_bytes()), encode);

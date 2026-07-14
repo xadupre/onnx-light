@@ -143,8 +143,9 @@ ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t 
   return zps;
 }
 
-std::vector<int64_t> ComputeStrides(const Shape &shape) {
-  std::vector<int64_t> strides(shape.size(), 1);
+Shape ComputeStrides(const Shape &shape) {
+  Shape strides;
+  strides.assign(shape.size(), 1);
   for (int64_t i = static_cast<int64_t>(shape.size()) - 2; i >= 0; --i) {
     strides[static_cast<size_t>(i)] =
         strides[static_cast<size_t>(i + 1)] * shape[static_cast<size_t>(i + 1)];
@@ -174,9 +175,9 @@ void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tenso
       a_prefix, b_prefix, kName, ": inputs are not broadcast-compatible on batch dimensions.");
   const size_t batch_rank = out_prefix.size();
 
-  const std::vector<int64_t> a_strides = ComputeStrides(a2);
-  const std::vector<int64_t> b_strides = ComputeStrides(b2);
-  const std::vector<int64_t> out_strides = ComputeStrides(output.shape);
+  const Shape a_strides = ComputeStrides(a2);
+  const Shape b_strides = ComputeStrides(b2);
+  const Shape out_strides = ComputeStrides(output.shape);
 
   const size_t a_prefix_rank = a_prefix.size();
   const size_t b_prefix_rank = b_prefix.size();

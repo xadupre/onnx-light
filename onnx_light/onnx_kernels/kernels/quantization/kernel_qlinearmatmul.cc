@@ -52,7 +52,7 @@ float ReadScalarFloat(const Tensor &t, const char *name) {
                     "' must be a FLOAT or FLOAT16 scalar for the reference kernel.");
 }
 
-onnx_kernels::Shape PromoteMatMulShape(const onnx_kernels::Shape &shape, bool is_left) {
+Shape PromoteMatMulShape(const Shape &shape, bool is_left) {
   if (shape.size() == 1) {
     if (is_left) {
       return {1, shape[0]};
@@ -62,8 +62,9 @@ onnx_kernels::Shape PromoteMatMulShape(const onnx_kernels::Shape &shape, bool is
   return shape;
 }
 
-std::vector<int64_t> ComputeStrides(const onnx_kernels::Shape &shape) {
-  std::vector<int64_t> strides(shape.size(), 1);
+Shape ComputeStrides(const Shape &shape) {
+  Shape strides;
+  strides.assign(shape.size(), 1);
   for (int64_t i = static_cast<int64_t>(shape.size()) - 2; i >= 0; --i) {
     strides[static_cast<size_t>(i)] =
         strides[static_cast<size_t>(i + 1)] * shape[static_cast<size_t>(i + 1)];
@@ -71,10 +72,9 @@ std::vector<int64_t> ComputeStrides(const onnx_kernels::Shape &shape) {
   return strides;
 }
 
-onnx_kernels::Shape BroadcastPrefix(const onnx_kernels::Shape &a_prefix,
-                                    const onnx_kernels::Shape &b_prefix) {
+Shape BroadcastPrefix(const Shape &a_prefix, const Shape &b_prefix) {
   const size_t rank = std::max(a_prefix.size(), b_prefix.size());
-  onnx_kernels::Shape out;
+  Shape out;
   out.assign(rank, 1);
   for (size_t i = 0; i < rank; ++i) {
     const bool has_a = i + a_prefix.size() >= rank;
@@ -92,19 +92,18 @@ onnx_kernels::Shape BroadcastPrefix(const onnx_kernels::Shape &a_prefix,
   return out;
 }
 
-onnx_kernels::Shape ComputeOutputShape(const onnx_kernels::Shape &a_shape,
-                                       const onnx_kernels::Shape &b_shape) {
+Shape ComputeOutputShape(const Shape &a_shape, const Shape &b_shape) {
   EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(), kName,
                       ": rank-0 inputs are not accepted.");
-  const onnx_kernels::Shape a2 = PromoteMatMulShape(a_shape, true);
-  const onnx_kernels::Shape b2 = PromoteMatMulShape(b_shape, false);
+  const Shape a2 = PromoteMatMulShape(a_shape, true);
+  const Shape b2 = PromoteMatMulShape(b_shape, false);
   EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2], kName,
                       ": incompatible inner dimensions.");
-  onnx_kernels::Shape a_prefix;
+  Shape a_prefix;
   a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
-  onnx_kernels::Shape b_prefix;
+  Shape b_prefix;
   b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
-  onnx_kernels::Shape out_shape = BroadcastPrefix(a_prefix, b_prefix);
+  Shape out_shape = BroadcastPrefix(a_prefix, b_prefix);
   if (a_shape.size() != 1) {
     out_shape.push_back(a2[a2.size() - 2]);
   }
@@ -131,22 +130,22 @@ template <typename Y> void StoreSaturated(float v, float y_zp, Y *out, int64_t i
 
 void RunQLinearMatMul(const Tensor &a, int32_t a_zp, float a_scale, const Tensor &b, int32_t b_zp,
                       float b_scale, float y_scale, int32_t y_zp, Tensor &output) {
-  const onnx_kernels::Shape a2 = PromoteMatMulShape(a.shape, true);
-  const onnx_kernels::Shape b2 = PromoteMatMulShape(b.shape, false);
+  const Shape a2 = PromoteMatMulShape(a.shape, true);
+  const Shape b2 = PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
   const int64_t K = a2[a2.size() - 1];
   const int64_t N = b2[b2.size() - 1];
 
-  onnx_kernels::Shape a_prefix;
+  Shape a_prefix;
   a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
-  onnx_kernels::Shape b_prefix;
+  Shape b_prefix;
   b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
-  const onnx_kernels::Shape out_prefix = BroadcastPrefix(a_prefix, b_prefix);
+  const Shape out_prefix = BroadcastPrefix(a_prefix, b_prefix);
   const size_t batch_rank = out_prefix.size();
 
-  const std::vector<int64_t> a_strides = ComputeStrides(a2);
-  const std::vector<int64_t> b_strides = ComputeStrides(b2);
-  const std::vector<int64_t> out_strides = ComputeStrides(output.shape);
+  const Shape a_strides = ComputeStrides(a2);
+  const Shape b_strides = ComputeStrides(b2);
+  const Shape out_strides = ComputeStrides(output.shape);
 
   const size_t a_prefix_rank = a_prefix.size();
   const size_t b_prefix_rank = b_prefix.size();

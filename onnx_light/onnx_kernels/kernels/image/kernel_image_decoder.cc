@@ -470,10 +470,10 @@ struct ByteBuffer {
 
   // Allocates n_bytes bytes. Uses allocator-backed storage when alloc is
   // non-null (initialization depends on the allocator); falls back to a
-  // zero-initialized std::vector<uint8_t> otherwise. Callers must invoke this
-  // method exactly once before using any accessor; subsequent calls are a
-  // contract violation detected by the debug assertion. Concrete allocators
-  // must throw (e.g. std::bad_alloc) on failure rather than returning nullptr.
+  // zero-initialized std::vector<uint8_t> otherwise. Must be called exactly
+  // once before any accessor is used; subsequent calls trigger the debug
+  // assertion. The allocator must throw (e.g. std::bad_alloc) on failure
+  // rather than returning nullptr.
   void assign(size_t n_bytes, RawBufferAllocator *alloc) {
     assert(buffer_ == nullptr && fallback_.empty() &&
            "ByteBuffer::assign() must be called exactly once");
@@ -485,8 +485,8 @@ struct ByteBuffer {
     }
   }
 
-  // Returns true when the buffer is backed by the allocator, false when using
-  // the fallback std::vector. Valid only after assign().
+  // Returns true when the buffer is backed by the allocator, false when backed
+  // by the fallback vector. Valid only after assign().
   bool is_allocator_backed() const noexcept { return buffer_ != nullptr; }
 
   // Returns a pointer to the first byte. Valid only after assign().
@@ -501,9 +501,11 @@ struct ByteBuffer {
            "ByteBuffer::data() called before assign()");
     return is_allocator_backed() ? buffer_->data() : fallback_.data();
   }
+  // Returns a reference to the byte at index i. Valid only after assign().
   uint8_t &operator[](size_t i) noexcept {
     return is_allocator_backed() ? (*buffer_)[i] : fallback_[i];
   }
+  // Returns a const reference to the byte at index i. Valid only after assign().
   const uint8_t &operator[](size_t i) const noexcept {
     return is_allocator_backed() ? (*buffer_)[i] : fallback_[i];
   }
@@ -511,9 +513,13 @@ struct ByteBuffer {
   size_t size() const noexcept {
     return is_allocator_backed() ? buffer_->size() : fallback_.size();
   }
+  // Returns a pointer to the first byte, for range-for compatibility.
   uint8_t *begin() noexcept { return data(); }
+  // Returns a pointer one past the last byte, for range-for compatibility.
   uint8_t *end() noexcept { return data() + size(); }
+  // Returns a const pointer to the first byte, for range-for compatibility.
   const uint8_t *begin() const noexcept { return data(); }
+  // Returns a const pointer one past the last byte, for range-for compatibility.
   const uint8_t *end() const noexcept { return data() + size(); }
 
 private:

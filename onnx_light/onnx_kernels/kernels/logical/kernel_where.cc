@@ -56,7 +56,9 @@ TernaryBroadcastInfo CheckWhereBroadcast(const Tensor &condition, const Tensor &
                       "kernel::Where inputs ``x`` and ``y`` must share the same dtype.");
 
   const size_t rank = std::max(condition.shape.size(), std::max(x.shape.size(), y.shape.size()));
-  std::vector<int64_t> sc(rank, 1), sx(rank, 1), sy(rank, 1), out(rank, 1);
+  Shape sc;
+  sc.assign(rank, 1);
+  Shape sx(sc), sy(sc), out(sc);
   for (size_t i = 0; i < condition.shape.size(); ++i) {
     sc[rank - condition.shape.size() + i] = condition.shape[i];
   }

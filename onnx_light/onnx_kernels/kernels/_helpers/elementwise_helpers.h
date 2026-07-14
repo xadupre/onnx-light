@@ -107,7 +107,8 @@ void BinaryElementwise(const char *op_name, const char *dtype_name, int32_t expe
   // General multidirectional broadcasting: iterate over output coordinates in
   // row-major order using the pre-computed per-input element strides.
   const size_t rank = bi.shape.size();
-  std::vector<int64_t> idx(rank, 0);
+  Shape idx;
+  idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t ox = 0, oy = 0;
     for (size_t d = 0; d < rank; ++d) {
@@ -177,7 +178,8 @@ void BinaryElementwiseInOut(const char *op_name, const char *in_dtype_name, int3
   }
 
   const size_t rank = bi.shape.size();
-  std::vector<int64_t> idx(rank, 0);
+  Shape idx;
+  idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t ox = 0, oy = 0;
     for (size_t d = 0; d < rank; ++d) {
@@ -255,7 +257,8 @@ void BinaryHalfElementwise(const char *op_name, const char *dtype_name, int32_t 
   }
 
   const size_t rank = bi.shape.size();
-  std::vector<int64_t> idx(rank, 0);
+  Shape idx;
+  idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t ox = 0, oy = 0;
     for (size_t d = 0; d < rank; ++d) {
@@ -319,7 +322,8 @@ void BinaryHalfElementwiseInOut(const char *op_name, const char *in_dtype_name, 
   }
 
   const size_t rank = bi.shape.size();
-  std::vector<int64_t> idx(rank, 0);
+  Shape idx;
+  idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t ox = 0, oy = 0;
     for (size_t d = 0; d < rank; ++d) {
@@ -396,7 +400,8 @@ void BinaryHalfCompareElementwise(const char *op_name, const char *dtype_name, i
   }
 
   const size_t rank = bi.shape.size();
-  std::vector<int64_t> idx(rank, 0);
+  Shape idx;
+  idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t ox = 0, oy = 0;
     for (size_t d = 0; d < rank; ++d) {

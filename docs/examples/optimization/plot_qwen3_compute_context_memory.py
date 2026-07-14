@@ -79,7 +79,7 @@ def make_tick_label(output_name: str, node_type: str) -> str:
 
 
 def make_plot_assignments(args: argparse.Namespace) -> list[tuple[str, dict[str, int]]]:
-    """Returns the four configurations displayed on the memory plot.
+    """This helper returns the four configurations displayed on the memory plot.
 
     Args:
         args: Parsed arguments with ``batch``, ``sequence_length``, and

@@ -40,15 +40,6 @@ std::vector<int64_t> ComputeStrides(const Shape &shape) {
   return strides;
 }
 
-Shape PromoteMatMulShape(const Shape &shape, bool is_left) {
-  return detail::PromoteMatMulShape(shape, is_left);
-}
-
-Shape BroadcastPrefix(const Shape &a_prefix, const Shape &b_prefix) {
-  return detail::BroadcastMatMulPrefix(a_prefix, b_prefix, kMatMulName,
-                                       " inputs are not broadcast-compatible on batch dimensions.");
-}
-
 Shape ComputeMatMulOutputShape(const Shape &a_shape, const Shape &b_shape) {
   return detail::ComputeMatMulOutputShape(
       a_shape, b_shape, kMatMulName, " does not accept rank-0 inputs.",
@@ -57,8 +48,8 @@ Shape ComputeMatMulOutputShape(const Shape &a_shape, const Shape &b_shape) {
 }
 
 template <typename T> void MatMulCompute(const Tensor &a, const Tensor &b, Tensor &output) {
-  const Shape a2 = PromoteMatMulShape(a.shape, true);
-  const Shape b2 = PromoteMatMulShape(b.shape, false);
+  const Shape a2 = detail::PromoteMatMulShape(a.shape, true);
+  const Shape b2 = detail::PromoteMatMulShape(b.shape, false);
   const int64_t m = a2[a2.size() - 2];
   const int64_t k = a2[a2.size() - 1];
   const int64_t n = b2[b2.size() - 1];
@@ -67,7 +58,8 @@ template <typename T> void MatMulCompute(const Tensor &a, const Tensor &b, Tenso
   Shape a_prefix, b_prefix;
   a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
   b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
-  const Shape out_prefix = BroadcastPrefix(a_prefix, b_prefix);
+  const Shape out_prefix = detail::BroadcastMatMulPrefix(
+      a_prefix, b_prefix, kMatMulName, " inputs are not broadcast-compatible on batch dimensions.");
   const size_t batch_rank = out_prefix.size();
 
   const std::vector<int64_t> a_strides = ComputeStrides(a2);

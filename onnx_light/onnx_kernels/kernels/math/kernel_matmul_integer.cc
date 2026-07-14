@@ -143,10 +143,6 @@ ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t 
   return zps;
 }
 
-Shape PromoteMatMulShape(const Shape &shape, bool is_left) {
-  return detail::PromoteMatMulShape(shape, is_left);
-}
-
 std::vector<int64_t> ComputeStrides(const Shape &shape) {
   std::vector<int64_t> strides(shape.size(), 1);
   for (int64_t i = static_cast<int64_t>(shape.size()) - 2; i >= 0; --i) {
@@ -154,11 +150,6 @@ std::vector<int64_t> ComputeStrides(const Shape &shape) {
         strides[static_cast<size_t>(i + 1)] * shape[static_cast<size_t>(i + 1)];
   }
   return strides;
-}
-
-Shape BroadcastPrefix(const Shape &a_prefix, const Shape &b_prefix) {
-  return detail::BroadcastMatMulPrefix(
-      a_prefix, b_prefix, kName, ": inputs are not broadcast-compatible on batch dimensions.");
 }
 
 Shape ComputeOutputShape(const Shape &a_shape, const Shape &b_shape) {
@@ -170,8 +161,8 @@ Shape ComputeOutputShape(const Shape &a_shape, const Shape &b_shape) {
 
 void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tensor &b,
                       const ZeroPointValues &b_zps, Tensor &output) {
-  const Shape a2 = PromoteMatMulShape(a.shape, true);
-  const Shape b2 = PromoteMatMulShape(b.shape, false);
+  const Shape a2 = detail::PromoteMatMulShape(a.shape, true);
+  const Shape b2 = detail::PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
   const int64_t K = a2[a2.size() - 1];
   const int64_t N = b2[b2.size() - 1];
@@ -179,7 +170,8 @@ void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tenso
   Shape a_prefix, b_prefix;
   a_prefix.insert(a_prefix.begin(), a2.begin(), a2.end() - 2);
   b_prefix.insert(b_prefix.begin(), b2.begin(), b2.end() - 2);
-  const Shape out_prefix = BroadcastPrefix(a_prefix, b_prefix);
+  const Shape out_prefix = detail::BroadcastMatMulPrefix(
+      a_prefix, b_prefix, kName, ": inputs are not broadcast-compatible on batch dimensions.");
   const size_t batch_rank = out_prefix.size();
 
   const std::vector<int64_t> a_strides = ComputeStrides(a2);
@@ -274,8 +266,8 @@ void ComputeMatMulInteger(const Tensor &a, const Tensor &b, const Tensor &a_zero
   EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(int32_t), kName,
                       ": preallocated output buffer size does not match its shape.");
 
-  const Shape a2 = PromoteMatMulShape(a.shape, true);
-  const Shape b2 = PromoteMatMulShape(b.shape, false);
+  const Shape a2 = detail::PromoteMatMulShape(a.shape, true);
+  const Shape b2 = detail::PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
   const int64_t N = b2[b2.size() - 1];
 

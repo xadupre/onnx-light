@@ -79,7 +79,11 @@ def make_tick_label(output_name: str, node_type: str) -> str:
 
 
 def make_plot_assignments(args: argparse.Namespace) -> list[tuple[str, dict[str, int]]]:
-    """Builds the four configurations displayed on the memory plot."""
+    """Returns the four configurations displayed on the memory plot.
+
+    Returns:
+        A list of ``(label, assignment)`` tuples.
+    """
 
     return [
         (

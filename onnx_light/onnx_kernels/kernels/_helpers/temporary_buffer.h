@@ -30,7 +30,9 @@ template <typename T> struct TemporaryTypedBuffer {
       : size(count) {
     if (buffer_allocator != nullptr) {
       RawBuffer *allocated = buffer_allocator->Allocate(count * sizeof(T));
-      EXT_ENFORCE_INVALID(allocated != nullptr, name, " allocator returned null.");
+      if (allocated == nullptr) {
+        EXT_THROW_INVALID(name, " allocator returned null.");
+      }
       if (allocated->size() < count * sizeof(T)) {
         buffer_allocator->Free(allocated);
         EXT_THROW_INVALID(name, " allocator returned too small a buffer.");

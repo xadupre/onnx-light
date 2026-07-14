@@ -28,10 +28,26 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // Less — z = x < y, element-wise with broadcasting (since opset 7).
 // Inputs are numeric tensors of the same dtype, the output is BOOL.
 // ---------------------------------------------------------------------------
-void RegisterLessCases(std::vector<TestCase> &registry) {
+void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Less less_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Less");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    const std::vector<int64_t> shape = {1024, 4096};
+    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9201));
+    Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9202));
+    Tensor z = less_kernel(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_less_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Equal-shape variant.
   {

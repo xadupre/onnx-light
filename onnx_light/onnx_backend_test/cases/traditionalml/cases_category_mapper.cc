@@ -23,7 +23,7 @@ namespace onnx_backend_test {
 // ``test_ai_onnx_ml_category_mapper_int_to_string`` (see
 // ``onnx/backend/test/case/node/ai_onnx_ml/category_mapper.py``).
 // ---------------------------------------------------------------------------
-void RegisterCategoryMapperCases(std::vector<TestCase> &registry) {
+void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);

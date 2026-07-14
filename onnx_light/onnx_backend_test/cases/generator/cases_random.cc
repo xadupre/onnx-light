@@ -51,10 +51,23 @@ void AddIntsAttr(NodeProto &node, const char *name, const std::vector<int64_t> &
 // SplitMix64 + Irwin-Hall RNG so these cases produce stable expected
 // outputs.
 // ---------------------------------------------------------------------------
-void RegisterRandomNormalCases(std::vector<TestCase> &registry) {
+void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const std::vector<int64_t> shape = {2, 3};
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> large_shape = {kBenchmarkElementwiseSize};
+    NodeProto node;
+    node.set_op_type("RandomNormal");
+    node.add_output("y");
+    AddIntsAttr(node, "shape", large_shape);
+
+    Tensor y = kernel::RandomNormal(ctx)(large_shape);
+    Expect(node, /*inputs=*/{}, {y}, "test_cc_randomnormal_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Default attributes (mean=0, scale=1, no seed, dtype=FLOAT).
   {
@@ -103,10 +116,23 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry) {
 // RandomUniform — produces an output tensor of the given ``shape`` filled
 // with samples drawn uniformly from ``[low, high)``.
 // ---------------------------------------------------------------------------
-void RegisterRandomUniformCases(std::vector<TestCase> &registry) {
+void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const std::vector<int64_t> shape = {2, 3};
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> large_shape = {kBenchmarkElementwiseSize};
+    NodeProto node;
+    node.set_op_type("RandomUniform");
+    node.add_output("y");
+    AddIntsAttr(node, "shape", large_shape);
+
+    Tensor y = kernel::RandomUniform(ctx)(large_shape);
+    Expect(node, /*inputs=*/{}, {y}, "test_cc_randomuniform_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Default attributes (low=0, high=1, no seed, dtype=FLOAT).
   {
@@ -154,9 +180,23 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry) {
 // ---------------------------------------------------------------------------
 // RandomNormalLike — copies the shape from a template input tensor.
 // ---------------------------------------------------------------------------
-void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry) {
+void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
+                                       Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+
+    NodeProto node;
+    node.set_op_type("RandomNormalLike");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor y = kernel::RandomNormalLike(ctx)(x);
+    Expect(node, {x}, {y}, "test_cc_randomnormallike_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Default attributes; input is FLOAT so output dtype matches.
   {
@@ -208,9 +248,24 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry) {
 // ---------------------------------------------------------------------------
 // RandomUniformLike — copies the shape from a template input tensor.
 // ---------------------------------------------------------------------------
-void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry) {
+void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
+                                       Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
+
+    NodeProto node;
+    node.set_op_type("RandomUniformLike");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor y = kernel::RandomUniformLike(ctx)(x);
+    Expect(node, {x}, {y}, "test_cc_randomuniformlike_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Default attributes.
   {

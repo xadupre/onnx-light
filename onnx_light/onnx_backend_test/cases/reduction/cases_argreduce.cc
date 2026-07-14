@@ -116,11 +116,51 @@ void RegisterArgReduceCases(std::vector<TestCase> &registry, const std::string &
 //   * The same four variants with ``select_last_index=1`` exercise the
 //     tie-breaking introduced in opset 12.
 // ---------------------------------------------------------------------------
-void RegisterArgMaxCases(std::vector<TestCase> &registry) {
+void RegisterArgMaxCases(std::vector<TestCase> &registry, TestMode mode) {
+
+  const OpsetId opset = DefaultOpset(13);
+  const kernel::KernelContext ctx{opset};
+  const kernel::ArgReduce arg_kernel{ctx, kernel::ArgReduce::Mode::kMax};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ArgMax");
+    node.add_input("data");
+    node.add_output("result");
+    AddAttribute<int64_t>(node, "axis", 1);
+    AddAttribute<int64_t>(node, "keepdims", 0);
+
+    Tensor data = Tensor::FromFloat("", {1024, 1024}, Randn<float>({1024, 1024}, /*seed=*/9801));
+    Tensor result = arg_kernel(data, /*axis=*/1, /*keepdims=*/false, /*select_last_index=*/false);
+
+    Expect(node, {data}, {result}, "test_cc_argmax_no_keepdims_example_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
   RegisterArgReduceCases(registry, "ArgMax", kernel::ArgReduce::Mode::kMax, "argmax");
 }
 
-void RegisterArgMinCases(std::vector<TestCase> &registry) {
+void RegisterArgMinCases(std::vector<TestCase> &registry, TestMode mode) {
+
+  const OpsetId opset = DefaultOpset(13);
+  const kernel::KernelContext ctx{opset};
+  const kernel::ArgReduce arg_kernel{ctx, kernel::ArgReduce::Mode::kMin};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ArgMin");
+    node.add_input("data");
+    node.add_output("result");
+    AddAttribute<int64_t>(node, "axis", 1);
+    AddAttribute<int64_t>(node, "keepdims", 0);
+
+    Tensor data = Tensor::FromFloat("", {1024, 1024}, Randn<float>({1024, 1024}, /*seed=*/9802));
+    Tensor result = arg_kernel(data, /*axis=*/1, /*keepdims=*/false, /*select_last_index=*/false);
+
+    Expect(node, {data}, {result}, "test_cc_argmin_no_keepdims_example_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
   RegisterArgReduceCases(registry, "ArgMin", kernel::ArgReduce::Mode::kMin, "argmin");
 }
 

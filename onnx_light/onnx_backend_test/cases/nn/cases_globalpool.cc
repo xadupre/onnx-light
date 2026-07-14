@@ -21,10 +21,24 @@ namespace onnx_backend_test {
 //   * test_cc_globalaveragepool — 2-D spatial (N=1, C=3, H=5, W=5).
 //   * test_cc_globalaveragepool_precomputed — precomputed 1x1x3x3 example.
 // ---------------------------------------------------------------------------
-void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry) {
+void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::GlobalAveragePool kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("GlobalAveragePool");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromFloat("", {1, 64, 128, 128}, Randn<float>({1, 64, 128, 128}, 1801));
+    Tensor y = kernel(x);
+
+    Expect(node, {x}, {y}, "test_cc_globalaveragepool_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // 1 x 3 x 5 x 5 input — mirrors test_globalaveragepool.
   {
@@ -67,10 +81,23 @@ void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry) {
 //   * test_cc_globalmaxpool — 2-D spatial (N=1, C=3, H=5, W=5).
 //   * test_cc_globalmaxpool_precomputed — precomputed 1x1x3x3 example.
 // ---------------------------------------------------------------------------
-void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry) {
+void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::GlobalMaxPool kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("GlobalMaxPool");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromFloat("", {1, 64, 128, 128}, Randn<float>({1, 64, 128, 128}, 1802));
+    Tensor y = kernel(x);
+
+    Expect(node, {x}, {y}, "test_cc_globalmaxpool_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // 1 x 3 x 5 x 5 input — mirrors test_globalmaxpool.
   {
@@ -113,10 +140,24 @@ void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry) {
 //   * test_cc_globallppool_lp2 — 2-D spatial, p=2 (default L2 norm).
 //   * test_cc_globallppool_default — 1x1x3x3, default p=2.
 // ---------------------------------------------------------------------------
-void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry) {
+void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::GlobalLpPool kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("GlobalLpPool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<int64_t>(node, "p", 1);
+
+    Tensor x = Tensor::FromFloat("", {1, 64, 128, 128}, Randn<float>({1, 64, 128, 128}, 1803));
+    Tensor y = kernel(x, /*p=*/1);
+
+    Expect(node, {x}, {y}, "test_cc_globallppool_lp1_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // 1 x 3 x 5 x 5 input, p=1.
   {

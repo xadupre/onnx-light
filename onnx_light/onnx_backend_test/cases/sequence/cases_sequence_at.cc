@@ -100,7 +100,7 @@ void RegisterSequenceAtCase(const std::string &name, const std::vector<Tensor> &
 //   * ``test_cc_sequence_at_neg``:  selects element at position -2
 //                                   (same as index 1 for n=3).
 // ---------------------------------------------------------------------------
-void RegisterSequenceAtCases(std::vector<TestCase> &registry) {
+void RegisterSequenceAtCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
 
   const std::vector<int64_t> elem_shape = {2, 3};

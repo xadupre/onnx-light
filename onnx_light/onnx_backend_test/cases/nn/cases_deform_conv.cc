@@ -40,10 +40,30 @@ NodeProto MakeDeformConvNode(const std::vector<std::string> &inputs,
 // definitions (since opset 19), evaluating the expected output through the
 // in-tree ``kernel::DeformConv`` reference implementation so the recorded
 // expectations stay self-consistent with this library.
-void RegisterDeformConvCases(std::vector<TestCase> &registry) {
+void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::DeformConv dc{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor X = Tensor::FromFloat("X", {1, 16, 128, 128}, Randn<float>({1, 16, 128, 128}, 1501));
+    Tensor W = Tensor::FromFloat("W", {16, 16, 2, 2}, Randn<float>({16, 16, 2, 2}, 1502));
+    Tensor offset =
+        Tensor::FromFloat("offset", {1, 8, 127, 127}, Randn<float>({1, 8, 127, 127}, 1503));
+    Tensor B;
+    Tensor mask;
+    kernel::DeformConv::Attributes attrs;
+    attrs.kernel_shape = {2, 2};
+    attrs.pads = {0, 0, 0, 0};
+    Tensor Y = dc(X, W, offset, B, mask, attrs);
+    Y.name = "Y";
+    NodeProto node = MakeDeformConvNode({"X", "W", "offset"}, {"Y"});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {0, 0, 0, 0});
+    Expect(node, {X, W, offset}, {Y}, "test_cc_basic_deform_conv_without_padding_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   // -------------------------------------------------------------------
   // Case 1: basic 2x2 kernel without padding (test vector from

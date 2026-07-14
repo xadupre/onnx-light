@@ -21,7 +21,7 @@ namespace onnx_backend_test {
 // expected output's element type, shape and bytes are an exact copy of the
 // single input tensor.
 // ---------------------------------------------------------------------------
-void RegisterOptionalCases(std::vector<TestCase> &registry) {
+void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
   NodeProto node;
   node.set_op_type("Optional");
   node.add_input("input");

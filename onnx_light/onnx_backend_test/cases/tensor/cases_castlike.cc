@@ -120,13 +120,24 @@ Tensor MakeTargetTypeTensor(const CastLikeDtype &to) {
 
 } // namespace
 
-void RegisterCastLikeCases(std::vector<TestCase> &registry) {
+void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
   const OpsetId opset_v21 = DefaultOpset(21); // For FLOAT8, INT4, UINT4
   const OpsetId opset_v23 = DefaultOpset(23); // For FLOAT4E2M1
   const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
   const kernel::KernelContext ctx{opset};
   const kernel::CastLike castlike_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeCastLikeNode();
+    Tensor input = Tensor::FromFloat("input", {kBenchmarkElementwiseSize},
+                                     Randn<float>({kBenchmarkElementwiseSize}, 2001));
+    Tensor target_type = Tensor::FromDouble("target_type", {1}, {0.0});
+    Tensor output = castlike_kernel(input, target_type);
+    Expect(node, {input, target_type}, {output}, "test_cc_castlike_FLOAT_to_DOUBLE_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   const auto dtypes = SupportedCastLikeDtypes();
   for (const auto &from : dtypes) {

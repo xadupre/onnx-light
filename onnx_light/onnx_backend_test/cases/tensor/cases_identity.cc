@@ -32,7 +32,7 @@ Tensor Rename(Tensor t, const std::string &name) {
 
 } // namespace
 
-void RegisterIdentityCases(std::vector<TestCase> &registry) {
+void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
   // Identity has been available since opset 1; opset 14 broadened the
   // ``V`` type constraint to also cover sequence types and opset 16 added
   // optional types. The default opset chosen here matches the most common
@@ -40,6 +40,15 @@ void RegisterIdentityCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Identity identity_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
+                                       Randn<float>({kBenchmarkElementwiseSize}, 2001));
+    const Tensor y = Rename(identity_kernel(x), "y");
+    Expect(MakeIdentityNode(), {x}, {y}, "test_cc_identity_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // test_cc_identity — 4-D float tensor with non-trivial shape; mirrors the
   // ONNX upstream ``test_identity`` case shape (1, 3, 2, 2).

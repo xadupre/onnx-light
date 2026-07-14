@@ -11,11 +11,28 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry) {
+void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::ArrayFeatureExtractor afe{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("ArrayFeatureExtractor");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    Tensor x = Tensor::FromFloat("", {8192, 4}, Randn<float>({8192, 4}, 2701));
+    Tensor y = Tensor::FromInt64("", {3}, {0, 2, 3});
+    Tensor z = afe.operator()<float>(x, y);
+
+    Expect(node, {x, y}, {z}, "test_ai_onnx_ml_array_feature_extractor_benchmark",
+           {default_opset, opset}, "backend-test", registry);
+    return;
+  }
 
   NodeProto node;
   node.set_op_type("ArrayFeatureExtractor");

@@ -34,10 +34,26 @@ namespace onnx_backend_test {
 // are not imported here — they are covered through the function-body path
 // once each sub-operator gains backend test coverage.
 // ---------------------------------------------------------------------------
-void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry) {
+void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
   const kernel::DynamicQuantizeLinear dyn_quantize_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("DynamicQuantizeLinear");
+    node.add_input("x");
+    node.add_output("y");
+    node.add_output("y_scale");
+    node.add_output("y_zero_point");
+
+    Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 2521));
+    auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
+    Expect(node, {x}, {y, y_scale, y_zero_point}, "test_dynamicquantizelinear_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   NodeProto node;
   node.set_op_type("DynamicQuantizeLinear");

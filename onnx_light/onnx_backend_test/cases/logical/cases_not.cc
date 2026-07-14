@@ -36,10 +36,21 @@ void RegisterNotOnnxCase(const std::string &name, const std::vector<int64_t> &sh
 // backend test cases (``test_not_2d``, ``test_not_3d``, ``test_not_4d``)
 // mirrored from ``onnx.backend.test.case.node.not.Not``.
 // ---------------------------------------------------------------------------
-void RegisterNotCases(std::vector<TestCase> &registry) {
+void RegisterNotCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(1);
   const kernel::KernelContext ctx{opset};
   const kernel::Not not_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeNode("Not", {"x"}, {"y"});
+
+    const std::vector<int64_t> shape = {1024, 4096};
+    Tensor x = Tensor::FromBool("", shape, RandUint<uint8_t>(2, shape, /*seed=*/9103));
+    Tensor y = not_kernel(x);
+
+    Expect(node, {x}, {y}, "test_cc_not_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   {
     NodeProto node = MakeNode("Not", {"x"}, {"y"});

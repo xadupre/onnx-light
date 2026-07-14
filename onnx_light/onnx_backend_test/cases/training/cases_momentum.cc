@@ -43,11 +43,42 @@ OpsetId TrainingOpset(int64_t version) { return OpsetId(kOnnxPreviewTrainingDoma
 // ``beta`` (FLOAT) and ``mode`` (STRING) and use the first-iteration
 // path (``T == 0``).
 // ---------------------------------------------------------------------------
-void RegisterMomentumCases(std::vector<TestCase> &registry) {
+void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = TrainingOpset(1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::Momentum momentum{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Momentum");
+    node.set_domain(kOnnxPreviewTrainingDomain);
+    AddInputs(node, {"R", "T", "X", "G", "V"});
+    AddOutputs(node, {"X_new", "V_new"});
+
+    const float norm_coefficient = 0.001f;
+    const float alpha = 0.95f;
+    const float beta = 0.1f;
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "alpha", alpha);
+    AddFloatAttribute(node, "beta", beta);
+    AddAttribute(node, "mode", std::string("standard"));
+
+    Tensor R = Tensor::FromFloat("", {}, {0.1f});
+    Tensor T = Tensor::FromInt64("", {}, {0});
+    Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+    Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
+    Tensor V = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
+
+    std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
+                                        kernel::Momentum::Mode::kStandard);
+    Expect(node, {R, T, X, G, V}, {outs[0], outs[1]}, "test_momentum_benchmark",
+           {default_opset, opset}, "backend-test", registry);
+    return;
+  }
 
   // From Momentum.export_momentum():
   {

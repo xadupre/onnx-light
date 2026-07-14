@@ -20,7 +20,34 @@ namespace onnx_backend_test {
 // Uses a small, fully deterministic value so this library does not depend
 // on a PRNG.
 // ---------------------------------------------------------------------------
-void RegisterConstantCases(std::vector<TestCase> &registry) {
+void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Constant");
+    node.add_output("y");
+
+    Tensor value = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                     Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+
+    AttributeProto *attr = node.add_attribute();
+    attr->set_name("value");
+    attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = attr->add_t();
+    t->set_data_type(static_cast<DataType>(value.data_type));
+    for (int64_t d : value.shape) {
+      t->add_dims(static_cast<uint64_t>(d));
+    }
+    t->set_raw_data(utils::ByteSpan(value.data));
+
+    const OpsetId opset = DefaultOpset(13);
+    const kernel::KernelContext ctx{opset};
+    Tensor y = kernel::Constant(ctx)(std::move(value));
+
+    Expect(node, /*inputs=*/{}, {y}, "test_cc_constant_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
+
   NodeProto node;
   node.set_op_type("Constant");
   node.add_output("y");

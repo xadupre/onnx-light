@@ -54,7 +54,7 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 // The map input is represented as a single Map object in the DataSet; the
 // runtime dispatch reads it from RuntimeContext::maps().
 // ---------------------------------------------------------------------------
-void RegisterCastMapCases(std::vector<TestCase> &registry) {
+void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};

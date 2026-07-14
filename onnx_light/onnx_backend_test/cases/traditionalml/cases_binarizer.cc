@@ -19,11 +19,32 @@ namespace onnx_backend_test {
 // ``onnx/backend/test/case/node/ai_onnx_ml/binarizer.py``), which uses
 // threshold=1.0 on a ``(3, 4, 5)`` ``float32`` input.
 // ---------------------------------------------------------------------------
-void RegisterBinarizerCases(std::vector<TestCase> &registry) {
+void RegisterBinarizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::Binarizer binarizer{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Binarizer");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+
+    const float threshold = 1.0f;
+    AttributeProto *threshold_attr = node.add_attribute();
+    threshold_attr->set_name("threshold");
+    threshold_attr->set_type(AttributeProto::AttributeType::FLOAT);
+    threshold_attr->set_f(threshold);
+
+    Tensor x = Tensor::FromFloat("", {8192, 4}, Randn<float>({8192, 4}, 2611));
+    Tensor y = binarizer.operator()<float>(x, threshold);
+
+    Expect(node, {x}, {y}, "test_ai_onnx_ml_binarizer_benchmark", {default_opset, opset},
+           "backend-test", registry);
+    return;
+  }
 
   // Canonical float case mirroring the upstream ONNX node test fixture.
   {

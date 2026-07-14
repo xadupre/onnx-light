@@ -18,10 +18,31 @@ namespace onnx_backend_test {
 // input against the ``pattern`` attribute, producing a ``tensor(bool)``
 // output with the same shape (since opset 20 in the ai.onnx domain).
 // ---------------------------------------------------------------------------
-void RegisterRegexFullMatchCases(std::vector<TestCase> &registry) {
+void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
   const kernel::KernelContext ctx{opset};
   const kernel::RegexFullMatch regex_full_match{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("RegexFullMatch");
+    node.add_input("x");
+    node.add_output("y");
+    const std::string pattern = "www\\.[\\w.-]+\\.\\bcom\\b";
+    AddAttribute(node, "pattern", pattern);
+
+    std::vector<std::string> values(262144);
+    for (size_t i = 0; i < values.size(); ++i) {
+      values[i] =
+          (i % 3 == 0) ? "www.google.com" : ((i % 3 == 1) ? "www.facebook.com" : "www.bbc.co.uk");
+    }
+    Tensor x = Tensor::FromStrings("", {static_cast<int64_t>(values.size())}, values);
+    Tensor y = regex_full_match(x, pattern);
+
+    Expect(node, {x}, {y}, "test_cc_regex_full_match_basic_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Basic variant: simple word pattern on a 1-D ``[C]`` input. Mirrors
   // upstream onnx ``test_regex_full_match_basic``.

@@ -19,10 +19,33 @@ namespace onnx_backend_test {
 // axes. The cases below mirror the upstream ``test_instancenorm_*`` ONNX
 // reference cases at opset 22 (the ai.onnx version supported by onnx-light).
 // ---------------------------------------------------------------------------
-void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry) {
+void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::InstanceNormalization instancenorm_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("InstanceNormalization");
+    node.add_input("x");
+    node.add_input("s");
+    node.add_input("bias");
+    node.add_output("y");
+
+    constexpr int64_t N = 1;
+    constexpr int64_t C = 64;
+    constexpr int64_t H = 128;
+    constexpr int64_t W = 128;
+    Tensor x = Tensor::FromFloat("", {N, C, H, W}, Randn<float>({N, C, H, W}, 2001));
+    Tensor scale = Tensor::FromFloat("", {C}, Randn<float>({C}, 2002));
+    Tensor bias = Tensor::FromFloat("", {C}, Randn<float>({C}, 2003));
+
+    Tensor y = instancenorm_kernel(x, scale, bias);
+
+    Expect(node, {x, scale, bias}, {y}, "test_cc_instancenorm_example_benchmark", {opset},
+           "backend-test", registry);
+    return;
+  }
 
   // ``instancenorm_example``: 1x2x1x3 input (N=1, C=2, H=1, W=3) with
   // per-channel scale/bias. Mirrors the upstream Python reference.

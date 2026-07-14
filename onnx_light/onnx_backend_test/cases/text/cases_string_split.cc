@@ -14,10 +14,30 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void RegisterStringSplitCases(std::vector<TestCase> &registry) {
+void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
   const kernel::KernelContext ctx{opset};
   const kernel::StringSplit string_split{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("StringSplit");
+    node.add_input("x");
+    node.add_output("substrings");
+    node.add_output("length");
+    AddAttribute(node, "delimiter", std::string("."));
+
+    std::vector<std::string> values(131072);
+    for (size_t i = 0; i < values.size(); ++i) {
+      values[i] = (i % 2 == 0) ? "abc.com" : "def.net";
+    }
+    Tensor x = Tensor::FromStrings("", {static_cast<int64_t>(values.size())}, values);
+    auto [substrings, length] = string_split(x, ".");
+
+    Expect(node, {x}, {std::move(substrings), std::move(length)},
+           "test_cc_string_split_basic_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   {
     NodeProto node;

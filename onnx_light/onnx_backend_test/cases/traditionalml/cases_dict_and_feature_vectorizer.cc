@@ -55,7 +55,7 @@ void AddIntsAttr(NodeProto &node, const char *name, const std::vector<int64_t> &
 // equals the vocabulary attribute length. Mirrors the upstream ONNX
 // ``ai.onnx.ml::DictVectorizer`` operator (since opset 1).
 // ---------------------------------------------------------------------------
-void RegisterDictVectorizerCases(std::vector<TestCase> &registry) {
+void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
@@ -126,11 +126,30 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry) {
 // feature dimension. Mirrors the upstream ONNX
 // ``ai.onnx.ml::FeatureVectorizer`` operator (since opset 1).
 // ---------------------------------------------------------------------------
-void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry) {
+void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::FeatureVectorizer fv{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("FeatureVectorizer");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x0");
+    node.add_input("x1");
+    node.add_output("y");
+
+    AddIntsAttr(node, "inputdimensions", {2, 1});
+
+    Tensor x0 = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2711));
+    Tensor x1 = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2712));
+    Tensor y = fv({x0, x1}, {2, 1});
+
+    Expect(node, {x0, x1}, {y}, "test_cc_feature_vectorizer_two_float_benchmark",
+           {default_opset, opset}, "backend-test", registry);
+    return;
+  }
 
   // Two float inputs concatenated along the feature dimension.
   {

@@ -35,10 +35,21 @@ NodeProto MakeCenterCropPadNode(const std::vector<int64_t> &axes) {
 // (since opset 18 in the ai.onnx domain). The reference kernel matches the
 // upstream Python implementation in onnx.reference.ops.op_center_crop_pad.
 // ---------------------------------------------------------------------------
-void RegisterCenterCropPadCases(std::vector<TestCase> &registry) {
+void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
   const kernel::CenterCropPad op{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor input =
+        Tensor::FromFloat("", {4096, 2048, 1}, Randn<float>({4096, 2048, 1}, 2001));
+    const Tensor shape = Tensor::FromInt64("", {3}, std::vector<int64_t>{2048, 2048, 1});
+    kernel::CenterCropPad::Attributes attrs;
+    const Tensor output = op(input, shape, attrs);
+    Expect(MakeCenterCropPadNode({}), {input, shape}, {output},
+           "test_cc_center_crop_pad_crop_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_center_crop_pad_crop — strictly cropping on every axis,
   // matching upstream test_center_crop_pad_crop (without random values).

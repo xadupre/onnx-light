@@ -24,11 +24,12 @@ namespace onnx_backend_test {
 /// ``onnx_light.release_after`` and ``onnx_light.not_used_after`` node metadata
 /// are pre-embedded in the model so tests can verify that
 /// ``ComputeContext::ComputeInPlaceReuseGraph`` reproduces them.
-void RegisterReleaseCases(std::vector<TestCase> &registry);
+void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Collects all release backend test cases by invoking every
 /// ``Register*Release*Cases`` helper declared in this header.
-void CollectReleaseTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
+void CollectReleaseTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
+                             TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

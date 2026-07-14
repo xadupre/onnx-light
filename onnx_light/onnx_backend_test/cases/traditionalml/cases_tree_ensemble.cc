@@ -60,11 +60,47 @@ void AddUint8Tensor(NodeProto &node, const char *name, const std::vector<uint8_t
 
 } // namespace
 
-void RegisterTreeEnsembleCases(std::vector<TestCase> &registry) {
+void RegisterTreeEnsembleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 5);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::TreeEnsemble tree_ens{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("TreeEnsemble");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+
+    AddInts(node, "nodes_featureids", {0});
+    AddInts(node, "nodes_truenodeids", {0});
+    AddInts(node, "nodes_falsenodeids", {1});
+    AddInts(node, "nodes_trueleafs", {1});
+    AddInts(node, "nodes_falseleafs", {1});
+    AddTypedTensor<float>(node, "nodes_splits", TensorProto::FLOAT, {0.5f});
+    AddUint8Tensor(node, "nodes_modes", {0x00});
+    AddInts(node, "leaf_targetids", {0, 0});
+    AddTypedTensor<float>(node, "leaf_weights", TensorProto::FLOAT, {1.0f, 2.0f});
+    AddInts(node, "tree_roots", {0});
+    AddInt(node, "n_targets", 1);
+    AddInt(node, "aggregate_function", 1);
+    AddInt(node, "post_transform", 0);
+
+    Tensor x = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2741));
+    Tensor y =
+        tree_ens.operator()<float>(x, /*tree_roots=*/{0}, /*nodes_featureids=*/{0},
+                                   /*nodes_splits=*/{0.5f}, /*nodes_modes=*/{0},
+                                   /*nodes_truenodeids=*/{0}, /*nodes_falsenodeids=*/{1},
+                                   /*nodes_trueleafs=*/{1}, /*nodes_falseleafs=*/{1},
+                                   /*nodes_missing=*/{}, /*leaf_targetids=*/{0, 0},
+                                   /*leaf_weights=*/{1.0f, 2.0f}, /*membership_values=*/{},
+                                   /*n_targets=*/1, /*aggregate_function=*/1, /*post_transform=*/0);
+
+    Expect(node, {x}, {y}, "test_cc_treeensemble_single_tree_float_benchmark",
+           {default_opset, opset}, "backend-test", registry);
+    return;
+  }
 
   // ---------------------------------------------------------------------------
   // Single-tree ensemble (v5 encoding), single feature, single target, float.

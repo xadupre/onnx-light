@@ -122,7 +122,7 @@ void RegisterSequenceEraseCase(const std::string &name, const std::vector<Tensor
 //   * ``test_cc_sequence_erase_neg``:     erases element at position -2
 //                                         (same as index 1 for n=3).
 // ---------------------------------------------------------------------------
-void RegisterSequenceEraseCases(std::vector<TestCase> &registry) {
+void RegisterSequenceEraseCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
 
   const std::vector<int64_t> elem_shape = {2, 3};

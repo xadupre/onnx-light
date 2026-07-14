@@ -36,7 +36,7 @@ NodeProto MakeCol2ImNode(const std::vector<std::string> &inputs,
 // definitions (since opset 18), evaluating the expected output through the
 // in-tree ``kernel::Col2Im`` reference implementation so the recorded
 // expectations stay self-consistent with this library.
-void RegisterCol2ImCases(std::vector<TestCase> &registry) {
+void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
   const kernel::Col2Im op{ctx};

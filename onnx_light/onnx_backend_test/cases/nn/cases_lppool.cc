@@ -38,12 +38,29 @@ namespace onnx_backend_test {
 //     ``p = 2`` (exact-value parity case with the upstream reference, which
 //     ships a precomputed deterministic expected output).
 // ---------------------------------------------------------------------------
-void RegisterLpPoolCases(std::vector<TestCase> &registry) {
+void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::LpPool lp_pool_kernel{ctx};
 
   uint64_t seed = 137;
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("LpPool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {1});
+    AddAttribute<int64_t>(node, "p", 3);
+
+    Tensor x = Tensor::FromFloat("", {1, 32, 16384}, Randn<float>({1, 32, 16384}, seed++));
+    Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2}, /*strides=*/{1}, /*pads=*/{}, /*p=*/3);
+
+    Expect(node, {x}, {y}, "test_cc_lppool_1d_default_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // 1-D LpPool with a 2-wide kernel, p = 3 on a 1x3x32 input (mirrors
   // ``test_lppool_1d_default``).

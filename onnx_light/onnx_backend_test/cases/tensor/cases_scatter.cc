@@ -31,13 +31,29 @@ NodeProto MakeScatterNode(int64_t axis, bool set_axis_attr) {
 
 } // namespace
 
-void RegisterScatterCases(std::vector<TestCase> &registry) {
+void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``Scatter`` is deprecated since opset 11; the upstream ONNX backend test
   // cases pin the opset to 10. Use the same opset here so the generated
   // models are valid (Scatter is not registered in opset >= 11).
   const OpsetId opset = DefaultOpset(10);
   const kernel::KernelContext ctx{opset};
   const kernel::Scatter scatter_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor data =
+        Tensor::FromFloat("", {4096, 1024}, std::vector<float>(kBenchmarkElementwiseSize, 0.0f));
+    std::vector<int64_t> index_values(kBenchmarkElementwiseSize);
+    for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
+      index_values[static_cast<std::size_t>(i)] = i % 4096;
+    }
+    Tensor indices = Tensor::FromInt64("", {4096, 1024}, index_values);
+    Tensor updates = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+    kernel::Scatter::Attributes attrs;
+    Tensor output = scatter_kernel(data, indices, updates, attrs);
+    Expect(MakeScatterNode(0, /*set_axis_attr=*/false), {data, indices, updates}, {output},
+           "test_cc_scatter_without_axis_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_scatter_without_axis — mirrors upstream ``test_scatter_without_axis``.
   {

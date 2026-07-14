@@ -42,7 +42,7 @@ namespace onnx_backend_test {
 //   Causal masking with attention softmax
 //   SwiGLU MLP (gate+up projections, Sigmoid, Mul, down projection)
 // ---------------------------------------------------------------------------
-void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(21);
 
   const std::string name = "test_cc_shape_inference_big_qwen3_4_layers_like";

@@ -31,11 +31,31 @@ void AddFloatsAttr(NodeProto &node, const char *name, const std::vector<float> &
 // always float. Mirrors the behaviour of the upstream ``ai.onnx.ml::Scaler``
 // operator (since opset 1 in the ``ai.onnx.ml`` domain).
 // ---------------------------------------------------------------------------
-void RegisterScalerCases(std::vector<TestCase> &registry) {
+void RegisterScalerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::Scaler scaler{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Scaler");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+
+    const std::vector<float> offset{0.5f, 1.0f, 1.5f};
+    const std::vector<float> scale{2.0f, 0.5f, 1.0f};
+    AddFloatsAttr(node, "offset", offset);
+    AddFloatsAttr(node, "scale", scale);
+
+    Tensor x = Tensor::FromFloat("", {8192, 3}, Randn<float>({8192, 3}, 2601));
+    Tensor y = scaler.operator()<float>(x, offset, scale);
+
+    Expect(node, {x}, {y}, "test_cc_scaler_float_benchmark", {default_opset, opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Per-feature offset/scale on a ``(2, 3)`` float input.
   {

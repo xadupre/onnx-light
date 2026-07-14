@@ -25,10 +25,24 @@ namespace onnx_backend_test {
 //   * test_l1normalization_axis_0 / _axis_1 / _axis_last — mirror upstream
 //     ONNX cases.
 // ---------------------------------------------------------------------------
-void RegisterLpNormalizationCases(std::vector<TestCase> &registry) {
+void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::LpNormalization kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor x = Tensor::FromFloat("", {32, 64, 1024}, Randn<float>({32, 64, 1024}, 2101));
+
+    NodeProto node;
+    node.set_op_type("LpNormalization");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor y = kernel(x);
+    Expect(node, {x}, {y}, "test_cc_lpnormalization_default_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   Tensor x = Tensor::FromFloat(
       "", {2, 2, 3}, {1.0f, 2.0f, 2.0f, 3.0f, 4.0f, 0.0f, 0.0f, 5.0f, 5.0f, 6.0f, 8.0f, 0.0f});

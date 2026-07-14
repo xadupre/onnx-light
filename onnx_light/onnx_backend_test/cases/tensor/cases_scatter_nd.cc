@@ -43,10 +43,25 @@ Tensor MakeUpdates2x4x4() {
 
 } // namespace
 
-void RegisterScatterNDCases(std::vector<TestCase> &registry) {
+void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
   const kernel::ScatterND snd_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor data = Tensor::FromFloat("", {256, 128, 128}, Randn<float>({256, 128, 128}, 2001));
+    std::vector<int64_t> index_values(256);
+    for (int64_t i = 0; i < 256; ++i) {
+      index_values[static_cast<std::size_t>(i)] = i;
+    }
+    Tensor indices = Tensor::FromInt64("", {256, 1}, index_values);
+    Tensor updates = Tensor::FromFloat("", {256, 128, 128}, Randn<float>({256, 128, 128}, 2002));
+    kernel::ScatterND::Attributes attrs;
+    Tensor output = snd_kernel(data, indices, updates, attrs);
+    Expect(MakeScatterNDNode("none"), {data, indices, updates}, {output},
+           "test_cc_scatternd_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_scatternd — mirrors upstream ``test_scatternd``.
   {

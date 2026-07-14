@@ -37,10 +37,26 @@ NodeProto MakeOneHotNode(bool set_axis, int64_t axis) {
 
 } // namespace
 
-void RegisterOneHotCases(std::vector<TestCase> &registry) {
+void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
   const kernel::OneHot one_hot_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    constexpr int64_t index_count = kBenchmarkElementwiseSize / 12;
+    std::vector<int64_t> index_values(index_count);
+    for (int64_t i = 0; i < index_count; ++i) {
+      index_values[static_cast<std::size_t>(i)] = i % 12;
+    }
+    const Tensor indices = Tensor::FromInt64("indices", {index_count}, index_values);
+    const Tensor depth = Tensor::FromFloat("depth", {}, {12.0f});
+    const Tensor values = Tensor::FromInt32("values", {2}, {2, 5});
+    kernel::OneHot::Attributes attrs;
+    const Tensor y = one_hot_kernel(indices, depth, values, attrs);
+    Expect(MakeOneHotNode(/*set_axis=*/false, /*axis=*/-1), {indices, depth, values}, {y},
+           "test_onehot_without_axis_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_onehot_without_axis: indices INT64 vector, depth FLOAT scalar,
   // INT32 values. Output rank = 2, axis = -1 (innermost).

@@ -29,7 +29,7 @@ namespace onnx_backend_test {
 //     is laid out as ``[batch_size, seq_length, input_size]``, mirroring
 //     upstream ``test_simple_rnn_batchwise``.
 // ---------------------------------------------------------------------------
-void RegisterRNNCases(std::vector<TestCase> &registry) {
+void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::RNN rnn_kernel{ctx};

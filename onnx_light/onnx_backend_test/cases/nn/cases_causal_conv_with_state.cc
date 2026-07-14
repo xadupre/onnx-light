@@ -78,10 +78,18 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &name, cons
 
 } // namespace
 
-void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry) {
+void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(27);
   const kernel::KernelContext ctx{opset};
   const kernel::CausalConvWithState kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor X = Tensor::FromFloat("input", {1, 32, 16384}, Randn<float>({1, 32, 16384}, 2601));
+    Tensor W = Tensor::FromFloat("weight", {32, 1, 3}, Randn<float>({32, 1, 3}, 2602));
+    RegisterCase(registry, "test_cc_causal_conv_with_state_basic_benchmark", opset, kernel, X, W,
+                 nullptr, nullptr, "none");
+    return;
+  }
 
   // Shared "basic" tensors used by several cases: B=1, C=2, L=4, K=3.
   Tensor X_basic =

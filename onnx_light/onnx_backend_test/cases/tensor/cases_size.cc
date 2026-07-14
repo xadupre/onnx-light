@@ -32,7 +32,7 @@ Tensor Rename(Tensor t, const std::string &name) {
 
 } // namespace
 
-void RegisterSizeCases(std::vector<TestCase> &registry) {
+void RegisterSizeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Size size_kernel{ctx};

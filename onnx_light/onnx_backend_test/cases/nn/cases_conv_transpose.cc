@@ -31,10 +31,24 @@ NodeProto MakeConvTransposeNode(const std::vector<std::string> &inputs,
 
 } // namespace
 
-void RegisterConvTransposeCases(std::vector<TestCase> &registry) {
+void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::ConvTranspose ct{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor X = Tensor::FromFloat("X", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1401));
+    Tensor W = Tensor::FromFloat("W", {32, 32, 3, 3}, Randn<float>({32, 32, 3, 3}, 1402));
+    Tensor B;
+    kernel::ConvTranspose::Attributes attrs;
+    attrs.kernel_shape = {3, 3};
+    Tensor Y = ct(X, W, B, attrs);
+    Y.name = "Y";
+    NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    Expect(node, {X, W}, {Y}, "test_cc_convtranspose_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // -------------------------------------------------------------------
   // Case 1: basic 3x3 ConvTranspose (mirrors ``test_convtranspose``).

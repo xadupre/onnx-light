@@ -54,8 +54,15 @@ void RegisterOneConstantOfShape(const std::string &case_name,
 // exports (``test_constantofshape_int_zeros`` /
 // ``test_constantofshape_float_ones``).
 // ---------------------------------------------------------------------------
-void RegisterConstantOfShapeCases(std::vector<TestCase> &registry) {
+void RegisterConstantOfShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor value = Tensor::FromFloat("", /*shape=*/{1}, {1.0f});
+    RegisterOneConstantOfShape("test_constantofshape_float_ones_benchmark",
+                               {kBenchmarkElementwiseSize}, value, registry, opset);
+    return;
+  }
 
   // Upstream ``test_constantofshape_float_ones``: shape ``[4, 3, 2]``,
   // ``value`` = FLOAT 1.0 -> output is a FLOAT 1-filled tensor.

@@ -41,10 +41,19 @@ Tensor MakeShapeTensor(const std::vector<int64_t> &dims) {
 
 } // namespace
 
-void RegisterExpandCases(std::vector<TestCase> &registry) {
+void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::Expand expand_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor input = Tensor::FromFloat("", {4096, 1}, Randn<float>({4096, 1}, 2001));
+    const Tensor shape = MakeShapeTensor({2, 4096, 512});
+    const Tensor output = expand_kernel(input, shape);
+    Expect(MakeExpandNode(), {input, shape}, {output}, "test_cc_expand_dim_changed_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_expand_dim_changed
   // input: shape [3, 1], values [1.0, 2.0, 3.0]

@@ -79,10 +79,18 @@ void RegisterCase(std::vector<TestCase> &registry, const kernel::LayerNormalizat
 
 } // namespace
 
-void RegisterLayerNormalizationCases(std::vector<TestCase> &registry) {
+void RegisterLayerNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(17);
   const kernel::KernelContext ctx{opset};
   const kernel::LayerNormalization layernorm_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    constexpr float kDefaultEpsilon = 1e-5f;
+    RegisterCase(registry, layernorm_kernel, opset, "layer_normalization_2d_axis0_benchmark",
+                 {2048, 2048}, /*axis=*/0, /*include_axis_attr=*/true, kDefaultEpsilon,
+                 /*include_epsilon_attr=*/false);
+    return;
+  }
 
   constexpr float kDefaultEpsilon = 1e-5f;
   constexpr float kAltEpsilon = 0.1f;

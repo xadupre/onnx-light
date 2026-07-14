@@ -71,10 +71,25 @@ std::vector<float> Range1ToN(int64_t n) {
 // ``np.random.randn`` outputs but are still valid backend tests because the
 // expected outputs are computed by this very kernel.
 // ---------------------------------------------------------------------------
-void RegisterMaxPoolCases(std::vector<TestCase> &registry) {
+void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const kernel::KernelContext ctx{opset};
   const kernel::MaxPool maxpool_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("MaxPool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2});
+
+    Tensor x = Tensor::FromFloat("", {1, 32, 16384}, Randn<float>({1, 32, 16384}, 2301));
+    Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2});
+
+    Expect(node, {x}, {y}, "test_cc_maxpool_1d_default_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // 1-D MaxPool with a 2-wide kernel on a 1x3x32 input.
   {

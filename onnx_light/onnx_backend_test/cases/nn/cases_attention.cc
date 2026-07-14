@@ -102,9 +102,17 @@ Tensor MakeK_1_2_3_2() {
   // (batch=1, kv_heads=2, kv_seq=3, head_size=2)
   return Tensor::FromFloat("", {1, 2, 3, 2},
                            {
-                               1.0f, 0.0f, 0.5f, 0.5f, 0.0f,
+                               1.0f,
+                               0.0f,
+                               0.5f,
+                               0.5f,
+                               0.0f,
                                1.0f, // head 0
-                               -1.0f, 1.0f, 1.0f, 1.0f, 0.25f,
+                               -1.0f,
+                               1.0f,
+                               1.0f,
+                               1.0f,
+                               0.25f,
                                -0.5f, // head 1
                            });
 }
@@ -113,9 +121,17 @@ Tensor MakeV_1_2_3_2() {
   // (batch=1, kv_heads=2, kv_seq=3, v_head_size=2)
   return Tensor::FromFloat("", {1, 2, 3, 2},
                            {
-                               1.0f, 0.0f, 0.0f, 1.0f, -1.0f,
+                               1.0f,
+                               0.0f,
+                               0.0f,
+                               1.0f,
+                               -1.0f,
                                1.0f, // head 0
-                               2.0f, -2.0f, 0.5f, 0.25f, -0.5f,
+                               2.0f,
+                               -2.0f,
+                               0.5f,
+                               0.25f,
+                               -0.5f,
                                0.0f, // head 1
                            });
 }
@@ -147,10 +163,21 @@ Tensor MakeQ_1_4_2_2_gqa() {
 
 } // namespace
 
-void RegisterAttentionCases(std::vector<TestCase> &registry) {
+void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
   const kernel::KernelContext ctx{opset};
   const kernel::Attention attention{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor Q = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2501));
+    Tensor K = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2502));
+    Tensor V = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2503));
+    Tensor Y = attention(Q, K, V);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // -------------------------------------------------------------------
   // Case 1: basic MHA (matches upstream ``test_attention_4d``).

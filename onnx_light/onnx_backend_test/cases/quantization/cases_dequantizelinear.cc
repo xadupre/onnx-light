@@ -77,7 +77,7 @@ namespace {
 // per-tensor scalar and per-axis FLOAT scale with FLOAT output for byte-sized
 // integer, float8, and sub-byte (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) inputs.
 // ---------------------------------------------------------------------------
-void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
+void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(25);
   // Opset 21 introduced the ``block_size`` attribute and the UINT4/INT4
   // sub-byte input types; opset 23 added FLOAT4E2M1; opset 25 added UINT2/INT2.
@@ -86,6 +86,23 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
   const OpsetId opset_v25 = DefaultOpset(25);
   const kernel::KernelContext ctx{opset};
   const kernel::DequantizeLinear dequantize_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("DequantizeLinear");
+    node.add_input("x");
+    node.add_input("x_scale");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromUint8("", {kBenchmarkElementwiseSize},
+                                 RandUint<uint8_t>(256, {kBenchmarkElementwiseSize}, 2511));
+    Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
+    Tensor y = dequantize_kernel(x, x_scale);
+
+    Expect(node, {x, x_scale}, {y}, "test_cc_dequantizelinear_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Default UINT8 input, x_zero_point omitted.
   {

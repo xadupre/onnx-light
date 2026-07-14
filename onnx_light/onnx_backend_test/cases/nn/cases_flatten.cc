@@ -57,10 +57,19 @@ std::vector<float> SequentialFloats(size_t count) {
 //   * test_cc_flatten_axis0..axis3   — explicit axis=0..3 on a (2, 3, 4, 5) input.
 //   * test_cc_flatten_negative_axis1..4 — axis=-1..-4 on a (2, 3, 4, 5) input.
 // ---------------------------------------------------------------------------
-void RegisterFlattenCases(std::vector<TestCase> &registry) {
+void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(25);
   const kernel::KernelContext ctx{opset};
   const kernel::Flatten kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeFlattenNode(/*axis=*/1, /*include_axis=*/false);
+    Tensor a = Tensor::FromFloat("", {64, 64, 32, 32}, Randn<float>({64, 64, 32, 32}, 1701));
+    Tensor b = kernel(a);
+    Expect(node, {a}, {b}, "test_cc_flatten_default_axis_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Default axis (axis=1) on a (5, 4, 3, 2) input.
   {

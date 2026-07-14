@@ -292,28 +292,28 @@ void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string
 std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_big,
                                        TestMode mode) {
   std::vector<TestCase> registry;
-  CollectControlflowTestCases(registry, op_type);
-  CollectGeneratorTestCases(registry, op_type);
-  CollectImageTestCases(registry, op_type);
-  CollectLogicalTestCases(registry, op_type);
+  CollectControlflowTestCases(registry, op_type, mode);
+  CollectGeneratorTestCases(registry, op_type, mode);
+  CollectImageTestCases(registry, op_type, mode);
+  CollectLogicalTestCases(registry, op_type, mode);
   CollectMathTestCases(registry, op_type, mode);
-  CollectNNTestCases(registry, op_type);
-  CollectObjectDetectionTestCases(registry, op_type);
-  CollectOptionalTestCases(registry, op_type);
-  CollectPreviewTestCases(registry, op_type);
-  CollectQuantizationTestCases(registry, op_type);
-  CollectReductionTestCases(registry, op_type);
-  CollectSequenceTestCases(registry, op_type);
-  CollectTensorTestCases(registry, op_type);
-  CollectTextTestCases(registry, op_type);
-  CollectTraditionalMLTestCases(registry, op_type);
-  CollectTrainingTestCases(registry, op_type);
-  CollectShapeInferenceTestCases(registry, op_type, include_big);
-  CollectEmptyShapeTestCases(registry, op_type);
-  CollectInPlaceTestCases(registry, op_type);
-  CollectReleaseTestCases(registry, op_type);
-  CollectShapeTagTestCases(registry, op_type);
-  CollectNanInfTestCases(registry, op_type);
+  CollectNNTestCases(registry, op_type, mode);
+  CollectObjectDetectionTestCases(registry, op_type, mode);
+  CollectOptionalTestCases(registry, op_type, mode);
+  CollectPreviewTestCases(registry, op_type, mode);
+  CollectQuantizationTestCases(registry, op_type, mode);
+  CollectReductionTestCases(registry, op_type, mode);
+  CollectSequenceTestCases(registry, op_type, mode);
+  CollectTensorTestCases(registry, op_type, mode);
+  CollectTextTestCases(registry, op_type, mode);
+  CollectTraditionalMLTestCases(registry, op_type, mode);
+  CollectTrainingTestCases(registry, op_type, mode);
+  CollectShapeInferenceTestCases(registry, op_type, include_big, mode);
+  CollectEmptyShapeTestCases(registry, op_type, mode);
+  CollectInPlaceTestCases(registry, op_type, mode);
+  CollectReleaseTestCases(registry, op_type, mode);
+  CollectShapeTagTestCases(registry, op_type, mode);
+  CollectNanInfTestCases(registry, op_type, mode);
   if (include_big) {
     return registry;
   }

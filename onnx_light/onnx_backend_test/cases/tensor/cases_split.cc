@@ -55,10 +55,20 @@ Tensor MakeInt64Vector(const std::vector<int64_t> &values) {
 
 } // namespace
 
-void RegisterSplitCases(std::vector<TestCase> &registry) {
+void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset13 = DefaultOpset(13);
   const OpsetId opset18 = DefaultOpset(18);
   const kernel::Split split_kernel{kernel::KernelContext{opset18}};
+
+  if (mode == TestMode::BENCHMARK) {
+    Tensor x = Tensor::FromFloat("", {4194303}, Randn<float>({4194303}, 2001));
+    NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3"}, /*axis=*/0,
+                                   /*has_axis=*/true);
+    std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
+    Expect(node, {x}, outs, "test_cc_split_equal_parts_1d_opset13_benchmark", {opset13},
+           "backend-test", registry);
+    return;
+  }
 
   // ---- opset 13: equal parts, 1-D, axis=0 ----
   {

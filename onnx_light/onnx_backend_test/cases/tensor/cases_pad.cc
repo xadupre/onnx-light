@@ -59,7 +59,7 @@ Tensor MakeInt64Vector(const std::string &name, const std::vector<int64_t> &valu
 
 } // namespace
 
-void RegisterPadCases(std::vector<TestCase> &registry) {
+void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(21);
 
   // test_cc_constant_pad - pads ``data`` with the constant 1.2 on the trailing two axes.

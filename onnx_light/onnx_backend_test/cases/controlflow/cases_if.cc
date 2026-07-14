@@ -74,7 +74,7 @@ void BuildConstantBranch(GraphProto &g, const std::string &graph_name,
 //     scope so subgraphs can reference values declared outside the
 //     branch.
 // ---------------------------------------------------------------------------
-void RegisterIfCases(std::vector<TestCase> &registry) {
+void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::If if_kernel{ctx};

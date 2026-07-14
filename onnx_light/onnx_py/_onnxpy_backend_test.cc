@@ -22,6 +22,7 @@ namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DataSet;
 using onnx_backend_test::TestCase;
+using onnx_backend_test::TestMode;
 using onnx_kernels::Map;
 using onnx_kernels::Tensor;
 
@@ -242,35 +243,50 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
         return "TestCase(name='" + tc.name + "', kind='" + tc.kind + "')";
       });
 
+  nb::enum_<TestMode>(bt_mod, "TestMode",
+                      "Selects how backend test cases are generated. ``TEST`` (the "
+                      "default) yields the standard correctness cases. ``BENCHMARK`` "
+                      "yields large-input cases sized so a single kernel evaluation "
+                      "runs long enough to be timed (~0.1 s), for categories that "
+                      "support it.")
+      .value("TEST", TestMode::TEST)
+      .value("BENCHMARK", TestMode::BENCHMARK);
+
   bt_mod.def(
       "collect_test_cases",
-      [](const std::string &op_type_or_cat, bool include_big) {
-        return onnx_backend_test::CollectTestCases(op_type_or_cat, include_big);
+      [](const std::string &op_type_or_cat, bool include_big, TestMode mode) {
+        return onnx_backend_test::CollectTestCases(op_type_or_cat, include_big, mode);
       },
       nb::arg("op_type_or_cat") = std::string(), nb::arg("include_big") = false,
+      nb::arg("mode") = TestMode::TEST,
       "Returns the list of C++-implemented backend test node cases. When "
       "``op_type_or_cat`` is non-empty, only cases whose top-level graph "
       "contains a node with that operator type are returned. It can also "
       "be 'shape', 'inference', 'nan_inf' to get other backend tests "
       "not testing a specific operator but specific issues in one "
       "algorithm. Test cases whose name contains ``'_big_'`` are excluded "
-      "by default; pass ``include_big=True`` to include them.");
+      "by default; pass ``include_big=True`` to include them. Pass "
+      "``mode=TestMode.BENCHMARK`` to emit large benchmark-sized cases "
+      "instead of the standard correctness cases where supported.");
 
   bt_mod.def(
       "collect_test_cases_by_name",
-      [](const std::string &name_regex, bool include_big) {
+      [](const std::string &name_regex, bool include_big, TestMode mode) {
         try {
-          return onnx_backend_test::CollectTestCasesByName(name_regex, include_big);
+          return onnx_backend_test::CollectTestCasesByName(name_regex, include_big, mode);
         } catch (const std::regex_error &e) {
           throw nb::value_error(e.what());
         }
       },
       nb::arg("name_regex") = std::string(), nb::arg("include_big") = false,
+      nb::arg("mode") = TestMode::TEST,
       "Returns the C++-implemented backend test node cases whose ``name`` matches "
       "the ECMAScript regular expression ``name_regex`` (``std::regex_search`` "
       "semantics: substring match by default; anchor with ``^...$`` to require a "
       "full match). An empty pattern returns every case. Test cases whose name "
       "contains ``'_big_'`` are excluded by default; pass ``include_big=True`` "
-      "to include them. Raises ``ValueError`` if ``name_regex`` is not a valid "
+      "to include them. Pass ``mode=TestMode.BENCHMARK`` to emit large "
+      "benchmark-sized cases instead of the standard correctness cases where "
+      "supported. Raises ``ValueError`` if ``name_regex`` is not a valid "
       "regular expression.");
 }

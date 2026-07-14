@@ -256,7 +256,7 @@ NodeProto MakeScanNodeWithBody(const std::vector<std::string> &inputs,
 // iteration slices back into the original [3, 2] tensor; the second case
 // uses T=0 to validate the empty leading axis (output shape [0, 2]).
 // ---------------------------------------------------------------------------
-void RegisterScanCases(std::vector<TestCase> &registry) {
+void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
   const kernel::Scan scan_kernel{ctx};

@@ -7,15 +7,16 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static const OpRegisterMap kEntries = {
+void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op_type,
+                          TestMode mode) {
+  static const OpRegisterModeMap kEntries = {
       {"StringConcat", &RegisterStringConcatCases},
       {"StringSplit", &RegisterStringSplitCases},
       {"StringNormalizer", &RegisterStringNormalizerCases},
       {"RegexFullMatch", &RegisterRegexFullMatchCases},
       {"TfIdfVectorizer", &RegisterTfIdfVectorizerCases},
   };
-  DispatchRegisterByOpType(registry, op_type, kEntries);
+  DispatchRegisterByOpType(registry, op_type, kEntries, mode);
 }
 
 } // namespace onnx_backend_test

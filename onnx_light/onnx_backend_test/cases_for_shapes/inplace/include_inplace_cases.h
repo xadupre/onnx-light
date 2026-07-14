@@ -21,11 +21,12 @@ namespace onnx_backend_test {
 /// Registers an ``Abs → Abs → Abs`` case whose intermediate tensors all share
 /// the same shape so in-place-reuse inference can detect the recyclable
 /// buffers and record the expected metadata on the graph nodes.
-void RegisterInPlaceReuseCases(std::vector<TestCase> &registry);
+void RegisterInPlaceReuseCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Collects all in-place-reuse backend test cases by invoking every
 /// ``Register*InPlace*Cases`` helper declared in this header.
-void CollectInPlaceTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
+void CollectInPlaceTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
+                             TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -18,35 +18,38 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``SequenceConstruct`` backend test node case(s).
-void RegisterSequenceConstructCases(std::vector<TestCase> &registry);
+void RegisterSequenceConstructCases(std::vector<TestCase> &registry,
+                                    TestMode mode = TestMode::TEST);
 
 /// Registers the ``SequenceEmpty`` backend test node case(s).
-void RegisterSequenceEmptyCases(std::vector<TestCase> &registry);
+void RegisterSequenceEmptyCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``ConcatFromSequence`` backend test node case(s).
-void RegisterConcatFromSequenceCases(std::vector<TestCase> &registry);
+void RegisterConcatFromSequenceCases(std::vector<TestCase> &registry,
+                                     TestMode mode = TestMode::TEST);
 
 /// Registers the ``SequenceLength`` backend test node case(s).
-void RegisterSequenceLengthCases(std::vector<TestCase> &registry);
+void RegisterSequenceLengthCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``SequenceErase`` backend test node case(s).
-void RegisterSequenceEraseCases(std::vector<TestCase> &registry);
+void RegisterSequenceEraseCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``SequenceAt`` backend test node case(s).
-void RegisterSequenceAtCases(std::vector<TestCase> &registry);
+void RegisterSequenceAtCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``SequenceInsert`` backend test node case(s).
-void RegisterSequenceInsertCases(std::vector<TestCase> &registry);
+void RegisterSequenceInsertCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``SequenceMap`` backend test node case(s).
-void RegisterSequenceMapCases(std::vector<TestCase> &registry);
+void RegisterSequenceMapCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``SplitToSequence`` backend test node case(s).
-void RegisterSplitToSequenceCases(std::vector<TestCase> &registry);
+void RegisterSplitToSequenceCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Collects all ``sequence`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
-void CollectSequenceTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
+void CollectSequenceTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
+                              TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

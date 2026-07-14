@@ -68,10 +68,18 @@ void RegisterCase(std::vector<TestCase> &registry, const kernel::RMSNormalizatio
 
 } // namespace
 
-void RegisterRMSNormalizationCases(std::vector<TestCase> &registry) {
+void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
   const kernel::KernelContext ctx{opset};
   const kernel::RMSNormalization rmsnorm_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    constexpr float kDefaultEpsilon = 1e-5f;
+    RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_2d_axis0_benchmark",
+                 {2048, 2048}, {2048, 2048}, /*axis=*/0, /*include_axis_attr=*/true,
+                 kDefaultEpsilon, /*include_epsilon_attr=*/false);
+    return;
+  }
 
   constexpr float kDefaultEpsilon = 1e-5f;
   constexpr float kAltEpsilon = 0.1f;

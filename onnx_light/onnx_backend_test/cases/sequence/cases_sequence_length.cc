@@ -67,7 +67,7 @@ void RegisterSequenceLengthCase(const std::string &name, const OpsetId &opset,
 
 } // namespace
 
-void RegisterSequenceLengthCases(std::vector<TestCase> &registry) {
+void RegisterSequenceLengthCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   RegisterSequenceLengthCase("test_cc_sequence_length", opset, registry);
 }

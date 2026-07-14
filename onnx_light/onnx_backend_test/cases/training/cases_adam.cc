@@ -41,11 +41,47 @@ OpsetId TrainingOpset(int64_t version) { return OpsetId(kOnnxPreviewTrainingDoma
 // Inputs are small, fully deterministic tensors so this library does not
 // depend on a PRNG.
 // ---------------------------------------------------------------------------
-void RegisterAdamCases(std::vector<TestCase> &registry) {
+void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = TrainingOpset(1);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::Adam adam{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Adam");
+    node.set_domain(kOnnxPreviewTrainingDomain);
+    AddInputs(node, {"R", "T", "X", "G", "V", "H"});
+    AddOutputs(node, {"X_new", "V_new", "H_new"});
+
+    const float alpha = 0.95f;
+    const float beta = 0.9f;
+    const float epsilon = 1e-2f;
+    const float norm_coefficient = 0.001f;
+    const float norm_coefficient_post = 0.0f;
+    AddFloatAttribute(node, "alpha", alpha);
+    AddFloatAttribute(node, "beta", beta);
+    AddFloatAttribute(node, "epsilon", epsilon);
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "norm_coefficient_post", norm_coefficient_post);
+
+    Tensor R = Tensor::FromFloat("", {}, {0.1f});
+    Tensor T = Tensor::FromInt64("", {}, {0});
+    Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+    Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
+    Tensor V = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
+    Tensor H = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                 Randn<float>({kBenchmarkElementwiseSize}, 987654324ULL));
+
+    std::vector<Tensor> outs = adam(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon,
+                                    norm_coefficient, norm_coefficient_post);
+    Expect(node, {R, T, X, G, V, H}, {outs[0], outs[1], outs[2]}, "test_cc_adam_single_benchmark",
+           {default_opset, opset}, "backend-test", registry);
+    return;
+  }
 
   // ----- Case 1: single optimized tensor, T == 0.
   {

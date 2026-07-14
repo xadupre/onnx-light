@@ -79,13 +79,28 @@ namespace onnx_backend_test {
 //     drawn from :cpp:func:`Randn` with a fixed seed instead of
 //     ``np.random.randn`` so the values are reproducible).
 // ---------------------------------------------------------------------------
-void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
+void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset18 = DefaultOpset(18);
   const kernel::KernelContext ctx18{opset18};
   const kernel::AveragePool average_pool_kernel18{ctx18};
   const OpsetId opset = DefaultOpset(19);
   const kernel::KernelContext ctx{opset};
   const kernel::AveragePool average_pool_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+
+    Tensor x = Tensor::FromFloat("", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1101));
+    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2});
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_2d_default_benchmark", {opset}, "backend-test",
+           registry);
+    return;
+  }
 
   // Default 2x2 kernel on a 1x1x4x4 input.
   {

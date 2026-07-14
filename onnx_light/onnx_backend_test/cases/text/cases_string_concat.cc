@@ -18,10 +18,31 @@ namespace onnx_backend_test {
 // are ``tensor(string)``; the reference kernel supports equal-shape and
 // scalar broadcasting.
 // ---------------------------------------------------------------------------
-void RegisterStringConcatCases(std::vector<TestCase> &registry) {
+void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
   const kernel::KernelContext ctx{opset};
   const kernel::StringConcat string_concat{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("StringConcat");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    std::vector<std::string> x_values(262144);
+    std::vector<std::string> y_values(262144);
+    for (size_t i = 0; i < x_values.size(); ++i) {
+      x_values[i] = (i % 2 == 0) ? "abc" : "hello ";
+      y_values[i] = (i % 2 == 0) ? "def" : "world";
+    }
+    Tensor x = Tensor::FromStrings("", {static_cast<int64_t>(x_values.size())}, x_values);
+    Tensor y = Tensor::FromStrings("", {static_cast<int64_t>(y_values.size())}, y_values);
+    Tensor z = string_concat(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_string_concat_benchmark", {opset}, "backend-test", registry);
+    return;
+  }
 
   // Equal-shape variant: element-wise concatenation of two 1-D string
   // tensors.

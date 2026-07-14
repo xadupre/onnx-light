@@ -23,11 +23,29 @@ namespace {
 
 } // namespace
 
-void RegisterRangeCases(std::vector<TestCase> &registry) {
+void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v11 = DefaultOpset(11);
   const OpsetId opset_v27 = DefaultOpset(27);
   const kernel::KernelContext ctx_v11{opset_v11};
   const kernel::KernelContext ctx_v27{opset_v27};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("Range");
+    node.add_input("start");
+    node.add_input("limit");
+    node.add_input("delta");
+    node.add_output("output");
+
+    const Tensor start = Tensor::FromFloat("start", {}, {0.0f});
+    const Tensor limit =
+        Tensor::FromFloat("limit", {}, {static_cast<float>(kBenchmarkElementwiseSize)});
+    const Tensor delta = Tensor::FromFloat("delta", {}, {1.0f});
+    const Tensor output = kernel::Range(ctx_v11)(start, limit, delta);
+    Expect(node, {start, limit, delta}, {output}, "test_range_float_type_positive_delta_benchmark",
+           {opset_v11}, "backend-test", registry);
+    return;
+  }
 
   // Upstream test: range_float_type_positive_delta
   // start=1, limit=5, delta=2  ->  [1.0, 3.0]

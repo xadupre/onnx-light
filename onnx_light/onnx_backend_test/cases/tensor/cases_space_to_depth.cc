@@ -31,10 +31,21 @@ NodeProto MakeSpaceToDepthNode(int64_t blocksize) {
 // DepthToSpace). Available since opset 1 in the ai.onnx domain; the type set
 // was extended in opset 13.
 // ---------------------------------------------------------------------------
-void RegisterSpaceToDepthCases(std::vector<TestCase> &registry) {
+void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
   const kernel::SpaceToDepth s2d{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const Tensor input =
+        Tensor::FromFloat("", {1, 2, 1024, 2048}, Randn<float>({1, 2, 1024, 2048}, 2001));
+    kernel::SpaceToDepth::Attributes attrs;
+    attrs.blocksize = 2;
+    const Tensor output = s2d(input, attrs);
+    Expect(MakeSpaceToDepthNode(2), {input}, {output}, "test_cc_spacetodepth_example_benchmark",
+           {opset}, "backend-test", registry);
+    return;
+  }
 
   // test_cc_spacetodepth_example — small N=1, C=2, H=2, W=4 input with
   // blocksize=2. Input values are simply [0, 1, ..., 15] so the output

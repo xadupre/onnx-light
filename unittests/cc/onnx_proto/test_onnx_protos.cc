@@ -5852,7 +5852,7 @@ TEST(onnx_proto, ParseFromZeroCopyStream_StringStream) {
   utils::StringStream stream(reinterpret_cast<const uint8_t *>(serialized.data()),
                              static_cast<int64_t>(serialized.size()));
   ModelProto parsed;
-  parsed.ParseFromZeroCopyStream(&stream);
+  EXPECT_TRUE(parsed.ParseFromZeroCopyStream(&stream));
 
   EXPECT_EQ(parsed.ir_version(), 7);
   ASSERT_TRUE(parsed.has_graph());
@@ -5875,7 +5875,7 @@ TEST(onnx_proto, ParseFromZeroCopyStream_WithOptions) {
                              static_cast<int64_t>(serialized.size()));
   TensorProto parsed;
   ParseOptions opts;
-  parsed.ParseFromZeroCopyStream(&stream, opts);
+  EXPECT_TRUE(parsed.ParseFromZeroCopyStream(&stream, opts));
 
   EXPECT_EQ(parsed.ref_name(), "zc_tensor");
   EXPECT_EQ(parsed.data_type(), static_cast<int32_t>(TensorProto::FLOAT));

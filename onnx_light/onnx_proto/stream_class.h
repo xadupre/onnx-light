@@ -19,8 +19,8 @@
   size_t ByteSizeLong() const;                                                                     \
   bool ParseFromString(const std::string &raw);                                                    \
   bool ParseFromString(const std::string &raw, ParseOptions &opts);                                \
-  void ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
-  void ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
+  bool ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
+  bool ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
   bool ParseFromIstream(std::istream *input);                                                      \
   bool SerializeToString(std::string &out) const;                                                  \
   bool SerializeToString(std::string &out, SerializeOptions &opts) const;                          \

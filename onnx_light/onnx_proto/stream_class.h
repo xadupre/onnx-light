@@ -24,6 +24,8 @@
   bool ParseFromIstream(std::istream *input);                                                      \
   bool SerializeToString(std::string &out) const;                                                  \
   bool SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
+  bool SerializeToFileDescriptor(int fd) const;                                                    \
+  bool SerializeToFileDescriptor(int fd, SerializeOptions &opts) const;                            \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
       const;                                                                                       \
   void ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \

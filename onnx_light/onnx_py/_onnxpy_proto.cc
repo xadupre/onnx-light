@@ -543,6 +543,22 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "When writing to two files, temporary external-data metadata is cleared so the "
           "in-memory model stays unchanged.")
       .def(
+          "SerializeToFileDescriptor",
+          [](cls &self, int fd, nb::object options) {
+            bool ok = false;
+            if (nb::isinstance<SerializeOptions &>(options)) {
+              ok = self.SerializeToFileDescriptor(fd, nb::cast<SerializeOptions &>(options));
+            } else {
+              ok = self.SerializeToFileDescriptor(fd);
+            }
+            if (!ok) {
+              throw std::runtime_error("SerializeToFileDescriptor: output exceeded "
+                                       "SerializeOptions.max_serialized_size_bytes.");
+            }
+          },
+          nb::arg("fd"), nb::arg("options") = nb::none(),
+          "Serializes this instance into an open file descriptor without closing it.")
+      .def(
           "__str__",
           [](cls &self) -> std::string {
             utils::PrintOptions opts;

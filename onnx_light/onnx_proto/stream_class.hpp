@@ -32,6 +32,12 @@
   bool cls::SerializeToString(std::string &out) const { return _SerializeToString(*this, out); }   \
   bool cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
     return _SerializeToString(*this, out, opts);                                                   \
+  }                                                                                                \
+  bool cls::SerializeToFileDescriptor(int fd) const {                                              \
+    return _SerializeToFileDescriptor(*this, fd);                                                  \
+  }                                                                                                \
+  bool cls::SerializeToFileDescriptor(int fd, SerializeOptions &opts) const {                      \
+    return _SerializeToFileDescriptor(*this, fd, opts);                                            \
   }
 
 ///////////////////////
@@ -375,6 +381,38 @@ bool _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
     buf.WaitForDelayedBlock();
   }
   return true;
+}
+
+template <typename cls> bool _SerializeToFileDescriptor(cls &self, int fd) {
+  SerializeOptions opts;
+  return self.SerializeToFileDescriptor(fd, opts);
+}
+
+template <typename cls> bool _SerializeToFileDescriptor(cls &self, int fd, SerializeOptions &opts) {
+  if constexpr (std::is_same_v<std::remove_cv_t<cls>, ModelProto>) {
+    if (opts.raw_data_callback) {
+      ModelProto copy;
+      copy.CopyFrom(self);
+      ApplySerializeRawDataCallback(copy, opts);
+      SerializeOptions local_opts = opts;
+      local_opts.raw_data_callback = {};
+      return _SerializeToFileDescriptor(copy, fd, local_opts);
+    }
+  }
+  EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
+              "SerializeToFileDescriptor: SerializeFormat::kOrtFlatbuffers is not implemented "
+              "yet. Use SerializeFormat::kOnnx for now.");
+  SerializeOptions local_opts = opts;
+  local_opts.num_threads = 1;
+  ONNX_LIGHT_NAMESPACE::utils::StringWriteStream size_buf;
+  SerializeSizeResult total_size = self.SerializeSize(size_buf, local_opts);
+  if (!EnforceMaxSerializedSize(total_size, local_opts, "SerializeToFileDescriptor")) {
+    return false;
+  }
+  ONNX_LIGHT_NAMESPACE::utils::FdWriteStream stream(fd);
+  size_buf.swap_size_cache(stream);
+  self.SerializeToStream(stream, local_opts);
+  return stream.Flush();
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

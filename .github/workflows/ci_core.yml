@@ -216,12 +216,15 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
 
-      # Windows: Release build without C++ tests (C++ tests are covered by core_tests_ubuntu).
-      # This avoids compiling the test suite with MSVC, which is the main
-      # contributor to long Windows build times.
+      # Windows builds in Release mode to avoid the MSVC Debug-mode overhead:
+      # _ITERATOR_DEBUG_LEVEL=2 (default in Debug) adds heavy STL bounds-checking
+      # to every container operation, and /Od (no optimisation) produces larger
+      # object files — making MSVC significantly slower to compile the 119 C++
+      # test translation units than GCC/Clang in Release mode (which Linux already
+      # uses in core_tests_ubuntu).
       - name: Build and Install package (Windows)
         if: runner.os == 'Windows'
-        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=OFF -e .[dev] -v
+        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
 
       - name: Build and Install package (macOS)
         if: runner.os == 'macOS'
@@ -232,6 +235,10 @@ jobs:
 
       - name: pip freeze
         run: pip freeze
+
+      - name: Run C++ unit tests (Windows)
+        if: runner.os == 'Windows'
+        run: ctest --test-dir build --output-on-failure -C Release --timeout 120
 
       - name: Run C++ unit tests (macOS)
         if: runner.os == 'macOS'

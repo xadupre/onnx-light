@@ -29,6 +29,7 @@
 
 #include <regex>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
@@ -206,8 +207,12 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
 
   // Build a lookup table from map name to its index in ``maps`` so the input
   // loop below can decide whether each present_input is a Map or a Tensor.
+  // Also validate that every map name is actually a non-empty node input.
+  std::unordered_set<std::string> present_input_set(present_inputs.begin(), present_inputs.end());
   std::unordered_map<std::string, size_t> map_index;
   for (size_t i = 0; i < maps.size(); ++i) {
+    EXT_ENFORCE_INVALID(present_input_set.count(maps[i].name) != 0, "BuildSingleNodeCase: map '",
+                        maps[i].name, "' is not a non-empty node input.");
     map_index[maps[i].name] = i;
   }
 

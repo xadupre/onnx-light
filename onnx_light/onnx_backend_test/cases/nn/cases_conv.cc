@@ -75,8 +75,8 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Y.name = "Y";
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
-    Expect(node, {X, W}, {Y}, "test_cc_basic_conv_without_padding", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_basic_conv_without_padding", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -97,7 +97,8 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
-    Expect(node, {X, W}, {Y}, "test_cc_basic_conv_with_padding", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_basic_conv_with_padding", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -121,8 +122,8 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
-    Expect(node, {X, W}, {Y}, "test_cc_conv_with_strides_padding", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_conv_with_strides_padding", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -143,8 +144,9 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeConvNode({"X", "W", "B"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
-    Expect(node, {X, W, B}, {Y}, "test_cc_conv_with_autopad_same", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_conv_with_autopad_same", {opset}, [=]() -> IoData {
+      return IoData{{std::move(X), std::move(W), std::move(B)}, {std::move(Y)}};
+    });
   }
 
   // -------------------------------------------------------------------
@@ -166,8 +168,8 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
-    Expect(node, {X, W}, {Y}, "test_cc_conv_with_strides_no_padding", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_conv_with_strides_no_padding", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -191,8 +193,8 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 0, 1, 0});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
-    Expect(node, {X, W}, {Y}, "test_cc_conv_with_strides_and_asymmetric_padding", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_conv_with_strides_and_asymmetric_padding", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -219,8 +221,8 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
-    Expect(node, {X, W}, {Y}, "test_cc_conv_with_autopad_same_stride2", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_conv_with_autopad_same_stride2", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -243,7 +245,9 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeConvNode({"X", "W", "B"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
-    Expect(node, {X, W, B}, {Y}, "test_cc_conv_fp16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_conv_fp16", {opset}, [=]() -> IoData {
+      return IoData{{std::move(X), std::move(W), std::move(B)}, {std::move(Y)}};
+    });
   }
 }
 

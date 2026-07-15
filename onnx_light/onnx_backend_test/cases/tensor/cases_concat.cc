@@ -75,25 +75,33 @@ void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
 
   for (const ConcatShapeCase &sc : shape_cases) {
     const int64_t rank = static_cast<int64_t>(sc.shape.size());
-    Tensor x0 = Tensor::FromFloat("", sc.shape, sc.values0);
-    Tensor x1 = Tensor::FromFloat("", sc.shape, sc.values1);
+    const std::vector<int64_t> shape = sc.shape;
+    const std::vector<float> values0 = sc.values0;
+    const std::vector<float> values1 = sc.values1;
+    const std::string label = sc.label;
 
     // Positive axes: 0 .. rank-1.
     for (int64_t axis = 0; axis < rank; ++axis) {
-      NodeProto node = MakeConcatNode(axis);
-      Tensor y = concat_kernel({x0, x1}, axis);
-      Expect(node, {x0, x1}, {y},
-             std::string("test_cc_concat_") + sc.label + "_axis_" + std::to_string(axis), {opset},
-             "backend-test", registry);
+      Expect(registry, MakeConcatNode(axis),
+             std::string("test_cc_concat_") + label + "_axis_" + std::to_string(axis), {opset},
+             [=]() -> IoData {
+               Tensor x0 = Tensor::FromFloat("", shape, values0);
+               Tensor x1 = Tensor::FromFloat("", shape, values1);
+               Tensor y = concat_kernel({x0, x1}, axis);
+               return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
+             });
     }
 
     // Negative axes: -rank .. -1.
     for (int64_t axis = -rank; axis < 0; ++axis) {
-      NodeProto node = MakeConcatNode(axis);
-      Tensor y = concat_kernel({x0, x1}, axis);
-      Expect(node, {x0, x1}, {y},
-             std::string("test_cc_concat_") + sc.label + "_axis_negative_" + std::to_string(-axis),
-             {opset}, "backend-test", registry);
+      Expect(registry, MakeConcatNode(axis),
+             std::string("test_cc_concat_") + label + "_axis_negative_" + std::to_string(-axis),
+             {opset}, [=]() -> IoData {
+               Tensor x0 = Tensor::FromFloat("", shape, values0);
+               Tensor x1 = Tensor::FromFloat("", shape, values1);
+               Tensor y = concat_kernel({x0, x1}, axis);
+               return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
+             });
     }
   }
 }

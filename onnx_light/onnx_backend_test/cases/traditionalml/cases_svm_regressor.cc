@@ -122,12 +122,13 @@ void RegisterSVMRegressorCases(std::vector<TestCase> &registry, TestMode mode) {
   post_transform->set_type(AttributeProto::AttributeType::STRING);
   post_transform->set_s("NONE");
 
-  Tensor x = Tensor::FromFloat("", {2, 2}, {3.0f, 1.0f, 0.0f, 2.0f});
-  Tensor y = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f}, {0.5f}, "LINEAR",
-                                   0.0f, 0.0f, 0.0f);
-
-  Expect(node, {x}, {y}, "test_cc_svmregressor_linear", {default_opset, opset}, "backend-test",
-         registry);
+  Expect(registry, std::move(node), "test_cc_svmregressor_linear", {default_opset, opset},
+         [=]() -> IoData {
+           Tensor x = Tensor::FromFloat("", {2, 2}, {3.0f, 1.0f, 0.0f, 2.0f});
+           Tensor y = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f}, {0.5f},
+                                            "LINEAR", 0.0f, 0.0f, 0.0f);
+           return IoData{{std::move(x)}, {std::move(y)}};
+         });
 }
 
 } // namespace onnx_backend_test

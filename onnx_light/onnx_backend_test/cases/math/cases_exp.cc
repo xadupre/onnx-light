@@ -42,10 +42,11 @@ void RegisterExpCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Exp");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
-    Tensor y = exp_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_exp", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_exp", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
+      Tensor y = exp_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // From Exp.export(): ``test_exp_example`` uses x = [-1, 0, 1].
@@ -54,10 +55,11 @@ void RegisterExpCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Exp");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = exp_kernel(x);
-    Expect(node, {x}, {y}, "test_exp_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_exp_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = exp_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // From Exp.export(): ``test_exp`` uses x = np.random.randn(3, 4, 5).
@@ -66,10 +68,11 @@ void RegisterExpCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Exp");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
-    Tensor y = exp_kernel(x);
-    Expect(node, {x}, {y}, "test_exp", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_exp", {opset}, [=]() -> IoData {
+      Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
+      Tensor y = exp_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // FLOAT16
   {
@@ -77,10 +80,11 @@ void RegisterExpCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Exp");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
-    Tensor y = exp_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_exp_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_exp_float16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
+      Tensor y = exp_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // BFLOAT16
@@ -89,15 +93,16 @@ void RegisterExpCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Exp");
     node.add_input("x");
     node.add_output("y");
-
-    std::vector<float> vals = {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f};
-    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
-    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
-    for (size_t i = 0; i < vals.size(); ++i)
-      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
-    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-    Tensor y = exp_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_exp_bfloat16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_exp_bfloat16", {opset}, [=]() -> IoData {
+      std::vector<float> vals = {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f};
+      std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+      auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+      for (size_t i = 0; i < vals.size(); ++i)
+        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+      Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
+      Tensor y = exp_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

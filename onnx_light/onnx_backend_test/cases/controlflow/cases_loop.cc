@@ -263,27 +263,6 @@ static void RegisterLoop11Case(std::vector<TestCase> &registry) {
   const kernel::KernelContext ctx{opset};
   const kernel::Loop loop_kernel{ctx};
 
-  // Inputs to the Loop node.
-  const Tensor trip_count("trip_count", DataType::INT64, {}, Int64Bytes(5));
-  const Tensor cond("cond", DataType::BOOL, {}, std::vector<uint8_t>{1});
-  const Tensor y("y", DataType::FLOAT, {1}, FloatBytes(-2.0f));
-
-  // Per-iteration scan-output values, matching ONNX's ``test_loop11``
-  // expected ``res_scan = [[-1], [1], [4], [8], [13]]``.
-  const std::vector<Tensor> per_iter_scan = {
-      Tensor("", DataType::FLOAT, {1}, FloatBytes(-1.0f)),
-      Tensor("", DataType::FLOAT, {1}, FloatBytes(1.0f)),
-      Tensor("", DataType::FLOAT, {1}, FloatBytes(4.0f)),
-      Tensor("", DataType::FLOAT, {1}, FloatBytes(8.0f)),
-      Tensor("", DataType::FLOAT, {1}, FloatBytes(13.0f)),
-  };
-
-  // Final loop-carried state value matches ``res_y = [13]``.
-  const Tensor res_y("", DataType::FLOAT, {1}, FloatBytes(13.0f));
-
-  std::vector<Tensor> out =
-      loop_kernel(trip_count, cond, /*v_initial=*/{y}, /*final_state=*/{res_y}, {per_iter_scan});
-
   // Build the Loop node: 3 inputs (M, cond, y) and 2 outputs (res_y, res_scan).
   NodeProto node;
   node.set_op_type("Loop");
@@ -298,8 +277,30 @@ static void RegisterLoop11Case(std::vector<TestCase> &registry) {
   body_attr->set_type(AttributeProto::AttributeType::GRAPH);
   *body_attr->add_g() = BuildLoop11Body();
 
-  Expect(node, {trip_count, cond, y}, out, "test_cc_loop11_carried_state", {opset}, "backend-test",
-         registry);
+  Expect(registry, std::move(node), "test_cc_loop11_carried_state", {opset},
+         [loop_kernel]() -> IoData {
+           // Inputs to the Loop node.
+           Tensor trip_count("trip_count", DataType::INT64, {}, Int64Bytes(5));
+           Tensor cond("cond", DataType::BOOL, {}, std::vector<uint8_t>{1});
+           Tensor y("y", DataType::FLOAT, {1}, FloatBytes(-2.0f));
+
+           // Per-iteration scan-output values, matching ONNX's ``test_loop11``
+           // expected ``res_scan = [[-1], [1], [4], [8], [13]]``.
+           const std::vector<Tensor> per_iter_scan = {
+               Tensor("", DataType::FLOAT, {1}, FloatBytes(-1.0f)),
+               Tensor("", DataType::FLOAT, {1}, FloatBytes(1.0f)),
+               Tensor("", DataType::FLOAT, {1}, FloatBytes(4.0f)),
+               Tensor("", DataType::FLOAT, {1}, FloatBytes(8.0f)),
+               Tensor("", DataType::FLOAT, {1}, FloatBytes(13.0f)),
+           };
+
+           // Final loop-carried state value matches ``res_y = [13]``.
+           const Tensor res_y("", DataType::FLOAT, {1}, FloatBytes(13.0f));
+
+           std::vector<Tensor> out = loop_kernel(trip_count, cond, /*v_initial=*/{y},
+                                                 /*final_state=*/{res_y}, {per_iter_scan});
+           return IoData{{std::move(trip_count), std::move(cond), std::move(y)}, std::move(out)};
+         });
 }
 
 namespace {
@@ -323,15 +324,17 @@ void RegisterTripCountVariants(std::vector<TestCase> &registry) {
 
   auto register_case = [&](const std::string &test_name, int64_t m_value) {
     NodeProto node = MakeLoopNode("M", "", "scan_outputs");
-    const Tensor m("", DataType::INT64, {}, Int64Bytes(m_value));
-    // Always supply at least one per-iteration template tensor so the
-    // stacked output keeps its dtype/trailing-shape even when the loop
-    // runs zero iterations.
-    const std::size_t row_len = std::max<std::size_t>(1, static_cast<std::size_t>(m_value));
-    std::vector<Tensor> per_iter(row_len, per_iter_value);
-    std::vector<Tensor> out =
-        loop_kernel(m, cond_undef, /*v_initial=*/{}, /*final_state=*/{}, {per_iter});
-    Expect(node, {m}, out, test_name, {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), test_name, {opset}, [=]() -> IoData {
+      const Tensor m("", DataType::INT64, {}, Int64Bytes(m_value));
+      // Always supply at least one per-iteration template tensor so the
+      // stacked output keeps its dtype/trailing-shape even when the loop
+      // runs zero iterations.
+      const std::size_t row_len = std::max<std::size_t>(1, static_cast<std::size_t>(m_value));
+      std::vector<Tensor> per_iter(row_len, per_iter_value);
+      std::vector<Tensor> out =
+          loop_kernel(m, cond_undef, /*v_initial=*/{}, /*final_state=*/{}, {per_iter});
+      return IoData{{std::move(m)}, std::move(out)};
+    });
   };
 
   // M = 3 → stacked scan output has shape [3, 1] = [[42], [42], [42]].
@@ -446,29 +449,6 @@ void RegisterMultiCarriedCase(std::vector<TestCase> &registry) {
   const kernel::KernelContext ctx{opset};
   const kernel::Loop loop_kernel{ctx};
 
-  const Tensor trip_count("trip_count", DataType::INT64, {}, Int64Bytes(3));
-  const Tensor cond("cond", DataType::BOOL, {}, std::vector<uint8_t>{1});
-  const Tensor y("y", DataType::FLOAT, {1}, FloatBytes(0.0f));
-  const Tensor w("w", DataType::FLOAT, {1}, FloatBytes(1.0f));
-
-  // Drive the body-runner overload so the registered expected outputs are
-  // produced by the same code path that ``RunLoopNode`` exercises at
-  // runtime.
-  kernel::Loop::BodyRunner runner = [](int64_t /*iter*/, bool cond_in,
-                                       const std::vector<Tensor> &state) -> std::vector<Tensor> {
-    const float y_in = state[0].AsFloat()[0];
-    const float w_in = state[1].AsFloat()[0];
-    const float y_out = y_in + 1.0f;
-    const float w_out = w_in * 2.0f;
-    return {Tensor("", DataType::BOOL, {}, std::vector<uint8_t>{static_cast<uint8_t>(cond_in)}),
-            Tensor("", DataType::FLOAT, {1}, FloatBytes(y_out)),
-            Tensor("", DataType::FLOAT, {1}, FloatBytes(w_out)),
-            Tensor("", DataType::FLOAT, {1}, FloatBytes(y_out))};
-  };
-
-  std::vector<Tensor> out = loop_kernel(trip_count, cond, /*v_initial=*/{y, w},
-                                        /*num_scan_outputs=*/1, runner);
-
   NodeProto node;
   node.set_op_type("Loop");
   node.add_input("trip_count");
@@ -484,8 +464,35 @@ void RegisterMultiCarriedCase(std::vector<TestCase> &registry) {
   body_attr->set_type(AttributeProto::AttributeType::GRAPH);
   *body_attr->add_g() = BuildMultiCarriedBody();
 
-  Expect(node, {trip_count, cond, y, w}, out, "test_cc_loop_multi_carried_state", {opset},
-         "backend-test", registry);
+  Expect(registry, std::move(node), "test_cc_loop_multi_carried_state", {opset},
+         [loop_kernel]() -> IoData {
+           Tensor trip_count("trip_count", DataType::INT64, {}, Int64Bytes(3));
+           Tensor cond("cond", DataType::BOOL, {}, std::vector<uint8_t>{1});
+           Tensor y("y", DataType::FLOAT, {1}, FloatBytes(0.0f));
+           Tensor w("w", DataType::FLOAT, {1}, FloatBytes(1.0f));
+
+           // Drive the body-runner overload so the registered expected outputs are
+           // produced by the same code path that ``RunLoopNode`` exercises at
+           // runtime.
+           kernel::Loop::BodyRunner runner =
+               [](int64_t /*iter*/, bool cond_in,
+                  const std::vector<Tensor> &state) -> std::vector<Tensor> {
+             const float y_in = state[0].AsFloat()[0];
+             const float w_in = state[1].AsFloat()[0];
+             const float y_out = y_in + 1.0f;
+             const float w_out = w_in * 2.0f;
+             return {Tensor("", DataType::BOOL, {},
+                            std::vector<uint8_t>{static_cast<uint8_t>(cond_in)}),
+                     Tensor("", DataType::FLOAT, {1}, FloatBytes(y_out)),
+                     Tensor("", DataType::FLOAT, {1}, FloatBytes(w_out)),
+                     Tensor("", DataType::FLOAT, {1}, FloatBytes(y_out))};
+           };
+
+           std::vector<Tensor> out = loop_kernel(trip_count, cond, /*v_initial=*/{y, w},
+                                                 /*num_scan_outputs=*/1, runner);
+           return IoData{{std::move(trip_count), std::move(cond), std::move(y), std::move(w)},
+                         std::move(out)};
+         });
 }
 
 } // namespace

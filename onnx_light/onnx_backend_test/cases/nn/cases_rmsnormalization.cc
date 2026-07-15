@@ -59,11 +59,12 @@ void RegisterCase(std::vector<TestCase> &registry, const kernel::RMSNormalizatio
   if (include_epsilon_attr) {
     AddAttribute<float>(node, "epsilon", epsilon);
   }
-
-  Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
-  Tensor scale = MakeFloatTensor("", scale_shape, 0.02f, 0.5f);
-  Tensor y = kernel(x, scale, axis, epsilon);
-  Expect(node, {x, scale}, {y}, "test_cc_" + base, {opset}, "backend-test", registry);
+  Expect(registry, std::move(node), "test_cc_" + base, {opset}, [=]() -> IoData {
+    Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
+    Tensor scale = MakeFloatTensor("", scale_shape, 0.02f, 0.5f);
+    Tensor y = kernel(x, scale, axis, epsilon);
+    return IoData{{std::move(x), std::move(scale)}, {std::move(y)}};
+  });
 }
 
 } // namespace

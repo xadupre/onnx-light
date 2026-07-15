@@ -84,8 +84,10 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "linear");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {query, key, value}, {result.output, result.present_state},
-           "test_cc_linear_attention_linear", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_linear", {opset}, [=]() -> IoData {
+      return IoData{{std::move(query), std::move(key), std::move(value)},
+                    {std::move(result.output), std::move(result.present_state)}};
+    });
   }
 
   // Case 2: gated update rule
@@ -103,8 +105,10 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {query, key, value, decay}, {result.output, result.present_state},
-           "test_cc_linear_attention_gated", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_gated", {opset}, [=]() -> IoData {
+      return IoData{{std::move(query), std::move(key), std::move(value), std::move(decay)},
+                    {std::move(result.output), std::move(result.present_state)}};
+    });
   }
 
   // Case 3: delta update rule
@@ -120,8 +124,10 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "delta");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {query, key, value, beta_t}, {result.output, result.present_state},
-           "test_cc_linear_attention_delta", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_delta", {opset}, [=]() -> IoData {
+      return IoData{{std::move(query), std::move(key), std::move(value), std::move(beta_t)},
+                    {std::move(result.output), std::move(result.present_state)}};
+    });
   }
 
   // Case 4: gated_delta update rule (default)
@@ -138,8 +144,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {query, key, value, decay, beta_t}, {result.output, result.present_state},
-           "test_cc_linear_attention_gated_delta", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_gated_delta", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(query), std::move(key), std::move(value), std::move(decay),
+                            std::move(beta_t)},
+                           {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 5: with past_state
@@ -157,8 +167,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "linear");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {query, key, value, past_state}, {result.output, result.present_state},
-           "test_cc_linear_attention_with_past_state", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_with_past_state", {opset},
+           [=]() -> IoData {
+             return IoData{
+                 {std::move(query), std::move(key), std::move(value), std::move(past_state)},
+                 {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 6: GQA — q_num_heads=4, kv_num_heads=2
@@ -178,8 +192,10 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "linear");
     AddAttribute<int64_t>(node, "q_num_heads", 4);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {q_gqa, key, value}, {result.output, result.present_state},
-           "test_cc_linear_attention_gqa", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_gqa", {opset}, [=]() -> IoData {
+      return IoData{{std::move(q_gqa), std::move(key), std::move(value)},
+                    {std::move(result.output), std::move(result.present_state)}};
+    });
   }
 
   // Case 7: gated with per-key-dim decay (decay_last = H_kv * d_k)
@@ -196,8 +212,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {query, key, value, decay_perdim}, {result.output, result.present_state},
-           "test_cc_linear_attention_gated_perdim_decay", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_gated_perdim_decay", {opset},
+           [=]() -> IoData {
+             return IoData{
+                 {std::move(query), std::move(key), std::move(value), std::move(decay_perdim)},
+                 {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 8: explicit scale attribute
@@ -215,8 +235,11 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     AddAttribute<float>(node, "scale", 2.0f);
-    Expect(node, {query, key, value}, {result.output, result.present_state},
-           "test_cc_linear_attention_explicit_scale", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_explicit_scale", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(query), std::move(key), std::move(value)},
+                           {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // ---------------------------------------------------------------------------
@@ -238,8 +261,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {query, key, value, decay_perhead}, {result.output, result.present_state},
-           "test_cc_linear_attention_gated_per_head_decay", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_gated_per_head_decay", {opset},
+           [=]() -> IoData {
+             return IoData{
+                 {std::move(query), std::move(key), std::move(value), std::move(decay_perhead)},
+                 {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 10: gated_delta_beta_scalar — gated_delta with beta last dim = 1.
@@ -257,8 +284,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {query, key, value, decay, beta_scalar}, {result.output, result.present_state},
-           "test_cc_linear_attention_gated_delta_beta_scalar", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_gated_delta_beta_scalar", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(query), std::move(key), std::move(value), std::move(decay),
+                            std::move(beta_scalar)},
+                           {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 11: gated_delta_gqa — q_num_heads=4, kv_num_heads=2 with gated_delta rule.
@@ -279,8 +310,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
     AddAttribute<int64_t>(node, "q_num_heads", 4);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {q_gqa, key, value, decay, beta}, {result.output, result.present_state},
-           "test_cc_linear_attention_gated_delta_gqa", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_gated_delta_gqa", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(q_gqa), std::move(key), std::move(value), std::move(decay),
+                            std::move(beta)},
+                           {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 12: gated_delta_mqa — kv_num_heads=1, q_num_heads=4 with gated_delta rule.
@@ -302,8 +337,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
     AddAttribute<int64_t>(node, "q_num_heads", 4);
     AddAttribute<int64_t>(node, "kv_num_heads", 1);
-    Expect(node, {q_mqa, k_mqa, v_mqa, decay, beta}, {result.output, result.present_state},
-           "test_cc_linear_attention_gated_delta_mqa", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_gated_delta_mqa", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(q_mqa), std::move(k_mqa), std::move(v_mqa), std::move(decay),
+                            std::move(beta)},
+                           {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 13: decode_step — T=1 with past_state (gated_delta).
@@ -325,8 +364,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {q1, k1, v1, past_state, decay, beta}, {result.output, result.present_state},
-           "test_cc_linear_attention_decode_step", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_decode_step", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(q1), std::move(k1), std::move(v1), std::move(past_state),
+                            std::move(decay), std::move(beta)},
+                           {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 14: prefill_with_past — T>1 with non-zero past_state (gated_delta).
@@ -346,9 +389,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {query, key, value, past_state, decay, beta},
-           {result.output, result.present_state}, "test_cc_linear_attention_prefill_with_past",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_prefill_with_past", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(query), std::move(key), std::move(value),
+                            std::move(past_state), std::move(decay), std::move(beta)},
+                           {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 15: no_past_explicit_zeros — past_state provided but filled with zeros (gated_delta).
@@ -368,9 +414,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {query, key, value, past_zeros, decay, beta},
-           {result.output, result.present_state}, "test_cc_linear_attention_no_past_explicit_zeros",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_no_past_explicit_zeros", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(query), std::move(key), std::move(value),
+                            std::move(past_zeros), std::move(decay), std::move(beta)},
+                           {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 16: linear_t1_no_past — linear rule with T=1, no past_state.
@@ -388,8 +437,11 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "linear");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node, {q1, k1, v1}, {result.output, result.present_state},
-           "test_cc_linear_attention_linear_t1_no_past", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_linear_t1_no_past", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(q1), std::move(k1), std::move(v1)},
+                           {std::move(result.output), std::move(result.present_state)}};
+           });
   }
 
   // Case 17: fp16 — half-precision activations (gated_delta). The kernel
@@ -415,13 +467,15 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
-    Expect(node,
-           {kernel::FloatToFloat16Tensor("", q16), kernel::FloatToFloat16Tensor("", k16),
-            kernel::FloatToFloat16Tensor("", v16), kernel::FloatToFloat16Tensor("", decay16),
-            kernel::FloatToFloat16Tensor("", beta16)},
-           {kernel::FloatToFloat16Tensor("", result.output),
-            kernel::FloatToFloat16Tensor("", result.present_state)},
-           "test_cc_linear_attention_fp16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_linear_attention_fp16", {opset}, [=]() -> IoData {
+      return IoData{{std::move(kernel::FloatToFloat16Tensor("", q16)),
+                     std::move(kernel::FloatToFloat16Tensor("", k16)),
+                     std::move(kernel::FloatToFloat16Tensor("", v16)),
+                     std::move(kernel::FloatToFloat16Tensor("", decay16)),
+                     std::move(kernel::FloatToFloat16Tensor("", beta16))},
+                    {std::move(kernel::FloatToFloat16Tensor("", result.output)),
+                     std::move(kernel::FloatToFloat16Tensor("", result.present_state))}};
+    });
     registry.back().atol = 5e-3;
     registry.back().rtol = 5e-3;
   }

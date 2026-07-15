@@ -558,8 +558,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                  });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_basic", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_basic", {default_opset, opset},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 2: GQA, batch_size=1, q_num_heads=4, kv_num_heads=2
@@ -627,8 +629,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                  });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_gqa", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_gqa", {default_opset, opset},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 3: basic MHA shape with a non-empty ``prob_mod`` subgraph
@@ -673,8 +677,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
     AddGraphAttribute(node, "prob_mod", BuildIdentityProbMod(modifier_shape));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_prob_mod_identity", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_prob_mod_identity",
+           {default_opset, opset}, [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 4: basic MHA shape with a non-empty ``prob_mod`` subgraph
@@ -731,8 +737,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
 
     NodeProto node = make_node();
     AddGraphAttribute(node, "prob_mod", BuildScaleProbMod(modifier_shape, kScale));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_prob_mod_scale_half",
-           {default_opset, opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_prob_mod_scale_half",
+           {default_opset, opset}, [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 5: basic MHA with an explicit ``scale`` attribute
@@ -752,8 +760,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     a->set_name("scale");
     a->set_type(AttributeProto::AttributeType::FLOAT);
     a->set_f(kExplicitScale);
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_scaled", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_scaled", {default_opset, opset},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 6: basic MHA with the value head size differing from the
@@ -780,8 +790,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                  });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_diff_head_sizes", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_diff_head_sizes",
+           {default_opset, opset}, [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 7: basic MHA shape with a ``score_mod`` subgraph that adds
@@ -808,8 +820,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
         [kBias](float s, int64_t, int64_t, int64_t, int64_t) { return s + kBias; });
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModBias(modifier_shape, kBias));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_score_mod", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_score_mod", {default_opset, opset},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 8: basic MHA shape with a ``score_mod`` subgraph that
@@ -831,8 +845,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
         });
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModCausalMask(modifier_shape));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_causal_mask", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_causal_mask", {default_opset, opset},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 9: basic MHA shape with a ``score_mod`` subgraph that
@@ -853,8 +869,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
         [kCap](float s, int64_t, int64_t, int64_t, int64_t) { return std::tanh(s / kCap) * kCap; });
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModSoftCap(modifier_shape, kCap));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_soft_cap", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_soft_cap", {default_opset, opset},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 10: basic MHA shape with a ``score_mod`` subgraph that
@@ -876,8 +894,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                             });
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModRelativePositional(modifier_shape));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_relative_positional",
-           {default_opset, opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_relative_positional",
+           {default_opset, opset}, [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 11: basic MHA computed in DOUBLE precision. Mirrors the shape
@@ -922,8 +942,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                   });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_double", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_double", {default_opset, opset},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 
   // ----- Case 12: basic MHA computed in FLOAT16 precision. Mirrors the shape
@@ -968,8 +990,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                          });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_fp16", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flexattention_fp16", {default_opset, opset},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
   }
 }
 

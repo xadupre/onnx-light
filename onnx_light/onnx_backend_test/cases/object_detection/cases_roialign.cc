@@ -188,23 +188,24 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *ss = node.add_attribute();
     ss->set_name("spatial_scale");
     ss->set_type(AttributeProto::AttributeType::FLOAT);
-    ss->set_f(1.0f);
+    Expect(registry, std::move(node), "test_cc_roialign", {opset}, [=]() -> IoData {
+      ss->set_f(1.0f);
 
-    Tensor x = MakeFeatureMap();
-    Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
-    Tensor batch_indices = Tensor::FromInt64("", {2}, batch_indices_values);
+      Tensor x = MakeFeatureMap();
+      Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
+      Tensor batch_indices = Tensor::FromInt64("", {2}, batch_indices_values);
 
-    kernel::RoiAlign::Attributes attrs;
-    attrs.mode = "avg";
-    attrs.output_height = 5;
-    attrs.output_width = 5;
-    attrs.sampling_ratio = 2;
-    attrs.spatial_scale = 1.0f;
-    attrs.coordinate_transformation_mode = "half_pixel";
-    Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+      kernel::RoiAlign::Attributes attrs;
+      attrs.mode = "avg";
+      attrs.output_height = 5;
+      attrs.output_width = 5;
+      attrs.sampling_ratio = 2;
+      attrs.spatial_scale = 1.0f;
+      attrs.coordinate_transformation_mode = "half_pixel";
+      Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
 
-    Expect(node, {x, rois, batch_indices}, {y}, "test_cc_roialign", {opset}, "backend-test",
-           registry);
+      return IoData{{std::move(x), std::move(rois), std::move(batch_indices)}, {std::move(y)}};
+    });
   }
 
   // Case 2: max mode with output_half_pixel (legacy opset-10 behaviour).
@@ -244,23 +245,24 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *ss = node.add_attribute();
     ss->set_name("spatial_scale");
     ss->set_type(AttributeProto::AttributeType::FLOAT);
-    ss->set_f(1.0f);
+    Expect(registry, std::move(node), "test_cc_roialign_max", {opset}, [=]() -> IoData {
+      ss->set_f(1.0f);
 
-    Tensor x = MakeFeatureMap();
-    Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
-    Tensor batch_indices = Tensor::FromInt64("", {2}, batch_indices_values);
+      Tensor x = MakeFeatureMap();
+      Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
+      Tensor batch_indices = Tensor::FromInt64("", {2}, batch_indices_values);
 
-    kernel::RoiAlign::Attributes attrs;
-    attrs.mode = "max";
-    attrs.output_height = 5;
-    attrs.output_width = 5;
-    attrs.sampling_ratio = 2;
-    attrs.spatial_scale = 1.0f;
-    attrs.coordinate_transformation_mode = "output_half_pixel";
-    Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+      kernel::RoiAlign::Attributes attrs;
+      attrs.mode = "max";
+      attrs.output_height = 5;
+      attrs.output_width = 5;
+      attrs.sampling_ratio = 2;
+      attrs.spatial_scale = 1.0f;
+      attrs.coordinate_transformation_mode = "output_half_pixel";
+      Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
 
-    Expect(node, {x, rois, batch_indices}, {y}, "test_cc_roialign_max", {opset}, "backend-test",
-           registry);
+      return IoData{{std::move(x), std::move(rois), std::move(batch_indices)}, {std::move(y)}};
+    });
   }
 
   // Inputs shared by the three upstream ``test_roialign_*`` cases (see
@@ -295,21 +297,22 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<int64_t>(node, "output_width", 5);
     AddAttribute<int64_t>(node, "sampling_ratio", 2);
     AddAttribute<float>(node, "spatial_scale", 1.0f);
+    Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+      Tensor x = MakeUpstreamFeatureMap();
+      Tensor rois = Tensor::FromFloat("", upstream_rois_shape, upstream_rois_values);
+      Tensor batch_indices = Tensor::FromInt64("", {3}, upstream_batch_indices_values);
 
-    Tensor x = MakeUpstreamFeatureMap();
-    Tensor rois = Tensor::FromFloat("", upstream_rois_shape, upstream_rois_values);
-    Tensor batch_indices = Tensor::FromInt64("", {3}, upstream_batch_indices_values);
+      kernel::RoiAlign::Attributes attrs;
+      attrs.mode = mode.empty() ? "avg" : mode;
+      attrs.output_height = 5;
+      attrs.output_width = 5;
+      attrs.sampling_ratio = 2;
+      attrs.spatial_scale = 1.0f;
+      attrs.coordinate_transformation_mode = coordinate_transformation_mode;
+      Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
 
-    kernel::RoiAlign::Attributes attrs;
-    attrs.mode = mode.empty() ? "avg" : mode;
-    attrs.output_height = 5;
-    attrs.output_width = 5;
-    attrs.sampling_ratio = 2;
-    attrs.spatial_scale = 1.0f;
-    attrs.coordinate_transformation_mode = coordinate_transformation_mode;
-    Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
-
-    Expect(node, {x, rois, batch_indices}, {y}, case_name, {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(rois), std::move(batch_indices)}, {std::move(y)}};
+    });
   };
 
   // Upstream ``test_roialign_aligned_false``: avg mode (default) with

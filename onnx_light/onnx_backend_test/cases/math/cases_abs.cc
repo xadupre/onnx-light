@@ -29,11 +29,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_abs", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
+      Tensor y = abs_kernel(x);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
-    Tensor y = abs_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_abs", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -41,11 +42,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/5));
-    Tensor y = abs_kernel(x);
-    Expect(node, {x}, {y}, "test_abs", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_abs", {opset}, [=]() -> IoData {
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/5));
+      Tensor y = abs_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // FLOAT16
@@ -54,10 +56,11 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
-    Tensor y = abs_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_abs_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_abs_float16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
+      Tensor y = abs_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // BFLOAT16
@@ -66,15 +69,16 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-
-    std::vector<float> vals = {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f};
-    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
-    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
-    for (size_t i = 0; i < vals.size(); ++i)
-      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
-    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-    Tensor y = abs_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_abs_bfloat16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_abs_bfloat16", {opset}, [=]() -> IoData {
+      std::vector<float> vals = {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f};
+      std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+      auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+      for (size_t i = 0; i < vals.size(); ++i)
+        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+      Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
+      Tensor y = abs_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // INT8
@@ -83,10 +87,11 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromInt8("", {2, 3}, {-1, 0, 2, -127, 3, -5});
-    Tensor y = abs_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_abs_int8", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_abs_int8", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromInt8("", {2, 3}, {-1, 0, 2, -127, 3, -5});
+      Tensor y = abs_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // INT16
@@ -95,10 +100,11 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromInt16("", {2, 3}, {-1, 0, 2, -1000, 3, -5});
-    Tensor y = abs_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_abs_int16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_abs_int16", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromInt16("", {2, 3}, {-1, 0, 2, -1000, 3, -5});
+      Tensor y = abs_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // INT32
@@ -107,10 +113,11 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromInt32("", {2, 3}, {-1, 0, 2, -100000, 3, -5});
-    Tensor y = abs_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_abs_int32", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_abs_int32", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromInt32("", {2, 3}, {-1, 0, 2, -100000, 3, -5});
+      Tensor y = abs_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // INT64
@@ -119,10 +126,11 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromInt64("", {2, 3}, {-1, 0, 2, -1000000000000LL, 3, -5});
-    Tensor y = abs_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_abs_int64", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_abs_int64", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromInt64("", {2, 3}, {-1, 0, 2, -1000000000000LL, 3, -5});
+      Tensor y = abs_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // DOUBLE
@@ -131,10 +139,11 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromDouble("", {2, 3}, {-1.0, 0.0, 1.5, -2.25, 3.5, -4.75});
-    Tensor y = abs_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_abs_double", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_abs_double", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromDouble("", {2, 3}, {-1.0, 0.0, 1.5, -2.25, 3.5, -4.75});
+      Tensor y = abs_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

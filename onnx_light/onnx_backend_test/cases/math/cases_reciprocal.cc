@@ -53,10 +53,11 @@ void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Reciprocal");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -0.5f, 0.25f, 1.0f, 2.0f, 4.0f});
-    Tensor y = reciprocal_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_reciprocal", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_reciprocal", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -0.5f, 0.25f, 1.0f, 2.0f, 4.0f});
+      Tensor y = reciprocal_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // From Reciprocal.export(): ``test_reciprocal_example`` uses x = [-4, 2].
@@ -65,10 +66,11 @@ void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Reciprocal");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {2}, {-4.0f, 2.0f});
-    Tensor y = reciprocal_kernel(x);
-    Expect(node, {x}, {y}, "test_reciprocal_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_reciprocal_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2}, {-4.0f, 2.0f});
+      Tensor y = reciprocal_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // From Reciprocal.export(): ``test_reciprocal`` uses np.random.rand(3, 4, 5) + 0.5.
@@ -77,10 +79,11 @@ void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Reciprocal");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = PositiveRandFloat({3, 4, 5}, /*seed=*/1);
-    Tensor y = reciprocal_kernel(x);
-    Expect(node, {x}, {y}, "test_reciprocal", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_reciprocal", {opset}, [=]() -> IoData {
+      Tensor x = PositiveRandFloat({3, 4, 5}, /*seed=*/1);
+      Tensor y = reciprocal_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // FLOAT16
   {
@@ -88,10 +91,11 @@ void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Reciprocal");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {0.5f, 1.0f, 2.0f, 4.0f, 0.25f, 8.0f});
-    Tensor y = reciprocal_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_reciprocal_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_reciprocal_float16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {0.5f, 1.0f, 2.0f, 4.0f, 0.25f, 8.0f});
+      Tensor y = reciprocal_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // BFLOAT16
@@ -100,15 +104,16 @@ void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Reciprocal");
     node.add_input("x");
     node.add_output("y");
-
-    std::vector<float> vals = {0.5f, 1.0f, 2.0f, 4.0f, 0.25f, 8.0f};
-    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
-    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
-    for (size_t i = 0; i < vals.size(); ++i)
-      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
-    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-    Tensor y = reciprocal_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_reciprocal_bfloat16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_reciprocal_bfloat16", {opset}, [=]() -> IoData {
+      std::vector<float> vals = {0.5f, 1.0f, 2.0f, 4.0f, 0.25f, 8.0f};
+      std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+      auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+      for (size_t i = 0; i < vals.size(); ++i)
+        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+      Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
+      Tensor y = reciprocal_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

@@ -46,11 +46,13 @@ void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *lambd = node.add_attribute();
     lambd->set_name("lambd");
     lambd->set_type(AttributeProto::FLOAT);
-    lambd->set_f(1.5f);
+    Expect(registry, std::move(node), "test_cc_shrink_hard", {opset}, [=]() -> IoData {
+      lambd->set_f(1.5f);
 
-    Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
-    Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f);
-    Expect(node, {x}, {y}, "test_cc_shrink_hard", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
+      Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -68,11 +70,13 @@ void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *lambd = node.add_attribute();
     lambd->set_name("lambd");
     lambd->set_type(AttributeProto::FLOAT);
-    lambd->set_f(1.5f);
+    Expect(registry, std::move(node), "test_cc_shrink_soft", {opset}, [=]() -> IoData {
+      lambd->set_f(1.5f);
 
-    Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
-    Tensor y = shrink_kernel(x, /*bias=*/1.5f, /*lambd=*/1.5f);
-    Expect(node, {x}, {y}, "test_cc_shrink_soft", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
+      Tensor y = shrink_kernel(x, /*bias=*/1.5f, /*lambd=*/1.5f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -81,10 +85,11 @@ void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Shrink");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -0.5f, -0.1f, 0.1f, 0.5f, 1.0f});
-    Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/0.5f);
-    Expect(node, {x}, {y}, "test_cc_shrink_default", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_shrink_default", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -0.5f, -0.1f, 0.1f, 0.5f, 1.0f});
+      Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/0.5f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

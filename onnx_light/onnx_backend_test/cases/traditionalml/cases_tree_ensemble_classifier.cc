@@ -180,15 +180,17 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
   const std::vector<int64_t> class_ids{0, 1};
   const std::vector<float> class_weights{1.0f, 1.0f};
 
-  Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
-  auto yz = cls.operator()<float>(x, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values,
-                                  nodes_modes, nodes_truenodeids, nodes_falsenodeids, nodes_missing,
-                                  class_treeids, class_nodeids, class_ids, class_weights,
-                                  /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
-                                  /*base_values=*/{}, /*post_transform=*/"NONE");
-
-  Expect(node, {x}, {yz.first, yz.second}, "test_cc_treeensembleclassifier_int64_binary",
-         {default_opset, opset}, "backend-test", registry);
+  Expect(registry, std::move(node), "test_cc_treeensembleclassifier_int64_binary",
+         {default_opset, opset}, [=]() -> IoData {
+           Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
+           auto yz = cls.operator()<float>(x, nodes_treeids, nodes_nodeids, nodes_featureids,
+                                           nodes_values, nodes_modes, nodes_truenodeids,
+                                           nodes_falsenodeids, nodes_missing, class_treeids,
+                                           class_nodeids, class_ids, class_weights,
+                                           /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
+                                           /*base_values=*/{}, /*post_transform=*/"NONE");
+           return IoData{{std::move(x)}, {std::move(yz.first), std::move(yz.second)}};
+         });
 }
 
 } // namespace onnx_backend_test

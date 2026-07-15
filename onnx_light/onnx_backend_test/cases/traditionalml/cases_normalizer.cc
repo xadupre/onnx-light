@@ -61,12 +61,13 @@ void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddStringAttr(node, "norm", "L2");
+    Expect(registry, std::move(node), "test_cc_normalizer_l2_float", {default_opset, opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 2.0f, 0.0f, 3.0f, 4.0f});
+             Tensor y = normalizer.operator()<float>(x, "L2");
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 2.0f, 0.0f, 3.0f, 4.0f});
-    Tensor y = normalizer.operator()<float>(x, "L2");
-
-    Expect(node, {x}, {y}, "test_cc_normalizer_l2_float", {default_opset, opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // L1 normalization on a single-row [C] int64 input — exercises the rank-1
@@ -78,12 +79,13 @@ void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddStringAttr(node, "norm", "L1");
+    Expect(registry, std::move(node), "test_cc_normalizer_l1_int64", {default_opset, opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromInt64("", {4}, {1, -1, 2, -2});
+             Tensor y = normalizer.operator()<int64_t>(x, "L1");
 
-    Tensor x = Tensor::FromInt64("", {4}, {1, -1, 2, -2});
-    Tensor y = normalizer.operator()<int64_t>(x, "L1");
-
-    Expect(node, {x}, {y}, "test_cc_normalizer_l1_int64", {default_opset, opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // MAX normalization on a [2, 3] double input — exercises the default
@@ -95,12 +97,13 @@ void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddStringAttr(node, "norm", "MAX");
+    Expect(registry, std::move(node), "test_cc_normalizer_max_double", {default_opset, opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, -3.0, 2.0, 0.0, 0.0, 0.0});
+             Tensor y = normalizer.operator()<double>(x, "MAX");
 
-    Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, -3.0, 2.0, 0.0, 0.0, 0.0});
-    Tensor y = normalizer.operator()<double>(x, "MAX");
-
-    Expect(node, {x}, {y}, "test_cc_normalizer_max_double", {default_opset, opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 

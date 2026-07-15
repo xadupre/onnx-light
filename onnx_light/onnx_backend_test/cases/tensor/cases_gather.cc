@@ -54,43 +54,48 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_gather_0 — mirrors the upstream ``test_gather_0`` node test:
   // gather along axis=0 with 2-D indices.
   {
-    Tensor data =
-        Tensor::FromFloat("", {5, 4}, {0.0f, 0.1f, 0.2f, 0.3f, 1.0f, 1.1f, 1.2f, 1.3f, 2.0f, 2.1f,
+    Expect(registry, MakeGatherNode(0), "test_cc_gather_0", {opset}, [=]() -> IoData {
+      Tensor data = Tensor::FromFloat("", {5, 4},
+                                      {0.0f, 0.1f, 0.2f, 0.3f, 1.0f, 1.1f, 1.2f, 1.3f, 2.0f, 2.1f,
                                        2.2f, 2.3f, 3.0f, 3.1f, 3.2f, 3.3f, 4.0f, 4.1f, 4.2f, 4.3f});
-    Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 1, 1, 2});
-    Tensor output = gather_kernel(data, indices, 0);
-    Expect(MakeGatherNode(0), {data, indices}, {output}, "test_cc_gather_0", {opset},
-           "backend-test", registry);
+      Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 1, 1, 2});
+      Tensor output = gather_kernel(data, indices, 0);
+      return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+    });
   }
 
   // test_cc_gather_1 — gather along axis=1.
   {
-    Tensor data =
-        Tensor::FromFloat("", {3, 3}, {1.0f, 1.2f, 1.9f, 2.3f, 3.4f, 3.9f, 4.5f, 5.7f, 5.9f});
-    Tensor indices = Tensor::FromInt64("", {1, 2}, {0, 2});
-    Tensor output = gather_kernel(data, indices, 1);
-    Expect(MakeGatherNode(1), {data, indices}, {output}, "test_cc_gather_1", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeGatherNode(1), "test_cc_gather_1", {opset}, [=]() -> IoData {
+      Tensor data =
+          Tensor::FromFloat("", {3, 3}, {1.0f, 1.2f, 1.9f, 2.3f, 3.4f, 3.9f, 4.5f, 5.7f, 5.9f});
+      Tensor indices = Tensor::FromInt64("", {1, 2}, {0, 2});
+      Tensor output = gather_kernel(data, indices, 1);
+      return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+    });
   }
 
   // test_cc_gather_2d_indices — mirrors the upstream ``test_gather_2d_indices``
   // node test: gather along axis=1 with 2-D indices.
   {
-    Tensor data =
-        Tensor::FromFloat("", {3, 3}, {1.0f, 1.2f, 1.9f, 2.3f, 3.4f, 3.9f, 4.5f, 5.7f, 5.9f});
-    Tensor indices = Tensor::FromInt64("", {1, 2}, {0, 2});
-    Tensor output = gather_kernel(data, indices, 1);
-    Expect(MakeGatherNode(1), {data, indices}, {output}, "test_cc_gather_2d_indices", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeGatherNode(1), "test_cc_gather_2d_indices", {opset}, [=]() -> IoData {
+      Tensor data =
+          Tensor::FromFloat("", {3, 3}, {1.0f, 1.2f, 1.9f, 2.3f, 3.4f, 3.9f, 4.5f, 5.7f, 5.9f});
+      Tensor indices = Tensor::FromInt64("", {1, 2}, {0, 2});
+      Tensor output = gather_kernel(data, indices, 1);
+      return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+    });
   }
 
   // test_cc_gather_negative_indices — negative indices wrap around the axis.
   {
-    Tensor data = Tensor::FromFloat("", {5}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor indices = Tensor::FromInt64("", {3}, {0, -1, -2});
-    Tensor output = gather_kernel(data, indices, 0);
-    Expect(MakeGatherNode(0), {data, indices}, {output}, "test_cc_gather_negative_indices", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeGatherNode(0), "test_cc_gather_negative_indices", {opset},
+           [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {5}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+             Tensor indices = Tensor::FromInt64("", {3}, {0, -1, -2});
+             Tensor output = gather_kernel(data, indices, 0);
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
   }
 }
 

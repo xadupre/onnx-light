@@ -46,12 +46,13 @@ void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("slope");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_prelu", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
+      Tensor slope = Tensor::FromFloat("", {2, 3}, {0.25f, 0.5f, 0.75f, 0.1f, 0.2f, 0.3f});
+      Tensor y = prelu_kernel(x, slope);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-    Tensor slope = Tensor::FromFloat("", {2, 3}, {0.25f, 0.5f, 0.75f, 0.1f, 0.2f, 0.3f});
-    Tensor y = prelu_kernel(x, slope);
-
-    Expect(node, {x, slope}, {y}, "test_cc_prelu", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(slope)}, {std::move(y)}};
+    });
   }
 
   // Unidirectional broadcast variant: slope is a 1-D tensor along the last
@@ -62,12 +63,13 @@ void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("slope");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_prelu_bcast", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -2.0f, -3.0f, 1.0f, 2.0f, 3.0f});
+      Tensor slope = Tensor::FromFloat("", {3}, {0.1f, 0.2f, 0.3f});
+      Tensor y = prelu_kernel(x, slope);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -2.0f, -3.0f, 1.0f, 2.0f, 3.0f});
-    Tensor slope = Tensor::FromFloat("", {3}, {0.1f, 0.2f, 0.3f});
-    Tensor y = prelu_kernel(x, slope);
-
-    Expect(node, {x, slope}, {y}, "test_cc_prelu_bcast", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(slope)}, {std::move(y)}};
+    });
   }
 
   // Regression for microsoft/onnxruntime#28732: PRelu must preserve ``+inf``
@@ -83,14 +85,15 @@ void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("slope");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_prelu_inf", {opset}, [=]() -> IoData {
+      const float pinf = std::numeric_limits<float>::infinity();
+      const float ninf = -std::numeric_limits<float>::infinity();
+      Tensor x = Tensor::FromFloat("", {4}, {pinf, ninf, 5e30f, -2.5f});
+      Tensor slope = Tensor::FromFloat("", {4}, {0.25f, 0.5f, 0.25f, 0.25f});
+      Tensor y = prelu_kernel(x, slope);
 
-    const float pinf = std::numeric_limits<float>::infinity();
-    const float ninf = -std::numeric_limits<float>::infinity();
-    Tensor x = Tensor::FromFloat("", {4}, {pinf, ninf, 5e30f, -2.5f});
-    Tensor slope = Tensor::FromFloat("", {4}, {0.25f, 0.5f, 0.25f, 0.25f});
-    Tensor y = prelu_kernel(x, slope);
-
-    Expect(node, {x, slope}, {y}, "test_cc_prelu_inf", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(slope)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``PRelu`` operator (mirror the
@@ -105,18 +108,27 @@ void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
   node.add_input("slope");
   node.add_output("y");
 
-  const std::vector<std::pair<std::string, std::vector<Tensor>>> cases = {
+  const std::vector<std::pair<std::string, std::function<IoData()>>> cases = {
       // From PRelu.export():
       {"test_prelu_example",
-       {RandnFloat({3, 4, 5}, /*seed=*/101), RandnFloat({3, 4, 5}, /*seed=*/102)}},
+       [=]() -> IoData {
+         auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/101);
+         auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/102);
+         Tensor y = prelu_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(y)}};
+       }},
       // From PRelu.export_prelu_broadcast():
       {"test_prelu_broadcast",
-       {RandnFloat({3, 4, 5}, /*seed=*/103), RandnFloat({5}, /*seed=*/104)}},
+       [=]() -> IoData {
+         auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/103);
+         auto inputs_1 = RandnFloat({5}, /*seed=*/104);
+         Tensor y = prelu_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(y)}};
+       }},
   };
 
-  for (const auto &[name, inputs] : cases) {
-    Tensor y = prelu_kernel(inputs[0], inputs[1]);
-    Expect(node, inputs, {y}, name, {opset}, "backend-test", registry);
+  for (const auto &[name, make_io] : cases) {
+    Expect(registry, node, name, {opset}, make_io);
   }
 }
 

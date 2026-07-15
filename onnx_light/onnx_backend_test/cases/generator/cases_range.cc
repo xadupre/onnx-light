@@ -60,13 +60,15 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("limit");
     node.add_input("delta");
     node.add_output("output");
-
-    const Tensor start = Tensor::FromFloat("start", {}, {1.0f});
-    const Tensor limit = Tensor::FromFloat("limit", {}, {5.0f});
-    const Tensor delta = Tensor::FromFloat("delta", {}, {2.0f});
-    const Tensor output = kernel::Range(ctx_v11)(start, limit, delta);
-    Expect(node, {start, limit, delta}, {output}, "test_range_float_type_positive_delta",
-           {opset_v11}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_range_float_type_positive_delta", {opset_v11},
+           [=]() -> IoData {
+             const Tensor start = Tensor::FromFloat("start", {}, {1.0f});
+             const Tensor limit = Tensor::FromFloat("limit", {}, {5.0f});
+             const Tensor delta = Tensor::FromFloat("delta", {}, {2.0f});
+             const Tensor output = kernel::Range(ctx_v11)(start, limit, delta);
+             return IoData{{std::move(start), std::move(limit), std::move(delta)},
+                           {std::move(output)}};
+           });
   }
 
   // Upstream test: range_int32_type_negative_delta
@@ -78,13 +80,15 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("limit");
     node.add_input("delta");
     node.add_output("output");
-
-    const Tensor start = Tensor::FromInt32("start", {}, {10});
-    const Tensor limit = Tensor::FromInt32("limit", {}, {6});
-    const Tensor delta = Tensor::FromInt32("delta", {}, {-3});
-    const Tensor output = kernel::Range(ctx_v11)(start, limit, delta);
-    Expect(node, {start, limit, delta}, {output}, "test_range_int32_type_negative_delta",
-           {opset_v11}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_range_int32_type_negative_delta", {opset_v11},
+           [=]() -> IoData {
+             const Tensor start = Tensor::FromInt32("start", {}, {10});
+             const Tensor limit = Tensor::FromInt32("limit", {}, {6});
+             const Tensor delta = Tensor::FromInt32("delta", {}, {-3});
+             const Tensor output = kernel::Range(ctx_v11)(start, limit, delta);
+             return IoData{{std::move(start), std::move(limit), std::move(delta)},
+                           {std::move(output)}};
+           });
   }
 
   // Upstream test (opset 27): range_float16_type_positive_delta
@@ -96,13 +100,15 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("limit");
     node.add_input("delta");
     node.add_output("output");
-
-    const Tensor start = kernel::MakeFloat16Scalar("start", 1.0f);
-    const Tensor limit = kernel::MakeFloat16Scalar("limit", 5.0f);
-    const Tensor delta = kernel::MakeFloat16Scalar("delta", 2.0f);
-    const Tensor output = kernel::Range(ctx_v27)(start, limit, delta);
-    Expect(node, {start, limit, delta}, {output}, "test_range_float16_type_positive_delta",
-           {opset_v27}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_range_float16_type_positive_delta", {opset_v27},
+           [=]() -> IoData {
+             const Tensor start = kernel::MakeFloat16Scalar("start", 1.0f);
+             const Tensor limit = kernel::MakeFloat16Scalar("limit", 5.0f);
+             const Tensor delta = kernel::MakeFloat16Scalar("delta", 2.0f);
+             const Tensor output = kernel::Range(ctx_v27)(start, limit, delta);
+             return IoData{{std::move(start), std::move(limit), std::move(delta)},
+                           {std::move(output)}};
+           });
   }
 
   // Upstream test (opset 27): range_bfloat16_type_positive_delta
@@ -114,13 +120,15 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("limit");
     node.add_input("delta");
     node.add_output("output");
-
-    const Tensor start = kernel::MakeBfloat16Scalar("start", 1.0f);
-    const Tensor limit = kernel::MakeBfloat16Scalar("limit", 5.0f);
-    const Tensor delta = kernel::MakeBfloat16Scalar("delta", 2.0f);
-    const Tensor output = kernel::Range(ctx_v27)(start, limit, delta);
-    Expect(node, {start, limit, delta}, {output}, "test_range_bfloat16_type_positive_delta",
-           {opset_v27}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_range_bfloat16_type_positive_delta", {opset_v27},
+           [=]() -> IoData {
+             const Tensor start = kernel::MakeBfloat16Scalar("start", 1.0f);
+             const Tensor limit = kernel::MakeBfloat16Scalar("limit", 5.0f);
+             const Tensor delta = kernel::MakeBfloat16Scalar("delta", 2.0f);
+             const Tensor output = kernel::Range(ctx_v27)(start, limit, delta);
+             return IoData{{std::move(start), std::move(limit), std::move(delta)},
+                           {std::move(output)}};
+           });
   }
 }
 

@@ -36,39 +36,44 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
 
   // Case 1: three FLOAT tensors of shape [2, 3].
   {
+    const std::vector<int64_t> elem_shape = {2, 3};
     NodeProto node;
     node.set_op_type("SequenceConstruct");
     node.add_input("a");
     node.add_input("b");
     node.add_input("c");
     node.add_output("output_sequence");
+    Expect(registry, std::move(node), "test_cc_sequence_construct", {opset},
+           [=]() -> IoData {
+             Tensor a =
+                 Tensor::FromFloat("", elem_shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
+             Tensor b = Tensor::FromFloat("", elem_shape, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+             Tensor c = Tensor::FromFloat("", elem_shape, {6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f});
 
-    const std::vector<int64_t> elem_shape = {2, 3};
-    Tensor a = Tensor::FromFloat("", elem_shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
-    Tensor b = Tensor::FromFloat("", elem_shape, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
-    Tensor c = Tensor::FromFloat("", elem_shape, {6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f});
+             Tensor output = kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a, b, c});
 
-    Tensor output = kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a, b, c});
-
-    Expect(node, {a, b, c}, {output}, "test_cc_sequence_construct", {opset}, "backend-test",
-           registry, "",
+             return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(output)}};
+           },
+           "", "",
            {SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT), elem_shape))});
   }
 
   // Case 2: a single INT64 tensor of shape [4].
   {
+    const std::vector<int64_t> elem_shape = {4};
     NodeProto node;
     node.set_op_type("SequenceConstruct");
     node.add_input("a");
     node.add_output("output_sequence");
+    Expect(registry, std::move(node), "test_cc_sequence_construct_int64_single", {opset},
+           [=]() -> IoData {
+             Tensor a = Tensor::FromInt64("", elem_shape, {-1, 0, 1, 2});
 
-    const std::vector<int64_t> elem_shape = {4};
-    Tensor a = Tensor::FromInt64("", elem_shape, {-1, 0, 1, 2});
+             Tensor output = kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a});
 
-    Tensor output = kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a});
-
-    Expect(node, {a}, {output}, "test_cc_sequence_construct_int64_single", {opset}, "backend-test",
-           registry, "",
+             return IoData{{std::move(a)}, {std::move(output)}};
+           },
+           "", "",
            {SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(DataType::INT64), elem_shape))});
   }
 }

@@ -42,15 +42,17 @@ void RegisterMaxUnpoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    Expect(registry, std::move(node), "test_cc_maxunpool_export_with_output_shape", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
+             Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {5, 7, 13, 15});
+             Tensor output_shape = Tensor::FromInt64("", {4}, {1, 1, 5, 5});
+             Tensor y = maxunpool_kernel(x, indices, output_shape, /*kernel_shape=*/{2, 2},
+                                         /*strides=*/{2, 2});
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
-    Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {5, 7, 13, 15});
-    Tensor output_shape = Tensor::FromInt64("", {4}, {1, 1, 5, 5});
-    Tensor y = maxunpool_kernel(x, indices, output_shape, /*kernel_shape=*/{2, 2},
-                                /*strides=*/{2, 2});
-
-    Expect(node, {x, indices, output_shape}, {y}, "test_cc_maxunpool_export_with_output_shape",
-           {opset}, "backend-test", registry);
+             return IoData{{std::move(x), std::move(indices), std::move(output_shape)},
+                           {std::move(y)}};
+           });
   }
 
   // Two-input form: the output shape is fully determined by ``kernel_shape``
@@ -63,13 +65,14 @@ void RegisterMaxUnpoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    Expect(registry, std::move(node), "test_cc_maxunpool_export_without_output_shape", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {5, 7, 13, 15});
+             Tensor y = maxunpool_kernel(x, indices, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {5, 7, 13, 15});
-    Tensor y = maxunpool_kernel(x, indices, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
-
-    Expect(node, {x, indices}, {y}, "test_cc_maxunpool_export_without_output_shape", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x), std::move(indices)}, {std::move(y)}};
+           });
   }
 }
 

@@ -37,10 +37,12 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("EyeLike");
     node.add_input("x");
     node.add_output("y");
-    const Tensor x = Tensor::FromFloat(
-        "x", {3, 4}, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
-    const Tensor y = kernel::EyeLike(ctx)(x, /*k=*/0, /*dtype=*/0);
-    Expect(node, {x}, {y}, "test_eyelike_without_dtype", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_eyelike_without_dtype", {opset}, [=]() -> IoData {
+      const Tensor x = Tensor::FromFloat(
+          "x", {3, 4}, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+      const Tensor y = kernel::EyeLike(ctx)(x, /*k=*/0, /*dtype=*/0);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream-style case with dtype override and non-zero diagonal offset.
@@ -56,12 +58,14 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
     auto *dtype_attr = node.add_attribute();
     dtype_attr->set_name("dtype");
     dtype_attr->set_type(AttributeProto::AttributeType::INT);
-    dtype_attr->set_i(static_cast<int64_t>(DataType::INT64));
+    Expect(registry, std::move(node), "test_eyelike_with_dtype", {opset}, [=]() -> IoData {
+      dtype_attr->set_i(static_cast<int64_t>(DataType::INT64));
 
-    const Tensor x =
-        Tensor::FromFloat("x", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
-    const Tensor y = kernel::EyeLike(ctx)(x, /*k=*/1, static_cast<int32_t>(DataType::INT64));
-    Expect(node, {x}, {y}, "test_eyelike_with_dtype", {opset}, "backend-test", registry);
+      const Tensor x =
+          Tensor::FromFloat("x", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+      const Tensor y = kernel::EyeLike(ctx)(x, /*k=*/1, static_cast<int32_t>(DataType::INT64));
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream-style case populating an off-main diagonal with explicit FLOAT dtype.
@@ -77,14 +81,17 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
     auto *dtype_attr = node.add_attribute();
     dtype_attr->set_name("dtype");
     dtype_attr->set_type(AttributeProto::AttributeType::INT);
-    dtype_attr->set_i(static_cast<int64_t>(DataType::FLOAT));
+    Expect(registry, std::move(node), "test_eyelike_populate_off_main_diagonal", {opset},
+           [=]() -> IoData {
+             dtype_attr->set_i(static_cast<int64_t>(DataType::FLOAT));
 
-    const Tensor x = Tensor::FromFloat("x", {4, 5}, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                                     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                                     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
-    const Tensor y = kernel::EyeLike(ctx)(x, /*k=*/1, static_cast<int32_t>(DataType::FLOAT));
-    Expect(node, {x}, {y}, "test_eyelike_populate_off_main_diagonal", {opset}, "backend-test",
-           registry);
+             const Tensor x = Tensor::FromFloat(
+                 "x", {4, 5}, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                               0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+             const Tensor y =
+                 kernel::EyeLike(ctx)(x, /*k=*/1, static_cast<int32_t>(DataType::FLOAT));
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 

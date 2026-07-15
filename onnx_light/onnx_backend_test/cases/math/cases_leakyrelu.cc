@@ -31,11 +31,13 @@ void RegisterLeakyReluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    alpha->set_f(0.1f);
+    Expect(registry, std::move(node), "test_cc_leakyrelu_example", {opset}, [=]() -> IoData {
+      alpha->set_f(0.1f);
 
-    Tensor x = Tensor::FromFloat("", {3, 4, 5}, std::vector<float>(60, -1.0f));
-    Tensor y = leakyrelu_kernel(x, 0.1f);
-    Expect(node, {x}, {y}, "test_cc_leakyrelu_example", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {3, 4, 5}, std::vector<float>(60, -1.0f));
+      Tensor y = leakyrelu_kernel(x, 0.1f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -47,11 +49,13 @@ void RegisterLeakyReluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    alpha->set_f(0.1f);
+    Expect(registry, std::move(node), "test_cc_leakyrelu", {opset}, [=]() -> IoData {
+      alpha->set_f(0.1f);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-    Tensor y = leakyrelu_kernel(x, 0.1f);
-    Expect(node, {x}, {y}, "test_cc_leakyrelu", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
+      Tensor y = leakyrelu_kernel(x, 0.1f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -59,11 +63,12 @@ void RegisterLeakyReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("LeakyRelu");
     node.add_input("X");
     node.add_output("Y");
-
-    // No alpha attribute: defaults to 0.01.
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-    Tensor y = leakyrelu_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_leakyrelu_default", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_leakyrelu_default", {opset}, [=]() -> IoData {
+      // No alpha attribute: defaults to 0.01.
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
+      Tensor y = leakyrelu_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

@@ -61,31 +61,37 @@ void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_gathernd_example_int32 — mirrors upstream
   // ``test_gathernd_example_int32`` (2x2 data with k_last == rank).
   {
-    Tensor data = Tensor::FromInt32("", {2, 2}, {0, 1, 2, 3});
-    Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
-    Tensor output = gnd_kernel(data, indices, 0);
-    Expect(MakeGatherNDNode(0, true), {data, indices}, {output}, "test_cc_gathernd_example_int32",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeGatherNDNode(0, true), "test_cc_gathernd_example_int32", {opset},
+           [=]() -> IoData {
+             Tensor data = Tensor::FromInt32("", {2, 2}, {0, 1, 2, 3});
+             Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
+             Tensor output = gnd_kernel(data, indices, 0);
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
   }
 
   // test_cc_gathernd_example_float32 — partial gather (k_last < rank); each
   // index selects a 1-D slice of length 2.
   {
-    Tensor data = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
-    Tensor indices = Tensor::FromInt64("", {2, 1}, {1, 0});
-    Tensor output = gnd_kernel(data, indices, 0);
-    Expect(MakeGatherNDNode(0, true), {data, indices}, {output}, "test_cc_gathernd_example_float32",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeGatherNDNode(0, true), "test_cc_gathernd_example_float32", {opset},
+           [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
+             Tensor indices = Tensor::FromInt64("", {2, 1}, {1, 0});
+             Tensor output = gnd_kernel(data, indices, 0);
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
   }
 
   // test_cc_gathernd_example_int32_batch_dim1 — batch_dims=1 variant.
   // For each batch i, indices[i] picks rows of data[i] independently.
   {
-    Tensor data = Tensor::FromInt32("", {2, 2, 2}, {0, 1, 2, 3, 4, 5, 6, 7});
-    Tensor indices = Tensor::FromInt64("", {2, 1}, {1, 0});
-    Tensor output = gnd_kernel(data, indices, 1);
-    Expect(MakeGatherNDNode(1, true), {data, indices}, {output},
-           "test_cc_gathernd_example_int32_batch_dim1", {opset}, "backend-test", registry);
+    Expect(registry, MakeGatherNDNode(1, true), "test_cc_gathernd_example_int32_batch_dim1",
+           {opset}, [=]() -> IoData {
+             Tensor data = Tensor::FromInt32("", {2, 2, 2}, {0, 1, 2, 3, 4, 5, 6, 7});
+             Tensor indices = Tensor::FromInt64("", {2, 1}, {1, 0});
+             Tensor output = gnd_kernel(data, indices, 1);
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
   }
 }
 

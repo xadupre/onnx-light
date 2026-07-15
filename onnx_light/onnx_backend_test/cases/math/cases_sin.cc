@@ -33,12 +33,13 @@ void RegisterSinCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sin");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_sin", {opset}, [=]() -> IoData {
+      Tensor x =
+          Tensor::FromFloat("", {2, 3}, {-3.14159f, -1.5708f, 0.0f, 1.0472f, 1.5708f, 3.14159f});
+      Tensor y = sin_kernel(x);
 
-    Tensor x =
-        Tensor::FromFloat("", {2, 3}, {-3.14159f, -1.5708f, 0.0f, 1.0472f, 1.5708f, 3.14159f});
-    Tensor y = sin_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_sin", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Sin`` operator (mirror the
@@ -50,10 +51,11 @@ void RegisterSinCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sin");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = sin_kernel(x);
-    Expect(node, {x}, {y}, "test_sin_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_sin_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = sin_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // From Sin.export(): ``test_sin`` uses x = np.random.rand(3, 4, 5).
   {
@@ -61,11 +63,12 @@ void RegisterSinCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sin");
     node.add_input("x");
     node.add_output("y");
-
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x = Tensor::FromFloat("", shape, Rand<float>(shape, /*seed=*/1));
-    Tensor y = sin_kernel(x);
-    Expect(node, {x}, {y}, "test_sin", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_sin", {opset}, [=]() -> IoData {
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x = Tensor::FromFloat("", shape, Rand<float>(shape, /*seed=*/1));
+      Tensor y = sin_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

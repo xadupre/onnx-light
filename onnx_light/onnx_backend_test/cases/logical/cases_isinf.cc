@@ -47,9 +47,11 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
 
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
-    Tensor x = Tensor::FromFloat("", {3}, {1.0f, inf_v, -inf_v});
-    Tensor y = isinf_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_isinf", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_isinf", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {1.0f, inf_v, -inf_v});
+      Tensor y = isinf_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ``onnx.backend.test.case.node.isinf.IsInf.export_infinity``:
@@ -57,9 +59,11 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   //   y = np.isinf(x)
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
-    Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
-    Tensor y = isinf_kernel(x);
-    Expect(node, {x}, {y}, "test_isinf", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_isinf", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
+      Tensor y = isinf_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ``IsInf.export_positive_infinity_only`` (detect_negative=0):
@@ -68,9 +72,11 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
     AddAttribute<int64_t>(node, "detect_negative", 0);
-    Tensor x = Tensor::FromFloat("", {6}, {-1.7f, nan_v, inf_v, 3.6f, -inf_v, inf_v});
-    Tensor y = isinf_kernel(x, /*detect_positive=*/1, /*detect_negative=*/0);
-    Expect(node, {x}, {y}, "test_isinf_positive", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_isinf_positive", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {6}, {-1.7f, nan_v, inf_v, 3.6f, -inf_v, inf_v});
+      Tensor y = isinf_kernel(x, /*detect_positive=*/1, /*detect_negative=*/0);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ``IsInf.export_negative_infinity_only`` (detect_positive=0):
@@ -79,18 +85,22 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
     AddAttribute<int64_t>(node, "detect_positive", 0);
-    Tensor x = Tensor::FromFloat("", {6}, {-1.7f, nan_v, inf_v, -3.6f, -inf_v, inf_v});
-    Tensor y = isinf_kernel(x, /*detect_positive=*/0, /*detect_negative=*/1);
-    Expect(node, {x}, {y}, "test_isinf_negative", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_isinf_negative", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {6}, {-1.7f, nan_v, inf_v, -3.6f, -inf_v, inf_v});
+      Tensor y = isinf_kernel(x, /*detect_positive=*/0, /*detect_negative=*/1);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // ``test_isinf_float16`` — IsInf on FLOAT16 input with hardcoded expected.
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
-    Tensor x = kernel::MakeFloat16Tensor("", {6}, {-inf_v, -1.0f, 0.0f, 1.0f, inf_v, nan_v});
-    // Expected: [True, False, False, False, True, False]
-    Tensor y = Tensor::FromBool("", {6}, {1, 0, 0, 0, 1, 0});
-    Expect(node, {x}, {y}, "test_isinf_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_isinf_float16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeFloat16Tensor("", {6}, {-inf_v, -1.0f, 0.0f, 1.0f, inf_v, nan_v});
+      // Expected: [True, False, False, False, True, False]
+      Tensor y = Tensor::FromBool("", {6}, {1, 0, 0, 0, 1, 0});
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

@@ -33,12 +33,13 @@ void EmitReduceMeanCase(std::vector<TestCase> &registry, const kernel::ReduceMea
   if (noop_with_empty_axes) {
     AddAttribute<int64_t>(node, "noop_with_empty_axes", 1);
   }
+  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+    Tensor data = Tensor::FromFloat("", data_shape, data_values);
+    Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
+    Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
 
-  Tensor data = Tensor::FromFloat("", data_shape, data_values);
-  Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
-  Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
-
-  Expect(node, {data, axes}, {reduced}, case_name, {opset}, "backend-test", registry);
+    return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+  });
 }
 
 // Emits a case where the optional ``axes`` input is omitted entirely (single
@@ -55,11 +56,12 @@ void EmitReduceMeanDefaultAxesCase(std::vector<TestCase> &registry,
   node.add_input("data");
   node.add_output("reduced");
   AddAttribute<int64_t>(node, "keepdims", keepdims ? 1 : 0);
+  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+    Tensor data = Tensor::FromFloat("", data_shape, data_values);
+    Tensor reduced = kernel(data, keepdims, /*noop_with_empty_axes=*/false);
 
-  Tensor data = Tensor::FromFloat("", data_shape, data_values);
-  Tensor reduced = kernel(data, keepdims, /*noop_with_empty_axes=*/false);
-
-  Expect(node, {data}, {reduced}, case_name, {opset}, "backend-test", registry);
+    return IoData{{std::move(data)}, {std::move(reduced)}};
+  });
 }
 
 } // namespace

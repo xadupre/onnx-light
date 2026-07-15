@@ -21,11 +21,12 @@ void RegisterNotOnnxCase(const std::string &name, const std::vector<int64_t> &sh
                          const kernel::Not &not_kernel, const OpsetId &opset,
                          std::vector<TestCase> &registry) {
   NodeProto node = MakeNode("Not", {"x"}, {"not"});
+  Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
+    Tensor x = RandBool(shape, seed);
+    Tensor y = not_kernel(x);
 
-  Tensor x = RandBool(shape, seed);
-  Tensor y = not_kernel(x);
-
-  Expect(node, {x}, {y}, name, {opset}, "backend-test", registry);
+    return IoData{{std::move(x)}, {std::move(y)}};
+  });
 }
 
 } // namespace
@@ -57,11 +58,12 @@ void RegisterNotCases(std::vector<TestCase> &registry, TestMode mode) {
 
   {
     NodeProto node = MakeNode("Not", {"x"}, {"y"});
+    Expect(registry, std::move(node), "test_cc_not", {opset}, [=]() -> IoData {
+      Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
+      Tensor y = not_kernel(x);
 
-    Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
-    Tensor y = not_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_not", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Not`` operator (mirror the

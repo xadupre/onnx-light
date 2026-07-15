@@ -37,10 +37,11 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Det");
     node.add_input("X");
     node.add_output("Y");
-
-    Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
-    Tensor y = det_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_det_2d", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_det_2d", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
+      Tensor y = det_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // N-D input: batch of square matrices (matches ONNX ``test_det_nd``).
@@ -49,11 +50,12 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Det");
     node.add_input("X");
     node.add_output("Y");
-
-    Tensor x = Tensor::FromFloat(
-        "", {3, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f, 3.0f, 3.0f, 1.0f});
-    Tensor y = det_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_det_nd", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_det_nd", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat(
+          "", {3, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f, 3.0f, 3.0f, 1.0f});
+      Tensor y = det_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

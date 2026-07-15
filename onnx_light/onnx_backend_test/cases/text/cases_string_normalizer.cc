@@ -55,11 +55,12 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_input("x");
     node.add_output("y");
     AddAttribute(node, "case_change_action", std::string("LOWER"));
+    Expect(registry, std::move(node), "test_cc_string_normalizer_lower", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromStrings("", {3}, {"Hello", "World", "FOO"});
+      Tensor y = string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/false, {});
 
-    Tensor x = Tensor::FromStrings("", {3}, {"Hello", "World", "FOO"});
-    Tensor y = string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/false, {});
-
-    Expect(node, {x}, {y}, "test_cc_string_normalizer_lower", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // NOOP variant: no stopwords, no case change, case-sensitive comparison.
@@ -70,12 +71,14 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_input("x");
     node.add_output("y");
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
+    Expect(registry, std::move(node), "test_cc_string_normalizer_nostopwords_nochangecase", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {2}, {"monday", "tuesday"});
+             Tensor y =
+                 string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {});
 
-    Tensor x = Tensor::FromStrings("", {2}, {"monday", "tuesday"});
-    Tensor y = string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {});
-
-    Expect(node, {x}, {y}, "test_cc_string_normalizer_nostopwords_nochangecase", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Case-sensitive stopword drop combined with ``LOWER`` case change on a 1-D
@@ -89,13 +92,15 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "case_change_action", std::string("LOWER"));
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
+    Expect(registry, std::move(node), "test_cc_string_normalizer_case_sensitive_lower", {opset},
+           [=]() -> IoData {
+             Tensor x =
+                 Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
+             Tensor y = string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/true,
+                                          {"monday"});
 
-    Tensor x = Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
-    Tensor y =
-        string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/true, {"monday"});
-
-    Expect(node, {x}, {y}, "test_cc_string_normalizer_case_sensitive_lower", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Stopwords + uppercasing on a 2-D ``[1, C]`` input. ``"a"`` is a
@@ -108,11 +113,12 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "case_change_action", std::string("UPPER"));
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(0));
     AddAttribute(node, "stopwords", std::vector<std::string>{"a"});
+    Expect(registry, std::move(node), "test_cc_string_normalizer_upper", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromStrings("", {1, 4}, {"A", "hello", "a", "world"});
+      Tensor y = string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/false, {"a"});
 
-    Tensor x = Tensor::FromStrings("", {1, 4}, {"A", "hello", "a", "world"});
-    Tensor y = string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/false, {"a"});
-
-    Expect(node, {x}, {y}, "test_cc_string_normalizer_upper", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Case-sensitive stopwords variant: only the exact-case "the" is
@@ -124,13 +130,14 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_output("y");
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"the"});
+    Expect(registry, std::move(node), "test_cc_string_normalizer_case_sensitive", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {3}, {"The", "the", "cat"});
+             Tensor y = string_normalizer(x, CaseChangeAction::kNone,
+                                          /*is_case_sensitive=*/true, {"the"});
 
-    Tensor x = Tensor::FromStrings("", {3}, {"The", "the", "cat"});
-    Tensor y = string_normalizer(x, CaseChangeAction::kNone,
-                                 /*is_case_sensitive=*/true, {"the"});
-
-    Expect(node, {x}, {y}, "test_cc_string_normalizer_case_sensitive", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // All elements dropped → output is a single empty string with shape
@@ -141,13 +148,14 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_input("x");
     node.add_output("y");
     AddAttribute(node, "stopwords", std::vector<std::string>{"a", "b"});
+    Expect(registry, std::move(node), "test_cc_string_normalizer_all_dropped", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {2}, {"a", "b"});
+             Tensor y = string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/false,
+                                          {"a", "b"});
 
-    Tensor x = Tensor::FromStrings("", {2}, {"a", "b"});
-    Tensor y =
-        string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/false, {"a", "b"});
-
-    Expect(node, {x}, {y}, "test_cc_string_normalizer_all_dropped", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // ---------------------------------------------------------------------------
@@ -166,12 +174,14 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_input("x");
     node.add_output("y");
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
+    Expect(registry, std::move(node), "test_cc_strnormalizer_nostopwords_nochangecase", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {2}, {"monday", "tuesday"});
+             Tensor y =
+                 string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {});
 
-    Tensor x = Tensor::FromStrings("", {2}, {"monday", "tuesday"});
-    Tensor y = string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {});
-
-    Expect(node, {x}, {y}, "test_cc_strnormalizer_nostopwords_nochangecase", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Mirrors ``test_strnormalizer_export_monday_casesensintive_nochangecase``:
@@ -183,13 +193,16 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_output("y");
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
+    Expect(registry, std::move(node),
+           "test_cc_strnormalizer_export_monday_casesensintive_nochangecase", {opset},
+           [=]() -> IoData {
+             Tensor x =
+                 Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
+             Tensor y = string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true,
+                                          {"monday"});
 
-    Tensor x = Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
-    Tensor y =
-        string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {"monday"});
-
-    Expect(node, {x}, {y}, "test_cc_strnormalizer_export_monday_casesensintive_nochangecase",
-           {opset}, "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Mirrors ``test_strnormalizer_export_monday_casesensintive_lower``:
@@ -202,13 +215,15 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "case_change_action", std::string("LOWER"));
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
+    Expect(registry, std::move(node), "test_cc_strnormalizer_export_monday_casesensintive_lower",
+           {opset}, [=]() -> IoData {
+             Tensor x =
+                 Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
+             Tensor y = string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/true,
+                                          {"monday"});
 
-    Tensor x = Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
-    Tensor y =
-        string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/true, {"monday"});
-
-    Expect(node, {x}, {y}, "test_cc_strnormalizer_export_monday_casesensintive_lower", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Mirrors ``test_strnormalizer_export_monday_casesensintive_upper``:
@@ -221,13 +236,15 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "case_change_action", std::string("UPPER"));
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
+    Expect(registry, std::move(node), "test_cc_strnormalizer_export_monday_casesensintive_upper",
+           {opset}, [=]() -> IoData {
+             Tensor x =
+                 Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
+             Tensor y = string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/true,
+                                          {"monday"});
 
-    Tensor x = Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
-    Tensor y =
-        string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/true, {"monday"});
-
-    Expect(node, {x}, {y}, "test_cc_strnormalizer_export_monday_casesensintive_upper", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Mirrors ``test_strnormalizer_export_monday_empty_output``: every element
@@ -240,13 +257,14 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "case_change_action", std::string("UPPER"));
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
+    Expect(registry, std::move(node), "test_cc_strnormalizer_export_monday_empty_output", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {2}, {"monday", "monday"});
+             Tensor y = string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/true,
+                                          {"monday"});
 
-    Tensor x = Tensor::FromStrings("", {2}, {"monday", "monday"});
-    Tensor y =
-        string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/true, {"monday"});
-
-    Expect(node, {x}, {y}, "test_cc_strnormalizer_export_monday_empty_output", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Mirrors ``test_strnormalizer_export_monday_insensintive_upper_twodim``:
@@ -258,14 +276,16 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_output("y");
     AddAttribute(node, "case_change_action", std::string("UPPER"));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
+    Expect(registry, std::move(node),
+           "test_cc_strnormalizer_export_monday_insensintive_upper_twodim", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings(
+                 "", {1, 6}, {"Monday", "tuesday", "wednesday", "Monday", "tuesday", "wednesday"});
+             Tensor y = string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/false,
+                                          {"monday"});
 
-    Tensor x = Tensor::FromStrings(
-        "", {1, 6}, {"Monday", "tuesday", "wednesday", "Monday", "tuesday", "wednesday"});
-    Tensor y =
-        string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/false, {"monday"});
-
-    Expect(node, {x}, {y}, "test_cc_strnormalizer_export_monday_insensintive_upper_twodim", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 

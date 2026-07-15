@@ -76,38 +76,46 @@ void RegisterSqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_squeeze_axes
   {
-    const Tensor data = Tensor::FromFloat("", {2, 1, 3, 1}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-    const Tensor axes = MakeAxesTensor({1, 3});
-    const Tensor squeezed = squeeze_kernel(data, {1, 3});
-    Expect(MakeSqueezeNode(), {data, axes}, {squeezed}, "test_cc_squeeze_axes", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeSqueezeNode(), "test_cc_squeeze_axes", {opset}, [=]() -> IoData {
+      const Tensor data = Tensor::FromFloat("", {2, 1, 3, 1}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+      const Tensor axes = MakeAxesTensor({1, 3});
+      const Tensor squeezed = squeeze_kernel(data, {1, 3});
+      return IoData{{std::move(data), std::move(axes)}, {std::move(squeezed)}};
+    });
   }
 
   // test_cc_squeeze_all_singleton
   {
-    const Tensor data = Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-    const Tensor axes = MakeAxesTensor({});
-    const Tensor squeezed = squeeze_kernel(data, {});
-    Expect(MakeSqueezeNode(), {data, axes}, {squeezed}, "test_cc_squeeze_all_singleton", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeSqueezeNode(), "test_cc_squeeze_all_singleton", {opset}, [=]() -> IoData {
+      const Tensor data = Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+      const Tensor axes = MakeAxesTensor({});
+      const Tensor squeezed = squeeze_kernel(data, {});
+      return IoData{{std::move(data), std::move(axes)}, {std::move(squeezed)}};
+    });
   }
 
   // test_cc_squeeze_no_axes_input: the optional ``axes`` input slot is omitted
   // entirely; the kernel should squeeze every dimension equal to 1.
   {
-    const Tensor data = Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-    const Tensor squeezed = squeeze_kernel(data, {});
-    Expect(MakeSqueezeNodeNoAxes(), {data}, {squeezed}, "test_cc_squeeze_no_axes_input", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeSqueezeNodeNoAxes(), "test_cc_squeeze_no_axes_input", {opset},
+           [=]() -> IoData {
+             const Tensor data =
+                 Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+             const Tensor squeezed = squeeze_kernel(data, {});
+             return IoData{{std::move(data)}, {std::move(squeezed)}};
+           });
   }
 
   // test_cc_squeeze_empty_axes_name: the optional ``axes`` input slot is
   // present but unconnected (empty name).
   {
-    const Tensor data = Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-    const Tensor squeezed = squeeze_kernel(data, {});
-    Expect(MakeSqueezeNodeEmptyAxes(), {data}, {squeezed}, "test_cc_squeeze_empty_axes_name",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeSqueezeNodeEmptyAxes(), "test_cc_squeeze_empty_axes_name", {opset},
+           [=]() -> IoData {
+             const Tensor data =
+                 Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+             const Tensor squeezed = squeeze_kernel(data, {});
+             return IoData{{std::move(data)}, {std::move(squeezed)}};
+           });
   }
 }
 

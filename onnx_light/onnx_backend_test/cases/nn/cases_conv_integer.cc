@@ -72,7 +72,9 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
     Y.name = "Y";
     NodeProto node = MakeConvIntegerNode({"X", "W", "x_zero_point"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
-    Expect(node, {X, W, xzp}, {Y}, "test_cc_basic_convinteger", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_basic_convinteger", {opset}, [=]() -> IoData {
+      return IoData{{std::move(X), std::move(W), std::move(xzp)}, {std::move(Y)}};
+    });
   }
 
   // -------------------------------------------------------------------
@@ -90,8 +92,9 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeConvIntegerNode({"X", "W", "x_zero_point"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
-    Expect(node, {X, W, xzp}, {Y}, "test_cc_convinteger_with_padding", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_convinteger_with_padding", {opset}, [=]() -> IoData {
+      return IoData{{std::move(X), std::move(W), std::move(xzp)}, {std::move(Y)}};
+    });
   }
 
   // -------------------------------------------------------------------
@@ -106,8 +109,10 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Y = ci(X, W, xzp, wzp, attrs);
     Y.name = "Y";
     NodeProto node = MakeConvIntegerNode({"X", "W", "x_zero_point"}, {"Y"});
-    Expect(node, {X, W, xzp}, {Y}, "test_cc_convinteger_without_padding", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_convinteger_without_padding", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(X), std::move(W), std::move(xzp)}, {std::move(Y)}};
+           });
   }
 }
 

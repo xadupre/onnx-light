@@ -113,13 +113,14 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_default", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2});
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
-                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
-                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2});
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_default", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // 3x3 kernel with strides (2, 2) on a 1x1x5x5 input.
@@ -130,14 +131,15 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_strides", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
+                                   {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                    10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                    19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2});
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
-                                 {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
-                                  10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
-                                  19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2});
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_strides", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // 3x3 kernel with explicit padding (1, 1, 1, 1) and
@@ -150,17 +152,18 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
     AddAttribute<int64_t>(node, "count_include_pad", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_pads_count_include_pad", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat(
+                 "", {1, 1, 5, 5}, {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                    10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                    19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
+                                            /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/false,
+                                            /*count_include_pad=*/true);
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
-                                 {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
-                                  10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
-                                  19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
-                                   /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/false,
-                                   /*count_include_pad=*/true);
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_pads_count_include_pad", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 1-D AveragePool with a 2-wide kernel (mirrors
@@ -171,11 +174,12 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2});
+    Expect(registry, std::move(node), "test_cc_averagepool_1d_default", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {1, 1, 8}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2});
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 8}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2});
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_1d_default", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Opset-18 clone of ``test_averagepool_19_ceil_count_include_pad_1d``,
@@ -191,16 +195,19 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "pads", {3, 3});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
     AddAttribute<int64_t>(node, "count_include_pad", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_18_ceil_count_include_pad_1d", {opset18},
+           [=]() -> IoData {
+             Tensor x =
+                 Tensor::FromFloat("", {1, 2, 9},
+                                   {2.0903f, 4.6493f, 1.6320f, -3.2051f, 4.6975f, 4.7296f, 3.3653f,
+                                    -1.5815f, -2.3832f, 0.9628f, -1.5899f, -2.6820f, 5.7529f,
+                                    7.7346f, -0.8910f, -2.0151f, 0.1313f, -0.5374f});
+             Tensor y =
+                 average_pool_kernel18(x, /*kernel_shape=*/{7}, /*strides=*/{3}, /*pads=*/{3, 3},
+                                       /*ceil_mode=*/true, /*count_include_pad=*/true);
 
-    Tensor x = Tensor::FromFloat("", {1, 2, 9},
-                                 {2.0903f, 4.6493f, 1.6320f, -3.2051f, 4.6975f, 4.7296f, 3.3653f,
-                                  -1.5815f, -2.3832f, 0.9628f, -1.5899f, -2.6820f, 5.7529f, 7.7346f,
-                                  -0.8910f, -2.0151f, 0.1313f, -0.5374f});
-    Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{7}, /*strides=*/{3}, /*pads=*/{3, 3},
-                                     /*ceil_mode=*/true, /*count_include_pad=*/true);
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_18_ceil_count_include_pad_1d", {opset18},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 3x3 kernel, strides (2, 2) with ``ceil_mode = 1`` (mirrors
@@ -213,15 +220,16 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_ceil", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
+                                     /*pads=*/{}, /*ceil_mode=*/true,
+                                     /*count_include_pad=*/false);
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
-                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
-                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
-                                   /*pads=*/{}, /*ceil_mode=*/true,
-                                   /*count_include_pad=*/false);
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_ceil", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Opset-18 clone of the ceil_mode + count_include_pad regression case from
@@ -236,16 +244,17 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
     AddAttribute<int64_t>(node, "count_include_pad", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_18_ceil_count_include_pad_2d", {opset18},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                          {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f,
+                                           10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
+                                              /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
+                                              /*count_include_pad=*/true);
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
-                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
-                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-    Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
-                                     /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
-                                     /*count_include_pad=*/true);
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_18_ceil_count_include_pad_2d", {opset18},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // No-regression opset-18 ceil_mode case: excluding padding must remain
@@ -260,16 +269,17 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
     AddAttribute<int64_t>(node, "count_include_pad", 0);
+    Expect(registry, std::move(node), "test_cc_averagepool_18_ceil_count_exclude_pad_2d", {opset18},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                          {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f,
+                                           10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
+                                              /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
+                                              /*count_include_pad=*/false);
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
-                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
-                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-    Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
-                                     /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
-                                     /*count_include_pad=*/false);
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_18_ceil_count_exclude_pad_2d", {opset18},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 3x3 kernel, strides (3, 3), pads (1, 1, 1, 1), ``ceil_mode = 1`` and
@@ -285,14 +295,15 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
     AddAttribute<int64_t>(node, "count_include_pad", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_ceil_last_window_starts_on_pad",
+           {opset}, [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{3, 3},
+                                            /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
+                                            /*count_include_pad=*/true);
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{3, 3},
-                                   /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
-                                   /*count_include_pad=*/true);
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_ceil_last_window_starts_on_pad", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 3x3 kernel with pads (2, 2, 2, 2), default ``count_include_pad = 0``
@@ -304,15 +315,16 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_pads", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
+                                     /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
+                                     /*count_include_pad=*/false);
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
-                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
-                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
-                                   /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
-                                   /*count_include_pad=*/false);
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_pads", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // 5x5 kernel with pads (2, 2, 2, 2) on a 5x5 input (mirrors
@@ -324,17 +336,18 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
     AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_precomputed_pads", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat(
+                 "", {1, 1, 5, 5}, {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                    10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                    19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
+                                            /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
+                                            /*count_include_pad=*/false);
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
-                                 {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
-                                  10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
-                                  19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
-                                   /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
-                                   /*count_include_pad=*/false);
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_precomputed_pads", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 5x5 kernel with pads (2, 2, 2, 2) and ``count_include_pad = 1`` on a
@@ -347,17 +360,18 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
     AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
     AddAttribute<int64_t>(node, "count_include_pad", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_precomputed_pads_count_include_pad",
+           {opset}, [=]() -> IoData {
+             Tensor x = Tensor::FromFloat(
+                 "", {1, 1, 5, 5}, {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                    10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                    19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
+                                            /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
+                                            /*count_include_pad=*/true);
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
-                                 {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
-                                  10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
-                                  19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
-                                   /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
-                                   /*count_include_pad=*/true);
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_precomputed_pads_count_include_pad", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 2x2 kernel with strides (2, 2) on a 5x5 input (mirrors
@@ -369,15 +383,16 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_precomputed_strides", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat(
+                 "", {1, 1, 5, 5}, {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                    10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                    19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
-                                 {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
-                                  10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
-                                  19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_precomputed_strides", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 3-D AveragePool with a 2x2x2 kernel (mirrors
@@ -388,15 +403,16 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2, 2});
+    Expect(registry, std::move(node), "test_cc_averagepool_3d_default", {opset}, [=]() -> IoData {
+      std::vector<float> data(1 * 1 * 3 * 3 * 3);
+      for (size_t i = 0; i < data.size(); ++i) {
+        data[i] = static_cast<float>(i + 1);
+      }
+      Tensor x = Tensor::FromFloat("", {1, 1, 3, 3, 3}, data);
+      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2, 2});
 
-    std::vector<float> data(1 * 1 * 3 * 3 * 3);
-    for (size_t i = 0; i < data.size(); ++i) {
-      data[i] = static_cast<float>(i + 1);
-    }
-    Tensor x = Tensor::FromFloat("", {1, 1, 3, 3, 3}, data);
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2, 2});
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_3d_default", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Opset-18 clone of the 3-D ceil_mode + count_include_pad regression case
@@ -411,18 +427,19 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1, 1, 1});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
     AddAttribute<int64_t>(node, "count_include_pad", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_18_ceil_count_include_pad_3d", {opset18},
+           [=]() -> IoData {
+             std::vector<float> data(27);
+             for (size_t i = 0; i < data.size(); ++i) {
+               data[i] = static_cast<float>(i + 1);
+             }
+             Tensor x = Tensor::FromFloat("", {1, 1, 3, 3, 3}, data);
+             Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3, 3}, /*strides=*/{2, 2, 2},
+                                              /*pads=*/{1, 1, 1, 1, 1, 1}, /*ceil_mode=*/true,
+                                              /*count_include_pad=*/true);
 
-    std::vector<float> data(27);
-    for (size_t i = 0; i < data.size(); ++i) {
-      data[i] = static_cast<float>(i + 1);
-    }
-    Tensor x = Tensor::FromFloat("", {1, 1, 3, 3, 3}, data);
-    Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3, 3}, /*strides=*/{2, 2, 2},
-                                     /*pads=*/{1, 1, 1, 1, 1, 1}, /*ceil_mode=*/true,
-                                     /*count_include_pad=*/true);
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_18_ceil_count_include_pad_3d", {opset18},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 3x3 kernel with strides (2, 2) and ``auto_pad = SAME_UPPER`` on a
@@ -435,17 +452,19 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", std::string("SAME_UPPER"));
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_precomputed_same_upper", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat(
+                 "", {1, 1, 5, 5}, {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                    10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                    19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+             Tensor y =
+                 average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
+                                     /*ceil_mode=*/false, /*count_include_pad=*/false,
+                                     /*dilations=*/{}, /*auto_pad=*/"SAME_UPPER");
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
-                                 {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
-                                  10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
-                                  19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
-                                   /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                   /*dilations=*/{}, /*auto_pad=*/"SAME_UPPER");
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_precomputed_same_upper", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 2x2 kernel with ``auto_pad = SAME_UPPER`` on a deterministic 1x1x4x4
@@ -457,15 +476,17 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", std::string("SAME_UPPER"));
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_same_upper", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                          {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f,
+                                           10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
+                                            /*ceil_mode=*/false, /*count_include_pad=*/false,
+                                            /*dilations=*/{}, /*auto_pad=*/"SAME_UPPER");
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
-                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
-                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
-                                   /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                   /*dilations=*/{}, /*auto_pad=*/"SAME_UPPER");
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_same_upper", {opset}, "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 2x2 kernel with ``auto_pad = SAME_LOWER`` on a deterministic 1x1x4x4
@@ -477,15 +498,17 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", std::string("SAME_LOWER"));
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_same_lower", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                          {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f,
+                                           10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
+                                            /*ceil_mode=*/false, /*count_include_pad=*/false,
+                                            /*dilations=*/{}, /*auto_pad=*/"SAME_LOWER");
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
-                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
-                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
-                                   /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                   /*dilations=*/{}, /*auto_pad=*/"SAME_LOWER");
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_same_lower", {opset}, "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 2x2 kernel, dilations (2, 2), strides (1, 1), ``ceil_mode = 1`` on a
@@ -499,15 +522,16 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {1, 1});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_dilations", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},
+                                     /*ceil_mode=*/true, /*count_include_pad=*/false,
+                                     /*dilations=*/{2, 2});
 
-    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
-                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
-                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},
-                                   /*ceil_mode=*/true, /*count_include_pad=*/false,
-                                   /*dilations=*/{2, 2});
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_dilations", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // 3x3 kernel, dilations (2, 2), strides (1, 1), ``auto_pad = VALID`` on a
@@ -522,19 +546,22 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {1, 1});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", std::string("VALID"));
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_dilations_valid", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat(
+                 "", {1, 1, 7, 7},
+                 {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,  10.0f,
+                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f, 19.0f, 20.0f,
+                  21.0f, 22.0f, 23.0f, 24.0f, 25.0f, 26.0f, 27.0f, 28.0f, 29.0f, 30.0f,
+                  31.0f, 32.0f, 33.0f, 34.0f, 35.0f, 36.0f, 37.0f, 38.0f, 39.0f, 40.0f,
+                  41.0f, 42.0f, 43.0f, 44.0f, 45.0f, 46.0f, 47.0f, 48.0f, 49.0f});
+             Tensor y =
+                 average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1}, /*pads=*/{},
+                                     /*ceil_mode=*/false, /*count_include_pad=*/false,
+                                     /*dilations=*/{2, 2}, /*auto_pad=*/"VALID");
 
-    Tensor x = Tensor::FromFloat(
-        "", {1, 1, 7, 7},
-        {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,  10.0f, 11.0f, 12.0f, 13.0f,
-         14.0f, 15.0f, 16.0f, 17.0f, 18.0f, 19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f, 26.0f,
-         27.0f, 28.0f, 29.0f, 30.0f, 31.0f, 32.0f, 33.0f, 34.0f, 35.0f, 36.0f, 37.0f, 38.0f, 39.0f,
-         40.0f, 41.0f, 42.0f, 43.0f, 44.0f, 45.0f, 46.0f, 47.0f, 48.0f, 49.0f});
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1}, /*pads=*/{},
-                                   /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                   /*dilations=*/{2, 2}, /*auto_pad=*/"VALID");
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_2d_dilations_valid", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 3-D AveragePool with a 2x2x2 kernel, dilations (2, 2, 2), strides
@@ -549,22 +576,23 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {1, 1, 1});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2, 2});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_3d_dilations_small", {opset},
+           [=]() -> IoData {
+             // Four identical 4x4 planes filled with 1..16.
+             std::vector<float> data;
+             data.reserve(1 * 1 * 4 * 4 * 4);
+             for (int64_t p = 0; p < 4; ++p) {
+               for (int64_t i = 1; i <= 16; ++i) {
+                 data.push_back(static_cast<float>(i));
+               }
+             }
+             Tensor x = Tensor::FromFloat("", {1, 1, 4, 4, 4}, data);
+             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2, 2}, /*strides=*/{1, 1, 1},
+                                            /*pads=*/{}, /*ceil_mode=*/true,
+                                            /*count_include_pad=*/false, /*dilations=*/{2, 2, 2});
 
-    // Four identical 4x4 planes filled with 1..16.
-    std::vector<float> data;
-    data.reserve(1 * 1 * 4 * 4 * 4);
-    for (int64_t p = 0; p < 4; ++p) {
-      for (int64_t i = 1; i <= 16; ++i) {
-        data.push_back(static_cast<float>(i));
-      }
-    }
-    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4, 4}, data);
-    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2, 2}, /*strides=*/{1, 1, 1},
-                                   /*pads=*/{}, /*ceil_mode=*/true,
-                                   /*count_include_pad=*/false, /*dilations=*/{2, 2, 2});
-
-    Expect(node, {x}, {y}, "test_cc_averagepool_3d_dilations_small", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 3-D AveragePool with a 5x5x5 kernel, strides (3, 3, 3) and dilations
@@ -588,15 +616,20 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
         AddAttribute<int64_t>(node, "count_include_pad", cip);
         AddAttribute<int64_t>(node, "ceil_mode", ceil_mode ? 1 : 0);
 
-        Tensor x = Tensor::FromFloat("", {1, 1, 32, 32, 32},
-                                     Randn<float>({1, 1, 32, 32, 32}, /*seed=*/seed++));
-        Tensor y = average_pool_kernel(x, /*kernel_shape=*/{5, 5, 5}, /*strides=*/{3, 3, 3},
-                                       /*pads=*/{}, /*ceil_mode=*/ceil_mode,
-                                       /*count_include_pad=*/cip != 0, /*dilations=*/{2, 2, 2});
-
         std::string name = "test_cc_averagepool_3d_dilations_large_count_include_pad_is_" +
                            std::to_string(cip) + "_ceil_mode_is_" + (ceil_mode ? "True" : "False");
-        Expect(node, {x}, {y}, name, {opset}, "backend-test", registry);
+        const uint64_t captured_seed = seed++;
+        Expect(registry, std::move(node), name, {opset},
+               [average_pool_kernel, cip, ceil_mode, captured_seed]() -> IoData {
+                 Tensor x =
+                     Tensor::FromFloat("", {1, 1, 32, 32, 32},
+                                       Randn<float>({1, 1, 32, 32, 32}, /*seed=*/captured_seed));
+                 Tensor y =
+                     average_pool_kernel(x, /*kernel_shape=*/{5, 5, 5}, /*strides=*/{3, 3, 3},
+                                         /*pads=*/{}, /*ceil_mode=*/ceil_mode,
+                                         /*count_include_pad=*/cip != 0, /*dilations=*/{2, 2, 2});
+                 return IoData{{std::move(x)}, {std::move(y)}};
+               });
       }
     }
   }

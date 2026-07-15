@@ -41,11 +41,12 @@ void EmitArgReduceCase(std::vector<TestCase> &registry, const std::string &op_ty
   if (select_last_index) {
     AddAttribute<int64_t>(node, "select_last_index", 1);
   }
+  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+    Tensor data = Tensor::FromFloat("", data_shape, data_values);
+    Tensor result = arg_kernel(data, include_axis ? axis : 0, keepdims != 0, select_last_index);
 
-  Tensor data = Tensor::FromFloat("", data_shape, data_values);
-  Tensor result = arg_kernel(data, include_axis ? axis : 0, keepdims != 0, select_last_index);
-
-  Expect(node, {data}, {result}, case_name, {opset}, "backend-test", registry);
+    return IoData{{std::move(data)}, {std::move(result)}};
+  });
 }
 
 // Registers the eight upstream ``test_argmax_*`` / ``test_argmin_*`` example

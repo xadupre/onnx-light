@@ -35,11 +35,13 @@ void RegisterSeluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *gamma = node.add_attribute();
     gamma->set_name("gamma");
     gamma->set_type(AttributeProto::FLOAT);
-    gamma->set_f(3.0f);
+    Expect(registry, std::move(node), "test_cc_selu_example", {opset}, [=]() -> IoData {
+      gamma->set_f(3.0f);
 
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = selu_kernel(x, 2.0f, 3.0f);
-    Expect(node, {x}, {y}, "test_cc_selu_example", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = selu_kernel(x, 2.0f, 3.0f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -56,11 +58,13 @@ void RegisterSeluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *gamma = node.add_attribute();
     gamma->set_name("gamma");
     gamma->set_type(AttributeProto::FLOAT);
-    gamma->set_f(3.0f);
+    Expect(registry, std::move(node), "test_cc_selu", {opset}, [=]() -> IoData {
+      gamma->set_f(3.0f);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-    Tensor y = selu_kernel(x, 2.0f, 3.0f);
-    Expect(node, {x}, {y}, "test_cc_selu", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
+      Tensor y = selu_kernel(x, 2.0f, 3.0f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -68,12 +72,13 @@ void RegisterSeluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Selu");
     node.add_input("X");
     node.add_output("Y");
-
-    // No attributes: defaults to ONNX schema defaults
-    // (alpha=1.67326319217681884765625, gamma=1.05070102214813232421875).
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-    Tensor y = selu_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_selu_default", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_selu_default", {opset}, [=]() -> IoData {
+      // No attributes: defaults to ONNX schema defaults
+      // (alpha=1.67326319217681884765625, gamma=1.05070102214813232421875).
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
+      Tensor y = selu_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

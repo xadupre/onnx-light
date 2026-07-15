@@ -46,11 +46,12 @@ void RegisterCosCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Cos");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_cos", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -0.5f, 0.0f, 0.25f, 0.5f, 1.0f});
+      Tensor y = cos_kernel(x);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -0.5f, 0.0f, 0.25f, 0.5f, 1.0f});
-    Tensor y = cos_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_cos", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Cos`` operator (mirror the
@@ -62,10 +63,11 @@ void RegisterCosCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Cos");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = cos_kernel(x);
-    Expect(node, {x}, {y}, "test_cos_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cos_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = cos_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // From Cos.export(): ``test_cos`` uses x = np.random.randn(3, 4, 5).
   {
@@ -73,10 +75,11 @@ void RegisterCosCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Cos");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
-    Tensor y = cos_kernel(x);
-    Expect(node, {x}, {y}, "test_cos", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cos", {opset}, [=]() -> IoData {
+      Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
+      Tensor y = cos_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

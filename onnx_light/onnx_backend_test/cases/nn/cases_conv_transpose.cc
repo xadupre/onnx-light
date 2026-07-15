@@ -73,7 +73,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
-    Expect(node, {X, W}, {Y}, "test_cc_convtranspose", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_convtranspose", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -96,7 +97,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 2, 1, 2});
     AddAttribute<std::vector<int64_t>>(node, "strides", {3, 2});
-    Expect(node, {X, W}, {Y}, "test_cc_convtranspose_pads", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_convtranspose_pads", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -115,8 +117,10 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W", "B"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
-    Expect(node, {X, W, B}, {Y}, "test_cc_convtranspose_with_kernel", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_convtranspose_with_kernel", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(X), std::move(W), std::move(B)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -129,7 +133,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor Y = ct(X, W, B, attrs);
     Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
-    Expect(node, {X, W}, {Y}, "test_cc_convtranspose_1d", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_convtranspose_1d", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -146,7 +151,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor Y = ct(X, W, B, attrs);
     Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
-    Expect(node, {X, W}, {Y}, "test_cc_convtranspose_3d", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_convtranspose_3d", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -168,8 +174,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
-    Expect(node, {X, W}, {Y}, "test_cc_convtranspose_autopad_same", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_convtranspose_autopad_same", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -185,7 +191,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2});
-    Expect(node, {X, W}, {Y}, "test_cc_convtranspose_dilations", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_convtranspose_dilations", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -204,7 +211,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<int64_t>(node, "group", 2);
-    Expect(node, {X, W}, {Y}, "test_cc_convtranspose_group_2", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_convtranspose_group_2", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -226,8 +234,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<int64_t>(node, "group", 2);
-    Expect(node, {X, W}, {Y}, "test_cc_convtranspose_group_2_image_3", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_convtranspose_group_2_image_3", {opset},
+           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
   }
 
   // -------------------------------------------------------------------
@@ -252,8 +260,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
       NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
       AddAttribute<std::vector<int64_t>>(node, "strides", {3, 2});
       AddAttribute<std::vector<int64_t>>(node, "output_shape", {10, 8});
-      Expect(node, {X, W}, {Y}, "test_cc_convtranspose_output_shape", {opset}, "backend-test",
-             registry);
+      Expect(registry, std::move(node), "test_cc_convtranspose_output_shape", {opset},
+             [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
     }
 
     {
@@ -269,8 +277,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
       AddAttribute<std::vector<int64_t>>(node, "output_shape", {10, 8});
       AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
       AddAttribute<std::vector<int64_t>>(node, "output_padding", {1, 1});
-      Expect(node, {X, W}, {Y}, "test_cc_convtranspose_kernel_shape", {opset}, "backend-test",
-             registry);
+      Expect(registry, std::move(node), "test_cc_convtranspose_kernel_shape", {opset},
+             [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
     }
   }
 }

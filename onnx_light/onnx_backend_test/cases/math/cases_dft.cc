@@ -97,49 +97,59 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // --- v20: standard forward DFT (axis = 1).
   {
-    Tensor axis = Tensor::FromInt64("axis", {}, {1});
-    Tensor y = dft_v20(x_real, /*dft_length=*/nullptr, 1, /*onesided=*/false,
-                       /*inverse=*/false);
-    Expect(MakeDFTNodeV20(/*inverse=*/false, /*onesided=*/false), {x_real, axis}, {y},
-           "test_cc_dft", {opset_v20}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV20(/*inverse=*/false, /*onesided=*/false), "test_cc_dft",
+           {opset_v20}, [=]() -> IoData {
+             Tensor axis = Tensor::FromInt64("axis", {}, {1});
+             Tensor y = dft_v20(x_real, /*dft_length=*/nullptr, 1, /*onesided=*/false,
+                                /*inverse=*/false);
+             return IoData{{std::move(x_real), std::move(axis)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtol;
   }
 
   // --- v20: inverse DFT (axis = 1).
   {
-    Tensor axis = Tensor::FromInt64("axis", {}, {1});
-    Tensor y = dft_v20(x_cplx, /*dft_length=*/nullptr, 1, /*onesided=*/false,
-                       /*inverse=*/true);
-    Expect(MakeDFTNodeV20(/*inverse=*/true, /*onesided=*/false), {x_cplx, axis}, {y},
-           "test_cc_dft_inverse", {opset_v20}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV20(/*inverse=*/true, /*onesided=*/false), "test_cc_dft_inverse",
+           {opset_v20}, [=]() -> IoData {
+             Tensor axis = Tensor::FromInt64("axis", {}, {1});
+             Tensor y = dft_v20(x_cplx, /*dft_length=*/nullptr, 1, /*onesided=*/false,
+                                /*inverse=*/true);
+             return IoData{{std::move(x_cplx), std::move(axis)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtol;
   }
 
   // --- v20: RFFT (axis = 1, onesided=1).
   {
-    Tensor axis = Tensor::FromInt64("axis", {}, {1});
-    Tensor y = dft_v20(x_real, /*dft_length=*/nullptr, 1, /*onesided=*/true,
-                       /*inverse=*/false);
-    Expect(MakeDFTNodeV20(/*inverse=*/false, /*onesided=*/true), {x_real, axis}, {y},
-           "test_cc_dft_rfft", {opset_v20}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV20(/*inverse=*/false, /*onesided=*/true), "test_cc_dft_rfft",
+           {opset_v20}, [=]() -> IoData {
+             Tensor axis = Tensor::FromInt64("axis", {}, {1});
+             Tensor y = dft_v20(x_real, /*dft_length=*/nullptr, 1, /*onesided=*/true,
+                                /*inverse=*/false);
+             return IoData{{std::move(x_real), std::move(axis)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtol;
   }
 
   // --- v17: standard forward DFT with axis attribute.
   {
-    Tensor y = dft_v17(x_real, /*dft_length=*/nullptr, 1, /*onesided=*/false,
-                       /*inverse=*/false);
-    Expect(MakeDFTNodeV17(/*axis=*/1, /*inverse=*/false, /*onesided=*/false), {x_real}, {y},
-           "test_cc_dft_opset17", {opset_v17}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV17(/*axis=*/1, /*inverse=*/false, /*onesided=*/false),
+           "test_cc_dft_opset17", {opset_v17}, [=]() -> IoData {
+             Tensor y = dft_v17(x_real, /*dft_length=*/nullptr, 1, /*onesided=*/false,
+                                /*inverse=*/false);
+             return IoData{{std::move(x_real)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtol;
   }
 
   // --- v17: inverse DFT.
   {
-    Tensor y = dft_v17(x_cplx, /*dft_length=*/nullptr, 1, /*onesided=*/false,
-                       /*inverse=*/true);
-    Expect(MakeDFTNodeV17(/*axis=*/1, /*inverse=*/true, /*onesided=*/false), {x_cplx}, {y},
-           "test_cc_dft_inverse_opset17", {opset_v17}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV17(/*axis=*/1, /*inverse=*/true, /*onesided=*/false),
+           "test_cc_dft_inverse_opset17", {opset_v17}, [=]() -> IoData {
+             Tensor y = dft_v17(x_cplx, /*dft_length=*/nullptr, 1, /*onesided=*/false,
+                                /*inverse=*/true);
+             return IoData{{std::move(x_cplx)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtol;
   }
 
@@ -169,75 +179,89 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // --- v20: ``test_cc_dft_axis`` — forward DFT along axis=2.
   {
-    Tensor axis = Tensor::FromInt64("axis", {}, {2});
-    Tensor y = dft_v20(x_real_10x10, /*dft_length=*/nullptr, 2, /*onesided=*/false,
-                       /*inverse=*/false);
-    Expect(MakeDFTNodeV20(/*inverse=*/false, /*onesided=*/false), {x_real_10x10, axis}, {y},
-           "test_cc_dft_axis", {opset_v20}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV20(/*inverse=*/false, /*onesided=*/false), "test_cc_dft_axis",
+           {opset_v20}, [=]() -> IoData {
+             Tensor axis = Tensor::FromInt64("axis", {}, {2});
+             Tensor y = dft_v20(x_real_10x10, /*dft_length=*/nullptr, 2, /*onesided=*/false,
+                                /*inverse=*/false);
+             return IoData{{std::move(x_real_10x10), std::move(axis)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v20: ``test_cc_dft_irfft`` — inverse one-sided DFT producing a real
   // output of length 10 from 6 one-sided complex bins.
   {
-    // Build the one-sided RFFT of ``np.arange(0, 100).reshape(10, 10)`` along
-    // axis=0 by running the forward kernel with onesided=1, axis=1.
-    Tensor x_onesided = dft_v20(x_real_10x10, /*dft_length=*/nullptr, 1, /*onesided=*/true,
-                                /*inverse=*/false);
-    x_onesided.name = "x";
-    Tensor axis = Tensor::FromInt64("axis", {}, {1});
-    Tensor y = dft_v20(x_onesided, /*dft_length=*/nullptr, 1, /*onesided=*/true,
-                       /*inverse=*/true);
-    Expect(MakeDFTNodeV20(/*inverse=*/true, /*onesided=*/true), {x_onesided, axis}, {y},
-           "test_cc_dft_irfft", {opset_v20}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV20(/*inverse=*/true, /*onesided=*/true), "test_cc_dft_irfft",
+           {opset_v20}, [=]() -> IoData {
+             // Build the one-sided RFFT of ``np.arange(0, 100).reshape(10, 10)`` along
+             // axis=0 by running the forward kernel with onesided=1, axis=1.
+             Tensor x_onesided = dft_v20(x_real_10x10, /*dft_length=*/nullptr, 1, /*onesided=*/true,
+                                         /*inverse=*/false);
+             x_onesided.name = "x";
+             Tensor axis = Tensor::FromInt64("axis", {}, {1});
+             Tensor y = dft_v20(x_onesided, /*dft_length=*/nullptr, 1, /*onesided=*/true,
+                                /*inverse=*/true);
+             return IoData{{std::move(x_onesided), std::move(axis)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v19: ``test_cc_dft_opset19`` — forward DFT along axis=1.
   {
-    Tensor y = dft_v19(x_real_10x10, /*dft_length=*/nullptr, 1, /*onesided=*/false,
-                       /*inverse=*/false);
-    Expect(MakeDFTNodeV17(/*axis=*/1, /*inverse=*/false, /*onesided=*/false), {x_real_10x10}, {y},
-           "test_cc_dft_opset19", {opset_v19}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV17(/*axis=*/1, /*inverse=*/false, /*onesided=*/false),
+           "test_cc_dft_opset19", {opset_v19}, [=]() -> IoData {
+             Tensor y = dft_v19(x_real_10x10, /*dft_length=*/nullptr, 1, /*onesided=*/false,
+                                /*inverse=*/false);
+             return IoData{{std::move(x_real_10x10)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v19: ``test_cc_dft_axis_opset19`` — forward DFT along axis=2.
   {
-    Tensor y = dft_v19(x_real_10x10, /*dft_length=*/nullptr, 2, /*onesided=*/false,
-                       /*inverse=*/false);
-    Expect(MakeDFTNodeV17(/*axis=*/2, /*inverse=*/false, /*onesided=*/false), {x_real_10x10}, {y},
-           "test_cc_dft_axis_opset19", {opset_v19}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV17(/*axis=*/2, /*inverse=*/false, /*onesided=*/false),
+           "test_cc_dft_axis_opset19", {opset_v19}, [=]() -> IoData {
+             Tensor y = dft_v19(x_real_10x10, /*dft_length=*/nullptr, 2, /*onesided=*/false,
+                                /*inverse=*/false);
+             return IoData{{std::move(x_real_10x10)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v19: ``test_cc_dft_inverse_opset19`` — inverse DFT along axis=1.
   {
-    Tensor y = dft_v19(x_cplx_10x10, /*dft_length=*/nullptr, 1, /*onesided=*/false,
-                       /*inverse=*/true);
-    Expect(MakeDFTNodeV17(/*axis=*/1, /*inverse=*/true, /*onesided=*/false), {x_cplx_10x10}, {y},
-           "test_cc_dft_inverse_opset19", {opset_v19}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV17(/*axis=*/1, /*inverse=*/true, /*onesided=*/false),
+           "test_cc_dft_inverse_opset19", {opset_v19}, [=]() -> IoData {
+             Tensor y = dft_v19(x_cplx_10x10, /*dft_length=*/nullptr, 1, /*onesided=*/false,
+                                /*inverse=*/true);
+             return IoData{{std::move(x_cplx_10x10)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v19: ``test_cc_dft_rfft_opset19`` — one-sided forward DFT (RFFT).
   {
-    Tensor y = dft_v19(x_real_10x10, /*dft_length=*/nullptr, 1, /*onesided=*/true,
-                       /*inverse=*/false);
-    Expect(MakeDFTNodeV17(/*axis=*/1, /*inverse=*/false, /*onesided=*/true), {x_real_10x10}, {y},
-           "test_cc_dft_rfft_opset19", {opset_v19}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV17(/*axis=*/1, /*inverse=*/false, /*onesided=*/true),
+           "test_cc_dft_rfft_opset19", {opset_v19}, [=]() -> IoData {
+             Tensor y = dft_v19(x_real_10x10, /*dft_length=*/nullptr, 1, /*onesided=*/true,
+                                /*inverse=*/false);
+             return IoData{{std::move(x_real_10x10)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v19: ``test_cc_dft_irfft_opset19`` — inverse one-sided DFT (IRFFT).
   {
-    Tensor x_onesided = dft_v19(x_real_10x10, /*dft_length=*/nullptr, 1, /*onesided=*/true,
-                                /*inverse=*/false);
-    x_onesided.name = "x";
-    Tensor y = dft_v19(x_onesided, /*dft_length=*/nullptr, 1, /*onesided=*/true,
-                       /*inverse=*/true);
-    Expect(MakeDFTNodeV17(/*axis=*/1, /*inverse=*/true, /*onesided=*/true), {x_onesided}, {y},
-           "test_cc_dft_irfft_opset19", {opset_v19}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV17(/*axis=*/1, /*inverse=*/true, /*onesided=*/true),
+           "test_cc_dft_irfft_opset19", {opset_v19}, [=]() -> IoData {
+             Tensor x_onesided = dft_v19(x_real_10x10, /*dft_length=*/nullptr, 1, /*onesided=*/true,
+                                         /*inverse=*/false);
+             x_onesided.name = "x";
+             Tensor y = dft_v19(x_onesided, /*dft_length=*/nullptr, 1, /*onesided=*/true,
+                                /*inverse=*/true);
+             return IoData{{std::move(x_onesided)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtolLarge;
   }
 
@@ -246,20 +270,26 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
   // Input: one-sided RFFT of [1,2,3,4] => X[0]=10+0i, X[1]=-2+2i, X[2]=-2+0i.
   // Expected output: the original signal [1,2,3,4].
   {
-    Tensor x_onesided = Tensor::FromFloat("x", {1, 3, 2}, {10.0f, 0.0f, -2.0f, 2.0f, -2.0f, 0.0f});
-    Tensor axis = Tensor::FromInt64("axis", {}, {1});
-    Tensor y = Tensor::FromFloat("y", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Expect(MakeDFTNodeV20(/*inverse=*/true, /*onesided=*/true), {x_onesided, axis}, {y},
-           "test_cc_dft_irfft_roundtrip", {opset_v20}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV20(/*inverse=*/true, /*onesided=*/true),
+           "test_cc_dft_irfft_roundtrip", {opset_v20}, [=]() -> IoData {
+             Tensor x_onesided =
+                 Tensor::FromFloat("x", {1, 3, 2}, {10.0f, 0.0f, -2.0f, 2.0f, -2.0f, 0.0f});
+             Tensor axis = Tensor::FromInt64("axis", {}, {1});
+             Tensor y = Tensor::FromFloat("y", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+             return IoData{{std::move(x_onesided), std::move(axis)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtol;
   }
 
   // --- v19: ``test_cc_dft_irfft_roundtrip_opset19`` — same with v17 API.
   {
-    Tensor x_onesided = Tensor::FromFloat("x", {1, 3, 2}, {10.0f, 0.0f, -2.0f, 2.0f, -2.0f, 0.0f});
-    Tensor y = Tensor::FromFloat("y", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Expect(MakeDFTNodeV17(/*axis=*/1, /*inverse=*/true, /*onesided=*/true), {x_onesided}, {y},
-           "test_cc_dft_irfft_roundtrip_opset19", {opset_v19}, "backend-test", registry);
+    Expect(registry, MakeDFTNodeV17(/*axis=*/1, /*inverse=*/true, /*onesided=*/true),
+           "test_cc_dft_irfft_roundtrip_opset19", {opset_v19}, [=]() -> IoData {
+             Tensor x_onesided =
+                 Tensor::FromFloat("x", {1, 3, 2}, {10.0f, 0.0f, -2.0f, 2.0f, -2.0f, 0.0f});
+             Tensor y = Tensor::FromFloat("y", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+             return IoData{{std::move(x_onesided)}, {std::move(y)}};
+           });
     registry.back().atol = kDFTAtol;
   }
 }

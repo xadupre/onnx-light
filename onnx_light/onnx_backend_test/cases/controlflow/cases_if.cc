@@ -104,17 +104,21 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   // cond = true → output is the then-branch value.
   {
     NodeProto node = make_node();
-    Tensor cond("", DataType::BOOL, {}, {1});
-    Tensor res = if_kernel(cond, then_value, else_value);
-    Expect(node, {cond}, {res}, "test_cc_if", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_if", {opset}, [=]() -> IoData {
+      Tensor cond("", DataType::BOOL, {}, {1});
+      Tensor res = if_kernel(cond, then_value, else_value);
+      return IoData{{std::move(cond)}, {std::move(res)}};
+    });
   }
 
   // cond = false → output is the else-branch value.
   {
     NodeProto node = make_node();
-    Tensor cond("", DataType::BOOL, {}, {0});
-    Tensor res = if_kernel(cond, then_value, else_value);
-    Expect(node, {cond}, {res}, "test_cc_if_else", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_if_else", {opset}, [=]() -> IoData {
+      Tensor cond("", DataType::BOOL, {}, {0});
+      Tensor res = if_kernel(cond, then_value, else_value);
+      return IoData{{std::move(cond)}, {std::move(res)}};
+    });
   }
 
   // Multi-output If: each branch declares two outputs. The returning kernel
@@ -210,8 +214,8 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
 
     Tensor cond("", DataType::BOOL, {}, {1});
     // cond = true → outputs come from the then-branch.
-    Expect(node, {cond}, {then_a, then_b}, "test_cc_if_multi_output", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_if_multi_output", {opset},
+           [cond, then_a, then_b]() -> IoData { return IoData{{cond}, {then_a, then_b}}; });
   }
 
   // -------------------------------------------------------------------------

@@ -2302,14 +2302,15 @@ void RegisterImageDecoderCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("output");
     AddAttribute<std::string>(node, "pixel_format", e.pixel_format);
 
-    std::vector<uint8_t> in_bytes(e.encoded, e.encoded + e.encoded_size);
-    Tensor in_tensor = Tensor::FromUint8("", {e.encoded_size}, in_bytes);
+    Expect(registry, std::move(node), e.name, {opset}, [e]() -> IoData {
+      std::vector<uint8_t> in_bytes(e.encoded, e.encoded + e.encoded_size);
+      Tensor in_tensor = Tensor::FromUint8("", {e.encoded_size}, in_bytes);
 
-    const int64_t out_count = e.height * e.width * e.channels;
-    std::vector<uint8_t> out_bytes(e.expected, e.expected + out_count);
-    Tensor out_tensor = Tensor::FromUint8("", {e.height, e.width, e.channels}, out_bytes);
-
-    Expect(node, {in_tensor}, {out_tensor}, e.name, {opset}, "backend-test", registry);
+      const int64_t out_count = e.height * e.width * e.channels;
+      std::vector<uint8_t> out_bytes(e.expected, e.expected + out_count);
+      Tensor out_tensor = Tensor::FromUint8("", {e.height, e.width, e.channels}, out_bytes);
+      return IoData{{std::move(in_tensor)}, {std::move(out_tensor)}};
+    });
   }
 }
 

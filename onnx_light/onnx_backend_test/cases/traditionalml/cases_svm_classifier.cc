@@ -139,12 +139,13 @@ void RegisterSVMClassifierCases(std::vector<TestCase> &registry, TestMode mode) 
   labels->add_ints(static_cast<int64_t>(0));
   labels->add_ints(static_cast<int64_t>(1));
 
-  Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 1.0f, 0.0f, 3.0f});
-  auto yz = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, -1.0f}, {0.0f}, {1, 1},
-                                  {0, 1}, "LINEAR", 0.0f, 0.0f, 0.0f);
-
-  Expect(node, {x}, {yz.first, yz.second}, "test_cc_svmclassifier_int64_binary",
-         {default_opset, opset}, "backend-test", registry);
+  Expect(registry, std::move(node), "test_cc_svmclassifier_int64_binary", {default_opset, opset},
+         [=]() -> IoData {
+           Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 1.0f, 0.0f, 3.0f});
+           auto yz = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, -1.0f}, {0.0f},
+                                           {1, 1}, {0, 1}, "LINEAR", 0.0f, 0.0f, 0.0f);
+           return IoData{{std::move(x)}, {std::move(yz.first), std::move(yz.second)}};
+         });
 }
 
 } // namespace onnx_backend_test

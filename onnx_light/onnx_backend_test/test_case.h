@@ -380,6 +380,12 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
 struct IoData {
   std::vector<Tensor> inputs;
   std::vector<Tensor> outputs;
+  /// Map-typed inputs (e.g. for CastMap, DictVectorizer). Each ``Map::name``
+  /// must match a non-empty entry in the node's ``input`` list. When present,
+  /// ``BuildSingleNodeCase`` declares the corresponding graph input with a
+  /// ``map(key_type, value_type)`` TypeProto and stores the Map in the
+  /// ``DataSet::maps`` collection so the runtime can retrieve it by name.
+  std::vector<Map> maps;
 };
 
 /**
@@ -389,13 +395,22 @@ struct IoData {
  * materialized. Only the inputs and outputs whose name is non-empty in the
  * node are wired into the graph.
  *
+ * Map-typed graph inputs are supplied via ``maps``: each ``Map::name`` must
+ * match a non-empty entry in ``node.input``, is declared with a
+ * ``map(key_type, value_type)`` TypeProto in the graph, and is stored in
+ * ``DataSet::maps`` so the runtime can retrieve it by name. The remaining
+ * (tensor-typed) inputs come from ``inputs`` in positional order. The sum
+ * ``inputs.size() + maps.size()`` must equal the number of non-empty entries
+ * in ``node.input``.
+ *
  * @throws std::invalid_argument under the same conditions as :func:`Expect`.
  */
 BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
                               std::vector<Tensor> outputs, const std::string &name,
                               const std::vector<OpsetId> &opset_imports,
                               const std::string &producer_name,
-                              const std::vector<TypeSpec> &output_types = {});
+                              const std::vector<TypeSpec> &output_types = {},
+                              std::vector<Map> maps = {});
 
 /**
  * Appends a *lazy* single-node :ref:`TestCase` whose inputs/outputs are
@@ -427,6 +442,20 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<int64_t> out_counts, std::function<IoData()> make_io,
             std::string producer_name = "backend-test", std::string tag = "",
             std::vector<TypeSpec> output_types = {});
+
+/**
+ * Convenience overload of the lazy :func:`Expect` that omits the element-count
+ * vectors. Equivalent to calling the six-parameter lazy overload with empty
+ * ``in_counts`` / ``out_counts``.  Use for small test cases where pre-declaring
+ * element counts adds no value over deriving them from the materialised tensors.
+ */
+inline void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
+                   std::vector<OpsetId> opset_imports, std::function<IoData()> make_io,
+                   std::string producer_name = "backend-test", std::string tag = "",
+                   std::vector<TypeSpec> output_types = {}) {
+  Expect(registry, std::move(node), std::move(name), std::move(opset_imports), {}, {},
+         std::move(make_io), std::move(producer_name), std::move(tag), std::move(output_types));
+}
 
 /// Function pointer registering one or more :ref:`TestCase` entries into the
 /// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.

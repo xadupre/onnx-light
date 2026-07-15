@@ -92,8 +92,10 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeDeformConvNode({"X", "W", "offset"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "pads", {0, 0, 0, 0});
-    Expect(node, {X, W, offset}, {Y}, "test_cc_basic_deform_conv_without_padding", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_basic_deform_conv_without_padding", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(X), std::move(W), std::move(offset)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -116,8 +118,10 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeDeformConvNode({"X", "W", "offset"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
-    Expect(node, {X, W, offset}, {Y}, "test_cc_basic_deform_conv_with_padding", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_basic_deform_conv_with_padding", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(X), std::move(W), std::move(offset)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -142,8 +146,12 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeDeformConvNode({"X", "W", "offset", "B", "mask"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "pads", {0, 0, 0, 0});
-    Expect(node, {X, W, offset, B, mask}, {Y}, "test_cc_deform_conv_with_mask_bias", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_deform_conv_with_mask_bias", {opset},
+           [=]() -> IoData {
+             return IoData{
+                 {std::move(X), std::move(W), std::move(offset), std::move(B), std::move(mask)},
+                 {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -173,8 +181,10 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "pads", {0, 0, 0, 0});
     AddAttribute<int64_t>(node, "offset_group", 2);
-    Expect(node, {X, W, offset}, {Y}, "test_cc_deform_conv_with_multiple_offset_groups", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_deform_conv_with_multiple_offset_groups", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(X), std::move(W), std::move(offset)}, {std::move(Y)}};
+           });
   }
 }
 

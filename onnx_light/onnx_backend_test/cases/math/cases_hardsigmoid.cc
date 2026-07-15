@@ -53,11 +53,13 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *beta = node.add_attribute();
     beta->set_name("beta");
     beta->set_type(AttributeProto::FLOAT);
-    beta->set_f(0.6f);
+    Expect(registry, std::move(node), "test_cc_hardsigmoid_example", {opset}, [=]() -> IoData {
+      beta->set_f(0.6f);
 
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
-    Expect(node, {x}, {y}, "test_cc_hardsigmoid_example", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -74,11 +76,13 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *beta = node.add_attribute();
     beta->set_name("beta");
     beta->set_type(AttributeProto::FLOAT);
-    beta->set_f(0.6f);
+    Expect(registry, std::move(node), "test_cc_hardsigmoid", {opset}, [=]() -> IoData {
+      beta->set_f(0.6f);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, -0.5f, 0.5f, 1.0f, 3.0f});
-    Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
-    Expect(node, {x}, {y}, "test_cc_hardsigmoid", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, -0.5f, 0.5f, 1.0f, 3.0f});
+      Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -86,11 +90,12 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("HardSigmoid");
     node.add_input("X");
     node.add_output("Y");
-
-    // No alpha/beta attributes: defaults to 0.2 and 0.5.
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, -0.5f, 0.5f, 1.0f, 3.0f});
-    Tensor y = hard_sigmoid_kernel(x, 0.2f, 0.5f);
-    Expect(node, {x}, {y}, "test_cc_hardsigmoid_default", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_hardsigmoid_default", {opset}, [=]() -> IoData {
+      // No alpha/beta attributes: defaults to 0.2 and 0.5.
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, -0.5f, 0.5f, 1.0f, 3.0f});
+      Tensor y = hard_sigmoid_kernel(x, 0.2f, 0.5f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

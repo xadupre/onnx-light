@@ -41,11 +41,12 @@ void RegisterHannWindowCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("HannWindow");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_hannwindow", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromInt32("", {}, {kSize});
+      Tensor y = hann_kernel(x, /*periodic=*/true);
 
-    Tensor x = Tensor::FromInt32("", {}, {kSize});
-    Tensor y = hann_kernel(x, /*periodic=*/true);
-
-    Expect(node, {x}, {y}, "test_cc_hannwindow", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Symmetric variant (periodic = 0).
@@ -59,11 +60,12 @@ void RegisterHannWindowCases(std::vector<TestCase> &registry, TestMode mode) {
     attr->set_name("periodic");
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(0);
+    Expect(registry, std::move(node), "test_cc_hannwindow_symmetric", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromInt32("", {}, {kSize});
+      Tensor y = hann_kernel(x, /*periodic=*/false);
 
-    Tensor x = Tensor::FromInt32("", {}, {kSize});
-    Tensor y = hann_kernel(x, /*periodic=*/false);
-
-    Expect(node, {x}, {y}, "test_cc_hannwindow_symmetric", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

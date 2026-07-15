@@ -52,13 +52,14 @@ void RegisterMaxCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_1");
     node.add_input("data_2");
     node.add_output("result");
+    Expect(registry, std::move(node), "test_max_example", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
+      Tensor x1 = Tensor::FromFloat("", {3}, {1.0f, 4.0f, 4.0f});
+      Tensor x2 = Tensor::FromFloat("", {3}, {2.0f, 5.0f, 3.0f});
+      Tensor z = max_kernel({x0, x1, x2});
 
-    Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
-    Tensor x1 = Tensor::FromFloat("", {3}, {1.0f, 4.0f, 4.0f});
-    Tensor x2 = Tensor::FromFloat("", {3}, {2.0f, 5.0f, 3.0f});
-    Tensor z = max_kernel({x0, x1, x2});
-
-    Expect(node, {x0, x1, x2}, {z}, "test_max_example", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0), std::move(x1), std::move(x2)}, {std::move(z)}};
+    });
   }
 
   // ``Max.export()`` -- single-input variant ``test_max_one_input``.
@@ -67,11 +68,12 @@ void RegisterMaxCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Max");
     node.add_input("data_0");
     node.add_output("result");
+    Expect(registry, std::move(node), "test_max_one_input", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
+      Tensor z = max_kernel({x0});
 
-    Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
-    Tensor z = max_kernel({x0});
-
-    Expect(node, {x0}, {z}, "test_max_one_input", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0)}, {std::move(z)}};
+    });
   }
 
   // ``Max.export()`` -- two-input variant ``test_max_two_inputs``.
@@ -81,42 +83,88 @@ void RegisterMaxCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_0");
     node.add_input("data_1");
     node.add_output("result");
+    Expect(registry, std::move(node), "test_max_two_inputs", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
+      Tensor x1 = Tensor::FromFloat("", {3}, {1.0f, 4.0f, 4.0f});
+      Tensor z = max_kernel({x0, x1});
 
-    Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
-    Tensor x1 = Tensor::FromFloat("", {3}, {1.0f, 4.0f, 4.0f});
-    Tensor z = max_kernel({x0, x1});
-
-    Expect(node, {x0, x1}, {z}, "test_max_two_inputs", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+    });
   }
 
   // ``Max.export_max_all_numeric_types()`` -- one two-input case per numeric
   // dtype supported by ``kernel::Max``.
-  struct DtypeCase {
-    const char *name;
-    Tensor x0;
-    Tensor x1;
-  };
-  const std::vector<DtypeCase> dtype_cases = {
-      {"test_max_float32", Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f}),
-       Tensor::FromFloat("", {3}, {1.0f, 4.0f, 4.0f})},
-      {"test_max_float64", Tensor::FromDouble("", {3}, {3.0, 2.0, 1.0}),
-       Tensor::FromDouble("", {3}, {1.0, 4.0, 4.0})},
-      {"test_max_int8", Tensor::FromInt8("", {3}, {int8_t{3}, int8_t{2}, int8_t{1}}),
-       Tensor::FromInt8("", {3}, {int8_t{1}, int8_t{4}, int8_t{4}})},
-      {"test_max_int16", Tensor::FromInt16("", {3}, {int16_t{3}, int16_t{2}, int16_t{1}}),
-       Tensor::FromInt16("", {3}, {int16_t{1}, int16_t{4}, int16_t{4}})},
-      {"test_max_int32", Tensor::FromInt32("", {3}, {3, 2, 1}),
-       Tensor::FromInt32("", {3}, {1, 4, 4})},
-      {"test_max_int64", Tensor::FromInt64("", {3}, {int64_t{3}, int64_t{2}, int64_t{1}}),
-       Tensor::FromInt64("", {3}, {int64_t{1}, int64_t{4}, int64_t{4}})},
-      {"test_max_uint8", Tensor::FromUint8("", {3}, {uint8_t{3}, uint8_t{2}, uint8_t{1}}),
-       Tensor::FromUint8("", {3}, {uint8_t{1}, uint8_t{4}, uint8_t{4}})},
-      {"test_max_uint16", Tensor::FromUint16("", {3}, {uint16_t{3}, uint16_t{2}, uint16_t{1}}),
-       Tensor::FromUint16("", {3}, {uint16_t{1}, uint16_t{4}, uint16_t{4}})},
-      {"test_max_uint32", Tensor::FromUint32("", {3}, {uint32_t{3}, uint32_t{2}, uint32_t{1}}),
-       Tensor::FromUint32("", {3}, {uint32_t{1}, uint32_t{4}, uint32_t{4}})},
-      {"test_max_uint64", Tensor::FromUint64("", {3}, {uint64_t{3}, uint64_t{2}, uint64_t{1}}),
-       Tensor::FromUint64("", {3}, {uint64_t{1}, uint64_t{4}, uint64_t{4}})},
+  const std::vector<std::pair<std::string, std::function<IoData()>>> dtype_cases = {
+      {"test_max_float32",
+       [=]() -> IoData {
+         auto x0 = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
+         auto x1 = Tensor::FromFloat("", {3}, {1.0f, 4.0f, 4.0f});
+         Tensor z = max_kernel({x0, x1});
+         return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+       }},
+      {"test_max_float64",
+       [=]() -> IoData {
+         auto x0 = Tensor::FromDouble("", {3}, {3.0, 2.0, 1.0});
+         auto x1 = Tensor::FromDouble("", {3}, {1.0, 4.0, 4.0});
+         Tensor z = max_kernel({x0, x1});
+         return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+       }},
+      {"test_max_int8",
+       [=]() -> IoData {
+         auto x0 = Tensor::FromInt8("", {3}, {int8_t{3}, int8_t{2}, int8_t{1}});
+         auto x1 = Tensor::FromInt8("", {3}, {int8_t{1}, int8_t{4}, int8_t{4}});
+         Tensor z = max_kernel({x0, x1});
+         return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+       }},
+      {"test_max_int16",
+       [=]() -> IoData {
+         auto x0 = Tensor::FromInt16("", {3}, {int16_t{3}, int16_t{2}, int16_t{1}});
+         auto x1 = Tensor::FromInt16("", {3}, {int16_t{1}, int16_t{4}, int16_t{4}});
+         Tensor z = max_kernel({x0, x1});
+         return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+       }},
+      {"test_max_int32",
+       [=]() -> IoData {
+         auto x0 = Tensor::FromInt32("", {3}, {3, 2, 1});
+         auto x1 = Tensor::FromInt32("", {3}, {1, 4, 4});
+         Tensor z = max_kernel({x0, x1});
+         return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+       }},
+      {"test_max_int64",
+       [=]() -> IoData {
+         auto x0 = Tensor::FromInt64("", {3}, {int64_t{3}, int64_t{2}, int64_t{1}});
+         auto x1 = Tensor::FromInt64("", {3}, {int64_t{1}, int64_t{4}, int64_t{4}});
+         Tensor z = max_kernel({x0, x1});
+         return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+       }},
+      {"test_max_uint8",
+       [=]() -> IoData {
+         auto x0 = Tensor::FromUint8("", {3}, {uint8_t{3}, uint8_t{2}, uint8_t{1}});
+         auto x1 = Tensor::FromUint8("", {3}, {uint8_t{1}, uint8_t{4}, uint8_t{4}});
+         Tensor z = max_kernel({x0, x1});
+         return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+       }},
+      {"test_max_uint16",
+       [=]() -> IoData {
+         auto x0 = Tensor::FromUint16("", {3}, {uint16_t{3}, uint16_t{2}, uint16_t{1}});
+         auto x1 = Tensor::FromUint16("", {3}, {uint16_t{1}, uint16_t{4}, uint16_t{4}});
+         Tensor z = max_kernel({x0, x1});
+         return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+       }},
+      {"test_max_uint32",
+       [=]() -> IoData {
+         auto x0 = Tensor::FromUint32("", {3}, {uint32_t{3}, uint32_t{2}, uint32_t{1}});
+         auto x1 = Tensor::FromUint32("", {3}, {uint32_t{1}, uint32_t{4}, uint32_t{4}});
+         Tensor z = max_kernel({x0, x1});
+         return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+       }},
+      {"test_max_uint64",
+       [=]() -> IoData {
+         auto x0 = Tensor::FromUint64("", {3}, {uint64_t{3}, uint64_t{2}, uint64_t{1}});
+         auto x1 = Tensor::FromUint64("", {3}, {uint64_t{1}, uint64_t{4}, uint64_t{4}});
+         Tensor z = max_kernel({x0, x1});
+         return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+       }},
   };
 
   NodeProto two_input_node;
@@ -125,9 +173,8 @@ void RegisterMaxCases(std::vector<TestCase> &registry, TestMode mode) {
   two_input_node.add_input("data_1");
   two_input_node.add_output("result");
 
-  for (const auto &c : dtype_cases) {
-    Tensor z = max_kernel({c.x0, c.x1});
-    Expect(two_input_node, {c.x0, c.x1}, {z}, c.name, {opset}, "backend-test", registry);
+  for (const auto &[name, make_io] : dtype_cases) {
+    Expect(registry, two_input_node, name, {opset}, make_io);
   }
 
   // Broadcasting variant: rank-2 vs scalar.
@@ -137,12 +184,13 @@ void RegisterMaxCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_0");
     node.add_input("data_1");
     node.add_output("result");
+    Expect(registry, std::move(node), "test_cc_max_bcast", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor x1 = Tensor::FromFloat("", {}, {2.5f});
+      Tensor z = max_kernel({x0, x1});
 
-    Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor x1 = Tensor::FromFloat("", {}, {2.5f});
-    Tensor z = max_kernel({x0, x1});
-
-    Expect(node, {x0, x1}, {z}, "test_cc_max_bcast", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+    });
   }
 
   // ``test_max_float16`` — Max on FLOAT16 inputs with hardcoded expected.
@@ -152,11 +200,12 @@ void RegisterMaxCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_0");
     node.add_input("data_1");
     node.add_output("result");
-
-    Tensor x0 = kernel::MakeFloat16Tensor("", {3}, {1.0f, 4.0f, 3.0f});
-    Tensor x1 = kernel::MakeFloat16Tensor("", {3}, {3.0f, 2.0f, 5.0f});
-    Tensor expected = kernel::MakeFloat16Tensor("", {3}, {3.0f, 4.0f, 5.0f});
-    Expect(node, {x0, x1}, {expected}, "test_max_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_max_float16", {opset}, [=]() -> IoData {
+      Tensor x0 = kernel::MakeFloat16Tensor("", {3}, {1.0f, 4.0f, 3.0f});
+      Tensor x1 = kernel::MakeFloat16Tensor("", {3}, {3.0f, 2.0f, 5.0f});
+      Tensor expected = kernel::MakeFloat16Tensor("", {3}, {3.0f, 4.0f, 5.0f});
+      return IoData{{std::move(x0), std::move(x1)}, {std::move(expected)}};
+    });
   }
 }
 

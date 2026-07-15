@@ -61,25 +61,31 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_scatter_without_axis — mirrors upstream ``test_scatter_without_axis``.
   {
-    Tensor data = Tensor::FromFloat("", {3, 3}, {0, 0, 0, 0, 0, 0, 0, 0, 0});
-    Tensor indices = Tensor::FromInt64("", {2, 3}, {1, 0, 2, 0, 2, 1});
-    Tensor updates = Tensor::FromFloat("", {2, 3}, {1.0f, 1.1f, 1.2f, 2.0f, 2.1f, 2.2f});
-    kernel::Scatter::Attributes attrs;
-    Tensor output = scatter_kernel(data, indices, updates, attrs);
-    Expect(MakeScatterNode(0, /*set_axis_attr=*/false), {data, indices, updates}, {output},
-           "test_cc_scatter_without_axis", {opset}, "backend-test", registry);
+    Expect(registry, MakeScatterNode(0, /*set_axis_attr=*/false), "test_cc_scatter_without_axis",
+           {opset}, [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {3, 3}, {0, 0, 0, 0, 0, 0, 0, 0, 0});
+             Tensor indices = Tensor::FromInt64("", {2, 3}, {1, 0, 2, 0, 2, 1});
+             Tensor updates = Tensor::FromFloat("", {2, 3}, {1.0f, 1.1f, 1.2f, 2.0f, 2.1f, 2.2f});
+             kernel::Scatter::Attributes attrs;
+             Tensor output = scatter_kernel(data, indices, updates, attrs);
+             return IoData{{std::move(data), std::move(indices), std::move(updates)},
+                           {std::move(output)}};
+           });
   }
 
   // test_cc_scatter_with_axis — mirrors upstream ``test_scatter_with_axis``.
   {
-    Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
-    Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 3});
-    Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
-    kernel::Scatter::Attributes attrs;
-    attrs.axis = 1;
-    Tensor output = scatter_kernel(data, indices, updates, attrs);
-    Expect(MakeScatterNode(1, /*set_axis_attr=*/true), {data, indices, updates}, {output},
-           "test_cc_scatter_with_axis", {opset}, "backend-test", registry);
+    Expect(registry, MakeScatterNode(1, /*set_axis_attr=*/true), "test_cc_scatter_with_axis",
+           {opset}, [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+             Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 3});
+             Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
+             kernel::Scatter::Attributes attrs;
+             attrs.axis = 1;
+             Tensor output = scatter_kernel(data, indices, updates, attrs);
+             return IoData{{std::move(data), std::move(indices), std::move(updates)},
+                           {std::move(output)}};
+           });
   }
 }
 

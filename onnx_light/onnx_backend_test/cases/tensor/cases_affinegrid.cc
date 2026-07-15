@@ -103,14 +103,15 @@ void RegisterAffineGridCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("size");
     node.add_output("grid");
     AddAttribute<int64_t>(node, "align_corners", align_corners);
+    Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+      Tensor size = Tensor::FromInt64("", {static_cast<int64_t>(size_dims.size())}, size_dims);
 
-    Tensor size = Tensor::FromInt64("", {static_cast<int64_t>(size_dims.size())}, size_dims);
+      kernel::AffineGrid::Attributes attrs;
+      attrs.align_corners = align_corners;
+      Tensor grid = ag_kernel(theta, size, attrs);
 
-    kernel::AffineGrid::Attributes attrs;
-    attrs.align_corners = align_corners;
-    Tensor grid = ag_kernel(theta, size, attrs);
-
-    Expect(node, {theta, size}, {grid}, case_name, {opset}, "backend-test", registry);
+      return IoData{{std::move(theta), std::move(size)}, {std::move(grid)}};
+    });
   };
 
   // Upstream ``test_affine_grid_2d`` cases: theta=(2,2,3), size=(N=2, C=3,

@@ -63,17 +63,18 @@ void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry, TestMode mode
   node.add_input("upper_edge_hertz");
   node.add_output("output");
 
-  Tensor num_mel_bins = Tensor::FromInt32("", {}, {kNumMelBins});
-  Tensor dft_length = Tensor::FromInt32("", {}, {kDftLength});
-  Tensor sample_rate = Tensor::FromInt32("", {}, {kSampleRate});
-  Tensor lower_edge_hertz = Tensor::FromFloat("", {}, {kLowerEdgeHertz});
-  Tensor upper_edge_hertz = Tensor::FromFloat("", {}, {kUpperEdgeHertz});
-
-  Tensor output = mel_kernel(num_mel_bins, dft_length, sample_rate, lower_edge_hertz,
-                             upper_edge_hertz, DataType::FLOAT);
-
-  Expect(node, {num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz},
-         {output}, "test_cc_melweightmatrix", {opset}, "backend-test", registry);
+  Expect(registry, std::move(node), "test_cc_melweightmatrix", {opset}, [=]() -> IoData {
+    Tensor num_mel_bins = Tensor::FromInt32("", {}, {kNumMelBins});
+    Tensor dft_length = Tensor::FromInt32("", {}, {kDftLength});
+    Tensor sample_rate = Tensor::FromInt32("", {}, {kSampleRate});
+    Tensor lower_edge_hertz = Tensor::FromFloat("", {}, {kLowerEdgeHertz});
+    Tensor upper_edge_hertz = Tensor::FromFloat("", {}, {kUpperEdgeHertz});
+    Tensor output = mel_kernel(num_mel_bins, dft_length, sample_rate, lower_edge_hertz,
+                               upper_edge_hertz, DataType::FLOAT);
+    return IoData{{std::move(num_mel_bins), std::move(dft_length), std::move(sample_rate),
+                   std::move(lower_edge_hertz), std::move(upper_edge_hertz)},
+                  {std::move(output)}};
+  });
 }
 
 } // namespace onnx_backend_test

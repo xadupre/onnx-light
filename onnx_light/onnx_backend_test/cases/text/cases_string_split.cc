@@ -49,12 +49,12 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("substrings");
     node.add_output("length");
     AddAttribute(node, "delimiter", std::string("."));
+    Expect(registry, std::move(node), "test_cc_string_split_basic", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromStrings("", {2}, {"abc.com", "def.net"});
+      auto [substrings, length] = string_split(x, ".");
 
-    Tensor x = Tensor::FromStrings("", {2}, {"abc.com", "def.net"});
-    auto [substrings, length] = string_split(x, ".");
-
-    Expect(node, {x}, {std::move(substrings), std::move(length)}, "test_cc_string_split_basic",
-           {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
+    });
   }
 
   {
@@ -64,13 +64,13 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("substrings");
     node.add_output("length");
     AddAttribute(node, "maxsplit", static_cast<int64_t>(2));
+    Expect(registry, std::move(node), "test_cc_string_split_maxsplit", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromStrings("", {2, 2},
+                                     {"hello world", "def.net", "o n n x", "the quick brown fox"});
+      auto [substrings, length] = string_split(x, "", 2);
 
-    Tensor x = Tensor::FromStrings("", {2, 2},
-                                   {"hello world", "def.net", "o n n x", "the quick brown fox"});
-    auto [substrings, length] = string_split(x, "", 2);
-
-    Expect(node, {x}, {std::move(substrings), std::move(length)}, "test_cc_string_split_maxsplit",
-           {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
+    });
   }
 
   {
@@ -80,12 +80,13 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("substrings");
     node.add_output("length");
     AddAttribute(node, "delimiter", std::string("-"));
+    Expect(registry, std::move(node), "test_cc_string_split_consecutive_delimiters", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {2}, {"o-n-n--x-", "o-n----nx"});
+             auto [substrings, length] = string_split(x, "-");
 
-    Tensor x = Tensor::FromStrings("", {2}, {"o-n-n--x-", "o-n----nx"});
-    auto [substrings, length] = string_split(x, "-");
-
-    Expect(node, {x}, {std::move(substrings), std::move(length)},
-           "test_cc_string_split_consecutive_delimiters", {opset}, "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
+           });
   }
 
   // Keep both variants: ONNX upstream exercises both an explicit empty-string
@@ -104,12 +105,12 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
       AddAttribute(node, "delimiter", std::string());
     }
 
-    Tensor x =
-        Tensor::FromStrings("", {3}, {"hello world !", "  hello   world !", " hello world   ! "});
-    auto [substrings, length] = string_split(x);
-
-    Expect(node, {x}, {std::move(substrings), std::move(length)}, test_name, {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), test_name, {opset}, [string_split]() -> IoData {
+      Tensor x =
+          Tensor::FromStrings("", {3}, {"hello world !", "  hello   world !", " hello world   ! "});
+      auto [substrings, length] = string_split(x);
+      return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
+    });
   }
 
   {
@@ -118,12 +119,13 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("substrings");
     node.add_output("length");
+    Expect(registry, std::move(node), "test_cc_string_split_empty_tensor", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {0}, std::vector<std::string>{});
+             auto [substrings, length] = string_split(x);
 
-    Tensor x = Tensor::FromStrings("", {0}, std::vector<std::string>{});
-    auto [substrings, length] = string_split(x);
-
-    Expect(node, {x}, {std::move(substrings), std::move(length)},
-           "test_cc_string_split_empty_tensor", {opset}, "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
+           });
   }
 }
 

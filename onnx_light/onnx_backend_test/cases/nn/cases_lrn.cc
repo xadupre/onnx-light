@@ -71,9 +71,10 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<float>(node, "beta", 0.5f);
     AddAttribute<float>(node, "bias", 2.0f);
     AddAttribute<int64_t>(node, "size", 3);
-
-    Tensor y = kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f, /*bias=*/2.0f);
-    Expect(node, {x}, {y}, "test_cc_lrn", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_lrn", {opset}, [=]() -> IoData {
+      Tensor y = kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f, /*bias=*/2.0f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Default attributes — only ``size`` specified.
@@ -83,9 +84,10 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<int64_t>(node, "size", 3);
-
-    Tensor y = kernel(x, /*size=*/3);
-    Expect(node, {x}, {y}, "test_cc_lrn_default", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_lrn_default", {opset}, [=]() -> IoData {
+      Tensor y = kernel(x, /*size=*/3);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

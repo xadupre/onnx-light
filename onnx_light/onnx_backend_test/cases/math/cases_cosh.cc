@@ -46,11 +46,12 @@ void RegisterCoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Cosh");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_cosh", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -0.5f, 0.0f, 0.5f, 1.0f, 3.0f});
+      Tensor y = cosh_kernel(x);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -0.5f, 0.0f, 0.5f, 1.0f, 3.0f});
-    Tensor y = cosh_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_cosh", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Cosh`` operator (mirror the
@@ -62,10 +63,11 @@ void RegisterCoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Cosh");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = cosh_kernel(x);
-    Expect(node, {x}, {y}, "test_cosh_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cosh_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = cosh_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // From Cosh.export(): ``test_cosh`` uses x = np.random.randn(3, 4, 5).
   {
@@ -73,10 +75,11 @@ void RegisterCoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Cosh");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
-    Tensor y = cosh_kernel(x);
-    Expect(node, {x}, {y}, "test_cosh", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cosh", {opset}, [=]() -> IoData {
+      Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
+      Tensor y = cosh_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

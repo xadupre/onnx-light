@@ -81,11 +81,12 @@ void RegisterLinearRegressorCases(std::vector<TestCase> &registry, TestMode mode
   post_transform->set_type(AttributeProto::AttributeType::STRING);
   post_transform->set_s("NONE");
 
-  Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 1.0f, 0.0f, 3.0f});
-  Tensor y = reg.operator()<float>(x, {0.5f, -1.0f}, {0.25f}, 1, "NONE");
-
-  Expect(node, {x}, {y}, "test_cc_linearregressor_single_target", {default_opset, opset},
-         "backend-test", registry);
+  Expect(registry, std::move(node), "test_cc_linearregressor_single_target", {default_opset, opset},
+         [=]() -> IoData {
+           Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 1.0f, 0.0f, 3.0f});
+           Tensor y = reg.operator()<float>(x, {0.5f, -1.0f}, {0.25f}, 1, "NONE");
+           return IoData{{std::move(x)}, {std::move(y)}};
+         });
 }
 
 } // namespace onnx_backend_test

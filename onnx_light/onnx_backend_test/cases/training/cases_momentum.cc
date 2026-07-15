@@ -99,17 +99,18 @@ void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "alpha", alpha);
     AddFloatAttribute(node, "beta", beta);
     AddAttribute(node, "mode", std::string("standard"));
+    Expect(registry, std::move(node), "test_momentum", {default_opset, opset}, [=]() -> IoData {
+      Tensor R = Tensor::FromFloat("", {}, {0.1f});
+      Tensor T = Tensor::FromInt64("", {}, {0});
+      Tensor X = Tensor::FromFloat("", {2}, {1.2f, 2.8f});
+      Tensor G = Tensor::FromFloat("", {2}, {-0.94f, -2.5f});
+      Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
 
-    Tensor R = Tensor::FromFloat("", {}, {0.1f});
-    Tensor T = Tensor::FromInt64("", {}, {0});
-    Tensor X = Tensor::FromFloat("", {2}, {1.2f, 2.8f});
-    Tensor G = Tensor::FromFloat("", {2}, {-0.94f, -2.5f});
-    Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
-
-    std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
-                                        kernel::Momentum::Mode::kStandard);
-    Expect(node, {R, T, X, G, V}, {outs[0], outs[1]}, "test_momentum", {default_opset, opset},
-           "backend-test", registry);
+      std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
+                                          kernel::Momentum::Mode::kStandard);
+      return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V)},
+                    {std::move(outs[0]), std::move(outs[1])}};
+    });
   }
 
   // From Momentum.export_nesterov_momentum():
@@ -127,17 +128,19 @@ void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "alpha", alpha);
     AddFloatAttribute(node, "beta", beta);
     AddAttribute(node, "mode", std::string("nesterov"));
+    Expect(registry, std::move(node), "test_nesterov_momentum", {default_opset, opset},
+           [=]() -> IoData {
+             Tensor R = Tensor::FromFloat("", {}, {0.1f});
+             Tensor T = Tensor::FromInt64("", {}, {0});
+             Tensor X = Tensor::FromFloat("", {2}, {1.2f, 2.8f});
+             Tensor G = Tensor::FromFloat("", {2}, {-0.94f, -2.5f});
+             Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
 
-    Tensor R = Tensor::FromFloat("", {}, {0.1f});
-    Tensor T = Tensor::FromInt64("", {}, {0});
-    Tensor X = Tensor::FromFloat("", {2}, {1.2f, 2.8f});
-    Tensor G = Tensor::FromFloat("", {2}, {-0.94f, -2.5f});
-    Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
-
-    std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
-                                        kernel::Momentum::Mode::kNesterov);
-    Expect(node, {R, T, X, G, V}, {outs[0], outs[1]}, "test_nesterov_momentum",
-           {default_opset, opset}, "backend-test", registry);
+             std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
+                                                 kernel::Momentum::Mode::kNesterov);
+             return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V)},
+                           {std::move(outs[0]), std::move(outs[1])}};
+           });
   }
 
   // From Momentum.export_momentum_multiple():
@@ -162,20 +165,25 @@ void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "alpha", alpha);
     AddFloatAttribute(node, "beta", beta);
     AddAttribute(node, "mode", std::string("standard"));
+    Expect(registry, std::move(node), "test_momentum_multiple", {default_opset, opset},
+           [=]() -> IoData {
+             Tensor R = Tensor::FromFloat("", {}, {0.1f});
+             Tensor T = Tensor::FromInt64("", {}, {0});
+             Tensor X1 = Tensor::FromFloat("", {1}, {1.0f});
+             Tensor X2 = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+             Tensor G1 = Tensor::FromFloat("", {1}, {-1.0f});
+             Tensor G2 = Tensor::FromFloat("", {2}, {-1.0f, -3.0f});
+             Tensor V1 = Tensor::FromFloat("", {1}, {2.0f});
+             Tensor V2 = Tensor::FromFloat("", {2}, {4.0f, 1.0f});
 
-    Tensor R = Tensor::FromFloat("", {}, {0.1f});
-    Tensor T = Tensor::FromInt64("", {}, {0});
-    Tensor X1 = Tensor::FromFloat("", {1}, {1.0f});
-    Tensor X2 = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
-    Tensor G1 = Tensor::FromFloat("", {1}, {-1.0f});
-    Tensor G2 = Tensor::FromFloat("", {2}, {-1.0f, -3.0f});
-    Tensor V1 = Tensor::FromFloat("", {1}, {2.0f});
-    Tensor V2 = Tensor::FromFloat("", {2}, {4.0f, 1.0f});
-
-    std::vector<Tensor> outs = momentum(R, T, {X1, X2}, {G1, G2}, {V1, V2}, alpha, beta,
-                                        norm_coefficient, kernel::Momentum::Mode::kStandard);
-    Expect(node, {R, T, X1, X2, G1, G2, V1, V2}, {outs[0], outs[1], outs[2], outs[3]},
-           "test_momentum_multiple", {default_opset, opset}, "backend-test", registry);
+             std::vector<Tensor> outs =
+                 momentum(R, T, {X1, X2}, {G1, G2}, {V1, V2}, alpha, beta, norm_coefficient,
+                          kernel::Momentum::Mode::kStandard);
+             return IoData{
+                 {std::move(R), std::move(T), std::move(X1), std::move(X2), std::move(G1),
+                  std::move(G2), std::move(V1), std::move(V2)},
+                 {std::move(outs[0]), std::move(outs[1]), std::move(outs[2]), std::move(outs[3])}};
+           });
   }
 }
 

@@ -40,32 +40,40 @@ void RegisterSizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_size_example — mirrors upstream ``test_size_example`` (2-D
   // float input of shape [2, 3]).
   {
-    const Tensor x = Tensor::FromFloat("x", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    const Tensor y = Rename(size_kernel(x), "y");
-    Expect(MakeSizeNode(), {x}, {y}, "test_cc_size_example", {opset}, "backend-test", registry);
+    Expect(registry, MakeSizeNode(), "test_cc_size_example", {opset}, [=]() -> IoData {
+      const Tensor x = Tensor::FromFloat("x", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+      const Tensor y = Rename(size_kernel(x), "y");
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // test_cc_size — mirrors upstream ``test_size`` (3-D float input of shape
   // [3, 4, 5]). Only the shape (and hence the element count) is observed by
   // the op.
   {
-    const Tensor x = Tensor::FromFloat("x", {3, 4, 5}, std::vector<float>(3 * 4 * 5, 0.0f));
-    const Tensor y = Rename(size_kernel(x), "y");
-    Expect(MakeSizeNode(), {x}, {y}, "test_cc_size", {opset}, "backend-test", registry);
+    Expect(registry, MakeSizeNode(), "test_cc_size", {opset}, [=]() -> IoData {
+      const Tensor x = Tensor::FromFloat("x", {3, 4, 5}, std::vector<float>(3 * 4 * 5, 0.0f));
+      const Tensor y = Rename(size_kernel(x), "y");
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // test_cc_size_scalar — 0-D (scalar) input has exactly one element.
   {
-    const Tensor x = Tensor::FromFloat("x", {}, {42.0f});
-    const Tensor y = Rename(size_kernel(x), "y");
-    Expect(MakeSizeNode(), {x}, {y}, "test_cc_size_scalar", {opset}, "backend-test", registry);
+    Expect(registry, MakeSizeNode(), "test_cc_size_scalar", {opset}, [=]() -> IoData {
+      const Tensor x = Tensor::FromFloat("x", {}, {42.0f});
+      const Tensor y = Rename(size_kernel(x), "y");
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // test_cc_size_empty — input with a zero dimension has zero elements.
   {
-    const Tensor x = Tensor::FromFloat("x", {2, 0, 3}, {});
-    const Tensor y = Rename(size_kernel(x), "y");
-    Expect(MakeSizeNode(), {x}, {y}, "test_cc_size_empty", {opset}, "backend-test", registry);
+    Expect(registry, MakeSizeNode(), "test_cc_size_empty", {opset}, [=]() -> IoData {
+      const Tensor x = Tensor::FromFloat("x", {2, 0, 3}, {});
+      const Tensor y = Rename(size_kernel(x), "y");
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

@@ -94,17 +94,18 @@ void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
     AddFloatAttribute(node, "epsilon", epsilon);
     AddFloatAttribute(node, "decay_factor", decay_factor);
+    Expect(registry, std::move(node), "test_adagrad", {default_opset, opset}, [=]() -> IoData {
+      Tensor R = Tensor::FromFloat("", {}, {0.1f});
+      Tensor T = Tensor::FromInt64("", {}, {0});
+      Tensor X = Tensor::FromFloat("", {1}, {1.0f});
+      Tensor G = Tensor::FromFloat("", {1}, {-1.0f});
+      Tensor H = Tensor::FromFloat("", {1}, {2.0f});
 
-    Tensor R = Tensor::FromFloat("", {}, {0.1f});
-    Tensor T = Tensor::FromInt64("", {}, {0});
-    Tensor X = Tensor::FromFloat("", {1}, {1.0f});
-    Tensor G = Tensor::FromFloat("", {1}, {-1.0f});
-    Tensor H = Tensor::FromFloat("", {1}, {2.0f});
-
-    std::vector<Tensor> outs =
-        adagrad(R, T, {X}, {G}, {H}, epsilon, decay_factor, norm_coefficient);
-    Expect(node, {R, T, X, G, H}, {outs[0], outs[1]}, "test_adagrad", {default_opset, opset},
-           "backend-test", registry);
+      std::vector<Tensor> outs =
+          adagrad(R, T, {X}, {G}, {H}, epsilon, decay_factor, norm_coefficient);
+      return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(H)},
+                    {std::move(outs[0]), std::move(outs[1])}};
+    });
   }
 
   // From Adagrad.export_adagrad_multiple():
@@ -121,20 +122,24 @@ void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
     AddFloatAttribute(node, "epsilon", epsilon);
     AddFloatAttribute(node, "decay_factor", decay_factor);
+    Expect(registry, std::move(node), "test_adagrad_multiple", {default_opset, opset},
+           [=]() -> IoData {
+             Tensor R = Tensor::FromFloat("", {}, {0.1f});
+             Tensor T = Tensor::FromInt64("", {}, {0});
+             Tensor X1 = Tensor::FromFloat("", {1}, {1.0f});
+             Tensor X2 = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+             Tensor G1 = Tensor::FromFloat("", {1}, {-1.0f});
+             Tensor G2 = Tensor::FromFloat("", {2}, {-1.0f, -3.0f});
+             Tensor H1 = Tensor::FromFloat("", {1}, {2.0f});
+             Tensor H2 = Tensor::FromFloat("", {2}, {4.0f, 1.0f});
 
-    Tensor R = Tensor::FromFloat("", {}, {0.1f});
-    Tensor T = Tensor::FromInt64("", {}, {0});
-    Tensor X1 = Tensor::FromFloat("", {1}, {1.0f});
-    Tensor X2 = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
-    Tensor G1 = Tensor::FromFloat("", {1}, {-1.0f});
-    Tensor G2 = Tensor::FromFloat("", {2}, {-1.0f, -3.0f});
-    Tensor H1 = Tensor::FromFloat("", {1}, {2.0f});
-    Tensor H2 = Tensor::FromFloat("", {2}, {4.0f, 1.0f});
-
-    std::vector<Tensor> outs =
-        adagrad(R, T, {X1, X2}, {G1, G2}, {H1, H2}, epsilon, decay_factor, norm_coefficient);
-    Expect(node, {R, T, X1, X2, G1, G2, H1, H2}, {outs[0], outs[1], outs[2], outs[3]},
-           "test_adagrad_multiple", {default_opset, opset}, "backend-test", registry);
+             std::vector<Tensor> outs = adagrad(R, T, {X1, X2}, {G1, G2}, {H1, H2}, epsilon,
+                                                decay_factor, norm_coefficient);
+             return IoData{
+                 {std::move(R), std::move(T), std::move(X1), std::move(X2), std::move(G1),
+                  std::move(G2), std::move(H1), std::move(H2)},
+                 {std::move(outs[0]), std::move(outs[1]), std::move(outs[2]), std::move(outs[3])}};
+           });
   }
 }
 

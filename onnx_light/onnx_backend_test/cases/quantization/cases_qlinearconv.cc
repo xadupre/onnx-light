@@ -112,9 +112,12 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y_scale");
     node.add_input("y_zero_point");
     node.add_output("y");
-
-    Expect(node, {x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point}, {y},
-           "test_cc_qlinearconv", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_qlinearconv", {opset}, [=]() -> IoData {
+      return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point), std::move(w),
+                     std::move(w_scale), std::move(w_zero_point), std::move(y_scale),
+                     std::move(y_zero_point)},
+                    {std::move(y)}};
+    });
   }
 
   {
@@ -149,9 +152,12 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y_scale");
     node.add_input("y_zero_point");
     node.add_output("y");
-
-    Expect(node, {x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point}, {y},
-           "test_cc_qlinearconv_int8", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_qlinearconv_int8", {opset}, [=]() -> IoData {
+      return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point), std::move(w),
+                     std::move(w_scale), std::move(w_zero_point), std::move(y_scale),
+                     std::move(y_zero_point)},
+                    {std::move(y)}};
+    });
   }
 }
 

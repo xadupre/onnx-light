@@ -32,12 +32,13 @@ void RegisterRoundCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Round");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_round", {opset}, [=]() -> IoData {
+      // Includes halves to exercise the round-half-to-even rule used by ONNX.
+      Tensor x = Tensor::FromFloat("", {2, 3}, {0.9f, 2.5f, 2.3f, 1.5f, -4.5f, -2.5f});
+      Tensor y = round_kernel(x);
 
-    // Includes halves to exercise the round-half-to-even rule used by ONNX.
-    Tensor x = Tensor::FromFloat("", {2, 3}, {0.9f, 2.5f, 2.3f, 1.5f, -4.5f, -2.5f});
-    Tensor y = round_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_round", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test case for the ``Round`` operator (mirrors the
@@ -47,14 +48,15 @@ void RegisterRoundCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Round");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {15},
-                                 {0.1f, 0.5f, 0.9f, 1.2f, 1.5f, 1.8f, 2.3f, 2.5f, 2.7f, -1.1f,
-                                  -1.5f, -1.9f, -2.2f, -2.5f, -2.8f});
-    Tensor y = Tensor::FromFloat("", {15},
-                                 {0.0f, 0.0f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 2.0f, 3.0f, -1.0f,
-                                  -2.0f, -2.0f, -2.0f, -2.0f, -3.0f});
-    Expect(node, {x}, {y}, "test_round", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_round", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {15},
+                                   {0.1f, 0.5f, 0.9f, 1.2f, 1.5f, 1.8f, 2.3f, 2.5f, 2.7f, -1.1f,
+                                    -1.5f, -1.9f, -2.2f, -2.5f, -2.8f});
+      Tensor y = Tensor::FromFloat("", {15},
+                                   {0.0f, 0.0f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 2.0f, 3.0f, -1.0f,
+                                    -2.0f, -2.0f, -2.0f, -2.0f, -3.0f});
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

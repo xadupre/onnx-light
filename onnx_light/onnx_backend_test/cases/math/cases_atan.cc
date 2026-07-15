@@ -46,11 +46,12 @@ void RegisterAtanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Atan");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_atan", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -0.5f, 0.0f, 0.5f, 1.0f, 3.0f});
+      Tensor y = atan_kernel(x);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -0.5f, 0.0f, 0.5f, 1.0f, 3.0f});
-    Tensor y = atan_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_atan", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Atan`` operator (mirror the
@@ -62,10 +63,11 @@ void RegisterAtanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Atan");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = atan_kernel(x);
-    Expect(node, {x}, {y}, "test_atan_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_atan_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = atan_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // From Atan.export(): ``test_atan`` uses x = np.random.randn(3, 4, 5).
   {
@@ -73,10 +75,11 @@ void RegisterAtanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Atan");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
-    Tensor y = atan_kernel(x);
-    Expect(node, {x}, {y}, "test_atan", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_atan", {opset}, [=]() -> IoData {
+      Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
+      Tensor y = atan_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

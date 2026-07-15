@@ -63,84 +63,100 @@ void RegisterCumSumCases(std::vector<TestCase> &registry, TestMode mode) {
   // 1-D inclusive cumulative sum (axis = 0).
   {
     NodeProto node = MakeCumSumNode(/*exclusive=*/false, /*reverse=*/false);
-    Tensor x = Tensor::FromDouble("", {5}, {1.0, 2.0, 3.0, 4.0, 5.0});
-    Tensor axis = Tensor::FromInt32("", {}, {0});
-    Tensor y = cumsum_kernel(x, axis);
-    Expect(node, {x, axis}, {y}, "test_cumsum_1d", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cumsum_1d", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromDouble("", {5}, {1.0, 2.0, 3.0, 4.0, 5.0});
+      Tensor axis = Tensor::FromInt32("", {}, {0});
+      Tensor y = cumsum_kernel(x, axis);
+      return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+    });
   }
 
   // 1-D exclusive cumulative sum (axis = 0).
   {
     NodeProto node = MakeCumSumNode(/*exclusive=*/true, /*reverse=*/false);
-    Tensor x = Tensor::FromDouble("", {5}, {1.0, 2.0, 3.0, 4.0, 5.0});
-    Tensor axis = Tensor::FromInt32("", {}, {0});
-    Tensor y = cumsum_kernel(x, axis, /*exclusive=*/true);
-    Expect(node, {x, axis}, {y}, "test_cumsum_1d_exclusive", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cumsum_1d_exclusive", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromDouble("", {5}, {1.0, 2.0, 3.0, 4.0, 5.0});
+      Tensor axis = Tensor::FromInt32("", {}, {0});
+      Tensor y = cumsum_kernel(x, axis, /*exclusive=*/true);
+      return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+    });
   }
 
   // 1-D reverse cumulative sum (axis = 0).
   {
     NodeProto node = MakeCumSumNode(/*exclusive=*/false, /*reverse=*/true);
-    Tensor x = Tensor::FromDouble("", {5}, {1.0, 2.0, 3.0, 4.0, 5.0});
-    Tensor axis = Tensor::FromInt32("", {}, {0});
-    Tensor y = cumsum_kernel(x, axis, /*exclusive=*/false, /*reverse=*/true);
-    Expect(node, {x, axis}, {y}, "test_cumsum_1d_reverse", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cumsum_1d_reverse", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromDouble("", {5}, {1.0, 2.0, 3.0, 4.0, 5.0});
+      Tensor axis = Tensor::FromInt32("", {}, {0});
+      Tensor y = cumsum_kernel(x, axis, /*exclusive=*/false, /*reverse=*/true);
+      return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+    });
   }
 
   // 1-D reverse + exclusive cumulative sum (axis = 0).
   {
     NodeProto node = MakeCumSumNode(/*exclusive=*/true, /*reverse=*/true);
-    Tensor x = Tensor::FromDouble("", {5}, {1.0, 2.0, 3.0, 4.0, 5.0});
-    Tensor axis = Tensor::FromInt32("", {}, {0});
-    Tensor y = cumsum_kernel(x, axis, /*exclusive=*/true, /*reverse=*/true);
-    Expect(node, {x, axis}, {y}, "test_cumsum_1d_reverse_exclusive", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cumsum_1d_reverse_exclusive", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromDouble("", {5}, {1.0, 2.0, 3.0, 4.0, 5.0});
+      Tensor axis = Tensor::FromInt32("", {}, {0});
+      Tensor y = cumsum_kernel(x, axis, /*exclusive=*/true, /*reverse=*/true);
+      return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+    });
   }
 
   // 2-D cumulative sum along axis 0.
   {
     NodeProto node = MakeCumSumNode(/*exclusive=*/false, /*reverse=*/false);
-    Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
-    Tensor axis = Tensor::FromInt32("", {}, {0});
-    Tensor y = cumsum_kernel(x, axis);
-    Expect(node, {x, axis}, {y}, "test_cumsum_2d_axis_0", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cumsum_2d_axis_0", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+      Tensor axis = Tensor::FromInt32("", {}, {0});
+      Tensor y = cumsum_kernel(x, axis);
+      return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+    });
   }
 
   // 2-D cumulative sum along axis 1.
   {
     NodeProto node = MakeCumSumNode(/*exclusive=*/false, /*reverse=*/false);
-    Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
-    Tensor axis = Tensor::FromInt32("", {}, {1});
-    Tensor y = cumsum_kernel(x, axis);
-    Expect(node, {x, axis}, {y}, "test_cumsum_2d_axis_1", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cumsum_2d_axis_1", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+      Tensor axis = Tensor::FromInt32("", {}, {1});
+      Tensor y = cumsum_kernel(x, axis);
+      return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+    });
   }
 
   // 2-D cumulative sum along negative axis (-1) — axis input is INT64.
   {
     NodeProto node = MakeCumSumNode(/*exclusive=*/false, /*reverse=*/false);
-    Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
-    Tensor axis = Tensor::FromInt64("", {}, {static_cast<int64_t>(-1)});
-    Tensor y = cumsum_kernel(x, axis);
-    Expect(node, {x, axis}, {y}, "test_cumsum_2d_negative_axis", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cumsum_2d_negative_axis", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+      Tensor axis = Tensor::FromInt64("", {}, {static_cast<int64_t>(-1)});
+      Tensor y = cumsum_kernel(x, axis);
+      return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+    });
   }
 
   // 2-D cumulative sum on INT32 input along axis 0.
   {
     NodeProto node = MakeCumSumNode(/*exclusive=*/false, /*reverse=*/false);
-    Tensor x = Tensor::FromInt32("", {2, 3}, {1, 2, 3, 4, 5, 6});
-    Tensor axis = Tensor::FromInt32("", {}, {0});
-    Tensor y = cumsum_kernel(x, axis);
-    Expect(node, {x, axis}, {y}, "test_cumsum_2d_int32", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cumsum_2d_int32", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromInt32("", {2, 3}, {1, 2, 3, 4, 5, 6});
+      Tensor axis = Tensor::FromInt32("", {}, {0});
+      Tensor y = cumsum_kernel(x, axis);
+      return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+    });
   }
 
   // 1-D exclusive cumulative sum on INT32 input (axis = 0).
   {
     NodeProto node = MakeCumSumNode(/*exclusive=*/true, /*reverse=*/false);
-    Tensor x = Tensor::FromInt32("", {5}, {1, 2, 3, 4, 5});
-    Tensor axis = Tensor::FromInt32("", {}, {0});
-    Tensor y = cumsum_kernel(x, axis, /*exclusive=*/true);
-    Expect(node, {x, axis}, {y}, "test_cumsum_1d_int32_exclusive", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cumsum_1d_int32_exclusive", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromInt32("", {5}, {1, 2, 3, 4, 5});
+      Tensor axis = Tensor::FromInt32("", {}, {0});
+      Tensor y = cumsum_kernel(x, axis, /*exclusive=*/true);
+      return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+    });
   }
 }
 

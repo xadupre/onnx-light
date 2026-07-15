@@ -61,24 +61,25 @@ void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode m
     node.add_input("bias");
     node.add_output("y");
     AddAttribute<int64_t>(node, "num_groups", 2);
+    Expect(registry, std::move(node), "test_cc_group_normalization_example", {opset},
+           [=]() -> IoData {
+             const int64_t N = 3;
+             const int64_t C = 4;
+             const int64_t H = 2;
+             const int64_t W = 2;
+             const int64_t total = N * C * H * W;
+             std::vector<float> x_data(static_cast<size_t>(total));
+             for (int64_t i = 0; i < total; ++i) {
+               x_data[static_cast<size_t>(i)] = static_cast<float>(i) * 0.1f - 2.0f;
+             }
+             Tensor x = Tensor::FromFloat("", {N, C, H, W}, x_data);
+             Tensor scale = Tensor::FromFloat("", {C}, {0.5f, 1.0f, 1.5f, 2.0f});
+             Tensor bias = Tensor::FromFloat("", {C}, {-0.25f, 0.0f, 0.25f, 0.5f});
 
-    const int64_t N = 3;
-    const int64_t C = 4;
-    const int64_t H = 2;
-    const int64_t W = 2;
-    const int64_t total = N * C * H * W;
-    std::vector<float> x_data(static_cast<size_t>(total));
-    for (int64_t i = 0; i < total; ++i) {
-      x_data[static_cast<size_t>(i)] = static_cast<float>(i) * 0.1f - 2.0f;
-    }
-    Tensor x = Tensor::FromFloat("", {N, C, H, W}, x_data);
-    Tensor scale = Tensor::FromFloat("", {C}, {0.5f, 1.0f, 1.5f, 2.0f});
-    Tensor bias = Tensor::FromFloat("", {C}, {-0.25f, 0.0f, 0.25f, 0.5f});
+             Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2);
 
-    Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2);
-
-    Expect(node, {x, scale, bias}, {y}, "test_cc_group_normalization_example", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
+           });
   }
 
   // ``group_normalization_epsilon``: same shape with epsilon=1e-2.
@@ -91,24 +92,25 @@ void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode m
     node.add_output("y");
     AddAttribute<int64_t>(node, "num_groups", 2);
     AddAttribute<float>(node, "epsilon", 1e-2f);
+    Expect(registry, std::move(node), "test_cc_group_normalization_epsilon", {opset},
+           [=]() -> IoData {
+             const int64_t N = 3;
+             const int64_t C = 4;
+             const int64_t H = 2;
+             const int64_t W = 2;
+             const int64_t total = N * C * H * W;
+             std::vector<float> x_data(static_cast<size_t>(total));
+             for (int64_t i = 0; i < total; ++i) {
+               x_data[static_cast<size_t>(i)] = static_cast<float>(i) * 0.1f - 2.0f;
+             }
+             Tensor x = Tensor::FromFloat("", {N, C, H, W}, x_data);
+             Tensor scale = Tensor::FromFloat("", {C}, {0.5f, 1.0f, 1.5f, 2.0f});
+             Tensor bias = Tensor::FromFloat("", {C}, {-0.25f, 0.0f, 0.25f, 0.5f});
 
-    const int64_t N = 3;
-    const int64_t C = 4;
-    const int64_t H = 2;
-    const int64_t W = 2;
-    const int64_t total = N * C * H * W;
-    std::vector<float> x_data(static_cast<size_t>(total));
-    for (int64_t i = 0; i < total; ++i) {
-      x_data[static_cast<size_t>(i)] = static_cast<float>(i) * 0.1f - 2.0f;
-    }
-    Tensor x = Tensor::FromFloat("", {N, C, H, W}, x_data);
-    Tensor scale = Tensor::FromFloat("", {C}, {0.5f, 1.0f, 1.5f, 2.0f});
-    Tensor bias = Tensor::FromFloat("", {C}, {-0.25f, 0.0f, 0.25f, 0.5f});
+             Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2, 1e-2f);
 
-    Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2, 1e-2f);
-
-    Expect(node, {x, scale, bias}, {y}, "test_cc_group_normalization_epsilon", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
+           });
   }
 }
 

@@ -29,10 +29,11 @@ void RegisterSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sigmoid");
     node.add_input("X");
     node.add_output("Y");
-
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-4.0f, -1.0f, 0.0f, 1.0f, 2.0f, 4.0f});
-    Tensor y = sigmoid_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_sigmoid", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_sigmoid", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-4.0f, -1.0f, 0.0f, 1.0f, 2.0f, 4.0f});
+      Tensor y = sigmoid_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // FLOAT16
   {
@@ -40,10 +41,11 @@ void RegisterSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sigmoid");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
-    Tensor y = sigmoid_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_sigmoid_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_sigmoid_float16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
+      Tensor y = sigmoid_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // BFLOAT16
@@ -52,15 +54,16 @@ void RegisterSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sigmoid");
     node.add_input("x");
     node.add_output("y");
-
-    std::vector<float> vals = {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f};
-    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
-    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
-    for (size_t i = 0; i < vals.size(); ++i)
-      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
-    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-    Tensor y = sigmoid_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_sigmoid_bfloat16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_sigmoid_bfloat16", {opset}, [=]() -> IoData {
+      std::vector<float> vals = {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f};
+      std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+      auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+      for (size_t i = 0; i < vals.size(); ++i)
+        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+      Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
+      Tensor y = sigmoid_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // DOUBLE
@@ -69,10 +72,11 @@ void RegisterSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sigmoid");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromDouble("", {2, 3}, {-2.0, -1.0, 0.0, 0.5, 1.0, 2.0});
-    Tensor y = sigmoid_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_sigmoid_double", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_sigmoid_double", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromDouble("", {2, 3}, {-2.0, -1.0, 0.0, 0.5, 1.0, 2.0});
+      Tensor y = sigmoid_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

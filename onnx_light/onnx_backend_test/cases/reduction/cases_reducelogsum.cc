@@ -34,12 +34,13 @@ void EmitReduceLogSumCase(std::vector<TestCase> &registry, const std::string &op
   if (noop_with_empty_axes) {
     AddAttribute<int64_t>(node, "noop_with_empty_axes", 1);
   }
+  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+    Tensor data = Tensor::FromFloat("", data_shape, data_values);
+    Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
+    Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
 
-  Tensor data = Tensor::FromFloat("", data_shape, data_values);
-  Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
-  Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
-
-  Expect(node, {data, axes}, {reduced}, case_name, {opset}, "backend-test", registry);
+    return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+  });
 }
 
 // Emits a case where the optional ``axes`` input is omitted entirely (single
@@ -57,11 +58,12 @@ void EmitReduceLogSumDefaultAxesCase(std::vector<TestCase> &registry, const std:
   node.add_input("data");
   node.add_output("reduced");
   AddAttribute<int64_t>(node, "keepdims", keepdims ? 1 : 0);
+  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+    Tensor data = Tensor::FromFloat("", data_shape, data_values);
+    Tensor reduced = kernel(data, keepdims, /*noop_with_empty_axes=*/false);
 
-  Tensor data = Tensor::FromFloat("", data_shape, data_values);
-  Tensor reduced = kernel(data, keepdims, /*noop_with_empty_axes=*/false);
-
-  Expect(node, {data}, {reduced}, case_name, {opset}, "backend-test", registry);
+    return IoData{{std::move(data)}, {std::move(reduced)}};
+  });
 }
 
 void RegisterReduceLogSumOpCases(std::vector<TestCase> &registry, const std::string &op_type,
@@ -214,13 +216,13 @@ void RegisterReduceLogSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("axes");
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
-
-    Tensor data = Tensor::FromDouble(
-        "", {3, 2, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
-    Tensor axes = Tensor::FromInt64("", {1}, {1});
-    Tensor reduced = kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-    Expect(node, {data, axes}, {reduced}, "test_cc_reducelogsum_double", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_reducelogsum_double", {opset}, [=]() -> IoData {
+      Tensor data = Tensor::FromDouble(
+          "", {3, 2, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
+      Tensor axes = Tensor::FromInt64("", {1}, {1});
+      Tensor reduced = kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+      return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+    });
   }
 }
 
@@ -256,13 +258,13 @@ void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry, TestMode mode
     node.add_input("axes");
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
-
-    Tensor data = Tensor::FromDouble(
-        "", {3, 2, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
-    Tensor axes = Tensor::FromInt64("", {1}, {1});
-    Tensor reduced = kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-    Expect(node, {data, axes}, {reduced}, "test_cc_reducelogsumexp_double", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_reducelogsumexp_double", {opset}, [=]() -> IoData {
+      Tensor data = Tensor::FromDouble(
+          "", {3, 2, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
+      Tensor axes = Tensor::FromInt64("", {1}, {1});
+      Tensor reduced = kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+      return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+    });
   }
 }
 

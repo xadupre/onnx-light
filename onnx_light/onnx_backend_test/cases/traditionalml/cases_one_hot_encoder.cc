@@ -72,15 +72,17 @@ void RegisterOneHotEncoderCases(std::vector<TestCase> &registry, TestMode mode) 
     }
 
     AttributeProto *zeros_attr = node.add_attribute();
-    zeros_attr->set_name("zeros");
-    zeros_attr->set_type(AttributeProto::AttributeType::INT);
-    zeros_attr->set_i(static_cast<int64_t>(1));
+    Expect(registry, std::move(node), "test_cc_one_hot_encoder_int64", {default_opset, opset},
+           [=]() -> IoData {
+             zeros_attr->set_name("zeros");
+             zeros_attr->set_type(AttributeProto::AttributeType::INT);
+             zeros_attr->set_i(static_cast<int64_t>(1));
 
-    Tensor x = Tensor::FromInt64("", {3}, {0, 2, 7});
-    Tensor y = one_hot.operator()<int64_t>(x, cats, /*zeros=*/true);
+             Tensor x = Tensor::FromInt64("", {3}, {0, 2, 7});
+             Tensor y = one_hot.operator()<int64_t>(x, cats, /*zeros=*/true);
 
-    Expect(node, {x}, {y}, "test_cc_one_hot_encoder_int64", {default_opset, opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // String categories — mirrors the upstream ONNX node test
@@ -101,15 +103,17 @@ void RegisterOneHotEncoderCases(std::vector<TestCase> &registry, TestMode mode) 
     }
 
     AttributeProto *zeros_attr = node.add_attribute();
-    zeros_attr->set_name("zeros");
-    zeros_attr->set_type(AttributeProto::AttributeType::INT);
-    zeros_attr->set_i(static_cast<int64_t>(1));
+    Expect(registry, std::move(node), "test_cc_one_hot_encoder_string", {default_opset, opset},
+           [=]() -> IoData {
+             zeros_attr->set_name("zeros");
+             zeros_attr->set_type(AttributeProto::AttributeType::INT);
+             zeros_attr->set_i(static_cast<int64_t>(1));
 
-    Tensor x = Tensor::FromStrings("", {4}, {"a", "b", "d", "c"});
-    Tensor y = one_hot(x, cats, /*zeros=*/true);
+             Tensor x = Tensor::FromStrings("", {4}, {"a", "b", "d", "c"});
+             Tensor y = one_hot(x, cats, /*zeros=*/true);
 
-    Expect(node, {x}, {y}, "test_cc_one_hot_encoder_string", {default_opset, opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 

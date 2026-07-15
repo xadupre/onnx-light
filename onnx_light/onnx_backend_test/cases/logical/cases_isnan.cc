@@ -45,9 +45,11 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
 
   {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
-    Tensor x = Tensor::FromFloat("", {3}, {1.0f, nan_v, 2.0f});
-    Tensor y = isnan_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_isnan", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_isnan", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {1.0f, nan_v, 2.0f});
+      Tensor y = isnan_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ``onnx.backend.test.case.node.isnan.IsNaN.export``:
@@ -55,9 +57,11 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
   //   y = np.isnan(x)
   {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
-    Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
-    Tensor y = isnan_kernel(x);
-    Expect(node, {x}, {y}, "test_isnan", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_isnan", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
+      Tensor y = isnan_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ``onnx.backend.test.case.node.isnan.IsNaN.export_float16``:
@@ -65,33 +69,39 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
   //   y = np.isnan(x)
   {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
-    Tensor x = kernel::MakeFloat16Tensor("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
-    Tensor y = isnan_kernel(x);
-    Expect(node, {x}, {y}, "test_isnan_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_isnan_float16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeFloat16Tensor("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
+      Tensor y = isnan_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Deterministic BFLOAT16 case exercising the BFLOAT16 branch of the
   // kernel (no upstream equivalent).
   {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
-    const std::vector<float> vals = {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v};
-    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
-    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
-    for (size_t i = 0; i < vals.size(); ++i)
-      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
-    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {6}, std::move(raw));
-    Tensor y = isnan_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_isnan_bfloat16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_isnan_bfloat16", {opset}, [=]() -> IoData {
+      const std::vector<float> vals = {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v};
+      std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+      auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+      for (size_t i = 0; i < vals.size(); ++i)
+        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+      Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {6}, std::move(raw));
+      Tensor y = isnan_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // DOUBLE
   {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
-    const double nan_d = std::numeric_limits<double>::quiet_NaN();
-    const double inf_d = std::numeric_limits<double>::infinity();
-    Tensor x = Tensor::FromDouble("", {6}, {-1.2, nan_d, inf_d, 2.8, -inf_d, nan_d});
-    Tensor y = isnan_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_isnan_double", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_isnan_double", {opset}, [=]() -> IoData {
+      const double nan_d = std::numeric_limits<double>::quiet_NaN();
+      const double inf_d = std::numeric_limits<double>::infinity();
+      Tensor x = Tensor::FromDouble("", {6}, {-1.2, nan_d, inf_d, 2.8, -inf_d, nan_d});
+      Tensor y = isnan_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

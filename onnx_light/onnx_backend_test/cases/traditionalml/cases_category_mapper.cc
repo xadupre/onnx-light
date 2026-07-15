@@ -56,16 +56,18 @@ void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode)
 
     const int64_t default_int64 = -1;
     AttributeProto *default_attr = node.add_attribute();
-    default_attr->set_name("default_int64");
-    default_attr->set_type(AttributeProto::AttributeType::INT);
-    default_attr->set_i(default_int64);
+    Expect(registry, std::move(node), "test_cc_category_mapper_string_to_int",
+           {default_opset, opset}, [=]() -> IoData {
+             default_attr->set_name("default_int64");
+             default_attr->set_type(AttributeProto::AttributeType::INT);
+             default_attr->set_i(default_int64);
 
-    Tensor x = Tensor::FromStrings("", {4}, {"hello", "world", "?", "good morning"});
-    Tensor y = category_mapper.operator()<std::string, int64_t>(x, cats_strings, cats_int64s,
-                                                                default_int64);
+             Tensor x = Tensor::FromStrings("", {4}, {"hello", "world", "?", "good morning"});
+             Tensor y = category_mapper.operator()<std::string, int64_t>(
+                 x, cats_strings, cats_int64s, default_int64);
 
-    Expect(node, {x}, {y}, "test_cc_category_mapper_string_to_int", {default_opset, opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // int64 -> string variant.
@@ -92,16 +94,18 @@ void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode)
 
     const std::string default_string = "_Unused";
     AttributeProto *default_attr = node.add_attribute();
-    default_attr->set_name("default_string");
-    default_attr->set_type(AttributeProto::AttributeType::STRING);
-    default_attr->set_s(utils::String(default_string));
+    Expect(registry, std::move(node), "test_cc_category_mapper_int_to_string",
+           {default_opset, opset}, [=]() -> IoData {
+             default_attr->set_name("default_string");
+             default_attr->set_type(AttributeProto::AttributeType::STRING);
+             default_attr->set_s(utils::String(default_string));
 
-    Tensor x = Tensor::FromInt64("", {4}, {1, 2, 4, 3});
-    Tensor y = category_mapper.operator()<int64_t, std::string>(x, cats_strings, cats_int64s,
-                                                                default_string);
+             Tensor x = Tensor::FromInt64("", {4}, {1, 2, 4, 3});
+             Tensor y = category_mapper.operator()<int64_t, std::string>(
+                 x, cats_strings, cats_int64s, default_string);
 
-    Expect(node, {x}, {y}, "test_cc_category_mapper_int_to_string", {default_opset, opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 

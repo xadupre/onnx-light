@@ -56,6 +56,21 @@ class TestIOModel(ExtTestCase):
             loaded_proto = onnxl.load(model_path)
             self.assertEqual(proto, loaded_proto)
 
+    def test_save_and_load_model_when_input_is_file_descriptor(self) -> None:
+        proto = _simple_model()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = os.path.join(temp_dir, "model_fd.onnx")
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            if hasattr(os, "O_BINARY"):
+                flags |= os.O_BINARY
+            fd = os.open(model_path, flags, 0o666)
+            try:
+                proto.SerializeToFileDescriptor(fd)
+            finally:
+                os.close(fd)
+            loaded_proto = onnxl.load(model_path)
+            self.assertEqual(proto, loaded_proto)
+
     def test_load_model_with_format_protobuf(self) -> None:
         """Tests that load() accepts format='protobuf' parameter."""
         proto = _simple_model()

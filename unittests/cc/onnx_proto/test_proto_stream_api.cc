@@ -3,6 +3,16 @@
 // return bool (true on success) and ByteSizeLong() reports the serialized size
 // without performing a real serialization (it delegates to SerializeSize()).
 #include "onnx.h"
+#include <filesystem>
+#include <fstream>
+#if defined(_WIN32)
+#include <fcntl.h>
+#include <io.h>
+#include <sys/stat.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 #include <gtest/gtest.h>
 #include <string>
 
@@ -16,6 +26,30 @@ AttributeProto MakeIntAttr() {
   attr.set_name("i_attr");
   attr.ref_i() = 123456789;
   return attr;
+}
+
+int OpenTempFdForWrite(const std::string &path) {
+#if defined(_WIN32)
+  int fd = -1;
+  _sopen_s(&fd, path.c_str(), _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY, _SH_DENYNO,
+           _S_IREAD | _S_IWRITE);
+  return fd;
+#else
+  return ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+#endif
+}
+
+void CloseFd(int fd) {
+#if defined(_WIN32)
+  _close(fd);
+#else
+  ::close(fd);
+#endif
+}
+
+std::string ReadWholeFile(const std::string &path) {
+  std::ifstream in(path, std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
 } // namespace
@@ -69,4 +103,39 @@ TEST(proto_stream_api, ByteSizeLongOnModelProto) {
   std::string serialized;
   ASSERT_TRUE(model.SerializeToString(serialized));
   EXPECT_EQ(model.ByteSizeLong(), serialized.size());
+}
+
+TEST(proto_stream_api, SerializeToFileDescriptorReturnsTrue) {
+  AttributeProto attr = MakeIntAttr();
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "onnx_light_proto_fd.bin";
+  const int fd = OpenTempFdForWrite(path.string());
+  ASSERT_GE(fd, 0);
+  ASSERT_TRUE(attr.SerializeToFileDescriptor(fd));
+  CloseFd(fd);
+
+  AttributeProto parsed;
+  ASSERT_TRUE(parsed.ParseFromString(ReadWholeFile(path.string())));
+  EXPECT_EQ(parsed.ref_i(), 123456789);
+  EXPECT_EQ(parsed.ref_name(), "i_attr");
+  std::filesystem::remove(path);
+}
+
+TEST(proto_stream_api, SerializeToFileDescriptorWithOptionsReturnsTrue) {
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("onnx-light");
+  SerializeOptions sopts;
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "onnx_light_model_proto_fd.bin";
+  const int fd = OpenTempFdForWrite(path.string());
+  ASSERT_GE(fd, 0);
+  ASSERT_TRUE(model.SerializeToFileDescriptor(fd, sopts));
+  CloseFd(fd);
+
+  ModelProto parsed;
+  ASSERT_TRUE(parsed.ParseFromString(ReadWholeFile(path.string())));
+  EXPECT_EQ(parsed.ref_ir_version(), 7);
+  EXPECT_EQ(parsed.ref_producer_name(), "onnx-light");
+  std::filesystem::remove(path);
 }

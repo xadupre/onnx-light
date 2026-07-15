@@ -5,6 +5,7 @@
 #include "onnx.h"
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #if defined(_WIN32)
 #include <fcntl.h>
 #include <io.h>
@@ -15,6 +16,7 @@
 #endif
 #include <gtest/gtest.h>
 #include <string>
+#include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -138,4 +140,77 @@ TEST(proto_stream_api, SerializeToFileDescriptorWithOptionsReturnsTrue) {
   EXPECT_EQ(parsed.ref_ir_version(), 7);
   EXPECT_EQ(parsed.ref_producer_name(), "onnx-light");
   std::filesystem::remove(path);
+}
+
+TEST(proto_stream_api, SerializeAsString) {
+  AttributeProto attr = MakeIntAttr();
+  const std::string serialized = attr.SerializeAsString();
+  EXPECT_FALSE(serialized.empty());
+
+  AttributeProto parsed;
+  EXPECT_TRUE(parsed.ParseFromString(serialized));
+  EXPECT_EQ(parsed.ref_i(), 123456789);
+  EXPECT_EQ(parsed.ref_name(), "i_attr");
+}
+
+TEST(proto_stream_api, SerializeAsStringMatchesSerializeToString) {
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("onnx-light");
+
+  std::string via_to_string;
+  ASSERT_TRUE(model.SerializeToString(via_to_string));
+  const std::string via_as_string = model.SerializeAsString();
+  EXPECT_EQ(via_to_string, via_as_string);
+}
+
+TEST(proto_stream_api, SerializeToArrayReturnsTrue) {
+  AttributeProto attr = MakeIntAttr();
+  const size_t n = attr.ByteSizeLong();
+  std::vector<uint8_t> buffer(n);
+  ASSERT_TRUE(attr.SerializeToArray(buffer.data(), static_cast<int>(n)));
+
+  AttributeProto parsed;
+  ASSERT_TRUE(
+      parsed.ParseFromString(std::string(reinterpret_cast<const char *>(buffer.data()), n)));
+  EXPECT_EQ(parsed.ref_i(), 123456789);
+  EXPECT_EQ(parsed.ref_name(), "i_attr");
+}
+
+TEST(proto_stream_api, SerializeToArrayMatchesSerializeToString) {
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("onnx-light");
+
+  std::string via_to_string;
+  ASSERT_TRUE(model.SerializeToString(via_to_string));
+  const size_t n = via_to_string.size();
+  std::vector<uint8_t> buffer(n);
+  ASSERT_TRUE(model.SerializeToArray(buffer.data(), static_cast<int>(n)));
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(buffer.data()), n), via_to_string);
+}
+
+TEST(proto_stream_api, SerializeToOstreamReturnsTrue) {
+  AttributeProto attr = MakeIntAttr();
+  std::ostringstream oss;
+  ASSERT_TRUE(attr.SerializeToOstream(&oss));
+  const std::string serialized = oss.str();
+  EXPECT_FALSE(serialized.empty());
+
+  AttributeProto parsed;
+  EXPECT_TRUE(parsed.ParseFromString(serialized));
+  EXPECT_EQ(parsed.ref_i(), 123456789);
+  EXPECT_EQ(parsed.ref_name(), "i_attr");
+}
+
+TEST(proto_stream_api, SerializeToOstreamMatchesSerializeToString) {
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("onnx-light");
+
+  std::string via_to_string;
+  ASSERT_TRUE(model.SerializeToString(via_to_string));
+  std::ostringstream oss;
+  ASSERT_TRUE(model.SerializeToOstream(&oss));
+  EXPECT_EQ(oss.str(), via_to_string);
 }

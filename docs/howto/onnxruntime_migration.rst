@@ -79,13 +79,13 @@ Every protobuf message method used by onnxruntime maps onto that native API:
     * - ``bool p.SerializeToString(&str)``
       - ``p.SerializeToString(str); // returns bool``
     * - ``std::string p.SerializeAsString()``
-      - ``std::string s; p.SerializeToString(s); return s;``
+      - ``p.SerializeAsString(); // native``
     * - ``size_t p.ByteSizeLong()``
       - ``p.ByteSizeLong(); // native, calls SerializeSize() – no serialization``
     * - ``bool p.SerializeToArray(data, size)``
-      - ``std::string s; p.SerializeToString(s); memcpy(data, s.data(), s.size());``
+      - ``p.SerializeToArray(data, size); // native``
     * - ``bool p.SerializeToOstream(&os)``
-      - ``std::string s; p.SerializeToString(s); os.write(s.data(), s.size());``
+      - ``p.SerializeToOstream(&os); // native``
     * - ``bool p.SerializeToFileDescriptor(fd)``
       - ``std::string s; p.SerializeToString(s); write(fd, s.data(), s.size());``
     * - ``FileOutputStream o(fd); p.SerializeToZeroCopyStream(&o) && o.Flush()``

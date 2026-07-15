@@ -22,6 +22,9 @@
   void ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
   void ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
   bool ParseFromIstream(std::istream *input);                                                      \
+  std::string SerializeAsString() const;                                                           \
+  bool SerializeToArray(void *data, int size) const;                                               \
+  bool SerializeToOstream(std::ostream *output) const;                                             \
   bool SerializeToString(std::string &out) const;                                                  \
   bool SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
   bool SerializeToFileDescriptor(int fd) const;                                                    \

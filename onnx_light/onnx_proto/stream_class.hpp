@@ -29,6 +29,13 @@
     _ParseFromZeroCopyStream(*this, stream, opts);                                                 \
   }                                                                                                \
   bool cls::ParseFromIstream(std::istream *input) { return _ParseFromIstream(*this, input); }      \
+  std::string cls::SerializeAsString() const { return _SerializeAsString(*this); }                 \
+  bool cls::SerializeToArray(void *data, int size) const {                                         \
+    return _SerializeToArray(*this, data, size);                                                   \
+  }                                                                                                \
+  bool cls::SerializeToOstream(std::ostream *output) const {                                       \
+    return _SerializeToOstream(*this, output);                                                     \
+  }                                                                                                \
   bool cls::SerializeToString(std::string &out) const { return _SerializeToString(*this, out); }   \
   bool cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
     return _SerializeToString(*this, out, opts);                                                   \
@@ -413,6 +420,38 @@ template <typename cls> bool _SerializeToFileDescriptor(cls &self, int fd, Seria
   size_buf.swap_size_cache(stream);
   self.SerializeToStream(stream, local_opts);
   return stream.Flush();
+}
+
+template <typename cls> std::string _SerializeAsString(cls &self) {
+  std::string out;
+  SerializeOptions opts;
+  _SerializeToString(self, out, opts);
+  return out;
+}
+
+template <typename cls> bool _SerializeToArray(cls &self, void *data, int size) {
+  EXT_ENFORCE(data != nullptr, "SerializeToArray: data pointer must not be null.");
+  EXT_ENFORCE(size >= 0, "SerializeToArray: size must be non-negative.");
+  std::string out;
+  SerializeOptions opts;
+  if (!_SerializeToString(self, out, opts)) {
+    return false;
+  }
+  EXT_ENFORCE(static_cast<size_t>(size) >= out.size(), "SerializeToArray: buffer too small (need ",
+              out.size(), " bytes, got ", size, ").");
+  std::memcpy(data, out.data(), out.size());
+  return true;
+}
+
+template <typename cls> bool _SerializeToOstream(cls &self, std::ostream *output) {
+  EXT_ENFORCE(output != nullptr, "SerializeToOstream: output stream pointer must not be null.");
+  std::string out;
+  SerializeOptions opts;
+  if (!_SerializeToString(self, out, opts)) {
+    return false;
+  }
+  output->write(out.data(), static_cast<std::streamsize>(out.size()));
+  return output->good();
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -72,24 +72,21 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
                                    {0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
       auto [values, indices] = topk_kernel(x, 3, /*axis=*/1, /*largest=*/true, /*sorted=*/true);
-      return IoData{{std::move(x), std::move(k)},
-                    {std::move(std::move(values)), std::move(std::move(indices))}};
+      return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
     });
   }
 
   // test_cc_top_k_smallest — largest=0, sorted=1, k=3.
   {
     NodeProto node = MakeTopKNode(/*axis=*/1, /*largest=*/0, /*sorted_attr=*/1,
-    Expect(registry, std::move(node), "test_cc_top_k_smallest", {opset},
-           [=]() -> IoData {
-      /*include_largest=*/true, /*include_sorted=*/true);
+                                  /*include_largest=*/true, /*include_sorted=*/true);
+    Expect(registry, std::move(node), "test_cc_top_k_smallest", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3, 4},
                                    {0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 11.f, 10.f, 9.f, 8.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
       auto [values, indices] = topk_kernel(x, 3, /*axis=*/1, /*largest=*/false, /*sorted=*/true);
-      return IoData{{std::move(x), std::move(k)},
-                    {std::move(std::move(values)), std::move(std::move(indices))}};
-           });
+      return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
+    });
   }
 
   // test_cc_top_k_negative_axis — axis=-1, k=3.
@@ -100,8 +97,7 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
                                    {0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
       auto [values, indices] = topk_kernel(x, 3, /*axis=*/-1, /*largest=*/true, /*sorted=*/true);
-      return IoData{{std::move(x), std::move(k)},
-                    {std::move(std::move(values)), std::move(std::move(indices))}};
+      return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
     });
   }
 
@@ -113,8 +109,7 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromFloat("", {5}, {1.f, 2.f, 3.f, 3.f, 2.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
       auto [values, indices] = topk_kernel(x, 3, /*axis=*/0, /*largest=*/true, /*sorted=*/true);
-      return IoData{{std::move(x), std::move(k)},
-                    {std::move(std::move(values)), std::move(std::move(indices))}};
+      return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
     });
   }
 
@@ -125,23 +120,21 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromFloat("", {2, 4}, {1.f, 2.f, 2.f, 3.f, 5.f, 5.f, 4.f, 3.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
       auto [values, indices] = topk_kernel(x, 3, /*axis=*/1, /*largest=*/true, /*sorted=*/true);
-      return IoData{{std::move(x), std::move(k)},
-                    {std::move(std::move(values)), std::move(std::move(indices))}};
+      return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
     });
   }
 
   // test_cc_top_k_same_values_largest — explicit largest=1 attribute with ties.
   {
     NodeProto node = MakeTopKNode(/*axis=*/0, /*largest=*/1, /*sorted_attr=*/1,
-    Expect(registry, std::move(node), "test_cc_top_k_same_values_largest", {opset},
-           [=]() -> IoData {
-      /*include_largest=*/true, /*include_sorted=*/true);
-      Tensor x = Tensor::FromFloat("", {5}, {1.f, 2.f, 3.f, 3.f, 2.f});
-      Tensor k = Tensor::FromInt64("", {1}, {3});
-      auto [values, indices] = topk_kernel(x, 3, /*axis=*/0, /*largest=*/true, /*sorted=*/true);
-      return IoData{{std::move(x), std::move(k)},
-                    {std::move(std::move(values)), std::move(std::move(indices))}};
-           });
+                                  /*include_largest=*/true, /*include_sorted=*/true);
+    Expect(
+        registry, std::move(node), "test_cc_top_k_same_values_largest", {opset}, [=]() -> IoData {
+          Tensor x = Tensor::FromFloat("", {5}, {1.f, 2.f, 3.f, 3.f, 2.f});
+          Tensor k = Tensor::FromInt64("", {1}, {3});
+          auto [values, indices] = topk_kernel(x, 3, /*axis=*/0, /*largest=*/true, /*sorted=*/true);
+          return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
+        });
   }
 
   // test_cc_top_k_uint64 — uint64 input exercises the all_numeric_types
@@ -152,8 +145,7 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromUint64("", {3, 4}, {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u});
       Tensor k = Tensor::FromInt64("", {1}, {3});
       auto [values, indices] = topk_kernel(x, 3, /*axis=*/1, /*largest=*/true, /*sorted=*/true);
-      return IoData{{std::move(x), std::move(k)},
-                    {std::move(std::move(values)), std::move(std::move(indices))}};
+      return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
     });
   }
 }

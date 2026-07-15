@@ -122,7 +122,7 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
              auto [y, y_h] = rnn_kernel(x, w, r, b, h0);
 
              return IoData{{std::move(x), std::move(w), std::move(r), std::move(b), std::move(h0)},
-                           {std::move(std::move(y)), std::move(std::move(y_h))}};
+                           {std::move(y), std::move(y_h)}};
            });
   }
 
@@ -249,7 +249,7 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
           Tensor::FromFloat("", {batch_size, 1, hidden_size}, y_h_batchwise_data);
 
       return IoData{{std::move(x_batchwise), std::move(w), std::move(r)},
-                    {std::move(std::move(y_batchwise)), std::move(std::move(y_h_batchwise))}};
+                    {std::move(y_batchwise), std::move(y_h_batchwise)}};
     });
   }
 }

@@ -105,25 +105,25 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     upstream_node.add_output("values");
 
     AttributeProto *upstream_attr = upstream_node.add_attribute();
-    Expect(registry, std::move(upstream_node), "test_constant", {opset}, [=]() -> IoData {
-      upstream_attr->set_name("value");
-      upstream_attr->set_type(AttributeProto::AttributeType::TENSOR);
-      TensorProto *ut = upstream_attr->add_t();
-      ut->set_name("const_tensor");
-      ut->set_data_type(static_cast<DataType>(values.data_type));
-      for (int64_t d : values.shape) {
-        ut->add_dims(static_cast<uint64_t>(d));
-      }
-      // Mirror the upstream Python helper ``onnx.helper.make_tensor`` which
-      // stores FLOAT tensors in the typed ``float_data`` field rather than
-      // ``raw_data``; this keeps the produced model byte-equivalent to the
-      // upstream ``test_constant/model.onnx``.
-      for (float v : values_data) {
-        ut->add_float_data(v);
-      }
+    upstream_attr->set_name("value");
+    upstream_attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *ut = upstream_attr->add_t();
+    ut->set_name("const_tensor");
+    ut->set_data_type(static_cast<DataType>(values.data_type));
+    for (int64_t d : values.shape) {
+      ut->add_dims(static_cast<uint64_t>(d));
+    }
+    // Mirror the upstream Python helper ``onnx.helper.make_tensor`` which
+    // stores FLOAT tensors in the typed ``float_data`` field rather than
+    // ``raw_data``; this keeps the produced model byte-equivalent to the
+    // upstream ``test_constant/model.onnx``.
+    for (float v : values_data) {
+      ut->add_float_data(v);
+    }
 
+    Expect(registry, std::move(upstream_node), "test_constant", {opset}, [=]() -> IoData {
       Tensor y_upstream = kernel::Constant(ctx)(std::move(values));
-      return IoData{std::move(/*inputs=*/{}), {std::move(y_upstream)}};
+      return IoData{{}, {std::move(y_upstream)}};
     });
   }
 
@@ -143,12 +143,12 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     n.set_op_type("Constant");
     n.add_output("y");
     AttributeProto *a = n.add_attribute();
+    a->set_name("value_float");
+    a->set_type(AttributeProto::AttributeType::FLOAT);
+    a->set_f(3.5f);
     Expect(registry, std::move(n), "test_cc_constant_value_float", {v12}, [=]() -> IoData {
-      a->set_name("value_float");
-      a->set_type(AttributeProto::AttributeType::FLOAT);
-      a->set_f(3.5f);
       Tensor y = Tensor::FromFloat("", /*shape=*/{}, {3.5f});
-      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+      return IoData{{}, {std::move(y)}};
     });
   }
 
@@ -158,15 +158,15 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     n.set_op_type("Constant");
     n.add_output("y");
     AttributeProto *a = n.add_attribute();
+    a->set_name("value_floats");
+    a->set_type(AttributeProto::AttributeType::FLOATS);
+    const std::vector<float> vals = {1.0f, 2.5f, -3.25f, 4.75f};
+    for (float v : vals) {
+      a->floats().push_back(v);
+    }
     Expect(registry, std::move(n), "test_cc_constant_value_floats", {v12}, [=]() -> IoData {
-      a->set_name("value_floats");
-      a->set_type(AttributeProto::AttributeType::FLOATS);
-      const std::vector<float> vals = {1.0f, 2.5f, -3.25f, 4.75f};
-      for (float v : vals) {
-        a->floats().push_back(v);
-      }
       Tensor y = Tensor::FromFloat("", {static_cast<int64_t>(vals.size())}, vals);
-      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+      return IoData{{}, {std::move(y)}};
     });
   }
 
@@ -176,12 +176,12 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     n.set_op_type("Constant");
     n.add_output("y");
     AttributeProto *a = n.add_attribute();
+    a->set_name("value_int");
+    a->set_type(AttributeProto::AttributeType::INT);
+    a->set_i(42);
     Expect(registry, std::move(n), "test_cc_constant_value_int", {v12}, [=]() -> IoData {
-      a->set_name("value_int");
-      a->set_type(AttributeProto::AttributeType::INT);
-      a->set_i(42);
       Tensor y = Tensor::FromInt64("", /*shape=*/{}, {static_cast<int64_t>(42)});
-      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+      return IoData{{}, {std::move(y)}};
     });
   }
 
@@ -191,15 +191,15 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     n.set_op_type("Constant");
     n.add_output("y");
     AttributeProto *a = n.add_attribute();
+    a->set_name("value_ints");
+    a->set_type(AttributeProto::AttributeType::INTS);
+    const std::vector<int64_t> vals = {-1, 0, 1, 2, 3};
+    for (int64_t v : vals) {
+      a->ints().push_back(v);
+    }
     Expect(registry, std::move(n), "test_cc_constant_value_ints", {v12}, [=]() -> IoData {
-      a->set_name("value_ints");
-      a->set_type(AttributeProto::AttributeType::INTS);
-      const std::vector<int64_t> vals = {-1, 0, 1, 2, 3};
-      for (int64_t v : vals) {
-        a->ints().push_back(v);
-      }
       Tensor y = Tensor::FromInt64("", {static_cast<int64_t>(vals.size())}, vals);
-      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+      return IoData{{}, {std::move(y)}};
     });
   }
 
@@ -209,12 +209,12 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     n.set_op_type("Constant");
     n.add_output("y");
     AttributeProto *a = n.add_attribute();
+    a->set_name("value_string");
+    a->set_type(AttributeProto::AttributeType::STRING);
+    a->set_s(utils::String("hello"));
     Expect(registry, std::move(n), "test_cc_constant_value_string", {v12}, [=]() -> IoData {
-      a->set_name("value_string");
-      a->set_type(AttributeProto::AttributeType::STRING);
-      a->set_s(utils::String("hello"));
       Tensor y = Tensor::FromStrings("", /*shape=*/{}, {std::string("hello")});
-      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+      return IoData{{}, {std::move(y)}};
     });
   }
 
@@ -224,15 +224,15 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     n.set_op_type("Constant");
     n.add_output("y");
     AttributeProto *a = n.add_attribute();
+    a->set_name("value_strings");
+    a->set_type(AttributeProto::AttributeType::STRINGS);
+    const std::vector<std::string> vals = {"a", "bc", "def"};
+    for (const std::string &v : vals) {
+      *a->add_strings() = utils::String(v);
+    }
     Expect(registry, std::move(n), "test_cc_constant_value_strings", {v12}, [=]() -> IoData {
-      a->set_name("value_strings");
-      a->set_type(AttributeProto::AttributeType::STRINGS);
-      const std::vector<std::string> vals = {"a", "bc", "def"};
-      for (const std::string &v : vals) {
-        *a->add_strings() = utils::String(v);
-      }
       Tensor y = Tensor::FromStrings("", {static_cast<int64_t>(vals.size())}, vals);
-      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+      return IoData{{}, {std::move(y)}};
     });
   }
 }

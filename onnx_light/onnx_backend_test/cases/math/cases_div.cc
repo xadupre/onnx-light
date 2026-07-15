@@ -158,7 +158,12 @@ void RegisterDivCases(std::vector<TestCase> &registry, TestMode mode) {
       // ``test_div_int32_trunc`` uses a hand-rolled fixed-vector pair that
       // exercises truncation toward zero (e.g. ``-3 / 2 == -1``).
       {"test_div_int32_trunc",
-       {Tensor::FromInt32("", {4}, {-3, 3, -3, 3}), Tensor::FromInt32("", {4}, {2, 2, -2, -2})}},
+       [=]() -> IoData {
+         auto inputs_0 = Tensor::FromInt32("", {4}, {-3, 3, -3, 3});
+         auto inputs_1 = Tensor::FromInt32("", {4}, {2, 2, -2, -2});
+         Tensor z = div_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
       {"test_div_int64",
        [=]() -> IoData {
          auto inputs_0 =
@@ -206,7 +211,12 @@ void RegisterDivCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       // From Div.export_div_broadcast():
       {"test_div_bcast",
-       {RandnFloat({3, 4, 5}, /*seed=*/35), RandFloatUnitOffset({5}, /*seed=*/36)}},
+       [=]() -> IoData {
+         auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/35);
+         auto inputs_1 = RandFloatUnitOffset({5}, /*seed=*/36);
+         Tensor z = div_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
   };
 
   for (const auto &[name, make_io] : cases) {

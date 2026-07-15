@@ -198,7 +198,12 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
        }},
       // From Greater.export_greater_broadcast() in greater_equal.py:
       {"test_greater_equal_bcast",
-       {RandnFloat({3, 4, 5}, /*seed=*/123), RandnFloat({5}, /*seed=*/124)}},
+       [=]() -> IoData {
+         auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/123);
+         auto inputs_1 = RandnFloat({5}, /*seed=*/124);
+         Tensor z = ge_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
   };
 
   for (const auto &[name, make_io] : cases) {

@@ -64,7 +64,7 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
              Tensor target = Tensor::FromInt64("", {3}, {2, 0, 4});
              Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"mean",
                                       /*has_ignore_index=*/false, /*ignore_index=*/0);
-             return IoData{{std::move(input), std::move(target)}, {std::move(std::move(loss))}};
+             return IoData{{std::move(input), std::move(target)}, {std::move(loss)}};
            });
   }
 
@@ -85,7 +85,7 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
              Tensor target = Tensor::FromInt64("", {3}, {2, 0, 4});
              Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"none",
                                       /*has_ignore_index=*/false, /*ignore_index=*/0);
-             return IoData{{std::move(input), std::move(target)}, {std::move(std::move(loss))}};
+             return IoData{{std::move(input), std::move(target)}, {std::move(loss)}};
            });
   }
 
@@ -109,7 +109,7 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
              Tensor loss = nll_kernel(input, target, &weight, /*reduction=*/"sum",
                                       /*has_ignore_index=*/false, /*ignore_index=*/0);
              return IoData{{std::move(input), std::move(target), std::move(weight)},
-                           {std::move(std::move(loss))}};
+                           {std::move(loss)}};
            });
   }
 
@@ -130,7 +130,7 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
              Tensor target = Tensor::FromInt64("", {3}, {2, -1, 4});
              Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"mean",
                                       /*has_ignore_index=*/true, /*ignore_index=*/-1);
-             return IoData{{std::move(input), std::move(target)}, {std::move(std::move(loss))}};
+             return IoData{{std::move(input), std::move(target)}, {std::move(loss)}};
            });
   }
 
@@ -150,7 +150,7 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
              Tensor target = Tensor::FromInt64("", {2, 2}, {2, 1, 0, 2});
              Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"none",
                                       /*has_ignore_index=*/false, /*ignore_index=*/0);
-             return IoData{{std::move(input), std::move(target)}, {std::move(std::move(loss))}};
+             return IoData{{std::move(input), std::move(target)}, {std::move(loss)}};
            });
   }
 

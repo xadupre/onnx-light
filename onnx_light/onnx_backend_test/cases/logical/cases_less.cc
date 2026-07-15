@@ -163,7 +163,13 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       // From Less.export_less_broadcast():
-      {"test_less_bcast", {RandnFloat({3, 4, 5}, /*seed=*/27), RandnFloat({5}, /*seed=*/28)}},
+      {"test_less_bcast",
+       [=]() -> IoData {
+         auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/27);
+         auto inputs_1 = RandnFloat({5}, /*seed=*/28);
+         Tensor z = less_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
   };
 
   for (const auto &[name, make_io] : cases) {

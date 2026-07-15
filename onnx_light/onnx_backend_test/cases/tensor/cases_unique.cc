@@ -85,9 +85,8 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
              attrs.sorted = false;
              auto out = unique_kernel(x, attrs);
              return IoData{{std::move(x)},
-                           {std::move(std::move(out.y)), std::move(std::move(out.indices)),
-                            std::move(std::move(out.inverse_indices)),
-                            std::move(std::move(out.counts))}};
+                           {std::move(out.y), std::move(out.indices),
+                            std::move(out.inverse_indices), std::move(out.counts)}};
            });
   }
 
@@ -99,9 +98,8 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromFloat("X", {6}, {2.f, 1.f, 1.f, 3.f, 4.f, 3.f});
              auto out = unique_kernel(x);
              return IoData{{std::move(x)},
-                           {std::move(std::move(out.y)), std::move(std::move(out.indices)),
-                            std::move(std::move(out.inverse_indices)),
-                            std::move(std::move(out.counts))}};
+                           {std::move(out.y), std::move(out.indices),
+                            std::move(out.inverse_indices), std::move(out.counts)}};
            });
   }
 
@@ -112,8 +110,8 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
       const Tensor x = Tensor::FromFloat("X", {1}, {7.f});
       auto out = unique_kernel(x);
       return IoData{{std::move(x)},
-                    {std::move(std::move(out.y)), std::move(std::move(out.indices)),
-                     std::move(std::move(out.inverse_indices)), std::move(std::move(out.counts))}};
+                    {std::move(out.y), std::move(out.indices), std::move(out.inverse_indices),
+                     std::move(out.counts)}};
     });
   }
 
@@ -128,8 +126,8 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
       attrs.axis = 0;
       auto out = unique_kernel(x, attrs);
       return IoData{{std::move(x)},
-                    {std::move(std::move(out.y)), std::move(std::move(out.indices)),
-                     std::move(std::move(out.inverse_indices)), std::move(std::move(out.counts))}};
+                    {std::move(out.y), std::move(out.indices), std::move(out.inverse_indices),
+                     std::move(out.counts)}};
     });
   }
 
@@ -146,9 +144,8 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
              attrs.axis = -1;
              auto out = unique_kernel(x, attrs);
              return IoData{{std::move(x)},
-                           {std::move(std::move(out.y)), std::move(std::move(out.indices)),
-                            std::move(std::move(out.inverse_indices)),
-                            std::move(std::move(out.counts))}};
+                           {std::move(out.y), std::move(out.indices),
+                            std::move(out.inverse_indices), std::move(out.counts)}};
            });
   }
 
@@ -165,9 +162,8 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
              attrs.axis = 1;
              auto out = unique_kernel(x, attrs);
              return IoData{{std::move(x)},
-                           {std::move(std::move(out.y)), std::move(std::move(out.indices)),
-                            std::move(std::move(out.inverse_indices)),
-                            std::move(std::move(out.counts))}};
+                           {std::move(out.y), std::move(out.indices),
+                            std::move(out.inverse_indices), std::move(out.counts)}};
            });
   }
 }

@@ -197,7 +197,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       // From Less.export_less_broadcast() in less_equal.py:
       {"test_less_equal_bcast",
-       {RandnFloat({3, 4, 5}, /*seed=*/223), RandnFloat({5}, /*seed=*/224)}},
+       [=]() -> IoData {
+         auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/223);
+         auto inputs_1 = RandnFloat({5}, /*seed=*/224);
+         Tensor z = le_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
   };
 
   for (const auto &[name, make_io] : cases) {

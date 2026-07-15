@@ -252,7 +252,7 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
           Tensor::FromFloat("", {batch_size, 1, hidden_size}, y_h_batchwise_data);
 
       return IoData{{std::move(x_batchwise), std::move(w), std::move(r)},
-                    {std::move(std::move(y_batchwise)), std::move(std::move(y_h_batchwise))}};
+                    {std::move(y_batchwise), std::move(y_h_batchwise)}};
     });
   }
 }

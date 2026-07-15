@@ -165,7 +165,13 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       // From Add.export_add_broadcast():
-      {"test_add_bcast", {RandnFloat({3, 4, 5}, /*seed=*/7), RandnFloat({5}, /*seed=*/8)}},
+      {"test_add_bcast",
+       [=]() -> IoData {
+         auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/7);
+         auto inputs_1 = RandnFloat({5}, /*seed=*/8);
+         Tensor z = add_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
   };
 
   for (const auto &[name, make_io] : cases) {

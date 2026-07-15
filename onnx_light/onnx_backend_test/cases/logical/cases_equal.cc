@@ -159,8 +159,13 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       // From Equal.export_equal_broadcast():
       {"test_equal_bcast",
-       {Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/65)),
-        Tensor::FromInt32("", {5}, RandnInt<int32_t>({5}, /*seed=*/66))}},
+       [=]() -> IoData {
+         auto inputs_0 =
+             Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/65));
+         auto inputs_1 = Tensor::FromInt32("", {5}, RandnInt<int32_t>({5}, /*seed=*/66));
+         Tensor z = equal_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
   };
 
   for (const auto &[name, make_io] : cases) {

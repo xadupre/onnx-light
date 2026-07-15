@@ -173,7 +173,13 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       // From Mul.export_mul_broadcast():
-      {"test_mul_bcast", {RandnFloat({3, 4, 5}, /*seed=*/19), RandnFloat({5}, /*seed=*/20)}},
+      {"test_mul_bcast",
+       [=]() -> IoData {
+         auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/19);
+         auto inputs_1 = RandnFloat({5}, /*seed=*/20);
+         Tensor z = mul_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
   };
 
   for (const auto &[name, make_io] : cases) {

@@ -163,7 +163,13 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       // From Greater.export_greater_broadcast():
-      {"test_greater_bcast", {RandnFloat({3, 4, 5}, /*seed=*/23), RandnFloat({5}, /*seed=*/24)}},
+      {"test_greater_bcast",
+       [=]() -> IoData {
+         auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/23);
+         auto inputs_1 = RandnFloat({5}, /*seed=*/24);
+         Tensor z = greater_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
   };
 
   for (const auto &[name, make_io] : cases) {

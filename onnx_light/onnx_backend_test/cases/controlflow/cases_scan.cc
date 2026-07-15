@@ -311,15 +311,14 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset8 = DefaultOpset(8);
     NodeProto node = MakeScanNodeWithBody({/*sequence_lens*/ "", "initial", "x"}, {"y", "z"},
-    Expect(registry, std::move(node), "test_scan_sum", {opset8},
-           [=]() -> IoData {
-      BuildSumScanBody(), /*num_scan_inputs=*/1);
-      const Tensor initial("", DataType::FLOAT, {1, 2}, FloatBytes({0.f, 0.f}));
-      const Tensor x("", DataType::FLOAT, {1, 3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
-      const Tensor y("", DataType::FLOAT, {1, 2}, FloatBytes({9.f, 12.f}));
-      const Tensor z("", DataType::FLOAT, {1, 3, 2}, FloatBytes({1.f, 2.f, 4.f, 6.f, 9.f, 12.f}));
+                                          BuildSumScanBody(), /*num_scan_inputs=*/1);
+    Expect(registry, std::move(node), "test_scan_sum", {opset8}, []() -> IoData {
+      Tensor initial("", DataType::FLOAT, {1, 2}, FloatBytes({0.f, 0.f}));
+      Tensor x("", DataType::FLOAT, {1, 3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+      Tensor y("", DataType::FLOAT, {1, 2}, FloatBytes({9.f, 12.f}));
+      Tensor z("", DataType::FLOAT, {1, 3, 2}, FloatBytes({1.f, 2.f, 4.f, 6.f, 9.f, 12.f}));
       return IoData{{std::move(initial), std::move(x)}, {std::move(y), std::move(z)}};
-           });
+    });
   }
 
   // test_scan9_sum (opset 9): no batch dim.
@@ -328,15 +327,14 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset9 = DefaultOpset(9);
     NodeProto node = MakeScanNodeWithBody({"initial", "x"}, {"y", "z"}, BuildSumScanBody(),
-    Expect(registry, std::move(node), "test_scan9_sum", {opset9},
-           [=]() -> IoData {
-      /*num_scan_inputs=*/1);
-      const Tensor initial("", DataType::FLOAT, {2}, FloatBytes({0.f, 0.f}));
-      const Tensor x("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
-      const Tensor y("", DataType::FLOAT, {2}, FloatBytes({9.f, 12.f}));
-      const Tensor z("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 4.f, 6.f, 9.f, 12.f}));
+                                          /*num_scan_inputs=*/1);
+    Expect(registry, std::move(node), "test_scan9_sum", {opset9}, []() -> IoData {
+      Tensor initial("", DataType::FLOAT, {2}, FloatBytes({0.f, 0.f}));
+      Tensor x("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+      Tensor y("", DataType::FLOAT, {2}, FloatBytes({9.f, 12.f}));
+      Tensor z("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 4.f, 6.f, 9.f, 12.f}));
       return IoData{{std::move(initial), std::move(x)}, {std::move(y), std::move(z)}};
-           });
+    });
   }
 
   // test_scan9_multi_state (opset 9): two state variables (sum, prod).
@@ -345,19 +343,18 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset9 = DefaultOpset(9);
     NodeProto node = MakeScanNodeWithBody({"initial_sum", "initial_prod", "x"},
-    Expect(registry, std::move(node), "test_scan9_multi_state", {opset9},
-           [=]() -> IoData {
-      {"y_sum", "y_prod", "z"}, BuildMultiStateScanBody(),
-      /*num_scan_inputs=*/1);
-      const Tensor initial_sum("", DataType::FLOAT, {2}, FloatBytes({0.f, 0.f}));
-      const Tensor initial_prod("", DataType::FLOAT, {2}, FloatBytes({1.f, 1.f}));
-      const Tensor x("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
-      const Tensor y_sum("", DataType::FLOAT, {2}, FloatBytes({9.f, 12.f}));
-      const Tensor y_prod("", DataType::FLOAT, {2}, FloatBytes({15.f, 48.f}));
-      const Tensor z("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 4.f, 6.f, 9.f, 12.f}));
+                                          {"y_sum", "y_prod", "z"}, BuildMultiStateScanBody(),
+                                          /*num_scan_inputs=*/1);
+    Expect(registry, std::move(node), "test_scan9_multi_state", {opset9}, []() -> IoData {
+      Tensor initial_sum("", DataType::FLOAT, {2}, FloatBytes({0.f, 0.f}));
+      Tensor initial_prod("", DataType::FLOAT, {2}, FloatBytes({1.f, 1.f}));
+      Tensor x("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+      Tensor y_sum("", DataType::FLOAT, {2}, FloatBytes({9.f, 12.f}));
+      Tensor y_prod("", DataType::FLOAT, {2}, FloatBytes({15.f, 48.f}));
+      Tensor z("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 4.f, 6.f, 9.f, 12.f}));
       return IoData{{std::move(initial_sum), std::move(initial_prod), std::move(x)},
                     {std::move(y_sum), std::move(y_prod), std::move(z)}};
-           });
+    });
   }
 
   // test_scan9_scalar (opset 9): scalar state and scalar scan element.
@@ -366,15 +363,14 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset9 = DefaultOpset(9);
     NodeProto node = MakeScanNodeWithBody({"initial", "x"}, {"y", "z"}, BuildSumScanBody(),
-    Expect(registry, std::move(node), "test_scan9_scalar", {opset9},
-           [=]() -> IoData {
-      /*num_scan_inputs=*/1);
-      const Tensor initial("", DataType::FLOAT, {}, FloatBytes({0.f}));
-      const Tensor x("", DataType::FLOAT, {5}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f}));
-      const Tensor y("", DataType::FLOAT, {}, FloatBytes({15.f}));
-      const Tensor z("", DataType::FLOAT, {5}, FloatBytes({1.f, 3.f, 6.f, 10.f, 15.f}));
+                                          /*num_scan_inputs=*/1);
+    Expect(registry, std::move(node), "test_scan9_scalar", {opset9}, []() -> IoData {
+      Tensor initial("", DataType::FLOAT, {}, FloatBytes({0.f}));
+      Tensor x("", DataType::FLOAT, {5}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f}));
+      Tensor y("", DataType::FLOAT, {}, FloatBytes({15.f}));
+      Tensor z("", DataType::FLOAT, {5}, FloatBytes({1.f, 3.f, 6.f, 10.f, 15.f}));
       return IoData{{std::move(initial), std::move(x)}, {std::move(y), std::move(z)}};
-           });
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -401,16 +397,15 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset9 = DefaultOpset(9);
     NodeProto node = MakeScanNodeWithBody({"initial", "x"}, {"y", "z"}, BuildSumScanBody(),
-    Expect(registry, std::move(node), "test_cc_scan9_input_reverse", {opset9},
-           [=]() -> IoData {
-      /*num_scan_inputs=*/1);
-      add_ints_attr(node, "scan_input_directions", {1});
-      const Tensor initial("", DataType::FLOAT, {}, FloatBytes({0.f}));
-      const Tensor x("", DataType::FLOAT, {5}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f}));
-      const Tensor y("", DataType::FLOAT, {}, FloatBytes({15.f}));
-      const Tensor z("", DataType::FLOAT, {5}, FloatBytes({5.f, 9.f, 12.f, 14.f, 15.f}));
+                                          /*num_scan_inputs=*/1);
+    add_ints_attr(node, "scan_input_directions", {1});
+    Expect(registry, std::move(node), "test_cc_scan9_input_reverse", {opset9}, []() -> IoData {
+      Tensor initial("", DataType::FLOAT, {}, FloatBytes({0.f}));
+      Tensor x("", DataType::FLOAT, {5}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f}));
+      Tensor y("", DataType::FLOAT, {}, FloatBytes({15.f}));
+      Tensor z("", DataType::FLOAT, {5}, FloatBytes({5.f, 9.f, 12.f, 14.f, 15.f}));
       return IoData{{std::move(initial), std::move(x)}, {std::move(y), std::move(z)}};
-           });
+    });
   }
 
   // test_cc_scan9_output_reverse (opset 9): scan_output_directions=[1] reverses
@@ -418,16 +413,15 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset9 = DefaultOpset(9);
     NodeProto node = MakeScanNodeWithBody({"initial", "x"}, {"y", "z"}, BuildSumScanBody(),
-    Expect(registry, std::move(node), "test_cc_scan9_output_reverse", {opset9},
-           [=]() -> IoData {
-      /*num_scan_inputs=*/1);
-      add_ints_attr(node, "scan_output_directions", {1});
-      const Tensor initial("", DataType::FLOAT, {}, FloatBytes({0.f}));
-      const Tensor x("", DataType::FLOAT, {5}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f}));
-      const Tensor y("", DataType::FLOAT, {}, FloatBytes({15.f}));
-      const Tensor z("", DataType::FLOAT, {5}, FloatBytes({15.f, 10.f, 6.f, 3.f, 1.f}));
+                                          /*num_scan_inputs=*/1);
+    add_ints_attr(node, "scan_output_directions", {1});
+    Expect(registry, std::move(node), "test_cc_scan9_output_reverse", {opset9}, []() -> IoData {
+      Tensor initial("", DataType::FLOAT, {}, FloatBytes({0.f}));
+      Tensor x("", DataType::FLOAT, {5}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f}));
+      Tensor y("", DataType::FLOAT, {}, FloatBytes({15.f}));
+      Tensor z("", DataType::FLOAT, {5}, FloatBytes({15.f, 10.f, 6.f, 3.f, 1.f}));
       return IoData{{std::move(initial), std::move(x)}, {std::move(y), std::move(z)}};
-           });
+    });
   }
 
   // test_cc_scan9_output_axis1 (opset 9): scan_output_axes=[1] places the
@@ -438,16 +432,15 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset9 = DefaultOpset(9);
     NodeProto node = MakeScanNodeWithBody({"initial", "x"}, {"y", "z"}, BuildSumScanBody(),
-    Expect(registry, std::move(node), "test_cc_scan9_output_axis1", {opset9},
-           [=]() -> IoData {
-      /*num_scan_inputs=*/1);
-      add_ints_attr(node, "scan_output_axes", {1});
-      const Tensor initial("", DataType::FLOAT, {2}, FloatBytes({0.f, 0.f}));
-      const Tensor x("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
-      const Tensor y("", DataType::FLOAT, {2}, FloatBytes({9.f, 12.f}));
-      const Tensor z("", DataType::FLOAT, {2, 3}, FloatBytes({1.f, 4.f, 9.f, 2.f, 6.f, 12.f}));
+                                          /*num_scan_inputs=*/1);
+    add_ints_attr(node, "scan_output_axes", {1});
+    Expect(registry, std::move(node), "test_cc_scan9_output_axis1", {opset9}, []() -> IoData {
+      Tensor initial("", DataType::FLOAT, {2}, FloatBytes({0.f, 0.f}));
+      Tensor x("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+      Tensor y("", DataType::FLOAT, {2}, FloatBytes({9.f, 12.f}));
+      Tensor z("", DataType::FLOAT, {2, 3}, FloatBytes({1.f, 4.f, 9.f, 2.f, 6.f, 12.f}));
       return IoData{{std::move(initial), std::move(x)}, {std::move(y), std::move(z)}};
-           });
+    });
   }
 
   // test_cc_scan9_input_axis_negative (opset 9): scan_input_axes=[-1] uses
@@ -459,15 +452,15 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset9 = DefaultOpset(9);
     NodeProto node = MakeScanNodeWithBody({"initial", "x"}, {"y", "z"}, BuildSumScanBody(),
+                                          /*num_scan_inputs=*/1);
+    add_ints_attr(node, "scan_input_axes", {-1});
     Expect(registry, std::move(node), "test_cc_scan9_input_axis_negative", {opset9},
-           [=]() -> IoData {
-      /*num_scan_inputs=*/1);
-      add_ints_attr(node, "scan_input_axes", {-1});
-      const Tensor initial("", DataType::FLOAT, {2}, FloatBytes({0.f, 0.f}));
-      const Tensor x("", DataType::FLOAT, {2, 3}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
-      const Tensor y("", DataType::FLOAT, {2}, FloatBytes({6.f, 15.f}));
-      const Tensor z("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 4.f, 3.f, 9.f, 6.f, 15.f}));
-      return IoData{{std::move(initial), std::move(x)}, {std::move(y), std::move(z)}};
+           []() -> IoData {
+             Tensor initial("", DataType::FLOAT, {2}, FloatBytes({0.f, 0.f}));
+             Tensor x("", DataType::FLOAT, {2, 3}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+             Tensor y("", DataType::FLOAT, {2}, FloatBytes({6.f, 15.f}));
+             Tensor z("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 4.f, 3.f, 9.f, 6.f, 15.f}));
+             return IoData{{std::move(initial), std::move(x)}, {std::move(y), std::move(z)}};
            });
   }
 
@@ -500,21 +493,18 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   // shape ``[N, N]`` from the body subgraph.
   {
     NodeProto node = MakeScanNodeWithBody({"X_state", "X_scan"}, {"state_X_final", "dists"},
-    Expect(registry, std::move(node), "test_cc_scan_pairwise_distance", {opset},
-           [=]() -> IoData {
-      BuildPairwiseDistanceScanBody(),
-      /*num_scan_inputs=*/1);
-      const Tensor x_state("X_state", DataType::FLOAT, {3, 2},
-                           FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
-      const Tensor x_scan("X_scan", DataType::FLOAT, {3, 2},
-                          FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
-      const Tensor state_X_final("", DataType::FLOAT, {3, 2},
-                                 FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
-      const Tensor dists("", DataType::FLOAT, {3, 3},
-                         FloatBytes({0.f, 8.f, 32.f, 8.f, 0.f, 8.f, 32.f, 8.f, 0.f}));
+                                          BuildPairwiseDistanceScanBody(),
+                                          /*num_scan_inputs=*/1);
+    Expect(registry, std::move(node), "test_cc_scan_pairwise_distance", {opset}, []() -> IoData {
+      Tensor x_state("X_state", DataType::FLOAT, {3, 2},
+                     FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+      Tensor x_scan("X_scan", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+      Tensor state_X_final("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+      Tensor dists("", DataType::FLOAT, {3, 3},
+                   FloatBytes({0.f, 8.f, 32.f, 8.f, 0.f, 8.f, 32.f, 8.f, 0.f}));
       return IoData{{std::move(x_state), std::move(x_scan)},
                     {std::move(state_X_final), std::move(dists)}};
-           });
+    });
   }
 }
 

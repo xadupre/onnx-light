@@ -53,8 +53,7 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromStrings("", {2}, {"abc.com", "def.net"});
       auto [substrings, length] = string_split(x, ".");
 
-      return IoData{{std::move(x)},
-                    {std::move(std::move(substrings)), std::move(std::move(length))}};
+      return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
     });
   }
 
@@ -70,8 +69,7 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
                                      {"hello world", "def.net", "o n n x", "the quick brown fox"});
       auto [substrings, length] = string_split(x, "", 2);
 
-      return IoData{{std::move(x)},
-                    {std::move(std::move(substrings)), std::move(std::move(length))}};
+      return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
     });
   }
 
@@ -87,8 +85,7 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor x = Tensor::FromStrings("", {2}, {"o-n-n--x-", "o-n----nx"});
              auto [substrings, length] = string_split(x, "-");
 
-             return IoData{{std::move(x)},
-                           {std::move(std::move(substrings)), std::move(std::move(length))}};
+             return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
            });
   }
 
@@ -127,8 +124,7 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor x = Tensor::FromStrings("", {0}, std::vector<std::string>{});
              auto [substrings, length] = string_split(x);
 
-             return IoData{{std::move(x)},
-                           {std::move(std::move(substrings)), std::move(std::move(length))}};
+             return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
            });
   }
 }

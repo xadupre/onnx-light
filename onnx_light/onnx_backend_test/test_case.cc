@@ -191,11 +191,11 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
                               std::vector<Tensor> outputs, const std::string &name,
                               const std::vector<OpsetId> &opset_imports,
                               const std::string &producer_name,
-                              const std::vector<TypeSpec> &output_types) {
+                              const std::vector<TypeSpec> &output_types, std::vector<Map> maps) {
   const auto present_inputs = NonEmpty(node.ref_input());
   const auto present_outputs = NonEmpty(node.ref_output());
   EXT_ENFORCE_INVALID(
-      present_inputs.size() == inputs.size(),
+      present_inputs.size() == inputs.size() + maps.size(),
       "BuildSingleNodeCase: number of input tensors does not match the non-empty inputs.");
   EXT_ENFORCE_INVALID(
       present_outputs.size() == outputs.size(),
@@ -204,6 +204,13 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
       output_types.empty() || output_types.size() == outputs.size(),
       "BuildSingleNodeCase: output_types, when provided, must have one entry per output tensor.");
 
+  // Build a lookup table from map name to its index in ``maps`` so the input
+  // loop below can decide whether each present_input is a Map or a Tensor.
+  std::unordered_map<std::string, size_t> map_index;
+  for (size_t i = 0; i < maps.size(); ++i) {
+    map_index[maps[i].name] = i;
+  }
+
   BuiltCase built;
   InitModel(built.model, kDefaultIrVersion, opset_imports, producer_name);
 
@@ -211,9 +218,19 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
   graph->set_name(name);
   graph->add_node(node);
 
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    inputs[i].name = present_inputs[i];
-    FillValueInfo(inputs[i], *graph->add_input());
+  size_t tensor_idx = 0;
+  for (const std::string &inp_name : present_inputs) {
+    auto it = map_index.find(inp_name);
+    if (it != map_index.end()) {
+      // Map-typed input: declare it with map(key_type, value_type) TypeProto.
+      const Map &m = maps[it->second];
+      AppendValueInfo(*graph->add_input(), inp_name,
+                      MapTypeSpec(m.key_type, TensorTypeSpec(m.value_type)));
+    } else {
+      inputs[tensor_idx].name = inp_name;
+      FillValueInfo(inputs[tensor_idx], *graph->add_input());
+      ++tensor_idx;
+    }
   }
   for (size_t i = 0; i < outputs.size(); ++i) {
     outputs[i].name = present_outputs[i];
@@ -227,6 +244,7 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
   DataSet ds;
   ds.inputs = std::move(inputs);
   ds.outputs = std::move(outputs);
+  ds.maps = std::move(maps);
   built.data_sets.emplace_back(std::move(ds));
   return built;
 }
@@ -256,7 +274,7 @@ std::function<BuiltCase()> MakeLazyBuild(std::shared_ptr<LazyCaseState> state) {
       IoData io = state->make_io();
       return BuildSingleNodeCase(state->node, std::move(io.inputs), std::move(io.outputs),
                                  state->name, state->opset_imports, state->producer_name,
-                                 state->output_types);
+                                 state->output_types, std::move(io.maps));
     }
     return BuildSingleNodeCase(state->node, state->inputs, state->outputs, state->name,
                                state->opset_imports, state->producer_name, state->output_types);

@@ -16,19 +16,6 @@ namespace onnx_backend_test {
 
 namespace {
 
-// Promotes the single input ValueInfoProto from its placeholder tensor type to
-// the actual map(int64, value_type) type expected by the CastMap schema.
-void PromoteInputToMapType(std::vector<TestCase> &registry, int32_t value_type) {
-  GraphProto &graph = registry.back().model().ref_graph();
-  ValueInfoProto &in_vi = *graph.mutable_input(0);
-  TypeProto &in_tp = in_vi.ref_type();
-  TypeProto::Map *in_map = in_tp.mutable_map_type();
-  in_map->set_key_type(static_cast<int32_t>(DataType::INT64));
-  TypeProto *map_value_type = in_map->mutable_value_type();
-  map_value_type->mutable_tensor_type()->set_elem_type(value_type);
-  in_tp.reset_tensor_type();
-}
-
 void AddStringAttr(NodeProto &node, const char *name, const std::string &value) {
   AttributeProto *attr = node.add_attribute();
   attr->set_name(name);
@@ -51,8 +38,8 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 // The output element type is controlled by the ``cast_to`` attribute. Mirrors
 // the upstream ONNX ``ai.onnx.ml::CastMap`` operator (since opset 1).
 //
-// The map input is represented as a single Map object in the DataSet; the
-// runtime dispatch reads it from RuntimeContext::maps().
+// The map input is passed as a ``Map`` object in ``IoData::maps``; the runtime
+// retrieves it by name from ``RuntimeContext::maps()``.
 // ---------------------------------------------------------------------------
 void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
@@ -74,12 +61,9 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              const std::vector<int64_t> keys{2, 0, 1};
              const std::vector<float> values{2.5f, 0.5f, 1.5f};
-             // Placeholder tensor for the formal input; the ValueInfo is promoted to
-             // map(int64, float) by PromoteInputToMapType so the ONNX checker passes.
-             Tensor x = Tensor::FromInt64("", {1}, {0});
+             Map x("x", Tensor::FromInt64("", {3}, keys), Tensor::FromFloat("", {3}, values));
              Tensor y = cast_map.operator()<float, float>(keys, values, "TO_FLOAT", "DENSE", 0);
-
-             return IoData{{std::move(x)}, {std::move(y)}};
+             return IoData{{}, {std::move(y)}, {std::move(x)}};
            });
   }
 
@@ -97,10 +81,9 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              const std::vector<int64_t> keys{1, 3};
              const std::vector<float> values{10.0f, 30.0f};
-             Tensor x = Tensor::FromInt64("", {1}, {0});
+             Map x("x", Tensor::FromInt64("", {2}, keys), Tensor::FromFloat("", {2}, values));
              Tensor y = cast_map.operator()<float, float>(keys, values, "TO_FLOAT", "SPARSE", 5);
-
-             return IoData{{std::move(x)}, {std::move(y)}};
+             return IoData{{}, {std::move(y)}, {std::move(x)}};
            });
   }
 
@@ -117,11 +100,10 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              const std::vector<int64_t> keys{1, 0};
              const std::vector<std::string> values{"b", "a"};
-             Tensor x = Tensor::FromInt64("", {1}, {0});
+             Map x("x", Tensor::FromInt64("", {2}, keys), Tensor::FromStrings("", {2}, values));
              Tensor y = cast_map.operator()<std::string, std::string>(keys, values, "TO_STRING",
                                                                       "DENSE", 0);
-
-             return IoData{{std::move(x)}, {std::move(y)}};
+             return IoData{{}, {std::move(y)}, {std::move(x)}};
            });
   }
 }

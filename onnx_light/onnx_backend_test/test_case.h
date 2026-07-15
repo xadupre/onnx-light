@@ -380,6 +380,12 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
 struct IoData {
   std::vector<Tensor> inputs;
   std::vector<Tensor> outputs;
+  /// Map-typed inputs (e.g. for CastMap, DictVectorizer). Each ``Map::name``
+  /// must match a non-empty entry in the node's ``input`` list. When present,
+  /// ``BuildSingleNodeCase`` declares the corresponding graph input with a
+  /// ``map(key_type, value_type)`` TypeProto and stores the Map in the
+  /// ``DataSet::maps`` collection so the runtime can retrieve it by name.
+  std::vector<Map> maps;
 };
 
 /**
@@ -389,13 +395,22 @@ struct IoData {
  * materialized. Only the inputs and outputs whose name is non-empty in the
  * node are wired into the graph.
  *
+ * Map-typed graph inputs are supplied via ``maps``: each ``Map::name`` must
+ * match a non-empty entry in ``node.input``, is declared with a
+ * ``map(key_type, value_type)`` TypeProto in the graph, and is stored in
+ * ``DataSet::maps`` so the runtime can retrieve it by name. The remaining
+ * (tensor-typed) inputs come from ``inputs`` in positional order. The sum
+ * ``inputs.size() + maps.size()`` must equal the number of non-empty entries
+ * in ``node.input``.
+ *
  * @throws std::invalid_argument under the same conditions as :func:`Expect`.
  */
 BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
                               std::vector<Tensor> outputs, const std::string &name,
                               const std::vector<OpsetId> &opset_imports,
                               const std::string &producer_name,
-                              const std::vector<TypeSpec> &output_types = {});
+                              const std::vector<TypeSpec> &output_types = {},
+                              std::vector<Map> maps = {});
 
 /**
  * Appends a *lazy* single-node :ref:`TestCase` whose inputs/outputs are

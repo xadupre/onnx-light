@@ -16,20 +16,6 @@ namespace onnx_backend_test {
 
 namespace {
 
-// Promote the single input ValueInfoProto from its placeholder tensor type to
-// the actual map(key_type, value_type) type expected by the DictVectorizer
-// schema. Mirrors ``cases_zipmap.cc``'s output-side helper.
-void PromoteInputToMapType(std::vector<TestCase> &registry, int32_t key_type, int32_t value_type) {
-  GraphProto &graph = registry.back().model().ref_graph();
-  ValueInfoProto &in_vi = *graph.mutable_input(0);
-  TypeProto &in_tp = in_vi.ref_type();
-  TypeProto::Map *in_map = in_tp.mutable_map_type();
-  in_map->set_key_type(key_type);
-  TypeProto *map_value_type = in_map->mutable_value_type();
-  map_value_type->mutable_tensor_type()->set_elem_type(value_type);
-  in_tp.reset_tensor_type();
-}
-
 void AddStringsAttr(NodeProto &node, const char *name, const std::vector<std::string> &values) {
   AttributeProto *attr = node.add_attribute();
   attr->set_name(name);
@@ -54,6 +40,9 @@ void AddIntsAttr(NodeProto &node, const char *name, const std::vector<int64_t> &
 // DictVectorizer — converts a dictionary into a 1-D output tensor whose length
 // equals the vocabulary attribute length. Mirrors the upstream ONNX
 // ``ai.onnx.ml::DictVectorizer`` operator (since opset 1).
+//
+// The map input is passed as a ``Map`` object in ``IoData::maps``; the runtime
+// retrieves it by name from ``RuntimeContext::maps()``.
 // ---------------------------------------------------------------------------
 void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
@@ -74,12 +63,9 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode)
            {default_opset, opset}, [=]() -> IoData {
              const std::vector<std::string> keys{"a", "c"};
              const std::vector<int64_t> values{4, 8};
-             // Placeholder input tensor (its bytes are unused by the runtime; the
-             // ValueInfo is rewritten below to declare a map(string, int64) input).
-             Tensor x = Tensor::FromInt64("", {1}, {0});
+             Map x("x", Tensor::FromStrings("", {2}, keys), Tensor::FromInt64("", {2}, values));
              Tensor y = dict.operator()<std::string, int64_t>(keys, values, vocab);
-
-             return IoData{{std::move(x)}, {std::move(y)}};
+             return IoData{{}, {std::move(y)}, {std::move(x)}};
            });
   }
 
@@ -96,10 +82,9 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode)
            [=]() -> IoData {
              const std::vector<int64_t> keys{10, 30};
              const std::vector<float> values{1.5f, 2.5f};
-             Tensor x = Tensor::FromInt64("", {1}, {0});
+             Map x("x", Tensor::FromInt64("", {2}, keys), Tensor::FromFloat("", {2}, values));
              Tensor y = dict.operator()<int64_t, float>(keys, values, vocab);
-
-             return IoData{{std::move(x)}, {std::move(y)}};
+             return IoData{{}, {std::move(y)}, {std::move(x)}};
            });
   }
 }

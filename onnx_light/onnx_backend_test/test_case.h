@@ -358,23 +358,33 @@ void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor>
  * @param registry Output registry (appended to).
  * @param tag Optional grouping tag (defaults to the node domain for
  *            non-default operator domains).
- * @param output_types Optional per-output declared type specs. When non-empty
- *                     it must contain one entry per output tensor; each output
- *                     value-info is then declared from its ``TypeSpec`` instead
- *                     of the materialized tensor type. Used to declare
- *                     ``Sequence`` / ``Map`` valued outputs whose runtime
- *                     representation is a plain ``Tensor``.
+ * @param output_types Per-output declared type specs. Must contain one entry
+ *                     per output tensor; each output value-info is then
+ *                     declared from its ``TypeSpec`` instead of the materialized
+ *                     tensor type. Used to declare ``Sequence`` / ``Map`` valued
+ *                     outputs whose runtime representation is a plain ``Tensor``.
  * @throws std::invalid_argument if ``inputs.size()`` does not equal the number
  *         of non-empty entries in ``node.input`` or if ``outputs.size()`` does
  *         not equal the number of non-empty entries in ``node.output``, or if
- *         ``output_types`` is non-empty and its size does not equal
- *         ``outputs.size()``.
+ *         ``output_types.size()`` does not equal ``outputs.size()``.
  */
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
-            std::vector<TestCase> &registry, const std::string &tag = "",
-            const std::vector<TypeSpec> &output_types = {});
+            std::vector<TestCase> &registry, const std::string &tag,
+            const std::vector<TypeSpec> &output_types);
+
+/**
+ * Overload of :func:`Expect` that omits the ``output_types`` argument.
+ * Equivalent to calling the full overload with an empty ``output_types``
+ * vector; each output value-info is derived from the materialized tensor type.
+ */
+inline void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
+                   const std::vector<Tensor> &outputs, const std::string &name,
+                   const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
+                   std::vector<TestCase> &registry, const std::string &tag = "") {
+  Expect(node, inputs, outputs, name, opset_imports, producer_name, registry, tag, {});
+}
 
 /// Materialized inputs/outputs produced by a lazy case builder.
 struct IoData {
@@ -389,13 +399,27 @@ struct IoData {
  * materialized. Only the inputs and outputs whose name is non-empty in the
  * node are wired into the graph.
  *
+ * @param output_types Per-output declared type specs (see :func:`Expect`).
  * @throws std::invalid_argument under the same conditions as :func:`Expect`.
  */
 BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
                               std::vector<Tensor> outputs, const std::string &name,
                               const std::vector<OpsetId> &opset_imports,
                               const std::string &producer_name,
-                              const std::vector<TypeSpec> &output_types = {});
+                              const std::vector<TypeSpec> &output_types);
+
+/**
+ * Overload of :func:`BuildSingleNodeCase` that omits ``output_types``.
+ * Equivalent to calling the full overload with an empty ``output_types``
+ * vector; each output value-info is derived from the materialized tensor type.
+ */
+inline BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
+                                     std::vector<Tensor> outputs, const std::string &name,
+                                     const std::vector<OpsetId> &opset_imports,
+                                     const std::string &producer_name) {
+  return BuildSingleNodeCase(node, std::move(inputs), std::move(outputs), name, opset_imports,
+                             producer_name, {});
+}
 
 /**
  * Appends a *lazy* single-node :ref:`TestCase` whose inputs/outputs are
@@ -419,14 +443,25 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
  * @param producer_name Producer name written into the model.
  * @param tag Optional grouping tag (defaults to the node domain for
  *            non-default operator domains).
- * @param output_types Optional per-output declared type specs (see
- *                     :func:`Expect`).
+ * @param output_types Per-output declared type specs (see :func:`Expect`).
  */
 void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
             std::vector<int64_t> out_counts, std::function<IoData()> make_io,
-            std::string producer_name = "backend-test", std::string tag = "",
-            std::vector<TypeSpec> output_types = {});
+            std::string producer_name, std::string tag, std::vector<TypeSpec> output_types);
+
+/**
+ * Overload of the lazy :func:`Expect` that omits ``output_types``.
+ * Equivalent to calling the full overload with an empty ``output_types``
+ * vector; each output value-info is derived from the materialized tensor type.
+ */
+inline void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
+                   std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
+                   std::vector<int64_t> out_counts, std::function<IoData()> make_io,
+                   std::string producer_name = "backend-test", std::string tag = "") {
+  Expect(registry, std::move(node), std::move(name), std::move(opset_imports), std::move(in_counts),
+         std::move(out_counts), std::move(make_io), std::move(producer_name), std::move(tag), {});
+}
 
 /// Function pointer registering one or more :ref:`TestCase` entries into the
 /// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.

@@ -523,12 +523,12 @@ TEST(KernelClass, ImageDecoderDecodesWebpRgbWhenRuntimeAvailable) {
   const auto cases =
       onnx_backend_test::CollectTestCasesByName("^test_cc_image_decoder_decode_webp_rgb$");
   ASSERT_EQ(cases.size(), 1u);
-  ASSERT_EQ(cases[0].data_sets.size(), 1u);
-  ASSERT_EQ(cases[0].data_sets[0].inputs.size(), 1u);
-  ASSERT_EQ(cases[0].data_sets[0].outputs.size(), 1u);
+  ASSERT_EQ(cases[0].data_sets().size(), 1u);
+  ASSERT_EQ(cases[0].data_sets()[0].inputs.size(), 1u);
+  ASSERT_EQ(cases[0].data_sets()[0].outputs.size(), 1u);
 
-  const Tensor &encoded = cases[0].data_sets[0].inputs[0];
-  const Tensor &expected = cases[0].data_sets[0].outputs[0];
+  const Tensor &encoded = cases[0].data_sets()[0].inputs[0];
+  const Tensor &expected = cases[0].data_sets()[0].outputs[0];
   Tensor out = decoder(encoded, "RGB");
 
   if (out.data.empty()) {
@@ -547,12 +547,12 @@ TEST(KernelClass, ImageDecoderDecodesJpeg2000RgbWhenRuntimeAvailable) {
   const auto cases =
       onnx_backend_test::CollectTestCasesByName("^test_cc_image_decoder_decode_jpeg2k_rgb$");
   ASSERT_EQ(cases.size(), 1u);
-  ASSERT_EQ(cases[0].data_sets.size(), 1u);
-  ASSERT_EQ(cases[0].data_sets[0].inputs.size(), 1u);
-  ASSERT_EQ(cases[0].data_sets[0].outputs.size(), 1u);
+  ASSERT_EQ(cases[0].data_sets().size(), 1u);
+  ASSERT_EQ(cases[0].data_sets()[0].inputs.size(), 1u);
+  ASSERT_EQ(cases[0].data_sets()[0].outputs.size(), 1u);
 
-  const Tensor &encoded = cases[0].data_sets[0].inputs[0];
-  const Tensor &expected = cases[0].data_sets[0].outputs[0];
+  const Tensor &encoded = cases[0].data_sets()[0].inputs[0];
+  const Tensor &expected = cases[0].data_sets()[0].outputs[0];
   Tensor out = decoder(encoded, "RGB");
 
   if (out.data.empty()) {
@@ -572,12 +572,12 @@ TEST(KernelClass, ImageDecoderDecodesPnmRgb) {
   const auto cases =
       onnx_backend_test::CollectTestCasesByName("^test_cc_image_decoder_decode_pnm_rgb$");
   ASSERT_EQ(cases.size(), 1u);
-  ASSERT_EQ(cases[0].data_sets.size(), 1u);
-  ASSERT_EQ(cases[0].data_sets[0].inputs.size(), 1u);
-  ASSERT_EQ(cases[0].data_sets[0].outputs.size(), 1u);
+  ASSERT_EQ(cases[0].data_sets().size(), 1u);
+  ASSERT_EQ(cases[0].data_sets()[0].inputs.size(), 1u);
+  ASSERT_EQ(cases[0].data_sets()[0].outputs.size(), 1u);
 
-  const Tensor &encoded = cases[0].data_sets[0].inputs[0];
-  const Tensor &expected = cases[0].data_sets[0].outputs[0];
+  const Tensor &encoded = cases[0].data_sets()[0].inputs[0];
+  const Tensor &expected = cases[0].data_sets()[0].outputs[0];
   Tensor out = decoder(encoded, "RGB");
 
   EXPECT_EQ(out.data_type, static_cast<int32_t>(DataType::UINT8));

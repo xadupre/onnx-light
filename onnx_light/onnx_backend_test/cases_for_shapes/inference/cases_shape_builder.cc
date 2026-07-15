@@ -81,7 +81,7 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, Test
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();
@@ -231,7 +231,7 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, 
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();
@@ -305,7 +305,7 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
   tc.rtol = 1e-3;
   tc.atol = 1e-5;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();
@@ -442,7 +442,7 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kConcatSplitIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();

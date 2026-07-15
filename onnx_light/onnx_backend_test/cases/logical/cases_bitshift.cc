@@ -42,14 +42,16 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Tensor x =
-        Tensor::FromUint8("", {kBenchmarkElementwiseSize},
-                          RandUint<uint8_t>(256, {kBenchmarkElementwiseSize}, /*seed=*/9501));
-    Tensor y = Tensor::FromUint8("", {kBenchmarkElementwiseSize},
-                                 RandUint<uint8_t>(8, {kBenchmarkElementwiseSize}, /*seed=*/9502));
-    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
-    Expect(node, {x, y}, {z}, "test_cc_bitshift_right_u8_benchmark", {opset}, "backend-test",
-           registry);
+    const int64_t count = kBenchmarkElementwiseSize;
+    Expect(registry, std::move(node), "test_cc_bitshift_right_u8_benchmark", {opset},
+           {count, count}, {count}, [k, count]() -> IoData {
+             Tensor x =
+                 Tensor::FromUint8("", {count}, RandUint<uint8_t>(256, {count}, /*seed=*/9501));
+             Tensor y =
+                 Tensor::FromUint8("", {count}, RandUint<uint8_t>(8, {count}, /*seed=*/9502));
+             Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
     return;
   }
 

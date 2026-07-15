@@ -50,11 +50,17 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeTopKNode(/*axis=*/1);
     const std::vector<int64_t> shape = {1024, 4096};
-    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 442));
-    Tensor k = Tensor::FromInt64("", {1}, {100});
-    auto [values, indices] = topk_kernel(x, 100, /*axis=*/1, /*largest=*/true, /*sorted=*/true);
-    Expect(node, {x, k}, {std::move(values), std::move(indices)}, "test_cc_top_k_benchmark",
-           {opset}, "backend-test", registry);
+    const int64_t input_count = 1024 * 4096;
+    const int64_t k_count = 1;
+    const int64_t output_count = 1024 * 100;
+    Expect(registry, std::move(node), "test_cc_top_k_benchmark", {opset}, {input_count, k_count},
+           {output_count, output_count}, [topk_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 442));
+             Tensor k = Tensor::FromInt64("", {1}, {100});
+             auto [values, indices] =
+                 topk_kernel(x, 100, /*axis=*/1, /*largest=*/true, /*sorted=*/true);
+             return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
+           });
     return;
   }
 

@@ -24,11 +24,14 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
     node.add_input("x");
     node.add_output("y");
 
-    Tensor x = Tensor::FromFloat("", {32, 64, 64, 1, 16}, Randn<float>({32, 64, 64, 1, 16}, 2401));
-
-    Tensor y = mvn_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_mvn_benchmark", {opset}, "backend-test", registry);
+    constexpr int64_t count = 32 * 64 * 64 * 1 * 16;
+    Expect(registry, std::move(node), "test_cc_mvn_benchmark", {opset}, {count}, {count},
+           [mvn_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {32, 64, 64, 1, 16},
+                                          Randn<float>({32, 64, 64, 1, 16}, 2401));
+             Tensor y = mvn_kernel(x);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

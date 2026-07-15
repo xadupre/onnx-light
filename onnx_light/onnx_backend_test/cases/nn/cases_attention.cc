@@ -153,13 +153,16 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::Attention attention{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    Tensor Q = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2501));
-    Tensor K = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2502));
-    Tensor V = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2503));
-    Tensor Y = attention(Q, K, V);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
-    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_benchmark", {opset}, "backend-test",
-           registry);
+    constexpr int64_t count = 1 * 8 * 128 * 64;
+    Expect(registry, std::move(node), "test_cc_attention_4d_benchmark", {opset},
+           {count, count, count}, {count}, [attention]() -> IoData {
+             Tensor Q = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2501));
+             Tensor K = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2502));
+             Tensor V = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2503));
+             Tensor Y = attention(Q, K, V);
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
     return;
   }
 

@@ -621,7 +621,7 @@ void RegisterLoop13SeqCase(std::vector<TestCase> &registry) {
                  FloatBytes({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}));
 
   TestCase tc(name, name);
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, /*ir_version=*/13, {opset});
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
@@ -674,7 +674,7 @@ void RegisterLoop13SeqCase(std::vector<TestCase> &registry) {
   ds.inputs.push_back(trip_count);
   ds.inputs.push_back(cond);
   ds.outputs.push_back(stacked);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }
@@ -918,7 +918,7 @@ void RegisterLoop16SeqNoneCase(std::vector<TestCase> &registry) {
                  FloatBytes({0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f}));
 
   TestCase tc(name, name);
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, /*ir_version=*/9, {opset});
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
@@ -992,7 +992,7 @@ void RegisterLoop16SeqNoneCase(std::vector<TestCase> &registry) {
   ds.inputs.push_back(trip_count);
   ds.inputs.push_back(cond);
   ds.outputs.push_back(stacked);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }

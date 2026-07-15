@@ -151,11 +151,14 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data");
     node.add_output("reduced");
 
-    Tensor data =
-        Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
-    Tensor reduced = reduce_sum_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-    Expect(node, {data}, {reduced}, "test_cc_reducesum_default_axes_keepdims_benchmark", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_reducesum_default_axes_keepdims_benchmark", {opset},
+           {256 * 256 * 16}, {1}, [reduce_sum_kernel]() -> IoData {
+             Tensor data =
+                 Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+             Tensor reduced =
+                 reduce_sum_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             return IoData{{std::move(data)}, {std::move(reduced)}};
+           });
     return;
   }
 

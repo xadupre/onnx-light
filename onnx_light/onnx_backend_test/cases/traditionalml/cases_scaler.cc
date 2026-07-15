@@ -49,11 +49,12 @@ void RegisterScalerCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatsAttr(node, "offset", offset);
     AddFloatsAttr(node, "scale", scale);
 
-    Tensor x = Tensor::FromFloat("", {8192, 3}, Randn<float>({8192, 3}, 2601));
-    Tensor y = scaler.operator()<float>(x, offset, scale);
-
-    Expect(node, {x}, {y}, "test_cc_scaler_float_benchmark", {default_opset, opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_scaler_float_benchmark", {default_opset, opset},
+           {24576}, {24576}, [scaler, offset, scale]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {8192, 3}, Randn<float>({8192, 3}, 2601));
+             Tensor y = scaler.operator()<float>(x, offset, scale);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

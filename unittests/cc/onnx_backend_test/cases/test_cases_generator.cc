@@ -53,7 +53,7 @@ TEST(BackendTestCase, ConstantCaseIsPresent) {
 
   // Single-node ``Constant`` topology: no graph inputs, one tensor output
   // declared from the ``value`` attribute.
-  const GraphProto &graph = constant->model.ref_graph();
+  const GraphProto &graph = constant->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();
@@ -68,8 +68,8 @@ TEST(BackendTestCase, ConstantCaseIsPresent) {
   EXPECT_EQ(attr.type(), AttributeProto::AttributeType::TENSOR);
   ASSERT_TRUE(attr.has_t());
 
-  ASSERT_EQ(constant->data_sets.size(), 1u);
-  const auto &ds = constant->data_sets[0];
+  ASSERT_EQ(constant->data_sets().size(), 1u);
+  const auto &ds = constant->data_sets()[0];
   EXPECT_EQ(ds.inputs.size(), 0u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
@@ -93,7 +93,7 @@ TEST(BackendTestCase, ConstantUpstreamOnnxCaseHasExpectedShape) {
   const TestCase *tc = FindCase(cases, "test_constant");
   ASSERT_NE(tc, nullptr);
 
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();
@@ -108,8 +108,8 @@ TEST(BackendTestCase, ConstantUpstreamOnnxCaseHasExpectedShape) {
   EXPECT_EQ(attr.type(), AttributeProto::AttributeType::TENSOR);
   ASSERT_TRUE(attr.has_t());
 
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   EXPECT_EQ(ds.inputs.size(), 0u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
@@ -166,7 +166,7 @@ TEST(BackendTestCase, ConstantAttributeVariantCasesArePresent) {
     SCOPED_TRACE(v.name);
     const TestCase *tc = FindCase(cases, v.name);
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -177,8 +177,8 @@ TEST(BackendTestCase, ConstantAttributeVariantCasesArePresent) {
     const auto &attr_name = attr.ref_name();
     EXPECT_EQ(std::string(attr_name.data(), attr_name.size()), v.attr);
     EXPECT_EQ(attr.type(), v.attr_type);
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     EXPECT_EQ(ds.inputs.size(), 0u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, v.out_dtype);
@@ -193,7 +193,7 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_constantofshape_float_ones");
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -204,8 +204,8 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
     EXPECT_EQ(std::string(attr_name.data(), attr_name.size()), "value");
     EXPECT_EQ(attr.type(), AttributeProto::AttributeType::TENSOR);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3}));
@@ -223,8 +223,8 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_constantofshape_int_zeros");
     ASSERT_NE(tc, nullptr);
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{10, 6}));
@@ -235,7 +235,7 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_constantofshape_int_shape_zero");
     ASSERT_NE(tc, nullptr);
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0}));
@@ -246,7 +246,7 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_cc_constantofshape_int64_fortytwo");
     ASSERT_NE(tc, nullptr);
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 3}));
@@ -263,13 +263,13 @@ TEST(BackendTestCase, EyeLikeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_eyelike_without_dtype");
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "EyeLike");
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
@@ -279,12 +279,12 @@ TEST(BackendTestCase, EyeLikeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_eyelike_with_dtype");
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 2u);
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 4}));
@@ -293,12 +293,12 @@ TEST(BackendTestCase, EyeLikeCasesArePresent) {
   {
     const TestCase *tc = FindCase(cases, "test_eyelike_populate_off_main_diagonal");
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 2u);
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{4, 5}));
@@ -318,15 +318,15 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
   ASSERT_NE(seeded, nullptr);
 
   for (const TestCase *tc : {plain, doubled, seeded}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Bernoulli");
     ASSERT_EQ(graph.ref_input().size(), 1u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape, ds.inputs[0].shape);
@@ -334,28 +334,28 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
 
   // Plain case: no attributes, output dtype matches input (FLOAT).
   {
-    const NodeProto &node = plain->model.ref_graph().ref_node()[0];
+    const NodeProto &node = plain->model().ref_graph().ref_node()[0];
     EXPECT_EQ(node.ref_attribute().size(), 0u);
-    EXPECT_EQ(plain->data_sets[0].outputs[0].data_type,
+    EXPECT_EQ(plain->data_sets()[0].outputs[0].data_type,
               static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   }
 
   // DOUBLE case: ``dtype`` attribute promotes the output to DOUBLE.
   {
-    const NodeProto &node = doubled->model.ref_graph().ref_node()[0];
+    const NodeProto &node = doubled->model().ref_graph().ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 1u);
     const auto &attr = node.ref_attribute()[0];
     const auto &attr_name = attr.ref_name();
     EXPECT_EQ(std::string(attr_name.data(), attr_name.size()), "dtype");
     EXPECT_EQ(attr.type(), AttributeProto::AttributeType::INT);
     EXPECT_EQ(attr.i(), static_cast<int64_t>(onnx_kernels::DataType::DOUBLE));
-    EXPECT_EQ(doubled->data_sets[0].outputs[0].data_type,
+    EXPECT_EQ(doubled->data_sets()[0].outputs[0].data_type,
               static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
   }
 
   // Seeded case: ``seed`` attribute is present.
   {
-    const NodeProto &node = seeded->model.ref_graph().ref_node()[0];
+    const NodeProto &node = seeded->model().ref_graph().ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 1u);
     const auto &attr = node.ref_attribute()[0];
     const auto &attr_name = attr.ref_name();
@@ -364,8 +364,8 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
   }
 
   // Outputs are 0/1 only.
-  const float *py = plain->data_sets[0].outputs[0].AsFloat();
-  for (int64_t i = 0; i < plain->data_sets[0].outputs[0].element_count(); ++i) {
+  const float *py = plain->data_sets()[0].outputs[0].AsFloat();
+  for (int64_t i = 0; i < plain->data_sets()[0].outputs[0].element_count(); ++i) {
     EXPECT_TRUE(py[i] == 0.0f || py[i] == 1.0f);
   }
 }
@@ -388,15 +388,15 @@ TEST(BackendTestCase, DelayedInitializerCasesArePresent) {
   for (const auto &entry : expected) {
     const TestCase *tc = FindCase(cases, entry.name);
     ASSERT_NE(tc, nullptr);
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     EXPECT_EQ(ConvertUtilsString(node.ref_op_type()), "DelayedInitializer");
     EXPECT_EQ(ConvertUtilsString(node.ref_domain()), "ai.rt");
     EXPECT_EQ(graph.ref_input().size(), 0u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     EXPECT_EQ(ds.inputs.size(), 0u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
@@ -432,15 +432,15 @@ void CheckRandomCasePresent(const std::vector<TestCase> &cases, const std::strin
                             const std::string &expected_op_type, int expected_inputs) {
   const TestCase *tc = FindCase(cases, name);
   ASSERT_NE(tc, nullptr) << "missing case: " << name;
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const NodeProto &node = graph.ref_node()[0];
   const auto &op_type = node.ref_op_type();
   EXPECT_EQ(std::string(op_type.data(), op_type.size()), expected_op_type);
   ASSERT_EQ(graph.ref_input().size(), static_cast<size_t>(expected_inputs));
   ASSERT_EQ(graph.ref_output().size(), 1u);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  ASSERT_EQ(tc->data_sets[0].outputs.size(), 1u);
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  ASSERT_EQ(tc->data_sets()[0].outputs.size(), 1u);
 }
 
 } // namespace

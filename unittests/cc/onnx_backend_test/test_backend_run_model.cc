@@ -74,7 +74,7 @@ void RunBackendCasesFor(const std::string &op_type,
 
   size_t executed = 0;
   for (const TestCase &tc : cases) {
-    const auto &graph = tc.model.ref_graph();
+    const auto &graph = tc.model().ref_graph();
     if (graph.ref_node().size() != 1u) {
       continue;
     }
@@ -88,12 +88,12 @@ void RunBackendCasesFor(const std::string &op_type,
     SCOPED_TRACE(tc.name);
 
     bool ran_case = false;
-    for (size_t ds_idx = 0; ds_idx < tc.data_sets.size(); ++ds_idx) {
-      const DataSet &ds = tc.data_sets[ds_idx];
+    for (size_t ds_idx = 0; ds_idx < tc.data_sets().size(); ++ds_idx) {
+      const DataSet &ds = tc.data_sets()[ds_idx];
       if (!accept_data_set(ds)) {
         continue;
       }
-      RuntimeContext rt(KernelContext(DefaultOpset(GetDefaultOpsetVersion(tc.model))));
+      RuntimeContext rt(KernelContext(DefaultOpset(GetDefaultOpsetVersion(tc.model()))));
       for (const Tensor &t : ds.inputs) {
         rt.Set(t.name, t);
       }
@@ -101,7 +101,7 @@ void RunBackendCasesFor(const std::string &op_type,
         rt.PutMap(m.name, m);
       }
 
-      ASSERT_NO_THROW(RunModel(tc.model, rt)) << "RunModel threw for case " << tc.name;
+      ASSERT_NO_THROW(RunModel(tc.model(), rt)) << "RunModel threw for case " << tc.name;
 
       for (const Tensor &expected : ds.outputs) {
         ASSERT_TRUE(rt.Has(expected.name))
@@ -507,14 +507,15 @@ TEST(BackendRunModel, SequenceMap) {
   std::size_t executed = 0;
   for (const TestCase &tc : cases) {
     SCOPED_TRACE(tc.name);
-    const onnx_kernels::kernel::KernelContext kctx(DefaultOpset(GetDefaultOpsetVersion(tc.model)));
+    const onnx_kernels::kernel::KernelContext kctx(
+        DefaultOpset(GetDefaultOpsetVersion(tc.model())));
 
-    for (const DataSet &ds : tc.data_sets) {
+    for (const DataSet &ds : tc.data_sets()) {
       RuntimeContext rt(kctx);
       for (const Tensor &t : ds.inputs) {
         rt.Set(t.name, t);
       }
-      ASSERT_NO_THROW(RunModel(tc.model, rt)) << "RunModel threw for case " << tc.name;
+      ASSERT_NO_THROW(RunModel(tc.model(), rt)) << "RunModel threw for case " << tc.name;
 
       // Each expected output is the stacked-tensor materialisation of
       // the corresponding output sequence (see

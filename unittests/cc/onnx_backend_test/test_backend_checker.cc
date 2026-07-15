@@ -24,7 +24,7 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPassChecker) {
 
   for (TestCase &tc : cases) {
     SCOPED_TRACE(tc.name);
-    ASSERT_NO_THROW(checker::check_model(tc.model, /*full_check=*/false)) << "case: " << tc.name;
+    ASSERT_NO_THROW(checker::check_model(tc.model(), /*full_check=*/false)) << "case: " << tc.name;
   }
 }
 

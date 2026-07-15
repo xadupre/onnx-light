@@ -58,7 +58,7 @@ void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
   // perform this type check and would reject the model otherwise. Promote
   // the just-emitted output to an ``OptionalTypeProto`` wrapping the
   // existing tensor type.
-  GraphProto &graph = registry.back().model.ref_graph();
+  GraphProto &graph = registry.back().model().ref_graph();
   ValueInfoProto &out_vi = *graph.mutable_output(0);
   TypeProto &out_tp = out_vi.ref_type();
   TypeProto::Optional *out_opt = out_tp.add_optional_type();

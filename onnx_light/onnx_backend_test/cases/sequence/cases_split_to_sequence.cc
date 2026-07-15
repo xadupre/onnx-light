@@ -43,7 +43,7 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   model.set_ir_version(kDefaultIrVersion);
   model.set_producer_name("backend-test");
   OperatorSetIdProto proto;
@@ -91,7 +91,7 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
     ds.inputs.push_back(*split);
   }
   ds.outputs.push_back(stacked);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }

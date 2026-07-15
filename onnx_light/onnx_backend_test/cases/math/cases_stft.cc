@@ -46,15 +46,23 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::STFT stft_v17{ctx_v17};
 
   if (mode == TestMode::BENCHMARK) {
+    NodeProto node =
+        MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/1);
     const std::vector<int64_t> shape = {1, 65536, 1};
-    Tensor signal_b = Tensor::FromFloat("signal", shape, Randn<float>(shape, 446));
-    Tensor frame_step_b = Tensor::FromInt64("frame_step", {}, {512});
-    Tensor frame_length_b = Tensor::FromInt64("frame_length", {}, {1024});
-    Tensor y =
-        stft_v17(signal_b, frame_step_b, /*window=*/nullptr, &frame_length_b, /*onesided=*/true);
-    Expect(MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/1),
-           {signal_b, frame_step_b, frame_length_b}, {y}, "test_cc_stft_benchmark", {opset_v17},
-           "backend-test", registry);
+    const int64_t signal_count = 65536;
+    const int64_t scalar_count = 1;
+    const int64_t output_count = 1 * 127 * 513 * 2;
+    Expect(
+        registry, std::move(node), "test_cc_stft_benchmark", {opset_v17},
+        {signal_count, scalar_count, scalar_count}, {output_count}, [stft_v17, shape]() -> IoData {
+          Tensor signal_b = Tensor::FromFloat("signal", shape, Randn<float>(shape, 446));
+          Tensor frame_step_b = Tensor::FromInt64("frame_step", {}, {512});
+          Tensor frame_length_b = Tensor::FromInt64("frame_length", {}, {1024});
+          Tensor y = stft_v17(signal_b, frame_step_b, /*window=*/nullptr, &frame_length_b,
+                              /*onesided=*/true);
+          return IoData{{std::move(signal_b), std::move(frame_step_b), std::move(frame_length_b)},
+                        {std::move(y)}};
+        });
     return;
   }
 

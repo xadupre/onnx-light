@@ -39,7 +39,7 @@ GraphProto *InitSequenceMapModel(TestCase &tc, const std::string &name, const Op
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   model.set_ir_version(kDefaultIrVersion);
   model.set_producer_name("backend-test");
   OperatorSetIdProto proto;
@@ -241,7 +241,7 @@ void RegisterSequenceMapIdentityCase(const std::string &name, const std::vector<
     ds.inputs.push_back(t);
   }
   ds.outputs.push_back(std::move(stacked));
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }
@@ -334,7 +334,7 @@ void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
   }
   ds.outputs.push_back(std::move(stacked0));
   ds.outputs.push_back(std::move(stacked1));
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }
@@ -423,7 +423,7 @@ void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<Test
     ds.inputs.push_back(t);
   }
   ds.outputs.push_back(std::move(stacked));
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }
@@ -500,7 +500,7 @@ void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
   }
   ds.inputs.push_back(x1);
   ds.outputs.push_back(std::move(stacked));
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }
@@ -578,7 +578,7 @@ void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<Test
     ds.inputs.push_back(t);
   }
   ds.outputs.push_back(std::move(stacked));
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }
@@ -668,7 +668,7 @@ void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
   ds.inputs.push_back(x1);
   ds.outputs.push_back(std::move(stacked0));
   ds.outputs.push_back(std::move(stacked1));
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }

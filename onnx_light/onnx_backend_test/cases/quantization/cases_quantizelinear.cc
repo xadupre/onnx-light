@@ -79,13 +79,15 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_input("y_scale");
     node.add_output("y");
 
-    Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                 Randn<float>({kBenchmarkElementwiseSize}, 2501));
-    Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
-    Tensor y = quantize_kernel(x, y_scale);
-
-    Expect(node, {x, y_scale}, {y}, "test_cc_quantizelinear_benchmark", {opset}, "backend-test",
-           registry);
+    const int64_t count = kBenchmarkElementwiseSize;
+    Expect(registry, std::move(node), "test_cc_quantizelinear_benchmark", {opset}, {count, 1},
+           {count}, [quantize_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 2501));
+             Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
+             Tensor y = quantize_kernel(x, y_scale);
+             return IoData{{std::move(x), std::move(y_scale)}, {std::move(y)}};
+           });
     return;
   }
 

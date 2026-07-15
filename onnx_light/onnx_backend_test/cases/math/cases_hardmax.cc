@@ -37,9 +37,13 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeHardmaxNode(/*axis=*/1);
     const std::vector<int64_t> shape = {2048, 2048};
-    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 429));
-    Tensor y = hardmax_kernel(x, 1);
-    Expect(node, {x}, {y}, "test_cc_hardmax_benchmark", {opset}, "backend-test", registry);
+    const int64_t count = 2048 * 2048;
+    Expect(registry, std::move(node), "test_cc_hardmax_benchmark", {opset}, {count}, {count},
+           [hardmax_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 429));
+             Tensor y = hardmax_kernel(x, 1);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

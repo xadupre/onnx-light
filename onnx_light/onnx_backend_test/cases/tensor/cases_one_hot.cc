@@ -44,17 +44,21 @@ void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     constexpr int64_t index_count = kBenchmarkElementwiseSize / 12;
-    std::vector<int64_t> index_values(index_count);
-    for (int64_t i = 0; i < index_count; ++i) {
-      index_values[static_cast<std::size_t>(i)] = i % 12;
-    }
-    const Tensor indices = Tensor::FromInt64("indices", {index_count}, index_values);
-    const Tensor depth = Tensor::FromFloat("depth", {}, {12.0f});
-    const Tensor values = Tensor::FromInt32("values", {2}, {2, 5});
-    kernel::OneHot::Attributes attrs;
-    const Tensor y = one_hot_kernel(indices, depth, values, attrs);
-    Expect(MakeOneHotNode(/*set_axis=*/false, /*axis=*/-1), {indices, depth, values}, {y},
-           "test_onehot_without_axis_benchmark", {opset}, "backend-test", registry);
+    NodeProto node = MakeOneHotNode(/*set_axis=*/false, /*axis=*/-1);
+    Expect(registry, std::move(node), "test_onehot_without_axis_benchmark", {opset},
+           {index_count, 1, 2}, {index_count * 12}, [one_hot_kernel, index_count]() -> IoData {
+             std::vector<int64_t> index_values(index_count);
+             for (int64_t i = 0; i < index_count; ++i) {
+               index_values[static_cast<std::size_t>(i)] = i % 12;
+             }
+             Tensor indices = Tensor::FromInt64("indices", {index_count}, index_values);
+             Tensor depth = Tensor::FromFloat("depth", {}, {12.0f});
+             Tensor values = Tensor::FromInt32("values", {2}, {2, 5});
+             kernel::OneHot::Attributes attrs;
+             Tensor y = one_hot_kernel(indices, depth, values, attrs);
+             return IoData{{std::move(indices), std::move(depth), std::move(values)},
+                           {std::move(y)}};
+           });
     return;
   }
 

@@ -146,7 +146,7 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();

@@ -28,7 +28,7 @@ void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry
   const std::string name("test_cc_shape_inference_slice_symbolic_end");
   TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
 
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
   GraphProto *graph = model.add_graph();
   graph->set_name(name);

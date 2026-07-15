@@ -233,12 +233,17 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def_ro("tag", &TestCase::tag)
       .def_rw("rtol", &TestCase::rtol)
       .def_rw("atol", &TestCase::atol)
-      .def_rw("data_sets", &TestCase::data_sets)
       .def_prop_ro(
-          "model", [](TestCase &tc) -> ModelProto & { return tc.model; },
+          "data_sets", [](TestCase &tc) -> std::vector<DataSet> & { return tc.data_sets(); },
+          nb::rv_policy::reference_internal,
+          "Returns the input/output data sets of this test case, materializing "
+          "them first for lazily-built cases.")
+      .def_prop_ro(
+          "model", [](TestCase &tc) -> ModelProto & { return tc.model(); },
           nb::rv_policy::reference_internal,
           "Returns the ``ModelProto`` of this test case, resolved against the "
-          "binding registered by ``_onnxpyprotoop``.")
+          "binding registered by ``_onnxpyprotoop``. Built on demand for "
+          "lazily-built (benchmark) cases.")
       .def("__repr__", [](const TestCase &tc) {
         return "TestCase(name='" + tc.name + "', kind='" + tc.kind + "')";
       });

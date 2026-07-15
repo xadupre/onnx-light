@@ -49,10 +49,14 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);
     const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
-    Tensor x = Tensor::FromDouble("", shape, std::vector<double>(kBenchmarkElementwiseSize, 1.0));
-    Tensor axis = Tensor::FromInt32("", {}, {0});
-    Tensor y = cumprod_kernel(x, axis);
-    Expect(node, {x, axis}, {y}, "test_cc_cumprod_benchmark", {opset}, "backend-test", registry);
+    const int64_t count = kBenchmarkElementwiseSize;
+    Expect(registry, std::move(node), "test_cc_cumprod_benchmark", {opset}, {count, 1}, {count},
+           [cumprod_kernel, shape, count]() -> IoData {
+             Tensor x = Tensor::FromDouble("", shape, std::vector<double>(count, 1.0));
+             Tensor axis = Tensor::FromInt32("", {}, {0});
+             Tensor y = cumprod_kernel(x, axis);
+             return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+           });
     return;
   }
 

@@ -502,13 +502,19 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
   };
 
   if (mode == TestMode::BENCHMARK) {
-    Tensor Q = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654321ULL));
-    Tensor K = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654322ULL));
-    Tensor V = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 987654323ULL));
-    Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_basic_benchmark", {default_opset, opset},
-           "backend-test", registry);
+    const int64_t count = 1 * 8 * 128 * 64;
+    Expect(registry, std::move(node), "test_cc_flexattention_basic_benchmark",
+           {default_opset, opset}, {count, count, count}, {count}, [flex]() -> IoData {
+             Tensor Q = Tensor::FromFloat("", {1, 8, 128, 64},
+                                          Randn<float>({1, 8, 128, 64}, 987654321ULL));
+             Tensor K = Tensor::FromFloat("", {1, 8, 128, 64},
+                                          Randn<float>({1, 8, 128, 64}, 987654322ULL));
+             Tensor V = Tensor::FromFloat("", {1, 8, 128, 64},
+                                          Randn<float>({1, 8, 128, 64}, 987654323ULL));
+             Tensor Y = flex(Q, K, V);
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
     return;
   }
 

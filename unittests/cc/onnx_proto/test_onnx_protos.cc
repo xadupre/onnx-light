@@ -4652,7 +4652,7 @@ TEST(onnx_file, LoadOnnxFile_OldProtobuf) {
   ModelProto model;
   utils::FileStream stream(file_path.string());
   ONNX_LIGHT_NAMESPACE::ParseOptions opts;
-  model.ParseFromStream(stream, opts);
+  EXPECT_TRUE(model.ParseFromStream(stream, opts));
 
   utils::PrintOptions pr;
   std::stringstream ss_text;
@@ -4670,7 +4670,7 @@ TEST(onnx_file, LoadOnnxFile_Expanded) {
   ModelProto model;
   utils::FileStream stream(file_path.string());
   ONNX_LIGHT_NAMESPACE::ParseOptions opts;
-  model.ParseFromStream(stream, opts);
+  EXPECT_TRUE(model.ParseFromStream(stream, opts));
 
   utils::PrintOptions pr;
   std::stringstream ss_text;
@@ -4688,7 +4688,7 @@ TEST(onnx_file, LoadOnnxFile_Constant) {
   NodeProto node;
   utils::FileStream stream(file_path.string());
   ONNX_LIGHT_NAMESPACE::ParseOptions opts;
-  node.ParseFromStream(stream, opts);
+  EXPECT_TRUE(node.ParseFromStream(stream, opts));
 
   utils::PrintOptions pr;
   std::stringstream ss_text;
@@ -6775,7 +6775,7 @@ TEST(onnx_proto, SequenceProto_ParseFromStream) {
   utils::StringStream read_stream(write_stream.data(), write_stream.size());
   ParseOptions parse_options;
   SequenceProto sequence2;
-  sequence2.ParseFromStream(read_stream, parse_options);
+  EXPECT_TRUE(sequence2.ParseFromStream(read_stream, parse_options));
 
   EXPECT_EQ(sequence2.ref_elem_type(), 1);
   ASSERT_EQ(sequence2.ref_tensor_values().size(), 2);

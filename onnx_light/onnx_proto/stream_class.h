@@ -28,7 +28,7 @@
   bool SerializeToFileDescriptor(int fd, SerializeOptions &opts) const;                            \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
       const;                                                                                       \
-  void ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
+  bool ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
   void PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const;
 

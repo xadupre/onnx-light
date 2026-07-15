@@ -683,7 +683,7 @@ TEST(onnx_external_ressource, SaveWithExternalData) {
   ModelProto model;
   utils::FileStream stream(file_path.string());
   ONNX_LIGHT_NAMESPACE::ParseOptions opts;
-  model.ParseFromStream(stream, opts);
+  EXPECT_TRUE(model.ParseFromStream(stream, opts));
 
   auto serialized = source_dir / "test_onnx_file_save_with_external_data.onnx";
   auto weights = source_dir / "test_onnx_file_save_with_external_data.data";
@@ -1276,7 +1276,7 @@ TEST(onnx_external_ressource, LoadWithExternalData) {
   ModelProto model;
   utils::TwoFilesStream stream(file_path.string(), weights_path.string());
   ONNX_LIGHT_NAMESPACE::ParseOptions opts;
-  model.ParseFromStream(stream, opts);
+  EXPECT_TRUE(model.ParseFromStream(stream, opts));
   EXPECT_EQ(model.ref_graph().ref_initializer().size(), 7);
   IteratorTensorProto it(&model.ref_graph());
   int big = 0;

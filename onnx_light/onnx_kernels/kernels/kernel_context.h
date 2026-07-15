@@ -53,23 +53,26 @@ struct KernelContext {
  * Base class for every backend test kernel.
  *
  * Each concrete kernel class derives from ``KernelBase`` so it inherits
- * ownership of the construction-time ``KernelContext`` reference. Derived
- * kernels access the context through the protected ``ctx_`` member and
- * typically inherit ``KernelBase``'s constructor via ``using
- * KernelBase::KernelBase;``, which preserves the ``explicit`` qualifier on
- * the single-argument constructor.
+ * ownership of the construction-time ``KernelContext``. Derived kernels access
+ * the context through the protected ``ctx_`` member and typically inherit
+ * ``KernelBase``'s constructor via ``using KernelBase::KernelBase;``, which
+ * preserves the ``explicit`` qualifier on the single-argument constructor.
+ *
+ * ``ctx_`` is stored by value so that kernels are safely copy-constructible:
+ * lazy test-case lambdas capture kernels by value and may outlive the
+ * ``KernelContext`` local variable used at registration time.
  *
  * Centralizing the context member here keeps every kernel class consistent,
  * makes it trivial to extend the construction-time interface (e.g. by
  * adding new fields to ``KernelContext``), and avoids a repeated
- * boilerplate ``const KernelContext &ctx_;`` member in each kernel.
+ * boilerplate ``KernelContext ctx_;`` member in each kernel.
  */
 class KernelBase {
 public:
   explicit KernelBase(const KernelContext &ctx) : ctx_(ctx) {}
 
 protected:
-  const KernelContext &ctx_;
+  KernelContext ctx_;
 };
 
 } // namespace kernel

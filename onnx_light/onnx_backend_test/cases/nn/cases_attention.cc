@@ -1915,9 +1915,9 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_attention_4d_fp16", {opset}, [=]() -> IoData {
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
+    registry.back().atol = 5e-3;
+    registry.back().rtol = 5e-3;
   }
-
-  // 4D GQA + past/present, fp16.
   {
     const OpsetId opset24 = DefaultOpset(24);
     Tensor Q32 = MakeDeterministicFloatTensor({2, 9, 4, 8}, 0xdeadu, 0.0f, 1.0f);
@@ -1951,6 +1951,27 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
                             std::move(pk), std::move(pv)},
                            {std::move(Y), std::move(present_key), std::move(present_value)}};
            });
+    registry.back().atol = 5e-3;
+    registry.back().rtol = 5e-3;
+
+    Tensor nonpad_kv_seqlen = Tensor::FromInt64("nonpad_kv_seqlen", {2}, {6, 5});
+    kernel::Attention::Attributes decode_attrs;
+    decode_attrs.is_causal = true;
+    Tensor decode_y =
+        attention(Q_in, K_in, V_in, decode_attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
+                  /*past_value=*/nullptr, &nonpad_kv_seqlen)
+            .Y;
+    Tensor decode_Y = kernel::FloatToFloat16Tensor("", decode_y);
+    NodeProto decode_node =
+        MakeAttentionNode({"Q", "K", "V", "", "", "", "nonpad_kv_seqlen"}, {"Y"});
+    AddInt(decode_node, "is_causal", 1);
+    Expect(registry, std::move(decode_node), "test_cc_attention_4d_gqa_causal_nonpad_decode_fp16",
+           {opset24}, [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(nonpad_kv_seqlen)},
+                           {std::move(decode_Y)}};
+           });
+    registry.back().atol = 5e-3;
+    registry.back().rtol = 5e-3;
   }
 }
 

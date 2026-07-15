@@ -476,6 +476,8 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
                     {std::move(kernel::FloatToFloat16Tensor("", result.output)),
                      std::move(kernel::FloatToFloat16Tensor("", result.present_state))}};
     });
+    registry.back().atol = 5e-3;
+    registry.back().rtol = 5e-3;
   }
 }
 

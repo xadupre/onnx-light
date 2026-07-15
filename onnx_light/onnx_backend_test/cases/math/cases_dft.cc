@@ -104,6 +104,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/false);
              return IoData{{std::move(x_real), std::move(axis)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtol;
   }
 
   // --- v20: inverse DFT (axis = 1).
@@ -115,6 +116,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/true);
              return IoData{{std::move(x_cplx), std::move(axis)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtol;
   }
 
   // --- v20: RFFT (axis = 1, onesided=1).
@@ -126,6 +128,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/false);
              return IoData{{std::move(x_real), std::move(axis)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtol;
   }
 
   // --- v17: standard forward DFT with axis attribute.
@@ -136,6 +139,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/false);
              return IoData{{std::move(x_real)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtol;
   }
 
   // --- v17: inverse DFT.
@@ -146,6 +150,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/true);
              return IoData{{std::move(x_cplx)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtol;
   }
 
   // -----------------------------------------------------------------------
@@ -181,6 +186,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/false);
              return IoData{{std::move(x_real_10x10), std::move(axis)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v20: ``test_cc_dft_irfft`` — inverse one-sided DFT producing a real
@@ -198,6 +204,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/true);
              return IoData{{std::move(x_onesided), std::move(axis)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v19: ``test_cc_dft_opset19`` — forward DFT along axis=1.
@@ -208,6 +215,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/false);
              return IoData{{std::move(x_real_10x10)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v19: ``test_cc_dft_axis_opset19`` — forward DFT along axis=2.
@@ -218,6 +226,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/false);
              return IoData{{std::move(x_real_10x10)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v19: ``test_cc_dft_inverse_opset19`` — inverse DFT along axis=1.
@@ -228,6 +237,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/true);
              return IoData{{std::move(x_cplx_10x10)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v19: ``test_cc_dft_rfft_opset19`` — one-sided forward DFT (RFFT).
@@ -238,6 +248,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/false);
              return IoData{{std::move(x_real_10x10)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v19: ``test_cc_dft_irfft_opset19`` — inverse one-sided DFT (IRFFT).
@@ -251,6 +262,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
                                 /*inverse=*/true);
              return IoData{{std::move(x_onesided)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtolLarge;
   }
 
   // --- v20: ``test_cc_dft_irfft_roundtrip`` — IRFFT with hardcoded expected
@@ -266,6 +278,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor y = Tensor::FromFloat("y", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
              return IoData{{std::move(x_onesided), std::move(axis)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtol;
   }
 
   // --- v19: ``test_cc_dft_irfft_roundtrip_opset19`` — same with v17 API.
@@ -277,6 +290,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor y = Tensor::FromFloat("y", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
              return IoData{{std::move(x_onesided)}, {std::move(y)}};
            });
+    registry.back().atol = kDFTAtol;
   }
 }
 

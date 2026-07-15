@@ -85,6 +85,7 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(signal), std::move(frame_step), std::move(frame_length)},
                            {std::move(y)}};
            });
+    registry.back().atol = 1e-5;
   }
 
   // --- STFT with both window and frame_length, onesided=1.
@@ -98,6 +99,7 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
                             std::move(frame_length)},
                            {std::move(y)}};
            });
+    registry.back().atol = 1e-5;
   }
 
   // --- STFT with onesided=0 (two-sided, complex output).
@@ -110,6 +112,7 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(signal), std::move(frame_step), std::move(frame_length)},
                            {std::move(y)}};
            });
+    registry.back().atol = 1e-5;
   }
 
   // --- STFT with complex-valued, batched input (onesided=0).
@@ -179,6 +182,7 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
                  {std::move(signal_complex), std::move(frame_step_b), std::move(frame_length_b)},
                  {std::move(y_expected)}};
            });
+    registry.back().atol = 1e-3;
   }
 }
 

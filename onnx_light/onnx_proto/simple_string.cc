@@ -71,66 +71,139 @@ void String::set(const char *ptr, size_t size) {
     }
   }
   if (ptr == nullptr) {
-    data_.clear();
-    null_ = true;
+    ptr_ = nullptr;
+    size_ = 0;
+    is_inline_ = false;
     return;
   }
   if (effective_size > 0 && ptr[effective_size - 1] == 0) {
     --effective_size;
   }
-  data_.assign(ptr, effective_size);
-  null_ = false;
+  if (effective_size < kInlineCapacity) {
+    if (effective_size > 0) {
+      memcpy(inline_data_, ptr, effective_size);
+    }
+    inline_data_[effective_size] = 0;
+    ptr_ = inline_data_;
+    size_ = effective_size;
+    is_inline_ = true;
+  } else {
+    ptr_ = new char[effective_size + 1];
+    memcpy(ptr_, ptr, effective_size);
+    ptr_[effective_size] = 0;
+    size_ = effective_size;
+    is_inline_ = false;
+  }
 }
 
 bool String::operator==(const char *other) const {
-  if (data_.empty())
+  if (size_ == 0)
     return other == nullptr || other[0] == 0;
   if (other == nullptr)
     return false;
-  return sv() == std::string_view(other);
+  size_t i;
+  for (i = 0; i < size_ && ptr_[i] == other[i] && other[i] != 0; ++i)
+    ;
+  return i == size_ && other[i] == 0;
 }
 
-bool String::operator==(const RefString &other) const { return sv() == other.sv(); }
+bool String::operator==(const RefString &other) const {
+  if (size() != other.size())
+    return false;
+  if (size() == 0)
+    return true;
+  size_t i;
+  for (i = 0; i < size_ && ptr_[i] == other[i]; ++i)
+    ;
+  return i == size_;
+}
 
-bool String::operator==(const String &other) const { return data_ == other.data_; }
+bool String::operator==(const String &other) const {
+  return *this == RefString(other.data(), other.size());
+}
 
-bool String::operator==(const std::string &other) const { return data_ == other; }
+bool String::operator==(const std::string &other) const {
+  return *this == RefString(other.data(), other.size());
+}
 
 bool String::operator!=(const std::string &other) const { return !(*this == other); }
 bool String::operator!=(const String &other) const { return !(*this == other); }
 bool String::operator!=(const RefString &other) const { return !(*this == other); }
 bool String::operator!=(const char *other) const { return !(*this == other); }
 
-bool String::operator<(const RefString &other) const { return sv() < other.sv(); }
+bool String::operator<(const RefString &other) const {
+  size_t min_size = size_ < other.size() ? size_ : other.size();
+  if (min_size > 0) {
+    int cmp = memcmp(ptr_, other.data(), min_size);
+    if (cmp != 0)
+      return cmp < 0;
+  }
+  return size_ < other.size();
+}
 
-bool String::operator<(const std::string &other) const { return sv() < std::string_view(other); }
+bool String::operator<(const std::string &other) const {
+  return *this < RefString(other.data(), other.size());
+}
 
-bool String::operator<(const String &other) const { return data_ < other.data_; }
+bool String::operator<(const String &other) const {
+  return *this < RefString(other.data(), other.size());
+}
 
 bool String::operator<(const char *other) const {
   if (other == nullptr)
     return false;
-  return sv() < std::string_view(other);
+  if (ptr_ == nullptr)
+    return other[0] != 0;
+  for (size_t i = 0; i < size_; ++i) {
+    if (other[i] == 0)
+      return false;
+    if (static_cast<unsigned char>(ptr_[i]) < static_cast<unsigned char>(other[i]))
+      return true;
+    if (static_cast<unsigned char>(ptr_[i]) > static_cast<unsigned char>(other[i]))
+      return false;
+  }
+  return other[size_] != 0;
 }
 
-bool String::operator>(const std::string &other) const { return sv() > std::string_view(other); }
+bool String::operator>(const std::string &other) const {
+  return *this > RefString(other.data(), other.size());
+}
 
-bool String::operator>(const String &other) const { return data_ > other.data_; }
+bool String::operator>(const String &other) const {
+  return *this > RefString(other.data(), other.size());
+}
 
-bool String::operator>(const RefString &other) const { return sv() > other.sv(); }
+bool String::operator>(const RefString &other) const {
+  size_t min_size = other.size() < size_ ? other.size() : size_;
+  if (min_size > 0) {
+    int cmp = memcmp(other.data(), ptr_, min_size);
+    if (cmp != 0)
+      return cmp < 0;
+  }
+  return other.size() < size_;
+}
 
 bool String::operator>(const char *other) const {
-  if (data_.empty())
+  if (ptr_ == nullptr || size_ == 0)
     return false;
   if (other == nullptr)
     return true;
-  return sv() > std::string_view(other);
+  for (size_t i = 0; i < size_; ++i) {
+    if (other[i] == 0)
+      return true;
+    if (static_cast<unsigned char>(ptr_[i]) > static_cast<unsigned char>(other[i]))
+      return true;
+    if (static_cast<unsigned char>(ptr_[i]) < static_cast<unsigned char>(other[i]))
+      return false;
+  }
+  return false;
 }
 
 std::string String::as_string(bool quote) const {
   if (empty())
     return quote ? std::string("\"\"") : std::string();
-  return quote ? "\"" + data_ + "\"" : data_;
+  auto s = std::string(data(), size());
+  return quote ? std::string("\"") + s + std::string("\"") : s;
 }
 
 std::string join_string(const std::vector<std::string> &elements, const char *delimiter) {
@@ -156,6 +229,7 @@ std::string join_string(const std::vector<std::string> &elements, const char *de
 
 String &String::operator=(const char *s) {
   EXT_ENFORCE(s != data(), "Cannot assign to self.");
+  clear();
   set(s, SIZE_MAX);
   return *this;
 }
@@ -163,29 +237,45 @@ String &String::operator=(const char *s) {
 String &String::operator=(String &&other) noexcept {
   if (this == &other)
     return *this;
-  data_ = std::move(other.data_);
-  null_ = other.null_;
-  other.clear();
+  clear();
+  if (other.is_inline_) {
+    size_ = other.size_;
+    is_inline_ = true;
+    if (size_ > 0) {
+      memcpy(inline_data_, other.inline_data_, size_);
+      ptr_ = inline_data_;
+    }
+  } else {
+    ptr_ = other.ptr_;
+    size_ = other.size_;
+    is_inline_ = false;
+  }
+  other.ptr_ = nullptr;
+  other.size_ = 0;
+  other.is_inline_ = false;
   return *this;
 }
 
 String &String::operator=(const RefString &s) {
-  if (data() == s.data() && size() == s.size())
+  if (data() == s.data() && size_ == s.size())
     return *this; // no change
   EXT_ENFORCE(s.data() != data(), "Cannot assign to self when size is different.");
+  clear();
   set(s.data(), s.size());
   return *this;
 }
 
 String &String::operator=(const String &s) {
-  if (this == &s)
+  if (data() == s.data() && size_ == s.size())
     return *this; // no change
-  data_ = s.data_;
-  null_ = s.null_;
+  EXT_ENFORCE(s.data() != data(), "Cannot assign to self when size is different.");
+  clear();
+  set(s.data(), s.size());
   return *this;
 }
 
 String &String::operator=(const std::string &s) {
+  clear();
   set(s.data(), s.size());
   return *this;
 }

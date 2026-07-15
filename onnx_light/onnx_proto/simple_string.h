@@ -93,59 +93,79 @@ public:
  */
 class String {
 private:
-  // The value is stored in a std::string so it can be exposed by reference
-  // (see str()) as a drop-in for protobuf string fields, which are std::string.
-  // std::string already provides small-string optimization, so this keeps the
-  // previous inline-storage behavior for short values without a custom buffer.
-  std::string data_;
-  // std::string cannot represent a "null" (unset) value distinct from an empty
-  // one: data() is never nullptr and empty() is true for both. Protobuf field
-  // presence relies on that distinction (see stream_class.hpp null() checks), so
-  // an explicit flag tracks whether the string is null (unset) versus empty ("").
-  bool null_ = true;
+  static constexpr size_t kInlineCapacity = 23;
+  char *ptr_;
+  size_t size_;
+  bool is_inline_;
+  char inline_data_[kInlineCapacity];
 
 public:
   /** Releases owned memory. */
-  inline ~String() = default;
-  /** Resets the instance to a null (unset) state and frees owned memory. */
+  inline ~String() { clear(); }
+  /** Resets the instance to an empty state and frees owned memory. */
   inline void clear() {
-    data_.clear();
-    null_ = true;
+    if (ptr_ != nullptr && !is_inline_) {
+      delete[] ptr_;
+    }
+    ptr_ = nullptr;
+    size_ = 0;
+    is_inline_ = false;
   }
-  /** Initializes a null (unset) string. */
-  explicit inline String() = default;
+  /** Initializes an empty string. */
+  explicit inline String() : ptr_(nullptr), size_(0), is_inline_(false) {}
   /** Initializes by copying content from a non-owning string view. */
-  explicit inline String(const RefString &s) { set(s.data(), s.size()); }
+  explicit inline String(const RefString &s) : ptr_(nullptr), size_(0), is_inline_(false) {
+    set(s.data(), s.size());
+  }
   /** Initializes by copying a pointer and explicit size. */
-  explicit inline String(const char *ptr, size_t size) { set(ptr, size); }
+  explicit inline String(const char *ptr, size_t size)
+      : ptr_(nullptr), size_(0), is_inline_(false) {
+    set(ptr, size);
+  }
   /** Initializes by copying a standard string. */
-  explicit String(const std::string &s) { set(s.data(), s.size()); }
+  explicit String(const std::string &s) : ptr_(nullptr), size_(0), is_inline_(false) {
+    set(s.data(), s.size());
+  }
   /** Initializes by copying another owning string. */
-  explicit String(const String &s) : data_(s.data_), null_(s.null_) {}
+  explicit String(const String &s) : ptr_(nullptr), size_(0), is_inline_(false) {
+    set(s.data(), s.size());
+  }
   /** Initializes by taking ownership from another instance. */
-  explicit String(String &&other) noexcept : data_(std::move(other.data_)), null_(other.null_) {
-    other.clear();
+  explicit String(String &&other) noexcept : ptr_(nullptr), size_(0), is_inline_(false) {
+    if (other.is_inline_) {
+      size_ = other.size_;
+      is_inline_ = true;
+      if (size_ > 0) {
+        memcpy(inline_data_, other.inline_data_, size_);
+        ptr_ = inline_data_;
+      }
+    } else {
+      ptr_ = other.ptr_;
+      size_ = other.size_;
+      is_inline_ = false;
+    }
+    other.ptr_ = nullptr;
+    other.size_ = 0;
+    other.is_inline_ = false;
   }
   /** Returns the number of characters. */
-  inline size_t size() const { return data_.size(); }
+  inline size_t size() const { return size_; }
   /** Returns the number of characters. */
-  inline size_t length() const { return data_.size(); }
-  /** Returns the underlying pointer, or nullptr when the string is null (unset). */
-  inline const char *data() const { return null_ ? nullptr : data_.data(); }
+  inline size_t length() const { return size_; }
+  /** Returns the underlying pointer. */
+  inline const char *data() const { return ptr_; }
   /** Returns a null-terminated C string (never nullptr). */
-  inline const char *c_str() const { return data_.c_str(); }
+  inline const char *c_str() const { return ptr_ == nullptr ? "" : ptr_; }
   /** Indicates whether the string is empty. */
-  inline bool empty() const { return data_.empty(); }
+  inline bool empty() const { return size_ == 0; }
   /** Returns a string_view. */
-  inline const std::string_view sv() const { return std::string_view(data_); }
-  /** Returns the owned value as a standard string reference. This makes the type
-   *  a zero-copy drop-in for protobuf string fields (which are std::string) in
-   *  consuming code that needs a ``const std::string&``. */
-  inline const std::string &str() const noexcept { return data_; }
-  /** Indicates whether the string is null (unset), as opposed to empty (""). */
-  inline bool null() const { return null_; }
+  inline const std::string_view sv() const {
+    return ptr_ == nullptr ? std::string_view() : std::string_view(ptr_, size_);
+  }
+  /** Indicates whether the string is empty and has no allocated buffer. */
+  inline bool null() const { return size_ == 0 && ptr_ == nullptr; }
   /** Returns the character at the specified index. */
-  inline char operator[](size_t i) const { return data_[i]; }
+  inline char operator[](size_t i) const { return ptr_[i]; }
   /** Assigns from a null-terminated string. */
   String &operator=(const char *s);
   /** Assigns by taking ownership from another instance. */
@@ -192,11 +212,15 @@ public:
   std::string as_string(bool quote = false) const;
   /** Implicit conversion to a standard string so the type is a drop-in for
    *  protobuf string fields (which are std::string) in consuming code. */
-  inline operator std::string() const { return data_; }
+  inline operator std::string() const {
+    return ptr_ == nullptr ? std::string() : std::string(ptr_, size_);
+  }
   /** Implicit conversion to a string view (drop-in for protobuf string fields). */
-  inline operator std::string_view() const { return std::string_view(data_); }
+  inline operator std::string_view() const {
+    return ptr_ == nullptr ? std::string_view() : std::string_view(ptr_, size_);
+  }
   /** Parses the content as a signed 64-bit integer. */
-  inline int64_t toint64() const { return RefString(data(), size()).toint64(); }
+  inline int64_t toint64() const { return RefString(ptr_, size_).toint64(); }
 
 private:
   /** Replaces the content with a copy of the provided buffer. */

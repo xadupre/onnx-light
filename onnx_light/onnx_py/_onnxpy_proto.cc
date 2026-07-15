@@ -1353,23 +1353,25 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
   nb::class_<utils::String>(m, "String", "Simplified string with no final null character.")
       .def(nb::init<std::string>())
       .def(
-          "__str__", [](const utils::String &self) -> std::string { return self.str(); },
+          "__str__", [](const utils::String &self) -> std::string { return self.as_string(); },
           "Converts this instance into a python string.")
       .def(
           "__add__",
           [](const utils::String &self, const nb::str &s) -> std::string {
-            return self.str() + nb::cast<std::string>(s);
+            return self.as_string() + nb::cast<std::string>(s);
           },
           "Concatenates this string and a python string.", nb::is_operator())
       .def(
           "__radd__",
           [](const utils::String &self, const nb::str &s) -> std::string {
-            return nb::cast<std::string>(s) + self.str();
+            return nb::cast<std::string>(s) + self.as_string();
           },
           "Concatenates a python string and this string.", nb::is_operator())
       .def(
           "__repr__",
-          [](const utils::String &self) -> std::string { return "'" + self.str() + "'"; },
+          [](const utils::String &self) -> std::string {
+            return std::string("'") + self.as_string() + std::string("'");
+          },
           "Representation with surrounding quotes.")
       .def(
           "__len__", [](const utils::String &self) -> int { return self.size(); },
@@ -1452,7 +1454,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .def(
           "decode",
           [](const utils::String &self, const char *encoding, const char *errors) -> nb::object {
-            nb::bytes data(self.data(), self.size());
+            std::string s = self.as_string();
+            nb::bytes data(s.data(), s.size());
             return data.attr("decode")(encoding, errors);
           },
           nb::arg("encoding") = "utf-8", nb::arg("errors") = "strict",

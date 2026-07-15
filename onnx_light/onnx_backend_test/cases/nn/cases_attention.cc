@@ -1589,17 +1589,24 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node =
         MakeAttentionNode({"Q", "K", "V", "attn_mask", "", "", "nonpad_kv_seqlen"}, {"Y"});
     AddInt(node, "is_causal", 1);
-    Expect(registry, std::move(node), "test_cc_attention_4d_causal_nonpad_attn_mask_composition",
-           {opset24}, [=]() -> IoData {
-             // Upstream exposes distinct backend test names for scenario variants that
-             // intentionally share the same numerics (attn_mask_composition,
-             // batch_prefill, continued_prefill, negative_offset_structural_empty).
-             // Register all aliases so the ONNX-vs-onnx-light name-parity check sees a
-             // matching case for each name.
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
-                            std::move(nonpad_kv_seqlen)},
-                           {std::move(r.Y)}};
-           });
+    // Upstream exposes distinct backend test names for scenario variants that
+    // intentionally share the same numerics (attn_mask_composition,
+    // batch_prefill, continued_prefill, negative_offset_structural_empty).
+    // Register all aliases so the ONNX-vs-onnx-light name-parity check sees a
+    // matching case for each name.  The lambda copies from its captures so it
+    // can be safely passed to multiple Expect calls.
+    auto make_nonpad_composition_io = [=]() -> IoData {
+      return IoData{{Q, K, V, mask, nonpad_kv_seqlen}, {r.Y}};
+    };
+    Expect(registry, node, "test_cc_attention_4d_causal_nonpad_attn_mask_composition", {opset24},
+           make_nonpad_composition_io);
+    Expect(registry, node, "test_cc_attention_4d_causal_nonpad_batch_prefill", {opset24},
+           make_nonpad_composition_io);
+    Expect(registry, node, "test_cc_attention_4d_causal_nonpad_continued_prefill", {opset24},
+           make_nonpad_composition_io);
+    Expect(registry, std::move(node),
+           "test_cc_attention_4d_causal_nonpad_negative_offset_structural_empty", {opset24},
+           std::move(make_nonpad_composition_io));
   }
 
   {

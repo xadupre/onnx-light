@@ -2210,12 +2210,12 @@ Tensor ImageDecoder::operator()(const Tensor &encoded_stream, const std::string 
       || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels, allocator)
 #endif
   ) {
-    return Tensor::FromUint8("", {height, width, channels}, std::move(pixels));
+    return Tensor::FromUint8("", {height, width, channels}, std::move(pixels), allocator);
   }
 
   // Per the ONNX schema, fall back to an empty ``(0, 0, C)`` matrix when
   // the bytestream cannot be decoded.
-  return Tensor::FromUint8("", {0, 0, channels}, {});
+  return Tensor::FromUint8("", {0, 0, channels}, {}, allocator);
 }
 
 void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &pixel_format,

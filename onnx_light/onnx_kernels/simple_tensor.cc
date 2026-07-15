@@ -67,57 +67,57 @@ size_t PackedByteSize(int32_t dtype, int64_t element_count) {
 }
 
 Tensor Tensor::FromFloat(const std::string &name, const Shape &shape,
-                         const std::vector<float> &values) {
-  return Tensor::From<float>(name, shape, values);
+                         const std::vector<float> &values, RawBufferAllocator *allocator) {
+  return Tensor::From<float>(name, shape, values, allocator);
 }
 
 Tensor Tensor::FromDouble(const std::string &name, const Shape &shape,
-                          const std::vector<double> &values) {
-  return Tensor::From<double>(name, shape, values);
+                          const std::vector<double> &values, RawBufferAllocator *allocator) {
+  return Tensor::From<double>(name, shape, values, allocator);
 }
 
 Tensor Tensor::FromInt32(const std::string &name, const Shape &shape,
-                         const std::vector<int32_t> &values) {
-  return Tensor::From<int32_t>(name, shape, values);
+                         const std::vector<int32_t> &values, RawBufferAllocator *allocator) {
+  return Tensor::From<int32_t>(name, shape, values, allocator);
 }
 
 Tensor Tensor::FromInt64(const std::string &name, const Shape &shape,
-                         const std::vector<int64_t> &values) {
-  return Tensor::From<int64_t>(name, shape, values);
+                         const std::vector<int64_t> &values, RawBufferAllocator *allocator) {
+  return Tensor::From<int64_t>(name, shape, values, allocator);
 }
 
 Tensor Tensor::FromInt8(const std::string &name, const Shape &shape,
-                        const std::vector<int8_t> &values) {
-  return Tensor::From<int8_t>(name, shape, values);
+                        const std::vector<int8_t> &values, RawBufferAllocator *allocator) {
+  return Tensor::From<int8_t>(name, shape, values, allocator);
 }
 
 Tensor Tensor::FromUint8(const std::string &name, const Shape &shape,
-                         const std::vector<uint8_t> &values) {
-  return Tensor::From<uint8_t>(name, shape, values);
+                         const std::vector<uint8_t> &values, RawBufferAllocator *allocator) {
+  return Tensor::From<uint8_t>(name, shape, values, allocator);
 }
 
 Tensor Tensor::FromInt16(const std::string &name, const Shape &shape,
-                         const std::vector<int16_t> &values) {
-  return Tensor::From<int16_t>(name, shape, values);
+                         const std::vector<int16_t> &values, RawBufferAllocator *allocator) {
+  return Tensor::From<int16_t>(name, shape, values, allocator);
 }
 
 Tensor Tensor::FromUint16(const std::string &name, const Shape &shape,
-                          const std::vector<uint16_t> &values) {
-  return Tensor::From<uint16_t>(name, shape, values);
+                          const std::vector<uint16_t> &values, RawBufferAllocator *allocator) {
+  return Tensor::From<uint16_t>(name, shape, values, allocator);
 }
 
 Tensor Tensor::FromUint32(const std::string &name, const Shape &shape,
-                          const std::vector<uint32_t> &values) {
-  return Tensor::From<uint32_t>(name, shape, values);
+                          const std::vector<uint32_t> &values, RawBufferAllocator *allocator) {
+  return Tensor::From<uint32_t>(name, shape, values, allocator);
 }
 
 Tensor Tensor::FromUint64(const std::string &name, const Shape &shape,
-                          const std::vector<uint64_t> &values) {
-  return Tensor::From<uint64_t>(name, shape, values);
+                          const std::vector<uint64_t> &values, RawBufferAllocator *allocator) {
+  return Tensor::From<uint64_t>(name, shape, values, allocator);
 }
 
 Tensor Tensor::FromBool(const std::string &name, const Shape &shape,
-                        const std::vector<uint8_t> &values) {
+                        const std::vector<uint8_t> &values, RawBufferAllocator *allocator) {
   int64_t expected = 1;
   for (int64_t d : shape) {
     EXT_ENFORCE_INVALID(d >= 0, "Tensor shape dimensions must be non-negative.");
@@ -125,6 +125,16 @@ Tensor Tensor::FromBool(const std::string &name, const Shape &shape,
   }
   EXT_ENFORCE_INVALID(static_cast<int64_t>(values.size()) == expected,
                       "Tensor values size does not match the product of shape.");
+  if (allocator != nullptr) {
+    Tensor t =
+        MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), shape, values.size(), allocator);
+    t.name = name;
+    uint8_t *out = t.mutable_bytes();
+    for (size_t i = 0; i < values.size(); ++i) {
+      out[i] = values[i] ? uint8_t{1} : uint8_t{0};
+    }
+    return t;
+  }
   std::vector<uint8_t> bytes(values.size());
   for (size_t i = 0; i < values.size(); ++i) {
     bytes[i] = values[i] ? uint8_t{1} : uint8_t{0};

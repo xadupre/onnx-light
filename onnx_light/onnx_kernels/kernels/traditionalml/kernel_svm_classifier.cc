@@ -78,8 +78,8 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
     expanded_scores[static_cast<size_t>(i * 2)] = -s;
     expanded_scores[static_cast<size_t>(i * 2 + 1)] = s;
   }
-  Tensor y = Tensor::FromInt64("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, 2}, expanded_scores);
+  Tensor y = Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
+  Tensor z = Tensor::FromFloat("", {sample_count, 2}, expanded_scores, ctx_.allocator);
   return std::make_pair(std::move(y), std::move(z));
 }
 
@@ -108,7 +108,7 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
     expanded_scores[static_cast<size_t>(i * 2 + 1)] = s;
   }
   Tensor y = Tensor::FromStrings("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, 2}, expanded_scores);
+  Tensor z = Tensor::FromFloat("", {sample_count, 2}, expanded_scores, ctx_.allocator);
   return std::make_pair(std::move(y), std::move(z));
 }
 

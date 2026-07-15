@@ -79,7 +79,7 @@ Tensor NonZero::operator()(const Tensor &x, RuntimeContext *rt) const {
     }
   }
 
-  return Tensor::FromInt64("", out_shape, values);
+  return Tensor::FromInt64("", out_shape, values, ctx_.allocator);
 }
 
 } // namespace kernel

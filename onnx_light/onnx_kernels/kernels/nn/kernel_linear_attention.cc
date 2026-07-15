@@ -317,8 +317,8 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
   }
 
   Result result;
-  result.output = Tensor::FromFloat("", {B, T, out_hidden}, output);
-  result.present_state = Tensor::FromFloat("", {B, kv_num_heads, d_k, d_v}, state);
+  result.output = Tensor::FromFloat("", {B, T, out_hidden}, output, ctx_.allocator);
+  result.present_state = Tensor::FromFloat("", {B, kv_num_heads, d_k, d_v}, state, ctx_.allocator);
   return result;
 }
 

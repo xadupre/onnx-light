@@ -137,7 +137,7 @@ Tensor FeatureVectorizer::operator()(const std::vector<Tensor> &inputs,
   }
   std::vector<float> values(static_cast<size_t>(n * total_features), 0.0f);
   Compute(inputs, input_dims, n, total_features, values.data());
-  return Tensor::FromFloat("", {n, total_features}, values);
+  return Tensor::FromFloat("", {n, total_features}, values, ctx_.allocator);
 }
 
 void FeatureVectorizer::operator()(const std::vector<Tensor> &inputs,

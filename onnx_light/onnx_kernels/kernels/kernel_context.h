@@ -8,6 +8,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
+
+class RawBufferAllocator;
+
 namespace kernel {
 
 /**
@@ -44,6 +47,14 @@ inline OpsetId DefaultOpset(int64_t version) { return OpsetId(std::string(), ver
 struct KernelContext {
   /// Opset against which the kernel must behave (domain + version).
   OpsetId opset;
+
+  /// Allocator kernels must use to acquire the raw byte storage of the
+  /// tensors they return, so no result buffer is allocated outside the
+  /// runtime context. ``nullptr`` when the owning
+  /// :cpp:class:`RuntimeContext` has no allocator attached (the default),
+  /// in which case results fall back to inline ``std::vector`` storage.
+  /// Kept in sync by :cpp:func:`RuntimeContext::kernel_ctx`.
+  RawBufferAllocator *allocator = nullptr;
 
   KernelContext() = default;
   explicit KernelContext(OpsetId opset_) : opset(std::move(opset_)) {}

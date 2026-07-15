@@ -452,7 +452,13 @@ public:
   const TensorMap &tensors() const noexcept { return tensors_; }
 
   /// Kernel construction context (opset).
-  kernel::KernelContext &kernel_ctx() noexcept { return kernel_ctx_; }
+  kernel::KernelContext &kernel_ctx() noexcept {
+    // Keep the construction-time context in sync with the currently attached
+    // allocator so kernels built via ``rt.kernel_ctx()`` route their result
+    // storage through it.
+    kernel_ctx_.allocator = allocator_;
+    return kernel_ctx_;
+  }
   const kernel::KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
 
   /// Optional allocator used by kernels to acquire and release

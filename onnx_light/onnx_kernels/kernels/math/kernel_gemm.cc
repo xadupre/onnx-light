@@ -84,12 +84,12 @@ void GemmCompute(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
 /// Allocates and returns the output tensor Y = alpha * op(A) * op(B) + beta * C.
 template <typename T>
 Tensor GemmAlloc(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
-                 int64_t transA, int64_t transB) {
+                 int64_t transA, int64_t transB, RawBufferAllocator *allocator = nullptr) {
   const int64_t m = transA ? a.shape[1] : a.shape[0];
   const int64_t n = transB ? b.shape[0] : b.shape[1];
   std::vector<T> result;
   GemmCompute<T>(a, b, c, alpha, beta, transA, transB, result);
-  return Tensor::From<T>("", {m, n}, result);
+  return Tensor::From<T>("", {m, n}, result, allocator);
 }
 
 /// Computes Y = alpha * op(A) * op(B) + beta * C into a preallocated output tensor.
@@ -118,9 +118,9 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
                         int64_t transA, int64_t transB, RuntimeContext *rt) const {
   switch (a.data_type) {
   case DataType::FLOAT:
-    return GemmAlloc<float>(a, b, c, alpha, beta, transA, transB);
+    return GemmAlloc<float>(a, b, c, alpha, beta, transA, transB, ctx_.allocator);
   case DataType::DOUBLE:
-    return GemmAlloc<double>(a, b, c, alpha, beta, transA, transB);
+    return GemmAlloc<double>(a, b, c, alpha, beta, transA, transB, ctx_.allocator);
   case DataType::FLOAT16:
   case DataType::BFLOAT16: {
     EXT_ENFORCE_INVALID(b.data_type == a.data_type, kGemmName,

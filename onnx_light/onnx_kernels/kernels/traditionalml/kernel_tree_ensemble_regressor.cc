@@ -102,7 +102,7 @@ Tensor TreeEnsembleRegressor::operator()(
     }
   }
 
-  return Tensor::FromFloat("", {sample_count, n_targets}, output_flat);
+  return Tensor::FromFloat("", {sample_count, n_targets}, output_flat, ctx_.allocator);
 }
 
 #define ONNX_LIGHT_INSTANTIATE_TREE_REGRESSOR(T)                                                   \

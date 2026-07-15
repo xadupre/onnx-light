@@ -14,7 +14,7 @@ namespace kernel {
 
 Tensor Size::operator()(const Tensor &data, RuntimeContext *rt) const {
   const int64_t n = data.shape.product();
-  return Tensor::FromInt64("", {}, {n});
+  return Tensor::FromInt64("", {}, {n}, ctx_.allocator);
 }
 
 void Size::operator()(const Tensor &data, Tensor &output) const {

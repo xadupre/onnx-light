@@ -453,34 +453,52 @@ struct Tensor {
   /// The templated ``From<T>`` factory is the generic version. The non-template
   /// ``FromFloat``/``FromDouble``/``FromInt32``/``FromInt64`` are thin wrappers
   /// kept for source compatibility.
+  ///
+  /// When ``allocator`` is non-null the element bytes are acquired from it (via
+  /// :cpp:func:`MakeOutputTensor`) and the returned tensor is allocator-backed;
+  /// when null the tensor uses inline ``std::vector`` storage (the legacy path).
+  /// Kernels producing a result should pass the runtime context allocator so no
+  /// output buffer is allocated outside it.
   template <typename T>
-  static Tensor From(const std::string &name, const Shape &shape, const std::vector<T> &values);
+  static Tensor From(const std::string &name, const Shape &shape, const std::vector<T> &values,
+                     RawBufferAllocator *allocator = nullptr);
 
   static Tensor FromFloat(const std::string &name, const Shape &shape,
-                          const std::vector<float> &values);
+                          const std::vector<float> &values,
+                          RawBufferAllocator *allocator = nullptr);
   static Tensor FromDouble(const std::string &name, const Shape &shape,
-                           const std::vector<double> &values);
+                           const std::vector<double> &values,
+                           RawBufferAllocator *allocator = nullptr);
   static Tensor FromInt32(const std::string &name, const Shape &shape,
-                          const std::vector<int32_t> &values);
+                          const std::vector<int32_t> &values,
+                          RawBufferAllocator *allocator = nullptr);
   static Tensor FromInt64(const std::string &name, const Shape &shape,
-                          const std::vector<int64_t> &values);
+                          const std::vector<int64_t> &values,
+                          RawBufferAllocator *allocator = nullptr);
   static Tensor FromInt8(const std::string &name, const Shape &shape,
-                         const std::vector<int8_t> &values);
+                         const std::vector<int8_t> &values,
+                         RawBufferAllocator *allocator = nullptr);
   static Tensor FromUint8(const std::string &name, const Shape &shape,
-                          const std::vector<uint8_t> &values);
+                          const std::vector<uint8_t> &values,
+                          RawBufferAllocator *allocator = nullptr);
   static Tensor FromInt16(const std::string &name, const Shape &shape,
-                          const std::vector<int16_t> &values);
+                          const std::vector<int16_t> &values,
+                          RawBufferAllocator *allocator = nullptr);
   static Tensor FromUint16(const std::string &name, const Shape &shape,
-                           const std::vector<uint16_t> &values);
+                           const std::vector<uint16_t> &values,
+                           RawBufferAllocator *allocator = nullptr);
   static Tensor FromUint32(const std::string &name, const Shape &shape,
-                           const std::vector<uint32_t> &values);
+                           const std::vector<uint32_t> &values,
+                           RawBufferAllocator *allocator = nullptr);
   static Tensor FromUint64(const std::string &name, const Shape &shape,
-                           const std::vector<uint64_t> &values);
+                           const std::vector<uint64_t> &values,
+                           RawBufferAllocator *allocator = nullptr);
   /// Constructs a ``BOOL`` tensor; element values are stored as one byte each
   /// (0 == false, non-zero == true). Provided as a ``uint8_t`` vector so the
   /// usual ``std::vector<bool>`` packing pitfalls are avoided.
   static Tensor FromBool(const std::string &name, const Shape &shape,
-                         const std::vector<uint8_t> &values);
+                         const std::vector<uint8_t> &values,
+                         RawBufferAllocator *allocator = nullptr);
   /// Constructs a ``STRING`` tensor whose elements are the provided UTF-8
   /// strings (stored in ``string_data``). Throws ``std::invalid_argument`` if
   /// any dimension in ``shape`` is negative or if ``values.size()`` does not
@@ -569,15 +587,30 @@ ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint64_t, DataType::UINT64);
 
 #undef ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE
 
+// Forward declaration so the allocator-backed path of the ``From<T>`` template
+// below resolves; the full declaration with documentation follows later.
+Tensor MakeOutputTensor(int32_t data_type, const Shape &shape, size_t n_bytes,
+                        RawBufferAllocator *allocator);
+
 template <typename T>
-Tensor Tensor::From(const std::string &name, const Shape &shape, const std::vector<T> &values) {
+Tensor Tensor::From(const std::string &name, const Shape &shape, const std::vector<T> &values,
+                    RawBufferAllocator *allocator) {
   for (int64_t d : shape) {
     EXT_ENFORCE_INVALID(d >= 0, "Tensor shape dimensions must be non-negative.");
   }
   const int64_t expected = shape.product();
   EXT_ENFORCE_INVALID(static_cast<int64_t>(values.size()) == expected,
                       "Tensor values size does not match the product of shape.");
-  std::vector<uint8_t> bytes(values.size() * sizeof(T));
+  const size_t n_bytes = values.size() * sizeof(T);
+  if (allocator != nullptr) {
+    Tensor t = MakeOutputTensor(TensorElementType<T>::value, shape, n_bytes, allocator);
+    t.name = name;
+    if (!values.empty()) {
+      std::memcpy(t.mutable_bytes(), values.data(), n_bytes);
+    }
+    return t;
+  }
+  std::vector<uint8_t> bytes(n_bytes);
   if (!values.empty()) {
     std::memcpy(bytes.data(), values.data(), bytes.size());
   }

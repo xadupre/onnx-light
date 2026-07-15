@@ -58,13 +58,13 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_transpose_permuted_axes
   {
+    const std::vector<int64_t> perm{1, 0, 2};
     Expect(registry, MakeTransposeNode(perm), "test_cc_transpose_permuted_axes", {opset},
            [=]() -> IoData {
              const Tensor data =
                  Tensor::FromFloat("", {2, 3, 4}, {0.f,  1.f,  2.f,  3.f,  4.f,  5.f,  6.f,  7.f,
                                                    8.f,  9.f,  10.f, 11.f, 12.f, 13.f, 14.f, 15.f,
                                                    16.f, 17.f, 18.f, 19.f, 20.f, 21.f, 22.f, 23.f});
-             const std::vector<int64_t> perm{1, 0, 2};
              const Tensor transposed = transpose_kernel(data, perm);
              return IoData{{std::move(data)}, {std::move(transposed)}};
            });
@@ -72,10 +72,10 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_transpose_permuted_axes_2
   {
+    const std::vector<int64_t> perm{1, 2, 0};
     Expect(registry, MakeTransposeNode(perm), "test_cc_transpose_permuted_axes_2", {opset},
            [=]() -> IoData {
              const Tensor data = Tensor::FromFloat("", {1, 2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-             const std::vector<int64_t> perm{1, 2, 0};
              const Tensor transposed = transpose_kernel(data, perm);
              return IoData{{std::move(data)}, {std::move(transposed)}};
            });

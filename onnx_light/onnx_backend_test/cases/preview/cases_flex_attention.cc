@@ -676,9 +676,9 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     const std::vector<int64_t> modifier_shape = {1, 2, 2, 2};
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
+    AddGraphAttribute(node, "prob_mod", BuildIdentityProbMod(modifier_shape));
     Expect(registry, std::move(node), "test_cc_flexattention_prob_mod_identity",
            {default_opset, opset}, [=]() -> IoData {
-             AddGraphAttribute(node, "prob_mod", BuildIdentityProbMod(modifier_shape));
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -736,9 +736,9 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     }
 
     NodeProto node = make_node();
+    AddGraphAttribute(node, "prob_mod", BuildScaleProbMod(modifier_shape, kScale));
     Expect(registry, std::move(node), "test_cc_flexattention_prob_mod_scale_half",
            {default_opset, opset}, [=]() -> IoData {
-             AddGraphAttribute(node, "prob_mod", BuildScaleProbMod(modifier_shape, kScale));
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -759,9 +759,9 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     AttributeProto *a = node.add_attribute();
     a->set_name("scale");
     a->set_type(AttributeProto::AttributeType::FLOAT);
+    a->set_f(kExplicitScale);
     Expect(registry, std::move(node), "test_cc_flexattention_scaled", {default_opset, opset},
            [=]() -> IoData {
-             a->set_f(kExplicitScale);
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -819,9 +819,9 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
         Q, K, V, default_scale,
         [kBias](float s, int64_t, int64_t, int64_t, int64_t) { return s + kBias; });
     NodeProto node = make_node();
+    AddGraphAttribute(node, "score_mod", BuildScoreModBias(modifier_shape, kBias));
     Expect(registry, std::move(node), "test_cc_flexattention_score_mod", {default_opset, opset},
            [=]() -> IoData {
-             AddGraphAttribute(node, "score_mod", BuildScoreModBias(modifier_shape, kBias));
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -844,9 +844,9 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
           return j <= i ? s : -std::numeric_limits<float>::infinity();
         });
     NodeProto node = make_node();
+    AddGraphAttribute(node, "score_mod", BuildScoreModCausalMask(modifier_shape));
     Expect(registry, std::move(node), "test_cc_flexattention_causal_mask", {default_opset, opset},
            [=]() -> IoData {
-             AddGraphAttribute(node, "score_mod", BuildScoreModCausalMask(modifier_shape));
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -868,9 +868,9 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
         Q, K, V, default_scale,
         [kCap](float s, int64_t, int64_t, int64_t, int64_t) { return std::tanh(s / kCap) * kCap; });
     NodeProto node = make_node();
+    AddGraphAttribute(node, "score_mod", BuildScoreModSoftCap(modifier_shape, kCap));
     Expect(registry, std::move(node), "test_cc_flexattention_soft_cap", {default_opset, opset},
            [=]() -> IoData {
-             AddGraphAttribute(node, "score_mod", BuildScoreModSoftCap(modifier_shape, kCap));
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -893,9 +893,9 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                               return s + static_cast<float>(i - j);
                                             });
     NodeProto node = make_node();
+    AddGraphAttribute(node, "score_mod", BuildScoreModRelativePositional(modifier_shape));
     Expect(registry, std::move(node), "test_cc_flexattention_relative_positional",
            {default_opset, opset}, [=]() -> IoData {
-             AddGraphAttribute(node, "score_mod", BuildScoreModRelativePositional(modifier_shape));
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }

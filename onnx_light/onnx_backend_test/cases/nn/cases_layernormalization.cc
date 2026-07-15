@@ -67,15 +67,14 @@ void RegisterCase(std::vector<TestCase> &registry, const kernel::LayerNormalizat
   }
   if (include_epsilon_attr) {
     AddAttribute<float>(node, "epsilon", epsilon);
-                    Expect(registry, std::move(node), "test_cc_" + base, {opset},
-                           [=]() -> IoData {
-                      }
-
-                      Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
-                      Tensor w = MakeFloatTensor("", normalized_shape, 0.02f, 0.5f);
-                      Tensor b = MakeFloatTensor("", normalized_shape, 0.01f, -0.25f);
-                      auto [y, mean, inv_std_dev] = kernel(x, w, b, axis, epsilon);
-                      return IoData{{std::move(x), std::move(w), std::move(b)}, {std::move(y), std::move(mean), std::move(inv_std_dev)}};
+  }
+  Expect(registry, std::move(node), "test_cc_" + base, {opset}, [=]() -> IoData {
+    Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
+    Tensor w = MakeFloatTensor("", normalized_shape, 0.02f, 0.5f);
+    Tensor b = MakeFloatTensor("", normalized_shape, 0.01f, -0.25f);
+    auto [y, mean, inv_std_dev] = kernel(x, w, b, axis, epsilon);
+    return IoData{{std::move(x), std::move(w), std::move(b)},
+                  {std::move(y), std::move(mean), std::move(inv_std_dev)}};
   });
 }
 

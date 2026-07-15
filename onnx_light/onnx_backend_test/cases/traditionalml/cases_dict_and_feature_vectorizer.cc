@@ -68,11 +68,10 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode)
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    const std::vector<std::string> vocab{"a", "c", "b", "z"};
+    AddStringsAttr(node, "string_vocabulary", vocab);
     Expect(registry, std::move(node), "test_cc_dict_vectorizer_string_int64",
            {default_opset, opset}, [=]() -> IoData {
-             const std::vector<std::string> vocab{"a", "c", "b", "z"};
-             AddStringsAttr(node, "string_vocabulary", vocab);
-
              const std::vector<std::string> keys{"a", "c"};
              const std::vector<int64_t> values{4, 8};
              // Placeholder input tensor (its bytes are unused by the runtime; the
@@ -91,11 +90,10 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode)
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    const std::vector<int64_t> vocab{10, 20, 30};
+    AddIntsAttr(node, "int64_vocabulary", vocab);
     Expect(registry, std::move(node), "test_cc_dict_vectorizer_int64_float", {default_opset, opset},
            [=]() -> IoData {
-             const std::vector<int64_t> vocab{10, 20, 30};
-             AddIntsAttr(node, "int64_vocabulary", vocab);
-
              const std::vector<int64_t> keys{10, 30};
              const std::vector<float> values{1.5f, 2.5f};
              Tensor x = Tensor::FromInt64("", {1}, {0});
@@ -145,10 +143,9 @@ void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mo
     node.add_input("x0");
     node.add_input("x1");
     node.add_output("y");
+    AddIntsAttr(node, "inputdimensions", {2, 1});
     Expect(registry, std::move(node), "test_cc_feature_vectorizer_two_float",
            {default_opset, opset}, [=]() -> IoData {
-             AddIntsAttr(node, "inputdimensions", {2, 1});
-
              Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              Tensor x1 = Tensor::FromFloat("", {2, 1}, {10.0f, 20.0f});
              Tensor y = fv({x0, x1}, {2, 1});
@@ -165,10 +162,9 @@ void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mo
     node.add_input("x0");
     node.add_input("x1");
     node.add_output("y");
+    AddIntsAttr(node, "inputdimensions", {2, 2});
     Expect(registry, std::move(node), "test_cc_feature_vectorizer_mixed_dtypes",
            {default_opset, opset}, [=]() -> IoData {
-             AddIntsAttr(node, "inputdimensions", {2, 2});
-
              Tensor x0 = Tensor::FromInt64("", {1, 2}, {1, 2});
              Tensor x1 = Tensor::FromFloat("", {1, 2}, {3.5f, 4.5f});
              Tensor y = fv({x0, x1}, {2, 2});

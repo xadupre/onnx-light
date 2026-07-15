@@ -94,22 +94,21 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node;
     node.set_op_type("Adam");
     node.set_domain(kOnnxPreviewTrainingDomain);
+    AddInputs(node, {"R", "T", "X", "G", "V", "H"});
+    AddOutputs(node, {"X_new", "V_new", "H_new"});
+
+    const float alpha = 0.95f;
+    const float beta = 0.9f;
+    const float epsilon = 1e-2f;
+    const float norm_coefficient = 0.001f;
+    const float norm_coefficient_post = 0.0f;
+    AddFloatAttribute(node, "alpha", alpha);
+    AddFloatAttribute(node, "beta", beta);
+    AddFloatAttribute(node, "epsilon", epsilon);
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "norm_coefficient_post", norm_coefficient_post);
     Expect(registry, std::move(node), "test_cc_adam_single", {default_opset, opset},
            [=]() -> IoData {
-             AddInputs(node, {"R", "T", "X", "G", "V", "H"});
-             AddOutputs(node, {"X_new", "V_new", "H_new"});
-
-             const float alpha = 0.95f;
-             const float beta = 0.9f;
-             const float epsilon = 1e-2f;
-             const float norm_coefficient = 0.001f;
-             const float norm_coefficient_post = 0.0f;
-             AddFloatAttribute(node, "alpha", alpha);
-             AddFloatAttribute(node, "beta", beta);
-             AddFloatAttribute(node, "epsilon", epsilon);
-             AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
-             AddFloatAttribute(node, "norm_coefficient_post", norm_coefficient_post);
-
              Tensor R = Tensor::FromFloat("", {}, {0.1f});
              Tensor T = Tensor::FromInt64("", {}, {0});
              Tensor X = Tensor::FromFloat("", {3}, {1.0f, 2.0f, -1.0f});
@@ -131,23 +130,22 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node;
     node.set_op_type("Adam");
     node.set_domain(kOnnxPreviewTrainingDomain);
+    AddInputs(node, {"R", "T", "X1", "X2", "G1", "G2", "V1", "V2", "H1", "H2"});
+    AddOutputs(node, {"X1_new", "X2_new", "V1_new", "V2_new", "H1_new", "H2_new"});
+
+    const float alpha = 0.9f;
+    const float beta = 0.999f;
+    const float epsilon = 1e-6f;
+    const float norm_coefficient = 0.0f;
+    const float norm_coefficient_post = 0.0f;
+    AddFloatAttribute(node, "alpha", alpha);
+    AddFloatAttribute(node, "beta", beta);
+    AddFloatAttribute(node, "epsilon", epsilon);
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "norm_coefficient_post", norm_coefficient_post);
     Expect(
         registry, std::move(node), "test_cc_adam_multiple", {default_opset, opset},
         [=]() -> IoData {
-          AddInputs(node, {"R", "T", "X1", "X2", "G1", "G2", "V1", "V2", "H1", "H2"});
-          AddOutputs(node, {"X1_new", "X2_new", "V1_new", "V2_new", "H1_new", "H2_new"});
-
-          const float alpha = 0.9f;
-          const float beta = 0.999f;
-          const float epsilon = 1e-6f;
-          const float norm_coefficient = 0.0f;
-          const float norm_coefficient_post = 0.0f;
-          AddFloatAttribute(node, "alpha", alpha);
-          AddFloatAttribute(node, "beta", beta);
-          AddFloatAttribute(node, "epsilon", epsilon);
-          AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
-          AddFloatAttribute(node, "norm_coefficient_post", norm_coefficient_post);
-
           Tensor R = Tensor::FromFloat("", {}, {0.05f});
           Tensor T = Tensor::FromInt64("", {}, {5});
           Tensor X1 = Tensor::FromFloat("", {2}, {0.5f, -0.5f});
@@ -180,19 +178,18 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node;
     node.set_op_type("Adam");
     node.set_domain(kOnnxPreviewTrainingDomain);
+    AddInputs(node, {"R", "T", "X", "G", "V", "H"});
+    AddOutputs(node, {"X_new", "V_new", "H_new"});
+
+    const float alpha = 0.95f;
+    const float beta = 0.1f;
+    const float epsilon = 1e-7f;
+    const float norm_coefficient = 0.001f;
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "alpha", alpha);
+    AddFloatAttribute(node, "beta", beta);
+    AddFloatAttribute(node, "epsilon", epsilon);
     Expect(registry, std::move(node), "test_adam", {default_opset, opset}, [=]() -> IoData {
-      AddInputs(node, {"R", "T", "X", "G", "V", "H"});
-      AddOutputs(node, {"X_new", "V_new", "H_new"});
-
-      const float alpha = 0.95f;
-      const float beta = 0.1f;
-      const float epsilon = 1e-7f;
-      const float norm_coefficient = 0.001f;
-      AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
-      AddFloatAttribute(node, "alpha", alpha);
-      AddFloatAttribute(node, "beta", beta);
-      AddFloatAttribute(node, "epsilon", epsilon);
-
       Tensor R = Tensor::FromFloat("", {}, {0.1f});
       Tensor T = Tensor::FromInt64("", {}, {0});
       Tensor X = Tensor::FromFloat("", {2}, {1.2f, 2.8f});
@@ -213,20 +210,19 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node;
     node.set_op_type("Adam");
     node.set_domain(kOnnxPreviewTrainingDomain);
+    AddInputs(node, {"R", "T", "X1", "X2", "G1", "G2", "V1", "V2", "H1", "H2"});
+    AddOutputs(node, {"X1_new", "X2_new", "V1_new", "V2_new", "H1_new", "H2_new"});
+
+    const float alpha = 0.95f;
+    const float beta = 0.85f;
+    const float epsilon = 1e-2f;
+    const float norm_coefficient = 0.001f;
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "alpha", alpha);
+    AddFloatAttribute(node, "beta", beta);
+    AddFloatAttribute(node, "epsilon", epsilon);
     Expect(
         registry, std::move(node), "test_adam_multiple", {default_opset, opset}, [=]() -> IoData {
-          AddInputs(node, {"R", "T", "X1", "X2", "G1", "G2", "V1", "V2", "H1", "H2"});
-          AddOutputs(node, {"X1_new", "X2_new", "V1_new", "V2_new", "H1_new", "H2_new"});
-
-          const float alpha = 0.95f;
-          const float beta = 0.85f;
-          const float epsilon = 1e-2f;
-          const float norm_coefficient = 0.001f;
-          AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
-          AddFloatAttribute(node, "alpha", alpha);
-          AddFloatAttribute(node, "beta", beta);
-          AddFloatAttribute(node, "epsilon", epsilon);
-
           Tensor R = Tensor::FromFloat("", {}, {0.1f});
           Tensor T = Tensor::FromInt64("", {}, {0});
           Tensor X1 = Tensor::FromFloat("", {1}, {1.0f});

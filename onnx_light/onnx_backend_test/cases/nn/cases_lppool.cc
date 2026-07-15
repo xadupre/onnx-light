@@ -78,12 +78,15 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2});
     AddAttribute<std::vector<int64_t>>(node, "strides", {1});
     AddAttribute<int64_t>(node, "p", 3);
-    Expect(registry, std::move(node), "test_cc_lppool_1d_default", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {1, 3, 32}, Randn<float>({1, 3, 32}, /*seed=*/seed++));
-      Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2}, /*strides=*/{1}, /*pads=*/{}, /*p=*/3);
+    Expect(registry, std::move(node), "test_cc_lppool_1d_default", {opset},
+           [=, case_seed = seed++]() -> IoData {
+             Tensor x =
+                 Tensor::FromFloat("", {1, 3, 32}, Randn<float>({1, 3, 32}, /*seed=*/case_seed));
+             Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2}, /*strides=*/{1}, /*pads=*/{},
+                                       /*p=*/3);
 
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 2-D LpPool, 2x2 kernel, p = 4 on a 1x3x32x32 input (mirrors
@@ -95,13 +98,15 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<int64_t>(node, "p", 4);
-    Expect(registry, std::move(node), "test_cc_lppool_2d_default", {opset}, [=]() -> IoData {
-      Tensor x =
-          Tensor::FromFloat("", {1, 3, 32, 32}, Randn<float>({1, 3, 32, 32}, /*seed=*/seed++));
-      Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{}, /*p=*/4);
+    Expect(registry, std::move(node), "test_cc_lppool_2d_default", {opset},
+           [=, case_seed = seed++]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 3, 32, 32},
+                                          Randn<float>({1, 3, 32, 32}, /*seed=*/case_seed));
+             Tensor y =
+                 lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{}, /*p=*/4);
 
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 3-D LpPool, 2x2x2 kernel, p = 3 on a 1x3x32x32x32 input (mirrors
@@ -113,14 +118,15 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2, 2});
     AddAttribute<int64_t>(node, "p", 3);
-    Expect(registry, std::move(node), "test_cc_lppool_3d_default", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {1, 3, 32, 32, 32},
-                                   Randn<float>({1, 3, 32, 32, 32}, /*seed=*/seed++));
-      Tensor y =
-          lp_pool_kernel(x, /*kernel_shape=*/{2, 2, 2}, /*strides=*/{}, /*pads=*/{}, /*p=*/3);
+    Expect(registry, std::move(node), "test_cc_lppool_3d_default", {opset},
+           [=, case_seed = seed++]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 3, 32, 32, 32},
+                                          Randn<float>({1, 3, 32, 32, 32}, /*seed=*/case_seed));
+             Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2, 2}, /*strides=*/{}, /*pads=*/{},
+                                       /*p=*/3);
 
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 2-D LpPool, 2x2 kernel, auto_pad = SAME_UPPER, p = 2 (mirrors
@@ -133,14 +139,16 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
     AddAttribute<int64_t>(node, "p", 2);
-    Expect(registry, std::move(node), "test_cc_lppool_2d_same_upper", {opset}, [=]() -> IoData {
-      Tensor x =
-          Tensor::FromFloat("", {1, 3, 32, 32}, Randn<float>({1, 3, 32, 32}, /*seed=*/seed++));
-      Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{}, /*p=*/2,
-                                /*ceil_mode=*/false, /*dilations=*/{}, /*auto_pad=*/"SAME_UPPER");
+    Expect(registry, std::move(node), "test_cc_lppool_2d_same_upper", {opset},
+           [=, case_seed = seed++]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 3, 32, 32},
+                                          Randn<float>({1, 3, 32, 32}, /*seed=*/case_seed));
+             Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
+                                       /*p=*/2, /*ceil_mode=*/false, /*dilations=*/{},
+                                       /*auto_pad=*/"SAME_UPPER");
 
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 2-D LpPool, 2x2 kernel, auto_pad = SAME_LOWER, p = 4 (mirrors
@@ -153,14 +161,16 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", "SAME_LOWER");
     AddAttribute<int64_t>(node, "p", 4);
-    Expect(registry, std::move(node), "test_cc_lppool_2d_same_lower", {opset}, [=]() -> IoData {
-      Tensor x =
-          Tensor::FromFloat("", {1, 3, 32, 32}, Randn<float>({1, 3, 32, 32}, /*seed=*/seed++));
-      Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{}, /*p=*/4,
-                                /*ceil_mode=*/false, /*dilations=*/{}, /*auto_pad=*/"SAME_LOWER");
+    Expect(registry, std::move(node), "test_cc_lppool_2d_same_lower", {opset},
+           [=, case_seed = seed++]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 3, 32, 32},
+                                          Randn<float>({1, 3, 32, 32}, /*seed=*/case_seed));
+             Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
+                                       /*p=*/4, /*ceil_mode=*/false, /*dilations=*/{},
+                                       /*auto_pad=*/"SAME_LOWER");
 
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 2-D LpPool, 3x3 kernel, pads = (2, 2, 2, 2), p = 3 on a 1x3x28x28 input
@@ -173,14 +183,15 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
     AddAttribute<int64_t>(node, "p", 3);
-    Expect(registry, std::move(node), "test_cc_lppool_2d_pads", {opset}, [=]() -> IoData {
-      Tensor x =
-          Tensor::FromFloat("", {1, 3, 28, 28}, Randn<float>({1, 3, 28, 28}, /*seed=*/seed++));
-      Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{},
-                                /*pads=*/{2, 2, 2, 2}, /*p=*/3);
+    Expect(registry, std::move(node), "test_cc_lppool_2d_pads", {opset},
+           [=, case_seed = seed++]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 3, 28, 28},
+                                          Randn<float>({1, 3, 28, 28}, /*seed=*/case_seed));
+             Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{},
+                                       /*pads=*/{2, 2, 2, 2}, /*p=*/3);
 
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 2-D LpPool, 5x5 kernel, strides (3, 3), p = 2 on a 1x3x32x32 input
@@ -193,14 +204,15 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
     AddAttribute<std::vector<int64_t>>(node, "strides", {3, 3});
     AddAttribute<int64_t>(node, "p", 2);
-    Expect(registry, std::move(node), "test_cc_lppool_2d_strides", {opset}, [=]() -> IoData {
-      Tensor x =
-          Tensor::FromFloat("", {1, 3, 32, 32}, Randn<float>({1, 3, 32, 32}, /*seed=*/seed++));
-      Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{3, 3}, /*pads=*/{},
-                                /*p=*/2);
+    Expect(registry, std::move(node), "test_cc_lppool_2d_strides", {opset},
+           [=, case_seed = seed++]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 3, 32, 32},
+                                          Randn<float>({1, 3, 32, 32}, /*seed=*/case_seed));
+             Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{3, 3}, /*pads=*/{},
+                                       /*p=*/2);
 
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 2-D LpPool with dilations (mirrors ``test_lppool_2d_dilations`` — uses

@@ -68,11 +68,10 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    AddStringAttr(node, "cast_to", "TO_FLOAT");
+    AddStringAttr(node, "map_form", "DENSE");
     Expect(registry, std::move(node), "test_cc_cast_map_int64_float_dense", {default_opset, opset},
            [=]() -> IoData {
-             AddStringAttr(node, "cast_to", "TO_FLOAT");
-             AddStringAttr(node, "map_form", "DENSE");
-
              const std::vector<int64_t> keys{2, 0, 1};
              const std::vector<float> values{2.5f, 0.5f, 1.5f};
              // Placeholder tensor for the formal input; the ValueInfo is promoted to
@@ -91,12 +90,11 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    AddStringAttr(node, "cast_to", "TO_FLOAT");
+    AddStringAttr(node, "map_form", "SPARSE");
+    AddIntAttr(node, "max_map", 5);
     Expect(registry, std::move(node), "test_cc_cast_map_int64_float_sparse", {default_opset, opset},
            [=]() -> IoData {
-             AddStringAttr(node, "cast_to", "TO_FLOAT");
-             AddStringAttr(node, "map_form", "SPARSE");
-             AddIntAttr(node, "max_map", 5);
-
              const std::vector<int64_t> keys{1, 3};
              const std::vector<float> values{10.0f, 30.0f};
              Tensor x = Tensor::FromInt64("", {1}, {0});
@@ -113,11 +111,10 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    AddStringAttr(node, "cast_to", "TO_STRING");
+    AddStringAttr(node, "map_form", "DENSE");
     Expect(registry, std::move(node), "test_cc_cast_map_int64_string_dense", {default_opset, opset},
            [=]() -> IoData {
-             AddStringAttr(node, "cast_to", "TO_STRING");
-             AddStringAttr(node, "map_form", "DENSE");
-
              const std::vector<int64_t> keys{1, 0};
              const std::vector<std::string> values{"b", "a"};
              Tensor x = Tensor::FromInt64("", {1}, {0});

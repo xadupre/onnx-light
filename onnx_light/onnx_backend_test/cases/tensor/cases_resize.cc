@@ -289,13 +289,13 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_resize_upsample_scales_nearest_axes_2_3 — opset 18 ``axes`` attribute.
   {
+    kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
     Expect(registry,
            MakeResizeNodeScales("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
            "test_resize_upsample_scales_nearest_axes_2_3", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({2.0f, 3.0f});
-             kernel::Resize::Attributes attrs;
-             attrs.axes = {2, 3};
              const Tensor Y = resize_kernel(X, scales, attrs);
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
@@ -304,13 +304,13 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_resize_upsample_scales_nearest_axes_3_2 — opset 18 ``axes`` attribute,
   // with axes specified in non-ascending order.
   {
+    kernel::Resize::Attributes attrs;
+    attrs.axes = {3, 2};
     Expect(registry,
            MakeResizeNodeScales("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
            "test_resize_upsample_scales_nearest_axes_3_2", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({3.0f, 2.0f});
-             kernel::Resize::Attributes attrs;
-             attrs.axes = {3, 2};
              const Tensor Y = resize_kernel(X, scales, attrs);
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
@@ -318,13 +318,13 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_resize_upsample_sizes_nearest_axes_2_3 — opset 18 sizes + axes.
   {
+    kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
            "test_resize_upsample_sizes_nearest_axes_2_3", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({7, 8});
-             kernel::Resize::Attributes attrs;
-             attrs.axes = {2, 3};
              const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
@@ -333,13 +333,13 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_resize_upsample_sizes_nearest_axes_3_2 — opset 18 sizes + axes
   // (non-ascending order).
   {
+    kernel::Resize::Attributes attrs;
+    attrs.axes = {3, 2};
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
            "test_resize_upsample_sizes_nearest_axes_3_2", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({8, 7});
-             kernel::Resize::Attributes attrs;
-             attrs.axes = {3, 2};
              const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
@@ -349,15 +349,15 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``keep_aspect_ratio_policy=not_larger``: scales by min(sizes / in_size)
   // across axes (7x7 output for a 2x2 input requested at 7x8).
   {
+    kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
+    attrs.keep_aspect_ratio_policy = "not_larger";
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
                                attrs.keep_aspect_ratio_policy),
            "test_resize_upsample_sizes_nearest_not_larger", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({7, 8});
-             kernel::Resize::Attributes attrs;
-             attrs.axes = {2, 3};
-             attrs.keep_aspect_ratio_policy = "not_larger";
              const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
@@ -367,15 +367,15 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``keep_aspect_ratio_policy=not_smaller``: scales by max(sizes / in_size)
   // across axes (8x8 output for a 2x2 input requested at 7x8).
   {
+    kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
+    attrs.keep_aspect_ratio_policy = "not_smaller";
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
                                attrs.keep_aspect_ratio_policy),
            "test_resize_upsample_sizes_nearest_not_smaller", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({7, 8});
-             kernel::Resize::Attributes attrs;
-             attrs.axes = {2, 3};
-             attrs.keep_aspect_ratio_policy = "not_smaller";
              const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
@@ -384,6 +384,9 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_resize_downsample_sizes_nearest_not_larger — downsample variant of
   // ``not_larger``: 2x4 input requested at 1x3 yields 1x2 output.
   {
+    kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
+    attrs.keep_aspect_ratio_policy = "not_larger";
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
                                attrs.keep_aspect_ratio_policy),
@@ -391,9 +394,6 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor sizes = MakeSizesTensor({1, 3});
-             kernel::Resize::Attributes attrs;
-             attrs.axes = {2, 3};
-             attrs.keep_aspect_ratio_policy = "not_larger";
              const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
@@ -402,6 +402,9 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_resize_downsample_sizes_nearest_not_smaller — downsample variant of
   // ``not_smaller``: 2x4 input requested at 1x3 yields 2x3 output.
   {
+    kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
+    attrs.keep_aspect_ratio_policy = "not_smaller";
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
                                attrs.keep_aspect_ratio_policy),
@@ -409,9 +412,6 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor sizes = MakeSizesTensor({1, 3});
-             kernel::Resize::Attributes attrs;
-             attrs.axes = {2, 3};
-             attrs.keep_aspect_ratio_policy = "not_smaller";
              const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });

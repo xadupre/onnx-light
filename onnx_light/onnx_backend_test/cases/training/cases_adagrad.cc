@@ -85,17 +85,16 @@ void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node;
     node.set_op_type("Adagrad");
     node.set_domain(kOnnxPreviewTrainingDomain);
+    AddInputs(node, {"R", "T", "X", "G", "H"});
+    AddOutputs(node, {"X_new", "H_new"});
+
+    const float norm_coefficient = 0.001f;
+    const float epsilon = 1e-5f;
+    const float decay_factor = 0.1f;
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "epsilon", epsilon);
+    AddFloatAttribute(node, "decay_factor", decay_factor);
     Expect(registry, std::move(node), "test_adagrad", {default_opset, opset}, [=]() -> IoData {
-      AddInputs(node, {"R", "T", "X", "G", "H"});
-      AddOutputs(node, {"X_new", "H_new"});
-
-      const float norm_coefficient = 0.001f;
-      const float epsilon = 1e-5f;
-      const float decay_factor = 0.1f;
-      AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
-      AddFloatAttribute(node, "epsilon", epsilon);
-      AddFloatAttribute(node, "decay_factor", decay_factor);
-
       Tensor R = Tensor::FromFloat("", {}, {0.1f});
       Tensor T = Tensor::FromInt64("", {}, {0});
       Tensor X = Tensor::FromFloat("", {1}, {1.0f});
@@ -114,18 +113,17 @@ void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node;
     node.set_op_type("Adagrad");
     node.set_domain(kOnnxPreviewTrainingDomain);
+    AddInputs(node, {"R", "T", "X1", "X2", "G1", "G2", "H1", "H2"});
+    AddOutputs(node, {"X1_new", "X2_new", "H1_new", "H2_new"});
+
+    const float norm_coefficient = 0.001f;
+    const float epsilon = 1e-5f;
+    const float decay_factor = 0.1f;
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "epsilon", epsilon);
+    AddFloatAttribute(node, "decay_factor", decay_factor);
     Expect(registry, std::move(node), "test_adagrad_multiple", {default_opset, opset},
            [=]() -> IoData {
-             AddInputs(node, {"R", "T", "X1", "X2", "G1", "G2", "H1", "H2"});
-             AddOutputs(node, {"X1_new", "X2_new", "H1_new", "H2_new"});
-
-             const float norm_coefficient = 0.001f;
-             const float epsilon = 1e-5f;
-             const float decay_factor = 0.1f;
-             AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
-             AddFloatAttribute(node, "epsilon", epsilon);
-             AddFloatAttribute(node, "decay_factor", decay_factor);
-
              Tensor R = Tensor::FromFloat("", {}, {0.1f});
              Tensor T = Tensor::FromInt64("", {}, {0});
              Tensor X1 = Tensor::FromFloat("", {1}, {1.0f});

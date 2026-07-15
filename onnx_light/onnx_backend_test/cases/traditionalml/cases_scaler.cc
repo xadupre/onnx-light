@@ -65,13 +65,12 @@ void RegisterScalerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    const std::vector<float> offset{0.5f, 1.0f, 1.5f};
+    const std::vector<float> scale{2.0f, 0.5f, 1.0f};
+    AddFloatsAttr(node, "offset", offset);
+    AddFloatsAttr(node, "scale", scale);
     Expect(registry, std::move(node), "test_cc_scaler_float", {default_opset, opset},
            [=]() -> IoData {
-             const std::vector<float> offset{0.5f, 1.0f, 1.5f};
-             const std::vector<float> scale{2.0f, 0.5f, 1.0f};
-             AddFloatsAttr(node, "offset", offset);
-             AddFloatsAttr(node, "scale", scale);
-
              Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor y = scaler.operator()<float>(x, offset, scale);
 
@@ -88,13 +87,12 @@ void RegisterScalerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    const std::vector<float> offset{1.0f};
+    const std::vector<float> scale{0.5f};
+    AddFloatsAttr(node, "offset", offset);
+    AddFloatsAttr(node, "scale", scale);
     Expect(registry, std::move(node), "test_cc_scaler_int64", {default_opset, opset},
            [=]() -> IoData {
-             const std::vector<float> offset{1.0f};
-             const std::vector<float> scale{0.5f};
-             AddFloatsAttr(node, "offset", offset);
-             AddFloatsAttr(node, "scale", scale);
-
              Tensor x = Tensor::FromInt64("", {5}, {0, 1, 2, 3, 4});
              Tensor y = scaler.operator()<int64_t>(x, offset, scale);
 

@@ -78,11 +78,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Tensor x = Tensor::FromFloat("", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3"}, /*axis=*/0,
+                                   /*has_axis=*/true);
     Expect(registry, std::move(node), "test_cc_split_equal_parts_1d_opset13", {opset13},
            [=]() -> IoData {
-      /*has_axis=*/true);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
-      return IoData{{std::move(x)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
+             return IoData{{std::move(x)}, std::move(outs)};
            });
   }
 
@@ -91,11 +92,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor x = Tensor::FromFloat("", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     Tensor split_in = MakeInt64Vector({2, 4});
     NodeProto node = MakeSplitNode({"output_1", "output_2"}, /*axis=*/0, /*has_axis=*/true,
+                                   /*num_outputs=*/0, /*has_split_input=*/true);
     Expect(registry, std::move(node), "test_cc_split_variable_parts_1d_opset13", {opset13},
            [=]() -> IoData {
-      /*num_outputs=*/0, /*has_split_input=*/true);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{2, 4}, /*num_outputs=*/0);
-      return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{2, 4}, /*num_outputs=*/0);
+             return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
            });
   }
 
@@ -118,11 +120,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
         "", {2, 6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
     Tensor split_in = MakeInt64Vector({2, 4});
     NodeProto node = MakeSplitNode({"output_1", "output_2"}, /*axis=*/1, /*has_axis=*/true,
+                                   /*num_outputs=*/0, /*has_split_input=*/true);
     Expect(registry, std::move(node), "test_cc_split_variable_parts_2d_opset13", {opset13},
            [=]() -> IoData {
-      /*num_outputs=*/0, /*has_split_input=*/true);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/1, /*split=*/{2, 4}, /*num_outputs=*/0);
-      return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/1, /*split=*/{2, 4}, /*num_outputs=*/0);
+             return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
            });
   }
 
@@ -130,11 +133,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Tensor x = Tensor::FromFloat("", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3"}, /*axis=*/0,
+                                   /*has_axis=*/false);
     Expect(registry, std::move(node), "test_cc_split_equal_parts_default_axis_opset13", {opset13},
            [=]() -> IoData {
-      /*has_axis=*/false);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
-      return IoData{{std::move(x)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
+             return IoData{{std::move(x)}, std::move(outs)};
            });
   }
 
@@ -143,11 +147,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor x = Tensor::FromFloat("", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     Tensor split_in = MakeInt64Vector({2, 4});
     NodeProto node = MakeSplitNode({"output_1", "output_2"}, /*axis=*/0, /*has_axis=*/false,
-    Expect(registry, std::move(node), "test_cc_split_variable_parts_default_axis_opset13", {opset13},
-           [=]() -> IoData {
-      /*num_outputs=*/0, /*has_split_input=*/true);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{2, 4}, /*num_outputs=*/0);
-      return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
+                                   /*num_outputs=*/0, /*has_split_input=*/true);
+    Expect(registry, std::move(node), "test_cc_split_variable_parts_default_axis_opset13",
+           {opset13}, [=]() -> IoData {
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{2, 4}, /*num_outputs=*/0);
+             return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
            });
   }
 
@@ -156,12 +161,13 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor x = Tensor::FromFloat("", {0}, {});
     Tensor split_in = MakeInt64Vector({0, 0, 0});
     NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3"}, /*axis=*/0,
+                                   /*has_axis=*/false, /*num_outputs=*/0,
+                                   /*has_split_input=*/true);
     Expect(registry, std::move(node), "test_cc_split_zero_size_splits_opset13", {opset13},
            [=]() -> IoData {
-      /*has_axis=*/false, /*num_outputs=*/0, /*has_split_input=*/true);
-      std::vector<Tensor> outs =
-          split_kernel(x, /*axis=*/0, /*split=*/{0, 0, 0}, /*num_outputs=*/0);
-      return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{0, 0, 0}, /*num_outputs=*/0);
+             return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
            });
   }
 
@@ -169,11 +175,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Tensor x = Tensor::FromFloat("", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3"}, /*axis=*/0,
+                                   /*has_axis=*/true, /*num_outputs=*/3);
     Expect(registry, std::move(node), "test_cc_split_equal_parts_1d_opset18", {opset18},
            [=]() -> IoData {
-      /*has_axis=*/true, /*num_outputs=*/3);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
-      return IoData{{std::move(x)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
+             return IoData{{std::move(x)}, std::move(outs)};
            });
   }
 
@@ -182,11 +189,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor x = Tensor::FromFloat("", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     Tensor split_in = MakeInt64Vector({2, 4});
     NodeProto node = MakeSplitNode({"output_1", "output_2"}, /*axis=*/0, /*has_axis=*/true,
+                                   /*num_outputs=*/0, /*has_split_input=*/true);
     Expect(registry, std::move(node), "test_cc_split_variable_parts_1d_opset18", {opset18},
            [=]() -> IoData {
-      /*num_outputs=*/0, /*has_split_input=*/true);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{2, 4}, /*num_outputs=*/0);
-      return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{2, 4}, /*num_outputs=*/0);
+             return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
            });
   }
 
@@ -195,12 +203,11 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor x = Tensor::FromFloat(
         "", {2, 6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
     NodeProto node = MakeSplitNode({"output_1", "output_2"}, /*axis=*/1, /*has_axis=*/true,
-    Expect(registry, std::move(node), "test_cc_split_equal_parts_2d", {opset18},
-           [=]() -> IoData {
-      /*num_outputs=*/2);
+                                   /*num_outputs=*/2);
+    Expect(registry, std::move(node), "test_cc_split_equal_parts_2d", {opset18}, [=]() -> IoData {
       std::vector<Tensor> outs = split_kernel(x, /*axis=*/1, /*split=*/{}, /*num_outputs=*/2);
       return IoData{{std::move(x)}, std::move(outs)};
-           });
+    });
   }
 
   // ---- opset 18: variable parts, 2-D, split [2,4] ----
@@ -209,11 +216,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
         "", {2, 6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
     Tensor split_in = MakeInt64Vector({2, 4});
     NodeProto node = MakeSplitNode({"output_1", "output_2"}, /*axis=*/1, /*has_axis=*/true,
+                                   /*num_outputs=*/0, /*has_split_input=*/true);
     Expect(registry, std::move(node), "test_cc_split_variable_parts_2d_opset18", {opset18},
            [=]() -> IoData {
-      /*num_outputs=*/0, /*has_split_input=*/true);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/1, /*split=*/{2, 4}, /*num_outputs=*/0);
-      return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/1, /*split=*/{2, 4}, /*num_outputs=*/0);
+             return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
            });
   }
 
@@ -221,11 +229,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Tensor x = Tensor::FromFloat("", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3"}, /*axis=*/0,
+                                   /*has_axis=*/false, /*num_outputs=*/3);
     Expect(registry, std::move(node), "test_cc_split_equal_parts_default_axis_opset18", {opset18},
            [=]() -> IoData {
-      /*has_axis=*/false, /*num_outputs=*/3);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
-      return IoData{{std::move(x)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
+             return IoData{{std::move(x)}, std::move(outs)};
            });
   }
 
@@ -234,11 +243,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor x = Tensor::FromFloat("", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     Tensor split_in = MakeInt64Vector({2, 4});
     NodeProto node = MakeSplitNode({"output_1", "output_2"}, /*axis=*/0, /*has_axis=*/false,
-    Expect(registry, std::move(node), "test_cc_split_variable_parts_default_axis_opset18", {opset18},
-           [=]() -> IoData {
-      /*num_outputs=*/0, /*has_split_input=*/true);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{2, 4}, /*num_outputs=*/0);
-      return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
+                                   /*num_outputs=*/0, /*has_split_input=*/true);
+    Expect(registry, std::move(node), "test_cc_split_variable_parts_default_axis_opset18",
+           {opset18}, [=]() -> IoData {
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{2, 4}, /*num_outputs=*/0);
+             return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
            });
   }
 
@@ -247,12 +257,13 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor x = Tensor::FromFloat("", {0}, {});
     Tensor split_in = MakeInt64Vector({0, 0, 0});
     NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3"}, /*axis=*/0,
+                                   /*has_axis=*/false, /*num_outputs=*/0,
+                                   /*has_split_input=*/true);
     Expect(registry, std::move(node), "test_cc_split_zero_size_splits_opset18", {opset18},
            [=]() -> IoData {
-      /*has_axis=*/false, /*num_outputs=*/0, /*has_split_input=*/true);
-      std::vector<Tensor> outs =
-          split_kernel(x, /*axis=*/0, /*split=*/{0, 0, 0}, /*num_outputs=*/0);
-      return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{0, 0, 0}, /*num_outputs=*/0);
+             return IoData{{std::move(x), std::move(split_in)}, std::move(outs)};
            });
   }
 
@@ -260,11 +271,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Tensor x = Tensor::FromFloat("", {7}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
     NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3", "output_4"}, /*axis=*/0,
+                                   /*has_axis=*/false, /*num_outputs=*/4);
     Expect(registry, std::move(node), "test_cc_split_1d_uneven_split_opset18", {opset18},
            [=]() -> IoData {
-      /*has_axis=*/false, /*num_outputs=*/4);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/4);
-      return IoData{{std::move(x)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/4);
+             return IoData{{std::move(x)}, std::move(outs)};
            });
   }
 
@@ -274,11 +286,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
                                  {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
                                   11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
     NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3"}, /*axis=*/1,
+                                   /*has_axis=*/true, /*num_outputs=*/3);
     Expect(registry, std::move(node), "test_cc_split_2d_uneven_split_opset18", {opset18},
            [=]() -> IoData {
-      /*has_axis=*/true, /*num_outputs=*/3);
-      std::vector<Tensor> outs = split_kernel(x, /*axis=*/1, /*split=*/{}, /*num_outputs=*/3);
-      return IoData{{std::move(x)}, std::move(outs)};
+             std::vector<Tensor> outs =
+                 split_kernel(x, /*axis=*/1, /*split=*/{}, /*num_outputs=*/3);
+             return IoData{{std::move(x)}, std::move(outs)};
            });
   }
 }

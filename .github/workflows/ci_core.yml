@@ -221,7 +221,7 @@ jobs:
       # contributor to long Windows build times.
       - name: Build and Install package (Windows)
         if: runner.os == 'Windows'
-        run: pip install -C build-dir=build -C cmake.build-type=Release -e .[dev] -v
+        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=OFF -e .[dev] -v
 
       - name: Build and Install package (macOS)
         if: runner.os == 'macOS'

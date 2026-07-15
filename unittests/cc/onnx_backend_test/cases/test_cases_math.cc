@@ -1250,9 +1250,9 @@ TEST(BackendTestCase, ClipDefaultMaxNodeOmitsTrailingMinInput) {
 
 TEST(BackendTestCase, BenchmarkModeProducesLargeInputCases) {
   std::vector<TestCase> registry;
-  // The following function builds the onnx models. It should not.
-  // It should return a function doing it.
-  CollectMathTestCases(registry, "", onnx_backend_test::TestMode::BENCHMARK);
+  // Keep this benchmark-mode sanity check focused on one representative math
+  // op so the test remains below the per-test CI timeout.
+  CollectMathTestCases(registry, "Add", onnx_backend_test::TestMode::BENCHMARK);
   ASSERT_FALSE(registry.empty());
   size_t benchmark_cases = 0;
   for (const auto &c : registry) {

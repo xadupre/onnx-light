@@ -101,9 +101,7 @@ bool String::operator!=(const char *other) const { return !(*this == other); }
 
 bool String::operator<(const RefString &other) const { return sv() < other.sv(); }
 
-bool String::operator<(const std::string &other) const {
-  return sv() < std::string_view(other);
-}
+bool String::operator<(const std::string &other) const { return sv() < std::string_view(other); }
 
 bool String::operator<(const String &other) const { return data_ < other.data_; }
 
@@ -113,9 +111,7 @@ bool String::operator<(const char *other) const {
   return sv() < std::string_view(other);
 }
 
-bool String::operator>(const std::string &other) const {
-  return sv() > std::string_view(other);
-}
+bool String::operator>(const std::string &other) const { return sv() > std::string_view(other); }
 
 bool String::operator>(const String &other) const { return data_ > other.data_; }
 
@@ -132,8 +128,7 @@ bool String::operator>(const char *other) const {
 std::string String::as_string(bool quote) const {
   if (empty())
     return quote ? std::string("\"\"") : std::string();
-  auto s = std::string(data(), size());
-  return quote ? std::string("\"") + s + std::string("\"") : s;
+  return quote ? "\"" + data_ + "\"" : data_;
 }
 
 std::string join_string(const std::vector<std::string> &elements, const char *delimiter) {

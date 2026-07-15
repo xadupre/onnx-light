@@ -98,13 +98,21 @@ private:
   // std::string already provides small-string optimization, so this keeps the
   // previous inline-storage behavior for short values without a custom buffer.
   std::string data_;
+  // std::string cannot represent a "null" (unset) value distinct from an empty
+  // one: data() is never nullptr and empty() is true for both. Protobuf field
+  // presence relies on that distinction (see stream_class.hpp null() checks), so
+  // an explicit flag tracks whether the string is null (unset) versus empty ("").
+  bool null_ = true;
 
 public:
   /** Releases owned memory. */
   inline ~String() = default;
-  /** Resets the instance to an empty state and frees owned memory. */
-  inline void clear() { data_.clear(); }
-  /** Initializes an empty string. */
+  /** Resets the instance to a null (unset) state and frees owned memory. */
+  inline void clear() {
+    data_.clear();
+    null_ = true;
+  }
+  /** Initializes a null (unset) string. */
   explicit inline String() = default;
   /** Initializes by copying content from a non-owning string view. */
   explicit inline String(const RefString &s) { set(s.data(), s.size()); }
@@ -113,15 +121,17 @@ public:
   /** Initializes by copying a standard string. */
   explicit String(const std::string &s) { set(s.data(), s.size()); }
   /** Initializes by copying another owning string. */
-  explicit String(const String &s) : data_(s.data_) {}
+  explicit String(const String &s) : data_(s.data_), null_(s.null_) {}
   /** Initializes by taking ownership from another instance. */
-  explicit String(String &&other) noexcept : data_(std::move(other.data_)) { other.data_.clear(); }
+  explicit String(String &&other) noexcept : data_(std::move(other.data_)), null_(other.null_) {
+    other.clear();
+  }
   /** Returns the number of characters. */
   inline size_t size() const { return data_.size(); }
   /** Returns the number of characters. */
   inline size_t length() const { return data_.size(); }
-  /** Returns the underlying pointer. */
-  inline const char *data() const { return data_.data(); }
+  /** Returns the underlying pointer, or nullptr when the string is null (unset). */
+  inline const char *data() const { return null_ ? nullptr : data_.data(); }
   /** Returns a null-terminated C string (never nullptr). */
   inline const char *c_str() const { return data_.c_str(); }
   /** Indicates whether the string is empty. */
@@ -132,8 +142,8 @@ public:
    *  a zero-copy drop-in for protobuf string fields (which are std::string) in
    *  consuming code that needs a ``const std::string&``. */
   inline const std::string &str() const noexcept { return data_; }
-  /** Indicates whether the string is empty and has no allocated buffer. */
-  inline bool null() const { return data_.empty(); }
+  /** Indicates whether the string is null (unset), as opposed to empty (""). */
+  inline bool null() const { return null_; }
   /** Returns the character at the specified index. */
   inline char operator[](size_t i) const { return data_[i]; }
   /** Assigns from a null-terminated string. */

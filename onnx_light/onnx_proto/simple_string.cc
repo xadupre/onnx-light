@@ -72,12 +72,14 @@ void String::set(const char *ptr, size_t size) {
   }
   if (ptr == nullptr) {
     data_.clear();
+    null_ = true;
     return;
   }
   if (effective_size > 0 && ptr[effective_size - 1] == 0) {
     --effective_size;
   }
   data_.assign(ptr, effective_size);
+  null_ = false;
 }
 
 bool String::operator==(const char *other) const {
@@ -162,7 +164,8 @@ String &String::operator=(String &&other) noexcept {
   if (this == &other)
     return *this;
   data_ = std::move(other.data_);
-  other.data_.clear();
+  null_ = other.null_;
+  other.clear();
   return *this;
 }
 
@@ -178,6 +181,7 @@ String &String::operator=(const String &s) {
   if (this == &s)
     return *this; // no change
   data_ = s.data_;
+  null_ = s.null_;
   return *this;
 }
 

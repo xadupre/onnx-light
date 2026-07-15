@@ -200,11 +200,12 @@ void StringStringEntryProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, key)
   WRITE_FIELD(options, stream, value)
 }
-void StringStringEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool StringStringEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, StringStringEntryProto) //
   READ_FIELD(options, stream, key)                    //
   READ_FIELD(options, stream, value)                  //
   READ_END(options, stream, StringStringEntryProto)   //  // NOLINT
+  return true;
 }
 void StringStringEntryProto::PrintToStringStream(std::stringstream &ss,
                                                  utils::PrintOptions &options) const {
@@ -225,11 +226,12 @@ void TensorAnnotation::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, tensor_name)
   WRITE_REPEATED_FIELD(options, stream, quant_parameter_tensor_names)
 }
-void TensorAnnotation::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TensorAnnotation::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TensorAnnotation)                      //
   READ_FIELD(options, stream, tensor_name)                           //
   READ_REPEATED_FIELD(options, stream, quant_parameter_tensor_names) //
   READ_END(options, stream, TensorAnnotation)                        //  // NOLINT
+  return true;
 }
 void TensorAnnotation::PrintToStringStream(std::stringstream &ss,
                                            utils::PrintOptions &options) const {
@@ -252,11 +254,12 @@ void IntIntListEntryProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, key)
   WRITE_REPEATED_FIELD(options, stream, value)
 }
-void IntIntListEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool IntIntListEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, IntIntListEntryProto) //
   READ_FIELD(options, stream, key)                  //
   READ_REPEATED_FIELD(options, stream, value)       //
   READ_END(options, stream, IntIntListEntryProto)   //
+  return true;
 }
 void IntIntListEntryProto::PrintToStringStream(std::stringstream &ss,
                                                utils::PrintOptions &options) const {
@@ -280,12 +283,13 @@ void DeviceConfigurationProto::SerializeToStream(utils::BinaryWriteStream &strea
   WRITE_FIELD(options, stream, num_devices)
   WRITE_REPEATED_FIELD(options, stream, device)
 }
-void DeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool DeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, DeviceConfigurationProto) //
   READ_FIELD(options, stream, name)                     //
   READ_FIELD(options, stream, num_devices)              //
   READ_REPEATED_FIELD(options, stream, device)          //
   READ_END(options, stream, DeviceConfigurationProto)   //
+  return true;
 }
 void DeviceConfigurationProto::PrintToStringStream(std::stringstream &ss,
                                                    utils::PrintOptions &options) const {
@@ -310,12 +314,13 @@ void SimpleShardedDimProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, dim_param)
   WRITE_FIELD(options, stream, num_shards)
 }
-void SimpleShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool SimpleShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, SimpleShardedDimProto) //
   READ_FIELD(options, stream, dim_value)             //
   READ_FIELD(options, stream, dim_param)             //
   READ_FIELD(options, stream, num_shards)            //
   READ_END(options, stream, SimpleShardedDimProto)   //
+  return true;
 }
 void SimpleShardedDimProto::PrintToStringStream(std::stringstream &ss,
                                                 utils::PrintOptions &options) const {
@@ -339,11 +344,12 @@ void ShardedDimProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, simple_sharding)
 }
 
-void ShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool ShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, ShardedDimProto)          //
   READ_FIELD(options, stream, axis)                     //
   READ_REPEATED_FIELD(options, stream, simple_sharding) //
   READ_END(options, stream, ShardedDimProto)            //
+  return true;
 }
 void ShardedDimProto::PrintToStringStream(std::stringstream &ss,
                                           utils::PrintOptions &options) const {
@@ -370,13 +376,14 @@ void ShardingSpecProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, index_to_device_group_map)
   WRITE_REPEATED_FIELD(options, stream, sharded_dim)
 }
-void ShardingSpecProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool ShardingSpecProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, ShardingSpecProto)                  //
   READ_FIELD(options, stream, tensor_name)                        //
   READ_REPEATED_FIELD(options, stream, device)                    //
   READ_REPEATED_FIELD(options, stream, index_to_device_group_map) //
   READ_REPEATED_FIELD(options, stream, sharded_dim)               //
   READ_END(options, stream, ShardingSpecProto)                    //  // NOLINT
+  return true;
 }
 void ShardingSpecProto::PrintToStringStream(std::stringstream &ss,
                                             utils::PrintOptions &options) const {
@@ -402,13 +409,14 @@ void NodeDeviceConfigurationProto::SerializeToStream(utils::BinaryWriteStream &s
   WRITE_REPEATED_FIELD(options, stream, sharding_spec)
   WRITE_FIELD(options, stream, pipeline_stage)
 }
-void NodeDeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream,
+bool NodeDeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream,
                                                    ParseOptions &options) {
   READ_BEGIN(options, stream, NodeDeviceConfigurationProto) //
   READ_FIELD(options, stream, configuration_id)             //
   READ_REPEATED_FIELD(options, stream, sharding_spec)       //
   READ_FIELD(options, stream, pipeline_stage)               //
   READ_END(options, stream, NodeDeviceConfigurationProto)   //
+  return true;
 }
 void NodeDeviceConfigurationProto::PrintToStringStream(std::stringstream &ss,
                                                        utils::PrintOptions &options) const {
@@ -431,11 +439,12 @@ void OperatorSetIdProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD_EMPTY(options, stream, domain)
   WRITE_FIELD(options, stream, version)
 }
-void OperatorSetIdProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool OperatorSetIdProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, OperatorSetIdProto) //
   READ_FIELD(options, stream, domain)             //
   READ_FIELD(options, stream, version)            //
   READ_END(options, stream, OperatorSetIdProto)   //
+  return true;
 }
 void OperatorSetIdProto::PrintToStringStream(std::stringstream &ss,
                                              utils::PrintOptions &options) const {
@@ -459,13 +468,14 @@ void TensorShapeProto::Dimension::SerializeToStream(utils::BinaryWriteStream &st
   WRITE_FIELD(options, stream, dim_param)
   WRITE_FIELD(options, stream, denotation)
 }
-void TensorShapeProto::Dimension::ParseFromStream(utils::BinaryStream &stream,
+bool TensorShapeProto::Dimension::ParseFromStream(utils::BinaryStream &stream,
                                                   ParseOptions &options) {
   READ_BEGIN(options, stream, TensorShapeProto::Dimension) //
   READ_FIELD(options, stream, dim_value)                   //
   READ_FIELD(options, stream, dim_param)                   //
   READ_FIELD(options, stream, denotation)                  //
   READ_END(options, stream, TensorShapeProto::Dimension)   //
+  return true;
 }
 void TensorShapeProto::Dimension::PrintToStringStream(std::stringstream &ss,
                                                       utils::PrintOptions &options) const {
@@ -486,10 +496,11 @@ void TensorShapeProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                          SerializeOptions &options) const {
   WRITE_REPEATED_FIELD(options, stream, dim)
 }
-void TensorShapeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TensorShapeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TensorShapeProto) //
   READ_REPEATED_FIELD(options, stream, dim)     //
   READ_END(options, stream, TensorShapeProto)   //
+  return true;
 }
 void TensorShapeProto::PrintToStringStream(std::stringstream &ss,
                                            utils::PrintOptions &options) const {
@@ -511,11 +522,12 @@ void TensorProto::Segment::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, begin)
   WRITE_FIELD(options, stream, end)
 }
-void TensorProto::Segment::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TensorProto::Segment::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TensorProto::Segment) //
   READ_FIELD(options, stream, begin)                //
   READ_FIELD(options, stream, end)                  //
   READ_END(options, stream, TensorProto::Segment)   //
+  return true;
 }
 void TensorProto::Segment::PrintToStringStream(std::stringstream &ss,
                                                utils::PrintOptions &options) const {
@@ -653,7 +665,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, uint64_data)
   WRITE_REPEATED_FIELD(options, stream, string_data)
 }
-void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TensorProto)                 //
   READ_REPEATED_FIELD(options, stream, dims)               //
   READ_ENUM_FIELD(options, stream, data_type)              //
@@ -806,6 +818,7 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       }
     }
   }
+  return true;
 }
 void TensorProto::LoadExternalData(const std::string &base_dir) {
   EXT_ENFORCE(has_data_location() && ref_data_location() == DataLocation::EXTERNAL,
@@ -932,12 +945,13 @@ void SparseTensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, indices)
   WRITE_REPEATED_FIELD(options, stream, dims)
 }
-void SparseTensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool SparseTensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, SparseTensorProto) //
   READ_FIELD(options, stream, values)            //
   READ_FIELD(options, stream, indices)           //
   READ_REPEATED_FIELD(options, stream, dims)     //
   READ_END(options, stream, SparseTensorProto)   //
+  return true;
 }
 void SparseTensorProto::PrintToStringStream(std::stringstream &ss,
                                             utils::PrintOptions &options) const {
@@ -960,11 +974,12 @@ void TypeProto::Tensor::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_ENUM_FIELD(options, stream, elem_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, shape)
 }
-void TypeProto::Tensor::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TypeProto::Tensor::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TypeProto::Tensor)       //
   READ_OPTIONAL_ENUM_FIELD(options, stream, elem_type) //
   READ_OPTIONAL_PROTO_FIELD(options, stream, shape)    //
   READ_END(options, stream, TypeProto::Tensor)         //
+  return true;
 }
 void TypeProto::Tensor::PrintToStringStream(std::stringstream &ss,
                                             utils::PrintOptions &options) const {
@@ -986,11 +1001,12 @@ void TypeProto::SparseTensor::SerializeToStream(utils::BinaryWriteStream &stream
   WRITE_ENUM_FIELD(options, stream, elem_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, shape)
 }
-void TypeProto::SparseTensor::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TypeProto::SparseTensor::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TypeProto::SparseTensor) //
   READ_OPTIONAL_ENUM_FIELD(options, stream, elem_type) //
   READ_OPTIONAL_PROTO_FIELD(options, stream, shape)    //
   READ_END(options, stream, TypeProto::SparseTensor)   //
+  return true;
 }
 void TypeProto::SparseTensor::PrintToStringStream(std::stringstream &ss,
                                                   utils::PrintOptions &options) const {
@@ -1010,10 +1026,11 @@ void TypeProto::Sequence::SerializeToStream(utils::BinaryWriteStream &stream,
                                             SerializeOptions &options) const {
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, elem_type)
 }
-void TypeProto::Sequence::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TypeProto::Sequence::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TypeProto::Sequence)      //
   READ_OPTIONAL_PROTO_FIELD(options, stream, elem_type) //
   READ_END(options, stream, TypeProto::Sequence)        //
+  return true;
 }
 void TypeProto::Sequence::PrintToStringStream(std::stringstream &ss,
                                               utils::PrintOptions &options) const {
@@ -1035,11 +1052,12 @@ void TypeProto::Map::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, key_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, value_type)
 }
-void TypeProto::Map::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TypeProto::Map::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TypeProto::Map)            //
   READ_FIELD(options, stream, key_type)                  //
   READ_OPTIONAL_PROTO_FIELD(options, stream, value_type) //
   READ_END(options, stream, TypeProto::Map)              //
+  return true;
 }
 void TypeProto::Map::PrintToStringStream(std::stringstream &ss,
                                          utils::PrintOptions &options) const {
@@ -1062,11 +1080,12 @@ void TypeProto::Opaque::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, domain)
   WRITE_FIELD(options, stream, name)
 }
-void TypeProto::Opaque::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TypeProto::Opaque::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TypeProto::Opaque) //
   READ_FIELD(options, stream, domain)            //
   READ_FIELD(options, stream, name)              //
   READ_END(options, stream, TypeProto::Opaque)   //
+  return true;
 }
 void TypeProto::Opaque::PrintToStringStream(std::stringstream &ss,
                                             utils::PrintOptions &options) const {
@@ -1086,10 +1105,11 @@ void TypeProto::Optional::SerializeToStream(utils::BinaryWriteStream &stream,
                                             SerializeOptions &options) const {
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, elem_type)
 }
-void TypeProto::Optional::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TypeProto::Optional::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TypeProto::Optional)      //
   READ_OPTIONAL_PROTO_FIELD(options, stream, elem_type) //
   READ_END(options, stream, TypeProto::Optional)        //
+  return true;
 }
 void TypeProto::Optional::PrintToStringStream(std::stringstream &ss,
                                               utils::PrintOptions &options) const {
@@ -1121,7 +1141,7 @@ void TypeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, optional_type)
 }
-void TypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool TypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, TypeProto)                         //
   READ_OPTIONAL_PROTO_FIELD(options, stream, tensor_type)        //
   READ_OPTIONAL_PROTO_FIELD(options, stream, sequence_type)      //
@@ -1131,6 +1151,7 @@ void TypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &optio
   READ_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_type) //
   READ_OPTIONAL_PROTO_FIELD(options, stream, optional_type)      //
   READ_END(options, stream, TypeProto)                           //
+  return true;
 }
 void TypeProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(
@@ -1159,13 +1180,14 @@ void ValueInfoProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
 
-void ValueInfoProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool ValueInfoProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, ValueInfoProto)          //
   READ_FIELD(options, stream, name)                    //
   READ_OPTIONAL_PROTO_FIELD(options, stream, type)     //
   READ_FIELD(options, stream, doc_string)              //
   READ_REPEATED_FIELD(options, stream, metadata_props) //
   READ_END(options, stream, ValueInfoProto)            //
+  return true;
 }
 void ValueInfoProto::PrintToStringStream(std::stringstream &ss,
                                          utils::PrintOptions &options) const {
@@ -1220,7 +1242,7 @@ void AttributeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, graphs)
   WRITE_REPEATED_FIELD(options, stream, type_protos)
 }
-void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, AttributeProto)               //
   READ_FIELD(options, stream, name)                         //
   READ_FIELD(options, stream, ref_attr_name)                //
@@ -1241,6 +1263,7 @@ void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
   READ_REPEATED_FIELD(options, stream, graphs)              //
   READ_REPEATED_FIELD(options, stream, type_protos)         //
   READ_END(options, stream, AttributeProto)                 //
+  return true;
 }
 void AttributeProto::PrintToStringStream(std::stringstream &ss,
                                          utils::PrintOptions &options) const {
@@ -1309,7 +1332,7 @@ void NodeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, device_configurations)
 }
-void NodeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool NodeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, NodeProto)                      //
   READ_REPEATED_FIELD(options, stream, input)                 //
   READ_REPEATED_FIELD(options, stream, output)                //
@@ -1322,6 +1345,7 @@ void NodeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &optio
   READ_REPEATED_FIELD(options, stream, metadata_props)        //
   READ_REPEATED_FIELD(options, stream, device_configurations) //
   READ_END(options, stream, NodeProto)                        //
+  return true;
 }
 void NodeProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(
@@ -1362,7 +1386,7 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, quantization_annotation)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
-void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, GraphProto)                       //
   READ_REPEATED_FIELD(options, stream, node)                    //
   READ_FIELD(options, stream, name)                             //
@@ -1375,6 +1399,7 @@ void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, quantization_annotation) //
   READ_REPEATED_FIELD(options, stream, metadata_props)          //
   READ_END(options, stream, GraphProto)                         //  // NOLINT
+  return true;
 }
 void GraphProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(
@@ -1419,7 +1444,7 @@ void FunctionProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, value_info)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
-void FunctionProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool FunctionProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, FunctionProto)            //
   READ_FIELD(options, stream, name)                     //
   READ_REPEATED_FIELD(options, stream, input)           //
@@ -1434,6 +1459,7 @@ void FunctionProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
   READ_REPEATED_FIELD(options, stream, value_info)      //
   READ_REPEATED_FIELD(options, stream, metadata_props)  //
   READ_END(options, stream, FunctionProto)              //  // NOLINT
+  return true;
 }
 void FunctionProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(domain),
@@ -1485,7 +1511,7 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, functions)
   WRITE_REPEATED_FIELD(options, stream, configuration)
 }
-void ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, ModelProto)              //
   READ_FIELD(options, stream, ir_version)              //
   READ_REPEATED_FIELD(options, stream, opset_import)   //
@@ -1499,6 +1525,7 @@ void ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, functions)      //
   READ_REPEATED_FIELD(options, stream, configuration)  //
   READ_END(options, stream, ModelProto)                //  // NOLINT
+  return true;
 }
 void ModelProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(ir_version),
@@ -1574,7 +1601,7 @@ void SequenceProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, map_values)
   WRITE_REPEATED_FIELD(options, stream, optional_values)
 }
-void SequenceProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool SequenceProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, SequenceProto)                 //
   READ_FIELD(options, stream, name)                          //
   READ_ENUM_FIELD(options, stream, elem_type)                //
@@ -1584,6 +1611,7 @@ void SequenceProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
   READ_REPEATED_FIELD(options, stream, map_values)           //
   READ_REPEATED_FIELD(options, stream, optional_values)      //
   READ_END(options, stream, SequenceProto)                   // NOLINT
+  return true;
 }
 void SequenceProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(elem_type),
@@ -1614,7 +1642,7 @@ void MapProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, string_keys)
   WRITE_FIELD(options, stream, values)
 }
-void MapProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool MapProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, MapProto)             //
   READ_FIELD(options, stream, name)                 //
   READ_ENUM_FIELD(options, stream, key_type)        //
@@ -1622,6 +1650,7 @@ void MapProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &option
   READ_REPEATED_FIELD(options, stream, string_keys) //
   READ_FIELD(options, stream, values)               //
   READ_END(options, stream, MapProto)               // NOLINT
+  return true;
 }
 void MapProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(key_type),
@@ -1654,7 +1683,7 @@ void OptionalProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, map_value)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, optional_value)
 }
-void OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+bool OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, OptionalProto)                      //
   READ_FIELD(options, stream, name)                               //
   READ_ENUM_FIELD(options, stream, elem_type)                     //
@@ -1664,6 +1693,7 @@ void OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
   READ_OPTIONAL_PROTO_FIELD(options, stream, map_value)           //
   READ_OPTIONAL_PROTO_FIELD(options, stream, optional_value)      //
   READ_END(options, stream, OptionalProto)                        // NOLINT
+  return true;
 }
 void OptionalProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(elem_type),

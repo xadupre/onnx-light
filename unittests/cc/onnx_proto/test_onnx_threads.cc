@@ -108,7 +108,7 @@ TEST(onnx_threads, ParallelModelProcessing0) {
     options.num_threads = 2;
     ModelProto model_proto2;
     stream.StartThreadPool(0);
-    model_proto2.ParseFromStream(stream, options);
+    EXPECT_TRUE(model_proto2.ParseFromStream(stream, options));
     stream.WaitForDelayedBlock();
     EXPECT_EQ(model_proto2.ref_ir_version(), model.ref_ir_version());
     EXPECT_EQ(model.ref_graph().ref_initializer().size(),
@@ -150,7 +150,7 @@ TEST(onnx_threads, ParallelModelProcessing4_File) {
     options.num_threads = 2;
     ModelProto model_proto2;
     stream.StartThreadPool(2);
-    model_proto2.ParseFromStream(stream, options);
+    EXPECT_TRUE(model_proto2.ParseFromStream(stream, options));
     stream.WaitForDelayedBlock();
     EXPECT_EQ(model_proto2.ref_ir_version(), model.ref_ir_version());
     EXPECT_EQ(model.ref_graph().ref_initializer().size(),

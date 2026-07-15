@@ -22,11 +22,11 @@
   bool cls::ParseFromString(const std::string &raw, ParseOptions &opts) {                          \
     return _ParseFromString(*this, raw, opts);                                                     \
   }                                                                                                \
-  void cls::ParseFromZeroCopyStream(utils::BinaryStream *stream) {                                 \
-    _ParseFromZeroCopyStream(*this, stream);                                                       \
+  bool cls::ParseFromZeroCopyStream(utils::BinaryStream *stream) {                                 \
+    return _ParseFromZeroCopyStream(*this, stream);                                                \
   }                                                                                                \
-  void cls::ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts) {             \
-    _ParseFromZeroCopyStream(*this, stream, opts);                                                 \
+  bool cls::ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts) {             \
+    return _ParseFromZeroCopyStream(*this, stream, opts);                                          \
   }                                                                                                \
   bool cls::ParseFromIstream(std::istream *input) { return _ParseFromIstream(*this, input); }      \
   std::string cls::SerializeAsString() const { return _SerializeAsString(*this); }                 \
@@ -269,14 +269,18 @@ bool _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
 }
 
 template <typename cls>
-void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStream *stream) {
+bool _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStream *stream) {
   EXT_ENFORCE(stream != nullptr, "ParseFromZeroCopyStream: stream pointer must not be null.");
   ParseOptions opts;
   self.ParseFromStream(*stream, opts);
+  // Parsing errors are signalled via exceptions (EXT_THROW/EXT_ENFORCE). The
+  // bool return follows the Google Protobuf API contract; it is always true
+  // when the function returns normally.
+  return true;
 }
 
 template <typename cls>
-void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStream *stream,
+bool _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStream *stream,
                               ParseOptions &opts) {
   EXT_ENFORCE(stream != nullptr, "ParseFromZeroCopyStream: stream pointer must not be null.");
   if (opts.format == SerializeFormat::kOrtFlatbuffers) {
@@ -306,6 +310,10 @@ void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStre
   self.ParseFromStream(*stream, opts);
   if (opts.is_parallel())
     stream->WaitForDelayedBlock();
+  // Parsing errors are signalled via exceptions (EXT_THROW/EXT_ENFORCE). The
+  // bool return follows the Google Protobuf API contract; it is always true
+  // when the function returns normally.
+  return true;
 }
 
 template <typename cls> bool _ParseFromIstream(cls &self, std::istream *input) {

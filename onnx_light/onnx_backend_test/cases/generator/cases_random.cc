@@ -78,10 +78,12 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node;
     node.set_op_type("RandomNormal");
     node.add_output("y");
-    AddIntsAttr(node, "shape", shape);
+    Expect(registry, std::move(node), "test_cc_randomnormal", {opset}, [=]() -> IoData {
+      AddIntsAttr(node, "shape", shape);
 
-    Tensor y = kernel::RandomNormal(ctx)(shape);
-    Expect(node, /*inputs=*/{}, {y}, "test_cc_randomnormal", {opset}, "backend-test", registry);
+      Tensor y = kernel::RandomNormal(ctx)(shape);
+      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+    });
   }
 
   // Explicit seed=42, mean=1, scale=2.
@@ -89,15 +91,16 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node;
     node.set_op_type("RandomNormal");
     node.add_output("y");
-    AddFloatAttr(node, "mean", 1.0f);
-    AddFloatAttr(node, "scale", 2.0f);
-    AddFloatAttr(node, "seed", 42.0f);
-    AddIntsAttr(node, "shape", shape);
+    Expect(registry, std::move(node), "test_cc_randomnormal_seeded", {opset}, [=]() -> IoData {
+      AddFloatAttr(node, "mean", 1.0f);
+      AddFloatAttr(node, "scale", 2.0f);
+      AddFloatAttr(node, "seed", 42.0f);
+      AddIntsAttr(node, "shape", shape);
 
-    Tensor y = kernel::RandomNormal(ctx)(shape, /*mean=*/1.0, /*scale=*/2.0, /*seed=*/42,
-                                         /*dtype=*/0);
-    Expect(node, /*inputs=*/{}, {y}, "test_cc_randomnormal_seeded", {opset}, "backend-test",
-           registry);
+      Tensor y = kernel::RandomNormal(ctx)(shape, /*mean=*/1.0, /*scale=*/2.0, /*seed=*/42,
+                                           /*dtype=*/0);
+      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+    });
   }
 
   // dtype=DOUBLE.
@@ -105,14 +108,15 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node;
     node.set_op_type("RandomNormal");
     node.add_output("y");
-    AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
-    AddIntsAttr(node, "shape", shape);
+    Expect(registry, std::move(node), "test_cc_randomnormal_double", {opset}, [=]() -> IoData {
+      AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
+      AddIntsAttr(node, "shape", shape);
 
-    Tensor y =
-        kernel::RandomNormal(ctx)(shape, /*mean=*/0.0, /*scale=*/1.0, kernel::RandomNormal::kNoSeed,
-                                  /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
-    Expect(node, /*inputs=*/{}, {y}, "test_cc_randomnormal_double", {opset}, "backend-test",
-           registry);
+      Tensor y = kernel::RandomNormal(ctx)(shape, /*mean=*/0.0, /*scale=*/1.0,
+                                           kernel::RandomNormal::kNoSeed,
+                                           /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+    });
   }
 }
 
@@ -147,10 +151,12 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) 
     NodeProto node;
     node.set_op_type("RandomUniform");
     node.add_output("y");
-    AddIntsAttr(node, "shape", shape);
+    Expect(registry, std::move(node), "test_cc_randomuniform", {opset}, [=]() -> IoData {
+      AddIntsAttr(node, "shape", shape);
 
-    Tensor y = kernel::RandomUniform(ctx)(shape);
-    Expect(node, /*inputs=*/{}, {y}, "test_cc_randomuniform", {opset}, "backend-test", registry);
+      Tensor y = kernel::RandomUniform(ctx)(shape);
+      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+    });
   }
 
   // Explicit seed=42, low=-1, high=3.
@@ -158,15 +164,16 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) 
     NodeProto node;
     node.set_op_type("RandomUniform");
     node.add_output("y");
-    AddFloatAttr(node, "low", -1.0f);
-    AddFloatAttr(node, "high", 3.0f);
-    AddFloatAttr(node, "seed", 42.0f);
-    AddIntsAttr(node, "shape", shape);
+    Expect(registry, std::move(node), "test_cc_randomuniform_seeded", {opset}, [=]() -> IoData {
+      AddFloatAttr(node, "low", -1.0f);
+      AddFloatAttr(node, "high", 3.0f);
+      AddFloatAttr(node, "seed", 42.0f);
+      AddIntsAttr(node, "shape", shape);
 
-    Tensor y = kernel::RandomUniform(ctx)(shape, /*low=*/-1.0, /*high=*/3.0, /*seed=*/42,
-                                          /*dtype=*/0);
-    Expect(node, /*inputs=*/{}, {y}, "test_cc_randomuniform_seeded", {opset}, "backend-test",
-           registry);
+      Tensor y = kernel::RandomUniform(ctx)(shape, /*low=*/-1.0, /*high=*/3.0, /*seed=*/42,
+                                            /*dtype=*/0);
+      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+    });
   }
 
   // dtype=DOUBLE.
@@ -174,14 +181,15 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) 
     NodeProto node;
     node.set_op_type("RandomUniform");
     node.add_output("y");
-    AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
-    AddIntsAttr(node, "shape", shape);
+    Expect(registry, std::move(node), "test_cc_randomuniform_double", {opset}, [=]() -> IoData {
+      AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
+      AddIntsAttr(node, "shape", shape);
 
-    Tensor y =
-        kernel::RandomUniform(ctx)(shape, /*low=*/0.0, /*high=*/1.0, kernel::RandomUniform::kNoSeed,
-                                   /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
-    Expect(node, /*inputs=*/{}, {y}, "test_cc_randomuniform_double", {opset}, "backend-test",
-           registry);
+      Tensor y = kernel::RandomUniform(ctx)(shape, /*low=*/0.0, /*high=*/1.0,
+                                            kernel::RandomUniform::kNoSeed,
+                                            /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+      return IoData{std::move(/*inputs=*/{}), {std::move(y)}};
+    });
   }
 }
 
@@ -218,9 +226,10 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mod
     node.set_op_type("RandomNormalLike");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor y = kernel::RandomNormalLike(ctx)(x);
-    Expect(node, {x}, {y}, "test_cc_randomnormallike", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_randomnormallike", {opset}, [=]() -> IoData {
+      Tensor y = kernel::RandomNormalLike(ctx)(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Override dtype=DOUBLE from a FLOAT input.
@@ -231,12 +240,14 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mod
     node.set_op_type("RandomNormalLike");
     node.add_input("x");
     node.add_output("y");
-    AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
+    Expect(registry, std::move(node), "test_cc_randomnormallike_double", {opset}, [=]() -> IoData {
+      AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
 
-    Tensor y = kernel::RandomNormalLike(ctx)(x, /*mean=*/0.0, /*scale=*/1.0,
-                                             kernel::RandomNormalLike::kNoSeed,
-                                             /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
-    Expect(node, {x}, {y}, "test_cc_randomnormallike_double", {opset}, "backend-test", registry);
+      Tensor y = kernel::RandomNormalLike(ctx)(x, /*mean=*/0.0, /*scale=*/1.0,
+                                               kernel::RandomNormalLike::kNoSeed,
+                                               /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Explicit seed.
@@ -247,13 +258,15 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mod
     node.set_op_type("RandomNormalLike");
     node.add_input("x");
     node.add_output("y");
-    AddFloatAttr(node, "mean", 1.0f);
-    AddFloatAttr(node, "scale", 0.5f);
-    AddFloatAttr(node, "seed", 7.0f);
+    Expect(registry, std::move(node), "test_cc_randomnormallike_seeded", {opset}, [=]() -> IoData {
+      AddFloatAttr(node, "mean", 1.0f);
+      AddFloatAttr(node, "scale", 0.5f);
+      AddFloatAttr(node, "seed", 7.0f);
 
-    Tensor y = kernel::RandomNormalLike(ctx)(x, /*mean=*/1.0, /*scale=*/0.5, /*seed=*/7,
-                                             /*dtype=*/0);
-    Expect(node, {x}, {y}, "test_cc_randomnormallike_seeded", {opset}, "backend-test", registry);
+      Tensor y = kernel::RandomNormalLike(ctx)(x, /*mean=*/1.0, /*scale=*/0.5, /*seed=*/7,
+                                               /*dtype=*/0);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 
@@ -290,9 +303,10 @@ void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mo
     node.set_op_type("RandomUniformLike");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor y = kernel::RandomUniformLike(ctx)(x);
-    Expect(node, {x}, {y}, "test_cc_randomuniformlike", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_randomuniformlike", {opset}, [=]() -> IoData {
+      Tensor y = kernel::RandomUniformLike(ctx)(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Override dtype=DOUBLE from a FLOAT input.
@@ -303,12 +317,14 @@ void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mo
     node.set_op_type("RandomUniformLike");
     node.add_input("x");
     node.add_output("y");
-    AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
+    Expect(registry, std::move(node), "test_cc_randomuniformlike_double", {opset}, [=]() -> IoData {
+      AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
 
-    Tensor y = kernel::RandomUniformLike(ctx)(x, /*low=*/0.0, /*high=*/1.0,
-                                              kernel::RandomUniformLike::kNoSeed,
-                                              /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
-    Expect(node, {x}, {y}, "test_cc_randomuniformlike_double", {opset}, "backend-test", registry);
+      Tensor y = kernel::RandomUniformLike(ctx)(x, /*low=*/0.0, /*high=*/1.0,
+                                                kernel::RandomUniformLike::kNoSeed,
+                                                /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Explicit seed and range.
@@ -319,13 +335,15 @@ void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mo
     node.set_op_type("RandomUniformLike");
     node.add_input("x");
     node.add_output("y");
-    AddFloatAttr(node, "low", -2.0f);
-    AddFloatAttr(node, "high", 5.0f);
-    AddFloatAttr(node, "seed", 7.0f);
+    Expect(registry, std::move(node), "test_cc_randomuniformlike_seeded", {opset}, [=]() -> IoData {
+      AddFloatAttr(node, "low", -2.0f);
+      AddFloatAttr(node, "high", 5.0f);
+      AddFloatAttr(node, "seed", 7.0f);
 
-    Tensor y = kernel::RandomUniformLike(ctx)(x, /*low=*/-2.0, /*high=*/5.0, /*seed=*/7,
-                                              /*dtype=*/0);
-    Expect(node, {x}, {y}, "test_cc_randomuniformlike_seeded", {opset}, "backend-test", registry);
+      Tensor y = kernel::RandomUniformLike(ctx)(x, /*low=*/-2.0, /*high=*/5.0, /*seed=*/7,
+                                                /*dtype=*/0);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

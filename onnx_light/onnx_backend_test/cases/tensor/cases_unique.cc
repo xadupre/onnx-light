@@ -78,81 +78,97 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_unique_not_sorted_without_axis — 1-D float input, sorted=0.
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/0, /*axis_attr=*/std::nullopt);
-    const Tensor x = Tensor::FromFloat("X", {6}, {2.f, 1.f, 1.f, 3.f, 4.f, 3.f});
-    kernel::Unique::Attributes attrs;
-    attrs.sorted = false;
-    auto out = unique_kernel(x, attrs);
-    Expect(node, {x},
-           {std::move(out.y), std::move(out.indices), std::move(out.inverse_indices),
-            std::move(out.counts)},
-           "test_cc_unique_not_sorted_without_axis", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_unique_not_sorted_without_axis", {opset},
+           [=]() -> IoData {
+             const Tensor x = Tensor::FromFloat("X", {6}, {2.f, 1.f, 1.f, 3.f, 4.f, 3.f});
+             kernel::Unique::Attributes attrs;
+             attrs.sorted = false;
+             auto out = unique_kernel(x, attrs);
+             return IoData{{std::move(x)},
+                           {std::move(std::move(out.y)), std::move(std::move(out.indices)),
+                            std::move(std::move(out.inverse_indices)),
+                            std::move(std::move(out.counts))}};
+           });
   }
 
   // test_cc_unique_sorted_without_axis — 1-D float input, default sorted=1.
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/std::nullopt, /*axis_attr=*/std::nullopt);
-    const Tensor x = Tensor::FromFloat("X", {6}, {2.f, 1.f, 1.f, 3.f, 4.f, 3.f});
-    auto out = unique_kernel(x);
-    Expect(node, {x},
-           {std::move(out.y), std::move(out.indices), std::move(out.inverse_indices),
-            std::move(out.counts)},
-           "test_cc_unique_sorted_without_axis", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_unique_sorted_without_axis", {opset},
+           [=]() -> IoData {
+             const Tensor x = Tensor::FromFloat("X", {6}, {2.f, 1.f, 1.f, 3.f, 4.f, 3.f});
+             auto out = unique_kernel(x);
+             return IoData{{std::move(x)},
+                           {std::move(std::move(out.y)), std::move(std::move(out.indices)),
+                            std::move(std::move(out.inverse_indices)),
+                            std::move(std::move(out.counts))}};
+           });
   }
 
   // test_cc_unique_length_1 — single-element input.
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/std::nullopt, /*axis_attr=*/std::nullopt);
-    const Tensor x = Tensor::FromFloat("X", {1}, {7.f});
-    auto out = unique_kernel(x);
-    Expect(node, {x},
-           {std::move(out.y), std::move(out.indices), std::move(out.inverse_indices),
-            std::move(out.counts)},
-           "test_cc_unique_length_1", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_unique_length_1", {opset}, [=]() -> IoData {
+      const Tensor x = Tensor::FromFloat("X", {1}, {7.f});
+      auto out = unique_kernel(x);
+      return IoData{{std::move(x)},
+                    {std::move(std::move(out.y)), std::move(std::move(out.indices)),
+                     std::move(std::move(out.inverse_indices)), std::move(std::move(out.counts))}};
+    });
   }
 
   // test_cc_unique_sorted_with_axis — 2-D float input, sorted=1, axis=0.
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/1, /*axis_attr=*/0);
-    const Tensor x = Tensor::FromFloat("X", {3, 3}, {1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 2.f, 3.f, 4.f});
-    kernel::Unique::Attributes attrs;
-    attrs.sorted = true;
-    attrs.axis = 0;
-    auto out = unique_kernel(x, attrs);
-    Expect(node, {x},
-           {std::move(out.y), std::move(out.indices), std::move(out.inverse_indices),
-            std::move(out.counts)},
-           "test_cc_unique_sorted_with_axis", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_unique_sorted_with_axis", {opset}, [=]() -> IoData {
+      const Tensor x =
+          Tensor::FromFloat("X", {3, 3}, {1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 2.f, 3.f, 4.f});
+      kernel::Unique::Attributes attrs;
+      attrs.sorted = true;
+      attrs.axis = 0;
+      auto out = unique_kernel(x, attrs);
+      return IoData{{std::move(x)},
+                    {std::move(std::move(out.y)), std::move(std::move(out.indices)),
+                     std::move(std::move(out.inverse_indices)), std::move(std::move(out.counts))}};
+    });
   }
 
   // test_cc_unique_sorted_with_negative_axis — 2-D float input, sorted=1,
   // axis=-1.
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/1, /*axis_attr=*/-1);
-    const Tensor x = Tensor::FromFloat("X", {2, 4}, {1.f, 1.f, 0.f, 2.f, 1.f, 1.f, 0.f, 2.f});
-    kernel::Unique::Attributes attrs;
-    attrs.sorted = true;
-    attrs.axis = -1;
-    auto out = unique_kernel(x, attrs);
-    Expect(node, {x},
-           {std::move(out.y), std::move(out.indices), std::move(out.inverse_indices),
-            std::move(out.counts)},
-           "test_cc_unique_sorted_with_negative_axis", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_unique_sorted_with_negative_axis", {opset},
+           [=]() -> IoData {
+             const Tensor x =
+                 Tensor::FromFloat("X", {2, 4}, {1.f, 1.f, 0.f, 2.f, 1.f, 1.f, 0.f, 2.f});
+             kernel::Unique::Attributes attrs;
+             attrs.sorted = true;
+             attrs.axis = -1;
+             auto out = unique_kernel(x, attrs);
+             return IoData{{std::move(x)},
+                           {std::move(std::move(out.y)), std::move(std::move(out.indices)),
+                            std::move(std::move(out.inverse_indices)),
+                            std::move(std::move(out.counts))}};
+           });
   }
 
   // test_cc_unique_sorted_with_axis_3d — 3-D float input, sorted=1, axis=1.
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/1, /*axis_attr=*/1);
-    const Tensor x = Tensor::FromFloat(
-        "X", {2, 4, 2},
-        {1.f, 1.f, 0.f, 1.f, 2.f, 1.f, 0.f, 1.f, 1.f, 1.f, 0.f, 1.f, 2.f, 1.f, 0.f, 1.f});
-    kernel::Unique::Attributes attrs;
-    attrs.sorted = true;
-    attrs.axis = 1;
-    auto out = unique_kernel(x, attrs);
-    Expect(node, {x},
-           {std::move(out.y), std::move(out.indices), std::move(out.inverse_indices),
-            std::move(out.counts)},
-           "test_cc_unique_sorted_with_axis_3d", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_unique_sorted_with_axis_3d", {opset},
+           [=]() -> IoData {
+             const Tensor x = Tensor::FromFloat(
+                 "X", {2, 4, 2},
+                 {1.f, 1.f, 0.f, 1.f, 2.f, 1.f, 0.f, 1.f, 1.f, 1.f, 0.f, 1.f, 2.f, 1.f, 0.f, 1.f});
+             kernel::Unique::Attributes attrs;
+             attrs.sorted = true;
+             attrs.axis = 1;
+             auto out = unique_kernel(x, attrs);
+             return IoData{{std::move(x)},
+                           {std::move(std::move(out.y)), std::move(std::move(out.indices)),
+                            std::move(std::move(out.inverse_indices)),
+                            std::move(std::move(out.counts))}};
+           });
   }
 }
 

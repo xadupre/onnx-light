@@ -55,15 +55,17 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
     node.add_input("input");
     node.add_input("target");
     node.add_output("loss");
-
-    Tensor input = Tensor::FromFloat("", {3, 5},
-                                     {-1.6f, -1.5f, -1.4f, -1.3f, -1.2f, -1.0f, -1.5f, -1.8f, -1.9f,
-                                      -1.95f, -2.2f, -1.7f, -1.3f, -1.1f, -1.2f});
-    Tensor target = Tensor::FromInt64("", {3}, {2, 0, 4});
-    Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"mean",
-                             /*has_ignore_index=*/false, /*ignore_index=*/0);
-    Expect(node, {input, target}, {std::move(loss)}, "test_cc_negative_log_likelihood_loss_mean",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_negative_log_likelihood_loss_mean", {opset},
+           [=]() -> IoData {
+             Tensor input =
+                 Tensor::FromFloat("", {3, 5},
+                                   {-1.6f, -1.5f, -1.4f, -1.3f, -1.2f, -1.0f, -1.5f, -1.8f, -1.9f,
+                                    -1.95f, -2.2f, -1.7f, -1.3f, -1.1f, -1.2f});
+             Tensor target = Tensor::FromInt64("", {3}, {2, 0, 4});
+             Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"mean",
+                                      /*has_ignore_index=*/false, /*ignore_index=*/0);
+             return IoData{{std::move(input), std::move(target)}, {std::move(std::move(loss))}};
+           });
   }
 
   // Reduction = "none" produces a per-sample loss tensor.
@@ -74,15 +76,17 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
     node.add_input("target");
     node.add_output("loss");
     AddAttribute(node, "reduction", std::string("none"));
-
-    Tensor input = Tensor::FromFloat("", {3, 5},
-                                     {-1.6f, -1.5f, -1.4f, -1.3f, -1.2f, -1.0f, -1.5f, -1.8f, -1.9f,
-                                      -1.95f, -2.2f, -1.7f, -1.3f, -1.1f, -1.2f});
-    Tensor target = Tensor::FromInt64("", {3}, {2, 0, 4});
-    Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"none",
-                             /*has_ignore_index=*/false, /*ignore_index=*/0);
-    Expect(node, {input, target}, {std::move(loss)}, "test_cc_negative_log_likelihood_loss_none",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_negative_log_likelihood_loss_none", {opset},
+           [=]() -> IoData {
+             Tensor input =
+                 Tensor::FromFloat("", {3, 5},
+                                   {-1.6f, -1.5f, -1.4f, -1.3f, -1.2f, -1.0f, -1.5f, -1.8f, -1.9f,
+                                    -1.95f, -2.2f, -1.7f, -1.3f, -1.1f, -1.2f});
+             Tensor target = Tensor::FromInt64("", {3}, {2, 0, 4});
+             Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"none",
+                                      /*has_ignore_index=*/false, /*ignore_index=*/0);
+             return IoData{{std::move(input), std::move(target)}, {std::move(std::move(loss))}};
+           });
   }
 
   // Reduction = "sum" with a per-class weight tensor.
@@ -94,16 +98,19 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
     node.add_input("weight");
     node.add_output("loss");
     AddAttribute(node, "reduction", std::string("sum"));
-
-    Tensor input = Tensor::FromFloat("", {3, 5},
-                                     {-1.6f, -1.5f, -1.4f, -1.3f, -1.2f, -1.0f, -1.5f, -1.8f, -1.9f,
-                                      -1.95f, -2.2f, -1.7f, -1.3f, -1.1f, -1.2f});
-    Tensor target = Tensor::FromInt64("", {3}, {2, 0, 4});
-    Tensor weight = Tensor::FromFloat("", {5}, {0.2f, 0.3f, 0.6f, 0.1f, 0.5f});
-    Tensor loss = nll_kernel(input, target, &weight, /*reduction=*/"sum",
-                             /*has_ignore_index=*/false, /*ignore_index=*/0);
-    Expect(node, {input, target, weight}, {std::move(loss)},
-           "test_cc_negative_log_likelihood_loss_weighted_sum", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_negative_log_likelihood_loss_weighted_sum", {opset},
+           [=]() -> IoData {
+             Tensor input =
+                 Tensor::FromFloat("", {3, 5},
+                                   {-1.6f, -1.5f, -1.4f, -1.3f, -1.2f, -1.0f, -1.5f, -1.8f, -1.9f,
+                                    -1.95f, -2.2f, -1.7f, -1.3f, -1.1f, -1.2f});
+             Tensor target = Tensor::FromInt64("", {3}, {2, 0, 4});
+             Tensor weight = Tensor::FromFloat("", {5}, {0.2f, 0.3f, 0.6f, 0.1f, 0.5f});
+             Tensor loss = nll_kernel(input, target, &weight, /*reduction=*/"sum",
+                                      /*has_ignore_index=*/false, /*ignore_index=*/0);
+             return IoData{{std::move(input), std::move(target), std::move(weight)},
+                           {std::move(std::move(loss))}};
+           });
   }
 
   // ``ignore_index`` masks one of the samples; reduction = "mean".
@@ -114,15 +121,17 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
     node.add_input("target");
     node.add_output("loss");
     AddAttribute(node, "ignore_index", static_cast<int64_t>(-1));
-
-    Tensor input = Tensor::FromFloat("", {3, 5},
-                                     {-1.6f, -1.5f, -1.4f, -1.3f, -1.2f, -1.0f, -1.5f, -1.8f, -1.9f,
-                                      -1.95f, -2.2f, -1.7f, -1.3f, -1.1f, -1.2f});
-    Tensor target = Tensor::FromInt64("", {3}, {2, -1, 4});
-    Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"mean",
-                             /*has_ignore_index=*/true, /*ignore_index=*/-1);
-    Expect(node, {input, target}, {std::move(loss)},
-           "test_cc_negative_log_likelihood_loss_ignore_index", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_negative_log_likelihood_loss_ignore_index", {opset},
+           [=]() -> IoData {
+             Tensor input =
+                 Tensor::FromFloat("", {3, 5},
+                                   {-1.6f, -1.5f, -1.4f, -1.3f, -1.2f, -1.0f, -1.5f, -1.8f, -1.9f,
+                                    -1.95f, -2.2f, -1.7f, -1.3f, -1.1f, -1.2f});
+             Tensor target = Tensor::FromInt64("", {3}, {2, -1, 4});
+             Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"mean",
+                                      /*has_ignore_index=*/true, /*ignore_index=*/-1);
+             return IoData{{std::move(input), std::move(target)}, {std::move(std::move(loss))}};
+           });
   }
 
   // K-dimensional input: shape (N, C, D1) with a per-sample 2-D target.
@@ -133,15 +142,16 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
     node.add_input("target");
     node.add_output("loss");
     AddAttribute(node, "reduction", std::string("none"));
-
-    Tensor input = Tensor::FromFloat(
-        "", {2, 3, 2},
-        {-1.0f, -2.0f, -2.0f, -2.0f, -3.0f, -2.0f, 0.0f, -1.0f, -2.0f, -2.0f, -1.0f, -2.0f});
-    Tensor target = Tensor::FromInt64("", {2, 2}, {2, 1, 0, 2});
-    Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"none",
-                             /*has_ignore_index=*/false, /*ignore_index=*/0);
-    Expect(node, {input, target}, {std::move(loss)}, "test_cc_negative_log_likelihood_loss_kd_none",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_negative_log_likelihood_loss_kd_none", {opset},
+           [=]() -> IoData {
+             Tensor input = Tensor::FromFloat("", {2, 3, 2},
+                                              {-1.0f, -2.0f, -2.0f, -2.0f, -3.0f, -2.0f, 0.0f,
+                                               -1.0f, -2.0f, -2.0f, -1.0f, -2.0f});
+             Tensor target = Tensor::FromInt64("", {2, 2}, {2, 1, 0, 2});
+             Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"none",
+                                      /*has_ignore_index=*/false, /*ignore_index=*/0);
+             return IoData{{std::move(input), std::move(target)}, {std::move(std::move(loss))}};
+           });
   }
 
   // -------------------------------------------------------------------------
@@ -356,28 +366,30 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
       AddAttribute(node, "ignore_index", c.ignore_index);
     }
 
-    Tensor input = Tensor::FromFloat("", c.input_shape, Rand<float>(c.input_shape, c.input_seed));
-    std::vector<int64_t> target_data = RandInt(0, C, c.target_shape, c.target_seed);
-    if (c.has_ignore_index && c.patched_target_flat_index >= 0) {
-      target_data[static_cast<size_t>(c.patched_target_flat_index)] = c.ignore_index;
-    }
-    Tensor target = Tensor::FromInt64("", c.target_shape, target_data);
+    Expect(registry, std::move(node), c.name, {opset}, [=]() -> IoData {
+      Tensor input = Tensor::FromFloat("", c.input_shape, Rand<float>(c.input_shape, c.input_seed));
+      std::vector<int64_t> target_data = RandInt(0, C, c.target_shape, c.target_seed);
+      if (c.has_ignore_index && c.patched_target_flat_index >= 0) {
+        target_data[static_cast<size_t>(c.patched_target_flat_index)] = c.ignore_index;
+      }
+      Tensor target = Tensor::FromInt64("", c.target_shape, target_data);
 
-    std::vector<Tensor> inputs;
-    inputs.reserve(c.with_weight ? 3 : 2);
-    inputs.push_back(input);
-    inputs.push_back(target);
-    Tensor weight;
-    if (c.with_weight) {
-      weight = Tensor::FromFloat("", {C}, Rand<float>({C}, c.weight_seed));
-      inputs.push_back(weight);
-    }
+      std::vector<Tensor> inputs;
+      inputs.reserve(c.with_weight ? 3 : 2);
+      inputs.push_back(input);
+      inputs.push_back(target);
+      Tensor weight;
+      if (c.with_weight) {
+        weight = Tensor::FromFloat("", {C}, Rand<float>({C}, c.weight_seed));
+        inputs.push_back(weight);
+      }
 
-    const Tensor *weight_ptr = c.with_weight ? &inputs[2] : nullptr;
-    Tensor loss =
-        nll_kernel(input, target, weight_ptr, c.reduction, c.has_ignore_index, c.ignore_index);
+      const Tensor *weight_ptr = c.with_weight ? &inputs[2] : nullptr;
+      Tensor loss =
+          nll_kernel(input, target, weight_ptr, c.reduction, c.has_ignore_index, c.ignore_index);
 
-    Expect(node, inputs, {std::move(loss)}, c.name, {opset}, "backend-test", registry);
+      return IoData{std::move(inputs), {std::move(loss)}};
+    });
   }
 }
 

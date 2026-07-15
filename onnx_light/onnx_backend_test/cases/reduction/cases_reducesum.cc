@@ -32,13 +32,16 @@ void EmitReduceSumOnnxCase(std::vector<TestCase> &registry, const kernel::Reduce
   AddAttribute<int64_t>(node, "keepdims", keepdims ? 1 : 0);
   if (noop_with_empty_axes) {
     AddAttribute<int64_t>(node, "noop_with_empty_axes", 1);
-  }
+                             Expect(registry, std::move(node), case_name, {opset},
+                                    [=]() -> IoData {
+                               }
 
-  Tensor data = Tensor::FromFloat("", data_shape, data_values);
-  Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
-  Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
+                               Tensor data = Tensor::FromFloat("", data_shape, data_values);
+                               Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
+                               Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
 
-  Expect(node, {data, axes}, {reduced}, case_name, {opset}, "backend-test", registry);
+                               return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -175,13 +178,14 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("ReduceSum");
     node.add_input("data");
     node.add_output("reduced");
+    Expect(registry, std::move(node), "test_cc_reducesum_default_axes_keepdims", {opset},
+           [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", example_shape, example_values);
+             Tensor reduced = reduce_sum_kernel(data, /*keepdims=*/true,
+                                                /*noop_with_empty_axes=*/false);
 
-    Tensor data = Tensor::FromFloat("", example_shape, example_values);
-    Tensor reduced = reduce_sum_kernel(data, /*keepdims=*/true,
-                                       /*noop_with_empty_axes=*/false);
-
-    Expect(node, {data}, {reduced}, "test_cc_reducesum_default_axes_keepdims", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(data)}, {std::move(reduced)}};
+           });
   }
 
   // Explicit ``axes = [1]`` with default ``keepdims = 1``: reduced dim
@@ -192,14 +196,14 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data");
     node.add_input("axes");
     node.add_output("reduced");
+    Expect(registry, std::move(node), "test_cc_reducesum_keepdims", {opset}, [=]() -> IoData {
+      Tensor data = Tensor::FromFloat("", example_shape, example_values);
+      Tensor axes = Tensor::FromInt64("", {1}, {1});
+      Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
+                                         /*noop_with_empty_axes=*/false);
 
-    Tensor data = Tensor::FromFloat("", example_shape, example_values);
-    Tensor axes = Tensor::FromInt64("", {1}, {1});
-    Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
-                                       /*noop_with_empty_axes=*/false);
-
-    Expect(node, {data, axes}, {reduced}, "test_cc_reducesum_keepdims", {opset}, "backend-test",
-           registry);
+      return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+    });
   }
 
   // Explicit ``axes = [1]`` with ``keepdims = 0``: reduced dim is dropped.
@@ -214,14 +218,15 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     attr->set_name("keepdims");
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(0);
+    Expect(registry, std::move(node), "test_cc_reducesum_do_not_keepdims", {opset},
+           [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", example_shape, example_values);
+             Tensor axes = Tensor::FromInt64("", {1}, {1});
+             Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/false,
+                                                /*noop_with_empty_axes=*/false);
 
-    Tensor data = Tensor::FromFloat("", example_shape, example_values);
-    Tensor axes = Tensor::FromInt64("", {1}, {1});
-    Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/false,
-                                       /*noop_with_empty_axes=*/false);
-
-    Expect(node, {data, axes}, {reduced}, "test_cc_reducesum_do_not_keepdims", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+           });
   }
 
   // Negative axis = -2 with ``keepdims = 1`` (default).
@@ -231,14 +236,15 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data");
     node.add_input("axes");
     node.add_output("reduced");
+    Expect(registry, std::move(node), "test_cc_reducesum_negative_axes_keepdims", {opset},
+           [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", example_shape, example_values);
+             Tensor axes = Tensor::FromInt64("", {1}, {-2});
+             Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
+                                                /*noop_with_empty_axes=*/false);
 
-    Tensor data = Tensor::FromFloat("", example_shape, example_values);
-    Tensor axes = Tensor::FromInt64("", {1}, {-2});
-    Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
-                                       /*noop_with_empty_axes=*/false);
-
-    Expect(node, {data, axes}, {reduced}, "test_cc_reducesum_negative_axes_keepdims", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+           });
   }
 
   // Empty ``axes`` input combined with ``noop_with_empty_axes = 1`` is an
@@ -254,14 +260,15 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     attr->set_name("noop_with_empty_axes");
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(1);
+    Expect(registry, std::move(node), "test_cc_reducesum_empty_axes_input_noop", {opset},
+           [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", example_shape, example_values);
+             Tensor axes = Tensor::FromInt64("", {0}, {});
+             Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
+                                                /*noop_with_empty_axes=*/true);
 
-    Tensor data = Tensor::FromFloat("", example_shape, example_values);
-    Tensor axes = Tensor::FromInt64("", {0}, {});
-    Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
-                                       /*noop_with_empty_axes=*/true);
-
-    Expect(node, {data, axes}, {reduced}, "test_cc_reducesum_empty_axes_input_noop", {opset},
-           "backend-test", registry);
+             return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+           });
   }
 
   // Reducing over an axis of size 0: data shape ``[2, 0, 4]``, ``axes = [1]``,
@@ -272,14 +279,14 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data");
     node.add_input("axes");
     node.add_output("reduced");
+    Expect(registry, std::move(node), "test_cc_reducesum_empty_set", {opset}, [=]() -> IoData {
+      Tensor data = Tensor::FromFloat("", {2, 0, 4}, {});
+      Tensor axes = Tensor::FromInt64("", {1}, {1});
+      Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
+                                         /*noop_with_empty_axes=*/false);
 
-    Tensor data = Tensor::FromFloat("", {2, 0, 4}, {});
-    Tensor axes = Tensor::FromInt64("", {1}, {1});
-    Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
-                                       /*noop_with_empty_axes=*/false);
-
-    Expect(node, {data, axes}, {reduced}, "test_cc_reducesum_empty_set", {opset}, "backend-test",
-           registry);
+      return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+    });
   }
 
   // Non-reduced axis of size 0: data shape ``[2, 0, 4]``, ``axes = [2]``,
@@ -290,14 +297,15 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data");
     node.add_input("axes");
     node.add_output("reduced");
+    Expect(registry, std::move(node), "test_cc_reducesum_empty_set_non_reduced_axis_zero", {opset},
+           [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {2, 0, 4}, {});
+             Tensor axes = Tensor::FromInt64("", {1}, {2});
+             Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
+                                                /*noop_with_empty_axes=*/false);
 
-    Tensor data = Tensor::FromFloat("", {2, 0, 4}, {});
-    Tensor axes = Tensor::FromInt64("", {1}, {2});
-    Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
-                                       /*noop_with_empty_axes=*/false);
-
-    Expect(node, {data, axes}, {reduced}, "test_cc_reducesum_empty_set_non_reduced_axis_zero",
-           {opset}, "backend-test", registry);
+             return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+           });
   }
 
   RegisterReduceSumOnnxCases(registry, reduce_sum_kernel);

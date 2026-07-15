@@ -48,11 +48,13 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *axis = node.add_attribute();
     axis->set_name("axis");
     axis->set_type(AttributeProto::INT);
-    axis->set_i(1);
+    Expect(registry, std::move(node), "test_cc_softmax", {opset}, [=]() -> IoData {
+      axis->set_i(1);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
-    Tensor y = softmax_kernel(x, 1);
-    Expect(node, {x}, {y}, "test_cc_softmax", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
+      Tensor y = softmax_kernel(x, 1);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -64,10 +66,11 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Softmax");
     node.add_input("input");
     node.add_output("output");
-
-    Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f});
-    Tensor y = softmax_kernel(x, -1);
-    Expect(node, {x}, {y}, "test_cc_softmax_default_axis", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_softmax_default_axis", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f});
+      Tensor y = softmax_kernel(x, -1);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

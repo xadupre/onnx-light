@@ -92,21 +92,22 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("rois");
     node.add_output("Y");
     AddAttribute<std::vector<int64_t>>(node, "pooled_shape", {2, 2});
+    Expect(registry, std::move(node), "test_cc_maxroipool_default", {opset}, [=]() -> IoData {
+      Tensor x = MakeFeatureMap();
+      const std::vector<int64_t> rois_shape = {2, 5};
+      const std::vector<float> rois_values = {
+          0.0f, 0.0f, 0.0f, 5.0f, 5.0f, // full 6x6 extent
+          0.0f, 1.0f, 1.0f, 4.0f, 4.0f, // interior 4x4 extent
+      };
+      Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
 
-    Tensor x = MakeFeatureMap();
-    const std::vector<int64_t> rois_shape = {2, 5};
-    const std::vector<float> rois_values = {
-        0.0f, 0.0f, 0.0f, 5.0f, 5.0f, // full 6x6 extent
-        0.0f, 1.0f, 1.0f, 4.0f, 4.0f, // interior 4x4 extent
-    };
-    Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
+      kernel::MaxRoiPool::Attributes attrs;
+      attrs.pooled_shape = {2, 2};
+      attrs.spatial_scale = 1.0f;
+      Tensor y = maxroipool_kernel(x, rois, attrs);
 
-    kernel::MaxRoiPool::Attributes attrs;
-    attrs.pooled_shape = {2, 2};
-    attrs.spatial_scale = 1.0f;
-    Tensor y = maxroipool_kernel(x, rois, attrs);
-
-    Expect(node, {x, rois}, {y}, "test_cc_maxroipool_default", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(rois)}, {std::move(y)}};
+    });
   }
 
   // Case 2: explicit spatial_scale = 0.5, single RoI, 3x3 pooled output.
@@ -118,20 +119,20 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     AddAttribute<std::vector<int64_t>>(node, "pooled_shape", {3, 3});
     AddAttribute<float>(node, "spatial_scale", 0.5f);
+    Expect(registry, std::move(node), "test_cc_maxroipool_spatial_scale", {opset}, [=]() -> IoData {
+      Tensor x = MakeFeatureMap();
+      const std::vector<int64_t> rois_shape = {1, 5};
+      // Scaled by 0.5 the corners (0, 0)..(10, 10) cover the whole 6x6 map.
+      const std::vector<float> rois_values = {0.0f, 0.0f, 0.0f, 10.0f, 10.0f};
+      Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
 
-    Tensor x = MakeFeatureMap();
-    const std::vector<int64_t> rois_shape = {1, 5};
-    // Scaled by 0.5 the corners (0, 0)..(10, 10) cover the whole 6x6 map.
-    const std::vector<float> rois_values = {0.0f, 0.0f, 0.0f, 10.0f, 10.0f};
-    Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
+      kernel::MaxRoiPool::Attributes attrs;
+      attrs.pooled_shape = {3, 3};
+      attrs.spatial_scale = 0.5f;
+      Tensor y = maxroipool_kernel(x, rois, attrs);
 
-    kernel::MaxRoiPool::Attributes attrs;
-    attrs.pooled_shape = {3, 3};
-    attrs.spatial_scale = 0.5f;
-    Tensor y = maxroipool_kernel(x, rois, attrs);
-
-    Expect(node, {x, rois}, {y}, "test_cc_maxroipool_spatial_scale", {opset}, "backend-test",
-           registry);
+      return IoData{{std::move(x), std::move(rois)}, {std::move(y)}};
+    });
   }
 }
 

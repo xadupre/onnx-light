@@ -135,11 +135,12 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
         continue;
       }
       const int64_t to_attr = static_cast<int64_t>(to.dtype);
-      NodeProto node = MakeCastNode(to_attr);
-      Tensor input = from.make_input();
-      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_") + from.name + "_to_" + to.name,
-             {opset}, "backend-test", registry);
+      Expect(registry, MakeCastNode(to_attr),
+             std::string("test_cc_cast_") + from.name + "_to_" + to.name, {opset}, [=]() -> IoData {
+               Tensor input = from.make_input();
+               Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
     }
   }
 
@@ -192,10 +193,12 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
     {
       const int64_t to_attr = static_cast<int64_t>(v.dtype);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor input = Tensor::FromFloat("", f8_shape, f8_fp32_values);
-      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT_to_") + v.name, {opset_v21},
-             "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_FLOAT_to_") + v.name, {opset_v21},
+             [=]() -> IoData {
+               Tensor input = Tensor::FromFloat("", f8_shape, f8_fp32_values);
+               Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
     }
     // FLOAT8* -> FLOAT — input bytes are the saturated FLOAT8 encoding
     // of the same FP32 vector (matches the upstream behaviour where
@@ -204,33 +207,39 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
     {
       const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor encoded = cast_kernel(Tensor::FromFloat("", f8_shape, f8_fp32_values),
-                                   static_cast<int32_t>(v.dtype));
-      Tensor input("", static_cast<int32_t>(v.dtype), f8_shape, encoded.data);
-      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT",
-             {opset_v21}, "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_") + v.name + "_to_FLOAT",
+             {opset_v21}, [=]() -> IoData {
+               Tensor encoded = cast_kernel(Tensor::FromFloat("", f8_shape, f8_fp32_values),
+                                            static_cast<int32_t>(v.dtype));
+               Tensor input("", static_cast<int32_t>(v.dtype), f8_shape, encoded.data);
+               Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
     }
     // FLOAT16 -> FLOAT8*
     {
       const int64_t to_attr = static_cast<int64_t>(v.dtype);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor input = kernel::MakeFloat16Tensor("", f8_shape, f8_fp32_values);
-      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT16_to_") + v.name, {opset_v21},
-             "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_FLOAT16_to_") + v.name,
+             {opset_v21}, [=]() -> IoData {
+               Tensor input = kernel::MakeFloat16Tensor("", f8_shape, f8_fp32_values);
+               Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
     }
     // FLOAT8* -> FLOAT16 — input bytes are the saturated FLOAT8 encoding
     // of the same FP32 vector (matching the upstream behaviour).
     {
       const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT16);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor encoded = cast_kernel(Tensor::FromFloat("", f8_shape, f8_fp32_values),
-                                   static_cast<int32_t>(v.dtype));
-      Tensor input("", static_cast<int32_t>(v.dtype), f8_shape, encoded.data);
-      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT16",
-             {opset_v21}, "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_") + v.name + "_to_FLOAT16",
+             {opset_v21}, [=]() -> IoData {
+               Tensor encoded = cast_kernel(Tensor::FromFloat("", f8_shape, f8_fp32_values),
+                                            static_cast<int32_t>(v.dtype));
+               Tensor input("", static_cast<int32_t>(v.dtype), f8_shape, encoded.data);
+               Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
     }
   }
 
@@ -248,19 +257,25 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
       {
         const int64_t to_attr = static_cast<int64_t>(v.dtype);
         NodeProto node = MakeCastNodeNoSaturate(to_attr);
-        Tensor input = Tensor::FromFloat("", f8_shape, f8_fp32_values);
-        Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr), /*saturate=*/false);
-        Expect(node, {input}, {output}, std::string("test_cast_no_saturate_FLOAT_to_") + v.name,
-               {opset_v21}, "backend-test", registry);
+        Expect(registry, std::move(node), std::string("test_cast_no_saturate_FLOAT_to_") + v.name,
+               {opset_v21}, [=]() -> IoData {
+                 Tensor input = Tensor::FromFloat("", f8_shape, f8_fp32_values);
+                 Tensor output =
+                     cast_kernel(input, static_cast<int32_t>(to_attr), /*saturate=*/false);
+                 return IoData{{std::move(input)}, {std::move(output)}};
+               });
       }
       // FLOAT16 -> FLOAT8* (no_saturate)
       {
         const int64_t to_attr = static_cast<int64_t>(v.dtype);
         NodeProto node = MakeCastNodeNoSaturate(to_attr);
-        Tensor input = kernel::MakeFloat16Tensor("", f8_shape, f8_fp32_values);
-        Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr), /*saturate=*/false);
-        Expect(node, {input}, {output}, std::string("test_cast_no_saturate_FLOAT16_to_") + v.name,
-               {opset_v21}, "backend-test", registry);
+        Expect(registry, std::move(node), std::string("test_cast_no_saturate_FLOAT16_to_") + v.name,
+               {opset_v21}, [=]() -> IoData {
+                 Tensor input = kernel::MakeFloat16Tensor("", f8_shape, f8_fp32_values);
+                 Tensor output =
+                     cast_kernel(input, static_cast<int32_t>(to_attr), /*saturate=*/false);
+                 return IoData{{std::move(input)}, {std::move(output)}};
+               });
       }
     }
   }
@@ -306,10 +321,12 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
     {
       const int64_t to_attr = static_cast<int64_t>(v.dtype);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor input = Tensor::FromFloat("", int4_shape, int4_fp32_values);
-      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT_to_") + v.name, {opset_v21},
-             "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_FLOAT_to_") + v.name, {opset_v21},
+             [=]() -> IoData {
+               Tensor input = Tensor::FromFloat("", int4_shape, int4_fp32_values);
+               Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
     }
     // sub-byte -> FLOAT — input bytes are the wrapped/packed encoding of
     // the same FP32 vector (matching upstream where the input is the result
@@ -318,38 +335,46 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
     {
       const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor encoded = cast_kernel(Tensor::FromFloat("", int4_shape, int4_fp32_values),
-                                   static_cast<int32_t>(v.dtype));
-      packed_input = Tensor("", static_cast<int32_t>(v.dtype), int4_shape, encoded.data);
-      Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
-      Expect(node, {packed_input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT",
-             {opset_v21}, "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_") + v.name + "_to_FLOAT",
+             {opset_v21}, [=]() -> IoData {
+               Tensor encoded = cast_kernel(Tensor::FromFloat("", int4_shape, int4_fp32_values),
+                                            static_cast<int32_t>(v.dtype));
+               packed_input = Tensor("", static_cast<int32_t>(v.dtype), int4_shape, encoded.data);
+               Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(packed_input)}, {std::move(output)}};
+             });
     }
     // sub-byte -> companion whole-byte integer (INT4->INT8, UINT4->UINT8).
     {
       const int64_t to_attr = static_cast<int64_t>(v.wide_int_dtype);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
-      Expect(node, {packed_input}, {output},
+      Expect(registry, std::move(node),
              std::string("test_cc_cast_") + v.name + "_to_" + v.wide_int_name, {opset_v21},
-             "backend-test", registry);
+             [=]() -> IoData {
+               Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(packed_input)}, {std::move(output)}};
+             });
     }
     // FLOAT16 -> sub-byte
     {
       const int64_t to_attr = static_cast<int64_t>(v.dtype);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor input = kernel::MakeFloat16Tensor("", int4_shape, int4_fp32_values);
-      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT16_to_") + v.name, {opset_v21},
-             "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_FLOAT16_to_") + v.name,
+             {opset_v21}, [=]() -> IoData {
+               Tensor input = kernel::MakeFloat16Tensor("", int4_shape, int4_fp32_values);
+               Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
     }
     // sub-byte -> FLOAT16
     {
       const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT16);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
-      Expect(node, {packed_input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT16",
-             {opset_v21}, "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_") + v.name + "_to_FLOAT16",
+             {opset_v21}, [=]() -> IoData {
+               Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(packed_input)}, {std::move(output)}};
+             });
     }
   }
 
@@ -364,46 +389,56 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
     {
       const int64_t to_attr = static_cast<int64_t>(v.dtype);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor input = Tensor::FromFloat("", int2_shape, int2_fp32_values);
-      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT_to_") + v.name, {opset_v25},
-             "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_FLOAT_to_") + v.name, {opset_v25},
+             [=]() -> IoData {
+               Tensor input = Tensor::FromFloat("", int2_shape, int2_fp32_values);
+               Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
     }
     Tensor packed_input;
     {
       const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor encoded = cast_kernel(Tensor::FromFloat("", int2_shape, int2_fp32_values),
-                                   static_cast<int32_t>(v.dtype));
-      packed_input = Tensor("", static_cast<int32_t>(v.dtype), int2_shape, encoded.data);
-      Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
-      Expect(node, {packed_input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT",
-             {opset_v25}, "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_") + v.name + "_to_FLOAT",
+             {opset_v25}, [=]() -> IoData {
+               Tensor encoded = cast_kernel(Tensor::FromFloat("", int2_shape, int2_fp32_values),
+                                            static_cast<int32_t>(v.dtype));
+               packed_input = Tensor("", static_cast<int32_t>(v.dtype), int2_shape, encoded.data);
+               Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(packed_input)}, {std::move(output)}};
+             });
     }
     {
       const int64_t to_attr = static_cast<int64_t>(v.wide_int_dtype);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
-      Expect(node, {packed_input}, {output},
+      Expect(registry, std::move(node),
              std::string("test_cc_cast_") + v.name + "_to_" + v.wide_int_name, {opset_v25},
-             "backend-test", registry);
+             [=]() -> IoData {
+               Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(packed_input)}, {std::move(output)}};
+             });
     }
     // FLOAT16 -> INT2 / UINT2
     {
       const int64_t to_attr = static_cast<int64_t>(v.dtype);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor input = kernel::MakeFloat16Tensor("", int2_shape, int2_fp32_values);
-      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT16_to_") + v.name, {opset_v25},
-             "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_FLOAT16_to_") + v.name,
+             {opset_v25}, [=]() -> IoData {
+               Tensor input = kernel::MakeFloat16Tensor("", int2_shape, int2_fp32_values);
+               Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
     }
     // INT2 / UINT2 -> FLOAT16
     {
       const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT16);
       NodeProto node = MakeCastNode(to_attr);
-      Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
-      Expect(node, {packed_input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT16",
-             {opset_v25}, "backend-test", registry);
+      Expect(registry, std::move(node), std::string("test_cc_cast_") + v.name + "_to_FLOAT16",
+             {opset_v25}, [=]() -> IoData {
+               Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(packed_input)}, {std::move(output)}};
+             });
     }
   }
 
@@ -440,10 +475,12 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
     // FLOAT -> FLOAT4E2M1
     const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT4E2M1);
     NodeProto node = MakeCastNode(to_attr);
-    Tensor input = Tensor::FromFloat("", f4_shape, f4_fp32_values);
-    Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-    Expect(node, {input}, {output}, "test_cc_cast_FLOAT_to_FLOAT4E2M1", {opset_v23}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_cast_FLOAT_to_FLOAT4E2M1", {opset_v23},
+           [=]() -> IoData {
+             Tensor input = Tensor::FromFloat("", f4_shape, f4_fp32_values);
+             Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+             return IoData{{std::move(input)}, {std::move(output)}};
+           });
   }
   Tensor f4_packed_input;
   {
@@ -451,30 +488,36 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
     // encoding of the same FP32 vector.
     const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT);
     NodeProto node = MakeCastNode(to_attr);
-    Tensor encoded = cast_kernel(Tensor::FromFloat("", f4_shape, f4_fp32_values),
-                                 static_cast<int32_t>(DataType::FLOAT4E2M1));
-    f4_packed_input =
-        Tensor("", static_cast<int32_t>(DataType::FLOAT4E2M1), f4_shape, encoded.data);
-    Tensor output = cast_kernel(f4_packed_input, static_cast<int32_t>(to_attr));
-    Expect(node, {f4_packed_input}, {output}, "test_cc_cast_FLOAT4E2M1_to_FLOAT", {opset_v23},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_cast_FLOAT4E2M1_to_FLOAT", {opset_v23},
+           [=]() -> IoData {
+             Tensor encoded = cast_kernel(Tensor::FromFloat("", f4_shape, f4_fp32_values),
+                                          static_cast<int32_t>(DataType::FLOAT4E2M1));
+             f4_packed_input =
+                 Tensor("", static_cast<int32_t>(DataType::FLOAT4E2M1), f4_shape, encoded.data);
+             Tensor output = cast_kernel(f4_packed_input, static_cast<int32_t>(to_attr));
+             return IoData{{std::move(f4_packed_input)}, {std::move(output)}};
+           });
   }
   {
     // FLOAT16 -> FLOAT4E2M1
     const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT4E2M1);
     NodeProto node = MakeCastNode(to_attr);
-    Tensor input = kernel::MakeFloat16Tensor("", f4_shape, f4_fp32_values);
-    Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-    Expect(node, {input}, {output}, "test_cc_cast_FLOAT16_to_FLOAT4E2M1", {opset_v23},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_cast_FLOAT16_to_FLOAT4E2M1", {opset_v23},
+           [=]() -> IoData {
+             Tensor input = kernel::MakeFloat16Tensor("", f4_shape, f4_fp32_values);
+             Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+             return IoData{{std::move(input)}, {std::move(output)}};
+           });
   }
   {
     // FLOAT4E2M1 -> FLOAT16
     const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT16);
     NodeProto node = MakeCastNode(to_attr);
-    Tensor output = cast_kernel(f4_packed_input, static_cast<int32_t>(to_attr));
-    Expect(node, {f4_packed_input}, {output}, "test_cc_cast_FLOAT4E2M1_to_FLOAT16", {opset_v23},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_cast_FLOAT4E2M1_to_FLOAT16", {opset_v23},
+           [=]() -> IoData {
+             Tensor output = cast_kernel(f4_packed_input, static_cast<int32_t>(to_attr));
+             return IoData{{std::move(f4_packed_input)}, {std::move(output)}};
+           });
   }
 
   // ---------------------------------------------------------------------
@@ -494,10 +537,12 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
     // FLOAT -> FLOAT8E8M0
     const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT8E8M0);
     NodeProto node = MakeCastNode(to_attr);
-    Tensor input = Tensor::FromFloat("", e8m0_shape, e8m0_fp32_values);
-    Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-    Expect(node, {input}, {output}, "test_cc_cast_e8m0_FLOAT_to_FLOAT8E8M0", {opset_v21},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_cast_e8m0_FLOAT_to_FLOAT8E8M0", {opset_v21},
+           [=]() -> IoData {
+             Tensor input = Tensor::FromFloat("", e8m0_shape, e8m0_fp32_values);
+             Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+             return IoData{{std::move(input)}, {std::move(output)}};
+           });
   }
   Tensor e8m0_packed_input;
   {
@@ -505,30 +550,36 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
     // the same FP32 vector.
     const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT);
     NodeProto node = MakeCastNode(to_attr);
-    Tensor encoded = cast_kernel(Tensor::FromFloat("", e8m0_shape, e8m0_fp32_values),
-                                 static_cast<int32_t>(DataType::FLOAT8E8M0));
-    e8m0_packed_input =
-        Tensor("", static_cast<int32_t>(DataType::FLOAT8E8M0), e8m0_shape, encoded.data);
-    Tensor output = cast_kernel(e8m0_packed_input, static_cast<int32_t>(to_attr));
-    Expect(node, {e8m0_packed_input}, {output}, "test_cc_cast_e8m0_FLOAT8E8M0_to_FLOAT",
-           {opset_v21}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_cast_e8m0_FLOAT8E8M0_to_FLOAT", {opset_v21},
+           [=]() -> IoData {
+             Tensor encoded = cast_kernel(Tensor::FromFloat("", e8m0_shape, e8m0_fp32_values),
+                                          static_cast<int32_t>(DataType::FLOAT8E8M0));
+             e8m0_packed_input =
+                 Tensor("", static_cast<int32_t>(DataType::FLOAT8E8M0), e8m0_shape, encoded.data);
+             Tensor output = cast_kernel(e8m0_packed_input, static_cast<int32_t>(to_attr));
+             return IoData{{std::move(e8m0_packed_input)}, {std::move(output)}};
+           });
   }
   {
     // FLOAT16 -> FLOAT8E8M0
     const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT8E8M0);
     NodeProto node = MakeCastNode(to_attr);
-    Tensor input = kernel::MakeFloat16Tensor("", e8m0_shape, e8m0_fp32_values);
-    Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-    Expect(node, {input}, {output}, "test_cc_cast_e8m0_FLOAT16_to_FLOAT8E8M0", {opset_v21},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_cast_e8m0_FLOAT16_to_FLOAT8E8M0", {opset_v21},
+           [=]() -> IoData {
+             Tensor input = kernel::MakeFloat16Tensor("", e8m0_shape, e8m0_fp32_values);
+             Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+             return IoData{{std::move(input)}, {std::move(output)}};
+           });
   }
   {
     // FLOAT8E8M0 -> FLOAT16
     const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT16);
     NodeProto node = MakeCastNode(to_attr);
-    Tensor output = cast_kernel(e8m0_packed_input, static_cast<int32_t>(to_attr));
-    Expect(node, {e8m0_packed_input}, {output}, "test_cc_cast_e8m0_FLOAT8E8M0_to_FLOAT16",
-           {opset_v21}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_cast_e8m0_FLOAT8E8M0_to_FLOAT16", {opset_v21},
+           [=]() -> IoData {
+             Tensor output = cast_kernel(e8m0_packed_input, static_cast<int32_t>(to_attr));
+             return IoData{{std::move(e8m0_packed_input)}, {std::move(output)}};
+           });
   }
 }
 

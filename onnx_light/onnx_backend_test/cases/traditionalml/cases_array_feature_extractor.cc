@@ -42,13 +42,15 @@ void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry, TestMod
   node.add_input("y");
   node.add_output("z");
 
-  Tensor x = Tensor::FromFloat(
-      "", {3, 4}, {0.0f, 1.0f, 2.0f, 3.0f, 10.0f, 11.0f, 12.0f, 13.0f, 20.0f, 21.0f, 22.0f, 23.0f});
-  Tensor y = Tensor::FromInt64("", {3}, {0, 2, 3});
-  Tensor z = afe.operator()<float>(x, y);
-
-  Expect(node, {x, y}, {z}, "test_ai_onnx_ml_array_feature_extractor", {default_opset, opset},
-         "backend-test", registry);
+  Expect(registry, std::move(node), "test_ai_onnx_ml_array_feature_extractor",
+         {default_opset, opset}, [=]() -> IoData {
+           Tensor x = Tensor::FromFloat(
+               "", {3, 4},
+               {0.0f, 1.0f, 2.0f, 3.0f, 10.0f, 11.0f, 12.0f, 13.0f, 20.0f, 21.0f, 22.0f, 23.0f});
+           Tensor y = Tensor::FromInt64("", {3}, {0, 2, 3});
+           Tensor z = afe.operator()<float>(x, y);
+           return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+         });
 }
 
 } // namespace onnx_backend_test

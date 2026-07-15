@@ -46,10 +46,11 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Log");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.5f, 1.0f, 2.0f, 4.0f, 10.0f});
-    Tensor y = log_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_log", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_log", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.5f, 1.0f, 2.0f, 4.0f, 10.0f});
+      Tensor y = log_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // From Log.export(): ``test_log_example`` uses positive inputs.
@@ -58,10 +59,11 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Log");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {2}, {1.0f, 10.0f});
-    Tensor y = log_kernel(x);
-    Expect(node, {x}, {y}, "test_log_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_log_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2}, {1.0f, 10.0f});
+      Tensor y = log_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // From Log.export(): ``test_log`` uses random positive inputs.
@@ -70,10 +72,11 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Log");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = PositiveRandFloat({3, 4, 5}, /*seed=*/1);
-    Tensor y = log_kernel(x);
-    Expect(node, {x}, {y}, "test_log", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_log", {opset}, [=]() -> IoData {
+      Tensor x = PositiveRandFloat({3, 4, 5}, /*seed=*/1);
+      Tensor y = log_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // FLOAT16
   {
@@ -81,10 +84,11 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Log");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f});
-    Tensor y = log_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_log_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_log_float16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f});
+      Tensor y = log_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // BFLOAT16
@@ -93,15 +97,16 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Log");
     node.add_input("x");
     node.add_output("y");
-
-    std::vector<float> vals = {0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f};
-    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
-    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
-    for (size_t i = 0; i < vals.size(); ++i)
-      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
-    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-    Tensor y = log_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_log_bfloat16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_log_bfloat16", {opset}, [=]() -> IoData {
+      std::vector<float> vals = {0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f};
+      std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+      auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+      for (size_t i = 0; i < vals.size(); ++i)
+        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+      Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
+      Tensor y = log_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

@@ -35,11 +35,12 @@ void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Floor");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_floor", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-1.5f, -0.5f, 0.0f, 0.5f, 1.2f, 2.0f});
+      Tensor y = floor_kernel(x);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-1.5f, -0.5f, 0.0f, 0.5f, 1.2f, 2.0f});
-    Tensor y = floor_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_floor", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Floor`` operator (mirror the
@@ -51,10 +52,11 @@ void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Floor");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {3}, {-1.5f, 1.2f, 2.0f});
-    Tensor y = floor_kernel(x);
-    Expect(node, {x}, {y}, "test_floor_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_floor_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {-1.5f, 1.2f, 2.0f});
+      Tensor y = floor_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // From Floor.export(): ``test_floor`` uses x = np.random.randn(3, 4, 5).
   {
@@ -62,11 +64,12 @@ void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Floor");
     node.add_input("x");
     node.add_output("y");
-
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/1));
-    Tensor y = floor_kernel(x);
-    Expect(node, {x}, {y}, "test_floor", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_floor", {opset}, [=]() -> IoData {
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/1));
+      Tensor y = floor_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // FLOAT16
   {
@@ -74,10 +77,11 @@ void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Floor");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-1.5f, -0.5f, 0.0f, 0.5f, 1.5f, 2.7f});
-    Tensor y = floor_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_floor_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_floor_float16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-1.5f, -0.5f, 0.0f, 0.5f, 1.5f, 2.7f});
+      Tensor y = floor_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // BFLOAT16
@@ -86,15 +90,16 @@ void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Floor");
     node.add_input("x");
     node.add_output("y");
-
-    std::vector<float> vals = {-1.5f, -0.5f, 0.0f, 0.5f, 1.5f, 2.7f};
-    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
-    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
-    for (size_t i = 0; i < vals.size(); ++i)
-      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
-    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-    Tensor y = floor_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_floor_bfloat16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_floor_bfloat16", {opset}, [=]() -> IoData {
+      std::vector<float> vals = {-1.5f, -0.5f, 0.0f, 0.5f, 1.5f, 2.7f};
+      std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+      auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+      for (size_t i = 0; i < vals.size(); ++i)
+        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+      Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
+      Tensor y = floor_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

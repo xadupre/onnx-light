@@ -52,13 +52,14 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_1");
     node.add_input("data_2");
     node.add_output("result");
+    Expect(registry, std::move(node), "test_mean_example", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 0.0f, 2.0f});
+      Tensor x1 = Tensor::FromFloat("", {3}, {1.0f, 3.0f, 4.0f});
+      Tensor x2 = Tensor::FromFloat("", {3}, {2.0f, 6.0f, 6.0f});
+      Tensor z = mean_kernel({x0, x1, x2});
 
-    Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 0.0f, 2.0f});
-    Tensor x1 = Tensor::FromFloat("", {3}, {1.0f, 3.0f, 4.0f});
-    Tensor x2 = Tensor::FromFloat("", {3}, {2.0f, 6.0f, 6.0f});
-    Tensor z = mean_kernel({x0, x1, x2});
-
-    Expect(node, {x0, x1, x2}, {z}, "test_mean_example", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0), std::move(x1), std::move(x2)}, {std::move(z)}};
+    });
   }
 
   // Upstream ``test_mean_one_input``: single input acts as Identity.
@@ -67,11 +68,12 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Mean");
     node.add_input("data_0");
     node.add_output("result");
+    Expect(registry, std::move(node), "test_mean_one_input", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 0.0f, 2.0f});
+      Tensor z = mean_kernel({x0});
 
-    Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 0.0f, 2.0f});
-    Tensor z = mean_kernel({x0});
-
-    Expect(node, {x0}, {z}, "test_mean_one_input", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0)}, {std::move(z)}};
+    });
   }
 
   // Upstream ``test_mean_two_inputs``: two equal-shape inputs.
@@ -81,12 +83,13 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_0");
     node.add_input("data_1");
     node.add_output("result");
+    Expect(registry, std::move(node), "test_mean_two_inputs", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 0.0f, 2.0f});
+      Tensor x1 = Tensor::FromFloat("", {3}, {1.0f, 3.0f, 4.0f});
+      Tensor z = mean_kernel({x0, x1});
 
-    Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 0.0f, 2.0f});
-    Tensor x1 = Tensor::FromFloat("", {3}, {1.0f, 3.0f, 4.0f});
-    Tensor z = mean_kernel({x0, x1});
-
-    Expect(node, {x0, x1}, {z}, "test_mean_two_inputs", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+    });
   }
 
   // Broadcasting variant: scalar broadcast against rank-2 input.
@@ -96,12 +99,13 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_0");
     node.add_input("data_1");
     node.add_output("result");
+    Expect(registry, std::move(node), "test_cc_mean_bcast", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor x1 = Tensor::FromFloat("", {}, {10.0f});
+      Tensor z = mean_kernel({x0, x1});
 
-    Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor x1 = Tensor::FromFloat("", {}, {10.0f});
-    Tensor z = mean_kernel({x0, x1});
-
-    Expect(node, {x0, x1}, {z}, "test_cc_mean_bcast", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+    });
   }
 }
 

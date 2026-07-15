@@ -48,30 +48,37 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_transpose_default_perm
   {
-    const Tensor data = Tensor::FromFloat("", {2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-    const Tensor transposed = transpose_kernel(data, /*perm=*/{});
-    Expect(MakeTransposeNode(), {data}, {transposed}, "test_cc_transpose_default_perm", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeTransposeNode(), "test_cc_transpose_default_perm", {opset},
+           [=]() -> IoData {
+             const Tensor data = Tensor::FromFloat("", {2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+             const Tensor transposed = transpose_kernel(data, /*perm=*/{});
+             return IoData{{std::move(data)}, {std::move(transposed)}};
+           });
   }
 
   // test_cc_transpose_permuted_axes
   {
-    const Tensor data = Tensor::FromFloat(
-        "", {2, 3, 4}, {0.f,  1.f,  2.f,  3.f,  4.f,  5.f,  6.f,  7.f,  8.f,  9.f,  10.f, 11.f,
-                        12.f, 13.f, 14.f, 15.f, 16.f, 17.f, 18.f, 19.f, 20.f, 21.f, 22.f, 23.f});
-    const std::vector<int64_t> perm{1, 0, 2};
-    const Tensor transposed = transpose_kernel(data, perm);
-    Expect(MakeTransposeNode(perm), {data}, {transposed}, "test_cc_transpose_permuted_axes",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeTransposeNode(perm), "test_cc_transpose_permuted_axes", {opset},
+           [=]() -> IoData {
+             const Tensor data =
+                 Tensor::FromFloat("", {2, 3, 4}, {0.f,  1.f,  2.f,  3.f,  4.f,  5.f,  6.f,  7.f,
+                                                   8.f,  9.f,  10.f, 11.f, 12.f, 13.f, 14.f, 15.f,
+                                                   16.f, 17.f, 18.f, 19.f, 20.f, 21.f, 22.f, 23.f});
+             const std::vector<int64_t> perm{1, 0, 2};
+             const Tensor transposed = transpose_kernel(data, perm);
+             return IoData{{std::move(data)}, {std::move(transposed)}};
+           });
   }
 
   // test_cc_transpose_permuted_axes_2
   {
-    const Tensor data = Tensor::FromFloat("", {1, 2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-    const std::vector<int64_t> perm{1, 2, 0};
-    const Tensor transposed = transpose_kernel(data, perm);
-    Expect(MakeTransposeNode(perm), {data}, {transposed}, "test_cc_transpose_permuted_axes_2",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeTransposeNode(perm), "test_cc_transpose_permuted_axes_2", {opset},
+           [=]() -> IoData {
+             const Tensor data = Tensor::FromFloat("", {1, 2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+             const std::vector<int64_t> perm{1, 2, 0};
+             const Tensor transposed = transpose_kernel(data, perm);
+             return IoData{{std::move(data)}, {std::move(transposed)}};
+           });
   }
 
   // Mirror upstream ``Transpose.export_all_permutations``: iterate over every
@@ -81,16 +88,18 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   // backend-test name comparison treats them as covered.
   {
     const std::vector<int64_t> shape{2, 3, 4};
-    const Tensor data = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/41));
     const std::vector<std::vector<int64_t>> all_perms = {
         {0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0},
     };
     for (size_t i = 0; i < all_perms.size(); ++i) {
-      const std::vector<int64_t> &perm = all_perms[i];
-      const Tensor transposed = transpose_kernel(data, perm);
+      const std::vector<int64_t> perm = all_perms[i];
       const std::string name = "test_cc_transpose_all_permutations_" + std::to_string(i);
-      Expect(MakeTransposeNode(perm), {data}, {transposed}, name, {opset}, "backend-test",
-             registry);
+      Expect(registry, MakeTransposeNode(perm), name, {opset},
+             [transpose_kernel, shape, perm]() -> IoData {
+               Tensor data = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/41));
+               Tensor transposed = transpose_kernel(data, perm);
+               return IoData{{std::move(data)}, {std::move(transposed)}};
+             });
     }
   }
 }

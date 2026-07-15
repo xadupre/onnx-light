@@ -44,18 +44,20 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &case_name,
                   const std::vector<int64_t> &expected, int64_t center_point_box = 0) {
   const OpsetId opset = DefaultOpset(11);
   NodeProto node = MakeNmsNode(center_point_box);
+  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+    Tensor boxes = Tensor::FromFloat("", boxes_shape, boxes_values);
+    Tensor scores = Tensor::FromFloat("", scores_shape, scores_values);
+    Tensor max_out = Tensor::FromInt64("", {1}, {max_output_boxes_per_class});
+    Tensor iou_thr = Tensor::FromFloat("", {1}, {iou_threshold});
+    Tensor score_thr = Tensor::FromFloat("", {1}, {score_threshold});
 
-  Tensor boxes = Tensor::FromFloat("", boxes_shape, boxes_values);
-  Tensor scores = Tensor::FromFloat("", scores_shape, scores_values);
-  Tensor max_out = Tensor::FromInt64("", {1}, {max_output_boxes_per_class});
-  Tensor iou_thr = Tensor::FromFloat("", {1}, {iou_threshold});
-  Tensor score_thr = Tensor::FromFloat("", {1}, {score_threshold});
+    const int64_t num_selected = static_cast<int64_t>(expected.size()) / 3;
+    Tensor selected = Tensor::FromInt64("", {num_selected, 3}, expected);
 
-  const int64_t num_selected = static_cast<int64_t>(expected.size()) / 3;
-  Tensor selected = Tensor::FromInt64("", {num_selected, 3}, expected);
-
-  Expect(node, {boxes, scores, max_out, iou_thr, score_thr}, {selected}, case_name, {opset},
-         "backend-test", registry);
+    return IoData{{std::move(boxes), std::move(scores), std::move(max_out), std::move(iou_thr),
+                   std::move(score_thr)},
+                  {std::move(selected)}};
+  });
 }
 
 } // namespace

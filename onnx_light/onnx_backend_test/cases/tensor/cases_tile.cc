@@ -71,11 +71,12 @@ void RegisterTileCases(std::vector<TestCase> &registry, TestMode mode) {
   //            [0, 1, 0, 1],
   //            [2, 3, 2, 3]]    (shape [4, 4])
   {
-    const Tensor input = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
-    const Tensor repeats = MakeRepeatsTensor({2, 2});
-    const Tensor output = tile_kernel(input, repeats);
-    Expect(MakeTileNode(), {input, repeats}, {output}, "test_cc_tile_precomputed", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeTileNode(), "test_cc_tile_precomputed", {opset}, [=]() -> IoData {
+      const Tensor input = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
+      const Tensor repeats = MakeRepeatsTensor({2, 2});
+      const Tensor output = tile_kernel(input, repeats);
+      return IoData{{std::move(input), std::move(repeats)}, {std::move(output)}};
+    });
   }
 
   // test_cc_tile_1d — repeat a 1-D tensor along its only axis.
@@ -84,11 +85,12 @@ void RegisterTileCases(std::vector<TestCase> &registry, TestMode mode) {
   // repeats: [3]
   // output:  [1, 2, 3, 1, 2, 3, 1, 2, 3]
   {
-    const Tensor input = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
-    const Tensor repeats = MakeRepeatsTensor({3});
-    const Tensor output = tile_kernel(input, repeats);
-    Expect(MakeTileNode(), {input, repeats}, {output}, "test_cc_tile_1d", {opset}, "backend-test",
-           registry);
+    Expect(registry, MakeTileNode(), "test_cc_tile_1d", {opset}, [=]() -> IoData {
+      const Tensor input = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+      const Tensor repeats = MakeRepeatsTensor({3});
+      const Tensor output = tile_kernel(input, repeats);
+      return IoData{{std::move(input), std::move(repeats)}, {std::move(output)}};
+    });
   }
 
   // test_cc_tile_repeats_one — repeating with all-ones leaves the tensor
@@ -98,11 +100,12 @@ void RegisterTileCases(std::vector<TestCase> &registry, TestMode mode) {
   // repeats: [1, 1]
   // output:  same as input
   {
-    const Tensor input = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    const Tensor repeats = MakeRepeatsTensor({1, 1});
-    const Tensor output = tile_kernel(input, repeats);
-    Expect(MakeTileNode(), {input, repeats}, {output}, "test_cc_tile_repeats_one", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeTileNode(), "test_cc_tile_repeats_one", {opset}, [=]() -> IoData {
+      const Tensor input = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+      const Tensor repeats = MakeRepeatsTensor({1, 1});
+      const Tensor output = tile_kernel(input, repeats);
+      return IoData{{std::move(input), std::move(repeats)}, {std::move(output)}};
+    });
   }
 }
 

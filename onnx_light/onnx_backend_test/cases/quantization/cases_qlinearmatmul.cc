@@ -146,15 +146,23 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
     y_2d.name = "y";
     {
       NodeProto node = MakeQLinearMatMulNode();
-      Expect(node, {a_2d, a_scale_f, a_zp, b_2d, b_scale_f, b_zp_2d, y_scale_f, y_zp}, {y_2d},
-             "test_cc_qlinearmatmul_2D_" + dtype_suffix + "_float32", {opset}, "backend-test",
-             registry);
+      Expect(registry, std::move(node), "test_cc_qlinearmatmul_2D_" + dtype_suffix + "_float32",
+             {opset}, [=]() -> IoData {
+               return IoData{{std::move(a_2d), std::move(a_scale_f), std::move(a_zp),
+                              std::move(b_2d), std::move(b_scale_f), std::move(b_zp_2d),
+                              std::move(y_scale_f), std::move(y_zp)},
+                             {std::move(y_2d)}};
+             });
     }
     {
       NodeProto node = MakeQLinearMatMulNode();
-      Expect(node, {a_2d, a_scale_h, a_zp, b_2d, b_scale_h, b_zp_2d, y_scale_h, y_zp}, {y_2d},
-             "test_cc_qlinearmatmul_2D_" + dtype_suffix + "_float16", {opset}, "backend-test",
-             registry);
+      Expect(registry, std::move(node), "test_cc_qlinearmatmul_2D_" + dtype_suffix + "_float16",
+             {opset}, [=]() -> IoData {
+               return IoData{{std::move(a_2d), std::move(a_scale_h), std::move(a_zp),
+                              std::move(b_2d), std::move(b_scale_h), std::move(b_zp_2d),
+                              std::move(y_scale_h), std::move(y_zp)},
+                             {std::move(y_2d)}};
+             });
     }
 
     // 3-D case. Upstream sets ``b_zero_point = 114`` for both UINT8 and INT8
@@ -176,9 +184,13 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
     y_3d_f32.name = "y";
     {
       NodeProto node = MakeQLinearMatMulNode();
-      Expect(node, {a_3d, a_scale_f, a_zp, b_3d, b_scale_f, b_zp_3d, y_scale_f, y_zp}, {y_3d_f32},
-             "test_cc_qlinearmatmul_3D_" + dtype_suffix + "_float32", {opset}, "backend-test",
-             registry);
+      Expect(registry, std::move(node), "test_cc_qlinearmatmul_3D_" + dtype_suffix + "_float32",
+             {opset}, [=]() -> IoData {
+               return IoData{{std::move(a_3d), std::move(a_scale_f), std::move(a_zp),
+                              std::move(b_3d), std::move(b_scale_f), std::move(b_zp_3d),
+                              std::move(y_scale_f), std::move(y_zp)},
+                             {std::move(y_3d_f32)}};
+             });
     }
 
     // FLOAT16 3-D variant: the FLOAT16 scales round-trip to the same combined
@@ -188,9 +200,13 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
     // output is ``[[-86, -128, -128], [115, 39, -121]]`` per batch).
     {
       NodeProto node = MakeQLinearMatMulNode();
-      Expect(node, {a_3d, a_scale_h, a_zp, b_3d, b_scale_h, b_zp_3d, y_scale_h, y_zp}, {y_3d_f32},
-             "test_cc_qlinearmatmul_3D_" + dtype_suffix + "_float16", {opset}, "backend-test",
-             registry);
+      Expect(registry, std::move(node), "test_cc_qlinearmatmul_3D_" + dtype_suffix + "_float16",
+             {opset}, [=]() -> IoData {
+               return IoData{{std::move(a_3d), std::move(a_scale_h), std::move(a_zp),
+                              std::move(b_3d), std::move(b_scale_h), std::move(b_zp_3d),
+                              std::move(y_scale_h), std::move(y_zp)},
+                             {std::move(y_3d_f32)}};
+             });
     }
   };
 
@@ -226,8 +242,12 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor y_t = MakeQuantTensor("y", dtype, {1, 1}, {expected_byte});
 
     NodeProto node = MakeQLinearMatMulNode();
-    Expect(node, {a_t, a_scale_t, a_zp_t, b_t, b_scale_t, b_zp_t, y_scale_t, y_zp_t}, {y_t}, name,
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
+      return IoData{{std::move(a_t), std::move(a_scale_t), std::move(a_zp_t), std::move(b_t),
+                     std::move(b_scale_t), std::move(b_zp_t), std::move(y_scale_t),
+                     std::move(y_zp_t)},
+                    {std::move(y_t)}};
+    });
   };
 
   // uint8 overflow: 100 * 100 / 0.2 = 50000 → clipped to 255.

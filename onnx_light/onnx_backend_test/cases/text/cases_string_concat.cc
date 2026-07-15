@@ -55,12 +55,13 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
+    Expect(registry, std::move(node), "test_cc_string_concat", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromStrings("", {3}, {"abc", "", "hello "});
+      Tensor y = Tensor::FromStrings("", {3}, {"def", "xyz", "world"});
+      Tensor z = string_concat(x, y);
 
-    Tensor x = Tensor::FromStrings("", {3}, {"abc", "", "hello "});
-    Tensor y = Tensor::FromStrings("", {3}, {"def", "xyz", "world"});
-    Tensor z = string_concat(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_string_concat", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 
   // Scalar broadcast variant: z[i] = x[i] + y (scalar).
@@ -70,12 +71,13 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
+    Expect(registry, std::move(node), "test_cc_string_concat_bcast", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromStrings("", {2, 2}, {"a", "b", "c", "d"});
+      Tensor y = Tensor::FromStrings("", {}, {"!"});
+      Tensor z = string_concat(x, y);
 
-    Tensor x = Tensor::FromStrings("", {2, 2}, {"a", "b", "c", "d"});
-    Tensor y = Tensor::FromStrings("", {}, {"!"});
-    Tensor z = string_concat(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_string_concat_bcast", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 
   // Zero-dimensional (scalar) variant: both inputs are 0-D string tensors.
@@ -86,13 +88,14 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
+    Expect(registry, std::move(node), "test_cc_string_concat_zero_dimensional", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {}, {"cat"});
+             Tensor y = Tensor::FromStrings("", {}, {"s"});
+             Tensor z = string_concat(x, y);
 
-    Tensor x = Tensor::FromStrings("", {}, {"cat"});
-    Tensor y = Tensor::FromStrings("", {}, {"s"});
-    Tensor z = string_concat(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_string_concat_zero_dimensional", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
   }
 
   // UTF-8 variant: element-wise concatenation of multi-byte UTF-8 strings.
@@ -103,12 +106,13 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
+    Expect(registry, std::move(node), "test_cc_string_concat_utf8", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromStrings("", {2}, {"\xe7\x9a\x84", "\xe4\xb8\xad"});
+      Tensor y = Tensor::FromStrings("", {2}, {"\xe7\x9a\x84", "\xe4\xb8\xad"});
+      Tensor z = string_concat(x, y);
 
-    Tensor x = Tensor::FromStrings("", {2}, {"\xe7\x9a\x84", "\xe4\xb8\xad"});
-    Tensor y = Tensor::FromStrings("", {2}, {"\xe7\x9a\x84", "\xe4\xb8\xad"});
-    Tensor z = string_concat(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_string_concat_utf8", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 
   // Broadcasting variant: mirrors upstream onnx
@@ -120,13 +124,14 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
+    Expect(registry, std::move(node), "test_cc_string_concat_broadcasting", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {3}, {"cat", "dog", "snake"});
+             Tensor y = Tensor::FromStrings("", {1}, {"s"});
+             Tensor z = string_concat(x, y);
 
-    Tensor x = Tensor::FromStrings("", {3}, {"cat", "dog", "snake"});
-    Tensor y = Tensor::FromStrings("", {1}, {"s"});
-    Tensor z = string_concat(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_string_concat_broadcasting", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
   }
 
   // Empty-string variant: mirrors upstream onnx
@@ -138,13 +143,14 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
+    Expect(registry, std::move(node), "test_cc_string_concat_empty_string", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {2}, {"abc", ""});
+             Tensor y = Tensor::FromStrings("", {2}, {"", "abc"});
+             Tensor z = string_concat(x, y);
 
-    Tensor x = Tensor::FromStrings("", {2}, {"abc", ""});
-    Tensor y = Tensor::FromStrings("", {2}, {"", "abc"});
-    Tensor z = string_concat(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_string_concat_empty_string", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
   }
 
   // Chained variant with 3 inputs and 1 output: w = (x + y) + z, built as

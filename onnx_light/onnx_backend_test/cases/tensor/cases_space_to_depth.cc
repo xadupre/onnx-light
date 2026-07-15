@@ -54,31 +54,34 @@ void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
   // blocksize=2. Input values are simply [0, 1, ..., 15] so the output
   // ordering can be inspected by hand.
   {
-    std::vector<float> values(16);
-    for (int i = 0; i < 16; ++i) {
-      values[static_cast<std::size_t>(i)] = static_cast<float>(i);
-    }
-    const Tensor input = Tensor::FromFloat("", {1, 2, 2, 4}, values);
-    kernel::SpaceToDepth::Attributes attrs;
-    attrs.blocksize = 2;
-    const Tensor output = s2d(input, attrs);
-    Expect(MakeSpaceToDepthNode(2), {input}, {output}, "test_cc_spacetodepth_example", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeSpaceToDepthNode(2), "test_cc_spacetodepth_example", {opset},
+           [=]() -> IoData {
+             std::vector<float> values(16);
+             for (int i = 0; i < 16; ++i) {
+               values[static_cast<std::size_t>(i)] = static_cast<float>(i);
+             }
+             const Tensor input = Tensor::FromFloat("", {1, 2, 2, 4}, values);
+             kernel::SpaceToDepth::Attributes attrs;
+             attrs.blocksize = 2;
+             const Tensor output = s2d(input, attrs);
+             return IoData{{std::move(input)}, {std::move(output)}};
+           });
   }
 
   // test_cc_spacetodepth — larger N=2, C=3, H=4, W=6 input with blocksize=2.
   {
-    const int64_t total = 2 * 3 * 4 * 6;
-    std::vector<float> values(static_cast<std::size_t>(total));
-    for (int64_t i = 0; i < total; ++i) {
-      values[static_cast<std::size_t>(i)] = static_cast<float>(i);
-    }
-    const Tensor input = Tensor::FromFloat("", {2, 3, 4, 6}, values);
-    kernel::SpaceToDepth::Attributes attrs;
-    attrs.blocksize = 2;
-    const Tensor output = s2d(input, attrs);
-    Expect(MakeSpaceToDepthNode(2), {input}, {output}, "test_cc_spacetodepth", {opset},
-           "backend-test", registry);
+    Expect(registry, MakeSpaceToDepthNode(2), "test_cc_spacetodepth", {opset}, [=]() -> IoData {
+      const int64_t total = 2 * 3 * 4 * 6;
+      std::vector<float> values(static_cast<std::size_t>(total));
+      for (int64_t i = 0; i < total; ++i) {
+        values[static_cast<std::size_t>(i)] = static_cast<float>(i);
+      }
+      const Tensor input = Tensor::FromFloat("", {2, 3, 4, 6}, values);
+      kernel::SpaceToDepth::Attributes attrs;
+      attrs.blocksize = 2;
+      const Tensor output = s2d(input, attrs);
+      return IoData{{std::move(input)}, {std::move(output)}};
+    });
   }
 }
 

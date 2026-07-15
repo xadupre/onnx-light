@@ -68,26 +68,20 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
-    AddStringAttr(node, "cast_to", "TO_FLOAT");
-    AddStringAttr(node, "map_form", "DENSE");
+    Expect(registry, std::move(node), "test_cc_cast_map_int64_float_dense", {default_opset, opset},
+           [=]() -> IoData {
+             AddStringAttr(node, "cast_to", "TO_FLOAT");
+             AddStringAttr(node, "map_form", "DENSE");
 
-    const std::vector<int64_t> keys{2, 0, 1};
-    const std::vector<float> values{2.5f, 0.5f, 1.5f};
-    // Placeholder tensor for the formal input; the ValueInfo is promoted to
-    // map(int64, float) by PromoteInputToMapType so the ONNX checker passes.
-    Tensor x = Tensor::FromInt64("", {1}, {0});
-    Tensor y = cast_map.operator()<float, float>(keys, values, "TO_FLOAT", "DENSE", 0);
+             const std::vector<int64_t> keys{2, 0, 1};
+             const std::vector<float> values{2.5f, 0.5f, 1.5f};
+             // Placeholder tensor for the formal input; the ValueInfo is promoted to
+             // map(int64, float) by PromoteInputToMapType so the ONNX checker passes.
+             Tensor x = Tensor::FromInt64("", {1}, {0});
+             Tensor y = cast_map.operator()<float, float>(keys, values, "TO_FLOAT", "DENSE", 0);
 
-    Expect(node, {x}, {y}, "test_cc_cast_map_int64_float_dense", {default_opset, opset},
-           "backend-test", registry);
-    PromoteInputToMapType(registry, static_cast<int32_t>(DataType::FLOAT));
-
-    // Store the map input in the DataSet.
-    registry.back().data_sets()[0].inputs.clear();
-    registry.back().data_sets()[0].maps = {
-        Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
-            Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values)),
-    };
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // SPARSE map(int64, float) -> tensor(float). Missing positions are zero.
@@ -97,24 +91,19 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
-    AddStringAttr(node, "cast_to", "TO_FLOAT");
-    AddStringAttr(node, "map_form", "SPARSE");
-    AddIntAttr(node, "max_map", 5);
+    Expect(registry, std::move(node), "test_cc_cast_map_int64_float_sparse", {default_opset, opset},
+           [=]() -> IoData {
+             AddStringAttr(node, "cast_to", "TO_FLOAT");
+             AddStringAttr(node, "map_form", "SPARSE");
+             AddIntAttr(node, "max_map", 5);
 
-    const std::vector<int64_t> keys{1, 3};
-    const std::vector<float> values{10.0f, 30.0f};
-    Tensor x = Tensor::FromInt64("", {1}, {0});
-    Tensor y = cast_map.operator()<float, float>(keys, values, "TO_FLOAT", "SPARSE", 5);
+             const std::vector<int64_t> keys{1, 3};
+             const std::vector<float> values{10.0f, 30.0f};
+             Tensor x = Tensor::FromInt64("", {1}, {0});
+             Tensor y = cast_map.operator()<float, float>(keys, values, "TO_FLOAT", "SPARSE", 5);
 
-    Expect(node, {x}, {y}, "test_cc_cast_map_int64_float_sparse", {default_opset, opset},
-           "backend-test", registry);
-    PromoteInputToMapType(registry, static_cast<int32_t>(DataType::FLOAT));
-
-    registry.back().data_sets()[0].inputs.clear();
-    registry.back().data_sets()[0].maps = {
-        Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
-            Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values)),
-    };
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // DENSE map(int64, string) -> tensor(string).
@@ -124,23 +113,19 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
-    AddStringAttr(node, "cast_to", "TO_STRING");
-    AddStringAttr(node, "map_form", "DENSE");
+    Expect(registry, std::move(node), "test_cc_cast_map_int64_string_dense", {default_opset, opset},
+           [=]() -> IoData {
+             AddStringAttr(node, "cast_to", "TO_STRING");
+             AddStringAttr(node, "map_form", "DENSE");
 
-    const std::vector<int64_t> keys{1, 0};
-    const std::vector<std::string> values{"b", "a"};
-    Tensor x = Tensor::FromInt64("", {1}, {0});
-    Tensor y = cast_map.operator()<std::string, std::string>(keys, values, "TO_STRING", "DENSE", 0);
+             const std::vector<int64_t> keys{1, 0};
+             const std::vector<std::string> values{"b", "a"};
+             Tensor x = Tensor::FromInt64("", {1}, {0});
+             Tensor y = cast_map.operator()<std::string, std::string>(keys, values, "TO_STRING",
+                                                                      "DENSE", 0);
 
-    Expect(node, {x}, {y}, "test_cc_cast_map_int64_string_dense", {default_opset, opset},
-           "backend-test", registry);
-    PromoteInputToMapType(registry, static_cast<int32_t>(DataType::STRING));
-
-    registry.back().data_sets()[0].inputs.clear();
-    registry.back().data_sets()[0].maps = {
-        Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
-            Tensor::FromStrings("x_values", {static_cast<int64_t>(values.size())}, values)),
-    };
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 

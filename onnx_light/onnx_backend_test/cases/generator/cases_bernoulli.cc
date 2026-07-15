@@ -42,14 +42,17 @@ void RegisterOneBernoulli(const std::string &case_name, const Tensor &input, int
     attr->set_name("dtype");
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(static_cast<int64_t>(dtype));
-  }
+                            Expect(registry, std::move(node), case_name, {opset},
+                                   [=]() -> IoData {
+                              }
 
-  const kernel::KernelContext ctx{opset};
-  Tensor input_named = input;
-  input_named.name = "x";
-  Tensor y = kernel::Bernoulli(ctx)(input_named, seed, dtype);
+                              const kernel::KernelContext ctx{opset};
+                              Tensor input_named = input;
+                              input_named.name = "x";
+                              Tensor y = kernel::Bernoulli(ctx)(input_named, seed, dtype);
 
-  Expect(node, {input_named}, {y}, case_name, {opset}, "backend-test", registry);
+                              return IoData{{std::move(input_named)}, {std::move(y)}};
+  });
 }
 
 } // namespace

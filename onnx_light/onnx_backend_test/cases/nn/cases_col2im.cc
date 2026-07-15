@@ -56,8 +56,10 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor output = op(input, image_shape, block_shape, attrs);
     output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
-    Expect(node, {input, image_shape, block_shape}, {output}, "test_cc_col2im", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_col2im", {opset}, [=]() -> IoData {
+      return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
+                    {std::move(output)}};
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -76,8 +78,10 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
     AddAttribute<std::vector<int64_t>>(node, "pads", {0, 1, 0, 1});
-    Expect(node, {input, image_shape, block_shape}, {output}, "test_cc_col2im_pads", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_col2im_pads", {opset}, [=]() -> IoData {
+      return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
+                    {std::move(output)}};
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -96,8 +100,10 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
-    Expect(node, {input, image_shape, block_shape}, {output}, "test_cc_col2im_strides", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_col2im_strides", {opset}, [=]() -> IoData {
+      return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
+                    {std::move(output)}};
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -116,8 +122,10 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {1, 5});
-    Expect(node, {input, image_shape, block_shape}, {output}, "test_cc_col2im_dilations", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_col2im_dilations", {opset}, [=]() -> IoData {
+      return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
+                    {std::move(output)}};
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -135,8 +143,10 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor output = op(input, image_shape, block_shape, attrs);
     output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
-    Expect(node, {input, image_shape, block_shape}, {output}, "test_cc_col2im_5d", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_col2im_5d", {opset}, [=]() -> IoData {
+      return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
+                    {std::move(output)}};
+    });
   }
 }
 

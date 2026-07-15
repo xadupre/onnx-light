@@ -29,16 +29,19 @@ void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const std::vector<int64_t> class_labels{10, 20, 30};
     AttributeProto *labels_attr = node.add_attribute();
-    labels_attr->set_name("classlabels_int64s");
-    labels_attr->set_type(AttributeProto::AttributeType::INTS);
-    for (int64_t v : class_labels) {
-      labels_attr->ints().push_back(v);
-    }
+    Expect(registry, std::move(node), "test_cc_zipmap_int64", {default_opset, opset},
+           [=]() -> IoData {
+             labels_attr->set_name("classlabels_int64s");
+             labels_attr->set_type(AttributeProto::AttributeType::INTS);
+             for (int64_t v : class_labels) {
+               labels_attr->ints().push_back(v);
+             }
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
-    Tensor z = zipmap(x, class_labels);
+             Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
+             Tensor z = zipmap(x, class_labels);
 
-    Expect(node, {x}, {z}, "test_cc_zipmap_int64", {default_opset, opset}, "backend-test", registry,
+             return IoData{{std::move(x)}, {std::move(z)}};
+           },
            "",
            {SequenceTypeSpec(MapTypeSpec(static_cast<int32_t>(DataType::INT64),
                                          TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT))))});
@@ -54,17 +57,20 @@ void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const std::vector<std::string> class_labels{"a", "b", "c"};
     AttributeProto *labels_attr = node.add_attribute();
-    labels_attr->set_name("classlabels_strings");
-    labels_attr->set_type(AttributeProto::AttributeType::STRINGS);
-    for (const std::string &v : class_labels) {
-      labels_attr->strings().push_back(utils::String(v));
-    }
+    Expect(registry, std::move(node), "test_cc_zipmap_string", {default_opset, opset},
+           [=]() -> IoData {
+             labels_attr->set_name("classlabels_strings");
+             labels_attr->set_type(AttributeProto::AttributeType::STRINGS);
+             for (const std::string &v : class_labels) {
+               labels_attr->strings().push_back(utils::String(v));
+             }
 
-    Tensor x = Tensor::FromFloat("", {3}, {0.1f, 0.7f, 0.2f});
-    Tensor z = zipmap(x, class_labels);
+             Tensor x = Tensor::FromFloat("", {3}, {0.1f, 0.7f, 0.2f});
+             Tensor z = zipmap(x, class_labels);
 
-    Expect(node, {x}, {z}, "test_cc_zipmap_string", {default_opset, opset}, "backend-test",
-           registry, "",
+             return IoData{{std::move(x)}, {std::move(z)}};
+           },
+           "",
            {SequenceTypeSpec(MapTypeSpec(static_cast<int32_t>(DataType::STRING),
                                          TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT))))});
   }

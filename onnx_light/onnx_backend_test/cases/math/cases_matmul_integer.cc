@@ -95,8 +95,9 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor Y = mmi(A, B, a_zp, b_zp);
     Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNode();
-    Expect(node, {A, B, a_zp, b_zp}, {Y}, "test_cc_matmulinteger", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_matmulinteger", {opset}, [=]() -> IoData {
+      return IoData{{std::move(A), std::move(B), std::move(a_zp), std::move(b_zp)}, {std::move(Y)}};
+    });
   }
 
   // 2-D INT8 x INT8 case with scalar zero points.
@@ -111,8 +112,9 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor Y = mmi(A, B, a_zp, b_zp);
     Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNode();
-    Expect(node, {A, B, a_zp, b_zp}, {Y}, "test_cc_matmulinteger_int8", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_matmulinteger_int8", {opset}, [=]() -> IoData {
+      return IoData{{std::move(A), std::move(B), std::move(a_zp), std::move(b_zp)}, {std::move(Y)}};
+    });
   }
 
   // 2-D UINT8 case with per-column b_zero_point (a_zero_point absent).
@@ -127,8 +129,10 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor Y = mmi(A, B, no_a_zp, b_zp);
     Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNodeNoAZP();
-    Expect(node, {A, B, b_zp}, {Y}, "test_cc_matmulinteger_per_col_b_zp", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_matmulinteger_per_col_b_zp", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(A), std::move(B), std::move(b_zp)}, {std::move(Y)}};
+           });
   }
 
   // 2-D UINT8 case with per-row a_zero_point (b_zero_point absent).
@@ -143,8 +147,10 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor Y = mmi(A, B, a_zp, no_b_zp);
     Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNodeNoBZP();
-    Expect(node, {A, B, a_zp}, {Y}, "test_cc_matmulinteger_per_row_a_zp", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_matmulinteger_per_row_a_zp", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(A), std::move(B), std::move(a_zp)}, {std::move(Y)}};
+           });
   }
 }
 

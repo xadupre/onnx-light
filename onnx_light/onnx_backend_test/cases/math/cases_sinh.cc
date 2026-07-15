@@ -33,11 +33,12 @@ void RegisterSinhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sinh");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_sinh", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
+      Tensor y = sinh_kernel(x);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
-    Tensor y = sinh_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_sinh", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Sinh`` operator (mirror the
@@ -49,10 +50,11 @@ void RegisterSinhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sinh");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = sinh_kernel(x);
-    Expect(node, {x}, {y}, "test_sinh_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_sinh_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = sinh_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // From Sinh.export(): ``test_sinh`` uses x = np.random.rand(3, 4, 5).
   {
@@ -60,11 +62,12 @@ void RegisterSinhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sinh");
     node.add_input("x");
     node.add_output("y");
-
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x = Tensor::FromFloat("", shape, Rand<float>(shape, /*seed=*/1));
-    Tensor y = sinh_kernel(x);
-    Expect(node, {x}, {y}, "test_sinh", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_sinh", {opset}, [=]() -> IoData {
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x = Tensor::FromFloat("", shape, Rand<float>(shape, /*seed=*/1));
+      Tensor y = sinh_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

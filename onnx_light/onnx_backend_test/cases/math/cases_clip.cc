@@ -70,71 +70,80 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   // Deterministic onnx-light-specific case (``test_cc_*``).
   {
     NodeProto node = MakeClipNode();
-    Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -0.5f, 0.0f, 0.5f, 2.0f});
-    Tensor min_val = ScalarTensor<float>(-1.0f);
-    Tensor max_val = ScalarTensor<float>(1.0f);
-    Tensor y = clip_kernel(x, &min_val, &max_val);
-    Expect(node, {x, min_val, max_val}, {y}, "test_cc_clip", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_clip", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -0.5f, 0.0f, 0.5f, 2.0f});
+      Tensor min_val = ScalarTensor<float>(-1.0f);
+      Tensor max_val = ScalarTensor<float>(1.0f);
+      Tensor y = clip_kernel(x, &min_val, &max_val);
+      return IoData{{std::move(x), std::move(min_val), std::move(max_val)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX ``Clip.export()`` cases — float min/max in [-1, 1].
   {
     NodeProto node = MakeClipNode();
-    Tensor x = Tensor::FromFloat("", {3}, {-2.0f, 0.0f, 2.0f});
-    Tensor min_val = ScalarTensor<float>(-1.0f);
-    Tensor max_val = ScalarTensor<float>(1.0f);
-    Tensor y = clip_kernel(x, &min_val, &max_val);
-    Expect(node, {x, min_val, max_val}, {y}, "test_clip_example", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_clip_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {-2.0f, 0.0f, 2.0f});
+      Tensor min_val = ScalarTensor<float>(-1.0f);
+      Tensor max_val = ScalarTensor<float>(1.0f);
+      Tensor y = clip_kernel(x, &min_val, &max_val);
+      return IoData{{std::move(x), std::move(min_val), std::move(max_val)}, {std::move(y)}};
+    });
   }
   {
     NodeProto node = MakeClipNode();
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/1));
-    Tensor min_val = ScalarTensor<float>(-1.0f);
-    Tensor max_val = ScalarTensor<float>(1.0f);
-    Tensor y = clip_kernel(x, &min_val, &max_val);
-    Expect(node, {x, min_val, max_val}, {y}, "test_clip", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_clip", {opset}, [=]() -> IoData {
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/1));
+      Tensor min_val = ScalarTensor<float>(-1.0f);
+      Tensor max_val = ScalarTensor<float>(1.0f);
+      Tensor y = clip_kernel(x, &min_val, &max_val);
+      return IoData{{std::move(x), std::move(min_val), std::move(max_val)}, {std::move(y)}};
+    });
   }
 
   // float min/max in [-5, 5] — inbounds / outbounds / splitbounds.
   {
     NodeProto node = MakeClipNode();
-    Tensor min_val = ScalarTensor<float>(-5.0f);
-    Tensor max_val = ScalarTensor<float>(5.0f);
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = clip_kernel(x, &min_val, &max_val);
-    Expect(node, {x, min_val, max_val}, {y}, "test_clip_inbounds", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_clip_inbounds", {opset}, [=]() -> IoData {
+      Tensor min_val = ScalarTensor<float>(-5.0f);
+      Tensor max_val = ScalarTensor<float>(5.0f);
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = clip_kernel(x, &min_val, &max_val);
+      return IoData{{std::move(x), std::move(min_val), std::move(max_val)}, {std::move(y)}};
+    });
   }
   {
     NodeProto node = MakeClipNode();
-    Tensor min_val = ScalarTensor<float>(-5.0f);
-    Tensor max_val = ScalarTensor<float>(5.0f);
-    Tensor x = Tensor::FromFloat("", {3}, {-6.0f, 0.0f, 6.0f});
-    Tensor y = clip_kernel(x, &min_val, &max_val);
-    Expect(node, {x, min_val, max_val}, {y}, "test_clip_outbounds", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_clip_outbounds", {opset}, [=]() -> IoData {
+      Tensor min_val = ScalarTensor<float>(-5.0f);
+      Tensor max_val = ScalarTensor<float>(5.0f);
+      Tensor x = Tensor::FromFloat("", {3}, {-6.0f, 0.0f, 6.0f});
+      Tensor y = clip_kernel(x, &min_val, &max_val);
+      return IoData{{std::move(x), std::move(min_val), std::move(max_val)}, {std::move(y)}};
+    });
   }
   {
     NodeProto node = MakeClipNode();
-    Tensor min_val = ScalarTensor<float>(-5.0f);
-    Tensor max_val = ScalarTensor<float>(5.0f);
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 6.0f});
-    Tensor y = clip_kernel(x, &min_val, &max_val);
-    Expect(node, {x, min_val, max_val}, {y}, "test_clip_splitbounds", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_clip_splitbounds", {opset}, [=]() -> IoData {
+      Tensor min_val = ScalarTensor<float>(-5.0f);
+      Tensor max_val = ScalarTensor<float>(5.0f);
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 6.0f});
+      Tensor y = clip_kernel(x, &min_val, &max_val);
+      return IoData{{std::move(x), std::move(min_val), std::move(max_val)}, {std::move(y)}};
+    });
   }
 
   // min > max: per the ONNX spec, all input values are replaced by max.
   {
     NodeProto node = MakeClipNode();
-    Tensor min_val = ScalarTensor<float>(2.0f);
-    Tensor max_val = ScalarTensor<float>(1.0f);
-    Tensor x = Tensor::FromFloat("", {3}, {-2.0f, 0.0f, 6.0f});
-    Tensor y = clip_kernel(x, &min_val, &max_val);
-    Expect(node, {x, min_val, max_val}, {y}, "test_clip_min_greater_than_max", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_clip_min_greater_than_max", {opset}, [=]() -> IoData {
+      Tensor min_val = ScalarTensor<float>(2.0f);
+      Tensor max_val = ScalarTensor<float>(1.0f);
+      Tensor x = Tensor::FromFloat("", {3}, {-2.0f, 0.0f, 6.0f});
+      Tensor y = clip_kernel(x, &min_val, &max_val);
+      return IoData{{std::move(x), std::move(min_val), std::move(max_val)}, {std::move(y)}};
+    });
   }
 
   // float default min / max / inbounds — exercise optional inputs.
@@ -145,11 +154,13 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("min");
     node.add_output("y");
-    Tensor min_val = ScalarTensor<float>(0.0f);
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/2));
-    Tensor y = clip_kernel(x, &min_val, /*max=*/nullptr);
-    Expect(node, {x, min_val}, {y}, "test_clip_default_min", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_clip_default_min", {opset}, [=]() -> IoData {
+      Tensor min_val = ScalarTensor<float>(0.0f);
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/2));
+      Tensor y = clip_kernel(x, &min_val, /*max=*/nullptr);
+      return IoData{{std::move(x), std::move(min_val)}, {std::move(y)}};
+    });
   }
   {
     // Inputs: ``["x", "", "max"]`` — missing min, present max.
@@ -159,17 +170,21 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("");
     node.add_input("max");
     node.add_output("y");
-    Tensor max_val = ScalarTensor<float>(0.0f);
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/3));
-    Tensor y = clip_kernel(x, /*min=*/nullptr, &max_val);
-    Expect(node, {x, max_val}, {y}, "test_clip_default_max", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_clip_default_max", {opset}, [=]() -> IoData {
+      Tensor max_val = ScalarTensor<float>(0.0f);
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/3));
+      Tensor y = clip_kernel(x, /*min=*/nullptr, &max_val);
+      return IoData{{std::move(x), std::move(max_val)}, {std::move(y)}};
+    });
   }
   {
     NodeProto node = MakeClipNodeNoBounds();
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = clip_kernel(x, /*min=*/nullptr, /*max=*/nullptr);
-    Expect(node, {x}, {y}, "test_clip_default_inbounds", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_clip_default_inbounds", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = clip_kernel(x, /*min=*/nullptr, /*max=*/nullptr);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // int8 variants: opset 12 widened ``T`` to all numeric tensors.
@@ -183,12 +198,13 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("min");
     node.add_output("y");
-    Tensor min_val = ScalarTensor<int8_t>(0);
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x = Tensor::FromInt8("", shape, ToInt8(Randn<float>(shape, /*seed=*/4)));
-    Tensor y = clip_kernel12(x, &min_val, /*max=*/nullptr);
-    Expect(node, {x, min_val}, {y}, "test_clip_default_int8_min", {opset12}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_clip_default_int8_min", {opset12}, [=]() -> IoData {
+      Tensor min_val = ScalarTensor<int8_t>(0);
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x = Tensor::FromInt8("", shape, ToInt8(Randn<float>(shape, /*seed=*/4)));
+      Tensor y = clip_kernel12(x, &min_val, /*max=*/nullptr);
+      return IoData{{std::move(x), std::move(min_val)}, {std::move(y)}};
+    });
   }
   {
     NodeProto node;
@@ -197,18 +213,22 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("");
     node.add_input("max");
     node.add_output("y");
-    Tensor max_val = ScalarTensor<int8_t>(0);
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x = Tensor::FromInt8("", shape, ToInt8(Randn<float>(shape, /*seed=*/5)));
-    Tensor y = clip_kernel12(x, /*min=*/nullptr, &max_val);
-    Expect(node, {x, max_val}, {y}, "test_clip_default_int8_max", {opset12}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_clip_default_int8_max", {opset12}, [=]() -> IoData {
+      Tensor max_val = ScalarTensor<int8_t>(0);
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x = Tensor::FromInt8("", shape, ToInt8(Randn<float>(shape, /*seed=*/5)));
+      Tensor y = clip_kernel12(x, /*min=*/nullptr, &max_val);
+      return IoData{{std::move(x), std::move(max_val)}, {std::move(y)}};
+    });
   }
   {
     NodeProto node = MakeClipNodeNoBounds();
-    Tensor x = Tensor::FromInt8("", {3}, {-1, 0, 1});
-    Tensor y = clip_kernel12(x, /*min=*/nullptr, /*max=*/nullptr);
-    Expect(node, {x}, {y}, "test_clip_default_int8_inbounds", {opset12}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_clip_default_int8_inbounds", {opset12},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromInt8("", {3}, {-1, 0, 1});
+             Tensor y = clip_kernel12(x, /*min=*/nullptr, /*max=*/nullptr);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 

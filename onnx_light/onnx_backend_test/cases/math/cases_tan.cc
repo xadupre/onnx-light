@@ -33,12 +33,13 @@ void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Tan");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_tan", {opset}, [=]() -> IoData {
+      // Stay clear of pi/2 ± k*pi where tan(x) is unbounded.
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -0.5f, 0.0f, 0.25f, 0.5f, 1.0f});
+      Tensor y = tan_kernel(x);
 
-    // Stay clear of pi/2 ± k*pi where tan(x) is unbounded.
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -0.5f, 0.0f, 0.25f, 0.5f, 1.0f});
-    Tensor y = tan_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_tan", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Tan`` operator (mirror the
@@ -50,10 +51,11 @@ void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Tan");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = tan_kernel(x);
-    Expect(node, {x}, {y}, "test_tan_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_tan_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = tan_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // From Tan.export(): ``test_tan`` uses x = np.random.randn(3, 4, 5).
   {
@@ -61,11 +63,12 @@ void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Tan");
     node.add_input("x");
     node.add_output("y");
-
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/1));
-    Tensor y = tan_kernel(x);
-    Expect(node, {x}, {y}, "test_tan", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_tan", {opset}, [=]() -> IoData {
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/1));
+      Tensor y = tan_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

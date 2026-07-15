@@ -59,102 +59,124 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_shape_example
   {
-    kernel::Shape::Attributes attrs;
-    const Tensor y = Rename(shape_kernel(x2d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/std::nullopt, /*end=*/std::nullopt), {x2d}, {y},
-           "test_cc_shape_example", {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/std::nullopt),
+           "test_cc_shape_example", {opset}, [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             const Tensor y = Rename(shape_kernel(x2d, attrs), "y");
+             return IoData{{std::move(x2d)}, {std::move(y)}};
+           });
   }
 
   // test_cc_shape (no attributes, 3-D input).
   {
-    kernel::Shape::Attributes attrs;
-    const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/std::nullopt, /*end=*/std::nullopt), {x3d}, {y}, "test_cc_shape",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/std::nullopt), "test_cc_shape",
+           {opset}, [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
   }
 
   // test_cc_shape_start_1
   {
-    kernel::Shape::Attributes attrs;
-    attrs.start = 1;
-    const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/1, /*end=*/std::nullopt), {x3d}, {y}, "test_cc_shape_start_1",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/1, /*end=*/std::nullopt), "test_cc_shape_start_1",
+           {opset}, [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             attrs.start = 1;
+             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
   }
 
   // test_cc_shape_end_1
   {
-    kernel::Shape::Attributes attrs;
-    attrs.end = 1;
-    const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/std::nullopt, /*end=*/1), {x3d}, {y}, "test_cc_shape_end_1",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/1), "test_cc_shape_end_1",
+           {opset}, [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             attrs.end = 1;
+             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
   }
 
   // test_cc_shape_start_negative_1
   {
-    kernel::Shape::Attributes attrs;
-    attrs.start = -1;
-    const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/-1, /*end=*/std::nullopt), {x3d}, {y},
-           "test_cc_shape_start_negative_1", {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/-1, /*end=*/std::nullopt),
+           "test_cc_shape_start_negative_1", {opset}, [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             attrs.start = -1;
+             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
   }
 
   // test_cc_shape_end_negative_1
   {
-    kernel::Shape::Attributes attrs;
-    attrs.end = -1;
-    const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/std::nullopt, /*end=*/-1), {x3d}, {y},
-           "test_cc_shape_end_negative_1", {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/-1),
+           "test_cc_shape_end_negative_1", {opset}, [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             attrs.end = -1;
+             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
   }
 
   // test_cc_shape_start_1_end_negative_1
   {
-    kernel::Shape::Attributes attrs;
-    attrs.start = 1;
-    attrs.end = -1;
-    const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/1, /*end=*/-1), {x3d}, {y},
-           "test_cc_shape_start_1_end_negative_1", {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/1, /*end=*/-1), "test_cc_shape_start_1_end_negative_1",
+           {opset}, [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             attrs.start = 1;
+             attrs.end = -1;
+             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
   }
 
   // test_cc_shape_start_1_end_2
   {
-    kernel::Shape::Attributes attrs;
-    attrs.start = 1;
-    attrs.end = 2;
-    const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/1, /*end=*/2), {x3d}, {y}, "test_cc_shape_start_1_end_2",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/1, /*end=*/2), "test_cc_shape_start_1_end_2", {opset},
+           [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             attrs.start = 1;
+             attrs.end = 2;
+             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
   }
 
   // test_cc_shape_clip_start
   {
-    kernel::Shape::Attributes attrs;
-    attrs.start = -10;
-    const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/-10, /*end=*/std::nullopt), {x3d}, {y},
-           "test_cc_shape_clip_start", {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/-10, /*end=*/std::nullopt), "test_cc_shape_clip_start",
+           {opset}, [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             attrs.start = -10;
+             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
   }
 
   // test_cc_shape_clip_end
   {
-    kernel::Shape::Attributes attrs;
-    attrs.end = 10;
-    const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/std::nullopt, /*end=*/10), {x3d}, {y}, "test_cc_shape_clip_end",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/10), "test_cc_shape_clip_end",
+           {opset}, [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             attrs.end = 10;
+             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
   }
 
   // test_cc_shape_start_greater_than_end
   {
-    kernel::Shape::Attributes attrs;
-    attrs.start = 2;
-    attrs.end = 1;
-    const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
-    Expect(MakeShapeNode(/*start=*/2, /*end=*/1), {x3d}, {y},
-           "test_cc_shape_start_greater_than_end", {opset}, "backend-test", registry);
+    Expect(registry, MakeShapeNode(/*start=*/2, /*end=*/1), "test_cc_shape_start_greater_than_end",
+           {opset}, [=]() -> IoData {
+             kernel::Shape::Attributes attrs;
+             attrs.start = 2;
+             attrs.end = 1;
+             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             return IoData{{std::move(x3d)}, {std::move(y)}};
+           });
   }
 }
 

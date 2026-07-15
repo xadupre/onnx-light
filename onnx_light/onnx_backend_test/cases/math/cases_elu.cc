@@ -31,11 +31,13 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    alpha->set_f(2.0f);
+    Expect(registry, std::move(node), "test_cc_elu_example", {opset}, [=]() -> IoData {
+      alpha->set_f(2.0f);
 
-    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-    Tensor y = elu_kernel(x, 2.0f);
-    Expect(node, {x}, {y}, "test_cc_elu_example", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor y = elu_kernel(x, 2.0f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -47,11 +49,13 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    alpha->set_f(2.0f);
+    Expect(registry, std::move(node), "test_cc_elu", {opset}, [=]() -> IoData {
+      alpha->set_f(2.0f);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-    Tensor y = elu_kernel(x, 2.0f);
-    Expect(node, {x}, {y}, "test_cc_elu", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
+      Tensor y = elu_kernel(x, 2.0f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -59,11 +63,12 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Elu");
     node.add_input("X");
     node.add_output("Y");
-
-    // No alpha attribute: defaults to 1.0.
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-    Tensor y = elu_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_elu_default", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_elu_default", {opset}, [=]() -> IoData {
+      // No alpha attribute: defaults to 1.0.
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
+      Tensor y = elu_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // FLOAT16 test case.
@@ -76,11 +81,13 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    alpha->set_f(2.0f);
+    Expect(registry, std::move(node), "test_cc_elu_float16", {opset}, [=]() -> IoData {
+      alpha->set_f(2.0f);
 
-    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-    Tensor y = elu_kernel(x, 2.0f);
-    Expect(node, {x}, {y}, "test_cc_elu_float16", {opset}, "backend-test", registry);
+      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
+      Tensor y = elu_kernel(x, 2.0f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // BFLOAT16 test case.
@@ -93,17 +100,19 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    alpha->set_f(1.0f);
+    Expect(registry, std::move(node), "test_cc_elu_bfloat16", {opset}, [=]() -> IoData {
+      alpha->set_f(1.0f);
 
-    std::vector<float> vals = {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f};
-    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
-    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
-    for (size_t i = 0; i < vals.size(); ++i) {
-      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
-    }
-    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-    Tensor y = elu_kernel(x, 1.0f);
-    Expect(node, {x}, {y}, "test_cc_elu_bfloat16", {opset}, "backend-test", registry);
+      std::vector<float> vals = {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f};
+      std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+      auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+      for (size_t i = 0; i < vals.size(); ++i) {
+        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+      }
+      Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
+      Tensor y = elu_kernel(x, 1.0f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

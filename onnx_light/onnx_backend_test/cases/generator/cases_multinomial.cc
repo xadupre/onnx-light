@@ -72,9 +72,10 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Multinomial");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor y = kernel::Multinomial(ctx)(x);
-    Expect(node, {x}, {y}, "test_cc_multinomial", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_multinomial", {opset}, [=]() -> IoData {
+      Tensor y = kernel::Multinomial(ctx)(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // sample_size=5, explicit seed=42.
@@ -86,11 +87,13 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Multinomial");
     node.add_input("x");
     node.add_output("y");
-    AddIntAttr(node, "sample_size", 5);
-    AddFloatAttr(node, "seed", 42.0f);
+    Expect(registry, std::move(node), "test_cc_multinomial_seeded", {opset}, [=]() -> IoData {
+      AddIntAttr(node, "sample_size", 5);
+      AddFloatAttr(node, "seed", 42.0f);
 
-    Tensor y = kernel::Multinomial(ctx)(x, /*sample_size=*/5, /*seed=*/42, /*dtype=*/0);
-    Expect(node, {x}, {y}, "test_cc_multinomial_seeded", {opset}, "backend-test", registry);
+      Tensor y = kernel::Multinomial(ctx)(x, /*sample_size=*/5, /*seed=*/42, /*dtype=*/0);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // dtype=INT64.
@@ -101,12 +104,14 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Multinomial");
     node.add_input("x");
     node.add_output("y");
-    AddIntAttr(node, "sample_size", 4);
-    AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::INT64));
+    Expect(registry, std::move(node), "test_cc_multinomial_int64", {opset}, [=]() -> IoData {
+      AddIntAttr(node, "sample_size", 4);
+      AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::INT64));
 
-    Tensor y = kernel::Multinomial(ctx)(x, /*sample_size=*/4, kernel::Multinomial::kNoSeed,
-                                        /*dtype=*/static_cast<int32_t>(DataType::INT64));
-    Expect(node, {x}, {y}, "test_cc_multinomial_int64", {opset}, "backend-test", registry);
+      Tensor y = kernel::Multinomial(ctx)(x, /*sample_size=*/4, kernel::Multinomial::kNoSeed,
+                                          /*dtype=*/static_cast<int32_t>(DataType::INT64));
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

@@ -28,7 +28,6 @@ void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
   node.add_output("output");
 
   const std::vector<int64_t> shape = {2, 3};
-  Tensor input = Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
 
   // ``type`` attribute: TypeProto wrapping an Optional<Tensor<FLOAT, [2, 3]>>.
   AttributeProto *attr = node.add_attribute();
@@ -47,9 +46,12 @@ void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
 
   const OpsetId opset = DefaultOpset(15);
   const kernel::KernelContext ctx{opset};
-  Tensor output = kernel::Optional(ctx)(input);
 
-  Expect(node, {input}, {output}, "test_cc_optional", {opset}, "backend-test", registry);
+  Expect(registry, std::move(node), "test_cc_optional", {opset}, [=]() -> IoData {
+    Tensor input = Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
+    Tensor output = kernel::Optional(ctx)(input);
+    return IoData{{std::move(input)}, {std::move(output)}};
+  });
 
   // ``Expect()`` populates the output value-info as a TensorTypeProto via the
   // generic ``FillValueInfo`` helper. The ONNX ``Optional`` operator however

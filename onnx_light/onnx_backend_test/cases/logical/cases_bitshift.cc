@@ -59,17 +59,21 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // (X=[1, 4], S=[1, 1], direction="RIGHT" => Z=[0, 2]).
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Tensor x = Tensor::FromUint8("", {2}, {1, 4});
-    Tensor y = Tensor::FromUint8("", {2}, {1, 1});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
-    Expect(node, {x, y}, {z}, "test_cc_bitshift_right_u8", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_bitshift_right_u8", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromUint8("", {2}, {1, 4});
+      Tensor y = Tensor::FromUint8("", {2}, {1, 1});
+      Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
   {
     NodeProto node = MakeBitShiftNode("LEFT");
-    Tensor x = Tensor::FromUint8("", {2}, {1, 2});
-    Tensor y = Tensor::FromUint8("", {2}, {1, 2});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
-    Expect(node, {x, y}, {z}, "test_cc_bitshift_left_u8", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_bitshift_left_u8", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromUint8("", {2}, {1, 2});
+      Tensor y = Tensor::FromUint8("", {2}, {1, 2});
+      Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 
   // Upstream ONNX node cases (BitShift.export_left*/export_right*).
@@ -77,66 +81,82 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // RIGHT direction over UINT8.
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Tensor x = Tensor::FromUint8("", {3}, {16, 4, 1});
-    Tensor y = Tensor::FromUint8("", {3}, {1, 2, 3});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
-    Expect(node, {x, y}, {z}, "test_bitshift_right_uint8", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_bitshift_right_uint8", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromUint8("", {3}, {16, 4, 1});
+      Tensor y = Tensor::FromUint8("", {3}, {1, 2, 3});
+      Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
   // RIGHT direction over UINT16.
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Tensor x = Tensor::FromUint16("", {3}, {16, 4, 1});
-    Tensor y = Tensor::FromUint16("", {3}, {1, 2, 3});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
-    Expect(node, {x, y}, {z}, "test_bitshift_right_uint16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_bitshift_right_uint16", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromUint16("", {3}, {16, 4, 1});
+      Tensor y = Tensor::FromUint16("", {3}, {1, 2, 3});
+      Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
   // RIGHT direction over UINT32.
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Tensor x = Tensor::FromUint32("", {3}, {16, 4, 1});
-    Tensor y = Tensor::FromUint32("", {3}, {1, 2, 3});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
-    Expect(node, {x, y}, {z}, "test_bitshift_right_uint32", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_bitshift_right_uint32", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromUint32("", {3}, {16, 4, 1});
+      Tensor y = Tensor::FromUint32("", {3}, {1, 2, 3});
+      Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
   // RIGHT direction over UINT64.
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Tensor x = Tensor::FromUint64("", {3}, {16, 4, 1});
-    Tensor y = Tensor::FromUint64("", {3}, {1, 2, 3});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
-    Expect(node, {x, y}, {z}, "test_bitshift_right_uint64", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_bitshift_right_uint64", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromUint64("", {3}, {16, 4, 1});
+      Tensor y = Tensor::FromUint64("", {3}, {1, 2, 3});
+      Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
   // LEFT direction over UINT8.
   {
     NodeProto node = MakeBitShiftNode("LEFT");
-    Tensor x = Tensor::FromUint8("", {3}, {16, 4, 1});
-    Tensor y = Tensor::FromUint8("", {3}, {1, 2, 3});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
-    Expect(node, {x, y}, {z}, "test_bitshift_left_uint8", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_bitshift_left_uint8", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromUint8("", {3}, {16, 4, 1});
+      Tensor y = Tensor::FromUint8("", {3}, {1, 2, 3});
+      Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
   // LEFT direction over UINT16.
   {
     NodeProto node = MakeBitShiftNode("LEFT");
-    Tensor x = Tensor::FromUint16("", {3}, {16, 4, 1});
-    Tensor y = Tensor::FromUint16("", {3}, {1, 2, 3});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
-    Expect(node, {x, y}, {z}, "test_bitshift_left_uint16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_bitshift_left_uint16", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromUint16("", {3}, {16, 4, 1});
+      Tensor y = Tensor::FromUint16("", {3}, {1, 2, 3});
+      Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
   // LEFT direction over UINT32.
   {
     NodeProto node = MakeBitShiftNode("LEFT");
-    Tensor x = Tensor::FromUint32("", {3}, {16, 4, 1});
-    Tensor y = Tensor::FromUint32("", {3}, {1, 2, 3});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
-    Expect(node, {x, y}, {z}, "test_bitshift_left_uint32", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_bitshift_left_uint32", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromUint32("", {3}, {16, 4, 1});
+      Tensor y = Tensor::FromUint32("", {3}, {1, 2, 3});
+      Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
   // LEFT direction over UINT64.
   {
     NodeProto node = MakeBitShiftNode("LEFT");
-    Tensor x = Tensor::FromUint64("", {3}, {16, 4, 1});
-    Tensor y = Tensor::FromUint64("", {3}, {1, 2, 3});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
-    Expect(node, {x, y}, {z}, "test_bitshift_left_uint64", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_bitshift_left_uint64", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromUint64("", {3}, {16, 4, 1});
+      Tensor y = Tensor::FromUint64("", {3}, {1, 2, 3});
+      Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 }
 

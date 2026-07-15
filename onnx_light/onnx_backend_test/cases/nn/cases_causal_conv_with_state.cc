@@ -72,8 +72,11 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &name, cons
   NodeProto node = MakeCausalConvNode(input_names, {"output", "present_state"});
   if (activation != "none") {
     AddAttribute<std::string>(node, "activation", activation);
-  }
-  Expect(node, inputs, {output, present_state}, name, {opset}, "backend-test", registry);
+                    Expect(registry, std::move(node), name, {opset},
+                           [=]() -> IoData {
+                      }
+                      return IoData{std::move(inputs), {std::move(output), std::move(present_state)}};
+  });
 }
 
 } // namespace

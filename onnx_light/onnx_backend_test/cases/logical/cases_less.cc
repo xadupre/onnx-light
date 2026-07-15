@@ -59,12 +59,13 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
+    Expect(registry, std::move(node), "test_cc_less", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
+      Tensor z = less_kernel(x, y);
 
-    Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
-    Tensor z = less_kernel(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_less", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 
   // Scalar broadcast variant: z[i] = x[i] < y (scalar).
@@ -74,12 +75,13 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
+    Expect(registry, std::move(node), "test_cc_less_bcast", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor y = Tensor::FromFloat("", {}, {2.5f});
+      Tensor z = less_kernel(x, y);
 
-    Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor y = Tensor::FromFloat("", {}, {2.5f});
-    Tensor z = less_kernel(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_less_bcast", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Less`` operator (mirror the
@@ -99,34 +101,73 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // Each upstream case is a (test_name, [x, y]) pair; the expected output is
   // computed by ``less_kernel`` to keep the registry self-consistent.
-  const std::vector<std::pair<std::string, std::vector<Tensor>>> cases = {
+  const std::vector<std::pair<std::string, std::function<IoData()>>> cases = {
       // From Less.export():
-      {"test_less", {RandnFloat({3, 4, 5}, /*seed=*/25), RandnFloat({3, 4, 5}, /*seed=*/26)}},
+      {"test_less",
+       [=]() -> IoData {
+         auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/25);
+         auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/26);
+         Tensor z = less_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
       {"test_less_int8",
-       {Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/51)),
-        Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/52))}},
+       [=]() -> IoData {
+         auto inputs_0 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/51));
+         auto inputs_1 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/52));
+         Tensor z = less_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
       {"test_less_int16",
-       {Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/53)),
-        Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/54))}},
+       [=]() -> IoData {
+         auto inputs_0 =
+             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/53));
+         auto inputs_1 =
+             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/54));
+         Tensor z = less_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
       {"test_less_uint8",
-       {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/55)),
-        Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/56))}},
+       [=]() -> IoData {
+         auto inputs_0 =
+             Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/55));
+         auto inputs_1 =
+             Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/56));
+         Tensor z = less_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
       {"test_less_uint16",
-       {Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/57)),
-        Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/58))}},
+       [=]() -> IoData {
+         auto inputs_0 =
+             Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/57));
+         auto inputs_1 =
+             Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/58));
+         Tensor z = less_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
       {"test_less_uint32",
-       {Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/59)),
-        Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/60))}},
+       [=]() -> IoData {
+         auto inputs_0 =
+             Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/59));
+         auto inputs_1 =
+             Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/60));
+         Tensor z = less_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
       {"test_less_uint64",
-       {Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/61)),
-        Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/62))}},
+       [=]() -> IoData {
+         auto inputs_0 =
+             Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/61));
+         auto inputs_1 =
+             Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/62));
+         Tensor z = less_kernel(inputs_0, inputs_1);
+         return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
+       }},
       // From Less.export_less_broadcast():
       {"test_less_bcast", {RandnFloat({3, 4, 5}, /*seed=*/27), RandnFloat({5}, /*seed=*/28)}},
   };
 
-  for (const auto &[name, inputs] : cases) {
-    Tensor z = less_kernel(inputs[0], inputs[1]);
-    Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
+  for (const auto &[name, make_io] : cases) {
+    Expect(registry, node, name, {opset}, make_io);
   }
 
   // FLOAT16
@@ -136,11 +177,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
     n16.add_input("x");
     n16.add_input("y");
     n16.add_output("z");
-
-    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
-    Tensor y = kernel::MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
-    Tensor z = less_kernel(x, y);
-    Expect(n16, {x, y}, {z}, "test_cc_less_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(n16), "test_cc_less_float16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
+      Tensor y = kernel::MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
+      Tensor z = less_kernel(x, y);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 
   // BFLOAT16
@@ -150,11 +192,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
     nbf.add_input("x");
     nbf.add_input("y");
     nbf.add_output("z");
-
-    Tensor x = kernel::MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
-    Tensor y = kernel::MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
-    Tensor z = less_kernel(x, y);
-    Expect(nbf, {x, y}, {z}, "test_cc_less_bfloat16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(nbf), "test_cc_less_bfloat16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
+      Tensor y = kernel::MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
+      Tensor z = less_kernel(x, y);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 }
 

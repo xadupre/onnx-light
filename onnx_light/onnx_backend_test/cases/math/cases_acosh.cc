@@ -51,11 +51,12 @@ void RegisterAcoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Acosh");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_acosh", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 1.25f, 1.5f, 2.0f, 3.5f, 10.0f});
+      Tensor y = acosh_kernel(x);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 1.25f, 1.5f, 2.0f, 3.5f, 10.0f});
-    Tensor y = acosh_kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_acosh", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Acosh`` operator (mirror the
@@ -67,10 +68,11 @@ void RegisterAcoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Acosh");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {3}, {10.0f, static_cast<float>(std::exp(1.0)), 1.0f});
-    Tensor y = acosh_kernel(x);
-    Expect(node, {x}, {y}, "test_acosh_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_acosh_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {10.0f, static_cast<float>(std::exp(1.0)), 1.0f});
+      Tensor y = acosh_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // From Acosh.export(): ``test_acosh`` uses np.random.uniform(1, 10, (3,4,5)).
   {
@@ -78,10 +80,11 @@ void RegisterAcoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Acosh");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = RandFloatInRange({3, 4, 5}, /*low=*/1.0f, /*high=*/10.0f, /*seed=*/1);
-    Tensor y = acosh_kernel(x);
-    Expect(node, {x}, {y}, "test_acosh", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_acosh", {opset}, [=]() -> IoData {
+      Tensor x = RandFloatInRange({3, 4, 5}, /*low=*/1.0f, /*high=*/10.0f, /*seed=*/1);
+      Tensor y = acosh_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

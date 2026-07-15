@@ -50,15 +50,16 @@ void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mo
     node.set_op_type("GlobalAveragePool");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_globalaveragepool", {opset}, [=]() -> IoData {
+      std::vector<float> x_data(1 * 3 * 5 * 5);
+      for (size_t i = 0; i < x_data.size(); ++i) {
+        x_data[i] = static_cast<float>(i + 1);
+      }
+      Tensor x = Tensor::FromFloat("", {1, 3, 5, 5}, x_data);
+      Tensor y = kernel(x);
 
-    std::vector<float> x_data(1 * 3 * 5 * 5);
-    for (size_t i = 0; i < x_data.size(); ++i) {
-      x_data[i] = static_cast<float>(i + 1);
-    }
-    Tensor x = Tensor::FromFloat("", {1, 3, 5, 5}, x_data);
-    Tensor y = kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_globalaveragepool", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // 1 x 1 x 3 x 3 precomputed example.
@@ -67,13 +68,14 @@ void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mo
     node.set_op_type("GlobalAveragePool");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_globalaveragepool_precomputed", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 3, 3},
+                                          {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+             Tensor y = kernel(x); // expected: 5.0
 
-    Tensor x =
-        Tensor::FromFloat("", {1, 1, 3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
-    Tensor y = kernel(x); // expected: 5.0
-
-    Expect(node, {x}, {y}, "test_cc_globalaveragepool_precomputed", {opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 
@@ -114,15 +116,16 @@ void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) 
     node.set_op_type("GlobalMaxPool");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_globalmaxpool", {opset}, [=]() -> IoData {
+      std::vector<float> x_data(1 * 3 * 5 * 5);
+      for (size_t i = 0; i < x_data.size(); ++i) {
+        x_data[i] = static_cast<float>(i + 1);
+      }
+      Tensor x = Tensor::FromFloat("", {1, 3, 5, 5}, x_data);
+      Tensor y = kernel(x);
 
-    std::vector<float> x_data(1 * 3 * 5 * 5);
-    for (size_t i = 0; i < x_data.size(); ++i) {
-      x_data[i] = static_cast<float>(i + 1);
-    }
-    Tensor x = Tensor::FromFloat("", {1, 3, 5, 5}, x_data);
-    Tensor y = kernel(x);
-
-    Expect(node, {x}, {y}, "test_cc_globalmaxpool", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // 1 x 1 x 3 x 3 precomputed example.
@@ -131,12 +134,14 @@ void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) 
     node.set_op_type("GlobalMaxPool");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_globalmaxpool_precomputed", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 3, 3},
+                                          {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+             Tensor y = kernel(x); // expected: 9.0
 
-    Tensor x =
-        Tensor::FromFloat("", {1, 1, 3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
-    Tensor y = kernel(x); // expected: 9.0
-
-    Expect(node, {x}, {y}, "test_cc_globalmaxpool_precomputed", {opset}, "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 
@@ -180,15 +185,16 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<int64_t>(node, "p", 1);
+    Expect(registry, std::move(node), "test_cc_globallppool_lp1", {opset}, [=]() -> IoData {
+      std::vector<float> x_data(1 * 3 * 5 * 5);
+      for (size_t i = 0; i < x_data.size(); ++i) {
+        x_data[i] = static_cast<float>(i + 1);
+      }
+      Tensor x = Tensor::FromFloat("", {1, 3, 5, 5}, x_data);
+      Tensor y = kernel(x, /*p=*/1);
 
-    std::vector<float> x_data(1 * 3 * 5 * 5);
-    for (size_t i = 0; i < x_data.size(); ++i) {
-      x_data[i] = static_cast<float>(i + 1);
-    }
-    Tensor x = Tensor::FromFloat("", {1, 3, 5, 5}, x_data);
-    Tensor y = kernel(x, /*p=*/1);
-
-    Expect(node, {x}, {y}, "test_cc_globallppool_lp1", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // 1 x 3 x 5 x 5 input, p=2.
@@ -198,15 +204,16 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<int64_t>(node, "p", 2);
+    Expect(registry, std::move(node), "test_cc_globallppool_lp2", {opset}, [=]() -> IoData {
+      std::vector<float> x_data(1 * 3 * 5 * 5);
+      for (size_t i = 0; i < x_data.size(); ++i) {
+        x_data[i] = static_cast<float>(i + 1);
+      }
+      Tensor x = Tensor::FromFloat("", {1, 3, 5, 5}, x_data);
+      Tensor y = kernel(x, /*p=*/2);
 
-    std::vector<float> x_data(1 * 3 * 5 * 5);
-    for (size_t i = 0; i < x_data.size(); ++i) {
-      x_data[i] = static_cast<float>(i + 1);
-    }
-    Tensor x = Tensor::FromFloat("", {1, 3, 5, 5}, x_data);
-    Tensor y = kernel(x, /*p=*/2);
-
-    Expect(node, {x}, {y}, "test_cc_globallppool_lp2", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // 1 x 1 x 3 x 3, default p=2.
@@ -215,12 +222,13 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("GlobalLpPool");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_globallppool_default", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {1, 1, 3, 3},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+      Tensor y = kernel(x); // expected: sqrt(1+4+9+16+25+36+49+64+81) = sqrt(285)
 
-    Tensor x =
-        Tensor::FromFloat("", {1, 1, 3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
-    Tensor y = kernel(x); // expected: sqrt(1+4+9+16+25+36+49+64+81) = sqrt(285)
-
-    Expect(node, {x}, {y}, "test_cc_globallppool_default", {opset}, "backend-test", registry);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

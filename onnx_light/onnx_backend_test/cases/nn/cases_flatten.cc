@@ -78,35 +78,41 @@ void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
   // Default axis (axis=1) on a (5, 4, 3, 2) input.
   {
     NodeProto node = MakeFlattenNode(/*axis=*/1, /*include_axis=*/false);
-    std::vector<float> data = SequentialFloats(5 * 4 * 3 * 2);
-    Tensor a = Tensor::FromFloat("", {5, 4, 3, 2}, data);
-    Tensor b = kernel(a);
-    Expect(node, {a}, {b}, "test_cc_flatten_default_axis", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_flatten_default_axis", {opset}, [=]() -> IoData {
+      std::vector<float> data = SequentialFloats(5 * 4 * 3 * 2);
+      Tensor a = Tensor::FromFloat("", {5, 4, 3, 2}, data);
+      Tensor b = kernel(a);
+      return IoData{{std::move(a)}, {std::move(b)}};
+    });
   }
 
   // Explicit axis 0..3 on a (2, 3, 4, 5) input.
   {
     const std::vector<int64_t> shape{2, 3, 4, 5};
-    std::vector<float> data = SequentialFloats(2 * 3 * 4 * 5);
     for (int64_t axis = 0; axis < 4; ++axis) {
-      NodeProto node = MakeFlattenNode(axis, /*include_axis=*/true);
-      Tensor a = Tensor::FromFloat("", shape, data);
-      Tensor b = kernel(a, axis);
-      Expect(node, {a}, {b}, "test_cc_flatten_axis" + std::to_string(axis), {opset}, "backend-test",
-             registry);
+      Expect(registry, MakeFlattenNode(axis, /*include_axis=*/true),
+             "test_cc_flatten_axis" + std::to_string(axis), {opset},
+             [kernel, shape, axis]() -> IoData {
+               std::vector<float> data = SequentialFloats(2 * 3 * 4 * 5);
+               Tensor a = Tensor::FromFloat("", shape, data);
+               Tensor b = kernel(a, axis);
+               return IoData{{std::move(a)}, {std::move(b)}};
+             });
     }
   }
 
   // Negative axis -1..-4 on a (2, 3, 4, 5) input.
   {
     const std::vector<int64_t> shape{2, 3, 4, 5};
-    std::vector<float> data = SequentialFloats(2 * 3 * 4 * 5);
     for (int64_t axis = -4; axis < 0; ++axis) {
-      NodeProto node = MakeFlattenNode(axis, /*include_axis=*/true);
-      Tensor a = Tensor::FromFloat("", shape, data);
-      Tensor b = kernel(a, axis);
-      Expect(node, {a}, {b}, "test_cc_flatten_negative_axis" + std::to_string(-axis), {opset},
-             "backend-test", registry);
+      Expect(registry, MakeFlattenNode(axis, /*include_axis=*/true),
+             "test_cc_flatten_negative_axis" + std::to_string(-axis), {opset},
+             [kernel, shape, axis]() -> IoData {
+               std::vector<float> data = SequentialFloats(2 * 3 * 4 * 5);
+               Tensor a = Tensor::FromFloat("", shape, data);
+               Tensor b = kernel(a, axis);
+               return IoData{{std::move(a)}, {std::move(b)}};
+             });
     }
   }
 }

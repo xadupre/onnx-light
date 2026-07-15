@@ -68,29 +68,37 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
 
   // From DynamicQuantizeLinear.export(): 1-D input straddling zero.
   {
-    Tensor x = Tensor::FromFloat("", {6}, {0.0f, 2.0f, -3.0f, -2.5f, 1.34f, 0.5f});
-    auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
-    Expect(node, {x}, {y, y_scale, y_zero_point}, "test_dynamicquantizelinear", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_dynamicquantizelinear", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {6}, {0.0f, 2.0f, -3.0f, -2.5f, 1.34f, 0.5f});
+      auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
+    });
   }
 
   // From DynamicQuantizeLinear.export_max_adjusted(): all-negative 1-D input,
   // so ``max`` gets clipped to 0.
   {
-    Tensor x = Tensor::FromFloat("", {6}, {-1.0f, -2.1f, -1.3f, -2.5f, -3.34f, -4.0f});
-    auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
-    Expect(node, {x}, {y, y_scale, y_zero_point}, "test_dynamicquantizelinear_max_adjusted",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_dynamicquantizelinear_max_adjusted", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {6}, {-1.0f, -2.1f, -1.3f, -2.5f, -3.34f, -4.0f});
+             auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
+             return IoData{{std::move(x)},
+                           {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
+           });
   }
 
   // From DynamicQuantizeLinear.export_min_adjusted(): all-positive 2-D input,
   // so ``min`` gets clipped to 0.
   {
-    Tensor x = Tensor::FromFloat(
-        "", {3, 4}, {1.0f, 2.1f, 1.3f, 2.5f, 3.34f, 4.0f, 1.5f, 2.6f, 3.9f, 4.0f, 3.0f, 2.345f});
-    auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
-    Expect(node, {x}, {y, y_scale, y_zero_point}, "test_dynamicquantizelinear_min_adjusted",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_dynamicquantizelinear_min_adjusted", {opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat(
+                 "", {3, 4},
+                 {1.0f, 2.1f, 1.3f, 2.5f, 3.34f, 4.0f, 1.5f, 2.6f, 3.9f, 4.0f, 3.0f, 2.345f});
+             auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
+             return IoData{{std::move(x)},
+                           {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
+           });
   }
 }
 

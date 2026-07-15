@@ -24,12 +24,13 @@ void RegisterXorOnnxCase(const std::string &name, const std::vector<int64_t> &x_
                          const kernel::Xor &xor_kernel, const OpsetId &opset,
                          std::vector<TestCase> &registry) {
   NodeProto node = MakeNode("Xor", {"x", "y"}, {"xor"});
+  Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
+    Tensor x = RandBool(x_shape, x_seed);
+    Tensor y = RandBool(y_shape, y_seed);
+    Tensor z = xor_kernel(x, y);
 
-  Tensor x = RandBool(x_shape, x_seed);
-  Tensor y = RandBool(y_shape, y_seed);
-  Tensor z = xor_kernel(x, y);
-
-  Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
+    return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+  });
 }
 
 } // namespace
@@ -61,23 +62,25 @@ void RegisterXorCases(std::vector<TestCase> &registry, TestMode mode) {
   // Equal-shape variant.
   {
     NodeProto node = MakeNode("Xor", {"x", "y"}, {"z"});
+    Expect(registry, std::move(node), "test_cc_xor", {opset}, [=]() -> IoData {
+      Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
+      Tensor y("", DataType::BOOL, {2, 2}, {1, 1, 0, 0});
+      Tensor z = xor_kernel(x, y);
 
-    Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
-    Tensor y("", DataType::BOOL, {2, 2}, {1, 1, 0, 0});
-    Tensor z = xor_kernel(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_xor", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 
   // Scalar broadcast variant: z[i] = x[i] XOR y (scalar).
   {
     NodeProto node = MakeNode("Xor", {"x", "y"}, {"z"});
+    Expect(registry, std::move(node), "test_cc_xor_bcast", {opset}, [=]() -> IoData {
+      Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
+      Tensor y("", DataType::BOOL, {}, {1});
+      Tensor z = xor_kernel(x, y);
 
-    Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
-    Tensor y("", DataType::BOOL, {}, {1});
-    Tensor z = xor_kernel(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_xor_bcast", {opset}, "backend-test", registry);
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``Xor`` operator (mirror the

@@ -77,31 +77,39 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // --- STFT with frame_length input, no window, onesided=1.
   {
-    Tensor y = stft_v17(signal, frame_step, /*window=*/nullptr, &frame_length, /*onesided=*/true);
-    Expect(MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/1),
-           {signal, frame_step, frame_length}, {y}, "test_cc_stft", {opset_v17}, "backend-test",
-           registry);
-    registry.back().atol = 1e-5;
+    Expect(registry,
+           MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/1),
+           "test_cc_stft", {opset_v17}, [=]() -> IoData {
+             Tensor y =
+                 stft_v17(signal, frame_step, /*window=*/nullptr, &frame_length, /*onesided=*/true);
+             return IoData{{std::move(signal), std::move(frame_step), std::move(frame_length)},
+                           {std::move(y)}};
+           });
   }
 
   // --- STFT with both window and frame_length, onesided=1.
   {
-    Tensor window = Tensor::FromFloat(
-        "window", {8}, {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}); // rectangular
-    Tensor y = stft_v17(signal, frame_step, &window, &frame_length, /*onesided=*/true);
-    Expect(MakeSTFTNode(/*with_window=*/true, /*with_frame_length=*/true, /*onesided=*/1),
-           {signal, frame_step, window, frame_length}, {y}, "test_cc_stft_with_window", {opset_v17},
-           "backend-test", registry);
-    registry.back().atol = 1e-5;
+    Expect(registry, MakeSTFTNode(/*with_window=*/true, /*with_frame_length=*/true, /*onesided=*/1),
+           "test_cc_stft_with_window", {opset_v17}, [=]() -> IoData {
+             Tensor window = Tensor::FromFloat(
+                 "window", {8}, {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}); // rectangular
+             Tensor y = stft_v17(signal, frame_step, &window, &frame_length, /*onesided=*/true);
+             return IoData{{std::move(signal), std::move(frame_step), std::move(window),
+                            std::move(frame_length)},
+                           {std::move(y)}};
+           });
   }
 
   // --- STFT with onesided=0 (two-sided, complex output).
   {
-    Tensor y = stft_v17(signal, frame_step, /*window=*/nullptr, &frame_length, /*onesided=*/false);
-    Expect(MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/0),
-           {signal, frame_step, frame_length}, {y}, "test_cc_stft_twosided", {opset_v17},
-           "backend-test", registry);
-    registry.back().atol = 1e-5;
+    Expect(registry,
+           MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/0),
+           "test_cc_stft_twosided", {opset_v17}, [=]() -> IoData {
+             Tensor y = stft_v17(signal, frame_step, /*window=*/nullptr, &frame_length,
+                                 /*onesided=*/false);
+             return IoData{{std::move(signal), std::move(frame_step), std::move(frame_length)},
+                           {std::move(y)}};
+           });
   }
 
   // --- STFT with complex-valued, batched input (onesided=0).
@@ -114,58 +122,63 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
   // real value differs per batch — any cross-batch contamination breaks the
   // DC bin equality on at least one frame.
   {
-    constexpr int64_t batch_size = 2;
-    constexpr int64_t signal_size = 128;
-    constexpr int64_t signal_components = 2; // complex: real + imag
-    constexpr int64_t frame_length_v = 32;
-    constexpr int64_t frame_step_v = 16;
-    constexpr int64_t n_dfts = (signal_size - frame_length_v) / frame_step_v + 1; // 7
-    constexpr int64_t dft_output_size = frame_length_v;                           // onesided=false
-    constexpr int64_t output_components = 2;
+    Expect(registry,
+           MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/0),
+           "test_cc_stft_complex_batched", {opset_v17}, [=]() -> IoData {
+             constexpr int64_t batch_size = 2;
+             constexpr int64_t signal_size = 128;
+             constexpr int64_t signal_components = 2; // complex: real + imag
+             constexpr int64_t frame_length_v = 32;
+             constexpr int64_t frame_step_v = 16;
+             constexpr int64_t n_dfts = (signal_size - frame_length_v) / frame_step_v + 1; // 7
+             constexpr int64_t dft_output_size = frame_length_v; // onesided=false
+             constexpr int64_t output_components = 2;
 
-    std::vector<float> signal_data(
-        static_cast<std::size_t>(batch_size * signal_size * signal_components), 0.0f);
-    for (int64_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
-      const float signal_value = batch_idx == 0 ? 1.0f : 99.0f;
-      for (int64_t sample_idx = 0; sample_idx < signal_size; ++sample_idx) {
-        signal_data[static_cast<std::size_t>((batch_idx * signal_size + sample_idx) *
-                                             signal_components)] = signal_value;
-      }
-    }
-    Tensor signal_complex =
-        Tensor::FromFloat("signal", {batch_size, signal_size, signal_components}, signal_data);
-    Tensor frame_step_b = Tensor::FromInt64("frame_step", {}, {frame_step_v});
-    Tensor frame_length_b = Tensor::FromInt64("frame_length", {}, {frame_length_v});
+             std::vector<float> signal_data(
+                 static_cast<std::size_t>(batch_size * signal_size * signal_components), 0.0f);
+             for (int64_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
+               const float signal_value = batch_idx == 0 ? 1.0f : 99.0f;
+               for (int64_t sample_idx = 0; sample_idx < signal_size; ++sample_idx) {
+                 signal_data[static_cast<std::size_t>((batch_idx * signal_size + sample_idx) *
+                                                      signal_components)] = signal_value;
+               }
+             }
+             Tensor signal_complex = Tensor::FromFloat(
+                 "signal", {batch_size, signal_size, signal_components}, signal_data);
+             Tensor frame_step_b = Tensor::FromInt64("frame_step", {}, {frame_step_v});
+             Tensor frame_length_b = Tensor::FromInt64("frame_length", {}, {frame_length_v});
 
-    Tensor y_expected = stft_v17(signal_complex, frame_step_b, /*window=*/nullptr, &frame_length_b,
-                                 /*onesided=*/false);
+             Tensor y_expected =
+                 stft_v17(signal_complex, frame_step_b, /*window=*/nullptr, &frame_length_b,
+                          /*onesided=*/false);
 
-    // Sanity-check the kernel's output against the closed-form DFT of a
-    // DC-only complex signal: the DC bin (k=0) of each frame must equal
-    // ``frame_length × dc_value``, and all other bins must be zero. Any
-    // cross-batch leak (the bug fixed by onnxruntime#28961) would jam
-    // different constants into adjacent frames and break this equality.
-    EXT_ENFORCE_INVALID(
-        y_expected.shape ==
-            std::vector<int64_t>({batch_size, n_dfts, dft_output_size, output_components}),
-        "test_cc_stft_complex_batched: unexpected output shape.");
-    const float *y_ptr = y_expected.AsFloat();
-    for (int64_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
-      const float dc_value = (batch_idx == 0 ? 1.0f : 99.0f) * static_cast<float>(frame_length_v);
-      for (int64_t frame_idx = 0; frame_idx < n_dfts; ++frame_idx) {
-        const int64_t base =
-            ((batch_idx * n_dfts + frame_idx) * dft_output_size) * output_components;
-        EXT_ENFORCE_INVALID(std::fabs(y_ptr[base] - dc_value) < 1e-3f,
-                            "test_cc_stft_complex_batched: DC bin value mismatch.");
-        EXT_ENFORCE_INVALID(std::fabs(y_ptr[base + 1]) < 1e-3f,
-                            "test_cc_stft_complex_batched: DC bin imag must be zero.");
-      }
-    }
+             // Sanity-check the kernel's output against the closed-form DFT of a
+             // DC-only complex signal: the DC bin (k=0) of each frame must equal
+             // ``frame_length × dc_value``, and all other bins must be zero. Any
+             // cross-batch leak (the bug fixed by onnxruntime#28961) would jam
+             // different constants into adjacent frames and break this equality.
+             EXT_ENFORCE_INVALID(
+                 y_expected.shape ==
+                     std::vector<int64_t>({batch_size, n_dfts, dft_output_size, output_components}),
+                 "test_cc_stft_complex_batched: unexpected output shape.");
+             const float *y_ptr = y_expected.AsFloat();
+             for (int64_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
+               const float dc_value =
+                   (batch_idx == 0 ? 1.0f : 99.0f) * static_cast<float>(frame_length_v);
+               for (int64_t frame_idx = 0; frame_idx < n_dfts; ++frame_idx) {
+                 const int64_t base =
+                     ((batch_idx * n_dfts + frame_idx) * dft_output_size) * output_components;
+                 EXT_ENFORCE_INVALID(std::fabs(y_ptr[base] - dc_value) < 1e-3f,
+                                     "test_cc_stft_complex_batched: DC bin value mismatch.");
+                 EXT_ENFORCE_INVALID(std::fabs(y_ptr[base + 1]) < 1e-3f,
+                                     "test_cc_stft_complex_batched: DC bin imag must be zero.");
+               }
+             }
 
-    Expect(MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/0),
-           {signal_complex, frame_step_b, frame_length_b}, {y_expected},
-           "test_cc_stft_complex_batched", {opset_v17}, "backend-test", registry);
-    registry.back().atol = 1e-3;
+             return IoData{
+                 {std::move(signal_complex), std::move(frame_step_b), std::move(frame_length_b)},
+                 {std::move(y_expected)}};
+           });
   }
 }
 

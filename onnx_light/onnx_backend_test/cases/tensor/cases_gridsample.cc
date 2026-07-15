@@ -109,9 +109,12 @@ void AddCase(std::vector<TestCase> &registry, const OpsetId &opset, const std::s
   }
   if (align_corners != 0) {
     AddAttribute<int64_t>(node, "align_corners", align_corners);
-  }
-  Tensor Y = Tensor::FromFloat("Y", y_shape, y_values);
-  Expect(node, {X, Grid}, {Y}, name, {opset}, "backend-test", registry);
+               Expect(registry, std::move(node), name, {opset},
+                      [=]() -> IoData {
+                 }
+                 Tensor Y = Tensor::FromFloat("Y", y_shape, y_values);
+                 return IoData{{std::move(X), std::move(Grid)}, {std::move(Y)}};
+  });
 }
 
 } // namespace

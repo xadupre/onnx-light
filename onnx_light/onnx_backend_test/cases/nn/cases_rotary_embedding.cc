@@ -62,8 +62,10 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     kernel::RotaryEmbedding::Attributes attrs;
     Tensor Y = kernel(X4, cos2, sin2, position_ids, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
-    Expect(node, {X4, cos2, sin2, position_ids}, {Y}, "test_cc_rotary_embedding", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_rotary_embedding", {opset}, [=]() -> IoData {
+      return IoData{{std::move(X4), std::move(cos2), std::move(sin2), std::move(position_ids)},
+                    {std::move(Y)}};
+    });
   }
 
   // Case 2: interleaved=1.
@@ -73,8 +75,12 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     Tensor Y = kernel(X4, cos2, sin2, position_ids, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
     AddAttribute<int64_t>(node, "interleaved", 1);
-    Expect(node, {X4, cos2, sin2, position_ids}, {Y}, "test_cc_rotary_embedding_interleaved",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_rotary_embedding_interleaved", {opset},
+           [=]() -> IoData {
+             return IoData{
+                 {std::move(X4), std::move(cos2), std::move(sin2), std::move(position_ids)},
+                 {std::move(Y)}};
+           });
   }
 
   // Case 3: rank-3 X = (batch, seq, hidden_size = num_heads * head_size)
@@ -88,8 +94,11 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     Tensor Y = kernel(X3, cos2, sin2, position_ids, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
     AddAttribute<int64_t>(node, "num_heads", 2);
-    Expect(node, {X3, cos2, sin2, position_ids}, {Y}, "test_cc_rotary_embedding_3d_input", {opset},
-           "backend-test", registry);
+    Expect(
+        registry, std::move(node), "test_cc_rotary_embedding_3d_input", {opset}, [=]() -> IoData {
+          return IoData{{std::move(X3), std::move(cos2), std::move(sin2), std::move(position_ids)},
+                        {std::move(Y)}};
+        });
   }
 
   // Case 4: no position_ids — cos/sin caches are rank-3
@@ -101,8 +110,10 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     Tensor empty;
     Tensor Y = kernel(X4, cos3, sin3, empty, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache"}, {"Y"});
-    Expect(node, {X4, cos3, sin3}, {Y}, "test_cc_rotary_embedding_no_position_ids", {opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_rotary_embedding_no_position_ids", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(X4), std::move(cos3), std::move(sin3)}, {std::move(Y)}};
+           });
   }
 
   // Case 5: no position_ids + interleaved=1.
@@ -113,8 +124,10 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     Tensor Y = kernel(X4, cos3, sin3, empty, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache"}, {"Y"});
     AddAttribute<int64_t>(node, "interleaved", 1);
-    Expect(node, {X4, cos3, sin3}, {Y}, "test_cc_rotary_embedding_no_position_ids_interleaved",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_rotary_embedding_no_position_ids_interleaved",
+           {opset}, [=]() -> IoData {
+             return IoData{{std::move(X4), std::move(cos3), std::move(sin3)}, {std::move(Y)}};
+           });
   }
 
   // Case 6: partial rotation — rotary_embedding_dim < head_size. With
@@ -129,8 +142,12 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     Tensor Y = kernel(X4, cos_partial, sin_partial, position_ids, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
     AddAttribute<int64_t>(node, "rotary_embedding_dim", 2);
-    Expect(node, {X4, cos_partial, sin_partial, position_ids}, {Y},
-           "test_cc_rotary_embedding_with_rotary_dim", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_rotary_embedding_with_rotary_dim", {opset},
+           [=]() -> IoData {
+             return IoData{{std::move(X4), std::move(cos_partial), std::move(sin_partial),
+                            std::move(position_ids)},
+                           {std::move(Y)}};
+           });
   }
 
   // Case 7: partial rotation + interleaved=1.
@@ -144,9 +161,12 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
     AddAttribute<int64_t>(node, "interleaved", 1);
     AddAttribute<int64_t>(node, "rotary_embedding_dim", 2);
-    Expect(node, {X4, cos_partial, sin_partial, position_ids}, {Y},
-           "test_cc_rotary_embedding_with_interleaved_rotary_dim", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_rotary_embedding_with_interleaved_rotary_dim",
+           {opset}, [=]() -> IoData {
+             return IoData{{std::move(X4), std::move(cos_partial), std::move(sin_partial),
+                            std::move(position_ids)},
+                           {std::move(Y)}};
+           });
   }
 
   // Case 8: no position_ids + partial rotation. cos/sin caches are rank-3
@@ -160,8 +180,10 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     Tensor Y = kernel(X4, cos_p3, sin_p3, empty, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache"}, {"Y"});
     AddAttribute<int64_t>(node, "rotary_embedding_dim", 2);
-    Expect(node, {X4, cos_p3, sin_p3}, {Y}, "test_cc_rotary_embedding_no_position_ids_rotary_dim",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_rotary_embedding_no_position_ids_rotary_dim",
+           {opset}, [=]() -> IoData {
+             return IoData{{std::move(X4), std::move(cos_p3), std::move(sin_p3)}, {std::move(Y)}};
+           });
   }
 }
 

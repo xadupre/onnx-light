@@ -110,7 +110,8 @@ void RegisterTensorInputCase(const std::string &name, const std::string &op_type
   node.set_op_type(op_type);
   node.add_input("input");
   node.add_output("output");
-  Expect(node, {input}, {expected_output}, name, {opset}, "backend-test", registry);
+  Expect(registry, std::move(node), name, {opset},
+         [=]() -> IoData { return IoData{{std::move(input)}, {std::move(expected_output)}}; });
 }
 
 // Builds a model that exercises ``OptionalGetElement`` on a sequence-typed

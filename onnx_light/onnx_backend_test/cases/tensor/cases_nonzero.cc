@@ -44,30 +44,38 @@ void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_nonzero_2d
   {
-    const Tensor x = Tensor::FromFloat("X", {2, 2}, {1.0f, 0.0f, 1.0f, 1.0f});
-    const Tensor y = nonzero_kernel(x);
-    Expect(MakeNonZeroNode(), {x}, {y}, "test_cc_nonzero_2d", {opset}, "backend-test", registry);
+    Expect(registry, MakeNonZeroNode(), "test_cc_nonzero_2d", {opset}, [=]() -> IoData {
+      const Tensor x = Tensor::FromFloat("X", {2, 2}, {1.0f, 0.0f, 1.0f, 1.0f});
+      const Tensor y = nonzero_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // test_cc_nonzero_1d
   {
-    const Tensor x = Tensor::FromFloat("X", {5}, {0.0f, 1.0f, 0.0f, -1.0f, 2.0f});
-    const Tensor y = nonzero_kernel(x);
-    Expect(MakeNonZeroNode(), {x}, {y}, "test_cc_nonzero_1d", {opset}, "backend-test", registry);
+    Expect(registry, MakeNonZeroNode(), "test_cc_nonzero_1d", {opset}, [=]() -> IoData {
+      const Tensor x = Tensor::FromFloat("X", {5}, {0.0f, 1.0f, 0.0f, -1.0f, 2.0f});
+      const Tensor y = nonzero_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // test_cc_nonzero_bool
   {
-    const Tensor x = Tensor::FromBool("X", {2, 3}, {1, 0, 1, 0, 1, 0});
-    const Tensor y = nonzero_kernel(x);
-    Expect(MakeNonZeroNode(), {x}, {y}, "test_cc_nonzero_bool", {opset}, "backend-test", registry);
+    Expect(registry, MakeNonZeroNode(), "test_cc_nonzero_bool", {opset}, [=]() -> IoData {
+      const Tensor x = Tensor::FromBool("X", {2, 3}, {1, 0, 1, 0, 1, 0});
+      const Tensor y = nonzero_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // test_cc_nonzero_int64
   {
-    const Tensor x = Tensor::FromInt64("X", {2, 3}, {0, 1, 2, 0, 0, 3});
-    const Tensor y = nonzero_kernel(x);
-    Expect(MakeNonZeroNode(), {x}, {y}, "test_cc_nonzero_int64", {opset}, "backend-test", registry);
+    Expect(registry, MakeNonZeroNode(), "test_cc_nonzero_int64", {opset}, [=]() -> IoData {
+      const Tensor x = Tensor::FromInt64("X", {2, 3}, {0, 1, 2, 0, 0, 3});
+      const Tensor y = nonzero_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // test_cc_nonzero_example — mirrors upstream
@@ -82,8 +90,8 @@ void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("NonZero");
     node.add_input("condition");
     node.add_output("result");
-    Expect(node, {condition}, {result}, "test_cc_nonzero_example", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_nonzero_example", {opset},
+           [=]() -> IoData { return IoData{{std::move(condition)}, {std::move(result)}}; });
   }
 }
 

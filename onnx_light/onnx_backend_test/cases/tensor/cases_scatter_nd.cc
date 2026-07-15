@@ -71,61 +71,68 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_scatternd — mirrors upstream ``test_scatternd``.
   {
-    Tensor data = MakeData4x4x4();
-    Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 2});
-    Tensor updates = MakeUpdates2x4x4();
-    kernel::ScatterND::Attributes attrs;
-    Tensor output = snd_kernel(data, indices, updates, attrs);
-    Expect(MakeScatterNDNode("none"), {data, indices, updates}, {output}, "test_cc_scatternd",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeScatterNDNode("none"), "test_cc_scatternd", {opset}, [=]() -> IoData {
+      Tensor data = MakeData4x4x4();
+      Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 2});
+      Tensor updates = MakeUpdates2x4x4();
+      kernel::ScatterND::Attributes attrs;
+      Tensor output = snd_kernel(data, indices, updates, attrs);
+      return IoData{{std::move(data), std::move(indices), std::move(updates)}, {std::move(output)}};
+    });
   }
 
   // test_cc_scatternd_add — mirrors upstream ``test_scatternd_add``.
   {
-    Tensor data = MakeData4x4x4();
-    Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
-    Tensor updates = MakeUpdates2x4x4();
-    kernel::ScatterND::Attributes attrs;
-    attrs.reduction = "add";
-    Tensor output = snd_kernel(data, indices, updates, attrs);
-    Expect(MakeScatterNDNode("add"), {data, indices, updates}, {output}, "test_cc_scatternd_add",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeScatterNDNode("add"), "test_cc_scatternd_add", {opset}, [=]() -> IoData {
+      Tensor data = MakeData4x4x4();
+      Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
+      Tensor updates = MakeUpdates2x4x4();
+      kernel::ScatterND::Attributes attrs;
+      attrs.reduction = "add";
+      Tensor output = snd_kernel(data, indices, updates, attrs);
+      return IoData{{std::move(data), std::move(indices), std::move(updates)}, {std::move(output)}};
+    });
   }
 
   // test_cc_scatternd_multiply — mirrors upstream ``test_scatternd_multiply``.
   {
-    Tensor data = MakeData4x4x4();
-    Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
-    Tensor updates = MakeUpdates2x4x4();
-    kernel::ScatterND::Attributes attrs;
-    attrs.reduction = "mul";
-    Tensor output = snd_kernel(data, indices, updates, attrs);
-    Expect(MakeScatterNDNode("mul"), {data, indices, updates}, {output},
-           "test_cc_scatternd_multiply", {opset}, "backend-test", registry);
+    Expect(registry, MakeScatterNDNode("mul"), "test_cc_scatternd_multiply", {opset},
+           [=]() -> IoData {
+             Tensor data = MakeData4x4x4();
+             Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
+             Tensor updates = MakeUpdates2x4x4();
+             kernel::ScatterND::Attributes attrs;
+             attrs.reduction = "mul";
+             Tensor output = snd_kernel(data, indices, updates, attrs);
+             return IoData{{std::move(data), std::move(indices), std::move(updates)},
+                           {std::move(output)}};
+           });
   }
 
   // test_cc_scatternd_max — mirrors upstream ``test_scatternd_max``.
   {
-    Tensor data = MakeData4x4x4();
-    Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
-    Tensor updates = MakeUpdates2x4x4();
-    kernel::ScatterND::Attributes attrs;
-    attrs.reduction = "max";
-    Tensor output = snd_kernel(data, indices, updates, attrs);
-    Expect(MakeScatterNDNode("max"), {data, indices, updates}, {output}, "test_cc_scatternd_max",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeScatterNDNode("max"), "test_cc_scatternd_max", {opset}, [=]() -> IoData {
+      Tensor data = MakeData4x4x4();
+      Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
+      Tensor updates = MakeUpdates2x4x4();
+      kernel::ScatterND::Attributes attrs;
+      attrs.reduction = "max";
+      Tensor output = snd_kernel(data, indices, updates, attrs);
+      return IoData{{std::move(data), std::move(indices), std::move(updates)}, {std::move(output)}};
+    });
   }
 
   // test_cc_scatternd_min — mirrors upstream ``test_scatternd_min``.
   {
-    Tensor data = MakeData4x4x4();
-    Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
-    Tensor updates = MakeUpdates2x4x4();
-    kernel::ScatterND::Attributes attrs;
-    attrs.reduction = "min";
-    Tensor output = snd_kernel(data, indices, updates, attrs);
-    Expect(MakeScatterNDNode("min"), {data, indices, updates}, {output}, "test_cc_scatternd_min",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeScatterNDNode("min"), "test_cc_scatternd_min", {opset}, [=]() -> IoData {
+      Tensor data = MakeData4x4x4();
+      Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
+      Tensor updates = MakeUpdates2x4x4();
+      kernel::ScatterND::Attributes attrs;
+      attrs.reduction = "min";
+      Tensor output = snd_kernel(data, indices, updates, attrs);
+      return IoData{{std::move(data), std::move(indices), std::move(updates)}, {std::move(output)}};
+    });
   }
 
   // test_cc_scatternd_max_with_element_indices — mirrors upstream
@@ -133,27 +140,33 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
   // Indices address individual elements (index rank == data rank), exercising
   // element-level reduction.
   {
-    Tensor data = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
-    Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
-    Tensor updates = Tensor::FromFloat("", {2}, {5, 1});
-    kernel::ScatterND::Attributes attrs;
-    attrs.reduction = "max";
-    Tensor output = snd_kernel(data, indices, updates, attrs);
-    Expect(MakeScatterNDNode("max"), {data, indices, updates}, {output},
-           "test_cc_scatternd_max_with_element_indices", {opset}, "backend-test", registry);
+    Expect(registry, MakeScatterNDNode("max"), "test_cc_scatternd_max_with_element_indices",
+           {opset}, [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
+             Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
+             Tensor updates = Tensor::FromFloat("", {2}, {5, 1});
+             kernel::ScatterND::Attributes attrs;
+             attrs.reduction = "max";
+             Tensor output = snd_kernel(data, indices, updates, attrs);
+             return IoData{{std::move(data), std::move(indices), std::move(updates)},
+                           {std::move(output)}};
+           });
   }
 
   // test_cc_scatternd_min_with_element_indices — mirrors upstream
   // ``test_scatternd_min_with_element_indices``.
   {
-    Tensor data = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
-    Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
-    Tensor updates = Tensor::FromFloat("", {2}, {5, 1});
-    kernel::ScatterND::Attributes attrs;
-    attrs.reduction = "min";
-    Tensor output = snd_kernel(data, indices, updates, attrs);
-    Expect(MakeScatterNDNode("min"), {data, indices, updates}, {output},
-           "test_cc_scatternd_min_with_element_indices", {opset}, "backend-test", registry);
+    Expect(registry, MakeScatterNDNode("min"), "test_cc_scatternd_min_with_element_indices",
+           {opset}, [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
+             Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
+             Tensor updates = Tensor::FromFloat("", {2}, {5, 1});
+             kernel::ScatterND::Attributes attrs;
+             attrs.reduction = "min";
+             Tensor output = snd_kernel(data, indices, updates, attrs);
+             return IoData{{std::move(data), std::move(indices), std::move(updates)},
+                           {std::move(output)}};
+           });
   }
 }
 

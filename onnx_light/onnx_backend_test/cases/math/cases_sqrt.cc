@@ -49,10 +49,11 @@ void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sqrt");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 0.25f, 1.0f, 2.0f, 4.0f, 9.0f});
-    Tensor y = sqrt_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_sqrt", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_sqrt", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 0.25f, 1.0f, 2.0f, 4.0f, 9.0f});
+      Tensor y = sqrt_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // From Sqrt.export(): ``test_sqrt_example`` uses x = [1, 4, 9].
@@ -61,10 +62,11 @@ void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sqrt");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = Tensor::FromFloat("", {3}, {1.0f, 4.0f, 9.0f});
-    Tensor y = sqrt_kernel(x);
-    Expect(node, {x}, {y}, "test_sqrt_example", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_sqrt_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3}, {1.0f, 4.0f, 9.0f});
+      Tensor y = sqrt_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // From Sqrt.export(): ``test_sqrt`` uses np.abs(np.random.randn(3, 4, 5)).
@@ -73,10 +75,11 @@ void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sqrt");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = NonNegativeRandFloat({3, 4, 5}, /*seed=*/1);
-    Tensor y = sqrt_kernel(x);
-    Expect(node, {x}, {y}, "test_sqrt", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_sqrt", {opset}, [=]() -> IoData {
+      Tensor x = NonNegativeRandFloat({3, 4, 5}, /*seed=*/1);
+      Tensor y = sqrt_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
   // FLOAT16
   {
@@ -84,10 +87,11 @@ void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sqrt");
     node.add_input("x");
     node.add_output("y");
-
-    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {0.0f, 0.25f, 1.0f, 2.25f, 4.0f, 9.0f});
-    Tensor y = sqrt_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_sqrt_float16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_sqrt_float16", {opset}, [=]() -> IoData {
+      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {0.0f, 0.25f, 1.0f, 2.25f, 4.0f, 9.0f});
+      Tensor y = sqrt_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // BFLOAT16
@@ -96,15 +100,16 @@ void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sqrt");
     node.add_input("x");
     node.add_output("y");
-
-    std::vector<float> vals = {0.0f, 0.25f, 1.0f, 2.25f, 4.0f, 9.0f};
-    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
-    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
-    for (size_t i = 0; i < vals.size(); ++i)
-      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
-    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-    Tensor y = sqrt_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_sqrt_bfloat16", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_sqrt_bfloat16", {opset}, [=]() -> IoData {
+      std::vector<float> vals = {0.0f, 0.25f, 1.0f, 2.25f, 4.0f, 9.0f};
+      std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+      auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+      for (size_t i = 0; i < vals.size(); ++i)
+        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+      Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
+      Tensor y = sqrt_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

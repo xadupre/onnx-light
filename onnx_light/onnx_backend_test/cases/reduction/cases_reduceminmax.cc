@@ -33,13 +33,16 @@ void EmitReduceMinMaxCase(std::vector<TestCase> &registry, const std::string &op
   AddAttribute<int64_t>(node, "keepdims", keepdims ? 1 : 0);
   if (noop_with_empty_axes) {
     AddAttribute<int64_t>(node, "noop_with_empty_axes", 1);
-  }
+                            Expect(registry, std::move(node), case_name, {opset},
+                                   [=]() -> IoData {
+                              }
 
-  Tensor data = Tensor::FromFloat("", data_shape, data_values);
-  Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
-  Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
+                              Tensor data = Tensor::FromFloat("", data_shape, data_values);
+                              Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
+                              Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
 
-  Expect(node, {data, axes}, {reduced}, case_name, {opset}, "backend-test", registry);
+                              return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+  });
 }
 
 // Emits a case where the optional ``axes`` input is omitted entirely (single
@@ -57,11 +60,12 @@ void EmitReduceMinMaxDefaultAxesCase(std::vector<TestCase> &registry, const std:
   node.add_input("data");
   node.add_output("reduced");
   AddAttribute<int64_t>(node, "keepdims", keepdims ? 1 : 0);
+  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+    Tensor data = Tensor::FromFloat("", data_shape, data_values);
+    Tensor reduced = kernel(data, keepdims, /*noop_with_empty_axes=*/false);
 
-  Tensor data = Tensor::FromFloat("", data_shape, data_values);
-  Tensor reduced = kernel(data, keepdims, /*noop_with_empty_axes=*/false);
-
-  Expect(node, {data}, {reduced}, case_name, {opset}, "backend-test", registry);
+    return IoData{{std::move(data)}, {std::move(reduced)}};
+  });
 }
 
 void RegisterReduceMinMaxCases(std::vector<TestCase> &registry, const std::string &op_type,
@@ -186,14 +190,14 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("axes");
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
-
-    // shape (4, 2): [[T,T],[T,F],[F,T],[F,F]]
-    const std::vector<uint8_t> bool_data = {1, 1, 1, 0, 0, 1, 0, 0};
-    Tensor data = Tensor::FromBool("", {4, 2}, bool_data);
-    Tensor axes = Tensor::FromInt64("", {1}, {1});
-    Tensor reduced = reduce_max_kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
-    Expect(node, {data, axes}, {reduced}, "test_reduce_max_bool_inputs", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_reduce_max_bool_inputs", {opset}, [=]() -> IoData {
+      // shape (4, 2): [[T,T],[T,F],[F,T],[F,F]]
+      const std::vector<uint8_t> bool_data = {1, 1, 1, 0, 0, 1, 0, 0};
+      Tensor data = Tensor::FromBool("", {4, 2}, bool_data);
+      Tensor axes = Tensor::FromInt64("", {1}, {1});
+      Tensor reduced = reduce_max_kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+      return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+    });
   }
 }
 
@@ -236,13 +240,13 @@ void RegisterReduceMinCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("axes");
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
-
-    const std::vector<uint8_t> bool_data = {1, 1, 1, 0, 0, 1, 0, 0};
-    Tensor data = Tensor::FromBool("", {4, 2}, bool_data);
-    Tensor axes = Tensor::FromInt64("", {1}, {1});
-    Tensor reduced = reduce_min_kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
-    Expect(node, {data, axes}, {reduced}, "test_reduce_min_bool_inputs", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_reduce_min_bool_inputs", {opset}, [=]() -> IoData {
+      const std::vector<uint8_t> bool_data = {1, 1, 1, 0, 0, 1, 0, 0};
+      Tensor data = Tensor::FromBool("", {4, 2}, bool_data);
+      Tensor axes = Tensor::FromInt64("", {1}, {1});
+      Tensor reduced = reduce_min_kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+      return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+    });
   }
 }
 

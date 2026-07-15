@@ -54,32 +54,38 @@ void RegisterGatherElementsCases(std::vector<TestCase> &registry, TestMode mode)
   // test_cc_gather_elements_0 — axis=1, mirrors upstream
   // ``test_gather_elements_0`` (small 2x2 example).
   {
-    Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 0});
-    Tensor output = ge_kernel(data, indices, 1);
-    Expect(MakeGatherElementsNode(1), {data, indices}, {output}, "test_cc_gather_elements_0",
-           {opset}, "backend-test", registry);
+    Expect(registry, MakeGatherElementsNode(1), "test_cc_gather_elements_0", {opset},
+           [=]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 0});
+             Tensor output = ge_kernel(data, indices, 1);
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
   }
 
   // test_cc_gather_elements_1 — axis=0, mirrors upstream
   // ``test_gather_elements_1`` (3x3 example).
   {
-    Tensor data =
-        Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
-    Tensor indices = Tensor::FromInt64("", {2, 3}, {1, 2, 0, 2, 0, 0});
-    Tensor output = ge_kernel(data, indices, 0);
-    Expect(MakeGatherElementsNode(0), {data, indices}, {output}, "test_cc_gather_elements_1",
-           {opset}, "backend-test", registry);
+    Expect(
+        registry, MakeGatherElementsNode(0), "test_cc_gather_elements_1", {opset}, [=]() -> IoData {
+          Tensor data =
+              Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+          Tensor indices = Tensor::FromInt64("", {2, 3}, {1, 2, 0, 2, 0, 0});
+          Tensor output = ge_kernel(data, indices, 0);
+          return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+        });
   }
 
   // test_cc_gather_elements_negative_indices — negative indices wrap.
   {
-    Tensor data =
-        Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
-    Tensor indices = Tensor::FromInt64("", {2, 3}, {-1, -2, 0, -2, 0, 0});
-    Tensor output = ge_kernel(data, indices, 0);
-    Expect(MakeGatherElementsNode(0), {data, indices}, {output},
-           "test_cc_gather_elements_negative_indices", {opset}, "backend-test", registry);
+    Expect(registry, MakeGatherElementsNode(0), "test_cc_gather_elements_negative_indices", {opset},
+           [=]() -> IoData {
+             Tensor data = Tensor::FromFloat(
+                 "", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+             Tensor indices = Tensor::FromInt64("", {2, 3}, {-1, -2, 0, -2, 0, 0});
+             Tensor output = ge_kernel(data, indices, 0);
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
   }
 }
 

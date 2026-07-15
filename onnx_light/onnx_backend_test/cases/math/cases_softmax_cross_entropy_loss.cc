@@ -69,18 +69,24 @@ void RegisterSCEVariants(const kernel::SoftmaxCrossEntropyLoss &sce_kernel, cons
   // Loss-only variant.
   {
     NodeProto node = BuildSCENode(has_weights, /*with_log_prob=*/false, reduction, has_ignore_index,
-                                  ignore_index);
-    Expect(node, inputs, {loss}, name_prefix, {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), name_prefix, {opset},
+           [=]() -> IoData {
+      ignore_index);
+      return IoData{std::move(inputs), {std::move(loss)}};
+           });
   }
 
   // Two-output variant (loss + log_prob).
   {
     NodeProto node = BuildSCENode(has_weights, /*with_log_prob=*/true, reduction, has_ignore_index,
-                                  ignore_index);
-    Tensor loss_copy = loss;
-    Tensor log_prob_copy = log_prob;
-    Expect(node, inputs, {std::move(loss_copy), std::move(log_prob_copy)},
-           name_prefix + "_log_prob", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), name_prefix + "_log_prob", {opset},
+           [=]() -> IoData {
+      ignore_index);
+      Tensor loss_copy = loss;
+      Tensor log_prob_copy = log_prob;
+      return IoData{std::move(inputs),
+                    {std::move(std::move(loss_copy)), std::move(std::move(log_prob_copy))}};
+           });
   }
 }
 
@@ -150,15 +156,17 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     node.add_input("scores");
     node.add_input("labels");
     node.add_output("output");
-
-    Tensor scores = Tensor::FromFloat("", {3, 5},
-                                      {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f, 0.1f, 0.05f,
-                                       -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
-    Tensor labels = Tensor::FromInt64("", {3}, {2, 0, 4});
-    auto [loss, log_prob] = sce_kernel(scores, labels, /*weights=*/nullptr, /*reduction=*/"mean",
-                                       /*has_ignore_index=*/false, /*ignore_index=*/0);
-    Expect(node, {scores, labels}, {std::move(loss)}, "test_cc_softmax_cross_entropy_loss_mean",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_softmax_cross_entropy_loss_mean", {opset},
+           [=]() -> IoData {
+             Tensor scores = Tensor::FromFloat("", {3, 5},
+                                               {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f,
+                                                0.1f, 0.05f, -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
+             Tensor labels = Tensor::FromInt64("", {3}, {2, 0, 4});
+             auto [loss, log_prob] =
+                 sce_kernel(scores, labels, /*weights=*/nullptr, /*reduction=*/"mean",
+                            /*has_ignore_index=*/false, /*ignore_index=*/0);
+             return IoData{{std::move(scores), std::move(labels)}, {std::move(std::move(loss))}};
+           });
   }
 
   // Reduction = "none", labels of shape (N,) — checks per-sample output shape.
@@ -169,15 +177,17 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     node.add_input("labels");
     node.add_output("output");
     AddAttribute(node, "reduction", std::string("none"));
-
-    Tensor scores = Tensor::FromFloat("", {3, 5},
-                                      {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f, 0.1f, 0.05f,
-                                       -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
-    Tensor labels = Tensor::FromInt64("", {3}, {2, 0, 4});
-    auto [loss, log_prob] = sce_kernel(scores, labels, /*weights=*/nullptr, /*reduction=*/"none",
-                                       /*has_ignore_index=*/false, /*ignore_index=*/0);
-    Expect(node, {scores, labels}, {std::move(loss)}, "test_cc_softmax_cross_entropy_loss_none",
-           {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_softmax_cross_entropy_loss_none", {opset},
+           [=]() -> IoData {
+             Tensor scores = Tensor::FromFloat("", {3, 5},
+                                               {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f,
+                                                0.1f, 0.05f, -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
+             Tensor labels = Tensor::FromInt64("", {3}, {2, 0, 4});
+             auto [loss, log_prob] =
+                 sce_kernel(scores, labels, /*weights=*/nullptr, /*reduction=*/"none",
+                            /*has_ignore_index=*/false, /*ignore_index=*/0);
+             return IoData{{std::move(scores), std::move(labels)}, {std::move(std::move(loss))}};
+           });
   }
 
   // Reduction = "sum" with a weights tensor; also exercises the optional
@@ -190,16 +200,18 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     node.add_input("weights");
     node.add_output("output");
     AddAttribute(node, "reduction", std::string("sum"));
-
-    Tensor scores = Tensor::FromFloat("", {3, 5},
-                                      {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f, 0.1f, 0.05f,
-                                       -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
-    Tensor labels = Tensor::FromInt64("", {3}, {2, 0, 4});
-    Tensor weights = Tensor::FromFloat("", {5}, {0.2f, 0.3f, 0.6f, 0.1f, 0.5f});
-    auto [loss, log_prob] = sce_kernel(scores, labels, &weights, /*reduction=*/"sum",
-                                       /*has_ignore_index=*/false, /*ignore_index=*/0);
-    Expect(node, {scores, labels, weights}, {std::move(loss)},
-           "test_cc_softmax_cross_entropy_loss_weighted_sum", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_softmax_cross_entropy_loss_weighted_sum", {opset},
+           [=]() -> IoData {
+             Tensor scores = Tensor::FromFloat("", {3, 5},
+                                               {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f,
+                                                0.1f, 0.05f, -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
+             Tensor labels = Tensor::FromInt64("", {3}, {2, 0, 4});
+             Tensor weights = Tensor::FromFloat("", {5}, {0.2f, 0.3f, 0.6f, 0.1f, 0.5f});
+             auto [loss, log_prob] = sce_kernel(scores, labels, &weights, /*reduction=*/"sum",
+                                                /*has_ignore_index=*/false, /*ignore_index=*/0);
+             return IoData{{std::move(scores), std::move(labels), std::move(weights)},
+                           {std::move(std::move(loss))}};
+           });
   }
 
   // Two outputs: loss + log_prob.
@@ -210,15 +222,18 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     node.add_input("labels");
     node.add_output("output");
     node.add_output("log_prob");
-
-    Tensor scores = Tensor::FromFloat("", {3, 5},
-                                      {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f, 0.1f, 0.05f,
-                                       -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
-    Tensor labels = Tensor::FromInt64("", {3}, {2, 0, 4});
-    auto [loss, log_prob] = sce_kernel(scores, labels, /*weights=*/nullptr, /*reduction=*/"mean",
-                                       /*has_ignore_index=*/false, /*ignore_index=*/0);
-    Expect(node, {scores, labels}, {std::move(loss), std::move(log_prob)},
-           "test_cc_softmax_cross_entropy_loss_log_prob", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_softmax_cross_entropy_loss_log_prob", {opset},
+           [=]() -> IoData {
+             Tensor scores = Tensor::FromFloat("", {3, 5},
+                                               {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f,
+                                                0.1f, 0.05f, -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
+             Tensor labels = Tensor::FromInt64("", {3}, {2, 0, 4});
+             auto [loss, log_prob] =
+                 sce_kernel(scores, labels, /*weights=*/nullptr, /*reduction=*/"mean",
+                            /*has_ignore_index=*/false, /*ignore_index=*/0);
+             return IoData{{std::move(scores), std::move(labels)},
+                           {std::move(std::move(loss)), std::move(std::move(log_prob))}};
+           });
   }
 
   // ---------------------------------------------------------------------------

@@ -90,17 +90,18 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_imputer_float", {default_opset, opset},
+           [=]() -> IoData {
+             const float replaced_value = 0.0f;
+             const std::vector<float> imputed_values{1.0f, 2.0f, 3.0f};
+             AddFloatAttr(node, "replaced_value_float", replaced_value);
+             AddFloatsAttr(node, "imputed_value_floats", imputed_values);
 
-    const float replaced_value = 0.0f;
-    const std::vector<float> imputed_values{1.0f, 2.0f, 3.0f};
-    AddFloatAttr(node, "replaced_value_float", replaced_value);
-    AddFloatsAttr(node, "imputed_value_floats", imputed_values);
+             Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 0.0f, 5.0f, 0.0f, 6.0f});
+             Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 0.0f, 5.0f, 0.0f, 6.0f});
-    Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
-
-    Expect(node, {x}, {y}, "test_cc_imputer_float", {default_opset, opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Float case: broadcast replacement (imputed_values length 1).
@@ -110,17 +111,18 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_imputer_float_broadcast", {default_opset, opset},
+           [=]() -> IoData {
+             const float replaced_value = -1.0f;
+             const std::vector<float> imputed_values{0.0f};
+             AddFloatAttr(node, "replaced_value_float", replaced_value);
+             AddFloatsAttr(node, "imputed_value_floats", imputed_values);
 
-    const float replaced_value = -1.0f;
-    const std::vector<float> imputed_values{0.0f};
-    AddFloatAttr(node, "replaced_value_float", replaced_value);
-    AddFloatsAttr(node, "imputed_value_floats", imputed_values);
+             Tensor x = Tensor::FromFloat("", {4}, {-1.0f, 2.0f, -1.0f, 4.0f});
+             Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
 
-    Tensor x = Tensor::FromFloat("", {4}, {-1.0f, 2.0f, -1.0f, 4.0f});
-    Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
-
-    Expect(node, {x}, {y}, "test_cc_imputer_float_broadcast", {default_opset, opset},
-           "backend-test", registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Float case: NaN replacement.
@@ -130,17 +132,18 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_imputer_float_nan", {default_opset, opset},
+           [=]() -> IoData {
+             const float replaced_value = std::numeric_limits<float>::quiet_NaN();
+             const std::vector<float> imputed_values{0.0f};
+             AddFloatAttr(node, "replaced_value_float", replaced_value);
+             AddFloatsAttr(node, "imputed_value_floats", imputed_values);
 
-    const float replaced_value = std::numeric_limits<float>::quiet_NaN();
-    const std::vector<float> imputed_values{0.0f};
-    AddFloatAttr(node, "replaced_value_float", replaced_value);
-    AddFloatsAttr(node, "imputed_value_floats", imputed_values);
+             Tensor x = Tensor::FromFloat("", {3}, {replaced_value, 2.0f, replaced_value});
+             Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
 
-    Tensor x = Tensor::FromFloat("", {3}, {replaced_value, 2.0f, replaced_value});
-    Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
-
-    Expect(node, {x}, {y}, "test_cc_imputer_float_nan", {default_opset, opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Int64 case: replace 0 with per-feature imputed values.
@@ -150,17 +153,18 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_domain("ai.onnx.ml");
     node.add_input("x");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_imputer_int64", {default_opset, opset},
+           [=]() -> IoData {
+             const int64_t replaced_value = 0;
+             const std::vector<int64_t> imputed_values{10, 20};
+             AddIntAttr(node, "replaced_value_int64", replaced_value);
+             AddIntsAttr(node, "imputed_value_int64s", imputed_values);
 
-    const int64_t replaced_value = 0;
-    const std::vector<int64_t> imputed_values{10, 20};
-    AddIntAttr(node, "replaced_value_int64", replaced_value);
-    AddIntsAttr(node, "imputed_value_int64s", imputed_values);
+             Tensor x = Tensor::FromInt64("", {3, 2}, {0, 0, 1, 2, 0, 3});
+             Tensor y = imputer.operator()<int64_t>(x, imputed_values, replaced_value);
 
-    Tensor x = Tensor::FromInt64("", {3, 2}, {0, 0, 1, 2, 0, 3});
-    Tensor y = imputer.operator()<int64_t>(x, imputed_values, replaced_value);
-
-    Expect(node, {x}, {y}, "test_cc_imputer_int64", {default_opset, opset}, "backend-test",
-           registry);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 

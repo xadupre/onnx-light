@@ -104,17 +104,21 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   // cond = true → output is the then-branch value.
   {
     NodeProto node = make_node();
-    Tensor cond("", DataType::BOOL, {}, {1});
-    Tensor res = if_kernel(cond, then_value, else_value);
-    Expect(node, {cond}, {res}, "test_cc_if", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_if", {opset}, [=]() -> IoData {
+      Tensor cond("", DataType::BOOL, {}, {1});
+      Tensor res = if_kernel(cond, then_value, else_value);
+      return IoData{{std::move(cond)}, {std::move(res)}};
+    });
   }
 
   // cond = false → output is the else-branch value.
   {
     NodeProto node = make_node();
-    Tensor cond("", DataType::BOOL, {}, {0});
-    Tensor res = if_kernel(cond, then_value, else_value);
-    Expect(node, {cond}, {res}, "test_cc_if_else", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_if_else", {opset}, [=]() -> IoData {
+      Tensor cond("", DataType::BOOL, {}, {0});
+      Tensor res = if_kernel(cond, then_value, else_value);
+      return IoData{{std::move(cond)}, {std::move(res)}};
+    });
   }
 
   // Multi-output If: each branch declares two outputs. The returning kernel
@@ -195,23 +199,25 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
       AttributeProto *a = n1->add_attribute();
       a->set_name("value");
       a->set_type(AttributeProto::AttributeType::TENSOR);
-      TensorProto *t = a->add_t();
-      t->set_data_type(static_cast<DataType>(else_b.data_type));
-      for (int64_t d : else_b.shape)
-        t->add_dims(static_cast<uint64_t>(d));
-      t->set_raw_data(utils::ByteSpan(else_b.data));
-    }
-    Tensor ea_info = else_a;
-    ea_info.name = "else_a";
-    FillValueInfo(ea_info, *else_g.add_output());
-    Tensor eb_info = else_b;
-    eb_info.name = "else_b";
-    FillValueInfo(eb_info, *else_g.add_output());
+    Expect(registry, std::move(node), "test_cc_if_multi_output", {opset},
+           [=]() -> IoData {
+        TensorProto *t = a->add_t();
+        t->set_data_type(static_cast<DataType>(else_b.data_type));
+        for (int64_t d : else_b.shape)
+          t->add_dims(static_cast<uint64_t>(d));
+        t->set_raw_data(utils::ByteSpan(else_b.data));
+      }
+      Tensor ea_info = else_a;
+      ea_info.name = "else_a";
+      FillValueInfo(ea_info, *else_g.add_output());
+      Tensor eb_info = else_b;
+      eb_info.name = "else_b";
+      FillValueInfo(eb_info, *else_g.add_output());
 
-    Tensor cond("", DataType::BOOL, {}, {1});
-    // cond = true → outputs come from the then-branch.
-    Expect(node, {cond}, {then_a, then_b}, "test_cc_if_multi_output", {opset}, "backend-test",
-           registry);
+      Tensor cond("", DataType::BOOL, {}, {1});
+      // cond = true → outputs come from the then-branch.
+      return IoData{{std::move(cond)}, {std::move(then_a), std::move(then_b)}};
+    });
   }
 
   // -------------------------------------------------------------------------

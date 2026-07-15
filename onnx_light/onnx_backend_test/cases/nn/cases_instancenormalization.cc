@@ -57,15 +57,15 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMod
     node.add_input("s");
     node.add_input("bias");
     node.add_output("y");
+    Expect(registry, std::move(node), "test_cc_instancenorm_example", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
+      Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
 
-    Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
-    Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+      Tensor y = instancenorm_kernel(x, scale, bias);
 
-    Tensor y = instancenorm_kernel(x, scale, bias);
-
-    Expect(node, {x, scale, bias}, {y}, "test_cc_instancenorm_example", {opset}, "backend-test",
-           registry);
+      return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
+    });
   }
 
   // ``instancenorm_epsilon``: 2x3x4x5 input with epsilon = 1e-2. Inputs are
@@ -78,24 +78,24 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMod
     node.add_input("bias");
     node.add_output("y");
     AddAttribute<float>(node, "epsilon", 1e-2f);
+    Expect(registry, std::move(node), "test_cc_instancenorm_epsilon", {opset}, [=]() -> IoData {
+      const int64_t N = 2;
+      const int64_t C = 3;
+      const int64_t H = 4;
+      const int64_t W = 5;
+      const int64_t total = N * C * H * W;
+      std::vector<float> x_data(static_cast<size_t>(total));
+      for (int64_t i = 0; i < total; ++i) {
+        x_data[static_cast<size_t>(i)] = static_cast<float>(i) * 0.1f - 1.0f;
+      }
+      Tensor x = Tensor::FromFloat("", {N, C, H, W}, x_data);
+      Tensor scale = Tensor::FromFloat("", {C}, {0.5f, 1.0f, 1.5f});
+      Tensor bias = Tensor::FromFloat("", {C}, {-0.25f, 0.25f, 0.75f});
 
-    const int64_t N = 2;
-    const int64_t C = 3;
-    const int64_t H = 4;
-    const int64_t W = 5;
-    const int64_t total = N * C * H * W;
-    std::vector<float> x_data(static_cast<size_t>(total));
-    for (int64_t i = 0; i < total; ++i) {
-      x_data[static_cast<size_t>(i)] = static_cast<float>(i) * 0.1f - 1.0f;
-    }
-    Tensor x = Tensor::FromFloat("", {N, C, H, W}, x_data);
-    Tensor scale = Tensor::FromFloat("", {C}, {0.5f, 1.0f, 1.5f});
-    Tensor bias = Tensor::FromFloat("", {C}, {-0.25f, 0.25f, 0.75f});
+      Tensor y = instancenorm_kernel(x, scale, bias, 1e-2f);
 
-    Tensor y = instancenorm_kernel(x, scale, bias, 1e-2f);
-
-    Expect(node, {x, scale, bias}, {y}, "test_cc_instancenorm_epsilon", {opset}, "backend-test",
-           registry);
+      return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
+    });
   }
 }
 

@@ -56,11 +56,12 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sum");
     node.add_input("data_0");
     node.add_output("sum");
+    Expect(registry, std::move(node), "test_cc_sum_one_input", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+      Tensor z = sum_kernel({x0});
 
-    Tensor x0 = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
-    Tensor z = sum_kernel({x0});
-
-    Expect(node, {x0}, {z}, "test_cc_sum_one_input", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0)}, {std::move(z)}};
+    });
   }
 
   // Two equal-shape inputs.
@@ -70,12 +71,13 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_0");
     node.add_input("data_1");
     node.add_output("sum");
+    Expect(registry, std::move(node), "test_cc_sum_two_inputs", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+      Tensor x1 = Tensor::FromFloat("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
+      Tensor z = sum_kernel({x0, x1});
 
-    Tensor x0 = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    Tensor x1 = Tensor::FromFloat("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
-    Tensor z = sum_kernel({x0, x1});
-
-    Expect(node, {x0, x1}, {z}, "test_cc_sum_two_inputs", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+    });
   }
 
   // Three equal-shape inputs.
@@ -86,13 +88,14 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_1");
     node.add_input("data_2");
     node.add_output("sum");
+    Expect(registry, std::move(node), "test_cc_sum_example", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {3}, {1.0f, 0.0f, 1.0f});
+      Tensor x1 = Tensor::FromFloat("", {3}, {3.0f, 4.0f, 5.0f});
+      Tensor x2 = Tensor::FromFloat("", {3}, {6.0f, 0.0f, 5.0f});
+      Tensor z = sum_kernel({x0, x1, x2});
 
-    Tensor x0 = Tensor::FromFloat("", {3}, {1.0f, 0.0f, 1.0f});
-    Tensor x1 = Tensor::FromFloat("", {3}, {3.0f, 4.0f, 5.0f});
-    Tensor x2 = Tensor::FromFloat("", {3}, {6.0f, 0.0f, 5.0f});
-    Tensor z = sum_kernel({x0, x1, x2});
-
-    Expect(node, {x0, x1, x2}, {z}, "test_cc_sum_example", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0), std::move(x1), std::move(x2)}, {std::move(z)}};
+    });
   }
 
   // Broadcasting variant: scalar broadcast against rank-2 input.
@@ -102,12 +105,13 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_0");
     node.add_input("data_1");
     node.add_output("sum");
+    Expect(registry, std::move(node), "test_cc_sum_bcast", {opset}, [=]() -> IoData {
+      Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor x1 = Tensor::FromFloat("", {}, {10.0f});
+      Tensor z = sum_kernel({x0, x1});
 
-    Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor x1 = Tensor::FromFloat("", {}, {10.0f});
-    Tensor z = sum_kernel({x0, x1});
-
-    Expect(node, {x0, x1}, {z}, "test_cc_sum_bcast", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
+    });
   }
 
   // Upstream-style multi-input random case mirroring
@@ -119,14 +123,15 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_1");
     node.add_input("data_2");
     node.add_output("sum");
+    Expect(registry, std::move(node), "test_sum_example", {opset}, [=]() -> IoData {
+      const std::vector<int64_t> shape = {3, 4, 5};
+      Tensor x0 = RandnFloat(shape, /*seed=*/61);
+      Tensor x1 = RandnFloat(shape, /*seed=*/62);
+      Tensor x2 = RandnFloat(shape, /*seed=*/63);
+      Tensor z = sum_kernel({x0, x1, x2});
 
-    const std::vector<int64_t> shape = {3, 4, 5};
-    Tensor x0 = RandnFloat(shape, /*seed=*/61);
-    Tensor x1 = RandnFloat(shape, /*seed=*/62);
-    Tensor x2 = RandnFloat(shape, /*seed=*/63);
-    Tensor z = sum_kernel({x0, x1, x2});
-
-    Expect(node, {x0, x1, x2}, {z}, "test_sum_example", {opset}, "backend-test", registry);
+      return IoData{{std::move(x0), std::move(x1), std::move(x2)}, {std::move(z)}};
+    });
   }
 }
 

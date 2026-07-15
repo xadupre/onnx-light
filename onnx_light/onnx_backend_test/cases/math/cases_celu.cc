@@ -31,11 +31,13 @@ void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    alpha->set_f(2.0f);
+    Expect(registry, std::move(node), "test_cc_celu", {opset}, [=]() -> IoData {
+      alpha->set_f(2.0f);
 
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-    Tensor y = celu_kernel(x, 2.0f);
-    Expect(node, {x}, {y}, "test_cc_celu", {opset}, "backend-test", registry);
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
+      Tensor y = celu_kernel(x, 2.0f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   {
@@ -43,11 +45,12 @@ void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Celu");
     node.add_input("X");
     node.add_output("Y");
-
-    // No alpha attribute: defaults to 1.0.
-    Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-    Tensor y = celu_kernel(x);
-    Expect(node, {x}, {y}, "test_cc_celu_default", {opset}, "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_celu_default", {opset}, [=]() -> IoData {
+      // No alpha attribute: defaults to 1.0.
+      Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
+      Tensor y = celu_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // Celu-28 opset: required for float16 and bfloat16 type constraints.
@@ -63,11 +66,13 @@ void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    alpha->set_f(2.0f);
+    Expect(registry, std::move(node), "test_cc_celu_float16", {opset28}, [=]() -> IoData {
+      alpha->set_f(2.0f);
 
-    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-    Tensor y = celu_kernel(x, 2.0f);
-    Expect(node, {x}, {y}, "test_cc_celu_float16", {opset28}, "backend-test", registry);
+      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
+      Tensor y = celu_kernel(x, 2.0f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 
   // BFLOAT16 test case.
@@ -80,11 +85,13 @@ void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    alpha->set_f(1.0f);
+    Expect(registry, std::move(node), "test_cc_celu_bfloat16", {opset28}, [=]() -> IoData {
+      alpha->set_f(1.0f);
 
-    Tensor x = kernel::MakeBfloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-    Tensor y = celu_kernel(x, 1.0f);
-    Expect(node, {x}, {y}, "test_cc_celu_bfloat16", {opset28}, "backend-test", registry);
+      Tensor x = kernel::MakeBfloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
+      Tensor y = celu_kernel(x, 1.0f);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

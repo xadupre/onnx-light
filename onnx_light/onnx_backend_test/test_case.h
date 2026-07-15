@@ -428,6 +428,20 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::string producer_name = "backend-test", std::string tag = "",
             std::vector<TypeSpec> output_types = {});
 
+/**
+ * Convenience overload of the lazy :func:`Expect` that omits the element-count
+ * vectors. Equivalent to calling the six-parameter lazy overload with empty
+ * ``in_counts`` / ``out_counts``.  Use for small test cases where pre-declaring
+ * element counts adds no value over deriving them from the materialised tensors.
+ */
+inline void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
+                   std::vector<OpsetId> opset_imports, std::function<IoData()> make_io,
+                   std::string producer_name = "backend-test", std::string tag = "",
+                   std::vector<TypeSpec> output_types = {}) {
+  Expect(registry, std::move(node), std::move(name), std::move(opset_imports), {}, {},
+         std::move(make_io), std::move(producer_name), std::move(tag), std::move(output_types));
+}
+
 /// Function pointer registering one or more :ref:`TestCase` entries into the
 /// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.
 using RegisterCasesFn = void (*)(std::vector<TestCase> &);

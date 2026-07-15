@@ -139,7 +139,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
 
   // From QuantizeLinear.export_uint16().
   {
-    Expect(registry, std::move(node), "test_quantizelinear_uint16", {opset}, [=]() -> IoData {
+    Expect(registry, node, "test_quantizelinear_uint16", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, 3.0f, 200000.0f});
       Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
       const Tensor y_zero_point = kernel::Uint16ZeroPoint(32767);
@@ -150,7 +150,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
 
   // From QuantizeLinear.export_int16().
   {
-    Expect(registry, std::move(node), "test_quantizelinear_int16", {opset}, [=]() -> IoData {
+    Expect(registry, node, "test_quantizelinear_int16", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, 3.0f, -100000.0f});
       Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
       const Tensor y_zero_point = kernel::Int16ZeroPoint(-1024);
@@ -164,7 +164,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
   // verbatim so cross-runtime comparisons exercise the canonical reference
   // values.
   {
-    Expect(registry, std::move(node), "test_quantizelinear", {opset}, [=]() -> IoData {
+    Expect(registry, node, "test_quantizelinear", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {6}, {0.0f, 2.0f, 3.0f, 1000.0f, -254.0f, -1000.0f});
       Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
       const Tensor y_zero_point("", static_cast<int32_t>(DataType::UINT8), {},
@@ -264,85 +264,73 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
 
   // From QuantizeLinear.export_uint4(). INT4/UINT4 introduced in opset 21.
   {
-    Expect(registry, std::move(sub_byte_node), "test_quantizelinear_uint4", {opset_v21},
-           [=]() -> IoData {
-             Tensor x = Tensor::FromFloat(
-                 "", sub_byte_x_shape,
-                 {0.0f, 2.5f, 4.8f, 8.6f, -30.0f, -20.0f, 6.0f, 9.0f, 12.0f, 15.0f, 16.0f, 40.0f});
-             Tensor y_zero_point =
-                 kernel::MakeSubByteTensor(DataType::UINT4, {3}, {1, 1, 1}, /*bits=*/4);
-             Tensor y =
-                 kernel::MakeSubByteTensor(DataType::UINT4, sub_byte_x_shape,
+    Expect(registry, sub_byte_node, "test_quantizelinear_uint4", {opset_v21}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat(
+          "", sub_byte_x_shape,
+          {0.0f, 2.5f, 4.8f, 8.6f, -30.0f, -20.0f, 6.0f, 9.0f, 12.0f, 15.0f, 16.0f, 40.0f});
+      Tensor y_zero_point = kernel::MakeSubByteTensor(DataType::UINT4, {3}, {1, 1, 1}, /*bits=*/4);
+      Tensor y = kernel::MakeSubByteTensor(DataType::UINT4, sub_byte_x_shape,
                                            {1, 2, 3, 5, 0, 0, 3, 4, 4, 5, 5, 11}, /*bits=*/4);
-             return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
-                           {std::move(y)}};
-           });
+      return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
+                    {std::move(y)}};
+    });
   }
 
   // From QuantizeLinear.export_int4(). INT4/UINT4 introduced in opset 21.
   {
-    Expect(registry, std::move(sub_byte_node), "test_quantizelinear_int4", {opset_v21},
-           [=]() -> IoData {
-             Tensor x = Tensor::FromFloat(
-                 "", sub_byte_x_shape,
-                 {0.0f, 2.5f, 4.8f, 8.6f, -30.0f, -20.0f, 6.0f, 9.0f, 12.0f, 15.0f, 16.0f, 40.0f});
-             Tensor y_zero_point =
-                 kernel::MakeSubByteTensor(DataType::INT4, {3}, {1, 1, 1}, /*bits=*/4);
-             Tensor y =
-                 kernel::MakeSubByteTensor(DataType::INT4, sub_byte_x_shape,
+    Expect(registry, sub_byte_node, "test_quantizelinear_int4", {opset_v21}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat(
+          "", sub_byte_x_shape,
+          {0.0f, 2.5f, 4.8f, 8.6f, -30.0f, -20.0f, 6.0f, 9.0f, 12.0f, 15.0f, 16.0f, 40.0f});
+      Tensor y_zero_point = kernel::MakeSubByteTensor(DataType::INT4, {3}, {1, 1, 1}, /*bits=*/4);
+      Tensor y = kernel::MakeSubByteTensor(DataType::INT4, sub_byte_x_shape,
                                            {1, 2, 3, 5, -8, -6, 3, 4, 4, 5, 5, 7}, /*bits=*/4);
-             return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
-                           {std::move(y)}};
-           });
+      return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
+                    {std::move(y)}};
+    });
   }
 
   // From QuantizeLinear.export_uint2(). INT2/UINT2 introduced in opset 25.
   {
-    Expect(registry, std::move(sub_byte_node), "test_quantizelinear_uint2", {opset_v25},
-           [=]() -> IoData {
-             Tensor x = Tensor::FromFloat(
-                 "", sub_byte_x_shape,
-                 {0.0f, 2.5f, 4.8f, 8.6f, -2.0f, -1.0f, 1.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
-             Tensor y_zero_point =
-                 kernel::MakeSubByteTensor(DataType::UINT2, {3}, {0, 0, 0}, /*bits=*/2);
-             Tensor y = kernel::MakeSubByteTensor(DataType::UINT2, sub_byte_x_shape,
-                                                  {0, 1, 2, 3, 0, 0, 0, 1, 1, 1, 2, 2}, /*bits=*/2);
-             return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
-                           {std::move(y)}};
-           });
+    Expect(registry, sub_byte_node, "test_quantizelinear_uint2", {opset_v25}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat(
+          "", sub_byte_x_shape,
+          {0.0f, 2.5f, 4.8f, 8.6f, -2.0f, -1.0f, 1.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
+      Tensor y_zero_point = kernel::MakeSubByteTensor(DataType::UINT2, {3}, {0, 0, 0}, /*bits=*/2);
+      Tensor y = kernel::MakeSubByteTensor(DataType::UINT2, sub_byte_x_shape,
+                                           {0, 1, 2, 3, 0, 0, 0, 1, 1, 1, 2, 2}, /*bits=*/2);
+      return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
+                    {std::move(y)}};
+    });
   }
 
   // From QuantizeLinear.export_int2(). INT2/UINT2 introduced in opset 25.
   {
-    Expect(registry, std::move(sub_byte_node), "test_quantizelinear_int2", {opset_v25},
-           [=]() -> IoData {
-             Tensor x = Tensor::FromFloat(
-                 "", sub_byte_x_shape,
-                 {0.0f, 2.5f, 4.8f, 8.6f, -4.0f, -3.0f, 1.0f, 2.0f, -0.0f, -2.5f, -4.8f, -8.6f});
-             Tensor y_zero_point =
-                 kernel::MakeSubByteTensor(DataType::INT2, {3}, {0, 0, 0}, /*bits=*/2);
-             Tensor y =
-                 kernel::MakeSubByteTensor(DataType::INT2, sub_byte_x_shape,
+    Expect(registry, sub_byte_node, "test_quantizelinear_int2", {opset_v25}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat(
+          "", sub_byte_x_shape,
+          {0.0f, 2.5f, 4.8f, 8.6f, -4.0f, -3.0f, 1.0f, 2.0f, -0.0f, -2.5f, -4.8f, -8.6f});
+      Tensor y_zero_point = kernel::MakeSubByteTensor(DataType::INT2, {3}, {0, 0, 0}, /*bits=*/2);
+      Tensor y = kernel::MakeSubByteTensor(DataType::INT2, sub_byte_x_shape,
                                            {0, 1, 1, 1, -1, -1, 0, 1, 0, -1, -1, -2}, /*bits=*/2);
-             return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
-                           {std::move(y)}};
-           });
+      return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
+                    {std::move(y)}};
+    });
   }
 
   // From QuantizeLinear.export_float4e2m1(). FLOAT4E2M1 introduced in opset 23.
   {
-    Expect(registry, std::move(sub_byte_node), "test_quantizelinear_float4e2m1", {opset_v23},
-           [=]() -> IoData {
-             Tensor x = Tensor::FromFloat(
-                 "", sub_byte_x_shape,
-                 {0.0f, 2.5f, 4.8f, 8.6f, -30.0f, -20.0f, 6.0f, 9.0f, -0.0f, -2.5f, -4.8f, -8.6f});
-             Tensor y_zero_point = kernel::MakeFloat4E2M1Tensor({3}, {0.0f, 0.0f, 0.0f});
-             Tensor y = kernel::MakeFloat4E2M1Tensor(
-                 sub_byte_x_shape,
-                 {0.0f, 1.0f, 2.0f, 4.0f, -6.0f, -6.0f, 2.0f, 3.0f, 0.0f, -0.5f, -1.0f, -2.0f});
-             return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
-                           {std::move(y)}};
-           });
+    Expect(registry, sub_byte_node, "test_quantizelinear_float4e2m1", {opset_v23}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat(
+          "", sub_byte_x_shape,
+          {0.0f, 2.5f, 4.8f, 8.6f, -30.0f, -20.0f, 6.0f, 9.0f, -0.0f, -2.5f, -4.8f, -8.6f});
+      Tensor y_zero_point = kernel::MakeFloat4E2M1Tensor({3}, {0.0f, 0.0f, 0.0f});
+      Tensor y =
+          kernel::MakeFloat4E2M1Tensor(sub_byte_x_shape, {0.0f, 1.0f, 2.0f, 4.0f, -6.0f, -6.0f,
+                                                          2.0f, 3.0f, 0.0f, -0.5f, -1.0f, -2.0f});
+      return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
+                    {std::move(y)}};
+    });
   }
 
   // --- Blocked quantization (opset 21+) ---

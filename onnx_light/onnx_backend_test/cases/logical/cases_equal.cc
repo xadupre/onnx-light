@@ -182,7 +182,7 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     string_node.add_output("equal");
 
     {
-      Expect(registry, std::move(string_node), "test_equal_string", {opset}, [=]() -> IoData {
+      Expect(registry, string_node, "test_equal_string", {opset}, [=]() -> IoData {
         Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
         Tensor y = Tensor::FromStrings("", {2}, {"string1", "string3"});
         Tensor z = equal_kernel(x, y);
@@ -190,13 +190,12 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
       });
     }
     {
-      Expect(registry, std::move(string_node), "test_equal_string_broadcast", {opset},
-             [=]() -> IoData {
-               Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
-               Tensor y = Tensor::FromStrings("", {1}, {"string1"});
-               Tensor z = equal_kernel(x, y);
-               return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-             });
+      Expect(registry, string_node, "test_equal_string_broadcast", {opset}, [=]() -> IoData {
+        Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
+        Tensor y = Tensor::FromStrings("", {1}, {"string1"});
+        Tensor z = equal_kernel(x, y);
+        return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+      });
     }
   }
 

@@ -66,10 +66,14 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeGemmNode(/*has_bias=*/false);
     const std::vector<int64_t> shape = {512, 512};
-    Tensor a = Tensor::FromFloat("", shape, Randn<float>(shape, 433));
-    Tensor b = Tensor::FromFloat("", shape, Randn<float>(shape, 434));
-    Tensor y = gemm_kernel(a, b, nullptr, 1.0f, 1.0f, 0, 0);
-    Expect(node, {a, b}, {y}, "test_cc_gemm_benchmark", {opset}, "backend-test", registry);
+    const int64_t count = 512 * 512;
+    Expect(registry, std::move(node), "test_cc_gemm_benchmark", {opset}, {count, count}, {count},
+           [gemm_kernel, shape]() -> IoData {
+             Tensor a = Tensor::FromFloat("", shape, Randn<float>(shape, 433));
+             Tensor b = Tensor::FromFloat("", shape, Randn<float>(shape, 434));
+             Tensor y = gemm_kernel(a, b, nullptr, 1.0f, 1.0f, 0, 0);
+             return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
+           });
     return;
   }
 

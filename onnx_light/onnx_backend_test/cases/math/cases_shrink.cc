@@ -25,10 +25,14 @@ void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
     lambd->set_name("lambd");
     lambd->set_type(AttributeProto::FLOAT);
     lambd->set_f(1.5f);
-    Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                 Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
-    Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f);
-    Expect(node, {x}, {y}, "test_cc_shrink_benchmark", {opset}, "backend-test", registry);
+    const int64_t count = kBenchmarkElementwiseSize;
+    Expect(registry, std::move(node), "test_cc_shrink_benchmark", {opset}, {count}, {count},
+           [shrink_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+             Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

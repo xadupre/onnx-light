@@ -46,11 +46,12 @@ void RegisterOneHotEncoderCases(std::vector<TestCase> &registry, TestMode mode) 
     zeros_attr->set_type(AttributeProto::AttributeType::INT);
     zeros_attr->set_i(static_cast<int64_t>(1));
 
-    Tensor x = Tensor::FromInt64("", {8192}, RandnInt<int64_t>({8192}, 2691));
-    Tensor y = one_hot.operator()<int64_t>(x, cats, /*zeros=*/true);
-
-    Expect(node, {x}, {y}, "test_cc_one_hot_encoder_int64_benchmark", {default_opset, opset},
-           "backend-test", registry);
+    Expect(registry, std::move(node), "test_cc_one_hot_encoder_int64_benchmark",
+           {default_opset, opset}, {8192}, {32768}, [one_hot, cats]() -> IoData {
+             Tensor x = Tensor::FromInt64("", {8192}, RandnInt<int64_t>({8192}, 2691));
+             Tensor y = one_hot.operator()<int64_t>(x, cats, /*zeros=*/true);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

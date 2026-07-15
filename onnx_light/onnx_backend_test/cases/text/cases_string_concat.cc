@@ -30,17 +30,20 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y");
     node.add_output("z");
 
-    std::vector<std::string> x_values(262144);
-    std::vector<std::string> y_values(262144);
-    for (size_t i = 0; i < x_values.size(); ++i) {
-      x_values[i] = (i % 2 == 0) ? "abc" : "hello ";
-      y_values[i] = (i % 2 == 0) ? "def" : "world";
-    }
-    Tensor x = Tensor::FromStrings("", {static_cast<int64_t>(x_values.size())}, x_values);
-    Tensor y = Tensor::FromStrings("", {static_cast<int64_t>(y_values.size())}, y_values);
-    Tensor z = string_concat(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_string_concat_benchmark", {opset}, "backend-test", registry);
+    constexpr int64_t count = 262144;
+    Expect(registry, std::move(node), "test_cc_string_concat_benchmark", {opset}, {count, count},
+           {count}, [string_concat, count]() -> IoData {
+             std::vector<std::string> x_values(static_cast<size_t>(count));
+             std::vector<std::string> y_values(static_cast<size_t>(count));
+             for (size_t i = 0; i < x_values.size(); ++i) {
+               x_values[i] = (i % 2 == 0) ? "abc" : "hello ";
+               y_values[i] = (i % 2 == 0) ? "def" : "world";
+             }
+             Tensor x = Tensor::FromStrings("", {count}, x_values);
+             Tensor y = Tensor::FromStrings("", {count}, y_values);
+             Tensor z = string_concat(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
     return;
   }
 
@@ -152,7 +155,7 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
 
-    ModelProto &model = tc.model;
+    ModelProto &model = tc.emplace_model();
     model.set_ir_version(13);
     model.set_producer_name("backend-test");
     OperatorSetIdProto *osid = model.add_opset_import();
@@ -193,7 +196,7 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     DataSet ds;
     ds.inputs = {x, y, z};
     ds.outputs = {w};
-    tc.data_sets.emplace_back(std::move(ds));
+    tc.data_sets().emplace_back(std::move(ds));
 
     registry.emplace_back(std::move(tc));
   }

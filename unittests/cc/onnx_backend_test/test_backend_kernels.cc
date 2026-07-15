@@ -67,17 +67,17 @@ TEST(BackendKernels, SplitKernelRunsOnBackendTestCases) {
 
   for (const TestCase &tc : cases) {
     SCOPED_TRACE(tc.name);
-    ASSERT_EQ(tc.model.ref_graph().ref_node().size(), 1u);
-    const NodeProto &node = tc.model.ref_graph().ref_node()[0];
+    ASSERT_EQ(tc.model().ref_graph().ref_node().size(), 1u);
+    const NodeProto &node = tc.model().ref_graph().ref_node()[0];
     ASSERT_EQ(UtilsStringToStdString(node.ref_op_type()), "Split");
 
     const int64_t axis = GetAttributeOr<int64_t>(node, "axis", 0);
     int64_t num_outputs = GetAttributeOr<int64_t>(node, "num_outputs", 0);
 
-    const KernelContext ctx{DefaultOpset(GetDefaultOpsetVersion(tc.model))};
+    const KernelContext ctx{DefaultOpset(GetDefaultOpsetVersion(tc.model()))};
     const Split split_kernel{ctx};
 
-    for (const DataSet &ds : tc.data_sets) {
+    for (const DataSet &ds : tc.data_sets()) {
       ASSERT_FALSE(ds.inputs.empty());
       const Tensor &input = ds.inputs[0];
       const std::vector<int64_t> split =

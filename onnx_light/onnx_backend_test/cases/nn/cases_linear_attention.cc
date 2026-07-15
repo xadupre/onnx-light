@@ -38,22 +38,27 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
   const kernel::LinearAttention kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    Tensor query = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2701));
-    Tensor key = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2702));
-    Tensor value = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2703));
-
-    kernel::LinearAttention::Attributes attrs;
-    attrs.update_rule = "linear";
-    attrs.q_num_heads = 8;
-    attrs.kv_num_heads = 8;
-    auto result = kernel(query, key, value, attrs);
     NodeProto node =
         MakeLinearAttentionNode({"query", "key", "value"}, {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "linear");
     AddAttribute<int64_t>(node, "q_num_heads", 8);
     AddAttribute<int64_t>(node, "kv_num_heads", 8);
-    Expect(node, {query, key, value}, {result.output, result.present_state},
-           "test_cc_linear_attention_linear_benchmark", {opset}, "backend-test", registry);
+
+    constexpr int64_t qkv_count = 1 * 512 * 512;
+    constexpr int64_t state_count = 1 * 8 * 64 * 64;
+    Expect(registry, std::move(node), "test_cc_linear_attention_linear_benchmark", {opset},
+           {qkv_count, qkv_count, qkv_count}, {qkv_count, state_count}, [kernel]() -> IoData {
+             Tensor query = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2701));
+             Tensor key = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2702));
+             Tensor value = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2703));
+             kernel::LinearAttention::Attributes attrs;
+             attrs.update_rule = "linear";
+             attrs.q_num_heads = 8;
+             attrs.kv_num_heads = 8;
+             auto result = kernel(query, key, value, attrs);
+             return IoData{{std::move(query), std::move(key), std::move(value)},
+                           {std::move(result.output), std::move(result.present_state)}};
+           });
     return;
   }
 

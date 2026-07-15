@@ -41,10 +41,14 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const OpsetId opset = DefaultOpset(13);
     const kernel::KernelContext ctx{opset};
-    Tensor y = kernel::Constant(ctx)(std::move(value));
+    const kernel::Constant constant_kernel{ctx};
 
-    Expect(node, /*inputs=*/{}, {y}, "test_cc_constant_benchmark", {opset}, "backend-test",
-           registry);
+    Expect(registry, std::move(node), "test_cc_constant_benchmark", {opset},
+           /*in_counts=*/{}, {kBenchmarkElementwiseSize},
+           [constant_kernel, value]() mutable -> IoData {
+             Tensor y = constant_kernel(std::move(value));
+             return IoData{/*inputs=*/{}, {std::move(y)}};
+           });
     return;
   }
 

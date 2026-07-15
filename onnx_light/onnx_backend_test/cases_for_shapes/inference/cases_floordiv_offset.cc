@@ -28,7 +28,7 @@ void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry) {
   const kernel::MaxPool maxpool_kernel{ctx};
 
   TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
-  ModelProto &model = tc.model;
+  ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});
   GraphProto *graph = model.add_graph();
   graph->set_name(name);

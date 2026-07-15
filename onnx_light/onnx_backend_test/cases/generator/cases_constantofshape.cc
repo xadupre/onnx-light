@@ -59,8 +59,32 @@ void RegisterConstantOfShapeCases(std::vector<TestCase> &registry, TestMode mode
 
   if (mode == TestMode::BENCHMARK) {
     const Tensor value = Tensor::FromFloat("", /*shape=*/{1}, {1.0f});
-    RegisterOneConstantOfShape("test_constantofshape_float_ones_benchmark",
-                               {kBenchmarkElementwiseSize}, value, registry, opset);
+    const std::vector<int64_t> shape_values = {kBenchmarkElementwiseSize};
+    NodeProto node;
+    node.set_op_type("ConstantOfShape");
+    node.add_input("x");
+    node.add_output("y");
+
+    AttributeProto *attr = node.add_attribute();
+    attr->set_name("value");
+    attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = attr->add_t();
+    t->set_data_type(static_cast<DataType>(value.data_type));
+    for (int64_t d : value.shape) {
+      t->add_dims(d);
+    }
+    t->set_raw_data(utils::ByteSpan(value.data));
+
+    const kernel::KernelContext ctx{opset};
+    const kernel::ConstantOfShape constant_of_shape_kernel{ctx};
+    Expect(registry, std::move(node), "test_constantofshape_float_ones_benchmark", {opset}, {1},
+           {kBenchmarkElementwiseSize},
+           [constant_of_shape_kernel, shape_values, value]() -> IoData {
+             Tensor shape_input =
+                 Tensor::FromInt64("x", {static_cast<int64_t>(shape_values.size())}, shape_values);
+             Tensor y = constant_of_shape_kernel(shape_input, value);
+             return IoData{{std::move(shape_input)}, {std::move(y)}};
+           });
     return;
   }
 

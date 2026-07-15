@@ -83,11 +83,14 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2});
 
-    Tensor x = Tensor::FromFloat("", {1, 32, 16384}, Randn<float>({1, 32, 16384}, 2301));
-    Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2});
-
-    Expect(node, {x}, {y}, "test_cc_maxpool_1d_default_benchmark", {opset}, "backend-test",
-           registry);
+    constexpr int64_t in_count = 1 * 32 * 16384;
+    constexpr int64_t out_count = 1 * 32 * 16383;
+    Expect(registry, std::move(node), "test_cc_maxpool_1d_default_benchmark", {opset}, {in_count},
+           {out_count}, [maxpool_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 32, 16384}, Randn<float>({1, 32, 16384}, 2301));
+             Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2});
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

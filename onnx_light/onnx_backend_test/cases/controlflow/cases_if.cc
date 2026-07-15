@@ -229,7 +229,7 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor expected = Tensor::FromFloat("res", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
 
     TestCase tc(name, name);
-    ModelProto &model = tc.model;
+    ModelProto &model = tc.emplace_model();
     InitModel(model, /*ir_version=*/9, {opset13});
     GraphProto *graph = model.add_graph();
     graph->set_name(name);
@@ -329,7 +329,7 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
     DataSet ds;
     ds.inputs.push_back(cond_in);
     ds.outputs.push_back(expected);
-    tc.data_sets.emplace_back(std::move(ds));
+    tc.data_sets().emplace_back(std::move(ds));
     registry.emplace_back(std::move(tc));
   }
 
@@ -349,7 +349,7 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor expected = Tensor::FromFloat("res", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
 
     TestCase tc(name, name);
-    ModelProto &model = tc.model;
+    ModelProto &model = tc.emplace_model();
     InitModel(model, /*ir_version=*/9, {opset16});
     GraphProto *graph = model.add_graph();
     graph->set_name(name);
@@ -460,7 +460,7 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
     DataSet ds;
     ds.inputs.push_back(cond_in);
     ds.outputs.push_back(expected);
-    tc.data_sets.emplace_back(std::move(ds));
+    tc.data_sets().emplace_back(std::move(ds));
     registry.emplace_back(std::move(tc));
   }
 }

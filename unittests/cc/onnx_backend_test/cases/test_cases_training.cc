@@ -47,7 +47,7 @@ TEST(BackendTestCase, AdamCasesArePresent) {
   ASSERT_NE(multiple, nullptr);
 
   for (const TestCase *tc : {single, multiple}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -64,7 +64,7 @@ TEST(BackendTestCase, AdamCasesArePresent) {
 
     // Model must import the ``ai.onnx.preview.training`` opset at version 1.
     bool has_training_opset = false;
-    for (const auto &osid : tc->model.ref_opset_import()) {
+    for (const auto &osid : tc->model().ref_opset_import()) {
       const auto &d = osid.ref_domain();
       if (std::string(d.data(), d.size()) == "ai.onnx.preview.training") {
         EXPECT_EQ(osid.version(), 1);
@@ -73,13 +73,13 @@ TEST(BackendTestCase, AdamCasesArePresent) {
     }
     EXPECT_TRUE(has_training_opset);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
+    ASSERT_EQ(tc->data_sets().size(), 1u);
   }
 
   // Single optimized tensor: inputs = {R, T, X, G, V, H} and outputs =
   // {X_new, V_new, H_new}.
   {
-    const auto &ds = single->data_sets[0];
+    const auto &ds = single->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 6u);
     ASSERT_EQ(ds.outputs.size(), 3u);
     EXPECT_EQ(ds.inputs[0].data_type,
@@ -99,7 +99,7 @@ TEST(BackendTestCase, AdamCasesArePresent) {
   // Two optimized tensors: inputs = {R, T, X1, X2, G1, G2, V1, V2, H1, H2}
   // and outputs = {X1_new, X2_new, V1_new, V2_new, H1_new, H2_new}.
   {
-    const auto &ds = multiple->data_sets[0];
+    const auto &ds = multiple->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 10u);
     ASSERT_EQ(ds.outputs.size(), 6u);
     EXPECT_EQ(ds.inputs[0].data_type,
@@ -133,7 +133,7 @@ TEST(BackendTestCase, AdamOnnxCasesArePresent) {
   ASSERT_NE(multiple, nullptr);
 
   for (const TestCase *tc : {single, multiple}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -149,12 +149,12 @@ TEST(BackendTestCase, AdamOnnxCasesArePresent) {
       EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::FLOAT);
     }
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
+    ASSERT_EQ(tc->data_sets().size(), 1u);
   }
 
   // ``test_adam``: single optimized rank-1 tensor of length 2.
   {
-    const auto &ds = single->data_sets[0];
+    const auto &ds = single->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 6u);
     ASSERT_EQ(ds.outputs.size(), 3u);
     EXPECT_EQ(ds.inputs[0].data_type,
@@ -173,7 +173,7 @@ TEST(BackendTestCase, AdamOnnxCasesArePresent) {
 
   // ``test_adam_multiple``: two optimized rank-1 tensors of lengths 1 and 2.
   {
-    const auto &ds = multiple->data_sets[0];
+    const auto &ds = multiple->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 10u);
     ASSERT_EQ(ds.outputs.size(), 6u);
     EXPECT_EQ(ds.inputs[0].data_type,
@@ -201,7 +201,7 @@ TEST(BackendTestCase, AdamCasesPassShapeInference) {
 
   for (auto &tc : cases) {
     SCOPED_TRACE(tc.name);
-    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model));
+    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model()));
   }
 }
 
@@ -216,7 +216,7 @@ TEST(BackendTestCase, AdagradOnnxCasesArePresent) {
   ASSERT_NE(multiple, nullptr);
 
   for (const TestCase *tc : {single, multiple}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -232,7 +232,7 @@ TEST(BackendTestCase, AdagradOnnxCasesArePresent) {
     }
 
     bool has_training_opset = false;
-    for (const auto &osid : tc->model.ref_opset_import()) {
+    for (const auto &osid : tc->model().ref_opset_import()) {
       const auto &d = osid.ref_domain();
       if (std::string(d.data(), d.size()) == "ai.onnx.preview.training") {
         EXPECT_EQ(osid.version(), 1);
@@ -241,13 +241,13 @@ TEST(BackendTestCase, AdagradOnnxCasesArePresent) {
     }
     EXPECT_TRUE(has_training_opset);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
+    ASSERT_EQ(tc->data_sets().size(), 1u);
   }
 
   // ``test_adagrad``: single optimized rank-1 tensor of length 1, with
   // inputs ``{R, T, X, G, H}`` and outputs ``{X_new, H_new}``.
   {
-    const auto &ds = single->data_sets[0];
+    const auto &ds = single->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 5u);
     ASSERT_EQ(ds.outputs.size(), 2u);
     EXPECT_EQ(ds.inputs[0].data_type,
@@ -268,7 +268,7 @@ TEST(BackendTestCase, AdagradOnnxCasesArePresent) {
   // 1 and 2, with inputs ``{R, T, X1, X2, G1, G2, H1, H2}`` and outputs
   // ``{X1_new, X2_new, H1_new, H2_new}``.
   {
-    const auto &ds = multiple->data_sets[0];
+    const auto &ds = multiple->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 8u);
     ASSERT_EQ(ds.outputs.size(), 4u);
     EXPECT_EQ(ds.inputs[0].data_type,
@@ -293,7 +293,7 @@ TEST(BackendTestCase, AdagradCasesPassShapeInference) {
   ASSERT_FALSE(cases.empty());
   for (auto &tc : cases) {
     SCOPED_TRACE(tc.name);
-    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model));
+    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model()));
   }
 }
 
@@ -310,7 +310,7 @@ TEST(BackendTestCase, MomentumOnnxCasesArePresent) {
   ASSERT_NE(multiple, nullptr);
 
   for (const TestCase *tc : {standard, nesterov, multiple}) {
-    const GraphProto &graph = tc->model.ref_graph();
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
@@ -334,7 +334,7 @@ TEST(BackendTestCase, MomentumOnnxCasesArePresent) {
     EXPECT_EQ(float_count, 3);
     EXPECT_EQ(string_count, 1);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
+    ASSERT_EQ(tc->data_sets().size(), 1u);
   }
 
   // ``test_momentum`` and ``test_nesterov_momentum`` share the same shape
@@ -342,7 +342,7 @@ TEST(BackendTestCase, MomentumOnnxCasesArePresent) {
   // ``{R, T, X, G, V}`` and outputs ``{X_new, V_new}``.
   for (const TestCase *tc : {standard, nesterov}) {
     SCOPED_TRACE(tc->name);
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 5u);
     ASSERT_EQ(ds.outputs.size(), 2u);
     EXPECT_EQ(ds.inputs[0].data_type,
@@ -362,7 +362,7 @@ TEST(BackendTestCase, MomentumOnnxCasesArePresent) {
   // ``test_momentum_multiple``: two optimized rank-1 tensors of lengths
   // 1 and 2.
   {
-    const auto &ds = multiple->data_sets[0];
+    const auto &ds = multiple->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 8u);
     ASSERT_EQ(ds.outputs.size(), 4u);
     for (size_t i : {2u, 4u, 6u}) {
@@ -383,7 +383,7 @@ TEST(BackendTestCase, MomentumCasesPassShapeInference) {
   ASSERT_FALSE(cases.empty());
   for (auto &tc : cases) {
     SCOPED_TRACE(tc.name);
-    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model));
+    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model()));
   }
 }
 

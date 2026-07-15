@@ -29,8 +29,6 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::LRN kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    Tensor x = Tensor::FromFloat("", {1, 64, 128, 128}, Randn<float>({1, 64, 128, 128}, 2201));
-
     NodeProto node;
     node.set_op_type("LRN");
     node.add_input("x");
@@ -40,8 +38,15 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<float>(node, "bias", 2.0f);
     AddAttribute<int64_t>(node, "size", 3);
 
-    Tensor y = kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f, /*bias=*/2.0f);
-    Expect(node, {x}, {y}, "test_cc_lrn_benchmark", {opset}, "backend-test", registry);
+    constexpr int64_t count = 1 * 64 * 128 * 128;
+    Expect(registry, std::move(node), "test_cc_lrn_benchmark", {opset}, {count}, {count},
+           [kernel]() -> IoData {
+             Tensor x =
+                 Tensor::FromFloat("", {1, 64, 128, 128}, Randn<float>({1, 64, 128, 128}, 2201));
+             Tensor y = kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f,
+                               /*bias=*/2.0f);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

@@ -65,17 +65,21 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) 
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> shape = {512, 512};
-    Tensor A = Tensor::FromUint8("A", shape, RandUint<uint8_t>(255, shape, 437));
-    Tensor B = Tensor::FromUint8("B", shape, RandUint<uint8_t>(255, shape, 438));
-    Tensor a_zp("a_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
-                std::vector<uint8_t>{0});
-    Tensor b_zp("b_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
-                std::vector<uint8_t>{0});
-    Tensor Y = mmi(A, B, a_zp, b_zp);
-    Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNode();
-    Expect(node, {A, B, a_zp, b_zp}, {Y}, "test_cc_matmulinteger_benchmark", {opset},
-           "backend-test", registry);
+    const int64_t count = 512 * 512;
+    Expect(registry, std::move(node), "test_cc_matmulinteger_benchmark", {opset},
+           {count, count, 1, 1}, {count}, [mmi, shape]() -> IoData {
+             Tensor A = Tensor::FromUint8("A", shape, RandUint<uint8_t>(255, shape, 437));
+             Tensor B = Tensor::FromUint8("B", shape, RandUint<uint8_t>(255, shape, 438));
+             Tensor a_zp("a_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
+                         std::vector<uint8_t>{0});
+             Tensor b_zp("b_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
+                         std::vector<uint8_t>{0});
+             Tensor Y = mmi(A, B, a_zp, b_zp);
+             Y.name = "Y";
+             return IoData{{std::move(A), std::move(B), std::move(a_zp), std::move(b_zp)},
+                           {std::move(Y)}};
+           });
     return;
   }
 

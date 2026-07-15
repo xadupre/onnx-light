@@ -44,8 +44,8 @@ TEST(EmptyShapeCases, AddScalarsProducesScalarSum) {
   const auto cases = Collect("empty_shape");
   const TestCase *tc = Find(cases, "test_cc_add_empty_shape_scalars");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_TRUE(ds.outputs[0].shape.empty());
@@ -58,8 +58,8 @@ TEST(EmptyShapeCases, AddZeroDimProducesZeroElementOutput) {
   const auto cases = Collect("empty_shape");
   const TestCase *tc = Find(cases, "test_cc_add_empty_shape_zero_dim");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].shape, std::vector<int64_t>({0}));
   EXPECT_EQ(ds.outputs[0].element_count(), 0);
@@ -69,7 +69,7 @@ TEST(EmptyShapeCases, AddZeroDim2DProducesZeroElementOutput) {
   const auto cases = Collect("empty_shape");
   const TestCase *tc = Find(cases, "test_cc_add_empty_shape_zero_dim_2d");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0, 3}));
   EXPECT_EQ(ds.outputs[0].element_count(), 0);
 }

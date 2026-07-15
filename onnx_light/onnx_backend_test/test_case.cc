@@ -184,79 +184,161 @@ void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor>
   DataSet ds;
   ds.inputs = std::move(inputs);
   ds.outputs = std::move(outputs);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 }
 
-void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
-            const std::vector<Tensor> &outputs, const std::string &name,
-            const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
-            std::vector<TestCase> &registry, const std::string &tag,
-            const std::vector<TypeSpec> &output_types) {
+BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
+                              std::vector<Tensor> outputs, const std::string &name,
+                              const std::vector<OpsetId> &opset_imports,
+                              const std::string &producer_name,
+                              const std::vector<TypeSpec> &output_types) {
   const auto present_inputs = NonEmpty(node.ref_input());
   const auto present_outputs = NonEmpty(node.ref_output());
   EXT_ENFORCE_INVALID(
       present_inputs.size() == inputs.size(),
-      "Expect: number of input tensors does not match the non-empty inputs of the node.");
+      "BuildSingleNodeCase: number of input tensors does not match the non-empty inputs.");
   EXT_ENFORCE_INVALID(
       present_outputs.size() == outputs.size(),
-      "Expect: number of output tensors does not match the non-empty outputs of the node.");
+      "BuildSingleNodeCase: number of output tensors does not match the non-empty outputs.");
   EXT_ENFORCE_INVALID(
       output_types.empty() || output_types.size() == outputs.size(),
-      "Expect: output_types, when provided, must have one entry per output tensor.");
+      "BuildSingleNodeCase: output_types, when provided, must have one entry per output tensor.");
 
-  // When the test targets a non-default operator domain and the caller did
-  // not provide an explicit tag, default the tag to the node's domain so
-  // that tests can be filtered/grouped by domain (e.g. ``"ai.onnx.ml"``,
-  // ``"ai.onnx.preview.training"``). An empty domain or ``"ai.onnx"``
-  // refers to the standard ONNX domain and keeps the empty tag.
-  std::string resolved_tag = tag;
-  if (resolved_tag.empty()) {
-    const std::string node_domain = node.domain().as_string();
-    if (!node_domain.empty() && node_domain != "ai.onnx") {
-      resolved_tag = node_domain;
-    }
-  }
+  BuiltCase built;
+  InitModel(built.model, kDefaultIrVersion, opset_imports, producer_name);
 
-  TestCase tc(name, name, "node", resolved_tag);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
-
-  ModelProto &model = tc.model;
-  InitModel(model, kDefaultIrVersion, opset_imports, producer_name);
-
-  GraphProto *graph = model.add_graph();
+  GraphProto *graph = built.model.add_graph();
   graph->set_name(name);
   graph->add_node(node);
 
   for (size_t i = 0; i < inputs.size(); ++i) {
-    Tensor tensor = inputs[i];
-    tensor.name = present_inputs[i];
-    FillValueInfo(tensor, *graph->add_input());
+    inputs[i].name = present_inputs[i];
+    FillValueInfo(inputs[i], *graph->add_input());
   }
   for (size_t i = 0; i < outputs.size(); ++i) {
-    Tensor tensor = outputs[i];
-    tensor.name = present_outputs[i];
+    outputs[i].name = present_outputs[i];
     if (output_types.empty()) {
-      FillValueInfo(tensor, *graph->add_output());
+      FillValueInfo(outputs[i], *graph->add_output());
     } else {
       AppendValueInfo(*graph->add_output(), present_outputs[i], output_types[i]);
     }
   }
 
   DataSet ds;
-  ds.inputs.reserve(inputs.size());
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    Tensor t = inputs[i];
-    t.name = present_inputs[i];
-    ds.inputs.emplace_back(std::move(t));
+  ds.inputs = std::move(inputs);
+  ds.outputs = std::move(outputs);
+  built.data_sets.emplace_back(std::move(ds));
+  return built;
+}
+
+namespace {
+
+// Copyable state shared by a lazy case builder. Holds the move-only
+// ``NodeProto`` (which therefore cannot be captured directly by a copyable
+// ``std::function``) plus everything else needed to build the model. Either
+// ``make_io`` is set (the inputs/outputs are generated on demand, e.g. for
+// benchmark cases) or the concrete ``inputs``/``outputs`` are stored directly.
+struct LazyCaseState {
+  NodeProto node;
+  std::string name;
+  std::vector<OpsetId> opset_imports;
+  std::string producer_name;
+  std::vector<TypeSpec> output_types;
+  std::function<IoData()> make_io;
+  std::vector<Tensor> inputs;
+  std::vector<Tensor> outputs;
+};
+
+// Builds the ``TestCase::build`` closure for a lazy case backed by ``state``.
+std::function<BuiltCase()> MakeLazyBuild(std::shared_ptr<LazyCaseState> state) {
+  return [state]() -> BuiltCase {
+    if (state->make_io) {
+      IoData io = state->make_io();
+      return BuildSingleNodeCase(state->node, std::move(io.inputs), std::move(io.outputs),
+                                 state->name, state->opset_imports, state->producer_name,
+                                 state->output_types);
+    }
+    return BuildSingleNodeCase(state->node, state->inputs, state->outputs, state->name,
+                               state->opset_imports, state->producer_name, state->output_types);
+  };
+}
+
+// Resolves the grouping tag for a node the same way :func:`Expect` does.
+std::string ResolveTag(const NodeProto &node, const std::string &tag) {
+  if (!tag.empty()) {
+    return tag;
   }
-  ds.outputs.reserve(outputs.size());
-  for (size_t i = 0; i < outputs.size(); ++i) {
-    Tensor t = outputs[i];
-    t.name = present_outputs[i];
-    ds.outputs.emplace_back(std::move(t));
+  const std::string node_domain = node.domain().as_string();
+  if (!node_domain.empty() && node_domain != "ai.onnx") {
+    return node_domain;
   }
-  tc.data_sets.emplace_back(std::move(ds));
+  return "";
+}
+
+} // namespace
+
+void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
+            const std::vector<Tensor> &outputs, const std::string &name,
+            const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
+            std::vector<TestCase> &registry, const std::string &tag,
+            const std::vector<TypeSpec> &output_types) {
+  const std::string resolved_tag = ResolveTag(node, tag);
+
+  // Validate arity eagerly so callers still get an immediate error at
+  // registration time even though the model/data set are built lazily.
+  const auto present_inputs = NonEmpty(node.ref_input());
+  const auto present_outputs = NonEmpty(node.ref_output());
+  EXT_ENFORCE_INVALID(present_inputs.size() == inputs.size(),
+                      "Expect: number of input tensors does not match the non-empty inputs.");
+  EXT_ENFORCE_INVALID(present_outputs.size() == outputs.size(),
+                      "Expect: number of output tensors does not match the non-empty outputs.");
+  EXT_ENFORCE_INVALID(
+      output_types.empty() || output_types.size() == outputs.size(),
+      "Expect: output_types, when provided, must have one entry per output tensor.");
+
+  TestCase tc(name, name, "node", resolved_tag);
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+  for (const auto &t : inputs) {
+    tc.declared_input_element_counts.push_back(t.element_count());
+  }
+  for (const auto &t : outputs) {
+    tc.declared_output_element_counts.push_back(t.element_count());
+  }
+
+  auto state = std::make_shared<LazyCaseState>();
+  state->node.CopyFrom(node);
+  state->name = name;
+  state->opset_imports = opset_imports;
+  state->producer_name = producer_name;
+  state->output_types = output_types;
+  state->inputs = inputs;
+  state->outputs = outputs;
+  tc.build = MakeLazyBuild(std::move(state));
+
+  registry.emplace_back(std::move(tc));
+}
+
+void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
+            std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
+            std::vector<int64_t> out_counts, std::function<IoData()> make_io,
+            std::string producer_name, std::string tag, std::vector<TypeSpec> output_types) {
+  const std::string resolved_tag = ResolveTag(node, tag);
+
+  auto state = std::make_shared<LazyCaseState>();
+  state->node = std::move(node);
+  state->name = name;
+  state->opset_imports = std::move(opset_imports);
+  state->producer_name = std::move(producer_name);
+  state->output_types = std::move(output_types);
+  state->make_io = std::move(make_io);
+
+  TestCase tc(name, name, "node", resolved_tag);
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+  tc.declared_input_element_counts = std::move(in_counts);
+  tc.declared_output_element_counts = std::move(out_counts);
+  tc.build = MakeLazyBuild(std::move(state));
 
   registry.emplace_back(std::move(tc));
 }

@@ -41,11 +41,14 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::Trilu trilu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor x = Tensor::FromFloat("X", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
-    kernel::Trilu::Attributes attrs;
-    const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
-    Expect(MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false), {x}, {y},
-           "test_cc_trilu_upper_default_benchmark", {opset}, "backend-test", registry);
+    NodeProto node = MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false);
+    Expect(registry, std::move(node), "test_cc_trilu_upper_default_benchmark", {opset}, {4194304},
+           {4194304}, [trilu_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("X", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+             kernel::Trilu::Attributes attrs;
+             Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

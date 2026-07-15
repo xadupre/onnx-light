@@ -84,10 +84,22 @@ void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry, TestMode 
   const kernel::CausalConvWithState kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    Tensor X = Tensor::FromFloat("input", {1, 32, 16384}, Randn<float>({1, 32, 16384}, 2601));
-    Tensor W = Tensor::FromFloat("weight", {32, 1, 3}, Randn<float>({32, 1, 3}, 2602));
-    RegisterCase(registry, "test_cc_causal_conv_with_state_basic_benchmark", opset, kernel, X, W,
-                 nullptr, nullptr, "none");
+    NodeProto node = MakeCausalConvNode({"input", "weight"}, {"output", "present_state"});
+    constexpr int64_t x_count = 1 * 32 * 16384;
+    constexpr int64_t w_count = 32 * 1 * 3;
+    constexpr int64_t present_count = 1 * 32 * 2;
+    Expect(registry, std::move(node), "test_cc_causal_conv_with_state_basic_benchmark", {opset},
+           {x_count, w_count}, {x_count, present_count}, [kernel]() -> IoData {
+             Tensor X =
+                 Tensor::FromFloat("input", {1, 32, 16384}, Randn<float>({1, 32, 16384}, 2601));
+             Tensor W = Tensor::FromFloat("weight", {32, 1, 3}, Randn<float>({32, 1, 3}, 2602));
+             Tensor bias;
+             Tensor past_state;
+             kernel::CausalConvWithState::Attributes attrs;
+             auto [output, present_state] = kernel(X, W, bias, past_state, attrs);
+             return IoData{{std::move(X), std::move(W)},
+                           {std::move(output), std::move(present_state)}};
+           });
     return;
   }
 

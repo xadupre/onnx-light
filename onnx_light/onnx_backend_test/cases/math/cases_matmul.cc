@@ -24,10 +24,14 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("B");
     node.add_output("Y");
     const std::vector<int64_t> shape = {512, 512};
-    Tensor a = Tensor::FromFloat("", shape, Randn<float>(shape, 435));
-    Tensor b = Tensor::FromFloat("", shape, Randn<float>(shape, 436));
-    Tensor y = matmul_kernel(a, b);
-    Expect(node, {a, b}, {y}, "test_cc_matmul_benchmark", {opset}, "backend-test", registry);
+    const int64_t count = 512 * 512;
+    Expect(registry, std::move(node), "test_cc_matmul_benchmark", {opset}, {count, count}, {count},
+           [matmul_kernel, shape]() -> IoData {
+             Tensor a = Tensor::FromFloat("", shape, Randn<float>(shape, 435));
+             Tensor b = Tensor::FromFloat("", shape, Randn<float>(shape, 436));
+             Tensor y = matmul_kernel(a, b);
+             return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
+           });
     return;
   }
 

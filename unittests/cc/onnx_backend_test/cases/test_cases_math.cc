@@ -36,8 +36,8 @@ TEST(BackendTestCase, AcosCaseOutputsMatchStdAcos) {
     }
   }
   ASSERT_NE(acos, nullptr);
-  ASSERT_EQ(acos->data_sets.size(), 1u);
-  const auto &ds = acos->data_sets[0];
+  ASSERT_EQ(acos->data_sets().size(), 1u);
+  const auto &ds = acos->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -58,8 +58,8 @@ TEST(BackendTestCase, AcoshCaseOutputsMatchStdAcosh) {
     }
   }
   ASSERT_NE(acosh, nullptr);
-  ASSERT_EQ(acosh->data_sets.size(), 1u);
-  const auto &ds = acosh->data_sets[0];
+  ASSERT_EQ(acosh->data_sets().size(), 1u);
+  const auto &ds = acosh->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -80,8 +80,8 @@ TEST(BackendTestCase, AddCaseOutputsAreElementwiseSum) {
     }
   }
   ASSERT_NE(add, nullptr);
-  ASSERT_EQ(add->data_sets.size(), 1u);
-  const auto &ds = add->data_sets[0];
+  ASSERT_EQ(add->data_sets().size(), 1u);
+  const auto &ds = add->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -109,8 +109,8 @@ TEST(BackendTestCase, SubCaseOutputsAreElementwiseDifference) {
   auto cases = CollectTestCases("Sub");
   const TestCase *tc = FindCase(cases, "test_cc_sub");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -126,8 +126,8 @@ TEST(BackendTestCase, MulCaseOutputsAreElementwiseProduct) {
   auto cases = CollectTestCases("Mul");
   const TestCase *tc = FindCase(cases, "test_cc_mul");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -143,8 +143,8 @@ TEST(BackendTestCase, DivCaseOutputsAreElementwiseQuotient) {
   auto cases = CollectTestCases("Div");
   const TestCase *tc = FindCase(cases, "test_cc_div");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -160,8 +160,8 @@ TEST(BackendTestCase, SigmoidCaseOutputsMatchLogisticFunction) {
   auto cases = CollectTestCases("Sigmoid");
   const TestCase *tc = FindCase(cases, "test_cc_sigmoid");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -176,8 +176,8 @@ TEST(BackendTestCase, SoftplusCaseOutputsMatchSoftplusFunction) {
   auto cases = CollectTestCases("Softplus");
   const TestCase *tc = FindCase(cases, "test_cc_softplus");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -194,8 +194,8 @@ TEST(BackendTestCase, MishCaseOutputsMatchMishFunction) {
   auto cases = CollectTestCases("Mish");
   const TestCase *tc = FindCase(cases, "test_cc_mish");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -212,8 +212,8 @@ TEST(BackendTestCase, SoftsignCaseOutputsMatchSoftsignFunction) {
   auto cases = CollectTestCases("Softsign");
   const TestCase *tc = FindCase(cases, "test_cc_softsign");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -228,8 +228,8 @@ TEST(BackendTestCase, ExpCaseOutputsMatchStdExp) {
   auto cases = CollectTestCases("Exp");
   const TestCase *tc = FindCase(cases, "test_cc_exp");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -244,8 +244,8 @@ TEST(BackendTestCase, ErfCaseOutputsMatchStdErf) {
   auto cases = CollectTestCases("Erf");
   const TestCase *tc = FindCase(cases, "test_cc_erf");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -260,8 +260,8 @@ TEST(BackendTestCase, SignCaseOutputsMatchExpected) {
   auto cases = CollectTestCases("Sign");
   const TestCase *tc = FindCase(cases, "test_cc_sign");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -277,8 +277,8 @@ TEST(BackendTestCase, LogCaseOutputsMatchStdLog) {
   auto cases = CollectTestCases("Log");
   const TestCase *tc = FindCase(cases, "test_cc_log");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -293,8 +293,8 @@ TEST(BackendTestCase, SoftmaxCaseOutputsAreNormalizedAlongAxis) {
   auto cases = CollectTestCases("Softmax");
   const TestCase *tc = FindCase(cases, "test_cc_softmax");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *y = ds.outputs[0].AsFloat();
@@ -314,8 +314,8 @@ TEST(BackendTestCase, LogSoftmaxCaseExpRowsAreNormalizedAlongAxis) {
   auto cases = CollectTestCases("LogSoftmax");
   const TestCase *tc = FindCase(cases, "test_cc_logsoftmax_example_1");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   ASSERT_EQ(ds.outputs[0].shape.size(), 2u);
@@ -364,8 +364,8 @@ TEST(BackendTestCase, AcosExampleCaseMatchesStdAcos) {
   auto cases = CollectTestCases("Acos");
   const TestCase *tc = FindCase(cases, "test_acos_example");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   ASSERT_EQ(ds.inputs[0].element_count(), 3);
@@ -380,7 +380,7 @@ TEST(BackendTestCase, AcoshExampleCaseMatchesStdAcosh) {
   auto cases = CollectTestCases("Acosh");
   const TestCase *tc = FindCase(cases, "test_acosh_example");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs[0].element_count(), 3);
   const float *x = ds.inputs[0].AsFloat();
   const float *y = ds.outputs[0].AsFloat();
@@ -393,7 +393,7 @@ TEST(BackendTestCase, AsinExampleCaseMatchesStdAsin) {
   auto cases = CollectTestCases("Asin");
   const TestCase *tc = FindCase(cases, "test_asin_example");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs[0].element_count(), 3);
   const float *x = ds.inputs[0].AsFloat();
   const float *y = ds.outputs[0].AsFloat();
@@ -406,7 +406,7 @@ TEST(BackendTestCase, AsinhExampleCaseMatchesStdAsinh) {
   auto cases = CollectTestCases("Asinh");
   const TestCase *tc = FindCase(cases, "test_asinh_example");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs[0].element_count(), 3);
   const float *x = ds.inputs[0].AsFloat();
   const float *y = ds.outputs[0].AsFloat();
@@ -419,7 +419,7 @@ TEST(BackendTestCase, AcosRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Acos");
   const TestCase *tc = FindCase(cases, "test_acos");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -434,7 +434,7 @@ TEST(BackendTestCase, AcoshRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Acosh");
   const TestCase *tc = FindCase(cases, "test_acosh");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -449,7 +449,7 @@ TEST(BackendTestCase, AsinRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Asin");
   const TestCase *tc = FindCase(cases, "test_asin");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -464,7 +464,7 @@ TEST(BackendTestCase, AsinhRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Asinh");
   const TestCase *tc = FindCase(cases, "test_asinh");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -494,7 +494,7 @@ TEST(BackendTestCase, AtanExampleCaseMatchesStdAtan) {
   auto cases = CollectTestCases("Atan");
   const TestCase *tc = FindCase(cases, "test_atan_example");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs[0].element_count(), 3);
   const float *x = ds.inputs[0].AsFloat();
   const float *y = ds.outputs[0].AsFloat();
@@ -507,7 +507,7 @@ TEST(BackendTestCase, AtanhExampleCaseMatchesStdAtanh) {
   auto cases = CollectTestCases("Atanh");
   const TestCase *tc = FindCase(cases, "test_atanh_example");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs[0].element_count(), 3);
   const float *x = ds.inputs[0].AsFloat();
   const float *y = ds.outputs[0].AsFloat();
@@ -520,7 +520,7 @@ TEST(BackendTestCase, AtanRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Atan");
   const TestCase *tc = FindCase(cases, "test_atan");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -535,7 +535,7 @@ TEST(BackendTestCase, AtanhRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Atanh");
   const TestCase *tc = FindCase(cases, "test_atanh");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -565,8 +565,8 @@ TEST(BackendTestCase, CosCaseOutputsMatchStdCos) {
   auto cases = CollectTestCases("Cos");
   const TestCase *tc = FindCase(cases, "test_cc_cos");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -580,8 +580,8 @@ TEST(BackendTestCase, CoshCaseOutputsMatchStdCosh) {
   auto cases = CollectTestCases("Cosh");
   const TestCase *tc = FindCase(cases, "test_cc_cosh");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   const float *x = ds.inputs[0].AsFloat();
   const float *y = ds.outputs[0].AsFloat();
   for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
@@ -593,7 +593,7 @@ TEST(BackendTestCase, CosExampleCaseMatchesStdCos) {
   auto cases = CollectTestCases("Cos");
   const TestCase *tc = FindCase(cases, "test_cos_example");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs[0].element_count(), 3);
   const float *x = ds.inputs[0].AsFloat();
   const float *y = ds.outputs[0].AsFloat();
@@ -606,7 +606,7 @@ TEST(BackendTestCase, CoshExampleCaseMatchesStdCosh) {
   auto cases = CollectTestCases("Cosh");
   const TestCase *tc = FindCase(cases, "test_cosh_example");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs[0].element_count(), 3);
   const float *x = ds.inputs[0].AsFloat();
   const float *y = ds.outputs[0].AsFloat();
@@ -619,7 +619,7 @@ TEST(BackendTestCase, CosRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Cos");
   const TestCase *tc = FindCase(cases, "test_cos");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -634,7 +634,7 @@ TEST(BackendTestCase, CoshRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Cosh");
   const TestCase *tc = FindCase(cases, "test_cosh");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -662,8 +662,8 @@ TEST(BackendTestCase, SinCaseOutputsMatchStdSin) {
   auto cases = CollectTestCases("Sin");
   const TestCase *tc = FindCase(cases, "test_cc_sin");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -677,8 +677,8 @@ TEST(BackendTestCase, SinhCaseOutputsMatchStdSinh) {
   auto cases = CollectTestCases("Sinh");
   const TestCase *tc = FindCase(cases, "test_cc_sinh");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -692,7 +692,7 @@ TEST(BackendTestCase, SinRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Sin");
   const TestCase *tc = FindCase(cases, "test_sin");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -707,7 +707,7 @@ TEST(BackendTestCase, SinhRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Sinh");
   const TestCase *tc = FindCase(cases, "test_sinh");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -722,8 +722,8 @@ TEST(BackendTestCase, TanCaseOutputsMatchStdTan) {
   auto cases = CollectTestCases("Tan");
   const TestCase *tc = FindCase(cases, "test_cc_tan");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -737,8 +737,8 @@ TEST(BackendTestCase, TanhCaseOutputsMatchStdTanh) {
   auto cases = CollectTestCases("Tanh");
   const TestCase *tc = FindCase(cases, "test_cc_tanh");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -752,7 +752,7 @@ TEST(BackendTestCase, TanRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Tan");
   const TestCase *tc = FindCase(cases, "test_tan");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -767,7 +767,7 @@ TEST(BackendTestCase, TanhRandomCaseHasUpstreamShape) {
   auto cases = CollectTestCases("Tanh");
   const TestCase *tc = FindCase(cases, "test_tanh");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   const std::vector<int64_t> expected_shape = {3, 4, 5};
   EXPECT_EQ(ds.inputs[0].shape, expected_shape);
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -835,24 +835,24 @@ TEST(BackendTestCase, MatMulCaseShapesMatchExpectedSignatures) {
 
   const TestCase *two_d = FindCase(cases, "test_cc_matmul_2d");
   ASSERT_NE(two_d, nullptr);
-  ASSERT_EQ(two_d->data_sets.size(), 1u);
-  EXPECT_EQ(two_d->data_sets[0].inputs[0].shape, (std::vector<int64_t>{2, 3}));
-  EXPECT_EQ(two_d->data_sets[0].inputs[1].shape, (std::vector<int64_t>{3, 4}));
-  EXPECT_EQ(two_d->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 4}));
+  ASSERT_EQ(two_d->data_sets().size(), 1u);
+  EXPECT_EQ(two_d->data_sets()[0].inputs[0].shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(two_d->data_sets()[0].inputs[1].shape, (std::vector<int64_t>{3, 4}));
+  EXPECT_EQ(two_d->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{2, 4}));
 
   const TestCase *vector_matrix = FindCase(cases, "test_cc_matmul_vector_matrix");
   ASSERT_NE(vector_matrix, nullptr);
-  ASSERT_EQ(vector_matrix->data_sets.size(), 1u);
-  EXPECT_EQ(vector_matrix->data_sets[0].inputs[0].shape, (std::vector<int64_t>{3}));
-  EXPECT_EQ(vector_matrix->data_sets[0].inputs[1].shape, (std::vector<int64_t>{3, 2}));
-  EXPECT_EQ(vector_matrix->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(vector_matrix->data_sets().size(), 1u);
+  EXPECT_EQ(vector_matrix->data_sets()[0].inputs[0].shape, (std::vector<int64_t>{3}));
+  EXPECT_EQ(vector_matrix->data_sets()[0].inputs[1].shape, (std::vector<int64_t>{3, 2}));
+  EXPECT_EQ(vector_matrix->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{2}));
 
   const TestCase *batch = FindCase(cases, "test_cc_matmul_batch_broadcast");
   ASSERT_NE(batch, nullptr);
-  ASSERT_EQ(batch->data_sets.size(), 1u);
-  EXPECT_EQ(batch->data_sets[0].inputs[0].shape, (std::vector<int64_t>{2, 2, 3}));
-  EXPECT_EQ(batch->data_sets[0].inputs[1].shape, (std::vector<int64_t>{1, 3, 4}));
-  EXPECT_EQ(batch->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 2, 4}));
+  ASSERT_EQ(batch->data_sets().size(), 1u);
+  EXPECT_EQ(batch->data_sets()[0].inputs[0].shape, (std::vector<int64_t>{2, 2, 3}));
+  EXPECT_EQ(batch->data_sets()[0].inputs[1].shape, (std::vector<int64_t>{1, 3, 4}));
+  EXPECT_EQ(batch->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{2, 2, 4}));
 }
 
 TEST(BackendTestCase, MatMulIntegerCasesArePresent) {
@@ -867,21 +867,21 @@ TEST(BackendTestCase, MatMulIntegerCaseShapesMatchExpectedSignatures) {
 
   const TestCase *uint8_case = FindCase(cases, "test_cc_matmulinteger");
   ASSERT_NE(uint8_case, nullptr);
-  ASSERT_EQ(uint8_case->data_sets.size(), 1u);
-  ASSERT_EQ(uint8_case->data_sets[0].inputs.size(), 4u);
-  EXPECT_EQ(uint8_case->data_sets[0].inputs[0].shape, (std::vector<int64_t>{4, 3}));
-  EXPECT_EQ(uint8_case->data_sets[0].inputs[1].shape, (std::vector<int64_t>{3, 2}));
-  ASSERT_EQ(uint8_case->data_sets[0].outputs.size(), 1u);
-  EXPECT_EQ(uint8_case->data_sets[0].outputs[0].shape, (std::vector<int64_t>{4, 2}));
+  ASSERT_EQ(uint8_case->data_sets().size(), 1u);
+  ASSERT_EQ(uint8_case->data_sets()[0].inputs.size(), 4u);
+  EXPECT_EQ(uint8_case->data_sets()[0].inputs[0].shape, (std::vector<int64_t>{4, 3}));
+  EXPECT_EQ(uint8_case->data_sets()[0].inputs[1].shape, (std::vector<int64_t>{3, 2}));
+  ASSERT_EQ(uint8_case->data_sets()[0].outputs.size(), 1u);
+  EXPECT_EQ(uint8_case->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{4, 2}));
 
   const TestCase *int8_case = FindCase(cases, "test_cc_matmulinteger_int8");
   ASSERT_NE(int8_case, nullptr);
-  ASSERT_EQ(int8_case->data_sets.size(), 1u);
-  ASSERT_EQ(int8_case->data_sets[0].inputs.size(), 4u);
-  EXPECT_EQ(int8_case->data_sets[0].inputs[0].shape, (std::vector<int64_t>{2, 3}));
-  EXPECT_EQ(int8_case->data_sets[0].inputs[1].shape, (std::vector<int64_t>{3, 2}));
-  ASSERT_EQ(int8_case->data_sets[0].outputs.size(), 1u);
-  EXPECT_EQ(int8_case->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 2}));
+  ASSERT_EQ(int8_case->data_sets().size(), 1u);
+  ASSERT_EQ(int8_case->data_sets()[0].inputs.size(), 4u);
+  EXPECT_EQ(int8_case->data_sets()[0].inputs[0].shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(int8_case->data_sets()[0].inputs[1].shape, (std::vector<int64_t>{3, 2}));
+  ASSERT_EQ(int8_case->data_sets()[0].outputs.size(), 1u);
+  EXPECT_EQ(int8_case->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{2, 2}));
 }
 
 TEST(BackendTestCase, AbsUpstreamOnnxCaseMatchesReference) {
@@ -891,8 +891,8 @@ TEST(BackendTestCase, AbsUpstreamOnnxCaseMatchesReference) {
   auto cases = CollectTestCases("Abs");
   const TestCase *tc = FindCase(cases, "test_abs");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
@@ -909,7 +909,7 @@ TEST(BackendTestCase, SubExampleCaseHasExpectedValues) {
   auto cases = CollectTestCases("Sub");
   const TestCase *tc = FindCase(cases, "test_sub_example");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs[0].element_count(), 3);
   const float *z = ds.outputs[0].AsFloat();
   EXPECT_FLOAT_EQ(z[0], -2.0f);
@@ -921,7 +921,7 @@ TEST(BackendTestCase, MulExampleCaseHasExpectedValues) {
   auto cases = CollectTestCases("Mul");
   const TestCase *tc = FindCase(cases, "test_mul_example");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs[0].element_count(), 3);
   const float *z = ds.outputs[0].AsFloat();
   EXPECT_FLOAT_EQ(z[0], 4.0f);
@@ -933,7 +933,7 @@ TEST(BackendTestCase, DivExampleCaseHasExpectedValues) {
   auto cases = CollectTestCases("Div");
   const TestCase *tc = FindCase(cases, "test_div_example");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs[0].element_count(), 2);
   const float *z = ds.outputs[0].AsFloat();
   EXPECT_FLOAT_EQ(z[0], 3.0f);
@@ -947,7 +947,7 @@ TEST(BackendTestCase, DivInt32TruncCaseHasExpectedValues) {
   auto cases = CollectTestCases("Div");
   const TestCase *tc = FindCase(cases, "test_div_int32_trunc");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   ASSERT_EQ(ds.outputs[0].element_count(), 4);
@@ -964,7 +964,7 @@ TEST(BackendTestCase, AddSubMulDivBroadcastCasesHaveBroadcastShapes) {
        {"test_add_bcast", "test_sub_bcast", "test_mul_bcast", "test_div_bcast"}) {
     const TestCase *tc = FindCase(cases, name);
     ASSERT_NE(tc, nullptr) << name;
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
     EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5})) << name;
@@ -987,8 +987,8 @@ TEST(BackendTestCase, BlackmanWindowCasesArePresent) {
 
   // Both variants take a scalar int32 size and produce a 1-D float window.
   for (const TestCase *tc : {periodic, symmetric}) {
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
@@ -996,9 +996,9 @@ TEST(BackendTestCase, BlackmanWindowCasesArePresent) {
     ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape[0], 10);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-    ASSERT_EQ(tc->model.ref_opset_import().size(), 1u);
-    EXPECT_EQ(tc->model.ref_opset_import()[0].version(), 17);
-    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(tc->model().ref_opset_import().size(), 1u);
+    EXPECT_EQ(tc->model().ref_opset_import()[0].version(), 17);
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const auto &op_type = graph.ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "BlackmanWindow");
@@ -1006,12 +1006,12 @@ TEST(BackendTestCase, BlackmanWindowCasesArePresent) {
 
   // The symmetric variant carries a ``periodic = 0`` attribute; the periodic
   // variant relies on the default and has no attribute.
-  ASSERT_EQ(symmetric->model.ref_graph().ref_node()[0].ref_attribute().size(), 1u);
-  const auto &attr = symmetric->model.ref_graph().ref_node()[0].ref_attribute()[0];
+  ASSERT_EQ(symmetric->model().ref_graph().ref_node()[0].ref_attribute().size(), 1u);
+  const auto &attr = symmetric->model().ref_graph().ref_node()[0].ref_attribute()[0];
   EXPECT_EQ(std::string(attr.ref_name().data(), attr.ref_name().size()), "periodic");
   EXPECT_EQ(attr.type(), AttributeProto::AttributeType::INT);
   EXPECT_EQ(attr.i(), 0);
-  EXPECT_EQ(periodic->model.ref_graph().ref_node()[0].ref_attribute().size(), 0u);
+  EXPECT_EQ(periodic->model().ref_graph().ref_node()[0].ref_attribute().size(), 0u);
 
   // Output values match the Blackman window reference formula.
   constexpr double kPi = 3.14159265358979323846;
@@ -1022,7 +1022,7 @@ TEST(BackendTestCase, BlackmanWindowCasesArePresent) {
   for (const TestCase *tc : {periodic, symmetric}) {
     const double divisor =
         (tc == periodic) ? static_cast<double>(size) : static_cast<double>(size - 1);
-    const float *y = tc->data_sets[0].outputs[0].AsFloat();
+    const float *y = tc->data_sets()[0].outputs[0].AsFloat();
     for (int32_t n = 0; n < size; ++n) {
       const double k = static_cast<double>(n) / divisor;
       const float expected =
@@ -1046,8 +1046,8 @@ TEST(BackendTestCase, FloorCaseOutputsMatchStdFloor) {
   auto cases = CollectTestCases("Floor");
   const TestCase *tc = FindCase(cases, "test_cc_floor");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -1061,8 +1061,8 @@ TEST(BackendTestCase, CeilCaseOutputsMatchStdCeil) {
   auto cases = CollectTestCases("Ceil");
   const TestCase *tc = FindCase(cases, "test_cc_ceil");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *x = ds.inputs[0].AsFloat();
@@ -1076,7 +1076,7 @@ TEST(BackendTestCase, RoundCaseImplementsBankersRounding) {
   auto cases = CollectTestCases("Round");
   const TestCase *tc = FindCase(cases, "test_cc_round");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   // x = {0.9, 2.5, 2.3, 1.5, -4.5, -2.5}
@@ -1105,8 +1105,8 @@ TEST(BackendTestCase, HannWindowCasesArePresent) {
   ASSERT_NE(symmetric, nullptr);
 
   for (const TestCase *tc : {periodic, symmetric}) {
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
@@ -1114,9 +1114,9 @@ TEST(BackendTestCase, HannWindowCasesArePresent) {
     ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape[0], 10);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-    ASSERT_EQ(tc->model.ref_opset_import().size(), 1u);
-    EXPECT_EQ(tc->model.ref_opset_import()[0].version(), 17);
-    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(tc->model().ref_opset_import().size(), 1u);
+    EXPECT_EQ(tc->model().ref_opset_import()[0].version(), 17);
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const auto &op_type = graph.ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "HannWindow");
@@ -1130,7 +1130,7 @@ TEST(BackendTestCase, HannWindowCasesArePresent) {
   for (const TestCase *tc : {periodic, symmetric}) {
     const double divisor =
         (tc == periodic) ? static_cast<double>(size) : static_cast<double>(size - 1);
-    const float *y = tc->data_sets[0].outputs[0].AsFloat();
+    const float *y = tc->data_sets()[0].outputs[0].AsFloat();
     for (int32_t n = 0; n < size; ++n) {
       const double k = static_cast<double>(n) / divisor;
       const float expected = static_cast<float>(a0 + a1 * std::cos(2.0 * kPi * k));
@@ -1153,8 +1153,8 @@ TEST(BackendTestCase, HammingWindowCasesArePresent) {
   ASSERT_NE(symmetric, nullptr);
 
   for (const TestCase *tc : {periodic, symmetric}) {
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
@@ -1162,9 +1162,9 @@ TEST(BackendTestCase, HammingWindowCasesArePresent) {
     ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape[0], 10);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-    ASSERT_EQ(tc->model.ref_opset_import().size(), 1u);
-    EXPECT_EQ(tc->model.ref_opset_import()[0].version(), 17);
-    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(tc->model().ref_opset_import().size(), 1u);
+    EXPECT_EQ(tc->model().ref_opset_import()[0].version(), 17);
+    const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const auto &op_type = graph.ref_node()[0].ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "HammingWindow");
@@ -1178,7 +1178,7 @@ TEST(BackendTestCase, HammingWindowCasesArePresent) {
   for (const TestCase *tc : {periodic, symmetric}) {
     const double divisor =
         (tc == periodic) ? static_cast<double>(size) : static_cast<double>(size - 1);
-    const float *y = tc->data_sets[0].outputs[0].AsFloat();
+    const float *y = tc->data_sets()[0].outputs[0].AsFloat();
     for (int32_t n = 0; n < size; ++n) {
       const double k = static_cast<double>(n) / divisor;
       const float expected = static_cast<float>(a0 + a1 * std::cos(2.0 * kPi * k));
@@ -1206,8 +1206,8 @@ TEST(BackendTestCase, ClipExampleClampsToMinAndMax) {
   auto cases = CollectTestCases("Clip");
   const TestCase *tc = FindCase(cases, "test_clip_example");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *y = ds.outputs[0].AsFloat();
@@ -1221,7 +1221,7 @@ TEST(BackendTestCase, ClipMinGreaterThanMaxReplacesAllValuesByMax) {
   auto cases = CollectTestCases("Clip");
   const TestCase *tc = FindCase(cases, "test_clip_min_greater_than_max");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *y = ds.outputs[0].AsFloat();
   ASSERT_EQ(ds.outputs[0].element_count(), 3);
@@ -1240,34 +1240,37 @@ TEST(BackendTestCase, ClipDefaultMaxNodeOmitsTrailingMinInput) {
   // *named* tensors (x and max).
   const TestCase *tc = FindCase(cases, "test_clip_default_max");
   ASSERT_NE(tc, nullptr);
-  const GraphProto &graph = tc->model.ref_graph();
+  const GraphProto &graph = tc->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 1u);
   const auto &node_inputs = graph.ref_node()[0].ref_input();
   ASSERT_EQ(node_inputs.size(), 3u);
   EXPECT_EQ(std::string(node_inputs[1].data(), node_inputs[1].size()), "");
-  ASSERT_EQ(tc->data_sets[0].inputs.size(), 2u);
+  ASSERT_EQ(tc->data_sets()[0].inputs.size(), 2u);
 }
 
 TEST(BackendTestCase, BenchmarkModeProducesLargeInputCases) {
   std::vector<TestCase> registry;
-  // Keep this benchmark-mode sanity check focused on one representative math
-  // op so the test remains below the per-test CI timeout.
-  CollectMathTestCases(registry, "Add", onnx_backend_test::TestMode::BENCHMARK);
+  // Collection must stay cheap: benchmark cases are lazy, so neither the
+  // ``ModelProto`` nor the (multi-million-element) input/output tensors are
+  // built here. We validate the declared element counts instead of
+  // materializing the cases.
+  CollectMathTestCases(registry, "", onnx_backend_test::TestMode::BENCHMARK);
   ASSERT_FALSE(registry.empty());
   size_t benchmark_cases = 0;
   for (const auto &c : registry) {
-    ASSERT_EQ(c.data_sets.size(), 1u) << "case: " << c.name;
-    const auto &ds = c.data_sets[0];
-    ASSERT_FALSE(ds.inputs.empty()) << "case: " << c.name;
-    ASSERT_FALSE(ds.outputs.empty()) << "case: " << c.name;
     if (c.name.find("_benchmark") != std::string::npos) {
       ++benchmark_cases;
+      // Lazy cases must not have been materialized during collection. Use the
+      // introspection helpers (which do *not* trigger materialization) rather
+      // than data_sets(), which would build the multi-million-element tensors.
+      EXPECT_FALSE(c.materialized()) << "benchmark case materialized eagerly: " << c.name;
+      EXPECT_TRUE(c.is_lazy()) << "benchmark case missing builder: " << c.name;
       int64_t max_elems = 0;
-      for (const auto &in : ds.inputs) {
-        max_elems = std::max(max_elems, in.element_count());
+      for (int64_t n : c.declared_input_element_counts) {
+        max_elems = std::max(max_elems, n);
       }
-      for (const auto &out : ds.outputs) {
-        max_elems = std::max(max_elems, out.element_count());
+      for (int64_t n : c.declared_output_element_counts) {
+        max_elems = std::max(max_elems, n);
       }
       EXPECT_GE(max_elems, 1 << 13) << "benchmark case too small: " << c.name;
     }

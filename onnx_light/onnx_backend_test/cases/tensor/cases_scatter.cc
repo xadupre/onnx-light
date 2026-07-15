@@ -40,18 +40,22 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
   const kernel::Scatter scatter_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    Tensor data =
-        Tensor::FromFloat("", {4096, 1024}, std::vector<float>(kBenchmarkElementwiseSize, 0.0f));
-    std::vector<int64_t> index_values(kBenchmarkElementwiseSize);
-    for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
-      index_values[static_cast<std::size_t>(i)] = i % 4096;
-    }
-    Tensor indices = Tensor::FromInt64("", {4096, 1024}, index_values);
-    Tensor updates = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
-    kernel::Scatter::Attributes attrs;
-    Tensor output = scatter_kernel(data, indices, updates, attrs);
-    Expect(MakeScatterNode(0, /*set_axis_attr=*/false), {data, indices, updates}, {output},
-           "test_cc_scatter_without_axis_benchmark", {opset}, "backend-test", registry);
+    NodeProto node = MakeScatterNode(0, /*set_axis_attr=*/false);
+    Expect(registry, std::move(node), "test_cc_scatter_without_axis_benchmark", {opset},
+           {4194304, 4194304, 4194304}, {4194304}, [scatter_kernel]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {4096, 1024},
+                                             std::vector<float>(kBenchmarkElementwiseSize, 0.0f));
+             std::vector<int64_t> index_values(kBenchmarkElementwiseSize);
+             for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
+               index_values[static_cast<std::size_t>(i)] = i % 4096;
+             }
+             Tensor indices = Tensor::FromInt64("", {4096, 1024}, index_values);
+             Tensor updates = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+             kernel::Scatter::Attributes attrs;
+             Tensor output = scatter_kernel(data, indices, updates, attrs);
+             return IoData{{std::move(data), std::move(indices), std::move(updates)},
+                           {std::move(output)}};
+           });
     return;
   }
 

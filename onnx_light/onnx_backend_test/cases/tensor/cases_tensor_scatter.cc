@@ -40,16 +40,19 @@ void RegisterTensorScatterCases(std::vector<TestCase> &registry, TestMode mode) 
   const kernel::TensorScatter ts_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    const Tensor past_cache =
-        Tensor::FromFloat("past_cache", {2, 1, 4096, 512}, Randn<float>({2, 1, 4096, 512}, 2001));
-    const Tensor update =
-        Tensor::FromFloat("update", {2, 1, 1, 512}, Randn<float>({2, 1, 1, 512}, 2002));
-    const Tensor write_indices = Tensor::FromInt64("write_indices", {2}, {2048, 3072});
-    kernel::TensorScatter::Attributes attrs;
-    const Tensor present_cache = ts_kernel(past_cache, update, &write_indices, attrs);
-    Expect(MakeTensorScatterNode("linear", /*set_mode_attr=*/true),
-           {past_cache, update, write_indices}, {present_cache}, "test_cc_tensorscatter_benchmark",
-           {opset}, "backend-test", registry);
+    NodeProto node = MakeTensorScatterNode("linear", /*set_mode_attr=*/true);
+    Expect(registry, std::move(node), "test_cc_tensorscatter_benchmark", {opset},
+           {4194304, 1024, 2}, {4194304}, [ts_kernel]() -> IoData {
+             Tensor past_cache = Tensor::FromFloat("past_cache", {2, 1, 4096, 512},
+                                                   Randn<float>({2, 1, 4096, 512}, 2001));
+             Tensor update =
+                 Tensor::FromFloat("update", {2, 1, 1, 512}, Randn<float>({2, 1, 1, 512}, 2002));
+             Tensor write_indices = Tensor::FromInt64("write_indices", {2}, {2048, 3072});
+             kernel::TensorScatter::Attributes attrs;
+             Tensor present_cache = ts_kernel(past_cache, update, &write_indices, attrs);
+             return IoData{{std::move(past_cache), std::move(update), std::move(write_indices)},
+                           {std::move(present_cache)}};
+           });
     return;
   }
 

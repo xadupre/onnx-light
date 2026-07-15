@@ -269,10 +269,12 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
         }
       }
     }
-    y = Tensor::FromFloat("", {batch_size, seq_length, 1, hidden_size}, std::move(y_perm));
+    y = Tensor::FromFloat("", {batch_size, seq_length, 1, hidden_size}, std::move(y_perm),
+                          ctx_.allocator);
     y_h = Tensor::FromFloat(
         "", {batch_size, 1, hidden_size},
-        std::vector<float>(y_h.AsFloat(), y_h.AsFloat() + (y_h.size_bytes() / sizeof(float))));
+        std::vector<float>(y_h.AsFloat(), y_h.AsFloat() + (y_h.size_bytes() / sizeof(float))),
+        ctx_.allocator);
   }
 
   return std::pair<Tensor, Tensor>(std::move(y), std::move(y_h));

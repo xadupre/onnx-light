@@ -380,9 +380,9 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
     }
   }
 
-  out.indices = Tensor::FromInt64("", {n_unique}, groups.first_occurrence);
-  out.inverse_indices = Tensor::FromInt64("", {count}, groups.inverse);
-  out.counts = Tensor::FromInt64("", {n_unique}, groups.counts);
+  out.indices = Tensor::FromInt64("", {n_unique}, groups.first_occurrence, ctx_.allocator);
+  out.inverse_indices = Tensor::FromInt64("", {count}, groups.inverse, ctx_.allocator);
+  out.counts = Tensor::FromInt64("", {n_unique}, groups.counts, ctx_.allocator);
   return out;
 }
 

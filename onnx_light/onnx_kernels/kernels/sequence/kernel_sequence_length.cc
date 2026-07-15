@@ -17,7 +17,7 @@ Tensor SequenceLength::operator()(const Sequence &input_sequence, RuntimeContext
   EXT_ENFORCE_INVALID(input_sequence.size() <=
                           static_cast<std::size_t>(std::numeric_limits<int64_t>::max()),
                       "kernel::SequenceLength: input sequence length exceeds int64_t range.");
-  return Tensor::FromInt64("", {}, {static_cast<int64_t>(input_sequence.size())});
+  return Tensor::FromInt64("", {}, {static_cast<int64_t>(input_sequence.size())}, ctx_.allocator);
 }
 
 } // namespace kernel

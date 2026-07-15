@@ -134,8 +134,8 @@ std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
     labels[static_cast<size_t>(n)] = classlabels_int64s[static_cast<size_t>(idx)];
   }
 
-  Tensor y = Tensor::FromInt64("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, n_classes}, scores);
+  Tensor y = Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
+  Tensor z = Tensor::FromFloat("", {sample_count, n_classes}, scores, ctx_.allocator);
   return std::make_pair(std::move(y), std::move(z));
 }
 
@@ -186,7 +186,7 @@ std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
   }
 
   Tensor y = Tensor::FromStrings("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, n_classes}, scores);
+  Tensor z = Tensor::FromFloat("", {sample_count, n_classes}, scores, ctx_.allocator);
   return std::make_pair(std::move(y), std::move(z));
 }
 

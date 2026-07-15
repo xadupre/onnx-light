@@ -114,8 +114,9 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
                                expansion.score_class_count);
     labels[static_cast<size_t>(n)] = class_labels[static_cast<size_t>(idx)];
   }
-  Tensor y = Tensor::FromInt64("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, expansion.score_class_count}, expansion.scores);
+  Tensor y = Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
+  Tensor z = Tensor::FromFloat("", {sample_count, expansion.score_class_count}, expansion.scores,
+                               ctx_.allocator);
   return std::make_pair(std::move(y), std::move(z));
 }
 
@@ -151,7 +152,8 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
     labels[static_cast<size_t>(n)] = class_labels[static_cast<size_t>(idx)];
   }
   Tensor y = Tensor::FromStrings("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, expansion.score_class_count}, expansion.scores);
+  Tensor z = Tensor::FromFloat("", {sample_count, expansion.score_class_count}, expansion.scores,
+                               ctx_.allocator);
   return std::make_pair(std::move(y), std::move(z));
 }
 

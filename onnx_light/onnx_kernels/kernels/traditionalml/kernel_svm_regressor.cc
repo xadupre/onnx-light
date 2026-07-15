@@ -45,7 +45,7 @@ Tensor SVMRegressor::operator()(const Tensor &x, const std::vector<float> &suppo
     value += static_cast<double>(rho[0]);
     predictions[static_cast<size_t>(n)] = static_cast<float>(value);
   }
-  return Tensor::FromFloat("", {sample_count, 1}, predictions);
+  return Tensor::FromFloat("", {sample_count, 1}, predictions, ctx_.allocator);
 }
 
 #define ONNX_LIGHT_INSTANTIATE_SVM_REGRESSOR(T)                                                    \

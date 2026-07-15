@@ -657,13 +657,17 @@ TEST(KernelClass, ImageDecoderPngUsesAllocatorForInternalBuffers) {
 
   Tensor out = decoder(encoded, "RGB", &rt);
 
-  // All temporary buffers must be freed after decoding.
-  EXPECT_EQ(alloc.allocated_count(), 0u);
+  // Every temporary buffer is freed; the one remaining allocation is the
+  // decoded output tensor, which is routed through the runtime allocator.
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_TRUE(out.has_allocation());
+  EXPECT_EQ(out.allocation_owner(), &alloc);
   // Output pixels must match the reference values.
   const std::vector<int64_t> expected_shape = {2, 2, 3};
   EXPECT_EQ(out.shape, expected_shape);
   const std::vector<uint8_t> expected_pixels = {90, 80, 70, 120, 110, 100, 30, 20, 10, 60, 50, 40};
-  EXPECT_EQ(out.data, expected_pixels);
+  const std::vector<uint8_t> actual_pixels(out.bytes(), out.bytes() + out.size_bytes());
+  EXPECT_EQ(actual_pixels, expected_pixels);
 }
 
 TEST(KernelClass, ImageDecoderJpegUsesAllocatorForInternalBuffers) {
@@ -681,8 +685,11 @@ TEST(KernelClass, ImageDecoderJpegUsesAllocatorForInternalBuffers) {
 
   Tensor out = decoder(encoded, "RGB", &rt);
 
-  // All temporary buffers must be freed after decoding.
-  EXPECT_EQ(alloc.allocated_count(), 0u);
+  // Every temporary buffer is freed; the one remaining allocation is the
+  // decoded output tensor, which is routed through the runtime allocator.
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_TRUE(out.has_allocation());
+  EXPECT_EQ(out.allocation_owner(), &alloc);
   // Output must be a non-empty 16x16x3 tensor.
   ASSERT_EQ(out.shape.size(), 3u);
   EXPECT_EQ(out.shape[0], 16);
@@ -705,13 +712,17 @@ TEST(KernelClass, ImageDecoderPnmUsesAllocatorForInternalBuffers) {
 
   Tensor out = decoder(encoded, "Grayscale", &rt);
 
-  // All temporary buffers must be freed after decoding.
-  EXPECT_EQ(alloc.allocated_count(), 0u);
+  // Every temporary buffer is freed; the one remaining allocation is the
+  // decoded output tensor, which is routed through the runtime allocator.
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_TRUE(out.has_allocation());
+  EXPECT_EQ(out.allocation_owner(), &alloc);
   // Output pixels must match the reference values.
   const std::vector<int64_t> expected_shape = {2, 2, 1};
   EXPECT_EQ(out.shape, expected_shape);
   const std::vector<uint8_t> expected_pixels = {0, 64, 128, 255};
-  EXPECT_EQ(out.data, expected_pixels);
+  const std::vector<uint8_t> actual_pixels(out.bytes(), out.bytes() + out.size_bytes());
+  EXPECT_EQ(actual_pixels, expected_pixels);
 }
 
 } // namespace Test

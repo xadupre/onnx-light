@@ -341,7 +341,7 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
   onnx_kernels::Shape out_shape = ComputeOutputShape(x.shape, output_size);
   std::vector<float> out_values(static_cast<size_t>(num_rows * output_size), 0.0f);
   ApplyMode(num_rows, output_size, mode, frequencies, weights, out_values.data());
-  return Tensor::FromFloat("", out_shape, out_values);
+  return Tensor::FromFloat("", out_shape, out_values, ctx_.allocator);
 }
 
 void TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_length,

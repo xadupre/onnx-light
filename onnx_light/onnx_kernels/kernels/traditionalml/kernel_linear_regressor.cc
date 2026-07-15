@@ -47,7 +47,7 @@ Tensor LinearRegressor::operator()(const Tensor &x, const std::vector<float> &co
       predictions[static_cast<size_t>(n * targets + t)] = static_cast<float>(value);
     }
   }
-  return Tensor::FromFloat("", {sample_count, targets}, predictions);
+  return Tensor::FromFloat("", {sample_count, targets}, predictions, ctx_.allocator);
 }
 
 #define ONNX_LIGHT_INSTANTIATE_LINEAR_REGRESSOR(T)                                                 \

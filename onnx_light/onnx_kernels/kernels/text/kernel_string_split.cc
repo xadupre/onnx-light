@@ -104,7 +104,7 @@ std::pair<Tensor, Tensor> StringSplit::operator()(const Tensor &x, const std::st
   }
 
   Tensor y = Tensor::MakeString("", std::move(y_shape), std::move(y_data));
-  Tensor z = Tensor::FromInt64("", x.shape, lengths);
+  Tensor z = Tensor::FromInt64("", x.shape, lengths, ctx_.allocator);
   return std::pair<Tensor, Tensor>(std::move(y), std::move(z));
 }
 

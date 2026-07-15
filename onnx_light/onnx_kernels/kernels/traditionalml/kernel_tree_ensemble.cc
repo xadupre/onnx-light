@@ -213,7 +213,7 @@ Tensor TreeEnsemble::operator()(
     }
   }
 
-  return Tensor::From<T>("", {sample_count, n_targets}, output_flat);
+  return Tensor::From<T>("", {sample_count, n_targets}, output_flat, ctx_.allocator);
 }
 
 #define ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(T)                                                    \

@@ -51,15 +51,14 @@ void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> shape = {kBenchmarkElementwiseSize / 2};
     NodeProto node = MakeConcatNode(0);
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_concat_1d_axis_0_benchmark",
-                              {opset},
-                              {kBenchmarkElementwiseSize / 2, kBenchmarkElementwiseSize / 2},
-                              {kBenchmarkElementwiseSize}, [concat_kernel, shape]() -> IoData {
-                                Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 2001));
-                                Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 2002));
-                                Tensor y = concat_kernel({x0, x1}, 0);
-                                return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_concat_1d_axis_0_benchmark", {opset},
+           {kBenchmarkElementwiseSize / 2, kBenchmarkElementwiseSize / 2},
+           {kBenchmarkElementwiseSize}, [concat_kernel, shape]() -> IoData {
+             Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 2001));
+             Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 2002));
+             Tensor y = concat_kernel({x0, x1}, 0);
+             return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
+           });
     return;
   }
 

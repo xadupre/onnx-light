@@ -20,16 +20,15 @@ void RegisterWhereCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const std::vector<int64_t> shape = {1024, 4096};
     const int64_t count = 1024 * 4096;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_where_example_benchmark", {opset}, {count, count, count},
-        {count}, [where_kernel, shape]() -> IoData {
-          Tensor condition =
-              Tensor::FromBool("condition", shape, RandUint<uint8_t>(2, shape, /*seed=*/9401));
-          Tensor x = Tensor::FromFloat("x", shape, Randn<float>(shape, /*seed=*/9402));
-          Tensor y = Tensor::FromFloat("y", shape, Randn<float>(shape, /*seed=*/9403));
-          Tensor output = where_kernel(condition, x, y);
-          return IoData{{std::move(condition), std::move(x), std::move(y)}, {std::move(output)}};
-        });
+    Expect(registry, std::move(node), "test_where_example_benchmark", {opset},
+           {count, count, count}, {count}, [where_kernel, shape]() -> IoData {
+             Tensor condition =
+                 Tensor::FromBool("condition", shape, RandUint<uint8_t>(2, shape, /*seed=*/9401));
+             Tensor x = Tensor::FromFloat("x", shape, Randn<float>(shape, /*seed=*/9402));
+             Tensor y = Tensor::FromFloat("y", shape, Randn<float>(shape, /*seed=*/9403));
+             Tensor output = where_kernel(condition, x, y);
+             return IoData{{std::move(condition), std::move(x), std::move(y)}, {std::move(output)}};
+           });
     return;
   }
 

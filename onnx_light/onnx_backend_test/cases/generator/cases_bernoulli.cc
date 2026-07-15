@@ -80,14 +80,14 @@ void RegisterBernoulliCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const kernel::KernelContext ctx{opset};
     const kernel::Bernoulli bernoulli_kernel{ctx};
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_bernoulli_benchmark", {opset},
-        {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [bernoulli_kernel]() -> IoData {
-          Tensor x = Tensor::FromFloat("x", /*shape=*/{kBenchmarkElementwiseSize},
-                                       std::vector<float>(kBenchmarkElementwiseSize, 0.5f));
-          Tensor y = bernoulli_kernel(x, kernel::Bernoulli::kNoSeed, /*dtype=*/0);
-          return IoData{{std::move(x)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_bernoulli_benchmark", {opset},
+           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
+           [bernoulli_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("x", /*shape=*/{kBenchmarkElementwiseSize},
+                                          std::vector<float>(kBenchmarkElementwiseSize, 0.5f));
+             Tensor y = bernoulli_kernel(x, kernel::Bernoulli::kNoSeed, /*dtype=*/0);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

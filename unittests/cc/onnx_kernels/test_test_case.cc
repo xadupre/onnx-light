@@ -135,9 +135,9 @@ TEST(BackendTestCase, ExpectBuildsSingleNodeModel) {
   EXPECT_EQ(tc.name, "test_dummy_add");
   EXPECT_EQ(tc.kind, "node");
   EXPECT_EQ(tc.tag, "");
-  EXPECT_EQ(tc.data_sets.size(), 1u);
-  EXPECT_EQ(tc.data_sets[0].inputs.size(), 2u);
-  EXPECT_EQ(tc.data_sets[0].outputs.size(), 1u);
+  EXPECT_EQ(tc.data_sets().size(), 1u);
+  EXPECT_EQ(tc.data_sets()[0].inputs.size(), 2u);
+  EXPECT_EQ(tc.data_sets()[0].outputs.size(), 1u);
 
   const GraphProto &graph = tc.model().ref_graph();
   EXPECT_EQ(graph.ref_node().size(), 1u);
@@ -738,8 +738,8 @@ TEST(BackendTestCase, DISABLED_BenchmarkModeMaterializesAllCategories) {
       // Lazy cases declared their sizing; verify materialization reproduces it.
       const bool was_lazy = static_cast<bool>(tc.build);
       tc.Materialize();
-      ASSERT_FALSE(tc.data_sets.empty()) << "no data set materialized: " << tc.name;
-      const auto &ds = tc.data_sets[0];
+      ASSERT_FALSE(tc.data_sets().empty()) << "no data set materialized: " << tc.name;
+      const auto &ds = tc.data_sets()[0];
       if (was_lazy && !tc.declared_input_element_counts.empty()) {
         ASSERT_EQ(ds.inputs.size(), tc.declared_input_element_counts.size())
             << "input count mismatch: " << tc.name;

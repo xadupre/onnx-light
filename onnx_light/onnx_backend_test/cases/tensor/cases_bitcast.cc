@@ -42,14 +42,13 @@ void RegisterBitCastCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeBitCastNode(DataType::INT32);
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_bitcast_float_to_int32_benchmark", {opset},
-        {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [k]() -> IoData {
-          Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                       Randn<float>({kBenchmarkElementwiseSize}, 2001));
-          Tensor y = k(x, DataType::INT32);
-          return IoData{{std::move(x)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_bitcast_float_to_int32_benchmark", {opset},
+           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [k]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 2001));
+             Tensor y = k(x, DataType::INT32);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

@@ -50,8 +50,8 @@ TEST(BackendTestCase, RoiAlignCasesArePresent) {
     EXPECT_EQ(graph.ref_input().size(), 3u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(avg->data_sets.size(), 1u);
-    const auto &ds = avg->data_sets[0];
+    ASSERT_EQ(avg->data_sets().size(), 1u);
+    const auto &ds = avg->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
@@ -67,8 +67,8 @@ TEST(BackendTestCase, RoiAlignCasesArePresent) {
   // Max case: same shapes; max values must be >= the avg-case ones since
   // both pool over the same RoI grid.
   {
-    const auto &ds_avg = avg->data_sets[0];
-    const auto &ds_max = max_case->data_sets[0];
+    const auto &ds_avg = avg->data_sets()[0];
+    const auto &ds_max = max_case->data_sets()[0];
     EXPECT_EQ(ds_max.outputs[0].shape, (std::vector<int64_t>{2, 1, 5, 5}));
     const float *pmax = ds_max.outputs[0].AsFloat();
     const float *pavg = ds_avg.outputs[0].AsFloat();
@@ -113,8 +113,8 @@ TEST(BackendTestCase, RoiAlignUpstreamCasesArePresent) {
     EXPECT_EQ(graph.ref_input().size(), 3u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     // (num_rois, C, output_height, output_width) = (3, 1, 5, 5).
@@ -158,8 +158,8 @@ TEST(BackendTestCase, NonMaxSuppressionUpstreamCasesArePresent) {
     EXPECT_EQ(graph.ref_input().size(), 5u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 5u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));

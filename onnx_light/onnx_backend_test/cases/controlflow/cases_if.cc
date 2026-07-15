@@ -329,7 +329,7 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
     DataSet ds;
     ds.inputs.push_back(cond_in);
     ds.outputs.push_back(expected);
-    tc.data_sets.emplace_back(std::move(ds));
+    tc.data_sets().emplace_back(std::move(ds));
     registry.emplace_back(std::move(tc));
   }
 
@@ -460,7 +460,7 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
     DataSet ds;
     ds.inputs.push_back(cond_in);
     ds.outputs.push_back(expected);
-    tc.data_sets.emplace_back(std::move(ds));
+    tc.data_sets().emplace_back(std::move(ds));
     registry.emplace_back(std::move(tc));
   }
 }

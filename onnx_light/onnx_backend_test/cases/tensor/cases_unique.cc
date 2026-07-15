@@ -56,23 +56,22 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
     // number of distinct groups bounded while still processing many elements.
     constexpr int64_t kUniqueBenchmarkSize = 1 << 20;
     constexpr int64_t kDistinctValues = 256;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_unique_not_sorted_without_axis_benchmark", {opset},
-        {kUniqueBenchmarkSize},
-        {kDistinctValues, kDistinctValues, kUniqueBenchmarkSize, kDistinctValues},
-        [unique_kernel, kUniqueBenchmarkSize, kDistinctValues]() -> IoData {
-          std::vector<float> values(static_cast<std::size_t>(kUniqueBenchmarkSize));
-          for (int64_t i = 0; i < kUniqueBenchmarkSize; ++i) {
-            values[static_cast<std::size_t>(i)] = static_cast<float>(i % kDistinctValues);
-          }
-          Tensor x = Tensor::FromFloat("X", {kUniqueBenchmarkSize}, values);
-          kernel::Unique::Attributes attrs;
-          attrs.sorted = false;
-          auto out = unique_kernel(x, attrs);
-          return IoData{{std::move(x)},
-                        {std::move(out.y), std::move(out.indices), std::move(out.inverse_indices),
-                         std::move(out.counts)}};
-        });
+    Expect(registry, std::move(node), "test_cc_unique_not_sorted_without_axis_benchmark", {opset},
+           {kUniqueBenchmarkSize},
+           {kDistinctValues, kDistinctValues, kUniqueBenchmarkSize, kDistinctValues},
+           [unique_kernel, kUniqueBenchmarkSize, kDistinctValues]() -> IoData {
+             std::vector<float> values(static_cast<std::size_t>(kUniqueBenchmarkSize));
+             for (int64_t i = 0; i < kUniqueBenchmarkSize; ++i) {
+               values[static_cast<std::size_t>(i)] = static_cast<float>(i % kDistinctValues);
+             }
+             Tensor x = Tensor::FromFloat("X", {kUniqueBenchmarkSize}, values);
+             kernel::Unique::Attributes attrs;
+             attrs.sorted = false;
+             auto out = unique_kernel(x, attrs);
+             return IoData{{std::move(x)},
+                           {std::move(out.y), std::move(out.indices),
+                            std::move(out.inverse_indices), std::move(out.counts)}};
+           });
     return;
   }
 

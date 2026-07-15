@@ -64,12 +64,12 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
     AddIntsAttr(node, "shape", large_shape);
 
     const kernel::RandomNormal random_normal_kernel{ctx};
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_randomnormal_benchmark", {opset},
-                              /*in_counts=*/{}, {kBenchmarkElementwiseSize},
-                              [random_normal_kernel, large_shape]() -> IoData {
-                                Tensor y = random_normal_kernel(large_shape);
-                                return IoData{/*inputs=*/{}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_randomnormal_benchmark", {opset},
+           /*in_counts=*/{}, {kBenchmarkElementwiseSize},
+           [random_normal_kernel, large_shape]() -> IoData {
+             Tensor y = random_normal_kernel(large_shape);
+             return IoData{/*inputs=*/{}, {std::move(y)}};
+           });
     return;
   }
 
@@ -133,12 +133,12 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) 
     AddIntsAttr(node, "shape", large_shape);
 
     const kernel::RandomUniform random_uniform_kernel{ctx};
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_randomuniform_benchmark", {opset},
-                              /*in_counts=*/{}, {kBenchmarkElementwiseSize},
-                              [random_uniform_kernel, large_shape]() -> IoData {
-                                Tensor y = random_uniform_kernel(large_shape);
-                                return IoData{/*inputs=*/{}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_randomuniform_benchmark", {opset},
+           /*in_counts=*/{}, {kBenchmarkElementwiseSize},
+           [random_uniform_kernel, large_shape]() -> IoData {
+             Tensor y = random_uniform_kernel(large_shape);
+             return IoData{/*inputs=*/{}, {std::move(y)}};
+           });
     return;
   }
 
@@ -199,15 +199,14 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mod
     node.add_output("y");
 
     const kernel::RandomNormalLike random_normal_like_kernel{ctx};
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_randomnormallike_benchmark",
-                              {opset}, {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
-                              [random_normal_like_kernel]() -> IoData {
-                                Tensor x = Tensor::FromFloat(
-                                    "x", {kBenchmarkElementwiseSize},
-                                    Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
-                                Tensor y = random_normal_like_kernel(x);
-                                return IoData{{std::move(x)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_randomnormallike_benchmark", {opset},
+           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
+           [random_normal_like_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+             Tensor y = random_normal_like_kernel(x);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 
@@ -272,15 +271,14 @@ void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mo
     node.add_output("y");
 
     const kernel::RandomUniformLike random_uniform_like_kernel{ctx};
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_randomuniformlike_benchmark",
-                              {opset}, {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
-                              [random_uniform_like_kernel]() -> IoData {
-                                Tensor x = Tensor::FromFloat(
-                                    "x", {kBenchmarkElementwiseSize},
-                                    Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
-                                Tensor y = random_uniform_like_kernel(x);
-                                return IoData{{std::move(x)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_randomuniformlike_benchmark", {opset},
+           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
+           [random_uniform_like_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
+             Tensor y = random_uniform_like_kernel(x);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

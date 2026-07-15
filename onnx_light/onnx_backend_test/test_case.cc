@@ -184,7 +184,7 @@ void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor>
   DataSet ds;
   ds.inputs = std::move(inputs);
   ds.outputs = std::move(outputs);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 }
 
 BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
@@ -233,17 +233,35 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
 
 namespace {
 
-// Copyable state shared by a lazy benchmark builder. Holds the move-only
+// Copyable state shared by a lazy case builder. Holds the move-only
 // ``NodeProto`` (which therefore cannot be captured directly by a copyable
-// ``std::function``) plus everything else needed to build the model.
-struct LazyBenchmarkState {
+// ``std::function``) plus everything else needed to build the model. Either
+// ``make_io`` is set (the inputs/outputs are generated on demand, e.g. for
+// benchmark cases) or the concrete ``inputs``/``outputs`` are stored directly.
+struct LazyCaseState {
   NodeProto node;
   std::string name;
   std::vector<OpsetId> opset_imports;
   std::string producer_name;
   std::vector<TypeSpec> output_types;
   std::function<IoData()> make_io;
+  std::vector<Tensor> inputs;
+  std::vector<Tensor> outputs;
 };
+
+// Builds the ``TestCase::build`` closure for a lazy case backed by ``state``.
+std::function<BuiltCase()> MakeLazyBuild(std::shared_ptr<LazyCaseState> state) {
+  return [state]() -> BuiltCase {
+    if (state->make_io) {
+      IoData io = state->make_io();
+      return BuildSingleNodeCase(state->node, std::move(io.inputs), std::move(io.outputs),
+                                 state->name, state->opset_imports, state->producer_name,
+                                 state->output_types);
+    }
+    return BuildSingleNodeCase(state->node, state->inputs, state->outputs, state->name,
+                               state->opset_imports, state->producer_name, state->output_types);
+  };
+}
 
 // Resolves the grouping tag for a node the same way :func:`Expect` does.
 std::string ResolveTag(const NodeProto &node, const std::string &tag) {
@@ -266,26 +284,48 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<TypeSpec> &output_types) {
   const std::string resolved_tag = ResolveTag(node, tag);
 
+  // Validate arity eagerly so callers still get an immediate error at
+  // registration time even though the model/data set are built lazily.
+  const auto present_inputs = NonEmpty(node.ref_input());
+  const auto present_outputs = NonEmpty(node.ref_output());
+  EXT_ENFORCE_INVALID(present_inputs.size() == inputs.size(),
+                      "Expect: number of input tensors does not match the non-empty inputs.");
+  EXT_ENFORCE_INVALID(present_outputs.size() == outputs.size(),
+                      "Expect: number of output tensors does not match the non-empty outputs.");
+  EXT_ENFORCE_INVALID(
+      output_types.empty() || output_types.size() == outputs.size(),
+      "Expect: output_types, when provided, must have one entry per output tensor.");
+
   TestCase tc(name, name, "node", resolved_tag);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
+  for (const auto &t : inputs) {
+    tc.declared_input_element_counts.push_back(t.element_count());
+  }
+  for (const auto &t : outputs) {
+    tc.declared_output_element_counts.push_back(t.element_count());
+  }
 
-  BuiltCase built =
-      BuildSingleNodeCase(node, inputs, outputs, name, opset_imports, producer_name, output_types);
-  tc.set_model(std::move(built.model));
-  tc.data_sets = std::move(built.data_sets);
+  auto state = std::make_shared<LazyCaseState>();
+  state->node.CopyFrom(node);
+  state->name = name;
+  state->opset_imports = opset_imports;
+  state->producer_name = producer_name;
+  state->output_types = output_types;
+  state->inputs = inputs;
+  state->outputs = outputs;
+  tc.build = MakeLazyBuild(std::move(state));
 
   registry.emplace_back(std::move(tc));
 }
 
-void RegisterLazyBenchmarkCase(std::vector<TestCase> &registry, NodeProto node, std::string name,
-                               std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
-                               std::vector<int64_t> out_counts, std::function<IoData()> make_io,
-                               std::string producer_name, std::string tag,
-                               std::vector<TypeSpec> output_types) {
+void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
+            std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
+            std::vector<int64_t> out_counts, std::function<IoData()> make_io,
+            std::string producer_name, std::string tag, std::vector<TypeSpec> output_types) {
   const std::string resolved_tag = ResolveTag(node, tag);
 
-  auto state = std::make_shared<LazyBenchmarkState>();
+  auto state = std::make_shared<LazyCaseState>();
   state->node = std::move(node);
   state->name = name;
   state->opset_imports = std::move(opset_imports);
@@ -298,12 +338,7 @@ void RegisterLazyBenchmarkCase(std::vector<TestCase> &registry, NodeProto node, 
   tc.atol = 1e-7;
   tc.declared_input_element_counts = std::move(in_counts);
   tc.declared_output_element_counts = std::move(out_counts);
-  tc.build = [state]() -> BuiltCase {
-    IoData io = state->make_io();
-    return BuildSingleNodeCase(state->node, std::move(io.inputs), std::move(io.outputs),
-                               state->name, state->opset_imports, state->producer_name,
-                               state->output_types);
-  };
+  tc.build = MakeLazyBuild(std::move(state));
 
   registry.emplace_back(std::move(tc));
 }

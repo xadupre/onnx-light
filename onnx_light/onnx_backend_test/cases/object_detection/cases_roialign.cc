@@ -118,33 +118,33 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
     ss->set_f(1.0f);
 
     const int64_t roi_count = 4096;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_roialign_benchmark", {opset},
-        {1 * 1 * 64 * 64, roi_count * 4, roi_count}, {roi_count * 1 * 5 * 5},
-        [roialign_kernel, roi_count]() -> IoData {
-          Tensor x =
-              Tensor::FromFloat("", {1, 1, 64, 64}, Randn<float>({1, 1, 64, 64}, 987654321ULL));
-          std::vector<float> rois_values;
-          rois_values.reserve(static_cast<size_t>(roi_count * 4));
-          for (int64_t i = 0; i < roi_count; ++i) {
-            const float y0 = static_cast<float>(i % 48);
-            const float x0 = static_cast<float>((i / 48) % 48);
-            rois_values.insert(rois_values.end(), {x0, y0, x0 + 15.0f, y0 + 15.0f});
-          }
-          Tensor rois = Tensor::FromFloat("", {roi_count, 4}, rois_values);
-          Tensor batch_indices =
-              Tensor::FromInt64("", {roi_count}, std::vector<int64_t>(roi_count, 0));
+    Expect(registry, std::move(node), "test_cc_roialign_benchmark", {opset},
+           {1 * 1 * 64 * 64, roi_count * 4, roi_count}, {roi_count * 1 * 5 * 5},
+           [roialign_kernel, roi_count]() -> IoData {
+             Tensor x =
+                 Tensor::FromFloat("", {1, 1, 64, 64}, Randn<float>({1, 1, 64, 64}, 987654321ULL));
+             std::vector<float> rois_values;
+             rois_values.reserve(static_cast<size_t>(roi_count * 4));
+             for (int64_t i = 0; i < roi_count; ++i) {
+               const float y0 = static_cast<float>(i % 48);
+               const float x0 = static_cast<float>((i / 48) % 48);
+               rois_values.insert(rois_values.end(), {x0, y0, x0 + 15.0f, y0 + 15.0f});
+             }
+             Tensor rois = Tensor::FromFloat("", {roi_count, 4}, rois_values);
+             Tensor batch_indices =
+                 Tensor::FromInt64("", {roi_count}, std::vector<int64_t>(roi_count, 0));
 
-          kernel::RoiAlign::Attributes attrs;
-          attrs.mode = "avg";
-          attrs.output_height = 5;
-          attrs.output_width = 5;
-          attrs.sampling_ratio = 2;
-          attrs.spatial_scale = 1.0f;
-          attrs.coordinate_transformation_mode = "half_pixel";
-          Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
-          return IoData{{std::move(x), std::move(rois), std::move(batch_indices)}, {std::move(y)}};
-        });
+             kernel::RoiAlign::Attributes attrs;
+             attrs.mode = "avg";
+             attrs.output_height = 5;
+             attrs.output_width = 5;
+             attrs.sampling_ratio = 2;
+             attrs.spatial_scale = 1.0f;
+             attrs.coordinate_transformation_mode = "half_pixel";
+             Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+             return IoData{{std::move(x), std::move(rois), std::move(batch_indices)},
+                           {std::move(y)}};
+           });
     return;
   }
 

@@ -50,8 +50,8 @@ TEST(BackendTestCase, StringConcatCaseIsPresent) {
     EXPECT_EQ(graph.ref_input().size(), 2u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(equal_case->data_sets.size(), 1u);
-    const auto &ds = equal_case->data_sets[0];
+    ASSERT_EQ(equal_case->data_sets().size(), 1u);
+    const auto &ds = equal_case->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
@@ -64,8 +64,8 @@ TEST(BackendTestCase, StringConcatCaseIsPresent) {
   // Scalar-broadcast case: rhs is a scalar STRING tensor; output keeps the
   // lhs 2x2 shape and broadcasts the scalar to every element.
   {
-    ASSERT_EQ(bcast_case->data_sets.size(), 1u);
-    const auto &ds = bcast_case->data_sets[0];
+    ASSERT_EQ(bcast_case->data_sets().size(), 1u);
+    const auto &ds = bcast_case->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[1].shape, std::vector<int64_t>{});
@@ -110,8 +110,8 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "StringNormalizer");
 
-    ASSERT_EQ(lower_case->data_sets.size(), 1u);
-    const auto &ds = lower_case->data_sets[0];
+    ASSERT_EQ(lower_case->data_sets().size(), 1u);
+    const auto &ds = lower_case->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
     const std::vector<int64_t> expected_shape = {3};
@@ -122,8 +122,8 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
 
   // Uppercase + stopwords variant on a 2-D [1, C] input — dropped "A" / "a".
   {
-    ASSERT_EQ(upper_case->data_sets.size(), 1u);
-    const auto &ds = upper_case->data_sets[0];
+    ASSERT_EQ(upper_case->data_sets().size(), 1u);
+    const auto &ds = upper_case->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     const std::vector<int64_t> expected_shape = {1, 2};
     EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -133,8 +133,8 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
 
   // All-dropped variant: input collapses to a single empty string at [1].
   {
-    ASSERT_EQ(all_dropped_case->data_sets.size(), 1u);
-    const auto &ds = all_dropped_case->data_sets[0];
+    ASSERT_EQ(all_dropped_case->data_sets().size(), 1u);
+    const auto &ds = all_dropped_case->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     const std::vector<int64_t> expected_shape = {1};
     EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -144,8 +144,8 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
 
   // NOOP variant: no stopwords and no case change; output equals input.
   {
-    ASSERT_EQ(nostopwords_case->data_sets.size(), 1u);
-    const auto &ds = nostopwords_case->data_sets[0];
+    ASSERT_EQ(nostopwords_case->data_sets().size(), 1u);
+    const auto &ds = nostopwords_case->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
     const std::vector<int64_t> expected_shape = {2};
@@ -157,8 +157,8 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
   // Case-sensitive stopword drop + LOWER variant: "monday" stopword removes
   // the first element; the survivors are lowercased (already lower here).
   {
-    ASSERT_EQ(case_sensitive_lower_case->data_sets.size(), 1u);
-    const auto &ds = case_sensitive_lower_case->data_sets[0];
+    ASSERT_EQ(case_sensitive_lower_case->data_sets().size(), 1u);
+    const auto &ds = case_sensitive_lower_case->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     const std::vector<int64_t> expected_shape = {3};
     EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -191,8 +191,8 @@ TEST(BackendTestCase, StringSplitCaseIsPresent) {
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "StringSplit");
-    ASSERT_EQ(basic_case->data_sets.size(), 1u);
-    const auto &ds = basic_case->data_sets[0];
+    ASSERT_EQ(basic_case->data_sets().size(), 1u);
+    const auto &ds = basic_case->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 2u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
@@ -202,8 +202,8 @@ TEST(BackendTestCase, StringSplitCaseIsPresent) {
   }
 
   {
-    ASSERT_EQ(maxsplit_case->data_sets.size(), 1u);
-    const auto &ds = maxsplit_case->data_sets[0];
+    ASSERT_EQ(maxsplit_case->data_sets().size(), 1u);
+    const auto &ds = maxsplit_case->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 2u);
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 2, 3}));
     const int64_t *counts = ds.outputs[1].AsInt64();
@@ -215,8 +215,8 @@ TEST(BackendTestCase, StringSplitCaseIsPresent) {
   }
 
   {
-    ASSERT_EQ(empty_tensor_case->data_sets.size(), 1u);
-    const auto &ds = empty_tensor_case->data_sets[0];
+    ASSERT_EQ(empty_tensor_case->data_sets().size(), 1u);
+    const auto &ds = empty_tensor_case->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 2u);
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0, 0}));
     EXPECT_TRUE(ds.outputs[0].string_data.empty());
@@ -244,8 +244,8 @@ TEST(BackendTestCase, RegexFullMatchCasesArePresent) {
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "RegexFullMatch");
-    ASSERT_EQ(basic_case->data_sets.size(), 1u);
-    const auto &ds = basic_case->data_sets[0];
+    ASSERT_EQ(basic_case->data_sets().size(), 1u);
+    const auto &ds = basic_case->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
@@ -253,8 +253,8 @@ TEST(BackendTestCase, RegexFullMatchCasesArePresent) {
   }
 
   {
-    ASSERT_EQ(empty_case->data_sets.size(), 1u);
-    const auto &ds = empty_case->data_sets[0];
+    ASSERT_EQ(empty_case->data_sets().size(), 1u);
+    const auto &ds = empty_case->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0}));
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));

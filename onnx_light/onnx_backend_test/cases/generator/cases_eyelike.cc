@@ -21,13 +21,13 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     const kernel::EyeLike eye_like_kernel{ctx};
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_eyelike_without_dtype_benchmark",
-                              {opset}, {2048 * 2048}, {2048 * 2048}, [eye_like_kernel]() -> IoData {
-                                Tensor x = Tensor::FromFloat(
-                                    "x", {2048, 2048}, Randn<float>({2048, 2048}, 987654321ULL));
-                                Tensor y = eye_like_kernel(x, /*k=*/0, /*dtype=*/0);
-                                return IoData{{std::move(x)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_eyelike_without_dtype_benchmark", {opset},
+           {2048 * 2048}, {2048 * 2048}, [eye_like_kernel]() -> IoData {
+             Tensor x =
+                 Tensor::FromFloat("x", {2048, 2048}, Randn<float>({2048, 2048}, 987654321ULL));
+             Tensor y = eye_like_kernel(x, /*k=*/0, /*dtype=*/0);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

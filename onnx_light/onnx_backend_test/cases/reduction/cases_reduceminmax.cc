@@ -156,15 +156,14 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_reducemax_default_axes_keepdims_benchmark",
-        {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_max_kernel]() -> IoData {
-          Tensor data =
-              Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
-          Tensor reduced =
-              reduce_max_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-          return IoData{{std::move(data)}, {std::move(reduced)}};
-        });
+    Expect(registry, std::move(node), "test_cc_reducemax_default_axes_keepdims_benchmark",
+           {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_max_kernel]() -> IoData {
+             Tensor data =
+                 Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+             Tensor reduced =
+                 reduce_max_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             return IoData{{std::move(data)}, {std::move(reduced)}};
+           });
     return;
   }
   RegisterReduceMinMaxCases(registry, "ReduceMax", reduce_max_kernel, "reducemax");
@@ -209,15 +208,14 @@ void RegisterReduceMinCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_reducemin_default_axes_keepdims_benchmark",
-        {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_min_kernel]() -> IoData {
-          Tensor data =
-              Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
-          Tensor reduced =
-              reduce_min_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-          return IoData{{std::move(data)}, {std::move(reduced)}};
-        });
+    Expect(registry, std::move(node), "test_cc_reducemin_default_axes_keepdims_benchmark",
+           {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_min_kernel]() -> IoData {
+             Tensor data =
+                 Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+             Tensor reduced =
+                 reduce_min_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             return IoData{{std::move(data)}, {std::move(reduced)}};
+           });
     return;
   }
   RegisterReduceMinMaxCases(registry, "ReduceMin", reduce_min_kernel, "reducemin");

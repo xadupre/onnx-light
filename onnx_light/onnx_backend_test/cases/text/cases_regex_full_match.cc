@@ -32,18 +32,17 @@ void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode)
     AddAttribute(node, "pattern", pattern);
 
     constexpr int64_t count = 262144;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_regex_full_match_basic_benchmark", {opset}, {count},
-        {count}, [regex_full_match, pattern, count]() -> IoData {
-          std::vector<std::string> values(static_cast<size_t>(count));
-          for (size_t i = 0; i < values.size(); ++i) {
-            values[i] = (i % 3 == 0) ? "www.google.com"
-                                     : ((i % 3 == 1) ? "www.facebook.com" : "www.bbc.co.uk");
-          }
-          Tensor x = Tensor::FromStrings("", {count}, values);
-          Tensor y = regex_full_match(x, pattern);
-          return IoData{{std::move(x)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_regex_full_match_basic_benchmark", {opset}, {count},
+           {count}, [regex_full_match, pattern, count]() -> IoData {
+             std::vector<std::string> values(static_cast<size_t>(count));
+             for (size_t i = 0; i < values.size(); ++i) {
+               values[i] = (i % 3 == 0) ? "www.google.com"
+                                        : ((i % 3 == 1) ? "www.facebook.com" : "www.bbc.co.uk");
+             }
+             Tensor x = Tensor::FromStrings("", {count}, values);
+             Tensor y = regex_full_match(x, pattern);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

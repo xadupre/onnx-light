@@ -32,13 +32,13 @@ void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNonZeroNode();
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_nonzero_2d_benchmark", {opset},
-        {kBenchmarkElementwiseSize}, {2 * kBenchmarkElementwiseSize}, [nonzero_kernel]() -> IoData {
-          Tensor x = Tensor::FromFloat("X", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
-          Tensor y = nonzero_kernel(x);
-          return IoData{{std::move(x)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_nonzero_2d_benchmark", {opset},
+           {kBenchmarkElementwiseSize}, {2 * kBenchmarkElementwiseSize},
+           [nonzero_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("X", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+             Tensor y = nonzero_kernel(x);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

@@ -65,13 +65,13 @@ void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeFlattenNode(/*axis=*/1, /*include_axis=*/false);
     constexpr int64_t count = 64 * 64 * 32 * 32;
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_flatten_default_axis_benchmark",
-                              {opset}, {count}, {count}, [kernel]() -> IoData {
-                                Tensor a = Tensor::FromFloat("", {64, 64, 32, 32},
-                                                             Randn<float>({64, 64, 32, 32}, 1701));
-                                Tensor b = kernel(a);
-                                return IoData{{std::move(a)}, {std::move(b)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_flatten_default_axis_benchmark", {opset}, {count},
+           {count}, [kernel]() -> IoData {
+             Tensor a =
+                 Tensor::FromFloat("", {64, 64, 32, 32}, Randn<float>({64, 64, 32, 32}, 1701));
+             Tensor b = kernel(a);
+             return IoData{{std::move(a)}, {std::move(b)}};
+           });
     return;
   }
 

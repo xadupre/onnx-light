@@ -116,15 +116,14 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     const int64_t to_attr = static_cast<int64_t>(DataType::DOUBLE);
     NodeProto node = MakeCastNode(to_attr);
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_cast_FLOAT_to_DOUBLE_benchmark",
-                              {opset}, {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
-                              [cast_kernel, to_attr]() -> IoData {
-                                Tensor input = Tensor::FromFloat(
-                                    "", {kBenchmarkElementwiseSize},
-                                    Randn<float>({kBenchmarkElementwiseSize}, 2001));
-                                Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-                                return IoData{{std::move(input)}, {std::move(output)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_cast_FLOAT_to_DOUBLE_benchmark", {opset},
+           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
+           [cast_kernel, to_attr]() -> IoData {
+             Tensor input = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                              Randn<float>({kBenchmarkElementwiseSize}, 2001));
+             Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+             return IoData{{std::move(input)}, {std::move(output)}};
+           });
     return;
   }
 

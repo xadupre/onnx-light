@@ -91,7 +91,7 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
     ds.inputs.push_back(*split);
   }
   ds.outputs.push_back(stacked);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }

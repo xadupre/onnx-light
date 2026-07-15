@@ -32,13 +32,12 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
     const int64_t count = kBenchmarkElementwiseSize;
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_isnan_benchmark", {opset},
-                              {count}, {count}, [isnan_kernel, count]() -> IoData {
-                                Tensor x = Tensor::FromFloat("", {count},
-                                                             Randn<float>({count}, /*seed=*/9301));
-                                Tensor y = isnan_kernel(x);
-                                return IoData{{std::move(x)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_isnan_benchmark", {opset}, {count}, {count},
+           [isnan_kernel, count]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {count}, Randn<float>({count}, /*seed=*/9301));
+             Tensor y = isnan_kernel(x);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
   const float nan_v = std::numeric_limits<float>::quiet_NaN();

@@ -57,15 +57,14 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t in_count = 1 * 32 * 16384;
     constexpr int64_t out_count = 1 * 32 * 16383;
     const uint64_t benchmark_seed = seed;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_lppool_1d_default_benchmark", {opset}, {in_count},
-        {out_count}, [lp_pool_kernel, benchmark_seed]() -> IoData {
-          Tensor x =
-              Tensor::FromFloat("", {1, 32, 16384}, Randn<float>({1, 32, 16384}, benchmark_seed));
-          Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2}, /*strides=*/{1},
-                                    /*pads=*/{}, /*p=*/3);
-          return IoData{{std::move(x)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_lppool_1d_default_benchmark", {opset}, {in_count},
+           {out_count}, [lp_pool_kernel, benchmark_seed]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 32, 16384},
+                                          Randn<float>({1, 32, 16384}, benchmark_seed));
+             Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2}, /*strides=*/{1},
+                                       /*pads=*/{}, /*p=*/3);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

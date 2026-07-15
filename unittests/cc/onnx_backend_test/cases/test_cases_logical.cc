@@ -60,8 +60,8 @@ TEST(BackendTestCase, AndCaseOutputsAreElementwiseAnd) {
     }
   }
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
@@ -105,8 +105,8 @@ TEST(BackendTestCase, AndOnnxBroadcastCaseShapesAndOutput) {
     }
   }
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{1, 4, 1, 6}));
@@ -177,7 +177,7 @@ TEST(BackendTestCase, OrCaseOutputsAreElementwiseOr) {
   auto cases = CollectTestCases("Or");
   const TestCase *tc = FindLogicalCase(cases, "test_or2d");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
@@ -193,7 +193,7 @@ TEST(BackendTestCase, XorCaseOutputsAreElementwiseXor) {
   auto cases = CollectTestCases("Xor");
   const TestCase *tc = FindLogicalCase(cases, "test_xor2d");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
@@ -210,7 +210,7 @@ TEST(BackendTestCase, OrXorBroadcastCasesHaveBroadcastShapes) {
   for (const char *name : {"test_or_bcast4v4d", "test_xor_bcast4v4d"}) {
     const TestCase *tc = FindLogicalCase(cases, name);
     ASSERT_NE(tc, nullptr) << name;
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{1, 4, 1, 6})) << name;
     EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 1, 5, 6})) << name;
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5, 6})) << name;
@@ -256,7 +256,7 @@ TEST(BackendTestCase, GreaterCaseOutputsAreElementwiseGreater) {
   auto cases = CollectTestCases("Greater");
   const TestCase *tc = FindLogicalCase(cases, "test_greater");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
@@ -276,7 +276,7 @@ TEST(BackendTestCase, LessCaseOutputsAreElementwiseLess) {
   auto cases = CollectTestCases("Less");
   const TestCase *tc = FindLogicalCase(cases, "test_less");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
@@ -294,7 +294,7 @@ TEST(BackendTestCase, GreaterLessBroadcastCasesHaveBroadcastShapes) {
   for (const char *name : {"test_greater_bcast", "test_less_bcast"}) {
     const TestCase *tc = FindLogicalCase(cases, name);
     ASSERT_NE(tc, nullptr) << name;
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
     EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5})) << name;
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
@@ -324,7 +324,7 @@ TEST(BackendTestCase, GreaterLessIntegerCasesUseRequestedDtype) {
        }) {
     const TestCase *tc = FindLogicalCase(cases, e.name);
     ASSERT_NE(tc, nullptr) << e.name;
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u) << e.name;
     EXPECT_EQ(ds.inputs[0].data_type, e.dtype) << e.name;
     EXPECT_EQ(ds.inputs[1].data_type, e.dtype) << e.name;
@@ -350,7 +350,7 @@ TEST(BackendTestCase, GreaterLessHalfCasesUseRequestedDtype) {
        }) {
     const TestCase *tc = FindLogicalCase(cases, e.name);
     ASSERT_NE(tc, nullptr) << e.name;
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u) << e.name;
     EXPECT_EQ(ds.inputs[0].data_type, e.dtype) << e.name;
     EXPECT_EQ(ds.inputs[1].data_type, e.dtype) << e.name;
@@ -383,7 +383,7 @@ TEST(BackendTestCase, GreaterOrEqualCaseOutputsAreElementwiseGreaterOrEqual) {
   auto cases = CollectTestCases("GreaterOrEqual");
   const TestCase *tc = FindLogicalCase(cases, "test_greater_equal");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
@@ -403,7 +403,7 @@ TEST(BackendTestCase, GreaterOrEqualBroadcastCaseHasBroadcastShapes) {
   auto cases = CollectTestCases("GreaterOrEqual");
   const TestCase *tc = FindLogicalCase(cases, "test_greater_equal_bcast");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5}));
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
@@ -430,7 +430,7 @@ TEST(BackendTestCase, LessOrEqualCaseOutputsAreElementwiseLessOrEqual) {
   auto cases = CollectTestCases("LessOrEqual");
   const TestCase *tc = FindLogicalCase(cases, "test_less_equal");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
@@ -450,7 +450,7 @@ TEST(BackendTestCase, LessOrEqualBroadcastCaseHasBroadcastShapes) {
   auto cases = CollectTestCases("LessOrEqual");
   const TestCase *tc = FindLogicalCase(cases, "test_less_equal_bcast");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5}));
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
@@ -479,7 +479,7 @@ TEST(BackendTestCase, EqualCaseOutputsAreElementwiseEqual) {
   auto cases = CollectTestCases("Equal");
   const TestCase *tc = FindLogicalCase(cases, "test_equal");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
@@ -499,7 +499,7 @@ TEST(BackendTestCase, EqualBroadcastCaseHasBroadcastShapes) {
   auto cases = CollectTestCases("Equal");
   const TestCase *tc = FindLogicalCase(cases, "test_equal_bcast");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5}));
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
@@ -523,7 +523,7 @@ TEST(BackendTestCase, EqualIntegerCasesUseRequestedDtype) {
        }) {
     const TestCase *tc = FindLogicalCase(cases, e.name);
     ASSERT_NE(tc, nullptr) << e.name;
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u) << e.name;
     EXPECT_EQ(ds.inputs[0].data_type, e.dtype) << e.name;
     EXPECT_EQ(ds.inputs[1].data_type, e.dtype) << e.name;
@@ -550,7 +550,7 @@ TEST(BackendTestCase, EqualAdditionalCasesUseRequestedDtype) {
        }) {
     const TestCase *tc = FindLogicalCase(cases, e.name);
     ASSERT_NE(tc, nullptr) << e.name;
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u) << e.name;
     EXPECT_EQ(ds.inputs[0].data_type, e.dtype) << e.name;
     EXPECT_EQ(ds.inputs[1].data_type, e.dtype) << e.name;
@@ -567,7 +567,7 @@ TEST(BackendTestCase, EqualStringCasesHaveExpectedShapesAndDtype) {
   for (const char *name : {"test_equal_string", "test_equal_string_broadcast"}) {
     const TestCase *tc = FindLogicalCase(cases, name);
     ASSERT_NE(tc, nullptr) << name;
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u) << name;
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING)) << name;
     EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING)) << name;
@@ -577,13 +577,13 @@ TEST(BackendTestCase, EqualStringCasesHaveExpectedShapesAndDtype) {
   }
   const TestCase *eq_str = FindLogicalCase(cases, "test_equal_string");
   ASSERT_NE(eq_str, nullptr);
-  EXPECT_EQ(eq_str->data_sets[0].outputs[0].data[0], 1);
-  EXPECT_EQ(eq_str->data_sets[0].outputs[0].data[1], 0);
+  EXPECT_EQ(eq_str->data_sets()[0].outputs[0].data[0], 1);
+  EXPECT_EQ(eq_str->data_sets()[0].outputs[0].data[1], 0);
   const TestCase *eq_str_bcast = FindLogicalCase(cases, "test_equal_string_broadcast");
   ASSERT_NE(eq_str_bcast, nullptr);
-  EXPECT_EQ(eq_str_bcast->data_sets[0].inputs[1].shape, (std::vector<int64_t>{1}));
-  EXPECT_EQ(eq_str_bcast->data_sets[0].outputs[0].data[0], 1);
-  EXPECT_EQ(eq_str_bcast->data_sets[0].outputs[0].data[1], 0);
+  EXPECT_EQ(eq_str_bcast->data_sets()[0].inputs[1].shape, (std::vector<int64_t>{1}));
+  EXPECT_EQ(eq_str_bcast->data_sets()[0].outputs[0].data[0], 1);
+  EXPECT_EQ(eq_str_bcast->data_sets()[0].outputs[0].data[1], 0);
 }
 
 TEST(BackendTestCase, WhereCasesArePresent) {
@@ -608,8 +608,8 @@ TEST(BackendTestCase, WhereTypeCombinationCasesArePresent) {
   for (const auto &[name, dtype] : expected) {
     const TestCase *tc = FindLogicalCase(cases, name);
     ASSERT_NE(tc, nullptr) << "missing Where case " << name;
-    ASSERT_EQ(tc->data_sets.size(), 1u) << name;
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u) << name;
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u) << name;
     ASSERT_EQ(ds.outputs.size(), 1u) << name;
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL)) << name;
@@ -623,8 +623,8 @@ TEST(BackendTestCase, WhereCaseOutputsSelectExpectedElements) {
   auto cases = CollectTestCases("Where");
   const TestCase *tc = FindLogicalCase(cases, "test_where_example");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
@@ -674,7 +674,7 @@ TEST(BackendTestCase, BitwiseAndI32CaseOutputsAreElementwiseAnd) {
   auto cases = CollectTestCases();
   const TestCase *tc = FindLogicalCase(cases, "test_bitwise_and_i32_2d");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
@@ -691,7 +691,7 @@ TEST(BackendTestCase, BitwiseNot2dCaseOutputsAreElementwiseNot) {
   auto cases = CollectTestCases();
   const TestCase *tc = FindLogicalCase(cases, "test_bitwise_not_2d");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.inputs[0].data_type, ds.outputs[0].data_type);

@@ -60,24 +60,23 @@ void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "epsilon", epsilon);
     AddFloatAttribute(node, "decay_factor", decay_factor);
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_adagrad_benchmark", {default_opset, opset},
-        {1, 1, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
-        {kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
-        [adagrad, epsilon, decay_factor, norm_coefficient]() -> IoData {
-          Tensor R = Tensor::FromFloat("", {}, {0.1f});
-          Tensor T = Tensor::FromInt64("", {}, {0});
-          Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                       Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
-          Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                       Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
-          Tensor H = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                       Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
-          std::vector<Tensor> outs =
-              adagrad(R, T, {X}, {G}, {H}, epsilon, decay_factor, norm_coefficient);
-          return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(H)},
-                        {std::move(outs[0]), std::move(outs[1])}};
-        });
+    Expect(registry, std::move(node), "test_adagrad_benchmark", {default_opset, opset},
+           {1, 1, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
+           {kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
+           [adagrad, epsilon, decay_factor, norm_coefficient]() -> IoData {
+             Tensor R = Tensor::FromFloat("", {}, {0.1f});
+             Tensor T = Tensor::FromInt64("", {}, {0});
+             Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+             Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
+             Tensor H = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
+             std::vector<Tensor> outs =
+                 adagrad(R, T, {X}, {G}, {H}, epsilon, decay_factor, norm_coefficient);
+             return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(H)},
+                           {std::move(outs[0]), std::move(outs[1])}};
+           });
     return;
   }
 

@@ -83,7 +83,7 @@ void RegisterSequenceAtCase(const std::string &name, const std::vector<Tensor> &
   }
   ds.inputs.push_back(position_tensor);
   ds.outputs.push_back(expected);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }

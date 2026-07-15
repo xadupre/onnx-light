@@ -42,21 +42,20 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t x_count = 1 * 32 * 128 * 128;
     constexpr int64_t w_count = 32 * 32 * 2 * 2;
     constexpr int64_t y_count = 1 * 32 * 127 * 127;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_basic_convinteger_benchmark", {opset},
-        {x_count, w_count, 1}, {y_count}, [ci]() -> IoData {
-          Tensor X = Tensor::FromUint8("X", {1, 32, 128, 128},
-                                       RandUint<uint8_t>(256, {1, 32, 128, 128}, 1301));
-          Tensor W =
-              Tensor::FromUint8("W", {32, 32, 2, 2}, RandUint<uint8_t>(8, {32, 32, 2, 2}, 1302));
-          Tensor xzp = Tensor::FromUint8("x_zero_point", {}, {1});
-          Tensor wzp;
-          kernel::ConvInteger::Attributes attrs;
-          attrs.kernel_shape = {2, 2};
-          Tensor Y = ci(X, W, xzp, wzp, attrs);
-          Y.name = "Y";
-          return IoData{{std::move(X), std::move(W), std::move(xzp)}, {std::move(Y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_basic_convinteger_benchmark", {opset},
+           {x_count, w_count, 1}, {y_count}, [ci]() -> IoData {
+             Tensor X = Tensor::FromUint8("X", {1, 32, 128, 128},
+                                          RandUint<uint8_t>(256, {1, 32, 128, 128}, 1301));
+             Tensor W =
+                 Tensor::FromUint8("W", {32, 32, 2, 2}, RandUint<uint8_t>(8, {32, 32, 2, 2}, 1302));
+             Tensor xzp = Tensor::FromUint8("x_zero_point", {}, {1});
+             Tensor wzp;
+             kernel::ConvInteger::Attributes attrs;
+             attrs.kernel_shape = {2, 2};
+             Tensor Y = ci(X, W, xzp, wzp, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W), std::move(xzp)}, {std::move(Y)}};
+           });
     return;
   }
 

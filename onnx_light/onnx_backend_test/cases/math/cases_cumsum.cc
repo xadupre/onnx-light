@@ -50,14 +50,13 @@ void RegisterCumSumCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeCumSumNode(/*exclusive=*/false, /*reverse=*/false);
     const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
     const int64_t count = kBenchmarkElementwiseSize;
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_cumsum_benchmark", {opset},
-                              {count, 1}, {count}, [cumsum_kernel, shape, count]() -> IoData {
-                                Tensor x =
-                                    Tensor::FromDouble("", shape, std::vector<double>(count, 1.0));
-                                Tensor axis = Tensor::FromInt32("", {}, {0});
-                                Tensor y = cumsum_kernel(x, axis);
-                                return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_cumsum_benchmark", {opset}, {count, 1}, {count},
+           [cumsum_kernel, shape, count]() -> IoData {
+             Tensor x = Tensor::FromDouble("", shape, std::vector<double>(count, 1.0));
+             Tensor axis = Tensor::FromInt32("", {}, {0});
+             Tensor y = cumsum_kernel(x, axis);
+             return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+           });
     return;
   }
 

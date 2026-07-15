@@ -75,8 +75,8 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
     ASSERT_EQ(node.ref_input().size(), 3u);
     ASSERT_EQ(node.ref_output().size(), 1u);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     for (const Tensor &t : ds.inputs) {
@@ -99,11 +99,11 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
   }
 
   // Basic case output shape matches (B, Hq, Lq, Dv) = (1, 2, 2, 2).
-  EXPECT_EQ(basic->data_sets[0].outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 2}));
+  EXPECT_EQ(basic->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 2}));
   // GQA case output shape matches (B, Hq, Lq, Dv) = (1, 4, 2, 2).
-  EXPECT_EQ(gqa->data_sets[0].outputs[0].shape, (std::vector<int64_t>{1, 4, 2, 2}));
+  EXPECT_EQ(gqa->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{1, 4, 2, 2}));
   // diff_head_sizes case output shape matches (B, Hq, Lq, Dv) = (1, 2, 2, 3).
-  EXPECT_EQ(diff_heads->data_sets[0].outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 3}));
+  EXPECT_EQ(diff_heads->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 3}));
 
   // The basic / gqa / diff_head_sizes cases must not carry any modifier
   // attributes.
@@ -137,23 +137,24 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
   }
 
   // Identity-prob_mod expected output equals the basic case output.
-  ASSERT_EQ(prob_mod_id->data_sets[0].outputs[0].shape, basic->data_sets[0].outputs[0].shape);
+  ASSERT_EQ(prob_mod_id->data_sets()[0].outputs[0].shape, basic->data_sets()[0].outputs[0].shape);
   {
-    const float *baseline = basic->data_sets[0].outputs[0].AsFloat();
-    const float *modified = prob_mod_id->data_sets[0].outputs[0].AsFloat();
-    const int64_t n = basic->data_sets[0].outputs[0].element_count();
-    ASSERT_EQ(n, prob_mod_id->data_sets[0].outputs[0].element_count());
+    const float *baseline = basic->data_sets()[0].outputs[0].AsFloat();
+    const float *modified = prob_mod_id->data_sets()[0].outputs[0].AsFloat();
+    const int64_t n = basic->data_sets()[0].outputs[0].element_count();
+    ASSERT_EQ(n, prob_mod_id->data_sets()[0].outputs[0].element_count());
     for (int64_t i = 0; i < n; ++i) {
       EXPECT_FLOAT_EQ(modified[i], baseline[i]);
     }
   }
   // Scale-by-0.5 prob_mod expected output equals 0.5 times the basic case.
-  ASSERT_EQ(prob_mod_scale->data_sets[0].outputs[0].shape, basic->data_sets[0].outputs[0].shape);
+  ASSERT_EQ(prob_mod_scale->data_sets()[0].outputs[0].shape,
+            basic->data_sets()[0].outputs[0].shape);
   {
-    const float *baseline = basic->data_sets[0].outputs[0].AsFloat();
-    const float *modified = prob_mod_scale->data_sets[0].outputs[0].AsFloat();
-    const int64_t n = basic->data_sets[0].outputs[0].element_count();
-    ASSERT_EQ(n, prob_mod_scale->data_sets[0].outputs[0].element_count());
+    const float *baseline = basic->data_sets()[0].outputs[0].AsFloat();
+    const float *modified = prob_mod_scale->data_sets()[0].outputs[0].AsFloat();
+    const int64_t n = basic->data_sets()[0].outputs[0].element_count();
+    ASSERT_EQ(n, prob_mod_scale->data_sets()[0].outputs[0].element_count());
     for (int64_t i = 0; i < n; ++i) {
       EXPECT_FLOAT_EQ(modified[i], 0.5f * baseline[i]);
     }
@@ -178,12 +179,12 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
   // The score_mod-bias case adds a constant to every score, which is a
   // softmax no-op, so the expected output must match the un-modified
   // baseline elementwise.
-  ASSERT_EQ(score_mod->data_sets[0].outputs[0].shape, basic->data_sets[0].outputs[0].shape);
+  ASSERT_EQ(score_mod->data_sets()[0].outputs[0].shape, basic->data_sets()[0].outputs[0].shape);
   {
-    const float *baseline = basic->data_sets[0].outputs[0].AsFloat();
-    const float *modified = score_mod->data_sets[0].outputs[0].AsFloat();
-    const int64_t n = basic->data_sets[0].outputs[0].element_count();
-    ASSERT_EQ(n, score_mod->data_sets[0].outputs[0].element_count());
+    const float *baseline = basic->data_sets()[0].outputs[0].AsFloat();
+    const float *modified = score_mod->data_sets()[0].outputs[0].AsFloat();
+    const int64_t n = basic->data_sets()[0].outputs[0].element_count();
+    ASSERT_EQ(n, score_mod->data_sets()[0].outputs[0].element_count());
     for (int64_t i = 0; i < n; ++i) {
       EXPECT_FLOAT_EQ(modified[i], baseline[i]);
     }
@@ -199,8 +200,8 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
     EXPECT_EQ(node.ref_attribute().size(), 0u);
-    ASSERT_EQ(dbl->data_sets.size(), 1u);
-    const auto &ds = dbl->data_sets[0];
+    ASSERT_EQ(dbl->data_sets().size(), 1u);
+    const auto &ds = dbl->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     for (const Tensor &t : ds.inputs) {
@@ -210,9 +211,9 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 2}));
 
-    const float *baseline = basic->data_sets[0].outputs[0].AsFloat();
+    const float *baseline = basic->data_sets()[0].outputs[0].AsFloat();
     const double *modified = ds.outputs[0].AsDouble();
-    const int64_t n = basic->data_sets[0].outputs[0].element_count();
+    const int64_t n = basic->data_sets()[0].outputs[0].element_count();
     ASSERT_EQ(n, ds.outputs[0].element_count());
     for (int64_t i = 0; i < n; ++i) {
       EXPECT_NEAR(modified[i], static_cast<double>(baseline[i]), 1e-6);

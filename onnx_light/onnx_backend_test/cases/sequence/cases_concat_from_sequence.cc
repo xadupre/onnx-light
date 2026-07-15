@@ -105,7 +105,7 @@ void RegisterConcatFromSequenceCase(const std::string &name, const std::vector<i
     ds.inputs.emplace_back(std::move(tc_in));
   }
   ds.outputs.emplace_back(expected);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }

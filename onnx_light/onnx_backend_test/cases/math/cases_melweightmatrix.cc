@@ -37,21 +37,20 @@ void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry, TestMode mode
     bench_node.add_input("upper_edge_hertz");
     bench_node.add_output("output");
     const int64_t output_count = (8192 / 2 + 1) * 2048;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(bench_node), "test_cc_melweightmatrix_benchmark", {opset},
-        {1, 1, 1, 1, 1}, {output_count}, [mel_kernel]() -> IoData {
-          Tensor b_num_mel_bins = Tensor::FromInt32("", {}, {2048});
-          Tensor b_dft_length = Tensor::FromInt32("", {}, {8192});
-          Tensor b_sample_rate = Tensor::FromInt32("", {}, {16000});
-          Tensor b_lower_edge_hertz = Tensor::FromFloat("", {}, {0.0f});
-          Tensor b_upper_edge_hertz = Tensor::FromFloat("", {}, {8000.0f});
-          Tensor b_output = mel_kernel(b_num_mel_bins, b_dft_length, b_sample_rate,
-                                       b_lower_edge_hertz, b_upper_edge_hertz, DataType::FLOAT);
-          return IoData{{std::move(b_num_mel_bins), std::move(b_dft_length),
-                         std::move(b_sample_rate), std::move(b_lower_edge_hertz),
-                         std::move(b_upper_edge_hertz)},
-                        {std::move(b_output)}};
-        });
+    Expect(registry, std::move(bench_node), "test_cc_melweightmatrix_benchmark", {opset},
+           {1, 1, 1, 1, 1}, {output_count}, [mel_kernel]() -> IoData {
+             Tensor b_num_mel_bins = Tensor::FromInt32("", {}, {2048});
+             Tensor b_dft_length = Tensor::FromInt32("", {}, {8192});
+             Tensor b_sample_rate = Tensor::FromInt32("", {}, {16000});
+             Tensor b_lower_edge_hertz = Tensor::FromFloat("", {}, {0.0f});
+             Tensor b_upper_edge_hertz = Tensor::FromFloat("", {}, {8000.0f});
+             Tensor b_output = mel_kernel(b_num_mel_bins, b_dft_length, b_sample_rate,
+                                          b_lower_edge_hertz, b_upper_edge_hertz, DataType::FLOAT);
+             return IoData{{std::move(b_num_mel_bins), std::move(b_dft_length),
+                            std::move(b_sample_rate), std::move(b_lower_edge_hertz),
+                            std::move(b_upper_edge_hertz)},
+                           {std::move(b_output)}};
+           });
     return;
   }
 

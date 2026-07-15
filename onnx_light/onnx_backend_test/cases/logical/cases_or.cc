@@ -48,14 +48,13 @@ void RegisterOrCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const std::vector<int64_t> shape = {1024, 4096};
     const int64_t count = 1024 * 4096;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_or_benchmark", {opset}, {count, count}, {count},
-        [or_kernel, shape]() -> IoData {
-          Tensor x = Tensor::FromBool("", shape, RandUint<uint8_t>(2, shape, /*seed=*/9101));
-          Tensor y = Tensor::FromBool("", shape, RandUint<uint8_t>(2, shape, /*seed=*/9102));
-          Tensor z = or_kernel(x, y);
-          return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-        });
+    Expect(registry, std::move(node), "test_cc_or_benchmark", {opset}, {count, count}, {count},
+           [or_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromBool("", shape, RandUint<uint8_t>(2, shape, /*seed=*/9101));
+             Tensor y = Tensor::FromBool("", shape, RandUint<uint8_t>(2, shape, /*seed=*/9102));
+             Tensor z = or_kernel(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
     return;
   }
 

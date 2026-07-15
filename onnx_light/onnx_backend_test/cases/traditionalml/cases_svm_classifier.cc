@@ -74,14 +74,13 @@ void RegisterSVMClassifierCases(std::vector<TestCase> &registry, TestMode mode) 
     labels->add_ints(static_cast<int64_t>(0));
     labels->add_ints(static_cast<int64_t>(1));
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_svmclassifier_int64_binary_benchmark",
-        {default_opset, opset}, {16384}, {8192, 16384}, [svm]() -> IoData {
-          Tensor x = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2671));
-          auto [y, z] = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, -1.0f}, {0.0f},
-                                              {1, 1}, {0, 1}, "LINEAR", 0.0f, 0.0f, 0.0f);
-          return IoData{{std::move(x)}, {std::move(y), std::move(z)}};
-        });
+    Expect(registry, std::move(node), "test_cc_svmclassifier_int64_binary_benchmark",
+           {default_opset, opset}, {16384}, {8192, 16384}, [svm]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2671));
+             auto [y, z] = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, -1.0f}, {0.0f},
+                                                 {1, 1}, {0, 1}, "LINEAR", 0.0f, 0.0f, 0.0f);
+             return IoData{{std::move(x)}, {std::move(y), std::move(z)}};
+           });
     return;
   }
 

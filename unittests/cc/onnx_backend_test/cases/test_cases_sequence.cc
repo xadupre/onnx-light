@@ -52,8 +52,8 @@ TEST(BackendTestCase, SequenceConstructCaseIsPresent) {
   ASSERT_TRUE(elem.has_tensor_type());
   EXPECT_EQ(elem.ref_tensor_type().ref_elem_type(), onnx_kernels::DataType::FLOAT);
 
-  ASSERT_EQ(seq_case->data_sets.size(), 1u);
-  const auto &ds = seq_case->data_sets[0];
+  ASSERT_EQ(seq_case->data_sets().size(), 1u);
+  const auto &ds = seq_case->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
@@ -108,17 +108,17 @@ TEST(BackendTestCase, ConcatFromSequenceCasesAreRegistered) {
     const ValueInfoProto &out_vi = graph.ref_output()[0];
     EXPECT_EQ(out_vi.ref_type().has_tensor_type(), true);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   }
 
   // Expected output shapes per case.
-  EXPECT_EQ(axis_0->data_sets[0].outputs[0].shape, (std::vector<int64_t>{6, 3}));
-  EXPECT_EQ(axis_1->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 9}));
-  EXPECT_EQ(new_axis->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 2, 3}));
+  EXPECT_EQ(axis_0->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{6, 3}));
+  EXPECT_EQ(axis_1->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{2, 9}));
+  EXPECT_EQ(new_axis->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{3, 2, 3}));
 }
 
 TEST(BackendTestCase, SequenceLengthCaseIsPresent) {
@@ -142,8 +142,8 @@ TEST(BackendTestCase, SequenceLengthCaseIsPresent) {
   EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_elem_type(), onnx_kernels::DataType::INT64);
   EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_shape().ref_dim().size(), 0u);
 
-  ASSERT_EQ(length_case->data_sets.size(), 1u);
-  const auto &ds = length_case->data_sets[0];
+  ASSERT_EQ(length_case->data_sets().size(), 1u);
+  const auto &ds = length_case->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
@@ -179,16 +179,16 @@ TEST(BackendTestCase, SequenceEraseCasesAreRegistered) {
     ASSERT_EQ(graph.ref_output().size(), 1u);
     // Output is a sequence type.
     EXPECT_TRUE(graph.ref_output()[0].ref_type().has_sequence_type()) << tc->name;
-    ASSERT_EQ(tc->data_sets.size(), 1u);
+    ASSERT_EQ(tc->data_sets().size(), 1u);
     // Output stacked tensor has 2 elements: shape [2, 2, 3].
-    EXPECT_EQ(tc->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 2, 3})) << tc->name;
+    EXPECT_EQ(tc->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{2, 2, 3})) << tc->name;
   }
 
   // The default case has 3 tensor inputs (no position).
-  EXPECT_EQ(default_case->data_sets[0].inputs.size(), 3u);
+  EXPECT_EQ(default_case->data_sets()[0].inputs.size(), 3u);
   // The position cases have 4 inputs (3 tensors + 1 position scalar).
-  EXPECT_EQ(pos1_case->data_sets[0].inputs.size(), 4u);
-  EXPECT_EQ(neg_case->data_sets[0].inputs.size(), 4u);
+  EXPECT_EQ(pos1_case->data_sets()[0].inputs.size(), 4u);
+  EXPECT_EQ(neg_case->data_sets()[0].inputs.size(), 4u);
 }
 
 TEST(BackendTestCase, SequenceInsertCasesAreRegistered) {
@@ -216,13 +216,13 @@ TEST(BackendTestCase, SequenceInsertCasesAreRegistered) {
     EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceInsert");
     ASSERT_EQ(graph.ref_output().size(), 1u);
     EXPECT_TRUE(graph.ref_output()[0].ref_type().has_sequence_type()) << tc->name;
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    EXPECT_EQ(tc->data_sets[0].outputs[0].shape, (std::vector<int64_t>{4, 2, 3})) << tc->name;
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    EXPECT_EQ(tc->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{4, 2, 3})) << tc->name;
   }
 
-  EXPECT_EQ(default_case->data_sets[0].inputs.size(), 4u);
-  EXPECT_EQ(pos1_case->data_sets[0].inputs.size(), 5u);
-  EXPECT_EQ(neg_case->data_sets[0].inputs.size(), 5u);
+  EXPECT_EQ(default_case->data_sets()[0].inputs.size(), 4u);
+  EXPECT_EQ(pos1_case->data_sets()[0].inputs.size(), 5u);
+  EXPECT_EQ(neg_case->data_sets()[0].inputs.size(), 5u);
 }
 
 TEST(BackendTestCase, SequenceAtCasesAreRegistered) {
@@ -252,11 +252,11 @@ TEST(BackendTestCase, SequenceAtCasesAreRegistered) {
     ASSERT_EQ(graph.ref_output().size(), 1u);
     // Output is a tensor type (not a sequence).
     EXPECT_TRUE(graph.ref_output()[0].ref_type().has_tensor_type()) << tc->name;
-    ASSERT_EQ(tc->data_sets.size(), 1u);
+    ASSERT_EQ(tc->data_sets().size(), 1u);
     // Each selected element has shape [2, 3].
-    EXPECT_EQ(tc->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 3})) << tc->name;
+    EXPECT_EQ(tc->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{2, 3})) << tc->name;
     // Inputs are 3 tensors + 1 position scalar.
-    EXPECT_EQ(tc->data_sets[0].inputs.size(), 4u) << tc->name;
+    EXPECT_EQ(tc->data_sets()[0].inputs.size(), 4u) << tc->name;
   }
 }
 
@@ -305,15 +305,15 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
     ASSERT_EQ(graph.ref_output().size(), 1u);
     // Output is a sequence type.
     EXPECT_TRUE(graph.ref_output()[0].ref_type().has_sequence_type()) << tc->name;
-    ASSERT_EQ(tc->data_sets.size(), 1u);
+    ASSERT_EQ(tc->data_sets().size(), 1u);
   }
 
   // The FLOAT case has 3 input tensors of shape [2, 3] → stacked [3, 2, 3].
-  EXPECT_EQ(float_case->data_sets[0].inputs.size(), 3u);
-  EXPECT_EQ(float_case->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 2, 3}));
+  EXPECT_EQ(float_case->data_sets()[0].inputs.size(), 3u);
+  EXPECT_EQ(float_case->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{3, 2, 3}));
   // The INT64 case has 2 input tensors of shape [4] → stacked [2, 4].
-  EXPECT_EQ(int64_case->data_sets[0].inputs.size(), 2u);
-  EXPECT_EQ(int64_case->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 4}));
+  EXPECT_EQ(int64_case->data_sets()[0].inputs.size(), 2u);
+  EXPECT_EQ(int64_case->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{2, 4}));
 
   // identity_2_sequences: 2 SequenceConstruct + 1 SequenceMap → 2 output sequences.
   {
@@ -326,11 +326,11 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
     EXPECT_TRUE(g.ref_output()[0].ref_type().has_sequence_type());
     EXPECT_TRUE(g.ref_output()[1].ref_type().has_sequence_type());
     // 6 graph inputs (3 per sequence), 2 stacked outputs.
-    ASSERT_EQ(identity_2_seq->data_sets.size(), 1u);
-    EXPECT_EQ(identity_2_seq->data_sets[0].inputs.size(), 6u);
-    ASSERT_EQ(identity_2_seq->data_sets[0].outputs.size(), 2u);
-    EXPECT_EQ(identity_2_seq->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 3}));
-    EXPECT_EQ(identity_2_seq->data_sets[0].outputs[1].shape, (std::vector<int64_t>{3, 4}));
+    ASSERT_EQ(identity_2_seq->data_sets().size(), 1u);
+    EXPECT_EQ(identity_2_seq->data_sets()[0].inputs.size(), 6u);
+    ASSERT_EQ(identity_2_seq->data_sets()[0].outputs.size(), 2u);
+    EXPECT_EQ(identity_2_seq->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{3, 3}));
+    EXPECT_EQ(identity_2_seq->data_sets()[0].outputs[1].shape, (std::vector<int64_t>{3, 4}));
   }
 
   // add_2_sequences: 2 SequenceConstruct + 1 SequenceMap → 1 output sequence.
@@ -345,10 +345,10 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
     EXPECT_EQ(body.ref_node()[0].ref_op_type().as_string(), "Add");
     ASSERT_EQ(g.ref_output().size(), 1u);
     EXPECT_TRUE(g.ref_output()[0].ref_type().has_sequence_type());
-    EXPECT_EQ(add_2_seq->data_sets[0].inputs.size(), 6u);
-    EXPECT_EQ(add_2_seq->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 4}));
+    EXPECT_EQ(add_2_seq->data_sets()[0].inputs.size(), 6u);
+    EXPECT_EQ(add_2_seq->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{3, 4}));
     // Verify element-wise add for the first iteration.
-    const auto &out = add_2_seq->data_sets[0].outputs[0];
+    const auto &out = add_2_seq->data_sets()[0].outputs[0];
     const float *out_data = out.As<float>();
     EXPECT_FLOAT_EQ(out_data[0], 10.0f);
     EXPECT_FLOAT_EQ(out_data[3], 13.0f);
@@ -364,9 +364,9 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
     const NodeProto &map_node = g.ref_node()[1];
     ASSERT_EQ(map_node.ref_input().size(), 2u);
     // 3 sequence-element tensors + 1 broadcast tensor → 4 graph inputs.
-    EXPECT_EQ(add_1_seq_1_tensor->data_sets[0].inputs.size(), 4u);
-    EXPECT_EQ(add_1_seq_1_tensor->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 4}));
-    const auto &out = add_1_seq_1_tensor->data_sets[0].outputs[0];
+    EXPECT_EQ(add_1_seq_1_tensor->data_sets()[0].inputs.size(), 4u);
+    EXPECT_EQ(add_1_seq_1_tensor->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{3, 4}));
+    const auto &out = add_1_seq_1_tensor->data_sets()[0].outputs[0];
     const float *out_data = out.As<float>();
     // x0_0 = [0,1,2,3], x1 = [100,200,300,400] → y0_0 = [100,201,302,403].
     EXPECT_FLOAT_EQ(out_data[0], 100.0f);
@@ -394,9 +394,9 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
                   .ref_tensor_type()
                   .ref_elem_type(),
               onnx_kernels::DataType::INT64);
-    EXPECT_EQ(extract_shapes->data_sets[0].inputs.size(), 3u);
-    EXPECT_EQ(extract_shapes->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 3}));
-    const auto &out = extract_shapes->data_sets[0].outputs[0];
+    EXPECT_EQ(extract_shapes->data_sets()[0].inputs.size(), 3u);
+    EXPECT_EQ(extract_shapes->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{3, 3}));
+    const auto &out = extract_shapes->data_sets()[0].outputs[0];
     EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
     const int64_t *out_data = out.As<int64_t>();
     // Shapes are {4,3,2}, {2,5,1}, {1,1,7}.
@@ -436,10 +436,10 @@ TEST(BackendTestCase, SequenceEmptyCasesAreRegistered) {
     // is produced in-graph).
     EXPECT_EQ(graph.ref_input().size(), 0u) << tc->name;
     ASSERT_EQ(graph.ref_output().size(), 1u);
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    EXPECT_TRUE(tc->data_sets[0].inputs.empty());
-    ASSERT_EQ(tc->data_sets[0].outputs.size(), 1u);
-    const onnx_kernels::Tensor &out = tc->data_sets[0].outputs[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    EXPECT_TRUE(tc->data_sets()[0].inputs.empty());
+    ASSERT_EQ(tc->data_sets()[0].outputs.size(), 1u);
+    const onnx_kernels::Tensor &out = tc->data_sets()[0].outputs[0];
     EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
     EXPECT_TRUE(out.shape.empty());
     ASSERT_EQ(out.data.size(), sizeof(int64_t));
@@ -481,20 +481,20 @@ TEST(BackendTestCase, SplitToSequenceCasesAreRegistered) {
     EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SplitToSequence") << tc->name;
     ASSERT_EQ(graph.ref_output().size(), 1u);
     EXPECT_TRUE(graph.ref_output()[0].ref_type().has_sequence_type()) << tc->name;
-    ASSERT_EQ(tc->data_sets.size(), 1u);
+    ASSERT_EQ(tc->data_sets().size(), 1u);
   }
 
   // Case 1: input [3,6] + scalar split=2 → 3 chunks of [3,2] stacked to [3,3,2].
-  EXPECT_EQ(case1->data_sets[0].inputs.size(), 2u);
-  EXPECT_EQ(case1->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 3, 2}));
+  EXPECT_EQ(case1->data_sets()[0].inputs.size(), 2u);
+  EXPECT_EQ(case1->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{3, 3, 2}));
 
   // Case 2: input [4,6] + vector split=[2,2] → 2 chunks of [2,6] stacked to [2,2,6].
-  EXPECT_EQ(case2->data_sets[0].inputs.size(), 2u);
-  EXPECT_EQ(case2->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 2, 6}));
+  EXPECT_EQ(case2->data_sets()[0].inputs.size(), 2u);
+  EXPECT_EQ(case2->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{2, 2, 6}));
 
   // No-keepdims case: input [3,6], keepdims=0 → 6 chunks of [3] stacked to [6,3].
-  EXPECT_EQ(case_nokd->data_sets[0].inputs.size(), 1u);
-  EXPECT_EQ(case_nokd->data_sets[0].outputs[0].shape, (std::vector<int64_t>{6, 3}));
+  EXPECT_EQ(case_nokd->data_sets()[0].inputs.size(), 1u);
+  EXPECT_EQ(case_nokd->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{6, 3}));
 }
 
 } // namespace Test

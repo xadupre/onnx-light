@@ -43,14 +43,13 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeIdentityNode();
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_identity_benchmark", {opset},
-        {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [identity_kernel]() -> IoData {
-          Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
-                                       Randn<float>({kBenchmarkElementwiseSize}, 2001));
-          Tensor y = Rename(identity_kernel(x), "y");
-          return IoData{{std::move(x)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_identity_benchmark", {opset},
+           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [identity_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 2001));
+             Tensor y = Rename(identity_kernel(x), "y");
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 
@@ -140,7 +139,7 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
     ds.inputs.push_back(a);
     ds.inputs.push_back(b);
     ds.outputs.push_back(stacked);
-    tc.data_sets.emplace_back(std::move(ds));
+    tc.data_sets().emplace_back(std::move(ds));
     registry.emplace_back(std::move(tc));
   }
 
@@ -207,7 +206,7 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
     DataSet ds;
     ds.inputs.push_back(x);
     ds.outputs.push_back(stacked);
-    tc.data_sets.emplace_back(std::move(ds));
+    tc.data_sets().emplace_back(std::move(ds));
     registry.emplace_back(std::move(tc));
   }
 }

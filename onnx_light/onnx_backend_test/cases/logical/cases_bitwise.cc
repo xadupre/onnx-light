@@ -131,14 +131,13 @@ void RegisterBitwiseAndCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("BitwiseAnd", {"x", "y"}, {"z"});
     const int64_t count = kBenchmarkElementwiseSize;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_bitwise_and_benchmark", {opset}, {count, count},
-        {count}, [k, count]() -> IoData {
-          Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9601));
-          Tensor y = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9602));
-          Tensor z = k(x, y);
-          return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-        });
+    Expect(registry, std::move(node), "test_cc_bitwise_and_benchmark", {opset}, {count, count},
+           {count}, [k, count]() -> IoData {
+             Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9601));
+             Tensor y = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9602));
+             Tensor z = k(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
     return;
   }
 
@@ -182,14 +181,13 @@ void RegisterBitwiseOrCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("BitwiseOr", {"x", "y"}, {"z"});
     const int64_t count = kBenchmarkElementwiseSize;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_bitwise_or_benchmark", {opset}, {count, count}, {count},
-        [k, count]() -> IoData {
-          Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9601));
-          Tensor y = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9602));
-          Tensor z = k(x, y);
-          return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-        });
+    Expect(registry, std::move(node), "test_cc_bitwise_or_benchmark", {opset}, {count, count},
+           {count}, [k, count]() -> IoData {
+             Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9601));
+             Tensor y = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9602));
+             Tensor z = k(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
     return;
   }
 
@@ -232,14 +230,13 @@ void RegisterBitwiseXorCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("BitwiseXor", {"x", "y"}, {"z"});
     const int64_t count = kBenchmarkElementwiseSize;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_bitwise_xor_benchmark", {opset}, {count, count},
-        {count}, [k, count]() -> IoData {
-          Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9601));
-          Tensor y = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9602));
-          Tensor z = k(x, y);
-          return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-        });
+    Expect(registry, std::move(node), "test_cc_bitwise_xor_benchmark", {opset}, {count, count},
+           {count}, [k, count]() -> IoData {
+             Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9601));
+             Tensor y = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9602));
+             Tensor z = k(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
     return;
   }
 
@@ -284,13 +281,12 @@ void RegisterBitwiseNotCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("BitwiseNot", {"x"}, {"y"});
     const int64_t count = kBenchmarkElementwiseSize;
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_bitwise_not_benchmark", {opset},
-                              {count}, {count}, [k, count]() -> IoData {
-                                Tensor x = Tensor::FromInt32(
-                                    "", {count}, RandnInt<int32_t>({count}, /*seed=*/9603));
-                                Tensor y = k(x);
-                                return IoData{{std::move(x)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_bitwise_not_benchmark", {opset}, {count}, {count},
+           [k, count]() -> IoData {
+             Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9603));
+             Tensor y = k(x);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

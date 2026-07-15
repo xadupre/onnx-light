@@ -46,13 +46,12 @@ void RegisterNotCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const std::vector<int64_t> shape = {1024, 4096};
     const int64_t count = 1024 * 4096;
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_not_benchmark", {opset}, {count},
-                              {count}, [not_kernel, shape]() -> IoData {
-                                Tensor x = Tensor::FromBool(
-                                    "", shape, RandUint<uint8_t>(2, shape, /*seed=*/9103));
-                                Tensor y = not_kernel(x);
-                                return IoData{{std::move(x)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_not_benchmark", {opset}, {count}, {count},
+           [not_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromBool("", shape, RandUint<uint8_t>(2, shape, /*seed=*/9103));
+             Tensor y = not_kernel(x);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

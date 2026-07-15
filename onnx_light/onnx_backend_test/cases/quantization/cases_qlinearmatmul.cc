@@ -91,24 +91,23 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
     const std::vector<int64_t> b_shape{512, 512};
     const int64_t count = 512 * 512;
     NodeProto node = MakeQLinearMatMulNode();
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_qlinearmatmul_2D_uint8_float32_benchmark", {opset},
-        {count, 1, 1, count, 1, 1, 1, 1}, {count}, [ql, a_shape, b_shape]() -> IoData {
-          Tensor a_2d = Tensor::FromUint8("a", a_shape, RandUint<uint8_t>(256, a_shape, 2531));
-          Tensor b_2d = Tensor::FromUint8("b", b_shape, RandUint<uint8_t>(256, b_shape, 2532));
-          Tensor a_scale_f = Tensor::FromFloat("a_scale", {}, {0.0066f});
-          Tensor b_scale_f = Tensor::FromFloat("b_scale", {}, {0.00705f});
-          Tensor y_scale_f = Tensor::FromFloat("y_scale", {}, {0.0107f});
-          Tensor a_zp = MakeQuantScalar("a_zero_point", DataType::UINT8, 113);
-          Tensor b_zp_2d = MakeQuantScalar("b_zero_point", DataType::UINT8, 114);
-          Tensor y_zp = MakeQuantScalar("y_zero_point", DataType::UINT8, 118);
-          Tensor y_2d = ql(a_2d, a_scale_f, a_zp, b_2d, b_scale_f, b_zp_2d, y_scale_f, y_zp);
-          y_2d.name = "y";
-          return IoData{{std::move(a_2d), std::move(a_scale_f), std::move(a_zp), std::move(b_2d),
-                         std::move(b_scale_f), std::move(b_zp_2d), std::move(y_scale_f),
-                         std::move(y_zp)},
-                        {std::move(y_2d)}};
-        });
+    Expect(registry, std::move(node), "test_cc_qlinearmatmul_2D_uint8_float32_benchmark", {opset},
+           {count, 1, 1, count, 1, 1, 1, 1}, {count}, [ql, a_shape, b_shape]() -> IoData {
+             Tensor a_2d = Tensor::FromUint8("a", a_shape, RandUint<uint8_t>(256, a_shape, 2531));
+             Tensor b_2d = Tensor::FromUint8("b", b_shape, RandUint<uint8_t>(256, b_shape, 2532));
+             Tensor a_scale_f = Tensor::FromFloat("a_scale", {}, {0.0066f});
+             Tensor b_scale_f = Tensor::FromFloat("b_scale", {}, {0.00705f});
+             Tensor y_scale_f = Tensor::FromFloat("y_scale", {}, {0.0107f});
+             Tensor a_zp = MakeQuantScalar("a_zero_point", DataType::UINT8, 113);
+             Tensor b_zp_2d = MakeQuantScalar("b_zero_point", DataType::UINT8, 114);
+             Tensor y_zp = MakeQuantScalar("y_zero_point", DataType::UINT8, 118);
+             Tensor y_2d = ql(a_2d, a_scale_f, a_zp, b_2d, b_scale_f, b_zp_2d, y_scale_f, y_zp);
+             y_2d.name = "y";
+             return IoData{{std::move(a_2d), std::move(a_scale_f), std::move(a_zp), std::move(b_2d),
+                            std::move(b_scale_f), std::move(b_zp_2d), std::move(y_scale_f),
+                            std::move(y_zp)},
+                           {std::move(y_2d)}};
+           });
     return;
   }
 

@@ -64,24 +64,23 @@ void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "beta", beta);
     AddAttribute(node, "mode", std::string("standard"));
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_momentum_benchmark", {default_opset, opset},
-        {1, 1, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
-        {kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
-        [momentum, alpha, beta, norm_coefficient]() -> IoData {
-          Tensor R = Tensor::FromFloat("", {}, {0.1f});
-          Tensor T = Tensor::FromInt64("", {}, {0});
-          Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                       Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
-          Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                       Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
-          Tensor V = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                       Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
-          std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
-                                              kernel::Momentum::Mode::kStandard);
-          return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V)},
-                        {std::move(outs[0]), std::move(outs[1])}};
-        });
+    Expect(registry, std::move(node), "test_momentum_benchmark", {default_opset, opset},
+           {1, 1, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
+           {kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
+           [momentum, alpha, beta, norm_coefficient]() -> IoData {
+             Tensor R = Tensor::FromFloat("", {}, {0.1f});
+             Tensor T = Tensor::FromInt64("", {}, {0});
+             Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+             Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
+             Tensor V = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                          Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
+             std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
+                                                 kernel::Momentum::Mode::kStandard);
+             return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V)},
+                           {std::move(outs[0]), std::move(outs[1])}};
+           });
     return;
   }
 

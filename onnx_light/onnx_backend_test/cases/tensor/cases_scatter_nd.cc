@@ -50,22 +50,22 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeScatterNDNode("none");
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_scatternd_benchmark", {opset}, {4194304, 256, 4194304},
-        {4194304}, [snd_kernel]() -> IoData {
-          Tensor data = Tensor::FromFloat("", {256, 128, 128}, Randn<float>({256, 128, 128}, 2001));
-          std::vector<int64_t> index_values(256);
-          for (int64_t i = 0; i < 256; ++i) {
-            index_values[static_cast<std::size_t>(i)] = i;
-          }
-          Tensor indices = Tensor::FromInt64("", {256, 1}, index_values);
-          Tensor updates =
-              Tensor::FromFloat("", {256, 128, 128}, Randn<float>({256, 128, 128}, 2002));
-          kernel::ScatterND::Attributes attrs;
-          Tensor output = snd_kernel(data, indices, updates, attrs);
-          return IoData{{std::move(data), std::move(indices), std::move(updates)},
-                        {std::move(output)}};
-        });
+    Expect(registry, std::move(node), "test_cc_scatternd_benchmark", {opset},
+           {4194304, 256, 4194304}, {4194304}, [snd_kernel]() -> IoData {
+             Tensor data =
+                 Tensor::FromFloat("", {256, 128, 128}, Randn<float>({256, 128, 128}, 2001));
+             std::vector<int64_t> index_values(256);
+             for (int64_t i = 0; i < 256; ++i) {
+               index_values[static_cast<std::size_t>(i)] = i;
+             }
+             Tensor indices = Tensor::FromInt64("", {256, 1}, index_values);
+             Tensor updates =
+                 Tensor::FromFloat("", {256, 128, 128}, Randn<float>({256, 128, 128}, 2002));
+             kernel::ScatterND::Attributes attrs;
+             Tensor output = snd_kernel(data, indices, updates, attrs);
+             return IoData{{std::move(data), std::move(indices), std::move(updates)},
+                           {std::move(output)}};
+           });
     return;
   }
 

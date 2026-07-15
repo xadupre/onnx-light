@@ -38,12 +38,12 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeHardmaxNode(/*axis=*/1);
     const std::vector<int64_t> shape = {2048, 2048};
     const int64_t count = 2048 * 2048;
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_hardmax_benchmark", {opset},
-                              {count}, {count}, [hardmax_kernel, shape]() -> IoData {
-                                Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 429));
-                                Tensor y = hardmax_kernel(x, 1);
-                                return IoData{{std::move(x)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_hardmax_benchmark", {opset}, {count}, {count},
+           [hardmax_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 429));
+             Tensor y = hardmax_kernel(x, 1);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

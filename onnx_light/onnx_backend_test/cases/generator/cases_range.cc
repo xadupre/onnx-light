@@ -38,17 +38,16 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("output");
 
     const kernel::Range range_kernel{ctx_v11};
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_range_float_type_positive_delta_benchmark", {opset_v11},
-        {1, 1, 1}, {kBenchmarkElementwiseSize}, [range_kernel]() -> IoData {
-          Tensor start = Tensor::FromFloat("start", {}, {0.0f});
-          Tensor limit =
-              Tensor::FromFloat("limit", {}, {static_cast<float>(kBenchmarkElementwiseSize)});
-          Tensor delta = Tensor::FromFloat("delta", {}, {1.0f});
-          Tensor output = range_kernel(start, limit, delta);
-          return IoData{{std::move(start), std::move(limit), std::move(delta)},
-                        {std::move(output)}};
-        });
+    Expect(registry, std::move(node), "test_range_float_type_positive_delta_benchmark", {opset_v11},
+           {1, 1, 1}, {kBenchmarkElementwiseSize}, [range_kernel]() -> IoData {
+             Tensor start = Tensor::FromFloat("start", {}, {0.0f});
+             Tensor limit =
+                 Tensor::FromFloat("limit", {}, {static_cast<float>(kBenchmarkElementwiseSize)});
+             Tensor delta = Tensor::FromFloat("delta", {}, {1.0f});
+             Tensor output = range_kernel(start, limit, delta);
+             return IoData{{std::move(start), std::move(limit), std::move(delta)},
+                           {std::move(output)}};
+           });
     return;
   }
 

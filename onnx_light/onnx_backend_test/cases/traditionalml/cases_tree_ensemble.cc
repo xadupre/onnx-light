@@ -87,20 +87,19 @@ void RegisterTreeEnsembleCases(std::vector<TestCase> &registry, TestMode mode) {
     AddInt(node, "aggregate_function", 1);
     AddInt(node, "post_transform", 0);
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_treeensemble_single_tree_float_benchmark",
-        {default_opset, opset}, {8192}, {8192}, [tree_ens]() -> IoData {
-          Tensor x = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2741));
-          Tensor y = tree_ens.operator()<float>(
-              x, /*tree_roots=*/{0}, /*nodes_featureids=*/{0},
-              /*nodes_splits=*/{0.5f}, /*nodes_modes=*/{0},
-              /*nodes_truenodeids=*/{0}, /*nodes_falsenodeids=*/{1},
-              /*nodes_trueleafs=*/{1}, /*nodes_falseleafs=*/{1},
-              /*nodes_missing=*/{}, /*leaf_targetids=*/{0, 0},
-              /*leaf_weights=*/{1.0f, 2.0f}, /*membership_values=*/{},
-              /*n_targets=*/1, /*aggregate_function=*/1, /*post_transform=*/0);
-          return IoData{{std::move(x)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_treeensemble_single_tree_float_benchmark",
+           {default_opset, opset}, {8192}, {8192}, [tree_ens]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2741));
+             Tensor y = tree_ens.operator()<float>(
+                 x, /*tree_roots=*/{0}, /*nodes_featureids=*/{0},
+                 /*nodes_splits=*/{0.5f}, /*nodes_modes=*/{0},
+                 /*nodes_truenodeids=*/{0}, /*nodes_falsenodeids=*/{1},
+                 /*nodes_trueleafs=*/{1}, /*nodes_falseleafs=*/{1},
+                 /*nodes_missing=*/{}, /*leaf_targetids=*/{0, 0},
+                 /*leaf_weights=*/{1.0f, 2.0f}, /*membership_values=*/{},
+                 /*n_targets=*/1, /*aggregate_function=*/1, /*post_transform=*/0);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

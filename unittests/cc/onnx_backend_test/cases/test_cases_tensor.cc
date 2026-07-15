@@ -49,8 +49,8 @@ void CheckCastCasePresent(const std::vector<TestCase> &cases, const std::string 
   EXPECT_EQ(graph.ref_input().size(), 1u);
   ASSERT_EQ(graph.ref_output().size(), 1u);
 
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(expected_output_dtype));
@@ -93,7 +93,7 @@ TEST(BackendTestCase, CastFloatToInt32TruncatesTowardZero) {
   const TestCase *tc = FindCase(cases, "test_cc_cast_FLOAT_to_INT32");
   ASSERT_NE(tc, nullptr);
 
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   const std::vector<int64_t> expected_shape = {4};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -110,7 +110,7 @@ TEST(BackendTestCase, CastBoolToInt32MapsTrueToOne) {
   const TestCase *tc = FindCase(cases, "test_cc_cast_BOOL_to_INT32");
   ASSERT_NE(tc, nullptr);
 
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
   EXPECT_EQ(py[0], 0);
@@ -124,7 +124,7 @@ TEST(BackendTestCase, CastInt32ToStringFormatsDecimal) {
   const TestCase *tc = FindCase(cases, "test_cc_cast_INT32_to_STRING");
   ASSERT_NE(tc, nullptr);
 
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
   ASSERT_EQ(ds.outputs[0].string_data.size(), 4u);
   EXPECT_EQ(ds.outputs[0].string_data[0], "-3");
@@ -138,7 +138,7 @@ TEST(BackendTestCase, CastStringToInt32ParsesDecimal) {
   const TestCase *tc = FindCase(cases, "test_cc_cast_STRING_to_INT32");
   ASSERT_NE(tc, nullptr);
 
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
   EXPECT_EQ(py[0], -3);
@@ -170,8 +170,8 @@ void CheckCastLikeCasePresent(const std::vector<TestCase> &cases, const std::str
   EXPECT_EQ(graph.ref_input().size(), 2u);
   ASSERT_EQ(graph.ref_output().size(), 1u);
 
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(expected_output_dtype));
@@ -198,7 +198,7 @@ TEST(BackendTestCase, CastLikeFloatToInt32MatchesCast) {
   const auto cases = CollectTestCases();
   const TestCase *tc = FindCase(cases, "test_cc_castlike_FLOAT_to_INT32");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   const std::vector<int64_t> expected_shape = {4};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
@@ -248,7 +248,7 @@ TEST(BackendTestCase, CastFloatToFloat8RegistersExpectedBytes) {
     const TestCase *tc = FindCase(cases, name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(f8.dtype));
     const std::vector<int64_t> expected_shape = {3, 5};
@@ -267,7 +267,7 @@ TEST(BackendTestCase, CastFloat8ToFloatInputMatchesSaturatedEncoding) {
     const TestCase *tc = FindCase(cases, name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(f8.dtype));
     ASSERT_EQ(ds.inputs[0].data.size(), f8.expected_bytes.size()) << "for case " << name;
@@ -310,8 +310,8 @@ TEST(BackendTestCase, AffineGridUpstreamCasesArePresent) {
     EXPECT_EQ(graph.ref_input().size(), 2u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.theta_shape);
@@ -394,8 +394,8 @@ TEST(BackendTestCase, GridSampleUpstreamCasesArePresent) {
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "GridSample");
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.x_shape);
@@ -484,7 +484,7 @@ TEST(BackendTestCase, CastFloatToSubByteRegistersExpectedPackedBytes) {
     const TestCase *tc = FindCase(cases, name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(e.dtype));
     EXPECT_EQ(ds.outputs[0].shape, e.shape);
@@ -502,7 +502,7 @@ TEST(BackendTestCase, CastSubByteToFloatInputMatchesWrappedPackedEncoding) {
     const TestCase *tc = FindCase(cases, name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(e.dtype));
     EXPECT_EQ(ds.inputs[0].shape, e.shape);
@@ -527,7 +527,7 @@ TEST(BackendTestCase, CastSubByteToWideIntegerProducesUnpackedWrappedValues) {
     const TestCase *tc = FindCase(cases, name);
     ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
-    const auto &ds = tc->data_sets[0];
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(e.wide_int_dtype));
     EXPECT_EQ(ds.outputs[0].shape, e.shape);
@@ -564,18 +564,18 @@ TEST(BackendTestCase, ConcatAllUpstreamCasesRegistered) {
           std::string("test_cc_concat_") + s.label + "_axis_" + std::to_string(axis);
       const TestCase *tc = FindCase(cases, name);
       ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
-      ASSERT_EQ(tc->data_sets.size(), 1u);
-      EXPECT_EQ(tc->data_sets[0].inputs.size(), 2u);
-      EXPECT_EQ(tc->data_sets[0].outputs.size(), 1u);
+      ASSERT_EQ(tc->data_sets().size(), 1u);
+      EXPECT_EQ(tc->data_sets()[0].inputs.size(), 2u);
+      EXPECT_EQ(tc->data_sets()[0].outputs.size(), 1u);
     }
     for (int64_t axis = 1; axis <= s.rank; ++axis) {
       const std::string name =
           std::string("test_cc_concat_") + s.label + "_axis_negative_" + std::to_string(axis);
       const TestCase *tc = FindCase(cases, name);
       ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
-      ASSERT_EQ(tc->data_sets.size(), 1u);
-      EXPECT_EQ(tc->data_sets[0].inputs.size(), 2u);
-      EXPECT_EQ(tc->data_sets[0].outputs.size(), 1u);
+      ASSERT_EQ(tc->data_sets().size(), 1u);
+      EXPECT_EQ(tc->data_sets()[0].inputs.size(), 2u);
+      EXPECT_EQ(tc->data_sets()[0].outputs.size(), 1u);
     }
   }
 }
@@ -606,8 +606,8 @@ TEST(BackendTestCase, ExpandDimChangedAndDimUnchangedCasesRegistered) {
     EXPECT_EQ(graph.ref_input().size(), 2u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -641,8 +641,8 @@ TEST(BackendTestCase, ReshapeCasesRegistered) {
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Reshape");
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -682,8 +682,8 @@ TEST(BackendTestCase, SliceCasesRegistered) {
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Slice");
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), exp.input_count);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
@@ -717,8 +717,8 @@ TEST(BackendTestCase, DepthToSpaceCasesRegistered) {
     EXPECT_EQ(graph.ref_input().size(), 1u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -752,8 +752,8 @@ TEST(BackendTestCase, SpaceToDepthCasesRegistered) {
     EXPECT_EQ(graph.ref_input().size(), 1u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -788,8 +788,8 @@ TEST(BackendTestCase, TransposeDefaultAndPermCasesRegistered) {
     EXPECT_EQ(graph.ref_input().size(), 1u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -825,8 +825,8 @@ TEST(BackendTestCase, TilePrecomputedAndOtherCasesRegistered) {
     EXPECT_EQ(graph.ref_input().size(), 2u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -839,7 +839,7 @@ TEST(BackendTestCase, TilePrecomputedAndOtherCasesRegistered) {
   // Verify that the precomputed case produces the documented tiled values.
   const TestCase *tc = FindCase(cases, "test_cc_tile_precomputed");
   ASSERT_NE(tc, nullptr);
-  const auto &out = tc->data_sets[0].outputs[0];
+  const auto &out = tc->data_sets()[0].outputs[0];
   ASSERT_EQ(out.data.size(), 16u * sizeof(float));
   const float *vals = reinterpret_cast<const float *>(out.data.data());
   const std::vector<float> expected_vals = {0, 1, 0, 1, 2, 3, 2, 3, 0, 1, 0, 1, 2, 3, 2, 3};
@@ -873,8 +873,8 @@ TEST(BackendTestCase, SqueezeCasesRegistered) {
     EXPECT_EQ(graph.ref_input().size(), 2u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -897,8 +897,8 @@ TEST(BackendTestCase, UnsqueezeCasesRegistered) {
   EXPECT_EQ(graph.ref_input().size(), 2u);
   ASSERT_EQ(graph.ref_output().size(), 1u);
 
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{2, 3}));
@@ -932,8 +932,8 @@ TEST(BackendTestCase, NonZeroCasesRegistered) {
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "NonZero");
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -966,8 +966,8 @@ TEST(BackendTestCase, TriluCasesRegistered) {
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Trilu");
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), exp.num_inputs);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -1000,8 +1000,8 @@ TEST(BackendTestCase, ReverseSequenceCasesRegistered) {
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "ReverseSequence");
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -1034,8 +1034,8 @@ TEST(BackendTestCase, UpsampleCasesRegistered) {
     const NodeProto &node = graph.ref_node()[0];
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Upsample");
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
@@ -1049,7 +1049,7 @@ TEST(BackendTestCase, UpsampleCasesRegistered) {
   // tiled (nearest-neighbor) values.
   const TestCase *tc = FindCase(cases, "test_cc_upsample_nearest");
   ASSERT_NE(tc, nullptr);
-  const auto &out = tc->data_sets[0].outputs[0];
+  const auto &out = tc->data_sets()[0].outputs[0];
   ASSERT_EQ(out.data.size(), 24u * sizeof(float));
   const float *vals = reinterpret_cast<const float *>(out.data.data());
   const std::vector<float> expected_vals = {
@@ -1084,8 +1084,8 @@ TEST(BackendTestCase, TensorScatterCasesRegistered) {
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "TensorScatter");
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.past_cache_shape);
@@ -1121,8 +1121,8 @@ TEST(BackendTestCase, OneHotCasesRegistered) {
     const auto &op_type = node.ref_op_type();
     EXPECT_EQ(std::string(op_type.data(), op_type.size()), "OneHot");
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);

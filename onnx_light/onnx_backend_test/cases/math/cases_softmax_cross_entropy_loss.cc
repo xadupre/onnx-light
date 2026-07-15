@@ -126,21 +126,20 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     constexpr int64_t scores_count = kN * kC;
     constexpr int64_t labels_count = kN;
     constexpr int64_t loss_count = 1;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_softmax_cross_entropy_loss_benchmark", {opset},
-        {scores_count, labels_count}, {loss_count}, [sce_kernel, kN, kC]() -> IoData {
-          Tensor scores = Tensor::FromFloat("", {kN, kC}, Randn<float>({kN, kC}, 443));
-          std::vector<int64_t> label_values(kN);
-          for (int64_t i = 0; i < kN; ++i) {
-            label_values[i] = i % kC;
-          }
-          Tensor labels = Tensor::FromInt64("", {kN}, label_values);
-          auto [loss, log_prob] = sce_kernel(scores, labels, /*weights=*/nullptr,
-                                             /*reduction=*/"mean", /*has_ignore_index=*/false,
-                                             /*ignore_index=*/0);
-          (void)log_prob;
-          return IoData{{std::move(scores), std::move(labels)}, {std::move(loss)}};
-        });
+    Expect(registry, std::move(node), "test_cc_softmax_cross_entropy_loss_benchmark", {opset},
+           {scores_count, labels_count}, {loss_count}, [sce_kernel, kN, kC]() -> IoData {
+             Tensor scores = Tensor::FromFloat("", {kN, kC}, Randn<float>({kN, kC}, 443));
+             std::vector<int64_t> label_values(kN);
+             for (int64_t i = 0; i < kN; ++i) {
+               label_values[i] = i % kC;
+             }
+             Tensor labels = Tensor::FromInt64("", {kN}, label_values);
+             auto [loss, log_prob] = sce_kernel(scores, labels, /*weights=*/nullptr,
+                                                /*reduction=*/"mean", /*has_ignore_index=*/false,
+                                                /*ignore_index=*/0);
+             (void)log_prob;
+             return IoData{{std::move(scores), std::move(labels)}, {std::move(loss)}};
+           });
     return;
   }
 

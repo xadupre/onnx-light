@@ -29,17 +29,16 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
 
     constexpr int64_t count = 131072;
     constexpr int64_t substring_count = count * 2;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_string_split_basic_benchmark", {opset}, {count},
-        {substring_count, count}, [string_split, count]() -> IoData {
-          std::vector<std::string> values(static_cast<size_t>(count));
-          for (size_t i = 0; i < values.size(); ++i) {
-            values[i] = (i % 2 == 0) ? "abc.com" : "def.net";
-          }
-          Tensor x = Tensor::FromStrings("", {count}, values);
-          auto [substrings, length] = string_split(x, ".");
-          return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
-        });
+    Expect(registry, std::move(node), "test_cc_string_split_basic_benchmark", {opset}, {count},
+           {substring_count, count}, [string_split, count]() -> IoData {
+             std::vector<std::string> values(static_cast<size_t>(count));
+             for (size_t i = 0; i < values.size(); ++i) {
+               values[i] = (i % 2 == 0) ? "abc.com" : "def.net";
+             }
+             Tensor x = Tensor::FromStrings("", {count}, values);
+             auto [substrings, length] = string_split(x, ".");
+             return IoData{{std::move(x)}, {std::move(substrings), std::move(length)}};
+           });
     return;
   }
 

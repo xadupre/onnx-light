@@ -74,13 +74,12 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttr(node, "replaced_value_float", replaced_value);
     AddFloatsAttr(node, "imputed_value_floats", imputed_values);
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_imputer_float_benchmark", {default_opset, opset},
-        {24576}, {24576}, [imputer, imputed_values, replaced_value]() -> IoData {
-          Tensor x = Tensor::FromFloat("", {8192, 3}, Randn<float>({8192, 3}, 2631));
-          Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
-          return IoData{{std::move(x)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_imputer_float_benchmark", {default_opset, opset},
+           {24576}, {24576}, [imputer, imputed_values, replaced_value]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {8192, 3}, Randn<float>({8192, 3}, 2631));
+             Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

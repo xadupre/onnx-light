@@ -64,8 +64,8 @@ TEST(BackendTestCase, IfCasesArePresent) {
     EXPECT_TRUE(has_then);
     EXPECT_TRUE(has_else);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
@@ -76,12 +76,12 @@ TEST(BackendTestCase, IfCasesArePresent) {
   }
 
   // True branch returns [1, 2]; false branch returns [3, 4].
-  EXPECT_EQ(if_true->data_sets[0].inputs[0].data[0], 1);
-  EXPECT_FLOAT_EQ(if_true->data_sets[0].outputs[0].AsFloat()[0], 1.0f);
-  EXPECT_FLOAT_EQ(if_true->data_sets[0].outputs[0].AsFloat()[1], 2.0f);
-  EXPECT_EQ(if_false->data_sets[0].inputs[0].data[0], 0);
-  EXPECT_FLOAT_EQ(if_false->data_sets[0].outputs[0].AsFloat()[0], 3.0f);
-  EXPECT_FLOAT_EQ(if_false->data_sets[0].outputs[0].AsFloat()[1], 4.0f);
+  EXPECT_EQ(if_true->data_sets()[0].inputs[0].data[0], 1);
+  EXPECT_FLOAT_EQ(if_true->data_sets()[0].outputs[0].AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(if_true->data_sets()[0].outputs[0].AsFloat()[1], 2.0f);
+  EXPECT_EQ(if_false->data_sets()[0].inputs[0].data[0], 0);
+  EXPECT_FLOAT_EQ(if_false->data_sets()[0].outputs[0].AsFloat()[0], 3.0f);
+  EXPECT_FLOAT_EQ(if_false->data_sets()[0].outputs[0].AsFloat()[1], 4.0f);
 }
 
 } // namespace Test
@@ -117,8 +117,8 @@ TEST(BackendTestCase, LoopCasesArePresent) {
     EXPECT_EQ(attr.type(), AttributeProto::AttributeType::GRAPH);
     ASSERT_TRUE(attr.has_g());
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
@@ -128,11 +128,11 @@ TEST(BackendTestCase, LoopCasesArePresent) {
   }
 
   // Trip-count 3 stacks the constant [42] three times → shape [3, 1].
-  EXPECT_EQ(trip3->data_sets[0].outputs[0].shape[0], 3);
-  ASSERT_EQ(trip3->data_sets[0].outputs[0].element_count(), 3);
+  EXPECT_EQ(trip3->data_sets()[0].outputs[0].shape[0], 3);
+  ASSERT_EQ(trip3->data_sets()[0].outputs[0].element_count(), 3);
   // Trip-count 0 produces an empty leading axis → shape [0, 1].
-  EXPECT_EQ(trip0->data_sets[0].outputs[0].shape[0], 0);
-  EXPECT_EQ(trip0->data_sets[0].outputs[0].element_count(), 0);
+  EXPECT_EQ(trip0->data_sets()[0].outputs[0].shape[0], 0);
+  EXPECT_EQ(trip0->data_sets()[0].outputs[0].element_count(), 0);
 
   // ``test_cc_loop11_carried_state`` mirrors ONNX's ``test_loop11``:
   // trip-count 5, FLOAT[1] loop-carried state ``y = [-2]`` and a FLOAT[1]
@@ -146,8 +146,8 @@ TEST(BackendTestCase, LoopCasesArePresent) {
     ASSERT_EQ(node.ref_input().size(), 3u);
     ASSERT_EQ(node.ref_output().size(), 2u);
 
-    ASSERT_EQ(loop11->data_sets.size(), 1u);
-    const auto &ds = loop11->data_sets[0];
+    ASSERT_EQ(loop11->data_sets().size(), 1u);
+    const auto &ds = loop11->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 2u);
     // res_y is FLOAT[1] = [13].
@@ -208,8 +208,8 @@ TEST(BackendTestCase, ScanCasesArePresent) {
     EXPECT_TRUE(has_body);
     EXPECT_TRUE(has_num);
 
-    ASSERT_EQ(tc->data_sets.size(), 1u);
-    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
@@ -219,13 +219,13 @@ TEST(BackendTestCase, ScanCasesArePresent) {
   }
 
   // Trip-count 3 → output shape [3, 2] containing [[0, 1], [2, 3], [4, 5]].
-  EXPECT_EQ(trip3->data_sets[0].outputs[0].shape[0], 3);
-  ASSERT_EQ(trip3->data_sets[0].outputs[0].element_count(), 6);
-  EXPECT_FLOAT_EQ(trip3->data_sets[0].outputs[0].AsFloat()[0], 0.0f);
-  EXPECT_FLOAT_EQ(trip3->data_sets[0].outputs[0].AsFloat()[5], 5.0f);
+  EXPECT_EQ(trip3->data_sets()[0].outputs[0].shape[0], 3);
+  ASSERT_EQ(trip3->data_sets()[0].outputs[0].element_count(), 6);
+  EXPECT_FLOAT_EQ(trip3->data_sets()[0].outputs[0].AsFloat()[0], 0.0f);
+  EXPECT_FLOAT_EQ(trip3->data_sets()[0].outputs[0].AsFloat()[5], 5.0f);
   // Trip-count 0 → output shape [0, 2].
-  EXPECT_EQ(trip0->data_sets[0].outputs[0].shape[0], 0);
-  EXPECT_EQ(trip0->data_sets[0].outputs[0].element_count(), 0);
+  EXPECT_EQ(trip0->data_sets()[0].outputs[0].shape[0], 0);
+  EXPECT_EQ(trip0->data_sets()[0].outputs[0].element_count(), 0);
 }
 
 } // namespace Test

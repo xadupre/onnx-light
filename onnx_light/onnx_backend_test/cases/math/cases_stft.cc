@@ -52,7 +52,7 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t signal_count = 65536;
     const int64_t scalar_count = 1;
     const int64_t output_count = 1 * 127 * 513 * 2;
-    RegisterLazyBenchmarkCase(
+    Expect(
         registry, std::move(node), "test_cc_stft_benchmark", {opset_v17},
         {signal_count, scalar_count, scalar_count}, {output_count}, [stft_v17, shape]() -> IoData {
           Tensor signal_b = Tensor::FromFloat("signal", shape, Randn<float>(shape, 446));

@@ -68,15 +68,14 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> shape = {4, 4096, 1};
     NodeProto node = MakeDFTNodeV20(/*inverse=*/false, /*onesided=*/false);
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_dft_benchmark", {opset_v20}, {4 * 4096, 1},
-        {4 * 4096 * 2}, [dft_v20, shape]() -> IoData {
-          Tensor x_real_b = Tensor::FromFloat("x", shape, Randn<float>(shape, 445));
-          Tensor axis = Tensor::FromInt64("axis", {}, {1});
-          Tensor y = dft_v20(x_real_b, /*dft_length=*/nullptr, 1, /*onesided=*/false,
-                             /*inverse=*/false);
-          return IoData{{std::move(x_real_b), std::move(axis)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_dft_benchmark", {opset_v20}, {4 * 4096, 1},
+           {4 * 4096 * 2}, [dft_v20, shape]() -> IoData {
+             Tensor x_real_b = Tensor::FromFloat("x", shape, Randn<float>(shape, 445));
+             Tensor axis = Tensor::FromInt64("axis", {}, {1});
+             Tensor y = dft_v20(x_real_b, /*dft_length=*/nullptr, 1, /*onesided=*/false,
+                                /*inverse=*/false);
+             return IoData{{std::move(x_real_b), std::move(axis)}, {std::move(y)}};
+           });
     return;
   }
 

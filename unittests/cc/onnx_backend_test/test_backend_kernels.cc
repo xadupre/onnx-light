@@ -77,7 +77,7 @@ TEST(BackendKernels, SplitKernelRunsOnBackendTestCases) {
     const KernelContext ctx{DefaultOpset(GetDefaultOpsetVersion(tc.model()))};
     const Split split_kernel{ctx};
 
-    for (const DataSet &ds : tc.data_sets) {
+    for (const DataSet &ds : tc.data_sets()) {
       ASSERT_FALSE(ds.inputs.empty());
       const Tensor &input = ds.inputs[0];
       const std::vector<int64_t> split =

@@ -88,8 +88,8 @@ void RunBackendCasesFor(const std::string &op_type,
     SCOPED_TRACE(tc.name);
 
     bool ran_case = false;
-    for (size_t ds_idx = 0; ds_idx < tc.data_sets.size(); ++ds_idx) {
-      const DataSet &ds = tc.data_sets[ds_idx];
+    for (size_t ds_idx = 0; ds_idx < tc.data_sets().size(); ++ds_idx) {
+      const DataSet &ds = tc.data_sets()[ds_idx];
       if (!accept_data_set(ds)) {
         continue;
       }
@@ -510,7 +510,7 @@ TEST(BackendRunModel, SequenceMap) {
     const onnx_kernels::kernel::KernelContext kctx(
         DefaultOpset(GetDefaultOpsetVersion(tc.model())));
 
-    for (const DataSet &ds : tc.data_sets) {
+    for (const DataSet &ds : tc.data_sets()) {
       RuntimeContext rt(kctx);
       for (const Tensor &t : ds.inputs) {
         rt.Set(t.name, t);

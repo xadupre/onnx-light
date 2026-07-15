@@ -37,15 +37,14 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMod
     constexpr int64_t H = 128;
     constexpr int64_t W = 128;
     constexpr int64_t x_count = N * C * H * W;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_instancenorm_example_benchmark", {opset},
-        {x_count, C, C}, {x_count}, [instancenorm_kernel]() -> IoData {
-          Tensor x = Tensor::FromFloat("", {N, C, H, W}, Randn<float>({N, C, H, W}, 2001));
-          Tensor scale = Tensor::FromFloat("", {C}, Randn<float>({C}, 2002));
-          Tensor bias = Tensor::FromFloat("", {C}, Randn<float>({C}, 2003));
-          Tensor y = instancenorm_kernel(x, scale, bias);
-          return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_instancenorm_example_benchmark", {opset},
+           {x_count, C, C}, {x_count}, [instancenorm_kernel]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {N, C, H, W}, Randn<float>({N, C, H, W}, 2001));
+             Tensor scale = Tensor::FromFloat("", {C}, Randn<float>({C}, 2002));
+             Tensor bias = Tensor::FromFloat("", {C}, Randn<float>({C}, 2003));
+             Tensor y = instancenorm_kernel(x, scale, bias);
+             return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
+           });
     return;
   }
 

@@ -382,8 +382,8 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
     // model's output ``ValueInfo``. Outputs whose graph type is not a plain
     // tensor (sequence / optional / map) are skipped because a single
     // ``DataSet`` tensor does not describe the container shape.
-    for (size_t ds_idx = 0; ds_idx < tc.data_sets.size(); ++ds_idx) {
-      const DataSet &ds = tc.data_sets[ds_idx];
+    for (size_t ds_idx = 0; ds_idx < tc.data_sets().size(); ++ds_idx) {
+      const DataSet &ds = tc.data_sets()[ds_idx];
       SCOPED_TRACE("data_set[" + std::to_string(ds_idx) + "]");
 
       std::unordered_map<std::string, const DataTensor *> ds_inputs_by_name;

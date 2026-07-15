@@ -33,18 +33,17 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "case_change_action", std::string("LOWER"));
 
     constexpr int64_t count = 262144;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_string_normalizer_lower_benchmark", {opset}, {count},
-        {count}, [string_normalizer, count]() -> IoData {
-          std::vector<std::string> values(static_cast<size_t>(count));
-          for (size_t i = 0; i < values.size(); ++i) {
-            values[i] = (i % 3 == 0) ? "Hello" : ((i % 3 == 1) ? "World" : "FOO");
-          }
-          Tensor x = Tensor::FromStrings("", {count}, values);
-          Tensor y = string_normalizer(x, CaseChangeAction::kLower,
-                                       /*is_case_sensitive=*/false, {});
-          return IoData{{std::move(x)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_string_normalizer_lower_benchmark", {opset}, {count},
+           {count}, [string_normalizer, count]() -> IoData {
+             std::vector<std::string> values(static_cast<size_t>(count));
+             for (size_t i = 0; i < values.size(); ++i) {
+               values[i] = (i % 3 == 0) ? "Hello" : ((i % 3 == 1) ? "World" : "FOO");
+             }
+             Tensor x = Tensor::FromStrings("", {count}, values);
+             Tensor y = string_normalizer(x, CaseChangeAction::kLower,
+                                          /*is_case_sensitive=*/false, {});
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

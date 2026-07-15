@@ -674,7 +674,7 @@ void RegisterLoop13SeqCase(std::vector<TestCase> &registry) {
   ds.inputs.push_back(trip_count);
   ds.inputs.push_back(cond);
   ds.outputs.push_back(stacked);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }
@@ -992,7 +992,7 @@ void RegisterLoop16SeqNoneCase(std::vector<TestCase> &registry) {
   ds.inputs.push_back(trip_count);
   ds.inputs.push_back(cond);
   ds.outputs.push_back(stacked);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }

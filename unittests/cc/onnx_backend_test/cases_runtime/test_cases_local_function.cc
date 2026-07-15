@@ -46,7 +46,7 @@ const TestCase *Find(const std::vector<TestCase> &cases, const std::string &name
 // Runs ``tc`` through ``RunModel`` and verifies that every data set's
 // expected outputs are reproduced bit-for-bit by the runtime.
 void ExpectModelMatchesDataSets(const TestCase &tc) {
-  for (const DataSet &ds : tc.data_sets) {
+  for (const DataSet &ds : tc.data_sets()) {
     RuntimeContext rt(KernelContext(DefaultOpset(kDefaultOpsetVersion)));
     for (const Tensor &in : ds.inputs) {
       rt.Set(in.name, in);

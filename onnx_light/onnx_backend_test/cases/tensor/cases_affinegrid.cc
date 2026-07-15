@@ -81,16 +81,15 @@ void RegisterAffineGridCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("grid");
     AddAttribute<int64_t>(node, "align_corners", 0);
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_affine_grid_2d_benchmark", {opset}, {6, 4},
-        {1448 * 1448 * 2}, [ag_kernel]() -> IoData {
-          Tensor theta = Tensor::FromFloat("", {1, 2, 3}, {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f});
-          Tensor size = Tensor::FromInt64("", {4}, {1, 1, 1448, 1448});
-          kernel::AffineGrid::Attributes attrs;
-          attrs.align_corners = 0;
-          Tensor grid = ag_kernel(theta, size, attrs);
-          return IoData{{std::move(theta), std::move(size)}, {std::move(grid)}};
-        });
+    Expect(registry, std::move(node), "test_affine_grid_2d_benchmark", {opset}, {6, 4},
+           {1448 * 1448 * 2}, [ag_kernel]() -> IoData {
+             Tensor theta = Tensor::FromFloat("", {1, 2, 3}, {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f});
+             Tensor size = Tensor::FromInt64("", {4}, {1, 1, 1448, 1448});
+             kernel::AffineGrid::Attributes attrs;
+             attrs.align_corners = 0;
+             Tensor grid = ag_kernel(theta, size, attrs);
+             return IoData{{std::move(theta), std::move(size)}, {std::move(grid)}};
+           });
     return;
   }
 

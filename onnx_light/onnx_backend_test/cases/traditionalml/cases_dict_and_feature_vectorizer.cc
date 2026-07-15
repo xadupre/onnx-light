@@ -85,8 +85,8 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode)
                           static_cast<int32_t>(DataType::INT64));
 
     // Store the map input in the DataSet.
-    registry.back().data_sets[0].inputs.clear();
-    registry.back().data_sets[0].maps = {
+    registry.back().data_sets()[0].inputs.clear();
+    registry.back().data_sets()[0].maps = {
         Map("x", Tensor::FromStrings("x_keys", {static_cast<int64_t>(keys.size())}, keys),
             Tensor::FromInt64("x_values", {static_cast<int64_t>(values.size())}, values)),
     };
@@ -113,8 +113,8 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode)
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::INT64),
                           static_cast<int32_t>(DataType::FLOAT));
 
-    registry.back().data_sets[0].inputs.clear();
-    registry.back().data_sets[0].maps = {
+    registry.back().data_sets()[0].inputs.clear();
+    registry.back().data_sets()[0].maps = {
         Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
             Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values)),
     };
@@ -142,14 +142,13 @@ void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mo
 
     AddIntsAttr(node, "inputdimensions", {2, 1});
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_feature_vectorizer_two_float_benchmark",
-        {default_opset, opset}, {16384, 8192}, {24576}, [fv]() -> IoData {
-          Tensor x0 = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2711));
-          Tensor x1 = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2712));
-          Tensor y = fv({x0, x1}, {2, 1});
-          return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_feature_vectorizer_two_float_benchmark",
+           {default_opset, opset}, {16384, 8192}, {24576}, [fv]() -> IoData {
+             Tensor x0 = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2711));
+             Tensor x1 = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2712));
+             Tensor y = fv({x0, x1}, {2, 1});
+             return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
+           });
     return;
   }
 

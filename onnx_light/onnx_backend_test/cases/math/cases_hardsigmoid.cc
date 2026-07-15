@@ -30,13 +30,12 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     beta->set_type(AttributeProto::FLOAT);
     beta->set_f(0.6f);
     const int64_t n = kBenchmarkElementwiseSize;
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_hardsigmoid_benchmark", {opset},
-                              {n}, {n}, [hard_sigmoid_kernel, n]() -> IoData {
-                                Tensor x =
-                                    Tensor::FromFloat("", {n}, Randn<float>({n}, 987654321ULL));
-                                Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
-                                return IoData{{std::move(x)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_hardsigmoid_benchmark", {opset}, {n}, {n},
+           [hard_sigmoid_kernel, n]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {n}, Randn<float>({n}, 987654321ULL));
+             Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

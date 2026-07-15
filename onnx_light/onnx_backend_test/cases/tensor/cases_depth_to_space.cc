@@ -42,17 +42,16 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeDepthToSpaceNode(2, "DCR");
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_depthtospace_dcr_benchmark", {opset},
-        {1 * 8 * 512 * 1024}, {1 * 8 * 512 * 1024}, [d2s]() -> IoData {
-          Tensor input =
-              Tensor::FromFloat("", {1, 8, 512, 1024}, Randn<float>({1, 8, 512, 1024}, 2001));
-          kernel::DepthToSpace::Attributes attrs;
-          attrs.blocksize = 2;
-          attrs.mode = "DCR";
-          Tensor output = d2s(input, attrs);
-          return IoData{{std::move(input)}, {std::move(output)}};
-        });
+    Expect(registry, std::move(node), "test_cc_depthtospace_dcr_benchmark", {opset},
+           {1 * 8 * 512 * 1024}, {1 * 8 * 512 * 1024}, [d2s]() -> IoData {
+             Tensor input =
+                 Tensor::FromFloat("", {1, 8, 512, 1024}, Randn<float>({1, 8, 512, 1024}, 2001));
+             kernel::DepthToSpace::Attributes attrs;
+             attrs.blocksize = 2;
+             attrs.mode = "DCR";
+             Tensor output = d2s(input, attrs);
+             return IoData{{std::move(input)}, {std::move(output)}};
+           });
     return;
   }
 

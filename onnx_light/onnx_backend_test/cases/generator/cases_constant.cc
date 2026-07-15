@@ -43,12 +43,12 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     const kernel::KernelContext ctx{opset};
     const kernel::Constant constant_kernel{ctx};
 
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_constant_benchmark", {opset},
-                              /*in_counts=*/{}, {kBenchmarkElementwiseSize},
-                              [constant_kernel, value]() mutable -> IoData {
-                                Tensor y = constant_kernel(std::move(value));
-                                return IoData{/*inputs=*/{}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_constant_benchmark", {opset},
+           /*in_counts=*/{}, {kBenchmarkElementwiseSize},
+           [constant_kernel, value]() mutable -> IoData {
+             Tensor y = constant_kernel(std::move(value));
+             return IoData{/*inputs=*/{}, {std::move(y)}};
+           });
     return;
   }
 

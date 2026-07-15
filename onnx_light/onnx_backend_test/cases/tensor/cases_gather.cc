@@ -36,19 +36,18 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeGatherNode(0);
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_gather_0_benchmark", {opset},
-        {kBenchmarkElementwiseSize, 4096}, {kBenchmarkElementwiseSize},
-        [gather_kernel]() -> IoData {
-          Tensor data = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
-          std::vector<int64_t> index_values(4096);
-          for (int64_t i = 0; i < 4096; ++i) {
-            index_values[static_cast<std::size_t>(i)] = i;
-          }
-          Tensor indices = Tensor::FromInt64("", {4096}, index_values);
-          Tensor output = gather_kernel(data, indices, 0);
-          return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
-        });
+    Expect(registry, std::move(node), "test_cc_gather_0_benchmark", {opset},
+           {kBenchmarkElementwiseSize, 4096}, {kBenchmarkElementwiseSize},
+           [gather_kernel]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+             std::vector<int64_t> index_values(4096);
+             for (int64_t i = 0; i < 4096; ++i) {
+               index_values[static_cast<std::size_t>(i)] = i;
+             }
+             Tensor indices = Tensor::FromInt64("", {4096}, index_values);
+             Tensor output = gather_kernel(data, indices, 0);
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
     return;
   }
 

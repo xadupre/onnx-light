@@ -26,12 +26,12 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     axis->set_i(1);
     const std::vector<int64_t> shape = {2048, 2048};
     const int64_t count = 2048 * 2048;
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_logsoftmax_benchmark", {opset},
-                              {count}, {count}, [logsoftmax_kernel, shape]() -> IoData {
-                                Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 432));
-                                Tensor y = logsoftmax_kernel(x, 1);
-                                return IoData{{std::move(x)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_logsoftmax_benchmark", {opset}, {count}, {count},
+           [logsoftmax_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 432));
+             Tensor y = logsoftmax_kernel(x, 1);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

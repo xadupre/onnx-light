@@ -42,19 +42,18 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     constexpr int64_t x_count = 1 * 32 * 128 * 128;
     constexpr int64_t w_count = 32 * 32 * 3 * 3;
     constexpr int64_t y_count = 1 * 32 * 130 * 130;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_convtranspose_benchmark", {opset}, {x_count, w_count},
-        {y_count}, [ct]() -> IoData {
-          Tensor X =
-              Tensor::FromFloat("X", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1401));
-          Tensor W = Tensor::FromFloat("W", {32, 32, 3, 3}, Randn<float>({32, 32, 3, 3}, 1402));
-          Tensor B;
-          kernel::ConvTranspose::Attributes attrs;
-          attrs.kernel_shape = {3, 3};
-          Tensor Y = ct(X, W, B, attrs);
-          Y.name = "Y";
-          return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_convtranspose_benchmark", {opset},
+           {x_count, w_count}, {y_count}, [ct]() -> IoData {
+             Tensor X =
+                 Tensor::FromFloat("X", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1401));
+             Tensor W = Tensor::FromFloat("W", {32, 32, 3, 3}, Randn<float>({32, 32, 3, 3}, 1402));
+             Tensor B;
+             kernel::ConvTranspose::Attributes attrs;
+             attrs.kernel_shape = {3, 3};
+             Tensor Y = ct(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
     return;
   }
 

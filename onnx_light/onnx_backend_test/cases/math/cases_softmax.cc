@@ -26,12 +26,12 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     axis->set_i(1);
     const std::vector<int64_t> shape = {2048, 2048};
     const int64_t count = 2048 * 2048;
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_softmax_benchmark", {opset},
-                              {count}, {count}, [softmax_kernel, shape]() -> IoData {
-                                Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 431));
-                                Tensor y = softmax_kernel(x, 1);
-                                return IoData{{std::move(x)}, {std::move(y)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_softmax_benchmark", {opset}, {count}, {count},
+           [softmax_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 431));
+             Tensor y = softmax_kernel(x, 1);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

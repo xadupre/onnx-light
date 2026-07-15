@@ -234,14 +234,10 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def_rw("rtol", &TestCase::rtol)
       .def_rw("atol", &TestCase::atol)
       .def_prop_ro(
-          "data_sets",
-          [](TestCase &tc) -> std::vector<DataSet> & {
-            tc.Materialize();
-            return tc.data_sets;
-          },
+          "data_sets", [](TestCase &tc) -> std::vector<DataSet> & { return tc.data_sets(); },
           nb::rv_policy::reference_internal,
           "Returns the input/output data sets of this test case, materializing "
-          "them first for lazily-built (benchmark) cases.")
+          "them first for lazily-built cases.")
       .def_prop_ro(
           "model", [](TestCase &tc) -> ModelProto & { return tc.model(); },
           nb::rv_policy::reference_internal,

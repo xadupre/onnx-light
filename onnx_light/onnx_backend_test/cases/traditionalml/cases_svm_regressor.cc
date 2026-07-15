@@ -65,14 +65,13 @@ void RegisterSVMRegressorCases(std::vector<TestCase> &registry, TestMode mode) {
     post_transform->set_type(AttributeProto::AttributeType::STRING);
     post_transform->set_s("NONE");
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_svmregressor_linear_benchmark", {default_opset, opset},
-        {16384}, {8192}, [svm]() -> IoData {
-          Tensor x = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2681));
-          Tensor y = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f}, {0.5f},
-                                           "LINEAR", 0.0f, 0.0f, 0.0f);
-          return IoData{{std::move(x)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_svmregressor_linear_benchmark",
+           {default_opset, opset}, {16384}, {8192}, [svm]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2681));
+             Tensor y = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f}, {0.5f},
+                                              "LINEAR", 0.0f, 0.0f, 0.0f);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
     return;
   }
 

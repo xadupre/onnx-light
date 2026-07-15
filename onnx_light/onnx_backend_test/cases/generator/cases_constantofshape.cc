@@ -77,14 +77,14 @@ void RegisterConstantOfShapeCases(std::vector<TestCase> &registry, TestMode mode
 
     const kernel::KernelContext ctx{opset};
     const kernel::ConstantOfShape constant_of_shape_kernel{ctx};
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_constantofshape_float_ones_benchmark", {opset}, {1},
-        {kBenchmarkElementwiseSize}, [constant_of_shape_kernel, shape_values, value]() -> IoData {
-          Tensor shape_input =
-              Tensor::FromInt64("x", {static_cast<int64_t>(shape_values.size())}, shape_values);
-          Tensor y = constant_of_shape_kernel(shape_input, value);
-          return IoData{{std::move(shape_input)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_constantofshape_float_ones_benchmark", {opset}, {1},
+           {kBenchmarkElementwiseSize},
+           [constant_of_shape_kernel, shape_values, value]() -> IoData {
+             Tensor shape_input =
+                 Tensor::FromInt64("x", {static_cast<int64_t>(shape_values.size())}, shape_values);
+             Tensor y = constant_of_shape_kernel(shape_input, value);
+             return IoData{{std::move(shape_input)}, {std::move(y)}};
+           });
     return;
   }
 

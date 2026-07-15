@@ -32,19 +32,18 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
     constexpr int64_t input_count = kN * kC;
     constexpr int64_t target_count = kN;
     constexpr int64_t loss_count = 1;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_negative_log_likelihood_loss_benchmark", {opset},
-        {input_count, target_count}, {loss_count}, [nll_kernel, kN, kC]() -> IoData {
-          Tensor input = Tensor::FromFloat("", {kN, kC}, Randn<float>({kN, kC}, 444));
-          std::vector<int64_t> target_values(kN);
-          for (int64_t i = 0; i < kN; ++i) {
-            target_values[i] = i % kC;
-          }
-          Tensor target = Tensor::FromInt64("", {kN}, target_values);
-          Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"mean",
-                                   /*has_ignore_index=*/false, /*ignore_index=*/0);
-          return IoData{{std::move(input), std::move(target)}, {std::move(loss)}};
-        });
+    Expect(registry, std::move(node), "test_cc_negative_log_likelihood_loss_benchmark", {opset},
+           {input_count, target_count}, {loss_count}, [nll_kernel, kN, kC]() -> IoData {
+             Tensor input = Tensor::FromFloat("", {kN, kC}, Randn<float>({kN, kC}, 444));
+             std::vector<int64_t> target_values(kN);
+             for (int64_t i = 0; i < kN; ++i) {
+               target_values[i] = i % kC;
+             }
+             Tensor target = Tensor::FromInt64("", {kN}, target_values);
+             Tensor loss = nll_kernel(input, target, /*weight=*/nullptr, /*reduction=*/"mean",
+                                      /*has_ignore_index=*/false, /*ignore_index=*/0);
+             return IoData{{std::move(input), std::move(target)}, {std::move(loss)}};
+           });
     return;
   }
 

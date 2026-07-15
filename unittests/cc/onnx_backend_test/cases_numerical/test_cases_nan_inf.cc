@@ -63,8 +63,8 @@ TEST(NanInfCases, AddInputsCarryNanAndInf) {
   const auto cases = Collect("nan_inf");
   const TestCase *tc = Find(cases, "test_cc_add_nan_inf");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   const auto *x = ds.inputs[0].AsFloat();
   const auto *y = ds.inputs[1].AsFloat();
@@ -83,7 +83,7 @@ TEST(NanInfCases, AddOutputPropagatesNanAndInf) {
   const auto cases = Collect("nan_inf");
   const TestCase *tc = Find(cases, "test_cc_add_nan_inf");
   ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs.size(), 1u);
   const float *z = ds.outputs[0].AsFloat();
   ASSERT_EQ(ds.outputs[0].element_count(), 6);
@@ -102,8 +102,8 @@ TEST(NanInfCases, TopKPicksPosInfFirstAsLargest) {
   const auto cases = Collect("nan_inf");
   const TestCase *tc = Find(cases, "test_cc_top_k_pos_inf");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs.size(), 2u);
   const float *values = ds.outputs[0].AsFloat();
   ASSERT_EQ(ds.outputs[0].element_count(), 3);
@@ -120,8 +120,8 @@ TEST(NanInfCases, TopKPicksNegInfFirstAsSmallest) {
   const auto cases = Collect("nan_inf");
   const TestCase *tc = Find(cases, "test_cc_top_k_neg_inf");
   ASSERT_NE(tc, nullptr);
-  ASSERT_EQ(tc->data_sets.size(), 1u);
-  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
   ASSERT_EQ(ds.outputs.size(), 2u);
   const float *values = ds.outputs[0].AsFloat();
   ASSERT_EQ(ds.outputs[0].element_count(), 3);

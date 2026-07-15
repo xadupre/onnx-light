@@ -31,19 +31,19 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("z");
 
     constexpr int64_t count = 262144;
-    RegisterLazyBenchmarkCase(registry, std::move(node), "test_cc_string_concat_benchmark", {opset},
-                              {count, count}, {count}, [string_concat, count]() -> IoData {
-                                std::vector<std::string> x_values(static_cast<size_t>(count));
-                                std::vector<std::string> y_values(static_cast<size_t>(count));
-                                for (size_t i = 0; i < x_values.size(); ++i) {
-                                  x_values[i] = (i % 2 == 0) ? "abc" : "hello ";
-                                  y_values[i] = (i % 2 == 0) ? "def" : "world";
-                                }
-                                Tensor x = Tensor::FromStrings("", {count}, x_values);
-                                Tensor y = Tensor::FromStrings("", {count}, y_values);
-                                Tensor z = string_concat(x, y);
-                                return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-                              });
+    Expect(registry, std::move(node), "test_cc_string_concat_benchmark", {opset}, {count, count},
+           {count}, [string_concat, count]() -> IoData {
+             std::vector<std::string> x_values(static_cast<size_t>(count));
+             std::vector<std::string> y_values(static_cast<size_t>(count));
+             for (size_t i = 0; i < x_values.size(); ++i) {
+               x_values[i] = (i % 2 == 0) ? "abc" : "hello ";
+               y_values[i] = (i % 2 == 0) ? "def" : "world";
+             }
+             Tensor x = Tensor::FromStrings("", {count}, x_values);
+             Tensor y = Tensor::FromStrings("", {count}, y_values);
+             Tensor z = string_concat(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
     return;
   }
 
@@ -196,7 +196,7 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     DataSet ds;
     ds.inputs = {x, y, z};
     ds.outputs = {w};
-    tc.data_sets.emplace_back(std::move(ds));
+    tc.data_sets().emplace_back(std::move(ds));
 
     registry.emplace_back(std::move(tc));
   }

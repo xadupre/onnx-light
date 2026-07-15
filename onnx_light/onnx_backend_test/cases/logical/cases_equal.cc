@@ -35,14 +35,13 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const std::vector<int64_t> shape = {1024, 4096};
     const int64_t count = 1024 * 4096;
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_equal_benchmark", {opset}, {count, count}, {count},
-        [equal_kernel, shape]() -> IoData {
-          Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9201));
-          Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9202));
-          Tensor z = equal_kernel(x, y);
-          return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-        });
+    Expect(registry, std::move(node), "test_cc_equal_benchmark", {opset}, {count, count}, {count},
+           [equal_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9201));
+             Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9202));
+             Tensor z = equal_kernel(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
     return;
   }
 

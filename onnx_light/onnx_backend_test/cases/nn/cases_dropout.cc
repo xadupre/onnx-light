@@ -26,17 +26,17 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data");
     node.add_output("output");
 
-    RegisterLazyBenchmarkCase(
-        registry, std::move(node), "test_cc_dropout_default_inference_benchmark", {opset},
-        {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [dropout_kernel]() -> IoData {
-          Tensor data = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 1601));
-          Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
-                      std::vector<uint8_t>(static_cast<size_t>(kBenchmarkElementwiseSize), 1));
-          Tensor output = dropout_kernel(data, /*ratio=*/0.5f,
-                                         /*training_mode=*/false, mask, kernel::Dropout::kNoSeed);
-          return IoData{{std::move(data)}, {std::move(output)}};
-        });
+    Expect(registry, std::move(node), "test_cc_dropout_default_inference_benchmark", {opset},
+           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [dropout_kernel]() -> IoData {
+             Tensor data = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
+                                             Randn<float>({kBenchmarkElementwiseSize}, 1601));
+             Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
+                         std::vector<uint8_t>(static_cast<size_t>(kBenchmarkElementwiseSize), 1));
+             Tensor output =
+                 dropout_kernel(data, /*ratio=*/0.5f,
+                                /*training_mode=*/false, mask, kernel::Dropout::kNoSeed);
+             return IoData{{std::move(data)}, {std::move(output)}};
+           });
     return;
   }
 

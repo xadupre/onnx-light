@@ -94,7 +94,7 @@ void RegisterOptionalInputCase(const std::string &name, const std::string &op_ty
   DataSet ds;
   ds.inputs.push_back(named_input);
   ds.outputs.push_back(named_output);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }
@@ -212,7 +212,7 @@ void RegisterOptionalGetElementSequenceCase(const std::string &name, bool with_o
     ds.inputs.push_back(t);
   }
   ds.outputs.push_back(stacked);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }
@@ -264,7 +264,7 @@ void RegisterOptionalHasElementEmptyCase(const std::string &name, bool with_empt
 
   DataSet ds;
   ds.outputs.push_back(expected);
-  tc.data_sets.emplace_back(std::move(ds));
+  tc.data_sets().emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
 }

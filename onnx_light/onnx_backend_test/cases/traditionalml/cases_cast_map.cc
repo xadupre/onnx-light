@@ -83,8 +83,8 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::FLOAT));
 
     // Store the map input in the DataSet.
-    registry.back().data_sets[0].inputs.clear();
-    registry.back().data_sets[0].maps = {
+    registry.back().data_sets()[0].inputs.clear();
+    registry.back().data_sets()[0].maps = {
         Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
             Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values)),
     };
@@ -110,8 +110,8 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
            "backend-test", registry);
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::FLOAT));
 
-    registry.back().data_sets[0].inputs.clear();
-    registry.back().data_sets[0].maps = {
+    registry.back().data_sets()[0].inputs.clear();
+    registry.back().data_sets()[0].maps = {
         Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
             Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values)),
     };
@@ -136,8 +136,8 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
            "backend-test", registry);
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::STRING));
 
-    registry.back().data_sets[0].inputs.clear();
-    registry.back().data_sets[0].maps = {
+    registry.back().data_sets()[0].inputs.clear();
+    registry.back().data_sets()[0].maps = {
         Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
             Tensor::FromStrings("x_values", {static_cast<int64_t>(values.size())}, values)),
     };

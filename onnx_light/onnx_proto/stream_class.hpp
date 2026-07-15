@@ -422,14 +422,14 @@ template <typename cls> bool _SerializeToFileDescriptor(cls &self, int fd, Seria
   return stream.Flush();
 }
 
-template <typename cls> std::string _SerializeAsString(cls &self) {
+template <typename cls> std::string _SerializeAsString(const cls &self) {
   std::string out;
   SerializeOptions opts;
   _SerializeToString(self, out, opts);
   return out;
 }
 
-template <typename cls> bool _SerializeToArray(cls &self, void *data, int size) {
+template <typename cls> bool _SerializeToArray(const cls &self, void *data, int size) {
   EXT_ENFORCE(data != nullptr, "SerializeToArray: data pointer must not be null.");
   EXT_ENFORCE(size >= 0, "SerializeToArray: size must be non-negative.");
   std::string out;
@@ -443,7 +443,7 @@ template <typename cls> bool _SerializeToArray(cls &self, void *data, int size) 
   return true;
 }
 
-template <typename cls> bool _SerializeToOstream(cls &self, std::ostream *output) {
+template <typename cls> bool _SerializeToOstream(const cls &self, std::ostream *output) {
   EXT_ENFORCE(output != nullptr, "SerializeToOstream: output stream pointer must not be null.");
   std::string out;
   SerializeOptions opts;

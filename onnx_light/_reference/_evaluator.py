@@ -211,14 +211,14 @@ class ReferenceEvaluator:
         # Map-typed graph inputs (``map(K, V)``) are consumed by the C++ kernels
         # for ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap`` through a
         # two-tensor naming convention: ``<name>_keys`` / ``<name>_values``.
-        # Expand these inputs so callers feed (and the runtime receives) the tensors
-        # directly by those names, keeping all map-handling logic in C++.
+        # Callers feed map inputs as a Python ``dict`` under the original graph-input
+        # name (e.g. ``{"x": {2: 2.5}}``); :meth:`_expand_map_feeds` splits the dict
+        # into the ``<name>_keys`` / ``<name>_values`` tensors before dispatching to
+        # the runtime.  ``_public_input_names`` exposes the original name in
+        # :attr:`input_names` so callers see a single entry per map input.
         #
-        # ``_map_inputs`` records, for every such graph input, the
-        # ``(key_type, value_type)`` pair (``TensorProto`` enum values). As a
-        # convenience, :meth:`run` also accepts a Python ``dict`` fed under the
-        # original map-input name (e.g. ``{"x": {2: 2.5}}``) and splits it into
-        # the ``<name>_keys`` / ``<name>_values`` tensors expected by the runtime.
+        # ``_map_inputs`` records, for every map-typed graph input, the
+        # ``(key_type, value_type)`` pair (``TensorProto`` enum values).
         self._map_inputs: dict[str, tuple[int, int]] = {}
         # ``_sequence_inputs`` records graph inputs declared as ``seq(T)``. Such
         # inputs are fed as a Python ``list``/``tuple`` of arrays (one per
@@ -232,12 +232,19 @@ class ReferenceEvaluator:
         self._optional_sequence_inputs: set[str] = set()
         if graph_inputs is not None:
             inputs: list[str] = []
+            public_inputs: list[str] = []
             for vi in graph_inputs:
                 if vi.name in initializers:
                     continue
                 if vi.type.has_map_type():
+                    # Internally the runtime uses the two-tensor convention
+                    # ``<name>_keys`` / ``<name>_values``; these are the names
+                    # validated in ``run()``. Externally (``input_names``), only
+                    # the original graph-input name is exposed so that callers
+                    # feed a Python ``dict`` under that name.
                     inputs.append(f"{vi.name}_keys")
                     inputs.append(f"{vi.name}_values")
+                    public_inputs.append(vi.name)
                     mt = vi.type.map_type
                     self._map_inputs[vi.name] = (
                         int(mt.key_type),
@@ -256,12 +263,20 @@ class ReferenceEvaluator:
                     ):
                         self._optional_sequence_inputs.add(vi.name)
                     inputs.append(vi.name)
+                    public_inputs.append(vi.name)
         else:
             assert self._function is not None
             inputs = list(self._function.input)
+            public_inputs = inputs
 
+        # ``_input_names`` / ``_input_names_set`` use the internally-expanded
+        # names (``<map>_keys`` / ``<map>_values`` for map-typed inputs) for
+        # validation inside ``run()`` (after ``_expand_map_feeds``).
+        # ``_public_input_names`` exposes the original graph-input names so
+        # callers see the map input as a single entry and feed a Python ``dict``.
         self._input_names: list[str] = inputs
         self._input_names_set: frozenset[str] = frozenset(self._input_names)
+        self._public_input_names: list[str] = public_inputs
         self._output_names: list[str] = list(outputs)
 
         # Pre-compute the opset version and KernelContext once at construction
@@ -507,8 +522,12 @@ class ReferenceEvaluator:
 
         Inputs that are also listed in the graph initializers are
         omitted, since the caller does not have to supply them.
+
+        Map-typed (``map(K, V)``) inputs are listed under their original
+        graph-input name.  Feed them as a Python ``dict`` (e.g.
+        ``{"x": {10: 1.5, 30: 2.5}}``) when calling :meth:`run`.
         """
-        return list(self._input_names)
+        return list(self._public_input_names)
 
     @property
     def output_names(self) -> list[str]:
@@ -552,8 +571,9 @@ class ReferenceEvaluator:
         feed_inputs:
             Mapping of input name to value. Tensor inputs are fed as a
             :class:`numpy.ndarray`; ``seq(T)`` inputs are fed as a ``list``
-            (or ``tuple``) of arrays, one per sequence element. Every name
-            listed by :attr:`input_names` must be present.
+            (or ``tuple``) of arrays, one per sequence element; ``map(K, V)``
+            inputs are fed as a Python ``dict`` (e.g. ``{10: 1.5, 30: 2.5}``).
+            Every name listed by :attr:`input_names` must be present.
 
         Returns
         -------
@@ -583,7 +603,7 @@ class ReferenceEvaluator:
         if missing:
             raise ValueError(
                 f"Missing input(s) for ReferenceEvaluator.run: {sorted(missing)}. "
-                f"Expected: {self._input_names}, got: {list(feed_inputs)}."
+                f"Expected: {self._public_input_names}, got: {list(feed_inputs)}."
             )
 
         ctx = self._ctx

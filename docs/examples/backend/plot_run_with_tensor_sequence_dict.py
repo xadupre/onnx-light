@@ -13,10 +13,8 @@ of ONNX values at the graph boundary:
   Python ``list`` (or ``tuple``) of :class:`numpy.ndarray` objects, one per
   element; retrieve a ``list`` of :class:`numpy.ndarray` objects.
 * **Dictionary** – a key-value map (``map(K, V)``).  Feed a Python ``dict``
-  under the graph-input name; the evaluator automatically splits it into the
-  ``<name>_keys`` / ``<name>_values`` tensors expected by the runtime.
-  Map-typed outputs are returned as stacked float tensors whose columns
-  correspond to the class labels.
+  under the graph-input name.  Map-typed outputs are returned as stacked
+  float tensors whose columns correspond to the class labels.
 
 This example builds three small ONNX models – one per value kind – and
 demonstrates both *how to supply the inputs* and *how to read the outputs*.
@@ -118,15 +116,10 @@ for i, arr in enumerate(seq_output):
 # 3. Dictionary (map) input and tensor output
 # ++++++++++++++++++++++++++++++++++++++++++++
 #
-# A ``map(K, V)``-typed graph input is declared in the model with a
-# ``MapType``.  The runtime represents it internally as a pair of tensors
-# named ``<input>_keys`` and ``<input>_values``, which is what
-# :attr:`~onnx_light.onnx.reference.ReferenceEvaluator.input_names` shows.
-#
-# As a convenience, :meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run`
-# also accepts a plain Python ``dict`` supplied under the *original* graph
-# input name; the evaluator splits it into the two-tensor convention
-# automatically.
+# A ``map(K, V)``-typed graph input is fed as a Python ``dict`` under the
+# graph-input name.  Internally the runtime represents the map as two
+# sequences (keys and values; ``unordered_map`` in C++), but the Python API
+# accepts a plain ``dict`` and performs the split automatically.
 #
 # Here we use ``ai.onnx.ml::DictVectorizer`` to convert a
 # ``map(int64, float)`` input into a dense 1-D output tensor.  The
@@ -158,30 +151,14 @@ print("\n=== Dictionary model ===")
 print(pretty_onnx(dict_model))
 
 dict_sess = ReferenceEvaluator(dict_model)
-# The runtime expands the map input into two tensors internally.
-print("input_names :", dict_sess.input_names)  # ['d_keys', 'd_values']
+print("input_names :", dict_sess.input_names)  # ['d']
 print("output_names:", dict_sess.output_names)
 
-# --- Option A: feed as explicit key / value arrays ---
-dict_results_arrays = dict_sess.run(
-    None,
-    {
-        "d_keys": np.array([10, 30], dtype=np.int64),
-        "d_values": np.array([1.5, 2.5], dtype=np.float32),
-    },
-)
-print("\nOption A – explicit arrays:")
-print("  d_keys  :", np.array([10, 30], dtype=np.int64))
-print("  d_values:", np.array([1.5, 2.5], dtype=np.float32))
-print("  output y:", dict_results_arrays[0])
-
-# --- Option B: feed as a Python dict under the original input name ---
-dict_results_dict = dict_sess.run(None, {"d": {10: 1.5, 30: 2.5}})
-print("\nOption B – Python dict  { 10: 1.5, 30: 2.5 }:")
-print("  output y:", dict_results_dict[0])
-
-# Both options produce the same dense output vector.
-np.testing.assert_array_equal(dict_results_arrays[0], dict_results_dict[0])
+# Feed the map as a Python dict under the original input name.
+dict_results = dict_sess.run(None, {"d": {10: 1.5, 30: 2.5}})
+print("\nInput  d = { 10: 1.5, 30: 2.5 }")
+print("Output y :", dict_results[0])
+np.testing.assert_array_equal(dict_results[0], np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
 # ---------------------------------------------------------------------------
 # 4. Map (dictionary) output via ZipMap

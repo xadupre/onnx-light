@@ -1,7 +1,8 @@
 import unittest
 
-import onnx_light.onnx as onnxl
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
+
+import onnx_light.onnx as onnxl
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).

@@ -99,8 +99,10 @@ public:                                                                         
 #define FIELD_STR(name, order, doc)                                                                \
   FIELD(utils::String, name, order, doc)                                                           \
   inline void clear_##name() { name##_.clear(); }                                                  \
+  inline void set_##name(utils::String &&v) { name##_ = std::move(v); }                            \
   inline void set_##name(const char *v) { name##_ = v; }                                           \
   inline void set_##name(const std::string &v) { name##_ = v; }                                    \
+  inline void set_##name(std::string &&v) { name##_ = std::move(v); }                              \
   inline void set_##name(const utils::RefString &v) { name##_ = v; }
 
 #define FIELD_REPEATED_BASE(type, repeated_type, name, order, doc)                                 \
@@ -116,7 +118,7 @@ public:                                                                         
   inline const repeated_type *ptr_##name() const { return &name##_; }                              \
   inline type *add_##name() { return &name##_.add(); }                                             \
   inline type *add_##name(type &&v) {                                                              \
-    name##_.emplace_back(v);                                                                       \
+    name##_.emplace_back(std::move(v));                                                            \
     return &name##_.back();                                                                        \
   }                                                                                                \
   inline type *add_##name(const type &v) {                                                         \
@@ -151,6 +153,7 @@ public:                                                                         
   FIELD_REPEATED_BASE(type, utils::RepeatedStringField, name, order, doc)                          \
   inline void add_##name(const char *v) { name##_.push_back(utils::String(v, SIZE_MAX)); }         \
   inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
+  inline void add_##name(std::string &&v) { name##_.emplace_back(std::move(v)); }                  \
   inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }
 
 #define FIELD_REPEATED_PROTO(type, name, order, doc)                                               \

@@ -5,6 +5,7 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
@@ -119,7 +120,13 @@ public:
   /** Initializes by copying a pointer and explicit size. */
   explicit inline String(const char *ptr, size_t size) : value_(), null_(true) { set(ptr, size); }
   /** Initializes by copying a standard string. */
-  explicit String(const std::string &s) : value_(), null_(true) { set(s.data(), s.size()); }
+  explicit inline String(const std::string &s) : value_(s), null_(false) {
+    normalize_std_string_value();
+  }
+  /** Initializes by taking ownership from a standard string. */
+  explicit inline String(std::string &&s) noexcept : value_(std::move(s)), null_(false) {
+    normalize_std_string_value();
+  }
   /** Initializes by copying another owning string. */
   inline String(const String &s) : value_(s.value_), null_(s.null_) {}
   /** Initializes by taking ownership from another instance. */
@@ -162,6 +169,8 @@ public:
   String &operator=(const String &s);
   /** Assigns from a standard string. */
   String &operator=(const std::string &s);
+  /** Assigns by taking ownership from a standard string. */
+  String &operator=(std::string &&s) noexcept;
   /** Compares with a standard string. */
   bool operator==(const std::string &other) const;
   /** Compares with another owning string. */
@@ -200,6 +209,13 @@ public:
   inline int64_t toint64() const { return RefString(data(), size()).toint64(); }
 
 private:
+  /** Normalizes std::string-backed state after direct assignment. */
+  inline void normalize_std_string_value() {
+    if (!value_.empty() && value_.back() == 0) {
+      value_.pop_back();
+    }
+    null_ = false;
+  }
   /** Replaces the content with a copy of the provided buffer. */
   void set(const char *ptr, size_t size);
 };

@@ -92,9 +92,7 @@ bool String::operator==(const char *other) const {
 
 bool String::operator==(const RefString &other) const { return sv() == other.sv(); }
 
-bool String::operator==(const String &other) const {
-  return null_ == other.null_ && value_ == other.value_;
-}
+bool String::operator==(const String &other) const { return sv() == other.sv(); }
 
 bool String::operator==(const std::string &other) const { return sv() == std::string_view(other); }
 
@@ -186,7 +184,14 @@ String &String::operator=(const String &s) {
 }
 
 String &String::operator=(const std::string &s) {
-  set(s.data(), s.size());
+  value_ = s;
+  normalize_std_string_value();
+  return *this;
+}
+
+String &String::operator=(std::string &&s) noexcept {
+  value_ = std::move(s);
+  normalize_std_string_value();
   return *this;
 }
 

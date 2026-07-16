@@ -356,6 +356,35 @@ TEST(onnx_string, String_ConstructorFromStdString) {
   }
 }
 
+TEST(onnx_string, String_MoveFromStdStringAndProtoSetters) {
+  static_assert(std::is_nothrow_constructible<utils::String, std::string &&>::value);
+  static_assert(std::is_nothrow_assignable<utils::String &, std::string &&>::value);
+
+  std::string ctor_value = "move ctor std::string";
+  utils::String moved_ctor(std::move(ctor_value));
+  EXPECT_EQ(moved_ctor, "move ctor std::string");
+  EXPECT_FALSE(moved_ctor.null());
+
+  std::string assign_value("abc\0", 4);
+  utils::String moved_assign;
+  moved_assign = std::move(assign_value);
+  EXPECT_EQ(moved_assign, "abc");
+  EXPECT_EQ(moved_assign.size(), 3);
+  EXPECT_FALSE(moved_assign.null());
+
+  AttributeProto attr;
+  std::string attr_name = "moved-name";
+  attr.set_name(std::move(attr_name));
+  EXPECT_EQ(attr.ref_name(), "moved-name");
+  EXPECT_FALSE(attr.ref_name().null());
+
+  NodeProto node;
+  std::string input_name = "moved-value";
+  node.add_input(std::move(input_name));
+  ASSERT_EQ(node.ref_input().size(), 1u);
+  EXPECT_EQ(node.ref_input()[0], "moved-value");
+}
+
 TEST(onnx_string, String_ConstructorFromRefString) {
   utils::RefString ref1("reference data", 14);
   utils::String s1(ref1);

@@ -596,6 +596,7 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
 
   const float *scales = y_scale.AsFloat();
   const std::uint8_t *zp_bytes = y_zero_point.bytes();
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
 
   if (!blocked) {
     // Per-axis: use QuantizeAxisLoop (no scale_index buffer needed).
@@ -603,7 +604,6 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
     // all other types can read ZP bytes directly.
     const int64_t inner_stride = ComputeInnerStride(x.shape, axis);
     const int64_t axis_size = x.shape[static_cast<std::size_t>(axis)];
-    RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
     switch (output.data_type) {
     case static_cast<int32_t>(DataType::UINT8):
       QuantizeAxisLoop<uint8_t>(x, scales, reinterpret_cast<const uint8_t *>(zp_bytes),
@@ -656,7 +656,6 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   // Blocked quantization: compute a flat scale index for every element, then
   // dispatch to the block loop.  For UINT16/INT16 the ZP values must be
   // widened into a typed buffer to avoid strict-aliasing violations.
-  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
   detail::TemporaryTypedBuffer<int64_t> scale_index_buf(static_cast<std::size_t>(x.element_count()),
                                                         allocator,
                                                         "kernel::QuantizeLinear: scale-index");

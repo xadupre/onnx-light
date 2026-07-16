@@ -53,7 +53,8 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
   return kFallbackDefaultOpsetVersion;
 }
 
-// Returns true when the model contains a SequenceMap node.
+// Returns true when the model's top-level graph or any local function body
+// contains a SequenceMap node.
 //
 // SequenceMap produces sequence-typed outputs that are stored in
 // RuntimeContext::sequences_, not in RuntimeContext::tensors_. The allocator
@@ -65,9 +66,21 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
 // now disowns inherited tensor allocations and withholds the parent allocator
 // from child subgraph contexts, preventing the use-after-free that previously
 // required skipping those cases.
-bool HasSequenceMapOp(const ModelProto &model) {
-  for (const auto &node : model.ref_graph().ref_node()) {
+template <typename GraphLike> static bool GraphHasSequenceMap(const GraphLike &graph) {
+  for (const auto &node : graph.ref_node()) {
     if (node.ref_op_type().sv() == "SequenceMap") {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool HasSequenceMapOp(const ModelProto &model) {
+  if (GraphHasSequenceMap(model.ref_graph())) {
+    return true;
+  }
+  for (const auto &fn : model.ref_functions()) {
+    if (GraphHasSequenceMap(fn)) {
       return true;
     }
   }

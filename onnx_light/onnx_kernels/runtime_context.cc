@@ -444,8 +444,10 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.tensors() = tensors_;
   // Disown all allocations inherited from the parent so that the child
   // destructor does not attempt to Free slots the parent still holds.
-  // DisownAllocation() nulls allocation_owner_ while leaving allocation_
-  // readable, so subgraph nodes can still read outer-scope tensor values.
+  // DisownAllocation() nulls allocation_owner_ (preventing the child from
+  // releasing the slot) while leaving allocation_ valid, so subgraph nodes
+  // can still read outer-scope tensor data through the same memory without
+  // taking ownership of it.
   for (auto &kv : child.tensors()) {
     kv.second.DisownAllocation();
   }

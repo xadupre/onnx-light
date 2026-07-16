@@ -152,11 +152,10 @@ public:
   /// All attributes explicit. ``strides`` may be empty (treated as all 1),
   /// ``pads`` may be empty (treated as all 0) and ``dilations`` may be empty
   /// (treated as all 1).
-  Tensor operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                    const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
-                    int64_t p = 2, bool ceil_mode = false,
-                    const std::vector<int64_t> &dilations = {},
-                    const std::string &auto_pad = "NOTSET", RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides = {},
+                    const Shape &pads = {}, int64_t p = 2, bool ceil_mode = false,
+                    const Shape &dilations = {}, const std::string &auto_pad = "NOTSET",
+                    RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from the input shape, so the output
   /// buffer cannot in general alias the input buffer.

@@ -80,9 +80,8 @@ void ResolveAutoPadAxisLpPool(const std::string &auto_pad, int64_t in_dim, int64
 
 } // namespace
 
-Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                          const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                          int64_t p, bool ceil_mode, const std::vector<int64_t> &dilations,
+Tensor LpPool::operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
+                          const Shape &pads, int64_t p, bool ceil_mode, const Shape &dilations,
                           const std::string &auto_pad, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LpPool: x must be FLOAT.");

@@ -49,7 +49,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from onnx_light.onnx_proto import FunctionProto, NodeProto, TensorProto
+    from onnx_light.onnx_proto._helper import FunctionProto, NodeProto, TensorProto
 
 try:
     from ..onnx_py._onnxpygradient import (  # type: ignore[import]

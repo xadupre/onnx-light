@@ -588,8 +588,9 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
  * @return A fresh registry of test cases (Abs, Add equal-shape, Add scalar
  *         broadcast).
  */
-std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool include_big = false,
-                                       TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_API std::vector<TestCase> CollectTestCases(const std::string &op_type = "",
+                                                                   bool include_big = false,
+                                                                   TestMode mode = TestMode::TEST);
 
 /**
  * Collects C++-implemented backend test node cases whose
@@ -612,9 +613,9 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool inc
  * @throws std::regex_error if ``name_regex`` is not a valid ECMAScript
  *         regular expression.
  */
-std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
-                                             bool include_big = false,
-                                             TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_API std::vector<TestCase>
+CollectTestCasesByName(const std::string &name_regex, bool include_big = false,
+                       TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

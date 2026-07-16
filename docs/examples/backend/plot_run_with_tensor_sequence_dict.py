@@ -27,6 +27,7 @@ import numpy as np
 import onnx_light.onnx as onnxl
 from onnx_light.onnx import helper
 from onnx_light.onnx.reference import ReferenceEvaluator
+from onnx_light.onnx import numpy_helper
 from onnx_light.tools import pretty_onnx
 
 # ---------------------------------------------------------------------------
@@ -218,6 +219,45 @@ dicts = [dict(zip(class_labels, row)) for row in maps_tensor]
 print("\nReconstructed per-sample dicts:")
 for i, d in enumerate(dicts):
     print(f"  sample[{i}]:", d)
+
+#####################################
+# 5. Map of tensors – numpy_helper round-trip
+# ++++++++++++++++++++++++++++++++++++++++++++
+#
+# An ONNX map whose *values* are tensors – e.g.
+# ``map(int64, tensor(float))`` – is represented in Python as a plain
+# ``dict`` mapping integer (or string) keys to :class:`numpy.ndarray`
+# objects.
+#
+# Use :func:`~onnx_light.onnx.numpy_helper.from_dict` to serialize such a
+# dict to a :class:`~onnx_light.onnx.MapProto` and
+# :func:`~onnx_light.onnx.numpy_helper.to_dict` to recover it.  The key
+# type and the tensor element type are inferred automatically from the
+# Python objects.
+
+tensor_map = {
+    np.int64(0): np.array([1.0, 2.0, 3.0], dtype=np.float32),
+    np.int64(1): np.array([4.0, 5.0, 6.0], dtype=np.float32),
+    np.int64(2): np.array([7.0, 8.0, 9.0], dtype=np.float32),
+}
+
+map_proto = numpy_helper.from_dict(tensor_map, name="feature_map")
+print("\n=== Map of tensors – MapProto ===")
+print(
+    "key_type         :", int(map_proto.key_type), "(INT64 =", int(onnxl.TensorProto.INT64), ")"
+)
+print("values.elem_type :", int(map_proto.values.elem_type))
+print("number of entries:", len(map_proto.keys))
+
+# Recover the Python dict from the MapProto.
+recovered = numpy_helper.to_dict(map_proto)
+print("\nRecovered dict:")
+for k, v in recovered.items():
+    print(f"  key={k}  value={v}")
+
+# Verify round-trip fidelity.
+for k in tensor_map:
+    np.testing.assert_array_equal(recovered[k], tensor_map[k])
 
 #####################################
 # Gallery thumbnail

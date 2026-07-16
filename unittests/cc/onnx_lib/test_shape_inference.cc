@@ -606,7 +606,7 @@ TEST(onnx_shape_inference, ArrayFeatureExtractorSymbolicDimConvertsToStdString) 
   const std::string symbolic_dim = "K";
   TensorShapeProto::Dimension dim;
   dim.set_dim_param(symbolic_dim);
-  std::string converted = dim.dim_param().as_string();
+  std::string converted = dim.dim_param();
   EXPECT_EQ(converted, symbolic_dim);
 }
 

@@ -57,7 +57,7 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node) {
   const int n_inputs = node.input_size();
   EXT_ENFORCE_INVALID(!(n_inputs < 1), "ComputeShapeConcat: Concat requires at least one input.");
 
-  const OptimTensor &first = ctx.Get(node.input(0).as_string());
+  const OptimTensor &first = ctx.Get(node.input(0));
   const TensorType common_dtype = first.Dtype();
   const OptimShape &first_shape = first.Shape();
   const int rank = static_cast<int>(first_shape.Rank());
@@ -81,10 +81,10 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node) {
   expressions::DimType axis_dim = ToDimType(first_shape[axis]);
 
   for (int i = 1; i < n_inputs; ++i) {
-    const OptimTensor &t = ctx.Get(node.input(i).as_string());
+    const OptimTensor &t = ctx.Get(node.input(i));
     EXT_ENFORCE_INVALID(t.Dtype() == common_dtype, "ComputeShapeConcat: input '",
-                        node.input(i).as_string(), "' has a dtype that differs from input '",
-                        node.input(0).as_string(), "'.");
+                        node.input(i), "' has a dtype that differs from input '",
+                        node.input(0), "'.");
     const OptimShape &shape = t.Shape();
     EXT_ENFORCE_INVALID(!(static_cast<int>(shape.Rank()) != rank), "ComputeShapeConcat: input ", i,
                         " has rank ", shape.Rank(), " != ", rank, " (first input).");
@@ -108,7 +108,7 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node) {
   if (resolved_axis == 0 && rank == 1) {
     bool all_have_vas = first.HasValueAsShape();
     for (int i = 1; all_have_vas && i < n_inputs; ++i) {
-      all_have_vas = ctx.Get(node.input(i).as_string()).HasValueAsShape();
+      all_have_vas = ctx.Get(node.input(i)).HasValueAsShape();
     }
     if (all_have_vas) {
       OptimShape value_as_shape;
@@ -119,7 +119,7 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node) {
       };
       append(first.ValueAsShape());
       for (int i = 1; i < n_inputs; ++i) {
-        append(ctx.Get(node.input(i).as_string()).ValueAsShape());
+        append(ctx.Get(node.input(i)).ValueAsShape());
       }
       out_tensor.SetValueAsShape(std::move(value_as_shape));
     }

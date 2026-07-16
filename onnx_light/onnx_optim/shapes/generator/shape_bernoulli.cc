@@ -23,7 +23,7 @@ void ComputeShapeBernoulli(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeBernoulli: Bernoulli requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(node.input(0));
   OptimShape out_shape = input.Shape();
 
   // Output element type: from the ``dtype`` attribute when present,

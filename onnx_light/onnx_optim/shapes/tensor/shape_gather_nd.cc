@@ -24,8 +24,8 @@ void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeGatherND: GatherND requires two inputs (data, indices).");
 
-  const OptimTensor &data = ctx.Get(node.input(0).as_string());
-  const OptimTensor &indices = ctx.Get(node.input(1).as_string());
+  const OptimTensor &data = ctx.Get(node.input(0));
+  const OptimTensor &indices = ctx.Get(node.input(1));
 
   const TensorType dtype = data.Dtype();
   const OptimShape &data_shape = data.Shape();

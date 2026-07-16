@@ -136,11 +136,11 @@ TEST(onnx_string, RefString_Inequality) {
 
 TEST(onnx_string, RefString_AsString) {
   utils::RefString a("hello", 5);
-  std::string str = a.as_string();
+  std::string str = a;
   EXPECT_EQ(str, "hello");
 
   utils::RefString empty(nullptr, 0);
-  std::string emptyStr = empty.as_string();
+  std::string emptyStr = empty;
   EXPECT_EQ(emptyStr, "");
 }
 
@@ -250,11 +250,11 @@ TEST(onnx_string, String_Inequality) {
 
 TEST(onnx_string, String_AsString) {
   utils::String a("hello", 5);
-  std::string str = a.as_string();
+  std::string str = a;
   EXPECT_EQ(str, "hello");
 
   utils::String empty;
-  std::string emptyStr = empty.as_string();
+  std::string emptyStr = empty;
   EXPECT_EQ(emptyStr, "");
 }
 
@@ -542,34 +542,34 @@ TEST(onnx_proto, NodeProtoDomainKeepsExplicitEmptyString) {
 
 TEST(onnx_string, RefString_AsStringEdgeCases) {
   utils::RefString rs1("regular strings", 14);
-  std::string s1 = rs1.as_string();
+  std::string s1 = rs1;
   EXPECT_EQ(s1, "regular string");
 
   char data[] = {'t', 'e', 's', 't', '\0', '!'};
   utils::RefString rs2(data, 6);
-  std::string s2 = rs2.as_string();
+  std::string s2 = rs2;
   EXPECT_EQ(s2.size(), 6);
   EXPECT_EQ(s2[4], '\0');
 
   utils::RefString null_rs(nullptr, 0);
-  std::string s3 = null_rs.as_string();
+  std::string s3 = null_rs;
   EXPECT_TRUE(s3.empty());
   EXPECT_EQ(s3, "");
 }
 
 TEST(onnx_string, String_AsStringEdgeCases) {
   utils::String s1("1234567890123", 13);
-  std::string std_s1 = s1.as_string();
+  std::string std_s1 = s1;
   EXPECT_EQ(std_s1, "1234567890123");
 
   utils::String s2("test\0!", 6);
-  std::string std_s2 = s2.as_string();
+  std::string std_s2 = s2;
   EXPECT_EQ(std_s2.size(), 6);
   EXPECT_EQ(std_s2[4], '\0');
 
   // Empty string
   utils::String empty;
-  std::string std_s3 = empty.as_string();
+  std::string std_s3 = empty;
   EXPECT_TRUE(std_s3.empty());
   EXPECT_EQ(std_s3, "");
 }
@@ -613,13 +613,13 @@ TEST(onnx_proto, TensorProtoName2) {
   EXPECT_EQ(tp.name_.size(), 4);
   EXPECT_NE(tp.name_.data(), nullptr);
   EXPECT_EQ(tp.name_.data()[0], 't');
-  std::string check = tp.name_.as_string();
+  std::string check = tp.name_;
   EXPECT_EQ(name, check);
-  std::string check4 = tp.ref_name().as_string();
+  std::string check4 = tp.ref_name();
   EXPECT_EQ(name, check4);
   name = "TEST2";
   tp.set_name(name);
-  std::string check2 = tp.name_.as_string();
+  std::string check2 = tp.name_;
   EXPECT_EQ(name, check2);
 }
 
@@ -6948,7 +6948,7 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_InvokedAndDeleterAttached) {
   ParseOptions options;
   options.raw_data_callback = [&](TensorProto &t) -> std::function<void()> {
     ++callback_calls;
-    seen_name = t.ref_name().as_string();
+    seen_name = t.ref_name();
     seen_size = t.ref_raw_data().size();
     return [&deleter_called]() { deleter_called = true; };
   };
@@ -7038,7 +7038,7 @@ TEST(onnx_proto, ParseFromIstream_ModelProto) {
   EXPECT_TRUE(parsed.has_ir_version());
   EXPECT_EQ(parsed.ref_ir_version(), 8);
   EXPECT_TRUE(parsed.has_producer_name());
-  EXPECT_EQ(parsed.ref_producer_name().as_string(), "test_producer");
+  EXPECT_EQ(parsed.ref_producer_name(), "test_producer");
   EXPECT_TRUE(parsed.has_graph());
   EXPECT_EQ(parsed.ref_graph().ref_name(), "test_graph");
 }
@@ -7063,7 +7063,7 @@ TEST(onnx_proto, ParseFromIstream_TensorProto) {
   std::istringstream iss(serialized, std::ios::binary);
   TensorProto parsed;
   EXPECT_TRUE(parsed.ParseFromIstream(&iss));
-  EXPECT_EQ(parsed.ref_name().as_string(), "my_tensor");
+  EXPECT_EQ(parsed.ref_name(), "my_tensor");
   EXPECT_EQ(parsed.ref_dims().size(), 1u);
   EXPECT_EQ(parsed.ref_dims()[0], 2);
   EXPECT_EQ(parsed.ref_float_data().size(), 2u);

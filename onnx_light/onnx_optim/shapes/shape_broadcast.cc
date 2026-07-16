@@ -121,7 +121,7 @@ void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, 
   if (node.output_size() < 1) {
     return;
   }
-  const std::string out_name = node.output(0).as_string();
+  const std::string out_name = node.output(0);
   if (!ctx.Has(out_name)) {
     return;
   }

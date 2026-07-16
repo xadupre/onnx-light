@@ -182,7 +182,7 @@ static void resizeShapeInferenceVersioned(InferenceContext &ctx, int opset_versi
   const auto *const keep_aspect_ratio_policy_attr = ctx.getAttribute("keep_aspect_ratio_policy");
   KeepAspectRatioPolicy keep_aspect_ratio_policy = KeepAspectRatioPolicy::STRETCH;
   if (keep_aspect_ratio_policy_attr && keep_aspect_ratio_policy_attr->has_s()) {
-    auto str = keep_aspect_ratio_policy_attr->s().as_string();
+    auto str = keep_aspect_ratio_policy_attr->s();
     if (str == "stretch") {
       keep_aspect_ratio_policy = KeepAspectRatioPolicy::STRETCH;
     } else if (str == "not_larger") {

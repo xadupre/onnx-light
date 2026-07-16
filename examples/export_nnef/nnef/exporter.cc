@@ -476,7 +476,7 @@ AttributeValue ExtractAttribute(const AttributeProto &attr) {
   case AttributeProto::FLOAT:
     return static_cast<double>(attr.f());
   case AttributeProto::STRING:
-    return attr.s().as_string();
+    return attr.s();
   case AttributeProto::INTS: {
     std::vector<int64_t> v;
     for (auto x : attr.ints())
@@ -492,7 +492,7 @@ AttributeValue ExtractAttribute(const AttributeProto &attr) {
   case AttributeProto::STRINGS: {
     std::vector<std::string> v;
     for (const auto &x : attr.strings())
-      v.push_back(x.as_string());
+      v.push_back(x);
     return v;
   }
   case AttributeProto::TENSOR:
@@ -506,7 +506,7 @@ AttributeValue ExtractAttribute(const AttributeProto &attr) {
 std::map<std::string, AttributeValue> AttrsToDict(const NodeProto &node) {
   std::map<std::string, AttributeValue> out;
   for (const auto &a : node.attribute()) {
-    out[a.name().as_string()] = ExtractAttribute(a);
+    out[a.name()] = ExtractAttribute(a);
   }
   return out;
 }
@@ -640,7 +640,7 @@ void ConvConverter(ExportContext &ctx, const NodeProto &node,
     throw NNEFExportError("Conv requires at least input and weight");
   const NNEFTensor *init_w = nullptr;
   if (node.input().size() >= 2) {
-    init_w = ctx.GetInitializer(node.input(1).as_string());
+    init_w = ctx.GetInitializer(node.input(1));
   }
   int spatial_rank = 0;
   if (init_w != nullptr) {
@@ -674,7 +674,7 @@ ConverterFn MakePool(const std::string &nnef_op) {
                 const std::vector<std::string> &inputs, const std::vector<std::string> &outputs) {
         const auto *kernel = GetInts(attrs, "kernel_shape");
         if (kernel == nullptr)
-          throw NNEFExportError(node.op_type().as_string() + " requires kernel_shape");
+          throw NNEFExportError(node.op_type() + " requires kernel_shape");
         int rank = static_cast<int>(kernel->size());
         std::vector<int64_t> size = {1, 1};
         size.insert(size.end(), kernel->begin(), kernel->end());
@@ -712,7 +712,7 @@ void ReshapeConverter(ExportContext &ctx, const NodeProto &node,
                       const std::vector<std::string> &outputs) {
   const NNEFTensor *init = nullptr;
   if (node.input().size() >= 2)
-    init = ctx.GetInitializer(node.input(1).as_string());
+    init = ctx.GetInitializer(node.input(1));
   if (init == nullptr)
     throw NNEFExportError("Reshape requires a constant shape initializer to export to NNEF");
   auto shape = NNEFTensorToInt64Vec(*init);
@@ -856,14 +856,14 @@ void ClipConverter(ExportContext &ctx, const NodeProto &node,
     has_hi = true;
   }
   if (!has_lo && inputs.size() >= 2) {
-    const NNEFTensor *init = ctx.GetInitializer(node.input(1).as_string());
+    const NNEFTensor *init = ctx.GetInitializer(node.input(1));
     if (init == nullptr)
       throw NNEFExportError("Clip min must be a constant initializer for NNEF export");
     lo = NNEFTensorFirstScalarAsDouble(*init);
     has_lo = true;
   }
   if (!has_hi && inputs.size() >= 3) {
-    const NNEFTensor *init = ctx.GetInitializer(node.input(2).as_string());
+    const NNEFTensor *init = ctx.GetInitializer(node.input(2));
     if (init == nullptr)
       throw NNEFExportError("Clip max must be a constant initializer for NNEF export");
     hi = NNEFTensorFirstScalarAsDouble(*init);
@@ -1038,14 +1038,14 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
   const auto &graph = model.graph();
   std::string name = !graph_name.empty()
                          ? graph_name
-                         : (!graph.name().empty() ? graph.name().as_string() : std::string("main"));
+                         : (!graph.name().empty() ? graph.name() : std::string("main"));
   name = SanitizeGraphName(name);
 
   ExportContext ctx;
 
   std::set<std::string> initializer_names;
   for (const auto &init : graph.initializer()) {
-    initializer_names.insert(init.name().as_string());
+    initializer_names.insert(init.name());
   }
 
   std::vector<std::string> input_names;
@@ -1053,7 +1053,7 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
 
   // Map input names (skip those that are also initializers).
   for (const auto &vi : graph.input()) {
-    const std::string n = vi.name().as_string();
+    const std::string n = vi.name();
     if (initializer_names.count(n))
       continue;
     std::string nnef_name = ctx.MapName(n);
@@ -1063,20 +1063,20 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
   std::vector<std::pair<std::string, NNEFTensor>> ordered_inits;
   for (const auto &init : graph.initializer()) {
     NNEFTensor t = TensorProtoToNNEFTensor(init);
-    std::string n = init.name().as_string();
+    std::string n = init.name();
     std::string nnef_name = ctx.MapName(n);
     ctx.SetInitializer(n, t);
     ordered_inits.push_back({nnef_name, std::move(t)});
   }
   // Outputs.
   for (const auto &vi : graph.output()) {
-    std::string nnef_name = ctx.MapName(vi.name().as_string());
+    std::string nnef_name = ctx.MapName(vi.name());
     output_names.push_back(nnef_name);
   }
 
   // Emit external statements for graph inputs.
   for (const auto &vi : graph.input()) {
-    const std::string n = vi.name().as_string();
+    const std::string n = vi.name();
     if (initializer_names.count(n))
       continue;
     std::string nnef_name = ctx.MapName(n);
@@ -1097,27 +1097,27 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
     const auto &pair = ordered_inits[i];
     std::vector<KV> kvs;
     kvs.push_back({"shape", FormatIntList(pair.second.shape)});
-    kvs.push_back({"label", FormatScalarString(init.name().as_string())});
+    kvs.push_back({"label", FormatScalarString(init.name())});
     ctx.AddStatement(EmitAssign({pair.first}, EmitCallRaw("variable", {}, kvs)));
   }
 
   // Walk nodes.
   for (const auto &node : graph.node()) {
-    std::string op = node.op_type().as_string();
+    std::string op = node.op_type();
     if (!HasOpConverter(op)) {
       throw NNEFExportError("No NNEF converter registered for ONNX op '" + op + "' (node '" +
-                            node.name().as_string() +
+                            node.name() +
                             "'). Use onnx_light.nnef.register_op_converter to add one.");
     }
     auto attrs = AttrsToDict(node);
     std::vector<std::string> inputs;
     for (const auto &n : node.input()) {
-      const std::string s = n.as_string();
+      const std::string s = n;
       inputs.push_back(s.empty() ? std::string("0.0") : ctx.MapName(s));
     }
     std::vector<std::string> outputs;
     for (const auto &n : node.output()) {
-      const std::string s = n.as_string();
+      const std::string s = n;
       if (s.empty()) {
         outputs.push_back(ctx.MakeTemp("unused"));
       } else {

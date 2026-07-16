@@ -22,7 +22,7 @@ void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
     if constexpr (requires(const T &value) { value.PrintToStringStream(ss, options); }) {
       p.PrintToStringStream(ss, options);
     } else if constexpr (std::is_same_v<T, utils::String>) {
-      ss << p.as_string(quote_strings);
+      ss << utils::quote_string(p);
     } else {
       ss << p;
     }

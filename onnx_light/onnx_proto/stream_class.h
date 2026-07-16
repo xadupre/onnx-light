@@ -99,6 +99,7 @@ public:                                                                         
 #define FIELD_STR(name, order, doc)                                                                \
   FIELD(utils::String, name, order, doc)                                                           \
   inline void clear_##name() { name##_.clear(); }                                                  \
+  inline void set_##name(const char *v) { name##_ = v; }                                           \
   inline void set_##name(const std::string &v) { name##_ = v; }                                    \
   inline void set_##name(const utils::RefString &v) { name##_ = v; }
 
@@ -148,6 +149,7 @@ public:                                                                         
 
 #define FIELD_REPEATED_STR(type, name, order, doc)                                                 \
   FIELD_REPEATED_BASE(type, utils::RepeatedStringField, name, order, doc)                          \
+  inline void add_##name(const char *v) { name##_.push_back(utils::String(v, SIZE_MAX)); }         \
   inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
   inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }
 

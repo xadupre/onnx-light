@@ -26,7 +26,7 @@ template <typename T> std::string write_as_string(utils::PrintOptions &, const T
 }
 
 template <> inline std::string write_as_string(utils::PrintOptions &, const utils::String &field) {
-  return field.as_string(true);
+  return utils::quote_string(field);
 }
 
 template <>
@@ -86,7 +86,7 @@ inline std::string write_as_repeated_field(utils::PrintOptions &,
   std::string result;
   result += "[";
   for (size_t i = 0; i < field.size(); ++i) {
-    result += field[i].as_string(true);
+    result += utils::quote_string(field[i]);
     if (i + 1 != field.size())
       result += ", ";
   }

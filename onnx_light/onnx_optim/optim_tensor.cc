@@ -610,7 +610,7 @@ OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
 // or -1 when none is present.
 int FindMetadataIndex(const ValueInfoProto &vi, const char *key) {
   for (int i = 0; i < vi.metadata_props().size(); ++i) {
-    if (vi.metadata_props()[i].key().as_string() == key) {
+    if (vi.metadata_props()[i].key() == key) {
       return i;
     }
   }
@@ -628,8 +628,8 @@ void RemoveMetadataAt(ValueInfoProto &vi, int idx) {
   const std::size_t last = storage.size() - 1;
   const std::size_t i = static_cast<std::size_t>(idx);
   if (i != last) {
-    const std::string key = storage[last].key().as_string();
-    const std::string value = storage[last].value().as_string();
+    const std::string key = storage[last].key();
+    const std::string value = storage[last].value();
     storage[i].set_key(key);
     storage[i].set_value(value);
   }
@@ -665,7 +665,7 @@ std::optional<double> ReadNumericMetadata(const ValueInfoProto &vi, const char *
   }
   try {
     std::size_t consumed = 0;
-    const std::string value = vi.metadata_props()[idx].value().as_string();
+    const std::string value = vi.metadata_props()[idx].value();
     const double parsed = std::stod(value, &consumed);
     if (consumed != value.size()) {
       return std::nullopt;
@@ -691,7 +691,7 @@ bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
   out = OptimTensor(nullptr, dtype, std::move(shape));
   const int idx = FindDeviceMetadataIndex(vi);
   if (idx >= 0) {
-    const Device device = DeviceFromName(vi.metadata_props()[idx].value().as_string());
+    const Device device = DeviceFromName(vi.metadata_props()[idx].value());
     if (device != Device::kUndefined) {
       out.SetDevice(device);
     }

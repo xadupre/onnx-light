@@ -102,7 +102,7 @@ template <> inline std::vector<std::string> RetrieveValues(const AttributeProto 
   std::vector<std::string> result;
   result.reserve(attr.ref_strings().size());
   for (const utils::String &value : attr.ref_strings()) {
-    result.push_back(value.as_string());
+    result.push_back(value);
   }
   return result;
 }

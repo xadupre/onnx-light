@@ -61,8 +61,16 @@ public:
   inline const std::string_view sv() const {
     return ptr_ == nullptr ? std::string_view() : std::string_view(ptr_, size_);
   }
+  /** Materializes the view into an owning string. */
+  inline operator std::string() const {
+    return ptr_ == nullptr ? std::string() : std::string(ptr_, size_);
+  }
+  /** Materializes the view into a string_view. */
+  inline operator std::string_view() const { return sv(); }
   /** Indicates whether the view is empty. */
   inline bool empty() const { return size_ == 0; }
+  /** Finds a substring inside the view. */
+  inline size_t find(std::string_view needle, size_t pos = 0) const { return sv().find(needle, pos); }
   /** Returns the character at the specified index. */
   inline char operator[](size_t i) const { return ptr_[i]; }
   /** Compares this view with another view. */
@@ -81,8 +89,6 @@ public:
   bool operator!=(const std::string &other) const;
   /** Returns whether this view differs from a null-terminated string. */
   bool operator!=(const char *other) const;
-  /** Converts the view into a standard string. */
-  std::string as_string(bool quote = false) const;
   /** Parses the content as a signed 64-bit integer. */
   int64_t toint64() const;
 };
@@ -93,79 +99,55 @@ public:
  */
 class String {
 private:
-  static constexpr size_t kInlineCapacity = 15;
-  char *ptr_;
-  size_t size_;
-  bool is_inline_;
-  char inline_data_[kInlineCapacity];
+  std::string value_;
+  bool null_;
 
 public:
   /** Releases owned memory. */
-  inline ~String() { clear(); }
+  inline ~String() = default;
   /** Resets the instance to an empty state and frees owned memory. */
   inline void clear() {
-    if (ptr_ != nullptr && !is_inline_) {
-      delete[] ptr_;
-    }
-    ptr_ = nullptr;
-    size_ = 0;
-    is_inline_ = false;
+   value_.clear();
+   null_ = true;
   }
   /** Initializes an empty string. */
-  explicit inline String() : ptr_(nullptr), size_(0), is_inline_(false) {}
+  explicit inline String() : value_(), null_(true) {}
   /** Initializes by copying content from a non-owning string view. */
-  explicit inline String(const RefString &s) : ptr_(nullptr), size_(0), is_inline_(false) {
-    set(s.data(), s.size());
-  }
+  explicit inline String(const RefString &s) : value_(), null_(true) { set(s.data(), s.size()); }
   /** Initializes by copying a pointer and explicit size. */
-  explicit inline String(const char *ptr, size_t size)
-      : ptr_(nullptr), size_(0), is_inline_(false) {
-    set(ptr, size);
-  }
+  explicit inline String(const char *ptr, size_t size) : value_(), null_(true) { set(ptr, size); }
   /** Initializes by copying a standard string. */
-  explicit String(const std::string &s) : ptr_(nullptr), size_(0), is_inline_(false) {
-    set(s.data(), s.size());
-  }
+  explicit String(const std::string &s) : value_(), null_(true) { set(s.data(), s.size()); }
   /** Initializes by copying another owning string. */
-  explicit String(const String &s) : ptr_(nullptr), size_(0), is_inline_(false) {
-    set(s.data(), s.size());
-  }
+  inline String(const String &s) : value_(s.value_), null_(s.null_) {}
   /** Initializes by taking ownership from another instance. */
-  explicit String(String &&other) noexcept : ptr_(nullptr), size_(0), is_inline_(false) {
-    if (other.is_inline_) {
-      size_ = other.size_;
-      is_inline_ = true;
-      if (size_ > 0) {
-        memcpy(inline_data_, other.inline_data_, size_);
-        ptr_ = inline_data_;
-      }
-    } else {
-      ptr_ = other.ptr_;
-      size_ = other.size_;
-      is_inline_ = false;
-    }
-    other.ptr_ = nullptr;
-    other.size_ = 0;
-    other.is_inline_ = false;
+  inline String(String &&other) noexcept : value_(std::move(other.value_)), null_(other.null_) {
+   other.clear();
   }
   /** Returns the number of characters. */
-  inline size_t size() const { return size_; }
+  inline size_t size() const { return value_.size(); }
   /** Returns the number of characters. */
-  inline size_t length() const { return size_; }
+  inline size_t length() const { return value_.size(); }
   /** Returns the underlying pointer. */
-  inline const char *data() const { return ptr_; }
+  inline const char *data() const { return null_ ? nullptr : value_.data(); }
   /** Returns a null-terminated C string (never nullptr). */
-  inline const char *c_str() const { return ptr_ == nullptr ? "" : ptr_; }
+  inline const char *c_str() const { return null_ ? "" : value_.c_str(); }
   /** Indicates whether the string is empty. */
-  inline bool empty() const { return size_ == 0; }
+  inline bool empty() const { return value_.empty(); }
   /** Returns a string_view. */
   inline const std::string_view sv() const {
-    return ptr_ == nullptr ? std::string_view() : std::string_view(ptr_, size_);
+   return null_ ? std::string_view() : std::string_view(value_.data(), value_.size());
   }
+  /** Materializes the string into an owning std::string. */
+  inline operator std::string() const { return null_ ? std::string() : value_; }
+  /** Materializes the string into a string_view. */
+  inline operator std::string_view() const { return sv(); }
   /** Indicates whether the string is empty and has no allocated buffer. */
-  inline bool null() const { return size_ == 0 && ptr_ == nullptr; }
+  inline bool null() const { return null_; }
+  /** Finds a substring inside the string. */
+  inline size_t find(std::string_view needle, size_t pos = 0) const { return sv().find(needle, pos); }
   /** Returns the character at the specified index. */
-  inline char operator[](size_t i) const { return ptr_[i]; }
+  inline char operator[](size_t i) const { return value_[i]; }
   /** Assigns from a null-terminated string. */
   String &operator=(const char *s);
   /** Assigns by taking ownership from another instance. */
@@ -208,19 +190,10 @@ public:
   bool operator>(const RefString &other) const;
   /** Returns whether this string is lexicographically greater than a null-terminated string. */
   bool operator>(const char *other) const;
-  /** Converts the value into a standard string. */
-  std::string as_string(bool quote = false) const;
   /** Implicit conversion to a standard string so the type is a drop-in for
    *  protobuf string fields (which are std::string) in consuming code. */
-  inline operator std::string() const {
-    return ptr_ == nullptr ? std::string() : std::string(ptr_, size_);
-  }
-  /** Implicit conversion to a string view (drop-in for protobuf string fields). */
-  inline operator std::string_view() const {
-    return ptr_ == nullptr ? std::string_view() : std::string_view(ptr_, size_);
-  }
   /** Parses the content as a signed 64-bit integer. */
-  inline int64_t toint64() const { return RefString(ptr_, size_).toint64(); }
+  inline int64_t toint64() const { return RefString(data(), size()).toint64(); }
 
 private:
   /** Replaces the content with a copy of the provided buffer. */
@@ -244,6 +217,11 @@ inline RefString &RefString::operator=(const String &v) {
 
 /** Concatenates rows with a delimiter. */
 std::string join_string(const std::vector<std::string> &rows, const char *delimiter = "\n");
+
+/** Quotes a string view for debug and error messages. */
+inline std::string quote_string(const RefString &s) { return "\"" + std::string(s) + "\""; }
+/** Quotes an owning string for debug and error messages. */
+inline std::string quote_string(const String &s) { return "\"" + std::string(s) + "\""; }
 
 /** Streams a RefString to an output stream. */
 inline std::ostream &operator<<(std::ostream &os, const RefString &s) {

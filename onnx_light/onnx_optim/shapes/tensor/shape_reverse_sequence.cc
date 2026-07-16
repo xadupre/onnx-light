@@ -19,10 +19,10 @@ void ComputeShapeReverseSequence(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeReverseSequence: ReverseSequence requires two inputs.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(node.input(0));
   EXT_ENFORCE_INVALID(!(input.Shape().Rank() < 2),
                       "ComputeShapeReverseSequence: input rank must be >= 2.");
-  const OptimTensor &sequence_lens = ctx.Get(node.input(1).as_string());
+  const OptimTensor &sequence_lens = ctx.Get(node.input(1));
   EXT_ENFORCE_INVALID(sequence_lens.Shape().Rank() == 1,
                       "ComputeShapeReverseSequence: 'sequence_lens' must have rank of 1.");
 

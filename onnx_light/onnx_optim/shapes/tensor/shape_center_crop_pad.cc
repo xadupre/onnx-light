@@ -24,7 +24,7 @@ void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeCenterCropPad: CenterCropPad requires two inputs.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(node.input(0));
   const OptimShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
 
@@ -47,7 +47,7 @@ void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node) {
   // Try to resolve the ``shape`` input as a known 1-D value-as-shape.
   std::vector<int64_t> shape_values;
   bool shape_known = false;
-  const OptimTensor &shape_input = ctx.Get(node.input(1).as_string());
+  const OptimTensor &shape_input = ctx.Get(node.input(1));
   if (shape_input.HasValueAsShape()) {
     const OptimShape &shape_as = shape_input.ValueAsShape();
     bool all_int = true;

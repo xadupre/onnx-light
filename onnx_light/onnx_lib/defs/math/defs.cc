@@ -488,8 +488,8 @@ static bool BuildContextDependentFunctionBodyGelu(const FunctionBodyBuildContext
                                                   FunctionProto &functionProto) {
   const auto *const approx_attr_proto = ctx.getAttribute("approximate");
   std::string approximate = approx_attr_proto != nullptr && approx_attr_proto->has_s()
-                                ? approx_attr_proto->s().as_string()
-                                : gelu_default_approx;
+                                ? std::string(approx_attr_proto->s())
+                                : std::string(gelu_default_approx);
   FunctionBuilder builder(functionProto);
 
   if (approximate == "tanh") {
@@ -1589,8 +1589,8 @@ static bool BuildContextDependentFunctionBody(const FunctionBodyBuildContext &ct
   bool float_input = input_type == TensorProto_DataType_FLOAT;
   const auto *const reduction_attr_proto = ctx.getAttribute("reduction");
   std::string reduction_attr = reduction_attr_proto != nullptr && reduction_attr_proto->has_s()
-                                   ? reduction_attr_proto->s().as_string()
-                                   : "mean";
+                                   ? std::string(reduction_attr_proto->s())
+                                   : std::string("mean");
 
   FunctionBuilder builder(functionProto);
   builder.Const1D("const_zero", static_cast<int64_t>(0))

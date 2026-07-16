@@ -239,7 +239,7 @@ Tensor Tensor::BorrowStrings(std::string name, Shape shape,
 
 Tensor TensorFromProto(const TensorProto &tp) {
   // Tensor name.
-  const std::string name = tp.name().as_string();
+  const std::string name = tp.name();
 
   // Tensor shape (dims are stored as uint64 in TensorProto).
   std::vector<int64_t> shape;
@@ -255,7 +255,7 @@ Tensor TensorFromProto(const TensorProto &tp) {
     std::vector<std::string> strings;
     strings.reserve(tp.string_data().size());
     for (size_t i = 0; i < tp.string_data().size(); ++i) {
-      strings.emplace_back(tp.string_data()[i].as_string());
+      strings.emplace_back(tp.string_data()[i]);
     }
     return Tensor::FromStrings(name, shape, strings);
   }

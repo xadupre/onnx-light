@@ -34,7 +34,7 @@ void ComputeShapeConstantOfShape(ShapesContext &ctx, const NodeProto &node) {
     dtype = DataTypeToTensorType(value->t().data_type());
   }
 
-  const OptimTensor &shape_input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &shape_input = ctx.Get(node.input(0));
 
   OptimShape out_shape;
   if (shape_input.HasValueAsShape()) {

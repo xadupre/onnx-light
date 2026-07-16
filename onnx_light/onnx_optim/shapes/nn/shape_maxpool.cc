@@ -134,7 +134,7 @@ void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *
 
   // Optional second output ``Indices`` (added in opset 8). Only register an
   // entry when the node actually declares a non-empty second output name.
-  if (node.output_size() >= 2 && !node.output(1).as_string().empty()) {
+  if (node.output_size() >= 2 && !node.output(1).empty()) {
     ctx.Set(node.output(1), OptimTensor(nullptr, TensorType::kInt64, std::move(out_shape)));
   }
 }

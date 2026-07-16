@@ -49,7 +49,7 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeSTFT: STFT requires at least two inputs (signal, frame_step).");
 
-  const OptimTensor &signal = ctx.Get(node.input(0).as_string());
+  const OptimTensor &signal = ctx.Get(node.input(0));
   const TensorType dtype = signal.Dtype();
   const OptimShape &in_shape = signal.Shape();
 
@@ -60,9 +60,9 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   // Try to read frame_step as a known constant.
   bool frame_step_known = false;
   int64_t frame_step_value = 0;
-  if (!node.input(1).as_string().empty() && ctx.Has(node.input(1).as_string())) {
+  if (!node.input(1).empty() && ctx.Has(node.input(1))) {
     int64_t v = 0;
-    if (ReadScalarInt(ctx.Get(node.input(1).as_string()), v)) {
+    if (ReadScalarInt(ctx.Get(node.input(1)), v)) {
       frame_step_value = v;
       frame_step_known = true;
     }
@@ -73,17 +73,17 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   // known as a constant.
   bool frame_length_known = false;
   int64_t frame_length_value = 0;
-  if (node.input_size() >= 4 && !node.input(3).as_string().empty() &&
-      ctx.Has(node.input(3).as_string())) {
+  if (node.input_size() >= 4 && !node.input(3).empty() &&
+      ctx.Has(node.input(3))) {
     int64_t v = 0;
-    if (ReadScalarInt(ctx.Get(node.input(3).as_string()), v)) {
+    if (ReadScalarInt(ctx.Get(node.input(3)), v)) {
       frame_length_value = v;
       frame_length_known = true;
     }
   }
-  if (!frame_length_known && node.input_size() >= 3 && !node.input(2).as_string().empty() &&
-      ctx.Has(node.input(2).as_string())) {
-    const OptimTensor &window = ctx.Get(node.input(2).as_string());
+  if (!frame_length_known && node.input_size() >= 3 && !node.input(2).empty() &&
+      ctx.Has(node.input(2))) {
+    const OptimTensor &window = ctx.Get(node.input(2));
     if (window.Shape().Rank() == 1 && window.Shape()[0].IsInt()) {
       frame_length_value = window.Shape()[0].AsInt();
       frame_length_known = true;
@@ -91,7 +91,7 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   }
 
   // Compute output shape: [batch_size, n_frames, dft_unique_bins, 2].
-  const std::string sym = "STFT_" + node.output(0).as_string();
+  const std::string sym = "STFT_" + node.output(0);
   OptimShape out_shape;
   // batch_size from signal input.
   if (in_shape.Rank() >= 1) {

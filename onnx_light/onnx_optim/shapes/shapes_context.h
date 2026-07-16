@@ -430,7 +430,7 @@ public:
   /// not be ``nullptr``.
   void SetLocalFunction(const FunctionProto *func) {
     EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
-    const std::string key = func->domain().as_string() + ":" + func->name().as_string();
+    const std::string key = func->domain() + ":" + func->name();
     local_functions_[key] = func;
   }
 

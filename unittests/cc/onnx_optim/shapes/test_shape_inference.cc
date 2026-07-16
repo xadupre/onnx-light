@@ -733,7 +733,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   // The Y output has type float and shape {6, 2}.
   ASSERT_EQ(graph.output_size(), 1u);
   const ValueInfoProto &out = graph.output(0);
-  EXPECT_EQ(out.name().as_string(), "Y");
+  EXPECT_EQ(out.name(), "Y");
   ASSERT_TRUE(out.has_type());
   ASSERT_TRUE(out.type().has_tensor_type());
   EXPECT_EQ(static_cast<int>(out.type().tensor_type().elem_type()),
@@ -746,7 +746,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   bool found_s = false;
   for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
     const ValueInfoProto &vi = graph.value_info()[i];
-    if (vi.name().as_string() == "S") {
+    if (vi.name() == "S") {
       found_s = true;
       ASSERT_TRUE(vi.has_type());
       ASSERT_TRUE(vi.type().has_tensor_type());
@@ -757,7 +757,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   EXPECT_TRUE(found_s);
   // The X input is not duplicated in value_info.
   for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
-    EXPECT_NE(graph.value_info()[i].name().as_string(), std::string("X"));
+    EXPECT_NE(graph.value_info()[i].name(), std::string("X"));
   }
 }
 
@@ -840,7 +840,7 @@ TEST(OnnxOptimShapeInference, InferShapesModelWithPrefillPrefersOutputAnchor) {
   ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
   ASSERT_EQ(out.type().tensor_type().shape().dim_size(), 2u);
   EXPECT_TRUE(out.type().tensor_type().shape().dim()[0].has_dim_param());
-  EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_param().as_string(), "ANCHOR");
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_param(), "ANCHOR");
   EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
 }
 
@@ -1059,8 +1059,8 @@ TEST(OnnxOptimShapeInference, ComputeShapeNodeUsesRegisteredCustomDomainCallback
       "com.acme", "CustomIdentity",
       [&called](onnx_optim::shapes::ShapesContext &inner_ctx, const NodeProto &inner_node) {
         called = true;
-        const std::string input_name = inner_node.input(0).as_string();
-        const std::string output_name = inner_node.output(0).as_string();
+        const std::string input_name = inner_node.input(0);
+        const std::string output_name = inner_node.output(0);
         inner_ctx.Set(output_name, onnx_optim::OptimTensor(inner_ctx.Get(input_name)));
       });
 

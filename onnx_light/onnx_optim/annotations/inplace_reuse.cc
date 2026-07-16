@@ -317,15 +317,15 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
                                 const std::unordered_set<std::string> &ancestor_locals) {
   std::unordered_set<std::string> local;
   for (int i = 0; i < graph.input().size(); ++i) {
-    local.insert(graph.input()[i].name().as_string());
+    local.insert(graph.input()[i].name());
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
-    local.insert(graph.initializer()[i].name().as_string());
+    local.insert(graph.initializer()[i].name());
   }
   for (int i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];
     for (int j = 0; j < nd.output().size(); ++j) {
-      const std::string name = nd.output()[j].as_string();
+      const std::string name = nd.output()[j];
       if (!name.empty()) {
         local.insert(name);
       }
@@ -338,7 +338,7 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
   for (int i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];
     for (int j = 0; j < nd.input().size(); ++j) {
-      const std::string name = nd.input()[j].as_string();
+      const std::string name = nd.input()[j];
       // Keep only true captures from an outer scope: skip empty names,
       // values local to this subgraph, and names produced by ancestor
       // subgraphs. Such names are already available within the enclosing
@@ -369,7 +369,7 @@ std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
   std::vector<std::string> out;
   std::unordered_set<std::string> seen;
   for (int i = 0; i < node.input().size(); ++i) {
-    const std::string name = node.input()[i].as_string();
+    const std::string name = node.input()[i];
     if (name.empty()) {
       continue;
     }
@@ -428,19 +428,19 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   std::unordered_set<std::string> graph_inputs;
   std::unordered_set<std::string> graph_initializers;
   for (int i = 0; i < graph.input().size(); ++i) {
-    const std::string name = graph.input()[i].name().as_string();
+    const std::string name = graph.input()[i].name();
     graph_inputs.insert(name);
     if (!allow_input_overwrite) {
       keep.insert(name);
     }
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
-    const std::string name = graph.initializer()[i].name().as_string();
+    const std::string name = graph.initializer()[i].name();
     graph_initializers.insert(name);
     keep.insert(name);
   }
   for (int i = 0; i < graph.output().size(); ++i) {
-    keep.insert(graph.output()[i].name().as_string());
+    keep.insert(graph.output()[i].name());
   }
 
   // Producer node index for every top-level intermediate, and the index of
@@ -453,7 +453,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   std::vector<std::vector<std::string>> referenced_per_node(static_cast<std::size_t>(num_nodes));
   std::unordered_set<std::string> graph_outputs;
   for (int i = 0; i < graph.output().size(); ++i) {
-    graph_outputs.insert(graph.output()[i].name().as_string());
+    graph_outputs.insert(graph.output()[i].name());
   }
   if (allow_input_overwrite) {
     for (const std::string &name : graph_inputs) {
@@ -470,7 +470,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       last_use[name] = i;
     }
     for (int o = 0; o < node.output_size(); ++o) {
-      const std::string name = node.output(o).as_string();
+      const std::string name = node.output(o);
       if (!name.empty() && producer.find(name) == producer.end()) {
         producer[name] = i;
       }
@@ -479,7 +479,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
-    const std::string op_type = node.op_type().as_string();
+    const std::string op_type = node.op_type();
     const bool is_squeeze = op_type == "Squeeze";
     const bool is_unsqueeze = op_type == "Unsqueeze";
     const std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
@@ -519,7 +519,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     // Count direct-input occurrences so a value read twice is never aliased.
     std::unordered_map<std::string, int> input_occurrences;
     for (int k = 0; k < node.input_size(); ++k) {
-      const std::string name = node.input(k).as_string();
+      const std::string name = node.input(k);
       if (!name.empty()) {
         ++input_occurrences[name];
       }
@@ -534,7 +534,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
         if (matched_outputs.count(o)) {
           continue;
         }
-        const std::string out_name = node.output(o).as_string();
+        const std::string out_name = node.output(o);
         if (out_name.empty() || !ctx.Has(out_name)) {
           continue;
         }
@@ -544,7 +544,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           if (used_inputs.count(k)) {
             continue;
           }
-          const std::string in_name = node.input(k).as_string();
+          const std::string in_name = node.input(k);
           if (in_name.empty() || in_name == out_name) {
             continue;
           }
@@ -615,7 +615,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 
   std::unordered_map<std::string, LiveAllocation> alive;
   for (int i = 0; i < graph.initializer().size(); ++i) {
-    const std::string name = graph.initializer()[i].name().as_string();
+    const std::string name = graph.initializer()[i].name();
     if (name.empty() || !ctx.Has(name)) {
       continue;
     }
@@ -628,7 +628,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
                                  MemoryValueSource::kInitializer, ValueTag(value_tags, name)};
   }
   for (int i = 0; i < graph.input().size(); ++i) {
-    const std::string name = graph.input()[i].name().as_string();
+    const std::string name = graph.input()[i].name();
     if (name.empty() || alive.find(name) != alive.end() || !ctx.Has(name)) {
       continue;
     }
@@ -657,7 +657,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       if (reuse_by_output.find(o) != reuse_by_output.end()) {
         continue;
       }
-      const std::string out_name = node.output(o).as_string();
+      const std::string out_name = node.output(o);
       if (out_name.empty() || !ctx.Has(out_name)) {
         continue;
       }
@@ -684,14 +684,14 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;
     for (int o = 0; o < node.output_size(); ++o) {
-      const std::string out_name = node.output(o).as_string();
+      const std::string out_name = node.output(o);
       if (out_name.empty() || !ctx.Has(out_name)) {
         continue;
       }
       expressions::DimType alloc_bytes = int64_t{0};
       auto reuse_it = reuse_by_output.find(o);
       if (reuse_it != reuse_by_output.end()) {
-        const std::string in_name = node.input(reuse_it->second).as_string();
+        const std::string in_name = node.input(reuse_it->second);
         auto alive_it = alive.find(in_name);
         if (alive_it == alive.end()) {
           continue;

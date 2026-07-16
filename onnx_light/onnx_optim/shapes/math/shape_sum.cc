@@ -25,13 +25,13 @@ void ComputeShapeSum(ShapesContext &ctx, const NodeProto &node) {
   // Start from the shape and dtype of the first input. Sum's type constraint
   // ``T`` requires every input to share the same float dtype, so the output
   // dtype is the dtype of the first input.
-  const OptimTensor &first = ctx.Get(node.input(0).as_string());
+  const OptimTensor &first = ctx.Get(node.input(0));
   const TensorType out_dtype = first.Dtype();
   OptimShape out_shape = first.Shape();
 
   // Multidirectional broadcast across all remaining inputs.
   for (int i = 1; i < n_inputs; ++i) {
-    const OptimTensor &cur = ctx.Get(node.input(i).as_string());
+    const OptimTensor &cur = ctx.Get(node.input(i));
     out_shape = BroadcastShapes(out_shape, cur.Shape());
   }
 

@@ -28,8 +28,8 @@ bool IsValidIdentifier(const std::string &str) {
   return next_ == end_;
 }
 
-bool IsValidIdentifier(const utils::String &str) { return IsValidIdentifier(str.as_string()); }
-bool IsValidIdentifier(const utils::RefString &str) { return IsValidIdentifier(str.as_string()); }
+bool IsValidIdentifier(const utils::String &str) { return IsValidIdentifier(str); }
+bool IsValidIdentifier(const utils::RefString &str) { return IsValidIdentifier(str); }
 
 class ProtoPrinter {
 public:
@@ -92,8 +92,8 @@ private:
     else
       printQuoted(str);
   }
-  void printId(const utils::String &str) { printId(str.as_string()); }
-  void printId(const utils::RefString &str) { printId(str.as_string()); }
+  void printId(const utils::String &str) { printId(str); }
+  void printId(const utils::RefString &str) { printId(str); }
 
   template <typename T> void print(const T &prim) { output_ << prim; }
 
@@ -107,8 +107,8 @@ private:
     output_ << "\"";
   }
 
-  inline void printQuoted(const utils::String &str) { printQuoted(str.as_string()); }
-  inline void printQuoted(const utils::RefString &str) { printQuoted(str.as_string()); }
+  inline void printQuoted(const utils::String &str) { printQuoted(str); }
+  inline void printQuoted(const utils::RefString &str) { printQuoted(str); }
 
   template <typename T>
   void printKeyValuePair(KeyWordMap::KeyWord key, const T &val, bool addsep = true) {

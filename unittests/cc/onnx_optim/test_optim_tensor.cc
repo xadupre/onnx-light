@@ -510,11 +510,11 @@ TEST(OnnxOptimValueInfo, ToValueInfoWritesTypeShape) {
   ASSERT_TRUE(tt.has_shape());
   ASSERT_EQ(tt.shape().dim().size(), 2);
   EXPECT_EQ(tt.shape().dim()[0].dim_value(), 2);
-  EXPECT_EQ(tt.shape().dim()[1].dim_param().as_string(), "M");
+  EXPECT_EQ(tt.shape().dim()[1].dim_param(), "M");
   // No device set => no metadata_props entry added.
   EXPECT_EQ(vi.metadata_props().size(), 0u);
   // The original name is preserved.
-  EXPECT_EQ(vi.name().as_string(), "y");
+  EXPECT_EQ(vi.name(), "y");
 }
 
 TEST(OnnxOptimValueInfo, ToValueInfoUndefinedDtypeReturnsFalse) {
@@ -532,8 +532,8 @@ TEST(OnnxOptimValueInfo, ToValueInfoWritesDeviceMetadata) {
   ValueInfoProto vi;
   ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
   ASSERT_EQ(vi.metadata_props().size(), 1u);
-  EXPECT_EQ(vi.metadata_props()[0].key().as_string(), onnx_optim::kValueInfoDeviceMetadataKey);
-  EXPECT_EQ(vi.metadata_props()[0].value().as_string(), "GPU7");
+  EXPECT_EQ(vi.metadata_props()[0].key(), onnx_optim::kValueInfoDeviceMetadataKey);
+  EXPECT_EQ(vi.metadata_props()[0].value(), "GPU7");
 }
 
 TEST(OnnxOptimValueInfo, ToValueInfoUpdatesExistingDeviceMetadataInPlace) {
@@ -551,11 +551,11 @@ TEST(OnnxOptimValueInfo, ToValueInfoUpdatesExistingDeviceMetadataInPlace) {
   ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
   ASSERT_EQ(vi.metadata_props().size(), 2u);
   // The unrelated entry survives untouched.
-  EXPECT_EQ(vi.metadata_props()[0].key().as_string(), "author");
-  EXPECT_EQ(vi.metadata_props()[0].value().as_string(), "test");
+  EXPECT_EQ(vi.metadata_props()[0].key(), "author");
+  EXPECT_EQ(vi.metadata_props()[0].value(), "test");
   // The device entry is updated in place.
-  EXPECT_EQ(vi.metadata_props()[1].key().as_string(), onnx_optim::kValueInfoDeviceMetadataKey);
-  EXPECT_EQ(vi.metadata_props()[1].value().as_string(), "CPU");
+  EXPECT_EQ(vi.metadata_props()[1].key(), onnx_optim::kValueInfoDeviceMetadataKey);
+  EXPECT_EQ(vi.metadata_props()[1].value(), "CPU");
 }
 
 TEST(OnnxOptimValueInfo, ToValueInfoRemovesStaleDeviceMetadata) {
@@ -573,8 +573,8 @@ TEST(OnnxOptimValueInfo, ToValueInfoRemovesStaleDeviceMetadata) {
   ASSERT_EQ(vi.metadata_props().size(), 1u);
   // The remaining entry is the unrelated one (swap-and-pop moved it
   // from position 1 to position 0).
-  EXPECT_EQ(vi.metadata_props()[0].key().as_string(), "author");
-  EXPECT_EQ(vi.metadata_props()[0].value().as_string(), "test");
+  EXPECT_EQ(vi.metadata_props()[0].key(), "author");
+  EXPECT_EQ(vi.metadata_props()[0].value(), "test");
 }
 
 TEST(OnnxOptimValueInfo, RoundTripPreservesDtypeShapeAndDevice) {
@@ -739,8 +739,8 @@ TEST(OnnxOptimValueInfo, ToValueInfoWritesMinMaxMetadata) {
   bool seen_min = false;
   bool seen_max = false;
   for (int i = 0; i < vi.metadata_props().size(); ++i) {
-    const std::string key = vi.metadata_props()[i].key().as_string();
-    const std::string value = vi.metadata_props()[i].value().as_string();
+    const std::string key = vi.metadata_props()[i].key();
+    const std::string value = vi.metadata_props()[i].value();
     if (key == onnx_optim::kValueInfoMinMetadataKey) {
       seen_min = true;
       EXPECT_EQ(std::stod(value), -2.5);
@@ -769,7 +769,7 @@ TEST(OnnxOptimValueInfo, ToValueInfoRemovesStaleMinMaxMetadata) {
   misc->set_value("test");
   ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
   ASSERT_EQ(vi.metadata_props().size(), 1u);
-  EXPECT_EQ(vi.metadata_props()[0].key().as_string(), "author");
+  EXPECT_EQ(vi.metadata_props()[0].key(), "author");
 }
 
 TEST(OnnxOptimValueInfo, FromValueInfoReadsMinMaxMetadata) {

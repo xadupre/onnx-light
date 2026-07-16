@@ -62,7 +62,7 @@ private:
     if (tensorType.has_shape()) {
       for (int i = 0; i < tensorType.shape().dim_size(); ++i) {
         if (tensorType.shape().dim(i).has_dim_param()) {
-          existing_symbols.insert(tensorType.shape().dim(i).dim_param().as_string());
+          existing_symbols.insert(tensorType.shape().dim(i).dim_param());
         }
       }
     }
@@ -148,15 +148,15 @@ struct InferenceContextImpl : public InferenceContext {
       GraphInferenceContext *graphInferenceContext = nullptr)
       : graphInferenceContext_{graphInferenceContext}, options_(options), node_(&n) {
     for (auto &attr : *n.mutable_attribute()) {
-      attributesByName_[attr.name().as_string()] = &attr;
+      attributesByName_[attr.name()] = &attr;
       if (attr.has_g()) {
         // need a mutable GraphProto to run inferencing on this attribute
-        graphProtoAttributesByName_[attr.name().as_string()] = attr.mutable_g();
+        graphProtoAttributesByName_[attr.name()] = attr.mutable_g();
       }
     }
 
     for (const auto &input : n.input()) {
-      auto valueTypesIter = valueTypesByName.find(input.as_string());
+      auto valueTypesIter = valueTypesByName.find(input);
       if (valueTypesIter != valueTypesByName.end()) {
         allInputTypes_.push_back(valueTypesIter->second);
       } else {
@@ -167,21 +167,21 @@ struct InferenceContextImpl : public InferenceContext {
       // inputDataByName - this is when input is TensorProto
       // inputSparseDataByName - this is when input is SparseTensorProto
       // generatedShapeData - this is when input was generated as part of partial data propagation
-      const auto inputDataIter = inputDataByName.find(input.as_string());
+      const auto inputDataIter = inputDataByName.find(input);
       if (inputDataIter != inputDataByName.cend()) {
         allInputData_.push_back(inputDataIter->second);
         allInputSparseData_.push_back(nullptr);
         allShapeInputData_.push_back(nullptr);
       } else {
         allInputData_.push_back(nullptr);
-        const auto inputSparseDataIter = inputSparseDataByName.find(input.as_string());
+        const auto inputSparseDataIter = inputSparseDataByName.find(input);
         if (inputSparseDataIter != inputSparseDataByName.cend()) {
           allInputSparseData_.push_back(inputSparseDataIter->second);
           allShapeInputData_.push_back(nullptr);
         } else {
           allInputSparseData_.push_back(nullptr);
           if (generatedShapeData != nullptr) {
-            const auto inputShapeDataIter = generatedShapeData->find(input.as_string());
+            const auto inputShapeDataIter = generatedShapeData->find(input);
             if (inputShapeDataIter != generatedShapeData->cend()) {
               allShapeInputData_.push_back(&inputShapeDataIter->second);
             } else {
@@ -312,20 +312,20 @@ struct DataPropagationContextImpl : public DataPropagationContext {
     size_t input_idx = 0;
 
     for (auto &attr : *n.mutable_attribute()) {
-      attributesByName_[attr.name().as_string()] = &attr;
+      attributesByName_[attr.name()] = &attr;
     }
 
     for (const auto &input : n.input()) {
-      inputIndexToNameMap_.insert({input_idx++, input.as_string()});
+      inputIndexToNameMap_.insert({input_idx++, input});
 
-      auto valueTypesIter = valueTypesByName.find(input.as_string());
+      auto valueTypesIter = valueTypesByName.find(input);
       if (valueTypesIter != valueTypesByName.end()) {
         allInputTypes_.push_back(valueTypesIter->second);
       } else {
         allInputTypes_.push_back(nullptr);
       }
 
-      const auto inputDataIter = inputDataByName.find(input.as_string());
+      const auto inputDataIter = inputDataByName.find(input);
       if (inputDataIter != inputDataByName.cend()) {
         allInputData_.push_back(inputDataIter->second);
       } else {
@@ -335,7 +335,7 @@ struct DataPropagationContextImpl : public DataPropagationContext {
 
     size_t output_idx = 0;
     for (const auto &output : n.output()) {
-      outputIndexToNameMap_.insert({output_idx++, output.as_string()});
+      outputIndexToNameMap_.insert({output_idx++, output});
     }
 
     allOutputTypes_.resize(n.output_size());

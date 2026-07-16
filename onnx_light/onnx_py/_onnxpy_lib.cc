@@ -430,7 +430,7 @@ void AddOnnxPyLib(nb::module_ &m) {
             for (size_t i = 0; i < ctx.allOutputTypes_.size(); ++i) {
               auto &proto = ctx.allOutputTypes_[i];
               if (proto.value_case() != TypeProto::VALUE_NOT_SET) {
-                result.emplace(node.output(static_cast<int>(i)).as_string(), std::move(proto));
+                result.emplace(node.output(static_cast<int>(i)), std::move(proto));
               }
             }
             return result;

@@ -49,7 +49,7 @@ struct FunctionBodyBuildContextImpl : public FunctionBodyBuildContext {
                                         const std::vector<TypeProto> &input_types = {})
       : node_proto_(node_proto), input_types_(input_types) {
     for (const auto &attr : node_proto.attribute()) {
-      attributesByName_[attr.name().as_string()] = &attr;
+      attributesByName_[attr.name()] = &attr;
     }
   }
 
@@ -812,13 +812,13 @@ public:
   ONNX_API virtual const OpSchema *GetSchema(const utils::String &key,
                                              const int maxInclusiveVersion,
                                              const utils::String &domain) const {
-    return GetSchema(key.as_string(), maxInclusiveVersion, domain.as_string());
+    return GetSchema(key, maxInclusiveVersion, domain);
   }
 
   ONNX_API virtual const OpSchema *GetSchema(const utils::RefString &key,
                                              const int maxInclusiveVersion,
                                              const utils::RefString &domain) const {
-    return GetSchema(key.as_string(), maxInclusiveVersion, domain.as_string());
+    return GetSchema(key, maxInclusiveVersion, domain);
   }
 };
 

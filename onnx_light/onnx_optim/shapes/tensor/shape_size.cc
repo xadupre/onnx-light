@@ -20,7 +20,7 @@ void ComputeShapeSize(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Size", "ComputeShapeSize");
   EXT_ENFORCE_INVALID(node.input_size() >= 1, "ComputeShapeSize: Size requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(node.input(0));
 
   // The output is always a 0-D (scalar) INT64 tensor.
   OptimTensor out_tensor(nullptr, TensorType::kInt64, OptimShape{});

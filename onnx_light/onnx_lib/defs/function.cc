@@ -25,7 +25,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     uniq_prefix = ss.str();
   }
   std::string node_name =
-      node.has_name() ? node.ref_name().as_string() : func.ref_name().as_string() + uniq_prefix;
+      node.has_name() ? node.ref_name() : func.ref_name() + uniq_prefix;
   std::unordered_map<std::string, std::string> io_names_map;
   std::unordered_map<std::string, AttributeProto> attr_map;
 
@@ -33,7 +33,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     if (idx >= (int)func.ref_input().size()) {
       ONNX_THROW("Input for function node " + node_name + " is out of bounds");
     }
-    io_names_map[func.ref_input()[idx].as_string()] = node.ref_input()[idx].as_string();
+    io_names_map[func.ref_input()[idx]] = node.ref_input()[idx];
   }
   for (int idx = 0; idx < (int)node.ref_output().size(); ++idx) {
     if (idx >= (int)func.ref_output().size()) {
@@ -45,11 +45,11 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     if (node.ref_output()[idx].empty()) {
       continue;
     }
-    io_names_map[func.ref_output()[idx].as_string()] = node.ref_output()[idx].as_string();
+    io_names_map[func.ref_output()[idx]] = node.ref_output()[idx];
   }
 
   for (const auto &attr : node.ref_attribute()) {
-    attr_map[attr.ref_name().as_string()] = attr;
+    attr_map[attr.ref_name()] = attr;
   }
 
   // For undefined attributes of the function node
@@ -57,21 +57,21 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   // get the domain version for function schema
   int domain_version = -1;
   for (const auto &opset_import : func.ref_opset_import()) {
-    if (opset_import.ref_domain().as_string() == node.ref_domain().as_string()) {
+    if (opset_import.ref_domain() == node.ref_domain()) {
       domain_version = static_cast<int>(opset_import.ref_version());
     }
   }
   if (domain_version == -1) {
-    ONNX_THROW("No opset import registered for domain '" + node.ref_domain().as_string() +
+    ONNX_THROW("No opset import registered for domain '" + node.ref_domain() +
                "' in function proto");
   }
 
   const OpSchemaRegistry *schema_registry = OpSchemaRegistry::Instance();
   const auto *const schema = schema_registry->GetSchema(
-      node.ref_op_type().as_string(), domain_version, node.ref_domain().as_string());
+      node.ref_op_type(), domain_version, node.ref_domain());
   if (schema == nullptr) {
-    ONNX_THROW("No schema registered for op '", node.ref_op_type().as_string(), "' in domain '",
-               node.ref_domain().as_string(), "' at version ", domain_version,
+    ONNX_THROW("No schema registered for op '", node.ref_op_type(), "' in domain '",
+               node.ref_domain(), "' at version ", domain_version,
                " while expanding function node ", node_name);
   }
   const auto &default_attrs = schema->attributes();
@@ -89,25 +89,25 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     new_node->clr_output();
     new_node->clr_attribute();
     for (const auto &input : function_node.ref_input()) {
-      if (io_names_map.count(input.as_string())) {
-        *new_node->add_input() = io_names_map[input.as_string()];
+      if (io_names_map.count(input)) {
+        *new_node->add_input() = io_names_map[input];
       } else {
-        *new_node->add_input() = InternalTensorNameGenerator(node_name, input.as_string());
+        *new_node->add_input() = InternalTensorNameGenerator(node_name, input);
       }
     }
     for (const auto &output : function_node.ref_output()) {
-      if (io_names_map.count(output.as_string())) {
-        *new_node->add_output() = io_names_map[output.as_string()];
+      if (io_names_map.count(output)) {
+        *new_node->add_output() = io_names_map[output];
       } else {
-        *new_node->add_output() = InternalTensorNameGenerator(node_name, output.as_string());
+        *new_node->add_output() = InternalTensorNameGenerator(node_name, output);
       }
     }
     for (const auto &attr : function_node.ref_attribute()) {
       if (attr.has_ref_attr_name()) {
-        if (attr_map.count(attr.ref_ref_attr_name().as_string())) {
+        if (attr_map.count(attr.ref_ref_attr_name())) {
           AttributeProto *new_attr = new_node->add_attribute();
-          new_attr->CopyFrom(attr_map[attr.ref_ref_attr_name().as_string()]);
-          new_attr->set_name(attr.ref_name().as_string());
+          new_attr->CopyFrom(attr_map[attr.ref_ref_attr_name()]);
+          new_attr->set_name(attr.ref_name());
         }
       } else {
         AttributeProto *new_attr = new_node->add_attribute();

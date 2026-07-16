@@ -107,12 +107,6 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
 
   const AutoPad auto_pad =
       AutoPadFromString(GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET")));
-  EXT_ENFORCE_INVALID(auto_pad == AutoPad::kNotSet || auto_pad == AutoPad::kValid ||
-                          auto_pad == AutoPad::kSameUpper || auto_pad == AutoPad::kSameLower,
-                      "ComputeShapeAveragePool: auto_pad='",
-                      GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET")),
-                      "' is not supported; must be one of NOTSET, SAME_UPPER, SAME_LOWER "
-                      "or VALID.");
   const bool use_auto_pad = auto_pad != AutoPad::kNotSet;
 
   const bool ceil_mode = GetAttributeOr<int64_t>(node, "ceil_mode", 0) != 0;

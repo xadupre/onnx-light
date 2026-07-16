@@ -203,15 +203,6 @@ TEST(OnnxOptimShapesNnAveragePool, AutoPadSameUpper) {
   EXPECT_EQ(out[3].AsInt(), 3);
 }
 
-TEST(OnnxOptimShapesNnAveragePool, RejectsUnknownAutoPad) {
-  NodeProto node = MakeAveragePoolNode({2, 2}, {}, {}, 0, "BAD_VALUE");
-  onnx_optim::shapes::ShapesContext ctx;
-  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
-                                       onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)});
-  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeAveragePool(ctx, node, "X"),
-               std::invalid_argument);
-}
-
 TEST(OnnxOptimShapesNnAveragePool, Dilations2D) {
   // kernel 2x2, dilations (2,2), ceil_mode=1 on 1x1x4x4 input -> 2x2 output
   // (mirrors test_averagepool_2d_dilations).

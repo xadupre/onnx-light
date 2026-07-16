@@ -18,11 +18,12 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``RoiAlign`` backend test node case(s).
-void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterRoiAlignCases(std::vector<TestCase> &registry,
+                                                         TestMode mode = TestMode::TEST);
 
 /// Registers the ``NonMaxSuppression`` backend test node case(s).
-void RegisterNonMaxSuppressionCases(std::vector<TestCase> &registry,
-                                    TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterNonMaxSuppressionCases(std::vector<TestCase> &registry,
+                                                                  TestMode mode = TestMode::TEST);
 
 /// Collects all ``object_detection`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.

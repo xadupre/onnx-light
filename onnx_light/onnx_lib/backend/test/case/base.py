@@ -17,8 +17,9 @@ from .....ext_test_case import ExtTestCase
 
 _LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
 # Backend test inputs/outputs are usually ndarrays, but ONNX sequence cases use
-# recursively nested Python lists of ndarrays.
-BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"]
+# recursively nested Python lists of ndarrays, and map-typed inputs are Python dicts.
+# ``None`` marks a graph input with no associated data (model-only validation cases).
+BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"] | dict[Any, Any] | None
 BackendTestDataSets: TypeAlias = Sequence[
     tuple[Sequence[BackendTestValue], Sequence[BackendTestValue]]
 ]
@@ -193,7 +194,7 @@ def _light_op_since_version(op_type: str, domain: str) -> int:
     return best
 
 
-def _transform_value(arr):
+def _transform_value(arr) -> BackendTestValue:
     if isinstance(arr, list):
         return [_transform_value(x) for x in arr]
     if isinstance(arr, (int, float, str, np.integer, np.floating, np.str_)):
@@ -375,38 +376,31 @@ def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
         arr = np.frombuffer(t.raw_data(), dtype=dtype)
         return arr.reshape(tuple(int(d) for d in t.shape))
 
-    def _ds_inputs_to_python(tc) -> list[list]:
+    def _ds_inputs_to_python(tc: Any) -> list[list[np.ndarray | dict[Any, Any] | None]]:
         """Returns per-DataSet positional inputs for ``tc``.
 
         For graph inputs declared with ``map(K, V)`` type (used by
         ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap``), the
         DataSet stores a Map object in ``ds.maps``. The keys and values
-        tensors are returned as two consecutive positional items so the
-        backend harness (which zips them against ``sess.input_names``)
-        receives them under the correct names.
+        tensors are combined into a single Python ``dict`` so the backend
+        harness (which zips them against ``sess.input_names``) feeds the
+        map under its original graph-input name.
         """
         graph_inputs = list(tc.model.graph.input)
-        data_sets: list[list] = []
+        data_sets: list[list[np.ndarray | dict[Any, Any] | None]] = []
         for ds in tc.data_sets:
             by_name = {t.name: _tensor_to_np(t) for t in ds.inputs}
             maps_by_name = {m.name: m for m in ds.maps} if ds.maps else {}
-            inputs: list = []
+            inputs: list[np.ndarray | dict[Any, Any] | None] = []
             for gi in graph_inputs:
                 if gi.type.has_map_type():
-                    # Try Map object first.
-                    if gi.name in maps_by_name:
-                        m = maps_by_name[gi.name]
-                        inputs.append(_tensor_to_np(m.keys))
-                        inputs.append(_tensor_to_np(m.values))
-                        continue
-                    # Fall back to legacy _keys/_values tensor convention.
-                    keys_arr = by_name.get(f"{gi.name}_keys")
-                    values_arr = by_name.get(f"{gi.name}_values")
-                    if keys_arr is None or values_arr is None:
+                    m = maps_by_name.get(gi.name)
+                    if m is not None:
+                        keys_np = _tensor_to_np(m.keys)
+                        values_np = _tensor_to_np(m.values)
+                        inputs.append(dict(zip(keys_np.tolist(), values_np.tolist())))
+                    else:
                         inputs.append(by_name.get(gi.name))
-                        continue
-                    inputs.append(keys_arr)
-                    inputs.append(values_arr)
                 else:
                     inputs.append(by_name.get(gi.name))
             data_sets.append(inputs)

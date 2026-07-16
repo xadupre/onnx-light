@@ -18,40 +18,52 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``ArgMax`` backend test node case(s).
-void RegisterArgMaxCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterArgMaxCases(std::vector<TestCase> &registry,
+                                                       TestMode mode = TestMode::TEST);
 
 /// Registers the ``ArgMin`` backend test node case(s).
-void RegisterArgMinCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterArgMinCases(std::vector<TestCase> &registry,
+                                                       TestMode mode = TestMode::TEST);
 
 /// Registers the ``ReduceSum`` backend test node case(s).
-void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReduceSumCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
 
 /// Registers the ``ReduceMax`` backend test node case(s).
-void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReduceMaxCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
 
 /// Registers the ``ReduceMean`` backend test node case(s).
-void RegisterReduceMeanCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReduceMeanCases(std::vector<TestCase> &registry,
+                                                           TestMode mode = TestMode::TEST);
 
 /// Registers the ``ReduceMin`` backend test node case(s).
-void RegisterReduceMinCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReduceMinCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
 
 /// Registers the ``ReduceProd`` backend test node case(s).
-void RegisterReduceProdCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReduceProdCases(std::vector<TestCase> &registry,
+                                                           TestMode mode = TestMode::TEST);
 
 /// Registers the ``ReduceL1`` backend test node case(s).
-void RegisterReduceL1Cases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReduceL1Cases(std::vector<TestCase> &registry,
+                                                         TestMode mode = TestMode::TEST);
 
 /// Registers the ``ReduceL2`` backend test node case(s).
-void RegisterReduceL2Cases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReduceL2Cases(std::vector<TestCase> &registry,
+                                                         TestMode mode = TestMode::TEST);
 
 /// Registers the ``ReduceLogSum`` backend test node case(s).
-void RegisterReduceLogSumCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReduceLogSumCases(std::vector<TestCase> &registry,
+                                                             TestMode mode = TestMode::TEST);
 
 /// Registers the ``ReduceLogSumExp`` backend test node case(s).
-void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry,
+                                                                TestMode mode = TestMode::TEST);
 
 /// Registers the ``ReduceSumSquare`` backend test node case(s).
-void RegisterReduceSumSquareCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReduceSumSquareCases(std::vector<TestCase> &registry,
+                                                                TestMode mode = TestMode::TEST);
 
 /// Collects all ``reduction`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.

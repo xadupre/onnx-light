@@ -208,18 +208,10 @@ class ReferenceEvaluator:
                 f"Unsupported proto type for ReferenceEvaluator: {type(proto).__name__}."
             )
 
-        # Map-typed graph inputs (``map(K, V)``) are consumed by the C++ kernels
-        # for ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap`` through a
-        # two-tensor naming convention: ``<name>_keys`` / ``<name>_values``.
-        # Expand these inputs so callers feed (and the runtime receives) the tensors
-        # directly by those names, keeping all map-handling logic in C++.
-        #
-        # ``_map_inputs`` records, for every such graph input, the
-        # ``(key_type, value_type)`` pair (``TensorProto`` enum values). As a
-        # convenience, :meth:`run` also accepts a Python ``dict`` fed under the
-        # original map-input name (e.g. ``{"x": {2: 2.5}}``) and splits it into
-        # the ``<name>_keys`` / ``<name>_values`` tensors expected by the runtime.
-        self._map_inputs: dict[str, tuple[int, int]] = {}
+        # ``_map_inputs`` records the names of graph inputs declared as ``map(K, V)``.
+        # Map-typed inputs are fed as a Python ``dict``; :meth:`run` stores them
+        # via ``ctx.put_map`` so the runtime can retrieve them by the original name.
+        self._map_inputs: set[str] = set()
         # ``_sequence_inputs`` records graph inputs declared as ``seq(T)``. Such
         # inputs are fed as a Python ``list``/``tuple`` of arrays (one per
         # sequence element) and handed to the runtime via ``put_sequence``
@@ -236,13 +228,11 @@ class ReferenceEvaluator:
                 if vi.name in initializers:
                     continue
                 if vi.type.has_map_type():
-                    inputs.append(f"{vi.name}_keys")
-                    inputs.append(f"{vi.name}_values")
-                    mt = vi.type.map_type
-                    self._map_inputs[vi.name] = (
-                        int(mt.key_type),
-                        int(mt.value_type.tensor_type.elem_type),
-                    )
+                    # Map-typed inputs are stored in the runtime's map store
+                    # under the original graph-input name; the caller feeds a
+                    # Python ``dict`` and :meth:`run` converts it to a Map.
+                    inputs.append(vi.name)
+                    self._map_inputs.add(vi.name)
                 else:
                     if vi.type.has_sequence_type():
                         self._sequence_inputs.add(vi.name)
@@ -289,128 +279,6 @@ class ReferenceEvaluator:
         # API installs a numpy-friendly wrapper that delegates to the
         # user-provided callable.
         self._custom_kernels: dict[str, Any] = {}
-
-    # -- map-typed input handling ------------------------------------------
-
-    @staticmethod
-    def _dict_to_key_value_arrays(
-        name: str, mapping: dict, key_type: int, value_type: int
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """Converts a Python ``dict`` feed into the ``(keys, values)`` arrays.
-
-        Parameters
-        ----------
-        name:
-            Name of the map-typed graph input the ``dict`` is fed under;
-            used only for error messages.
-        mapping:
-            The ``dict`` feed, mapping map keys to map values.
-        key_type:
-            ``TensorProto`` enum value of the map's key dtype.
-        value_type:
-            ``TensorProto`` enum value of the map's value dtype.
-
-        Returns
-        -------
-        tuple of :class:`numpy.ndarray`
-            The ``(keys, values)`` tensors expected by the C++ runtime for a
-            ``map(K, V)``-typed input fed under its original name (the
-            ``<name>_keys`` / ``<name>_values`` convention).
-        """
-        keys_list = list(mapping.keys())
-        values_list = list(mapping.values())
-        if key_type == int(TensorProto.STRING):
-            keys_arr = np.array(keys_list, dtype=object)
-        else:
-            keys_dtype = _DTYPE_TO_NP.get(key_type)
-            if keys_dtype is None:
-                raise NotImplementedError(
-                    f"ReferenceEvaluator: unsupported map key dtype {key_type} "
-                    f"for input {name!r}."
-                )
-            keys_arr = np.array(keys_list, dtype=keys_dtype)
-        if value_type == int(TensorProto.STRING):
-            values_arr = np.array(values_list, dtype=object)
-        else:
-            values_dtype = _DTYPE_TO_NP.get(value_type)
-            if values_dtype is None:
-                raise NotImplementedError(
-                    f"ReferenceEvaluator: unsupported map value dtype "
-                    f"{value_type} for input {name!r}."
-                )
-            values_arr = np.array(values_list, dtype=values_dtype)
-        return keys_arr, values_arr
-
-    def _expand_map_feeds(self, feed_inputs: dict[str, Any]) -> dict[str, Any]:
-        """Expands map-typed ``dict`` feeds into the two-tensor convention.
-
-        A ``map(K, V)``-typed input may be fed either directly through its
-        ``<name>_keys`` / ``<name>_values`` tensors or, as a convenience,
-        through a single Python ``dict`` (optionally wrapped in a size-1 numpy
-        object array) under the original input name.
-
-        Parameters
-        ----------
-        feed_inputs:
-            The raw ``name -> value`` feed mapping passed to :meth:`run`.
-
-        Returns
-        -------
-        dict
-            A new feed mapping where every ``dict`` fed under a map-typed
-            input name has been split into the expected ``<name>_keys`` /
-            ``<name>_values`` tensors; all other entries are passed through
-            unchanged.
-        """
-        if not self._map_inputs:
-            return feed_inputs
-        expanded: dict[str, Any] = {}
-        for name, value in feed_inputs.items():
-            # Unwrap a size-1 object array wrapping a ``dict`` (e.g. when a
-            # caller normalises every feed value with ``np.asarray`` before
-            # dispatch).
-            if isinstance(value, np.ndarray) and value.dtype == object and value.size == 1:
-                unwrapped = value.item()
-                if isinstance(unwrapped, dict):
-                    value = unwrapped
-            if name in self._map_inputs and isinstance(value, dict):
-                key_type, value_type = self._map_inputs[name]
-                keys_arr, values_arr = self._dict_to_key_value_arrays(
-                    name, value, key_type, value_type
-                )
-                expanded[f"{name}_keys"] = keys_arr
-                expanded[f"{name}_values"] = values_arr
-            elif name.endswith("_keys") and isinstance(value, dict):
-                # Backward-compatibility path: some callers build feeds by
-                # zipping positional inputs against ``sess.input_names``. For a
-                # map(K, V) input represented as a single ``dict`` positional
-                # value, that zip may yield ``{"<name>_keys": {...}}`` instead
-                # of ``{"<name>": {...}}``. Treat that form as the same map
-                # shorthand when ``<name>`` is a known map input and
-                # ``<name>_values`` is not provided explicitly.
-                base_name = name.removesuffix("_keys")
-                if (
-                    base_name in self._map_inputs
-                    and f"{base_name}_values" not in feed_inputs
-                    and base_name not in feed_inputs
-                ):
-                    key_type, value_type = self._map_inputs[base_name]
-                    keys_arr, values_arr = self._dict_to_key_value_arrays(
-                        base_name, value, key_type, value_type
-                    )
-                    expanded[f"{base_name}_keys"] = keys_arr
-                    expanded[f"{base_name}_values"] = values_arr
-                else:
-                    expanded[name] = value
-            elif isinstance(value, dict):
-                raise TypeError(
-                    f"ReferenceEvaluator.run: input {name!r} received a "
-                    f"dict feed but is not declared as a map(K, V) input. "
-                    f"Map-typed inputs are: {sorted(self._map_inputs)}."
-                )
-            else:
-                expanded[name] = value
-        return expanded
 
     # -- custom kernels -----------------------------------------------------
 
@@ -507,6 +375,10 @@ class ReferenceEvaluator:
 
         Inputs that are also listed in the graph initializers are
         omitted, since the caller does not have to supply them.
+
+        Map-typed (``map(K, V)``) inputs are listed under their original
+        graph-input name.  These are fed as a Python ``dict`` (e.g.
+        ``{"x": {10: 1.5, 30: 2.5}}``) when calling :meth:`run`.
         """
         return list(self._input_names)
 
@@ -541,7 +413,7 @@ class ReferenceEvaluator:
 
     def run(
         self, output_names: list[str] | None, feed_inputs: dict[str, Any]
-    ) -> list[np.ndarray | list]:
+    ) -> list[np.ndarray | list[np.ndarray]]:
         """Executes the wrapped graph / model / function.
 
         Parameters
@@ -552,8 +424,9 @@ class ReferenceEvaluator:
         feed_inputs:
             Mapping of input name to value. Tensor inputs are fed as a
             :class:`numpy.ndarray`; ``seq(T)`` inputs are fed as a ``list``
-            (or ``tuple``) of arrays, one per sequence element. Every name
-            listed by :attr:`input_names` must be present.
+            (or ``tuple``) of arrays, one per sequence element; ``map(K, V)``
+            inputs are fed as a Python ``dict`` (e.g. ``{"x": {10: 1.5}}``).
+            Every name listed by :attr:`input_names` must be present.
 
         Returns
         -------
@@ -572,11 +445,6 @@ class ReferenceEvaluator:
                 "feed_inputs must be a dict[name -> numpy.ndarray], not "
                 f"{type(feed_inputs).__name__}."
             )
-
-        # Allow ``map(K, V)``-typed inputs to be fed as a single Python ``dict``
-        # under the original input name; expand them into the two-tensor
-        # ``<name>_keys`` / ``<name>_values`` convention the runtime expects.
-        feed_inputs = self._expand_map_feeds(feed_inputs)
 
         # Fast missing-input check using frozenset difference.
         missing = self._input_names_set - feed_inputs.keys()
@@ -603,7 +471,22 @@ class ReferenceEvaluator:
 
         for name, value in feed_inputs.items():
             is_optional_sequence_input = name in self._optional_sequence_inputs
-            if name in self._sequence_inputs or is_optional_sequence_input:
+            if name in self._map_inputs:
+                # ``map(K, V)`` inputs are fed as a Python ``dict`` and stored
+                # in the runtime's map store via ``put_map``.  A size-1 numpy
+                # object array wrapping the dict (e.g. produced by
+                # ``np.asarray(some_dict, dtype=object)``) is unwrapped first.
+                if isinstance(value, np.ndarray) and value.dtype == object and value.size == 1:
+                    unwrapped = value.item()
+                    if isinstance(unwrapped, dict):
+                        value = unwrapped
+                if not isinstance(value, dict):
+                    raise TypeError(
+                        f"Map input {name!r} must be fed as a Python dict, "
+                        f"not {type(value).__name__}."
+                    )
+                ctx.put_map(name, value)
+            elif name in self._sequence_inputs or is_optional_sequence_input:
                 # ``seq(T)`` graph inputs are fed as a list/tuple of arrays (one
                 # per sequence element) and stored through ``put_sequence``.
                 if not isinstance(value, (list, tuple)):
@@ -631,7 +514,7 @@ class ReferenceEvaluator:
 
         self._last_ctx = ctx
 
-        results: list[np.ndarray | list] = []
+        results: list[np.ndarray | list[np.ndarray]] = []
         for name in output_names:
             if ctx.has(name):
                 results.append(_cpp_tensor_to_numpy(ctx.get(name)))

@@ -18,15 +18,16 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``Optional`` backend test node case(s).
-void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterOptionalCases(std::vector<TestCase> &registry,
+                                                         TestMode mode = TestMode::TEST);
 
 /// Registers the ``OptionalGetElement`` backend test node case(s).
-void RegisterOptionalGetElementCases(std::vector<TestCase> &registry,
-                                     TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterOptionalGetElementCases(std::vector<TestCase> &registry,
+                                                                   TestMode mode = TestMode::TEST);
 
 /// Registers the ``OptionalHasElement`` backend test node case(s).
-void RegisterOptionalHasElementCases(std::vector<TestCase> &registry,
-                                     TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterOptionalHasElementCases(std::vector<TestCase> &registry,
+                                                                   TestMode mode = TestMode::TEST);
 
 /// Collects all ``optional`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.

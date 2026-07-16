@@ -19,6 +19,19 @@
 #include <utility>
 #include <vector>
 
+// Marks the per-operator ``Register*Cases`` helpers as internal to
+// ``lib_onnx_backend_test``. They are only ever invoked from the ``Collect*``
+// aggregators inside the library, so on ELF/Mach-O we give them hidden
+// visibility to keep them out of the shared library's dynamic symbol table.
+// The public ``Collect*`` entry points keep the compiler's default (visible)
+// visibility. On MSVC the macro is empty (symbols are exported via
+// WINDOWS_EXPORT_ALL_SYMBOLS).
+#if defined(__GNUC__) || defined(__clang__)
+#define ONNX_LIGHT_BACKEND_TEST_LOCAL __attribute__((visibility("hidden")))
+#else
+#define ONNX_LIGHT_BACKEND_TEST_LOCAL
+#endif
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 

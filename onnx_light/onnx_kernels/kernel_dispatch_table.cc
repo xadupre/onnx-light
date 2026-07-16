@@ -2698,26 +2698,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const std::string map_input = node.input(0);
 
-         // Look for the map in the maps store first; if not found, construct a
-         // temporary Map from the _keys/_values tensor pair (for backward
-         // compatibility with the Python backend test infrastructure and
-         // ReferenceEvaluator).
-         Map temp_map;
-         const Map *cast_m_ptr = nullptr;
-         if (rt.HasMap(map_input)) {
-           cast_m_ptr = &rt.GetMap(map_input);
-         } else {
-           const std::string keys_name = map_input + "_keys";
-           const std::string values_name = map_input + "_values";
-           auto keys_it = rt.tensors().find(keys_name);
-           auto values_it = rt.tensors().find(values_name);
-           EXT_ENFORCE_INVALID(!(keys_it == rt.tensors().end() || values_it == rt.tensors().end()), "RunNode: CastMap map input '" , map_input ,
-                                         "' requires a Map or tensors '" , keys_name , "' / '" ,
-                                         values_name , "'.");
-           temp_map = Map(map_input, keys_it->second, values_it->second);
-           cast_m_ptr = &temp_map;
-         }
-         const Map &cast_m = *cast_m_ptr;
+         EXT_ENFORCE_INVALID(rt.HasMap(map_input), "RunNode: CastMap map input '", map_input,
+                             "' not found in the runtime context. Map-typed inputs "
+                             "must be stored via PutMap before executing the graph.");
+         const Map &cast_m = rt.GetMap(map_input);
          const Tensor &x_keys = cast_m.keys;
          const Tensor &x_values = cast_m.values;
          EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)), "RunNode: CastMap keys must be an INT64 tensor.");
@@ -2767,26 +2751,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const std::string map_input = node.input(0);
 
-         // Look for the map in the maps store first; if not found, construct a
-         // temporary Map from the _keys/_values tensor pair (for backward
-         // compatibility with the Python backend test infrastructure and
-         // ReferenceEvaluator).
-         Map temp_map;
-         const Map *dict_m_ptr = nullptr;
-         if (rt.HasMap(map_input)) {
-           dict_m_ptr = &rt.GetMap(map_input);
-         } else {
-           const std::string keys_name = map_input + "_keys";
-           const std::string values_name = map_input + "_values";
-           auto keys_it = rt.tensors().find(keys_name);
-           auto values_it = rt.tensors().find(values_name);
-           EXT_ENFORCE_INVALID(!(keys_it == rt.tensors().end() || values_it == rt.tensors().end()), "RunNode: DictVectorizer map input '" , map_input ,
-                                         "' requires a Map or tensors '" , keys_name , "' / '" ,
-                                         values_name , "'.");
-           temp_map = Map(map_input, keys_it->second, values_it->second);
-           dict_m_ptr = &temp_map;
-         }
-         const Map &dict_m = *dict_m_ptr;
+         EXT_ENFORCE_INVALID(rt.HasMap(map_input), "RunNode: DictVectorizer map input '",
+                             map_input,
+                             "' not found in the runtime context. Map-typed inputs "
+                             "must be stored via PutMap before executing the graph.");
+         const Map &dict_m = rt.GetMap(map_input);
          const Tensor &x_keys = dict_m.keys;
          const Tensor &x_values = dict_m.values;
          const AttributeProto *str_vocab = FindAttribute(node, "string_vocabulary");

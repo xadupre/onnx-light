@@ -28,22 +28,25 @@ namespace onnx_backend_test {
 /// ``"outer"`` (``SquareThenAdd``) calls another model-local function in
 /// domain ``"inner"`` (``Square``). Exercises cross-domain function-to-
 /// function dispatch via ``RunModel``.
-void RegisterFunctionCallsFunctionAcrossDomainsCase(std::vector<TestCase> &registry,
-                                                    TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterFunctionCallsFunctionAcrossDomainsCase(std::vector<TestCase> &registry,
+                                               TestMode mode = TestMode::TEST);
 
 /// Registers a test case with three nested model-local functions in the
 /// same domain (``Outer`` -> ``Middle`` -> ``Inner``). Exercises that the
 /// function registry propagates through arbitrary nesting depth.
-void RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry,
-                                               TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry,
+                                          TestMode mode = TestMode::TEST);
 
 /// Registers a test case where a model-local function declares formal
 /// attributes (``then_branch``/``else_branch``) that the body's ``If``
 /// node references via ``ref_attr_name``. Exercises that
 /// ``CallModelLocalFunction`` resolves the references against the
 /// call-site attributes before executing the function body.
-void RegisterFunctionLinkedAttributeCase(std::vector<TestCase> &registry,
-                                         TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterFunctionLinkedAttributeCase(std::vector<TestCase> &registry,
+                                    TestMode mode = TestMode::TEST);
 
 /// Collects all model-local-function backend test cases by invoking every
 /// ``Register*Case`` helper declared in this header. When ``op_type`` is

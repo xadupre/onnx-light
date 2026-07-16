@@ -18,19 +18,24 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``StringConcat`` backend test node case(s).
-void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterStringConcatCases(std::vector<TestCase> &registry,
+                                                             TestMode mode = TestMode::TEST);
 
 /// Registers the ``StringSplit`` backend test node case(s).
-void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterStringSplitCases(std::vector<TestCase> &registry,
+                                                            TestMode mode = TestMode::TEST);
 
 /// Registers the ``StringNormalizer`` backend test node case(s).
-void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterStringNormalizerCases(std::vector<TestCase> &registry,
+                                                                 TestMode mode = TestMode::TEST);
 
 /// Registers the ``RegexFullMatch`` backend test node case(s).
-void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterRegexFullMatchCases(std::vector<TestCase> &registry,
+                                                               TestMode mode = TestMode::TEST);
 
 /// Registers the ``TfIdfVectorizer`` backend test node case(s).
-void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry,
+                                                                TestMode mode = TestMode::TEST);
 
 /// Collects all ``text`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.

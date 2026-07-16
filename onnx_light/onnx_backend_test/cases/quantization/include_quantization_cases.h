@@ -18,20 +18,24 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``QuantizeLinear`` backend test node case(s).
-void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterQuantizeLinearCases(std::vector<TestCase> &registry,
+                                                               TestMode mode = TestMode::TEST);
 
 /// Registers the ``DequantizeLinear`` backend test node case(s).
-void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterDequantizeLinearCases(std::vector<TestCase> &registry,
+                                                                 TestMode mode = TestMode::TEST);
 
 /// Registers the ``DynamicQuantizeLinear`` backend test node case(s).
-void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry,
-                                        TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the ``QLinearMatMul`` backend test node case(s).
-void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterQLinearMatMulCases(std::vector<TestCase> &registry,
+                                                              TestMode mode = TestMode::TEST);
 
 /// Registers the ``QLinearConv`` backend test node case(s).
-void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterQLinearConvCases(std::vector<TestCase> &registry,
+                                                            TestMode mode = TestMode::TEST);
 
 /// Collects all ``quantization`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.

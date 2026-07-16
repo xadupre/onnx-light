@@ -29,6 +29,8 @@
 #endif
 
 namespace ONNX_LIGHT_NAMESPACE {
+ExternalDataLocationExistsError::~ExternalDataLocationExistsError() = default;
+
 bool IteratorTensorProto::next() {
   while (!positions_.empty()) {
     Position &pos = positions_.back();

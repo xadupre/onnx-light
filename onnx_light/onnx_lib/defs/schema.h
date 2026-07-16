@@ -812,13 +812,15 @@ public:
   ONNX_API virtual const OpSchema *GetSchema(const utils::String &key,
                                              const int maxInclusiveVersion,
                                              const utils::String &domain) const {
-    return GetSchema(key, maxInclusiveVersion, domain);
+    return GetSchema(static_cast<std::string>(key), maxInclusiveVersion,
+                     static_cast<std::string>(domain));
   }
 
   ONNX_API virtual const OpSchema *GetSchema(const utils::RefString &key,
                                              const int maxInclusiveVersion,
                                              const utils::RefString &domain) const {
-    return GetSchema(key, maxInclusiveVersion, domain);
+    return GetSchema(static_cast<std::string>(key), maxInclusiveVersion,
+                     static_cast<std::string>(domain));
   }
 };
 

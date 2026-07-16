@@ -70,7 +70,9 @@ public:
   /** Indicates whether the view is empty. */
   inline bool empty() const { return size_ == 0; }
   /** Finds a substring inside the view. */
-  inline size_t find(std::string_view needle, size_t pos = 0) const { return sv().find(needle, pos); }
+  inline size_t find(std::string_view needle, size_t pos = 0) const {
+    return sv().find(needle, pos);
+  }
   /** Returns the character at the specified index. */
   inline char operator[](size_t i) const { return ptr_[i]; }
   /** Compares this view with another view. */
@@ -107,8 +109,8 @@ public:
   inline ~String() = default;
   /** Resets the instance to an empty state and frees owned memory. */
   inline void clear() {
-   value_.clear();
-   null_ = true;
+    value_.clear();
+    null_ = true;
   }
   /** Initializes an empty string. */
   explicit inline String() : value_(), null_(true) {}
@@ -122,7 +124,7 @@ public:
   inline String(const String &s) : value_(s.value_), null_(s.null_) {}
   /** Initializes by taking ownership from another instance. */
   inline String(String &&other) noexcept : value_(std::move(other.value_)), null_(other.null_) {
-   other.clear();
+    other.clear();
   }
   /** Returns the number of characters. */
   inline size_t size() const { return value_.size(); }
@@ -136,7 +138,7 @@ public:
   inline bool empty() const { return value_.empty(); }
   /** Returns a string_view. */
   inline const std::string_view sv() const {
-   return null_ ? std::string_view() : std::string_view(value_.data(), value_.size());
+    return null_ ? std::string_view() : std::string_view(value_.data(), value_.size());
   }
   /** Materializes the string into an owning std::string. */
   inline operator std::string() const { return null_ ? std::string() : value_; }
@@ -145,7 +147,9 @@ public:
   /** Indicates whether the string is empty and has no allocated buffer. */
   inline bool null() const { return null_; }
   /** Finds a substring inside the string. */
-  inline size_t find(std::string_view needle, size_t pos = 0) const { return sv().find(needle, pos); }
+  inline size_t find(std::string_view needle, size_t pos = 0) const {
+    return sv().find(needle, pos);
+  }
   /** Returns the character at the specified index. */
   inline char operator[](size_t i) const { return value_[i]; }
   /** Assigns from a null-terminated string. */

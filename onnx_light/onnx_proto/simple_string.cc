@@ -70,7 +70,12 @@ void String::set(const char *ptr, size_t size) {
   if (effective_size > 0 && ptr[effective_size - 1] == 0) {
     --effective_size;
   }
-  value_.assign(ptr, effective_size);
+  if (!null_ && ptr >= value_.data() && ptr <= value_.data() + value_.size()) {
+    std::string copy(ptr, effective_size);
+    value_ = std::move(copy);
+  } else {
+    value_.assign(ptr, effective_size);
+  }
   null_ = false;
 }
 
@@ -85,17 +90,13 @@ bool String::operator==(const char *other) const {
   return i == size() && other[i] == 0;
 }
 
-bool String::operator==(const RefString &other) const {
-  return sv() == other.sv();
-}
+bool String::operator==(const RefString &other) const { return sv() == other.sv(); }
 
 bool String::operator==(const String &other) const {
   return null_ == other.null_ && value_ == other.value_;
 }
 
-bool String::operator==(const std::string &other) const {
-  return sv() == std::string_view(other);
-}
+bool String::operator==(const std::string &other) const { return sv() == std::string_view(other); }
 
 bool String::operator!=(const std::string &other) const { return !(*this == other); }
 bool String::operator!=(const String &other) const { return !(*this == other); }

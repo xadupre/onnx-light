@@ -1878,7 +1878,7 @@ const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::stri
 }
 
 const OpSchema *OpSchemaRegistry::Schema(const utils::String &key, const utils::String &domain) {
-  return Schema(key, domain);
+  return Schema(static_cast<std::string>(key), static_cast<std::string>(domain));
 }
 
 const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const int maxInclusiveVersion,
@@ -1907,7 +1907,8 @@ const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const int maxIn
 
 const OpSchema *OpSchemaRegistry::Schema(const utils::String &key, const int maxInclusiveVersion,
                                          const utils::String &domain) {
-  return Schema(key, maxInclusiveVersion, domain);
+  return Schema(static_cast<std::string>(key), maxInclusiveVersion,
+                static_cast<std::string>(domain));
 }
 
 const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int maxInclusiveVersion,
@@ -1917,7 +1918,8 @@ const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int ma
 
 const OpSchema *OpSchemaRegistry::GetSchema(const utils::String &key, const int maxInclusiveVersion,
                                             const utils::String &domain) const {
-  return Schema(key, maxInclusiveVersion, domain);
+  return Schema(static_cast<std::string>(key), maxInclusiveVersion,
+                static_cast<std::string>(domain));
 }
 
 void OpSchemaRegistry::SetLoadedSchemaVersion(int target_version) {

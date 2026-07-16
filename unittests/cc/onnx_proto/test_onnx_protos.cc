@@ -588,6 +588,16 @@ TEST(onnx_string, String) {
   EXPECT_EQ(b, "iii");
 }
 
+TEST(onnx_string, String_AllowsAliasingAssignments) {
+  utils::String value("abcdef", 6);
+  value = value.c_str();
+  EXPECT_EQ(value, "abcdef");
+
+  value = utils::RefString(value.data() + 1, 3);
+  EXPECT_EQ(value, "bcd");
+  EXPECT_FALSE(value.null());
+}
+
 TEST(onnx_proto, TensorProtoName1) {
   TensorProto tp;
   EXPECT_EQ(tp.name_.data(), nullptr);

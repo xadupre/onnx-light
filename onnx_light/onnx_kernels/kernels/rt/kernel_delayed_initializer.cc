@@ -64,6 +64,7 @@ Tensor DelayedInitializer::operator()(RuntimeContext *rt) const {
                   std::vector<uint8_t>(loaded_bytes_.bytes(),
                                        loaded_bytes_.bytes() + loaded_bytes_.size_bytes()));
   }
+  // No runtime allocator available: load from file into inline vector storage.
   return LoadBytes(attrs_);
 }
 

@@ -175,16 +175,21 @@ void CollectGraphSeedTags(const GraphProto &graph,
   }
 }
 
-void InferNodesTags(const std::vector<const NodeProto *> &nodes,
+const NodeProto *AsNodePtr(const NodeProto &node) { return &node; }
+const NodeProto *AsNodePtr(const NodeProto *node) { return node; }
+
+template <typename NodeIt>
+void InferNodesTags(NodeIt begin, NodeIt end,
                     std::unordered_map<std::string, std::string> &value_tags,
                     std::vector<std::string> &node_tags) {
-  node_tags.assign(nodes.size(), std::string());
+  node_tags.assign(static_cast<std::size_t>(std::distance(begin, end)), std::string());
   bool changed = true;
   while (changed) {
     changed = false;
-    for (std::size_t n = 0; n < nodes.size(); ++n) {
-      const NodeProto *node = nodes[n];
-      const std::string op_type = node->op_type().as_string();
+    std::size_t n = 0;
+    for (auto it = begin; it != end; ++it, ++n) {
+      const NodeProto &node = *AsNodePtr(*it);
+      const std::string op_type = node.op_type().as_string();
       std::string explicit_output_tag;
       if (op_type == "Shape" || op_type == "Size") {
         explicit_output_tag = "shape";
@@ -192,34 +197,34 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         explicit_output_tag = "weight";
       }
 
-      if (node->input().size() >= 2) {
+      if (node.input().size() >= 2) {
         if (op_type == "Reshape" || op_type == "Expand" || op_type == "Slice") {
-          changed |= TrySetValueTag(value_tags, node->input(1).as_string(), "shape");
+          changed |= TrySetValueTag(value_tags, node.input(1).as_string(), "shape");
         } else if (op_type == "Squeeze" || op_type == "Unsqueeze" || op_type == "ReduceSum" ||
                    op_type == "ReduceMean" || op_type == "ReduceMax" || op_type == "ReduceMin") {
-          changed |= TrySetValueTag(value_tags, node->input(1).as_string(), "axes");
+          changed |= TrySetValueTag(value_tags, node.input(1).as_string(), "axes");
         }
       }
       if (op_type == "Slice") {
-        if (node->input().size() > 2) {
-          changed |= TrySetValueTag(value_tags, node->input(2).as_string(), "shape");
+        if (node.input().size() > 2) {
+          changed |= TrySetValueTag(value_tags, node.input(2).as_string(), "shape");
         }
-        if (node->input().size() > 3) {
-          changed |= TrySetValueTag(value_tags, node->input(3).as_string(), "axes");
+        if (node.input().size() > 3) {
+          changed |= TrySetValueTag(value_tags, node.input(3).as_string(), "axes");
         }
-        if (node->input().size() > 4) {
-          changed |= TrySetValueTag(value_tags, node->input(4).as_string(), "shape");
+        if (node.input().size() > 4) {
+          changed |= TrySetValueTag(value_tags, node.input(4).as_string(), "shape");
         }
       }
 
       std::string current_output_tag;
       bool output_tags_are_consistent = true;
-      for (int o = 0; o < node->output().size(); ++o) {
-        auto it = value_tags.find(node->output(o).as_string());
-        if (it != value_tags.end()) {
+      for (int o = 0; o < node.output().size(); ++o) {
+        auto output_it = value_tags.find(node.output(o).as_string());
+        if (output_it != value_tags.end()) {
           if (current_output_tag.empty()) {
-            current_output_tag = it->second;
-          } else if (current_output_tag != it->second) {
+            current_output_tag = output_it->second;
+          } else if (current_output_tag != output_it->second) {
             output_tags_are_consistent = false;
             break;
           }
@@ -240,16 +245,16 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         bool has_tag = false;
         bool all_same = true;
         std::string first_known_tag;
-        for (int i = 0; i < node->input().size(); ++i) {
-          auto it = value_tags.find(node->input(i).as_string());
-          if (it != value_tags.end() && !it->second.empty()) {
-            if (it->second == "weight") {
+        for (int i = 0; i < node.input().size(); ++i) {
+          auto input_it = value_tags.find(node.input(i).as_string());
+          if (input_it != value_tags.end() && !input_it->second.empty()) {
+            if (input_it->second == "weight") {
               any_weight = true;
             }
             if (first_known_tag.empty()) {
-              first_known_tag = it->second;
+              first_known_tag = input_it->second;
               has_tag = true;
-            } else if (first_known_tag != it->second) {
+            } else if (first_known_tag != input_it->second) {
               all_same = false;
             }
           }
@@ -261,10 +266,10 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         } else if (has_tag && !all_same) {
           inherited_tag = "ambiguous";
         }
-      } else if (!node->input().empty()) {
-        auto it = value_tags.find(node->input(0).as_string());
-        if (it != value_tags.end()) {
-          inherited_tag = it->second;
+      } else if (!node.input().empty()) {
+        auto input_it = value_tags.find(node.input(0).as_string());
+        if (input_it != value_tags.end()) {
+          inherited_tag = input_it->second;
         }
       }
       const std::string node_tag =
@@ -274,18 +279,18 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         changed = true;
       }
       if (!node_tag.empty()) {
-        for (int o = 0; o < node->output().size(); ++o) {
-          changed |= TrySetValueTag(value_tags, node->output(o).as_string(), node_tag);
+        for (int o = 0; o < node.output().size(); ++o) {
+          changed |= TrySetValueTag(value_tags, node.output(o).as_string(), node_tag);
         }
       }
 
-      const std::vector<int> backward_inputs = BackwardTagInputIndices(*node, current_output_tag);
+      const std::vector<int> backward_inputs = BackwardTagInputIndices(node, current_output_tag);
       if (!backward_inputs.empty()) {
         if (output_tags_are_consistent && !current_output_tag.empty()) {
           for (int idx : backward_inputs) {
-            if (idx >= 0 && idx < node->input().size()) {
+            if (idx >= 0 && idx < node.input().size()) {
               changed |=
-                  TrySetValueTag(value_tags, node->input(idx).as_string(), current_output_tag);
+                  TrySetValueTag(value_tags, node.input(idx).as_string(), current_output_tag);
             }
           }
         }
@@ -365,12 +370,7 @@ ComputeTagsFromNodeIterators(std::vector<NodeProto>::const_iterator begin,
                              std::vector<NodeProto>::const_iterator end) {
   std::unordered_map<std::string, std::string> computed_value_tags;
   std::vector<std::string> computed_node_tags;
-  std::vector<const NodeProto *> ptrs;
-  ptrs.reserve(std::distance(begin, end));
-  for (auto it = begin; it != end; ++it) {
-    ptrs.push_back(&(*it));
-  }
-  InferNodesTags(ptrs, computed_value_tags, computed_node_tags);
+  InferNodesTags(begin, end, computed_value_tags, computed_node_tags);
   return {computed_value_tags, computed_node_tags};
 }
 
@@ -412,7 +412,7 @@ std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>
 ComputeTags(const std::vector<const NodeProto *> &nodes) {
   std::unordered_map<std::string, std::string> computed_value_tags;
   std::vector<std::string> computed_node_tags;
-  InferNodesTags(nodes, computed_value_tags, computed_node_tags);
+  InferNodesTags(nodes.begin(), nodes.end(), computed_value_tags, computed_node_tags);
   return {computed_value_tags, computed_node_tags};
 }
 

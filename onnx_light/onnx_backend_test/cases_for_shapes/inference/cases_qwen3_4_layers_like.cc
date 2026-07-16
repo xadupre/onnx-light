@@ -78,13 +78,15 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
 
   // Per-layer attention constant initializers (one set per transformer layer).
   for (int layer = 0; layer < 4; ++layer) {
-    const std::string sfx = "layer_" + std::to_string(layer);
-    const std::string nm_idx = "init7_s1_2__" + sfx;
-    const std::string nm_inf = "init10_s1___" + sfx;
-    const std::string nm_zero = "init10_s1_2__" + sfx;
-    AddInitializer<int64_t>(*graph, nm_idx.c_str(), {INT64_C(1)}, {INT64_C(2)});
-    AddInitializer<uint16_t>(*graph, nm_inf.c_str(), {INT64_C(1)}, {static_cast<uint16_t>(64512u)});
-    AddInitializer<uint16_t>(*graph, nm_zero.c_str(), {INT64_C(1)}, {static_cast<uint16_t>(0u)});
+    const std::string layer_suffix = "layer_" + std::to_string(layer);
+    const std::string index_init_name = "init7_s1_2__" + layer_suffix;
+    const std::string neg_inf_init_name = "init10_s1___" + layer_suffix;
+    const std::string zero_init_name = "init10_s1_2__" + layer_suffix;
+    AddInitializer<int64_t>(*graph, index_init_name.c_str(), {INT64_C(1)}, {INT64_C(2)});
+    AddInitializer<uint16_t>(*graph, neg_inf_init_name.c_str(), {INT64_C(1)},
+                             {static_cast<uint16_t>(64512u)});
+    AddInitializer<uint16_t>(*graph, zero_init_name.c_str(), {INT64_C(1)},
+                             {static_cast<uint16_t>(0u)});
   }
 
   // ---- Graph initializers -------------------------------------------------
@@ -96,14 +98,14 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
 
   // Per-layer projection weight initializers.
   for (int layer = 0; layer < 4; ++layer) {
-    const std::string lp = "p_model_layers_" + std::to_string(layer);
-    const std::string q_proj = lp + "_self_attn_q_proj_weight::T10";
-    const std::string k_proj = lp + "_self_attn_k_proj_weight::T10";
-    const std::string v_proj = lp + "_self_attn_v_proj_weight::T10";
-    const std::string o_proj = lp + "_self_attn_o_proj_weight::T10";
-    const std::string gate_proj = lp + "_mlp_gate_proj_weight::T10";
-    const std::string up_proj = lp + "_mlp_up_proj_weight::T10";
-    const std::string down_proj = lp + "_mlp_down_proj_weight::T10";
+    const std::string weight_prefix = "p_model_layers_" + std::to_string(layer);
+    const std::string q_proj = weight_prefix + "_self_attn_q_proj_weight::T10";
+    const std::string k_proj = weight_prefix + "_self_attn_k_proj_weight::T10";
+    const std::string v_proj = weight_prefix + "_self_attn_v_proj_weight::T10";
+    const std::string o_proj = weight_prefix + "_self_attn_o_proj_weight::T10";
+    const std::string gate_proj = weight_prefix + "_mlp_gate_proj_weight::T10";
+    const std::string up_proj = weight_prefix + "_mlp_up_proj_weight::T10";
+    const std::string down_proj = weight_prefix + "_mlp_down_proj_weight::T10";
     AddInitializer<uint16_t>(*graph, q_proj.c_str(), {INT64_C(1024), INT64_C(2048)}, {});
     AddInitializer<uint16_t>(*graph, k_proj.c_str(), {INT64_C(1024), INT64_C(1024)}, {});
     AddInitializer<uint16_t>(*graph, v_proj.c_str(), {INT64_C(1024), INT64_C(1024)}, {});
@@ -142,11 +144,11 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
 
   // Per-layer norm weight initializers.
   for (int layer = 0; layer < 4; ++layer) {
-    const std::string ld = "model.layers." + std::to_string(layer);
-    const std::string q_norm = ld + ".self_attn.q_norm.weight";
-    const std::string k_norm = ld + ".self_attn.k_norm.weight";
-    const std::string input_ln = ld + ".input_layernorm.weight";
-    const std::string post_ln = ld + ".post_attention_layernorm.weight";
+    const std::string norm_prefix = "model.layers." + std::to_string(layer);
+    const std::string q_norm = norm_prefix + ".self_attn.q_norm.weight";
+    const std::string k_norm = norm_prefix + ".self_attn.k_norm.weight";
+    const std::string input_ln = norm_prefix + ".input_layernorm.weight";
+    const std::string post_ln = norm_prefix + ".post_attention_layernorm.weight";
     // All-same FP16 initializer (value=0x3C00).
     AddInitializer<uint16_t>(*graph, q_norm.c_str(), {INT64_C(128)},
                              std::vector<uint16_t>(128u, static_cast<uint16_t>(15360u)));
@@ -269,203 +271,279 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   std::string layer_input = "embedding";
   for (int layer = 0; layer < 4; ++layer) {
     const std::string li = std::to_string(layer);
-    const std::string lp = "p_model_layers_" + li; // weight name prefix
-    const std::string ld = "model.layers." + li;   // norm weight name prefix
-    const std::string sfx = "layer_" + li;         // per-layer node/init suffix
+    const std::string weight_prefix = "p_model_layers_" + li; // weight name prefix
+    const std::string norm_prefix = "model.layers." + li;     // norm weight name prefix
+    const std::string layer_suffix = "layer_" + li;           // per-layer node/init suffix
     // Helper: generate a unique intermediate node name for this layer.
-    auto L = [&sfx](const std::string &s) -> std::string { return sfx + "_" + s; };
+    auto make_layer_name = [&layer_suffix](const std::string &s) -> std::string {
+      return layer_suffix + "_" + s;
+    };
 
     // Pre-attention RMSNorm (input_layernorm).
     {
-      NodeProto &n = AddNode(*graph, "Cast", {layer_input}, {L("f32")});
+      NodeProto &n = AddNode(*graph, "Cast", {layer_input}, {make_layer_name("f32")});
       AddAttribute<int64_t>(n, "to", INT64_C(1));
     }
-    AddNode(*graph, "Pow", {L("f32"), "init1_s_"}, {L("pow_pre")});
+    AddNode(*graph, "Pow", {make_layer_name("f32"), "init1_s_"}, {make_layer_name("pow_pre")});
     {
-      NodeProto &n = AddNode(*graph, "ReduceMean", {L("pow_pre"), "init7_s1_-1"}, {L("mean_pre")});
+      NodeProto &n = AddNode(*graph, "ReduceMean", {make_layer_name("pow_pre"), "init7_s1_-1"},
+                             {make_layer_name("mean_pre")});
       AddAttribute<int64_t>(n, "keepdims", INT64_C(1));
     }
-    AddNode(*graph, "Add", {L("mean_pre"), "init1_s_2::RSh1"}, {L("add_pre")});
-    AddNode(*graph, "Sqrt", {L("add_pre")}, {L("sqrt_pre")});
-    AddNode(*graph, "Reciprocal", {L("sqrt_pre")}, {L("rsqrt_pre")});
-    AddNode(*graph, "Mul", {L("f32"), L("rsqrt_pre")}, {L("mul_pre")});
+    AddNode(*graph, "Add", {make_layer_name("mean_pre"), "init1_s_2::RSh1"},
+            {make_layer_name("add_pre")});
+    AddNode(*graph, "Sqrt", {make_layer_name("add_pre")}, {make_layer_name("sqrt_pre")});
+    AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_pre")}, {make_layer_name("rsqrt_pre")});
+    AddNode(*graph, "Mul", {make_layer_name("f32"), make_layer_name("rsqrt_pre")},
+            {make_layer_name("mul_pre")});
     {
-      NodeProto &n = AddNode(*graph, "Cast", {L("mul_pre")}, {L("normed_half")});
+      NodeProto &n =
+          AddNode(*graph, "Cast", {make_layer_name("mul_pre")}, {make_layer_name("normed_half")});
       AddAttribute<int64_t>(n, "to", INT64_C(10));
     }
-    AddNode(*graph, "Mul", {ld + ".input_layernorm.weight", L("normed_half")}, {L("normed")});
+    AddNode(*graph, "Mul",
+            {norm_prefix + ".input_layernorm.weight", make_layer_name("normed_half")},
+            {make_layer_name("normed")});
 
     // Q projection + q_norm + transpose.
-    AddNode(*graph, "MatMul", {L("normed"), lp + "_self_attn_q_proj_weight::T10"}, {L("q_mm")});
+    AddNode(*graph, "MatMul",
+            {make_layer_name("normed"), weight_prefix + "_self_attn_q_proj_weight::T10"},
+            {make_layer_name("q_mm")});
     {
-      NodeProto &n = AddNode(*graph, "Cast", {L("q_mm")}, {L("q_f32")});
+      NodeProto &n = AddNode(*graph, "Cast", {make_layer_name("q_mm")}, {make_layer_name("q_f32")});
       AddAttribute<int64_t>(n, "to", INT64_C(1));
     }
-    AddNode(*graph, "Reshape", {L("q_f32"), "init7_s4_0_0_16_128"}, {L("q_4d")});
-    AddNode(*graph, "Pow", {L("q_4d"), "init1_s_"}, {L("pow_q")});
+    AddNode(*graph, "Reshape", {make_layer_name("q_f32"), "init7_s4_0_0_16_128"},
+            {make_layer_name("q_4d")});
+    AddNode(*graph, "Pow", {make_layer_name("q_4d"), "init1_s_"}, {make_layer_name("pow_q")});
     {
-      NodeProto &n = AddNode(*graph, "ReduceMean", {L("pow_q"), "init7_s1_-1"}, {L("mean_q")});
+      NodeProto &n = AddNode(*graph, "ReduceMean", {make_layer_name("pow_q"), "init7_s1_-1"},
+                             {make_layer_name("mean_q")});
       AddAttribute<int64_t>(n, "keepdims", INT64_C(1));
     }
-    AddNode(*graph, "Add", {L("mean_q"), "init1_s_2::RSh1"}, {L("add_q")});
-    AddNode(*graph, "Sqrt", {L("add_q")}, {L("sqrt_q")});
-    AddNode(*graph, "Reciprocal", {L("sqrt_q")}, {L("rsqrt_q")});
-    AddNode(*graph, "Mul", {L("q_4d"), L("rsqrt_q")}, {L("mul_q")});
+    AddNode(*graph, "Add", {make_layer_name("mean_q"), "init1_s_2::RSh1"},
+            {make_layer_name("add_q")});
+    AddNode(*graph, "Sqrt", {make_layer_name("add_q")}, {make_layer_name("sqrt_q")});
+    AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_q")}, {make_layer_name("rsqrt_q")});
+    AddNode(*graph, "Mul", {make_layer_name("q_4d"), make_layer_name("rsqrt_q")},
+            {make_layer_name("mul_q")});
     {
-      NodeProto &n = AddNode(*graph, "Cast", {L("mul_q")}, {L("q_normed_half")});
+      NodeProto &n =
+          AddNode(*graph, "Cast", {make_layer_name("mul_q")}, {make_layer_name("q_normed_half")});
       AddAttribute<int64_t>(n, "to", INT64_C(10));
     }
-    AddNode(*graph, "Mul", {ld + ".self_attn.q_norm.weight", L("q_normed_half")}, {L("q_normed")});
+    AddNode(*graph, "Mul",
+            {norm_prefix + ".self_attn.q_norm.weight", make_layer_name("q_normed_half")},
+            {make_layer_name("q_normed")});
     {
-      NodeProto &n = AddNode(*graph, "Transpose", {L("q_normed")}, {L("q_T")});
+      NodeProto &n =
+          AddNode(*graph, "Transpose", {make_layer_name("q_normed")}, {make_layer_name("q_T")});
       AddAttribute<std::vector<int64_t>>(n, "perm",
                                          {INT64_C(0), INT64_C(2), INT64_C(1), INT64_C(3)});
     }
 
     // K projection + k_norm + transpose.
-    AddNode(*graph, "MatMul", {L("normed"), lp + "_self_attn_k_proj_weight::T10"}, {L("k_mm")});
+    AddNode(*graph, "MatMul",
+            {make_layer_name("normed"), weight_prefix + "_self_attn_k_proj_weight::T10"},
+            {make_layer_name("k_mm")});
     {
-      NodeProto &n = AddNode(*graph, "Cast", {L("k_mm")}, {L("k_f32")});
+      NodeProto &n = AddNode(*graph, "Cast", {make_layer_name("k_mm")}, {make_layer_name("k_f32")});
       AddAttribute<int64_t>(n, "to", INT64_C(1));
     }
-    AddNode(*graph, "Reshape", {L("k_f32"), "init7_s4_0_0_8_128"}, {L("k_4d")});
-    AddNode(*graph, "Pow", {L("k_4d"), "init1_s_"}, {L("pow_k")});
+    AddNode(*graph, "Reshape", {make_layer_name("k_f32"), "init7_s4_0_0_8_128"},
+            {make_layer_name("k_4d")});
+    AddNode(*graph, "Pow", {make_layer_name("k_4d"), "init1_s_"}, {make_layer_name("pow_k")});
     {
-      NodeProto &n = AddNode(*graph, "ReduceMean", {L("pow_k"), "init7_s1_-1"}, {L("mean_k")});
+      NodeProto &n = AddNode(*graph, "ReduceMean", {make_layer_name("pow_k"), "init7_s1_-1"},
+                             {make_layer_name("mean_k")});
       AddAttribute<int64_t>(n, "keepdims", INT64_C(1));
     }
-    AddNode(*graph, "Add", {L("mean_k"), "init1_s_2::RSh1"}, {L("add_k")});
-    AddNode(*graph, "Sqrt", {L("add_k")}, {L("sqrt_k")});
-    AddNode(*graph, "Reciprocal", {L("sqrt_k")}, {L("rsqrt_k")});
-    AddNode(*graph, "Mul", {L("k_4d"), L("rsqrt_k")}, {L("mul_k")});
+    AddNode(*graph, "Add", {make_layer_name("mean_k"), "init1_s_2::RSh1"},
+            {make_layer_name("add_k")});
+    AddNode(*graph, "Sqrt", {make_layer_name("add_k")}, {make_layer_name("sqrt_k")});
+    AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_k")}, {make_layer_name("rsqrt_k")});
+    AddNode(*graph, "Mul", {make_layer_name("k_4d"), make_layer_name("rsqrt_k")},
+            {make_layer_name("mul_k")});
     {
-      NodeProto &n = AddNode(*graph, "Cast", {L("mul_k")}, {L("k_normed_half")});
+      NodeProto &n =
+          AddNode(*graph, "Cast", {make_layer_name("mul_k")}, {make_layer_name("k_normed_half")});
       AddAttribute<int64_t>(n, "to", INT64_C(10));
     }
-    AddNode(*graph, "Mul", {ld + ".self_attn.k_norm.weight", L("k_normed_half")}, {L("k_normed")});
+    AddNode(*graph, "Mul",
+            {norm_prefix + ".self_attn.k_norm.weight", make_layer_name("k_normed_half")},
+            {make_layer_name("k_normed")});
     {
-      NodeProto &n = AddNode(*graph, "Transpose", {L("k_normed")}, {L("k_T")});
+      NodeProto &n =
+          AddNode(*graph, "Transpose", {make_layer_name("k_normed")}, {make_layer_name("k_T")});
       AddAttribute<std::vector<int64_t>>(n, "perm",
                                          {INT64_C(0), INT64_C(2), INT64_C(1), INT64_C(3)});
     }
 
     // V projection + transpose.
-    AddNode(*graph, "MatMul", {L("normed"), lp + "_self_attn_v_proj_weight::T10"}, {L("v_mm")});
-    AddNode(*graph, "Reshape", {L("v_mm"), "init7_s4_0_0_8_128"}, {L("v_4d")});
+    AddNode(*graph, "MatMul",
+            {make_layer_name("normed"), weight_prefix + "_self_attn_v_proj_weight::T10"},
+            {make_layer_name("v_mm")});
+    AddNode(*graph, "Reshape", {make_layer_name("v_mm"), "init7_s4_0_0_8_128"},
+            {make_layer_name("v_4d")});
     {
-      NodeProto &n = AddNode(*graph, "Transpose", {L("v_4d")}, {L("v_T")});
+      NodeProto &n =
+          AddNode(*graph, "Transpose", {make_layer_name("v_4d")}, {make_layer_name("v_T")});
       AddAttribute<std::vector<int64_t>>(n, "perm",
                                          {INT64_C(0), INT64_C(2), INT64_C(1), INT64_C(3)});
     }
 
     // RoPE for Q.
     {
-      NodeProto &n = AddNode(*graph, "Split", {L("q_T")}, {L("q_half0"), L("q_half1")});
+      NodeProto &n = AddNode(*graph, "Split", {make_layer_name("q_T")},
+                             {make_layer_name("q_half0"), make_layer_name("q_half1")});
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
       AddAttribute<int64_t>(n, "num_outputs", INT64_C(2));
     }
-    AddNode(*graph, "Neg", {L("q_half1")}, {L("neg_q")});
+    AddNode(*graph, "Neg", {make_layer_name("q_half1")}, {make_layer_name("neg_q")});
     {
-      NodeProto &n = AddNode(*graph, "Concat", {L("neg_q"), L("q_half0")}, {L("q_rot")});
+      NodeProto &n =
+          AddNode(*graph, "Concat", {make_layer_name("neg_q"), make_layer_name("q_half0")},
+                  {make_layer_name("q_rot")});
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
     }
-    AddNode(*graph, "Mul", {L("q_T"), "unsqueeze_16"}, {L("q_cos")});
-    AddNode(*graph, "Mul", {L("q_rot"), "unsqueeze_17"}, {L("q_sin")});
-    AddNode(*graph, "Add", {L("q_cos"), L("q_sin")}, {L("q_rope")});
+    AddNode(*graph, "Mul", {make_layer_name("q_T"), "unsqueeze_16"}, {make_layer_name("q_cos")});
+    AddNode(*graph, "Mul", {make_layer_name("q_rot"), "unsqueeze_17"}, {make_layer_name("q_sin")});
+    AddNode(*graph, "Add", {make_layer_name("q_cos"), make_layer_name("q_sin")},
+            {make_layer_name("q_rope")});
 
     // RoPE for K.
     {
-      NodeProto &n = AddNode(*graph, "Split", {L("k_T")}, {L("k_half0"), L("k_half1")});
+      NodeProto &n = AddNode(*graph, "Split", {make_layer_name("k_T")},
+                             {make_layer_name("k_half0"), make_layer_name("k_half1")});
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
       AddAttribute<int64_t>(n, "num_outputs", INT64_C(2));
     }
-    AddNode(*graph, "Neg", {L("k_half1")}, {L("neg_k")});
+    AddNode(*graph, "Neg", {make_layer_name("k_half1")}, {make_layer_name("neg_k")});
     {
-      NodeProto &n = AddNode(*graph, "Concat", {L("neg_k"), L("k_half0")}, {L("k_rot")});
+      NodeProto &n =
+          AddNode(*graph, "Concat", {make_layer_name("neg_k"), make_layer_name("k_half0")},
+                  {make_layer_name("k_rot")});
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
     }
-    AddNode(*graph, "Mul", {L("k_T"), "unsqueeze_16"}, {L("k_cos")});
-    AddNode(*graph, "Mul", {L("k_rot"), "unsqueeze_17"}, {L("k_sin")});
-    AddNode(*graph, "Add", {L("k_cos"), L("k_sin")}, {L("k_rope")});
+    AddNode(*graph, "Mul", {make_layer_name("k_T"), "unsqueeze_16"}, {make_layer_name("k_cos")});
+    AddNode(*graph, "Mul", {make_layer_name("k_rot"), "unsqueeze_17"}, {make_layer_name("k_sin")});
+    AddNode(*graph, "Add", {make_layer_name("k_cos"), make_layer_name("k_sin")},
+            {make_layer_name("k_rope")});
 
     // KV-cache concatenation (produces the layer's present key/value outputs).
     {
-      NodeProto &n = AddNode(*graph, "Concat", {"past_key_values_key_" + li, L("k_rope")},
-                             {"present_key_values_key_" + li});
+      NodeProto &n =
+          AddNode(*graph, "Concat", {"past_key_values_key_" + li, make_layer_name("k_rope")},
+                  {"present_key_values_key_" + li});
       AddAttribute<int64_t>(n, "axis", INT64_C(-2));
     }
     {
-      NodeProto &n = AddNode(*graph, "Concat", {"past_key_values_value_" + li, L("v_T")},
-                             {"present_key_values_value_" + li});
+      NodeProto &n =
+          AddNode(*graph, "Concat", {"past_key_values_value_" + li, make_layer_name("v_T")},
+                  {"present_key_values_value_" + li});
       AddAttribute<int64_t>(n, "axis", INT64_C(-2));
     }
 
     // GQA: expand KV to Q-head count, then compute scaled dot-product attention.
-    AddNode(*graph, "Mul", {"present_key_values_key_" + li, "init10_s1_"}, {L("scaled_k")});
-    AddNode(*graph, "Unsqueeze", {L("scaled_k"), "init7_s1_2__" + sfx}, {L("scaled_k_unsq")});
-    AddNode(*graph, "Unsqueeze", {"present_key_values_value_" + li, "init7_s1_2__" + sfx},
-            {L("v_unsq")});
-    AddNode(*graph, "Expand", {L("scaled_k_unsq"), "init7_s5_1_1_2_1_1"}, {L("scaled_k_exp")});
-    AddNode(*graph, "Expand", {L("v_unsq"), "init7_s5_1_1_2_1_1"}, {L("v_exp")});
-    AddNode(*graph, "Reshape", {L("scaled_k_exp"), "init7_s4_0_16_-1_128"}, {L("k_gqa")});
-    AddNode(*graph, "Reshape", {L("v_exp"), "init7_s4_0_16_-1_128"}, {L("v_gqa")});
-    AddNode(*graph, "Mul", {L("q_rope"), "init10_s1_"}, {L("scaled_q")});
+    AddNode(*graph, "Mul", {"present_key_values_key_" + li, "init10_s1_"},
+            {make_layer_name("scaled_k")});
+    AddNode(*graph, "Unsqueeze", {make_layer_name("scaled_k"), "init7_s1_2__" + layer_suffix},
+            {make_layer_name("scaled_k_unsq")});
+    AddNode(*graph, "Unsqueeze", {"present_key_values_value_" + li, "init7_s1_2__" + layer_suffix},
+            {make_layer_name("v_unsq")});
+    AddNode(*graph, "Expand", {make_layer_name("scaled_k_unsq"), "init7_s5_1_1_2_1_1"},
+            {make_layer_name("scaled_k_exp")});
+    AddNode(*graph, "Expand", {make_layer_name("v_unsq"), "init7_s5_1_1_2_1_1"},
+            {make_layer_name("v_exp")});
+    AddNode(*graph, "Reshape", {make_layer_name("scaled_k_exp"), "init7_s4_0_16_-1_128"},
+            {make_layer_name("k_gqa")});
+    AddNode(*graph, "Reshape", {make_layer_name("v_exp"), "init7_s4_0_16_-1_128"},
+            {make_layer_name("v_gqa")});
+    AddNode(*graph, "Mul", {make_layer_name("q_rope"), "init10_s1_"},
+            {make_layer_name("scaled_q")});
     {
-      NodeProto &n = AddNode(*graph, "Transpose", {L("k_gqa")}, {L("k_gqa_T")});
+      NodeProto &n =
+          AddNode(*graph, "Transpose", {make_layer_name("k_gqa")}, {make_layer_name("k_gqa_T")});
       AddAttribute<std::vector<int64_t>>(n, "perm",
                                          {INT64_C(0), INT64_C(1), INT64_C(3), INT64_C(2)});
     }
-    AddNode(*graph, "MatMul", {L("scaled_q"), L("k_gqa_T")}, {L("attn_scores")});
-    AddNode(*graph, "Where", {"and_2", L("attn_scores"), "init10_s1___" + sfx}, {L("masked")});
+    AddNode(*graph, "MatMul", {make_layer_name("scaled_q"), make_layer_name("k_gqa_T")},
+            {make_layer_name("attn_scores")});
+    AddNode(*graph, "Where",
+            {"and_2", make_layer_name("attn_scores"), "init10_s1___" + layer_suffix},
+            {make_layer_name("masked")});
     {
-      NodeProto &n = AddNode(*graph, "Softmax", {L("masked")}, {L("softmax")});
+      NodeProto &n =
+          AddNode(*graph, "Softmax", {make_layer_name("masked")}, {make_layer_name("softmax")});
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
     }
-    AddNode(*graph, "IsNaN", {L("softmax")}, {L("is_nan")});
-    AddNode(*graph, "Where", {L("is_nan"), "init10_s1_2__" + sfx, L("softmax")}, {L("attn_w")});
-    AddNode(*graph, "MatMul", {L("attn_w"), L("v_gqa")}, {L("attn_out")});
+    AddNode(*graph, "IsNaN", {make_layer_name("softmax")}, {make_layer_name("is_nan")});
+    AddNode(*graph, "Where",
+            {make_layer_name("is_nan"), "init10_s1_2__" + layer_suffix, make_layer_name("softmax")},
+            {make_layer_name("attn_w")});
+    AddNode(*graph, "MatMul", {make_layer_name("attn_w"), make_layer_name("v_gqa")},
+            {make_layer_name("attn_out")});
     {
-      NodeProto &n = AddNode(*graph, "Transpose", {L("attn_out")}, {L("attn_out_T")});
+      NodeProto &n = AddNode(*graph, "Transpose", {make_layer_name("attn_out")},
+                             {make_layer_name("attn_out_T")});
       AddAttribute<std::vector<int64_t>>(n, "perm",
                                          {INT64_C(0), INT64_C(2), INT64_C(1), INT64_C(3)});
     }
-    AddNode(*graph, "Reshape", {L("attn_out_T"), "init7_s3_0_0_2048"}, {L("attn_2d")});
-    AddNode(*graph, "MatMul", {L("attn_2d"), lp + "_self_attn_o_proj_weight::T10"},
-            {L("attn_proj")});
-    AddNode(*graph, "Add", {layer_input, L("attn_proj")}, {L("resid_attn")});
+    AddNode(*graph, "Reshape", {make_layer_name("attn_out_T"), "init7_s3_0_0_2048"},
+            {make_layer_name("attn_2d")});
+    AddNode(*graph, "MatMul",
+            {make_layer_name("attn_2d"), weight_prefix + "_self_attn_o_proj_weight::T10"},
+            {make_layer_name("attn_proj")});
+    AddNode(*graph, "Add", {layer_input, make_layer_name("attn_proj")},
+            {make_layer_name("resid_attn")});
 
     // Post-attention RMSNorm (post_attention_layernorm).
     {
-      NodeProto &n = AddNode(*graph, "Cast", {L("resid_attn")}, {L("post_f32")});
+      NodeProto &n =
+          AddNode(*graph, "Cast", {make_layer_name("resid_attn")}, {make_layer_name("post_f32")});
       AddAttribute<int64_t>(n, "to", INT64_C(1));
     }
-    AddNode(*graph, "Pow", {L("post_f32"), "init1_s_"}, {L("pow_post")});
+    AddNode(*graph, "Pow", {make_layer_name("post_f32"), "init1_s_"},
+            {make_layer_name("pow_post")});
     {
-      NodeProto &n =
-          AddNode(*graph, "ReduceMean", {L("pow_post"), "init7_s1_-1"}, {L("mean_post")});
+      NodeProto &n = AddNode(*graph, "ReduceMean", {make_layer_name("pow_post"), "init7_s1_-1"},
+                             {make_layer_name("mean_post")});
       AddAttribute<int64_t>(n, "keepdims", INT64_C(1));
     }
-    AddNode(*graph, "Add", {L("mean_post"), "init1_s_2::RSh1"}, {L("add_post")});
-    AddNode(*graph, "Sqrt", {L("add_post")}, {L("sqrt_post")});
-    AddNode(*graph, "Reciprocal", {L("sqrt_post")}, {L("rsqrt_post")});
-    AddNode(*graph, "Mul", {L("post_f32"), L("rsqrt_post")}, {L("mul_post")});
+    AddNode(*graph, "Add", {make_layer_name("mean_post"), "init1_s_2::RSh1"},
+            {make_layer_name("add_post")});
+    AddNode(*graph, "Sqrt", {make_layer_name("add_post")}, {make_layer_name("sqrt_post")});
+    AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_post")}, {make_layer_name("rsqrt_post")});
+    AddNode(*graph, "Mul", {make_layer_name("post_f32"), make_layer_name("rsqrt_post")},
+            {make_layer_name("mul_post")});
     {
-      NodeProto &n = AddNode(*graph, "Cast", {L("mul_post")}, {L("post_half")});
+      NodeProto &n =
+          AddNode(*graph, "Cast", {make_layer_name("mul_post")}, {make_layer_name("post_half")});
       AddAttribute<int64_t>(n, "to", INT64_C(10));
     }
-    AddNode(*graph, "Mul", {ld + ".post_attention_layernorm.weight", L("post_half")},
-            {L("mlp_in")});
+    AddNode(*graph, "Mul",
+            {norm_prefix + ".post_attention_layernorm.weight", make_layer_name("post_half")},
+            {make_layer_name("mlp_in")});
 
     // SwiGLU MLP.
-    AddNode(*graph, "MatMul", {L("mlp_in"), lp + "_mlp_gate_proj_weight::T10"}, {L("gate")});
-    AddNode(*graph, "Sigmoid", {L("gate")}, {L("gate_act")});
-    AddNode(*graph, "Mul", {L("gate"), L("gate_act")}, {L("silu")});
-    AddNode(*graph, "MatMul", {L("mlp_in"), lp + "_mlp_up_proj_weight::T10"}, {L("up")});
-    AddNode(*graph, "Mul", {L("silu"), L("up")}, {L("swiglu")});
-    AddNode(*graph, "MatMul", {L("swiglu"), lp + "_mlp_down_proj_weight::T10"}, {L("down")});
-    AddNode(*graph, "Add", {L("resid_attn"), L("down")}, {L("out")});
+    AddNode(*graph, "MatMul",
+            {make_layer_name("mlp_in"), weight_prefix + "_mlp_gate_proj_weight::T10"},
+            {make_layer_name("gate")});
+    AddNode(*graph, "Sigmoid", {make_layer_name("gate")}, {make_layer_name("gate_act")});
+    AddNode(*graph, "Mul", {make_layer_name("gate"), make_layer_name("gate_act")},
+            {make_layer_name("silu")});
+    AddNode(*graph, "MatMul",
+            {make_layer_name("mlp_in"), weight_prefix + "_mlp_up_proj_weight::T10"},
+            {make_layer_name("up")});
+    AddNode(*graph, "Mul", {make_layer_name("silu"), make_layer_name("up")},
+            {make_layer_name("swiglu")});
+    AddNode(*graph, "MatMul",
+            {make_layer_name("swiglu"), weight_prefix + "_mlp_down_proj_weight::T10"},
+            {make_layer_name("down")});
+    AddNode(*graph, "Add", {make_layer_name("resid_attn"), make_layer_name("down")},
+            {make_layer_name("out")});
 
-    layer_input = L("out");
+    layer_input = make_layer_name("out");
   }
 
   // ---- Final RMSNorm (model.norm) + language-model head -------------------

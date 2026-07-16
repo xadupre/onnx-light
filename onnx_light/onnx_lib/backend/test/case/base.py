@@ -18,7 +18,7 @@ from .....ext_test_case import ExtTestCase
 _LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
 # Backend test inputs/outputs are usually ndarrays, but ONNX sequence cases use
 # recursively nested Python lists of ndarrays, and map-typed inputs are Python dicts.
-BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"] | dict
+BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"] | dict[Any, Any]
 BackendTestDataSets: TypeAlias = Sequence[
     tuple[Sequence[BackendTestValue], Sequence[BackendTestValue]]
 ]
@@ -375,7 +375,7 @@ def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
         arr = np.frombuffer(t.raw_data(), dtype=dtype)
         return arr.reshape(tuple(int(d) for d in t.shape))
 
-    def _ds_inputs_to_python(tc) -> list[list[np.ndarray | dict | None]]:
+    def _ds_inputs_to_python(tc: Any) -> list[list[np.ndarray | dict | None]]:
         """Returns per-DataSet positional inputs for ``tc``.
 
         For graph inputs declared with ``map(K, V)`` type (used by

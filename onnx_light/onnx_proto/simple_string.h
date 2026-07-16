@@ -1,6 +1,7 @@
 #pragma once
 
 #include "onnx_light_helpers.h"
+#include <cassert>
 #include <cstring>
 #include <ostream>
 #include <string>
@@ -13,49 +14,36 @@ namespace utils {
 class String;
 
 /**
- * String view used by binary readers.
- * It references existing memory and may keep short values in an internal buffer.
+ * Non-owning string view used by binary readers.
+ * It references existing memory that must remain valid for the lifetime of this view.
  */
 class RefString {
 private:
-  static constexpr size_t kInlineCapacity = 15;
   const char *ptr_;
   size_t size_;
-  bool has_inline_;
-  char inline_data_[kInlineCapacity];
 
 public:
   /** Initializes a view by copying pointer and size from another view. */
-  explicit inline RefString(const RefString &copy)
-      : ptr_(copy.ptr_), size_(copy.size_), has_inline_(copy.has_inline_) {
-    if (has_inline_) {
-      EXT_ENFORCE(size_ <= kInlineCapacity, "RefString inline copy exceeds capacity.");
-      memcpy(inline_data_, copy.inline_data_, size_);
-      ptr_ = inline_data_;
-    }
-  }
+  inline RefString(const RefString &copy) : ptr_(copy.ptr_), size_(copy.size_) {}
   /** Initializes a view from a pointer and an explicit size. */
-  explicit inline RefString(const char *ptr, size_t size)
-      : ptr_(ptr), size_(size), has_inline_(false) {}
+  explicit inline RefString(const char *ptr, size_t size) : ptr_(ptr), size_(size) {}
   /** Assigns the pointer and size from another view. */
   inline RefString &operator=(const RefString &v) {
+    ptr_ = v.ptr_;
     size_ = v.size_;
-    has_inline_ = v.has_inline_;
-    if (has_inline_) {
-      EXT_ENFORCE(size_ <= kInlineCapacity, "RefString inline assignment exceeds capacity.");
-      memcpy(inline_data_, v.inline_data_, size_);
-      ptr_ = inline_data_;
-    } else {
-      ptr_ = v.ptr_;
-    }
     return *this;
   }
   /** Assigns the pointer and size from an owning string. */
   RefString &operator=(const String &v);
   /** Returns the number of characters in the view. */
   inline size_t size() const { return size_; }
-  /** Returns the underlying pointer. */
-  inline const char *c_str() const { return ptr_; }
+  /** Returns the underlying null-terminated pointer (asserts null-termination in debug builds). */
+  inline const char *c_str() const {
+#ifndef NDEBUG
+    assert(ptr_ == nullptr || ptr_[size_] == '\0');
+#endif
+    return ptr_;
+  }
   /** Returns the underlying pointer without ownership. */
   inline const char *data() const { return ptr_; }
   /** Returns a string_view. */
@@ -225,16 +213,8 @@ private:
 
 /** Assigns a non-owning view from an owning string. */
 inline RefString &RefString::operator=(const String &v) {
+  ptr_ = v.data();
   size_ = v.size();
-  if (size_ > 0 && size_ <= kInlineCapacity) {
-    EXT_ENFORCE(size_ <= kInlineCapacity, "RefString inline conversion exceeds capacity.");
-    memcpy(inline_data_, v.data(), size_);
-    ptr_ = inline_data_;
-    has_inline_ = true;
-  } else {
-    ptr_ = v.data();
-    has_inline_ = false;
-  }
   return *this;
 }
 

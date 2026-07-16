@@ -39,12 +39,12 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
-  static std::vector<uint8_t> LoadBytes(const Attributes &attrs);
+  static Tensor LoadBytes(const Attributes &attrs, RawBufferAllocator *allocator = nullptr);
   static void LoadBytesInto(const Attributes &attrs, uint8_t *destination, size_t byte_count);
   static int64_t ComputeElementCount(const onnx_kernels::Shape &shape);
 
   Attributes attrs_;
-  std::vector<uint8_t> loaded_bytes_;
+  Tensor loaded_bytes_;
 };
 
 } // namespace kernel

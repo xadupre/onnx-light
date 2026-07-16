@@ -1808,6 +1808,99 @@ TEST(RunModel, DelayedInitializerUsesAllocatorWhenProvided) {
   fs::remove(weights_path);
 }
 
+TEST(RunModel, DelayedInitializerCpuLoadUsesConstructionAllocator) {
+  namespace fs = std::filesystem;
+
+  const fs::path weights_path =
+      fs::temp_directory_path() / "onnx_light_delayed_initializer_cpu_alloc.bin";
+  fs::remove(weights_path);
+  {
+    std::ofstream out(weights_path, std::ios::binary);
+    ASSERT_TRUE(out.good());
+    const float values[3] = {1.0f, 2.0f, 3.0f};
+    out.write(reinterpret_cast<const char *>(values), sizeof(values));
+  }
+
+  // SimpleRawBufferAllocator capacity counts buffer slots, not bytes.
+  constexpr size_t kAllocatorSlotCapacity = 1;
+  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+
+  KernelContext ctx(DefaultOpset(18));
+  ctx.allocator = &alloc;
+
+  onnx_kernels::kernel::DelayedInitializer::Attributes attrs;
+  attrs.shape = {3};
+  attrs.dtype = static_cast<int32_t>(TensorProto::DataType::FLOAT);
+  attrs.load_device = "cpu";
+  attrs.runtime_device = "cpu";
+  attrs.filename = weights_path.string();
+  attrs.offset = 0;
+  // Construction with an allocator: loaded_bytes_ should be allocator-backed.
+  onnx_kernels::kernel::DelayedInitializer delayed(ctx, std::move(attrs));
+
+  // The internal buffer consumed one allocator slot at construction time.
+  EXPECT_EQ(alloc.TotalAllocatedSize(), 3 * sizeof(float));
+
+  // Calling operator() without a runtime allocator returns a vector-backed copy.
+  Tensor y = delayed(nullptr);
+  EXPECT_FALSE(y.has_allocation());
+  ASSERT_EQ(y.shape.size(), 1u);
+  EXPECT_EQ(y.shape[0], 3);
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 2.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], 3.0f);
+
+  fs::remove(weights_path);
+}
+
+TEST(RunModel, DelayedInitializerCpuLoadWithBothAllocators) {
+  namespace fs = std::filesystem;
+
+  const fs::path weights_path =
+      fs::temp_directory_path() / "onnx_light_delayed_initializer_cpu_both_alloc.bin";
+  fs::remove(weights_path);
+  {
+    std::ofstream out(weights_path, std::ios::binary);
+    ASSERT_TRUE(out.good());
+    const float values[2] = {7.0f, -8.5f};
+    out.write(reinterpret_cast<const char *>(values), sizeof(values));
+  }
+
+  // Allocator for the construction-time loaded_bytes_ buffer.
+  // SimpleRawBufferAllocator capacity counts buffer slots, not bytes.
+  constexpr size_t kConstructionAllocatorSlots = 1;
+  onnx_kernels::SimpleRawBufferAllocator construction_alloc(kConstructionAllocatorSlots);
+
+  KernelContext ctx(DefaultOpset(18));
+  ctx.allocator = &construction_alloc;
+
+  onnx_kernels::kernel::DelayedInitializer::Attributes attrs;
+  attrs.shape = {2};
+  attrs.dtype = static_cast<int32_t>(TensorProto::DataType::FLOAT);
+  attrs.load_device = "cpu";
+  attrs.runtime_device = "cpu";
+  attrs.filename = weights_path.string();
+  attrs.offset = 0;
+  onnx_kernels::kernel::DelayedInitializer delayed(ctx, std::move(attrs));
+
+  // Call operator() with a separate runtime allocator: the output must be
+  // backed by the runtime allocator, not the construction-time allocator.
+  constexpr size_t kRuntimeAllocatorSlots = 1;
+  onnx_kernels::SimpleRawBufferAllocator runtime_alloc(kRuntimeAllocatorSlots);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_allocator(&runtime_alloc);
+
+  Tensor y = delayed(&rt);
+  ASSERT_TRUE(y.has_allocation());
+  EXPECT_EQ(y.allocation_owner(), &runtime_alloc);
+  ASSERT_EQ(y.shape.size(), 1u);
+  EXPECT_EQ(y.shape[0], 2);
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 7.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], -8.5f);
+
+  fs::remove(weights_path);
+}
+
 // ---------------------------------------------------------------------------
 // RunFunction tests
 // ---------------------------------------------------------------------------

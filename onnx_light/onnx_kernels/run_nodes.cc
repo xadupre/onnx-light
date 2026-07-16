@@ -215,9 +215,14 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     // in the body's output list (e.g. a Scan body that uses the same tensor
     // as both a state output and a scan output). After the copy, disown the
     // child's allocation so its destructor does not free a slot now owned by
-    // the caller's copy. DisownAllocation() is a no-op for inline tensors
-    // (which are the common case since MakeSubgraphContext withholds the
-    // parent allocator from child contexts).
+    // the caller's copy.
+    //
+    // Note: RunSubgraph is used for If/Loop/Scan subgraphs whose child context
+    // is created via MakeSubgraphContext (which withholds the parent allocator),
+    // so body outputs are typically inline. DisownAllocation() is a no-op for
+    // inline tensors. The pattern also guards the rarer allocator-backed case
+    // (e.g. when CallModelLocalFunction uses MakeFunctionContext, which does
+    // propagate the allocator — but that path does not call RunSubgraph).
     outputs.push_back(it->second);
     it->second.DisownAllocation();
   }

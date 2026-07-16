@@ -224,6 +224,16 @@ inline std::string quote_string(const RefString &s) { return quote_string(s.sv()
 /** Quotes an owning string for debug and error messages. */
 inline std::string quote_string(const String &s) { return quote_string(s.sv()); }
 
+/** Appends an owning string to a MakeString stream without copying. */
+inline void MakeStringInternalElement(onnx_light_helpers::StringStream &ss, const String &s) {
+  ss.append_string(static_cast<const std::string &>(s));
+}
+
+/** Appends a non-owning string view to a MakeString stream. */
+inline void MakeStringInternalElement(onnx_light_helpers::StringStream &ss, const RefString &s) {
+  onnx_light_helpers::MakeStringInternalElement(ss, s.sv());
+}
+
 /** Streams a RefString to an output stream. */
 inline std::ostream &operator<<(std::ostream &os, const RefString &s) {
   os.write(s.data(), static_cast<std::streamsize>(s.size()));

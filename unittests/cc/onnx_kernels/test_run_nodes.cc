@@ -2591,10 +2591,10 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
 }
 
 // Variant of LoopNodeRunsBodySubgraph with a SimpleRawBufferAllocator. Verifies
-// that iter/cond scalars produced by MakeInt64Scalar/MakeBoolScalar in the
-// run_body lambda are allocated from rt.allocator() and that subgraph contexts
-// created inside RunSubgraph do not inherit the allocator, preventing double-free
-// of body-output tensors threaded as loop-carried state across iterations.
+// that subgraph contexts created inside RunSubgraph do not inherit the allocator,
+// preventing double-free of body-output tensors threaded as loop-carried state
+// across iterations.  Iter/cond scalars use inline storage (no allocator slot
+// consumed); only the final loop outputs are backed by the allocator.
 TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   ModelProto model;
   model.set_ir_version(10);
@@ -2632,16 +2632,17 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   body->add_output()->set_name("s_out");
   body->add_output()->set_name("s_out");
 
-  // Two slots: iter+cond scalars during each iteration (freed when the child
-  // context is destroyed) and then s_final+scan after the loop.
+  // Two slots are sufficient: only the final loop outputs (s_final and scan)
+  // are backed by the allocator; iter/cond scalars injected into each child
+  // context use inline storage and consume no allocator slots.
   constexpr size_t kAllocatorSlotCapacity = 2;
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_allocator(&alloc);
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+  rt.set_allocator(&alloc);
 
   RunModel(model, rt);
 
@@ -2727,24 +2728,24 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
 }
 
 // Same as MixedTensorSequenceAndScanOutputs but with a SimpleRawBufferAllocator
-// attached to the RuntimeContext. Verifies that iter/cond scalars are allocated
-// from the parent allocator and that subgraph contexts not inheriting the parent
-// allocator prevents double-free of body outputs used as loop-carried state.
+// attached to the RuntimeContext. Verifies that subgraph contexts do not inherit
+// the parent allocator (preventing double-free of loop-carried outputs) and that
+// the final loop outputs are correctly backed by the parent allocator.
 TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
-  // Two simultaneous slots are needed: iter and cond scalars are allocated from
-  // rt.allocator() via MakeInt64Scalar/MakeBoolScalar and stored in the child
-  // context. The child destructor frees them through each tensor's
-  // allocation_owner (the parent allocator). After the loop the tensor state
-  // output and the stacked scan output each occupy one slot.
+  // Two simultaneous slots are needed: only the final loop outputs (acc_final
+  // and scan) are backed by the allocator. Iter/cond scalars injected into
+  // each child context use inline storage and consume no allocator slots.
+  // Input tensors are set before attaching the allocator so they stay inline
+  // and do not consume allocator slots.
   constexpr size_t kAllocatorSlotCapacity = 2;
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
-  rt.set_allocator(&alloc);
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
   rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+  rt.set_allocator(&alloc);
 
   RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},
                        BuildMixedSequenceLoopBody()),

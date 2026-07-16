@@ -53,13 +53,12 @@ bool ParseBoolScalar(const Tensor &t, const std::string &where) {
   return t.AsBool()[0] != 0;
 }
 
-Tensor MakeInt64Scalar(const std::string &name, int64_t v,
-                       RawBufferAllocator *allocator = nullptr) {
-  return Tensor::FromInt64(name, {}, {v}, allocator);
+Tensor MakeInt64Scalar(const std::string &name, int64_t v) {
+  return Tensor::FromInt64(name, {}, {v});
 }
 
-Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *allocator = nullptr) {
-  return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)}, allocator);
+Tensor MakeBoolScalar(const std::string &name, bool v) {
+  return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)});
 }
 
 int64_t CheckedMulInt64(int64_t a, int64_t b, const std::string &where) {
@@ -304,10 +303,8 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
 
     const std::string &iter_name = body.input(0).name().as_string();
     const std::string &cond_name = body.input(1).name().as_string();
-    child.Put(iter_name, MakeInt64Scalar(iter_name, iter, rt.allocator()),
-              RuntimeEventKind::kInput);
-    child.Put(cond_name, MakeBoolScalar(cond_name, cond_value, rt.allocator()),
-              RuntimeEventKind::kInput);
+    child.Put(iter_name, MakeInt64Scalar(iter_name, iter), RuntimeEventKind::kInput);
+    child.Put(cond_name, MakeBoolScalar(cond_name, cond_value), RuntimeEventKind::kInput);
     for (std::size_t i = 0; i < n; ++i) {
       const std::string &bname = body.input(static_cast<int>(2 + i)).name().as_string();
       if (is_seq_state[i]) {
@@ -491,10 +488,9 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(2 + n);
     bindings.emplace_back(body.input(0).name().as_string(),
-                          MakeInt64Scalar(body.input(0).name().as_string(), iter, rt.allocator()));
-    bindings.emplace_back(
-        body.input(1).name().as_string(),
-        MakeBoolScalar(body.input(1).name().as_string(), cond_in, rt.allocator()));
+                          MakeInt64Scalar(body.input(0).name().as_string(), iter));
+    bindings.emplace_back(body.input(1).name().as_string(),
+                          MakeBoolScalar(body.input(1).name().as_string(), cond_in));
     for (size_t i = 0; i < n; ++i) {
       Tensor t = state[i];
       t.name = body.input(2 + i).name().as_string();

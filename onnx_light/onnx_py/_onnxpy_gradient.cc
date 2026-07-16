@@ -101,7 +101,9 @@ Parameters
 nodes : list[NodeProto]
     The forward computation nodes in topological order.
 inputs : list[str]
-    Names of all graph inputs.
+    Names of all graph inputs.  This parameter is accepted for API symmetry;
+    it is currently unused but reserved for future use (e.g. distinguishing
+    graph inputs from initializers during gradient pruning).
 initializers : list[TensorProto]
     Constant tensors embedded in the forward graph.
 xs : list[str]

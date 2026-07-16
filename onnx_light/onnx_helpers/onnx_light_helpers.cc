@@ -114,6 +114,10 @@ void MakeStringInternal(StringStream &) {}
 
 void MakeStringInternalElement(StringStream &ss, const std::string &t) { ss.append_string(t); }
 
+void MakeStringInternalElement(StringStream &ss, std::string_view t) {
+  ss.append_string(std::string(t));
+}
+
 void MakeStringInternalElement(StringStream &ss, const char *t) { ss.append_charp(t); }
 
 void MakeStringInternalElement(StringStream &ss, const char &t) { ss.append_char(t); }

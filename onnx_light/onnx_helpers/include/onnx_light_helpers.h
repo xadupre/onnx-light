@@ -8,6 +8,7 @@
 #include <source_location>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -68,6 +69,9 @@ void MakeStringInternalElement(StringStream &ss, const char *t);
 
 /** Appends a standard string to @p ss. */
 void MakeStringInternalElement(StringStream &ss, const std::string &t);
+
+/** Appends a string view to @p ss. */
+void MakeStringInternalElement(StringStream &ss, std::string_view t);
 
 /** Appends a single character to @p ss. */
 void MakeStringInternalElement(StringStream &ss, const char &t);

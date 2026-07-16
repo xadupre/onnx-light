@@ -402,6 +402,21 @@ ComputeTags(const std::vector<NodeProto> &nodes) {
 }
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+ComputeTags(const std::vector<const NodeProto *> &nodes) {
+  std::unordered_map<std::string, std::string> computed_value_tags;
+  std::vector<std::string> computed_node_tags;
+  std::vector<const NodeProto *> ptrs;
+  ptrs.reserve(nodes.size());
+  for (const NodeProto *node : nodes) {
+    if (node != nullptr) {
+      ptrs.push_back(node);
+    }
+  }
+  InferNodesTags(ptrs, computed_value_tags, computed_node_tags);
+  return {computed_value_tags, computed_node_tags};
+}
+
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 ComputeContext::ComputeValueAndNodeTags(const GraphProto &graph) {
   std::tie(value_tags_, node_tags_) = ComputeTags(graph);
   return {value_tags_, node_tags_};
@@ -420,6 +435,12 @@ ComputeContext::ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes) {
 }
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+ComputeContext::ComputeValueAndNodeTags(const std::vector<const NodeProto *> &nodes) {
+  std::tie(value_tags_, node_tags_) = ComputeTags(nodes);
+  return {value_tags_, node_tags_};
+}
+
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 InferValueAndNodeTags(const GraphProto &graph) {
   ComputeContext ctx;
   return ctx.ComputeValueAndNodeTags(graph);
@@ -433,6 +454,12 @@ InferValueAndNodeTags(const FunctionProto &function) {
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 InferValueAndNodeTags(const std::vector<NodeProto> &nodes) {
+  ComputeContext ctx;
+  return ctx.ComputeValueAndNodeTags(nodes);
+}
+
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+InferValueAndNodeTags(const std::vector<const NodeProto *> &nodes) {
   ComputeContext ctx;
   return ctx.ComputeValueAndNodeTags(nodes);
 }

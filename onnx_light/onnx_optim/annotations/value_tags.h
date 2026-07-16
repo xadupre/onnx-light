@@ -28,6 +28,9 @@ InferValueAndNodeTags(const FunctionProto &function);
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 InferValueAndNodeTags(const std::vector<NodeProto> &nodes);
 
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+InferValueAndNodeTags(const std::vector<const NodeProto *> &nodes);
+
 void WriteValueAndNodeTagsToMetadata(GraphProto &graph);
 void WriteValueAndNodeTagsToMetadata(FunctionProto &function);
 void WriteValueAndNodeTagsToMetadata(ModelProto &model);

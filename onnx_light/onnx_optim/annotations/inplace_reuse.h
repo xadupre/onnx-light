@@ -310,6 +310,11 @@ public:
   std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
   ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes);
 
+  /// Same as :cpp:func:`ComputeValueAndNodeTags(const std::vector<NodeProto>&)`
+  /// but receives a non-owning list of node pointers.
+  std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+  ComputeValueAndNodeTags(const std::vector<const NodeProto *> &nodes);
+
   /// Read-only access to the last value-tag map computed through
   /// :cpp:func:`ComputeValueAndNodeTags`.
   const std::unordered_map<std::string, std::string> &ValueTags() const noexcept {

@@ -351,7 +351,7 @@ public:
   /// Convenience overload for brace-enclosed initializer lists such as
   /// ``{2, 4}``; copies the values into a temporary vector and forwards to
   /// the span overload.  Callers with an existing ``std::vector<int64_t>``
-  /// can pass it directly — it converts to ``std::span`` implicitly.
+  /// can pass it directly via implicit conversion to ``std::span``.
   std::vector<Tensor> operator()(const Tensor &input, int64_t axis,
                                  std::initializer_list<int64_t> split, int64_t num_outputs,
                                  RuntimeContext *rt = nullptr) const {

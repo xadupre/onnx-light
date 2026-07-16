@@ -3235,7 +3235,6 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                "RunNode: LabelEncoder requires exactly one of 'values_int64s', "
                "'values_floats', 'values_strings' or 'values_tensor' to be set.");
 
-         // Resolve KeyT.
          // Resolve KeyT. The tensor holder keeps the key data alive when the key
          // source is a tensor attribute; spans reference either the holder or an
          // attribute-sourced vector.

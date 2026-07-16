@@ -303,15 +303,8 @@ public:
   std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
   ComputeValueAndNodeTags(const FunctionProto &function);
 
-  /**
-   * Same as :cpp:func:`ComputeValueAndNodeTags(const GraphProto&)` but for an
-   * arbitrary node list.
-   */
-  std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-  ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes);
-
-  /// Same as :cpp:func:`ComputeValueAndNodeTags(const std::vector<NodeProto>&)`
-  /// but receives a non-owning list of node pointers.
+  /// Same as :cpp:func:`ComputeValueAndNodeTags(const GraphProto&)` but for an
+  /// arbitrary non-owning node-pointer list.
   std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
   ComputeValueAndNodeTags(const std::vector<const NodeProto *> &nodes);
 

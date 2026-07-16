@@ -13,8 +13,8 @@ bool GradGemm(const NodeProto &node, const std::string &output_grad,
               std::unordered_map<std::string, std::string> &grad_accum, int &counter,
               FunctionProto &func) {
   const auto &inputs = node.input();
-  std::string A = (inputs.size() >= 1 && !inputs[0].null()) ? inputs[0].as_string() : "";
-  std::string B = (inputs.size() >= 2 && !inputs[1].null()) ? inputs[1].as_string() : "";
+  std::string A = (inputs.size() >= 1 && !inputs[0].null()) ? std::string(inputs[0]) : "";
+  std::string B = (inputs.size() >= 2 && !inputs[1].null()) ? std::string(inputs[1]) : "";
   if (A.empty() || B.empty())
     return false;
 
@@ -34,7 +34,7 @@ bool GradGemm(const NodeProto &node, const std::string &output_grad,
 
   // Gradient for optional bias: sum over the batch axis.
   if (inputs.size() >= 3 && !inputs[2].null() && !inputs[2].empty()) {
-    std::string bias = inputs[2].as_string();
+    std::string bias = inputs[2];
     std::string dBias = NewGradName("dC_init", counter);
     NodeProto &rs = func.add_node("ReduceSum", {output_grad}, {dBias});
     AddAttribute(rs, "axes", std::vector<int64_t>{0}); // 0 = batch axis

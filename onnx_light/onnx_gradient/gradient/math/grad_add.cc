@@ -13,9 +13,9 @@ bool GradAdd(const NodeProto &node, const std::string &output_grad,
              FunctionProto &func) {
   const auto &inputs = node.input();
   if (inputs.size() >= 1 && !inputs[0].null() && !inputs[0].empty())
-    AccumulateGrad(output_grad, grad_accum[inputs[0].as_string()], counter, func);
+    AccumulateGrad(output_grad, grad_accum[inputs[0]], counter, func);
   if (inputs.size() >= 2 && !inputs[1].null() && !inputs[1].empty())
-    AccumulateGrad(output_grad, grad_accum[inputs[1].as_string()], counter, func);
+    AccumulateGrad(output_grad, grad_accum[inputs[1]], counter, func);
   return true;
 }
 

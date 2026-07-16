@@ -12,8 +12,8 @@ bool GradMatMul(const NodeProto &node, const std::string &output_grad,
                 std::unordered_map<std::string, std::string> &grad_accum, int &counter,
                 FunctionProto &func) {
   const auto &inputs = node.input();
-  std::string A = (inputs.size() >= 1 && !inputs[0].null()) ? inputs[0].as_string() : "";
-  std::string B = (inputs.size() >= 2 && !inputs[1].null()) ? inputs[1].as_string() : "";
+  std::string A = (inputs.size() >= 1 && !inputs[0].null()) ? std::string(inputs[0]) : "";
+  std::string B = (inputs.size() >= 2 && !inputs[1].null()) ? std::string(inputs[1]) : "";
   if (A.empty() || B.empty())
     return false;
 

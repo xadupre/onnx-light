@@ -88,10 +88,10 @@ The callback must have the signature ``fn(ctx, node) -> None`` in Python and
       .. code-block:: cpp
 
           void infer_my_op(ShapesContext &ctx, const NodeProto &node) {
-            const OptimTensor &x = ctx.Get(node.input(0).as_string());
+            const OptimTensor &x = ctx.Get(node.input(0).sv());
             // derive the output shape from the input(s) and attributes
             OptimShape out_shape = x.Shape();
-            ctx.Set(node.output(0).as_string(),
+            ctx.Set(node.output(0).sv(),
                     OptimTensor(/*data=*/nullptr, x.Dtype(), out_shape));
           }
 

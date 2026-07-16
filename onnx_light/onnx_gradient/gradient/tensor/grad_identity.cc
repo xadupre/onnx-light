@@ -13,7 +13,7 @@ bool GradIdentity(const NodeProto &node, const std::string &output_grad,
                   FunctionProto &func) {
   const auto &inputs = node.input();
   if (inputs.size() >= 1 && !inputs[0].null() && !inputs[0].empty())
-    AccumulateGrad(output_grad, grad_accum[inputs[0].as_string()], counter, func);
+    AccumulateGrad(output_grad, grad_accum[inputs[0]], counter, func);
   return true;
 }
 

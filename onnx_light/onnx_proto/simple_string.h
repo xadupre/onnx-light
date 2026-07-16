@@ -24,15 +24,11 @@ private:
 
 public:
   /** Initializes a view by copying pointer and size from another view. */
-  inline RefString(const RefString &copy) : ptr_(copy.ptr_), size_(copy.size_) {}
+  RefString(const RefString &copy) = default;
   /** Initializes a view from a pointer and an explicit size. */
   explicit inline RefString(const char *ptr, size_t size) : ptr_(ptr), size_(size) {}
   /** Assigns the pointer and size from another view. */
-  inline RefString &operator=(const RefString &v) {
-    ptr_ = v.ptr_;
-    size_ = v.size_;
-    return *this;
-  }
+  RefString &operator=(const RefString &v) = default;
   /** Assigns the pointer and size from an owning string. */
   RefString &operator=(const String &v);
   /** Returns the number of characters in the view. */

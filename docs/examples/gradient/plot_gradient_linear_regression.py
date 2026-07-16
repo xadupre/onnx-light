@@ -107,7 +107,7 @@ b_true = np.float32(1.5)
 X_data = rng.standard_normal((N, F)).astype(np.float32)
 y_data = X_data @ W_true + b_true + 0.05 * rng.standard_normal((N, 1)).astype(np.float32)
 
-# --- Initialise parameters ---
+# --- Initialize parameters ---
 W = rng.standard_normal((F, 1)).astype(np.float32) * 0.1
 b = np.float32(0.0)
 

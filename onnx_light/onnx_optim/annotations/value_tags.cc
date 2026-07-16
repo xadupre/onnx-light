@@ -5,6 +5,7 @@
 #include "onnx_optim/annotations/value_tags.h"
 
 #include <algorithm>
+#include <iterator>
 #include <string_view>
 #include <tuple>
 #include <unordered_set>
@@ -365,6 +366,7 @@ ComputeTagsFromNodeIterators(NodeIterator begin, NodeIterator end) {
   std::unordered_map<std::string, std::string> computed_value_tags;
   std::vector<std::string> computed_node_tags;
   std::vector<const NodeProto *> ptrs;
+  ptrs.reserve(static_cast<std::size_t>(std::distance(begin, end)));
   for (NodeIterator it = begin; it != end; ++it) {
     ptrs.push_back(&(*it));
   }

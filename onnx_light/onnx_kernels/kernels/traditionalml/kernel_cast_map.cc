@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -42,7 +43,7 @@ template <> std::string ConvertValue<std::string, std::string>(const std::string
   return value;
 }
 
-void ValidateAttributes(const std::vector<int64_t> &input_keys, std::size_t input_values_size,
+void ValidateAttributes(std::span<const int64_t> input_keys, std::size_t input_values_size,
                         const std::string &map_form, int64_t max_map) {
   EXT_ENFORCE_INVALID(input_keys.size() == input_values_size,
                       "kernel::CastMap: input keys/values must have the same length.");
@@ -58,7 +59,7 @@ void ValidateAttributes(const std::vector<int64_t> &input_keys, std::size_t inpu
   }
 }
 
-int64_t OutputLength(const std::vector<int64_t> &input_keys, const std::string &map_form,
+int64_t OutputLength(std::span<const int64_t> input_keys, const std::string &map_form,
                      int64_t max_map) {
   return map_form == "SPARSE" ? max_map : static_cast<int64_t>(input_keys.size());
 }
@@ -66,7 +67,7 @@ int64_t OutputLength(const std::vector<int64_t> &input_keys, const std::string &
 // Returns the input keys sorted in ascending order along with the original
 // indices in ``input_values`` corresponding to each (sorted) key.
 std::vector<std::pair<int64_t, std::size_t>>
-SortKeysAscending(const std::vector<int64_t> &input_keys) {
+SortKeysAscending(std::span<const int64_t> input_keys) {
   std::vector<std::pair<int64_t, std::size_t>> sorted;
   sorted.reserve(input_keys.size());
   for (std::size_t i = 0; i < input_keys.size(); ++i) {
@@ -80,7 +81,7 @@ SortKeysAscending(const std::vector<int64_t> &input_keys) {
 }
 
 template <typename V, typename OutT>
-void FillNumericOutput(const std::vector<int64_t> &input_keys, const std::vector<V> &input_values,
+void FillNumericOutput(std::span<const int64_t> input_keys, std::span<const V> input_values,
                        const std::string &map_form, OutT *out) {
   if (map_form == "SPARSE") {
     // Already zero-initialised by the caller; just scatter values by key.
@@ -96,7 +97,7 @@ void FillNumericOutput(const std::vector<int64_t> &input_keys, const std::vector
 }
 
 template <typename V>
-void FillStringOutput(const std::vector<int64_t> &input_keys, const std::vector<V> &input_values,
+void FillStringOutput(std::span<const int64_t> input_keys, std::span<const V> input_values,
                       const std::string &map_form, std::vector<std::string> &out) {
   if (map_form == "SPARSE") {
     // ``out`` has already been resized and default-constructed by the caller.
@@ -114,9 +115,9 @@ void FillStringOutput(const std::vector<int64_t> &input_keys, const std::vector<
 } // namespace
 
 template <typename V, typename OutT>
-Tensor CastMap::operator()(const std::vector<int64_t> &input_keys,
-                           const std::vector<V> &input_values, const std::string &cast_to,
-                           const std::string &map_form, int64_t max_map, RuntimeContext *rt) const {
+Tensor CastMap::operator()(std::span<const int64_t> input_keys, std::span<const V> input_values,
+                           const std::string &cast_to, const std::string &map_form, int64_t max_map,
+                           RuntimeContext *rt) const {
   ValidateAttributes(input_keys, input_values.size(), map_form, max_map);
   (void)cast_to; // cast_to is encoded in OutT; only validated by the caller.
 
@@ -129,8 +130,8 @@ Tensor CastMap::operator()(const std::vector<int64_t> &input_keys,
     FillStringOutput<V>(input_keys, input_values, map_form, out.string_data);
     return out;
   } else {
-    std::vector<uint8_t> bytes(static_cast<std::size_t>(n) * sizeof(OutT), 0u);
-    Tensor out("", static_cast<int32_t>(TensorElementType<OutT>::value), shape, std::move(bytes));
+    Tensor out = MakeOutputTensor(static_cast<int32_t>(TensorElementType<OutT>::value), shape,
+                                  static_cast<std::size_t>(n) * sizeof(OutT), ctx_.allocator);
     FillNumericOutput<V, OutT>(input_keys, input_values, map_form,
                                reinterpret_cast<OutT *>(out.mutable_bytes()));
     return out;
@@ -138,7 +139,7 @@ Tensor CastMap::operator()(const std::vector<int64_t> &input_keys,
 }
 
 template <typename V, typename OutT>
-void CastMap::operator()(const std::vector<int64_t> &input_keys, const std::vector<V> &input_values,
+void CastMap::operator()(std::span<const int64_t> input_keys, std::span<const V> input_values,
                          const std::string &cast_to, const std::string &map_form, int64_t max_map,
                          Tensor &output) const {
   ValidateAttributes(input_keys, input_values.size(), map_form, max_map);
@@ -168,10 +169,10 @@ void CastMap::operator()(const std::vector<int64_t> &input_keys, const std::vect
 
 // Explicit instantiations for all supported (V, OutT) pairs.
 #define ONNX_LIGHT_INSTANTIATE_CAST_MAP(V, OutT)                                                   \
-  template Tensor CastMap::operator()<V, OutT>(                                                    \
-      const std::vector<int64_t> &, const std::vector<V> &, const std::string &,                   \
-      const std::string &, int64_t, RuntimeContext *) const;                                       \
-  template void CastMap::operator()<V, OutT>(const std::vector<int64_t> &, const std::vector<V> &, \
+  template Tensor CastMap::operator()<V, OutT>(std::span<const int64_t>, std::span<const V>,       \
+                                               const std::string &, const std::string &, int64_t,  \
+                                               RuntimeContext *) const;                            \
+  template void CastMap::operator()<V, OutT>(std::span<const int64_t>, std::span<const V>,         \
                                              const std::string &, const std::string &, int64_t,    \
                                              Tensor &) const
 

@@ -20,8 +20,12 @@ void ReleaseTensorAllocation(Tensor &tensor) {
   if (!tensor.has_allocation()) {
     return;
   }
-  RawBufferAllocator *owner = tensor.allocation_owner();
-  owner->Free(tensor.allocation());
+  // Only free when this context owns the slot. Non-owning (borrowed) tensors
+  // created via Tensor::DisownAllocation share their slot with a parent
+  // context that retains ownership; freeing here would be a double-free.
+  if (tensor.has_allocation_owner()) {
+    tensor.allocation_owner()->Free(tensor.allocation());
+  }
   tensor.ClearAllocation();
 }
 

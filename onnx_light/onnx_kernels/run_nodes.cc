@@ -858,18 +858,11 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
     Tensor bound = it->second;
     bound.name = param_name;
     if (bound.has_allocation()) {
-      // Detach from the parent's allocator slot.  The child context must not
-      // co-own the same RawBuffer: its destructor would free the slot while the
-      // parent still holds it (use-after-free).  Copy the bytes into inline
-      // storage so that child.Put / EnsureAllocatorBacked migrates the copy
-      // into its own allocator slot instead.
-      const size_t n = bound.size_bytes();
-      RawBuffer inline_copy(n);
-      if (n > 0) {
-        std::memcpy(inline_copy.data(), bound.bytes(), n);
-      }
-      bound.ClearAllocation();
-      bound.data = std::move(inline_copy);
+      // Pass a non-owning view of the parent's allocator slot into the child.
+      // The child context shares the same allocator and can read through the
+      // slot pointer without owning it; ReleaseTensorAllocation skips Free
+      // when has_allocation_owner() is false, preventing a double-free.
+      bound.DisownAllocation();
     }
     child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
   }
@@ -912,6 +905,11 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
                         "' of model-local function '", op_type,
                         "' was not produced by the function body.");
     Tensor result = std::move(it->second);
+    // Erase from the child map immediately so that the child context
+    // destructor does not attempt to free the slot that is now owned by
+    // the parent (the compiler-generated move leaves allocation_ set in
+    // the moved-from entry, which would otherwise cause a double-free).
+    child.tensors().erase(it);
     result.name = caller_name;
     rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
   }

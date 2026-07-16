@@ -424,6 +424,10 @@ struct Tensor {
   }
 
   bool has_allocation() const noexcept { return allocation_ != nullptr; }
+  /// Returns true when this tensor owns its allocator slot and is responsible
+  /// for freeing it. False for non-owning (borrowed) allocator views created
+  /// via :cpp:func:`DisownAllocation`.
+  bool has_allocation_owner() const noexcept { return allocation_owner_ != nullptr; }
   RawBuffer *allocation() const {
     EXT_ENFORCE(allocation_ != nullptr, "Tensor::allocation: tensor is not allocator-backed.");
     return allocation_;
@@ -437,6 +441,14 @@ struct Tensor {
     allocation_ = nullptr;
     allocation_owner_ = nullptr;
   }
+  /// Releases ownership of the allocator slot without freeing it or clearing
+  /// the slot pointer. After this call ``has_allocation()`` remains true so
+  /// ``bytes()`` / ``size_bytes()`` keep resolving through the slot, but
+  /// ``has_allocation_owner()`` returns false so the context destructor will
+  /// not free the slot. Use this to pass a read-only, non-owning view of an
+  /// allocator-backed tensor into a child context that shares the same
+  /// allocator, avoiding a data copy while preventing double-free.
+  void DisownAllocation() noexcept { allocation_owner_ = nullptr; }
 
   /// Returns the product of all shape dimensions; 1 for an empty shape.
   int64_t element_count() const;

@@ -70,7 +70,7 @@ void String::set(const char *ptr, size_t size) {
   if (effective_size > 0 && ptr[effective_size - 1] == 0) {
     --effective_size;
   }
-  if (!null_ && ptr >= value_.data() && ptr <= value_.data() + value_.size()) {
+  if (!null_ && ptr >= value_.data() && ptr < value_.data() + value_.size()) {
     std::string copy(ptr, effective_size);
     value_ = std::move(copy);
   } else {

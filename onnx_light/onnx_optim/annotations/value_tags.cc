@@ -405,14 +405,7 @@ std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>
 ComputeTags(const std::vector<const NodeProto *> &nodes) {
   std::unordered_map<std::string, std::string> computed_value_tags;
   std::vector<std::string> computed_node_tags;
-  std::vector<const NodeProto *> ptrs;
-  ptrs.reserve(nodes.size());
-  for (const NodeProto *node : nodes) {
-    if (node != nullptr) {
-      ptrs.push_back(node);
-    }
-  }
-  InferNodesTags(ptrs, computed_value_tags, computed_node_tags);
+  InferNodesTags(nodes, computed_value_tags, computed_node_tags);
   return {computed_value_tags, computed_node_tags};
 }
 

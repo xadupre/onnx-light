@@ -905,10 +905,13 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
                         "' of model-local function '", op_type,
                         "' was not produced by the function body.");
     Tensor result = std::move(it->second);
-    // Erase from the child map immediately so that the child context
-    // destructor does not attempt to free the slot that is now owned by
-    // the parent (the compiler-generated move leaves allocation_ set in
-    // the moved-from entry, which would otherwise cause a double-free).
+    // Erase the moved-from entry from the child map before the child context
+    // is destroyed.  Tensor uses compiler-generated move operations that
+    // copy (not null) raw pointer members such as allocation_ and
+    // allocation_owner_, so the moved-from entry still points at the same
+    // allocator slot.  Without the erase, the child destructor would call
+    // ReleaseTensorAllocation on that entry and free a slot that is now owned
+    // by the parent, causing a double-free.
     child.tensors().erase(it);
     result.name = caller_name;
     rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);

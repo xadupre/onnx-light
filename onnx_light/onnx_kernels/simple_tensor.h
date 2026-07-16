@@ -426,7 +426,7 @@ struct Tensor {
   bool has_allocation() const noexcept { return allocation_ != nullptr; }
   /// Returns true when this tensor owns its allocator slot and is responsible
   /// for freeing it. False for non-owning (borrowed) allocator views created
-  /// via :cpp:func:`DisownAllocation`.
+  /// via :cpp:func:`~Tensor::DisownAllocation`.
   bool has_allocation_owner() const noexcept { return allocation_owner_ != nullptr; }
   RawBuffer *allocation() const {
     EXT_ENFORCE(allocation_ != nullptr, "Tensor::allocation: tensor is not allocator-backed.");

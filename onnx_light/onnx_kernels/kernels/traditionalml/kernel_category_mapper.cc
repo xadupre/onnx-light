@@ -91,8 +91,8 @@ Tensor CategoryMapper::operator()(const Tensor &x, const std::vector<std::string
         [&sd](int64_t i, const std::string &v) { sd[static_cast<size_t>(i)] = v; });
     return Tensor::MakeString("", x.shape, std::move(sd));
   } else {
-    std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(OutT));
-    Tensor out("", TensorElementType<OutT>::value, x.shape, std::move(bytes));
+    Tensor out = MakeOutputTensor(TensorElementType<OutT>::value, x.shape,
+                                  static_cast<size_t>(n) * sizeof(OutT), ctx_.allocator);
     OutT *po = reinterpret_cast<OutT *>(out.mutable_bytes());
     LookupAndFill<InT, OutT>(x, cats_strings, cats_int64s, default_value,
                              [po](int64_t i, OutT v) { po[i] = v; });

@@ -64,8 +64,8 @@ Tensor DictVectorizer::operator()(const std::vector<K> &input_keys,
              [&out](size_t pos, const std::string &value) { out.string_data[pos] = value; });
     return out;
   } else {
-    std::vector<uint8_t> bytes(static_cast<size_t>(c) * sizeof(V), 0u);
-    Tensor out("", static_cast<int32_t>(TensorElementType<V>::value), shape, std::move(bytes));
+    Tensor out = MakeOutputTensor(static_cast<int32_t>(TensorElementType<V>::value), shape,
+                                  static_cast<size_t>(c) * sizeof(V), ctx_.allocator);
     Fill<K, V>(input_keys, input_values, vocabulary, reinterpret_cast<V *>(out.mutable_bytes()));
     return out;
   }

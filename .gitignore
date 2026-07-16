@@ -178,3 +178,4 @@ cmake_install.cmake
 
 # Pixi environment directory
 .pixi/
+a.out

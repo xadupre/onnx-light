@@ -191,8 +191,7 @@ inline Shape GetAttributeShapeOrDefault(const NodeProto &node, const std::string
     return fallback;
   }
   EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::INTS),
-                      "RunNode: attribute '", name, "' of op '", node.op_type().as_string(),
-                      "' must be INTS.");
+                      "RunNode: attribute '", name, "' of op '", node.op_type(), "' must be INTS.");
   Shape values;
   for (size_t i = 0; i < attr->ints().size(); ++i) {
     values.push_back(attr->ints()[i]);

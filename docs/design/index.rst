@@ -36,6 +36,12 @@ a smooth replacement.
     custom_kernels
 
 .. toctree::
+    :caption: Gradient
+    :maxdepth: 1
+
+    gradient
+
+.. toctree::
     :caption: Shape Inference
     :maxdepth: 1
 

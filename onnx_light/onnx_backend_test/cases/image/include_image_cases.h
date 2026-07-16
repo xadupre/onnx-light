@@ -19,7 +19,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``ai.onnx::ImageDecoder`` backend test node case(s).
-void RegisterImageDecoderCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterImageDecoderCases(std::vector<TestCase> &registry,
+                                                             TestMode mode = TestMode::TEST);
 
 /// Collects all ``image`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.

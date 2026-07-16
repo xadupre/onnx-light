@@ -18,7 +18,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``ai.onnx.preview::FlexAttention`` backend test node case(s).
-void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterFlexAttentionCases(std::vector<TestCase> &registry,
+                                                              TestMode mode = TestMode::TEST);
 
 /// Collects all ``preview`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.

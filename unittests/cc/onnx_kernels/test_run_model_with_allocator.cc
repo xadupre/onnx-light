@@ -75,7 +75,7 @@ bool HasSubgraphOp(const ModelProto &model) {
   if (GraphHasSubgraphOp(model.ref_graph())) {
     return true;
   }
-  for (const auto &fn : model.ref_function()) {
+  for (const auto &fn : model.ref_functions()) {
     if (GraphHasSubgraphOp(fn)) {
       return true;
     }

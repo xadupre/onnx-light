@@ -6,6 +6,7 @@
 
 #include "onnx_kernels/runtime_context.h"
 #include <cstring>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -23,7 +24,7 @@ namespace {
 //   - When ``num_outputs`` is provided, ``axis_dim`` is divided into equal
 //     chunks of ``ceil(axis_dim / num_outputs)``; the last chunk absorbs the
 //     remainder (and may be smaller).
-std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, const std::vector<int64_t> &split,
+std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, std::span<const int64_t> split,
                                        int64_t num_outputs) {
   if (!split.empty()) {
     EXT_ENFORCE_INVALID(num_outputs <= 0,
@@ -36,7 +37,7 @@ std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, const std::vector<int64
     EXT_ENFORCE_INVALID(total == axis_dim, "kernel::Split: sum of 'split' (", std::to_string(total),
                         ") does not match the input dim on 'axis' (", std::to_string(axis_dim),
                         ").");
-    return split;
+    return std::vector<int64_t>(split.begin(), split.end());
   }
   EXT_ENFORCE_INVALID(num_outputs > 0,
                       "kernel::Split: either 'split' or 'num_outputs' must be specified.");
@@ -56,7 +57,7 @@ std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, const std::vector<int64
 } // namespace
 
 std::vector<Tensor> Split::operator()(const Tensor &input, int64_t axis,
-                                      const std::vector<int64_t> &split, int64_t num_outputs,
+                                      std::span<const int64_t> split, int64_t num_outputs,
                                       RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(input.shape.size());
   EXT_ENFORCE_INVALID(rank > 0, "kernel::Split cannot split a scalar tensor.");

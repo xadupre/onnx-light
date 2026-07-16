@@ -413,7 +413,7 @@ class ReferenceEvaluator:
 
     def run(
         self, output_names: list[str] | None, feed_inputs: dict[str, Any]
-    ) -> list[np.ndarray | list]:
+    ) -> list[np.ndarray | list[np.ndarray]]:
         """Executes the wrapped graph / model / function.
 
         Parameters
@@ -514,7 +514,7 @@ class ReferenceEvaluator:
 
         self._last_ctx = ctx
 
-        results: list[np.ndarray | list] = []
+        results: list[np.ndarray | list[np.ndarray]] = []
         for name in output_names:
             if ctx.has(name):
                 results.append(_cpp_tensor_to_numpy(ctx.get(name)))

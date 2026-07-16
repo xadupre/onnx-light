@@ -17,8 +17,8 @@ from .....ext_test_case import ExtTestCase
 
 _LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
 # Backend test inputs/outputs are usually ndarrays, but ONNX sequence cases use
-# recursively nested Python lists of ndarrays.
-BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"]
+# recursively nested Python lists of ndarrays, and map-typed inputs are Python dicts.
+BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"] | dict
 BackendTestDataSets: TypeAlias = Sequence[
     tuple[Sequence[BackendTestValue], Sequence[BackendTestValue]]
 ]
@@ -375,7 +375,7 @@ def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
         arr = np.frombuffer(t.raw_data(), dtype=dtype)
         return arr.reshape(tuple(int(d) for d in t.shape))
 
-    def _ds_inputs_to_python(tc) -> list[list]:
+    def _ds_inputs_to_python(tc) -> list[list[np.ndarray | dict | None]]:
         """Returns per-DataSet positional inputs for ``tc``.
 
         For graph inputs declared with ``map(K, V)`` type (used by
@@ -386,11 +386,11 @@ def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
         map under its original graph-input name.
         """
         graph_inputs = list(tc.model.graph.input)
-        data_sets: list[list] = []
+        data_sets: list[list[np.ndarray | dict | None]] = []
         for ds in tc.data_sets:
             by_name = {t.name: _tensor_to_np(t) for t in ds.inputs}
             maps_by_name = {m.name: m for m in ds.maps} if ds.maps else {}
-            inputs: list = []
+            inputs: list[np.ndarray | dict | None] = []
             for gi in graph_inputs:
                 if gi.type.has_map_type():
                     m = maps_by_name.get(gi.name)

@@ -147,8 +147,11 @@ public:
   inline const std::string_view sv() const {
     return null_ ? std::string_view() : std::string_view(value_.data(), value_.size());
   }
-  /** Materializes the string into an owning std::string. */
-  inline operator std::string() const { return null_ ? std::string() : value_; }
+  /** Returns a const reference to the underlying std::string (empty string for null). */
+  inline operator const std::string &() const {
+    static const std::string kEmpty;
+    return null_ ? kEmpty : value_;
+  }
   /** Materializes the string into a string_view. */
   inline operator std::string_view() const { return sv(); }
   /** Indicates whether the string is empty and has no allocated buffer. */

@@ -435,13 +435,74 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "Returns the list of map names currently held by the context.")
       .def(
           "put_map",
-          [](RuntimeContext &rt, const std::string &name, Tensor keys, Tensor values) {
-            rt.PutMap(name, Map(name, std::move(keys), std::move(values)));
+          [](RuntimeContext &rt, const std::string &name, nb::dict d) {
+            int64_t n = static_cast<int64_t>(d.size());
+            if (n == 0) {
+              rt.PutMap(name, Map(name, Tensor{}, Tensor{}));
+              return;
+            }
+            auto it = d.begin();
+            nb::object first_key = (*it).first;
+            nb::object first_val = (*it).second;
+
+            bool str_keys = nb::isinstance<nb::str>(first_key);
+            // In Python, bool is a subclass of int; treat plain int as int64.
+            bool int_vals = nb::isinstance<nb::int_>(first_val) &&
+                            !nb::isinstance<nb::bool_>(first_val) &&
+                            !nb::isinstance<nb::float_>(first_val);
+
+            Tensor keys_t, vals_t;
+
+            if (str_keys) {
+              std::vector<std::string> keys;
+              keys.reserve(static_cast<size_t>(n));
+              for (auto [k, v] : d) {
+                keys.push_back(nb::cast<std::string>(k));
+              }
+              keys_t = Tensor::FromStrings(name, {n}, keys);
+            } else {
+              std::vector<int64_t> keys;
+              keys.reserve(static_cast<size_t>(n));
+              for (auto [k, v] : d) {
+                keys.push_back(nb::cast<int64_t>(k));
+              }
+              keys_t = Tensor::FromInt64(name, {n}, keys);
+            }
+
+            if (nb::isinstance<nb::str>(first_val)) {
+              std::vector<std::string> vals;
+              vals.reserve(static_cast<size_t>(n));
+              for (auto [k, v] : d) {
+                vals.push_back(nb::cast<std::string>(v));
+              }
+              vals_t = Tensor::FromStrings(name, {n}, vals);
+            } else if (nb::isinstance<nb::float_>(first_val)) {
+              std::vector<float> vals;
+              vals.reserve(static_cast<size_t>(n));
+              for (auto [k, v] : d) {
+                vals.push_back(nb::cast<float>(v));
+              }
+              vals_t = Tensor::FromFloat(name, {n}, vals);
+            } else if (int_vals) {
+              std::vector<int64_t> vals;
+              vals.reserve(static_cast<size_t>(n));
+              for (auto [k, v] : d) {
+                vals.push_back(nb::cast<int64_t>(v));
+              }
+              vals_t = Tensor::FromInt64(name, {n}, vals);
+            } else {
+              throw std::invalid_argument(
+                  "put_map: unsupported value type in dict – values must be "
+                  "int, float, or str scalars (all entries must share the same type).");
+            }
+
+            rt.PutMap(name, Map(name, std::move(keys_t), std::move(vals_t)));
           },
-          nb::arg("name"), nb::arg("keys"), nb::arg("values"),
-          "Inserts or overwrites the map stored under ``name`` from the given 1-D "
-          "``keys`` and ``values`` :class:`Tensor` objects. The map key/value types "
-          "are inferred from the tensor data types.")
+          nb::arg("name"), nb::arg("d"),
+          "Inserts or overwrites the map stored under ``name`` from a Python ``dict``. "
+          "Keys must be ``int`` or ``str``; values must be ``int``, ``float``, or ``str`` "
+          "scalars (all entries must share the same key type and value type). "
+          "The map key/value types are inferred from the first dict entry.")
       .def(
           "events",
           [](const RuntimeContext &rt) {

@@ -208,12 +208,10 @@ class ReferenceEvaluator:
                 f"Unsupported proto type for ReferenceEvaluator: {type(proto).__name__}."
             )
 
-        # ``_map_inputs`` records, for every map-typed graph input, the
-        # ``(key_type, value_type)`` pair (``TensorProto`` enum values).
-        # Map-typed inputs are fed as a Python ``dict`` (e.g. ``{"x": {2: 2.5}}``);
-        # :meth:`run` converts the dict to a C++ ``Map`` and stores it via
-        # ``ctx.put_map`` so the runtime can retrieve it by the original name.
-        self._map_inputs: dict[str, tuple[int, int]] = {}
+        # ``_map_inputs`` records the names of graph inputs declared as ``map(K, V)``.
+        # Map-typed inputs are fed as a Python ``dict``; :meth:`run` stores them
+        # via ``ctx.put_map`` so the runtime can retrieve them by the original name.
+        self._map_inputs: set[str] = set()
         # ``_sequence_inputs`` records graph inputs declared as ``seq(T)``. Such
         # inputs are fed as a Python ``list``/``tuple`` of arrays (one per
         # sequence element) and handed to the runtime via ``put_sequence``
@@ -234,11 +232,7 @@ class ReferenceEvaluator:
                     # under the original graph-input name; the caller feeds a
                     # Python ``dict`` and :meth:`run` converts it to a Map.
                     inputs.append(vi.name)
-                    mt = vi.type.map_type
-                    self._map_inputs[vi.name] = (
-                        int(mt.key_type),
-                        int(mt.value_type.tensor_type.elem_type),
-                    )
+                    self._map_inputs.add(vi.name)
                 else:
                     if vi.type.has_sequence_type():
                         self._sequence_inputs.add(vi.name)
@@ -491,34 +485,7 @@ class ReferenceEvaluator:
                         f"Map input {name!r} must be fed as a Python dict, "
                         f"not {type(value).__name__}."
                     )
-                key_type, value_type = self._map_inputs[name]
-                keys_list = list(value.keys())
-                values_list = list(value.values())
-                if key_type == int(TensorProto.STRING):
-                    keys_arr = np.array(keys_list, dtype=object)
-                else:
-                    keys_dtype = _DTYPE_TO_NP.get(key_type)
-                    if keys_dtype is None:
-                        raise NotImplementedError(
-                            f"ReferenceEvaluator: unsupported map key dtype {key_type} "
-                            f"for input {name!r}."
-                        )
-                    keys_arr = np.array(keys_list, dtype=keys_dtype)
-                if value_type == int(TensorProto.STRING):
-                    values_arr = np.array(values_list, dtype=object)
-                else:
-                    values_dtype = _DTYPE_TO_NP.get(value_type)
-                    if values_dtype is None:
-                        raise NotImplementedError(
-                            f"ReferenceEvaluator: unsupported map value dtype "
-                            f"{value_type} for input {name!r}."
-                        )
-                    values_arr = np.array(values_list, dtype=values_dtype)
-                ctx.put_map(
-                    name,
-                    _numpy_to_cpp_tensor(name, keys_arr),
-                    _numpy_to_cpp_tensor(name, values_arr),
-                )
+                ctx.put_map(name, value)
             elif name in self._sequence_inputs or is_optional_sequence_input:
                 # ``seq(T)`` graph inputs are fed as a list/tuple of arrays (one
                 # per sequence element) and stored through ``put_sequence``.

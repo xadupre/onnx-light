@@ -9,6 +9,7 @@
 #include "onnx_kernels/kernels/rt/include_rt_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
+#include "onnx_kernels/node_helpers.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/simple_sequence.h"
 #include "onnx_kernels/simple_tensor.h"
@@ -4011,6 +4012,34 @@ TEST(SubgraphEventGraphName, TopLevelEventsHaveEmptyGraphName) {
     EXPECT_TRUE(ev.subgraph_attr_name.empty())
         << "Expected empty subgraph_attr_name for top-level event, got: " << ev.subgraph_attr_name;
   }
+}
+
+TEST(NodeHelpers, GetAttributeShapeOrDefaultReturnsShape) {
+  NodeProto node;
+  node.set_op_type("Pool");
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("kernel_shape");
+  attr->set_type(AttributeProto::AttributeType::INTS);
+  attr->add_ints(3);
+  attr->add_ints(3);
+
+  const Shape result =
+      onnx_kernels::detail::GetAttributeShapeOrDefault(node, "kernel_shape", Shape{});
+  ASSERT_EQ(result.size(), static_cast<size_t>(2));
+  EXPECT_EQ(result[0], 3);
+  EXPECT_EQ(result[1], 3);
+}
+
+TEST(NodeHelpers, GetAttributeShapeOrDefaultReturnsFallback) {
+  NodeProto node;
+  node.set_op_type("Pool");
+
+  const Shape fallback{1, 1};
+  const Shape result =
+      onnx_kernels::detail::GetAttributeShapeOrDefault(node, "kernel_shape", fallback);
+  ASSERT_EQ(result.size(), static_cast<size_t>(2));
+  EXPECT_EQ(result[0], 1);
+  EXPECT_EQ(result[1], 1);
 }
 
 } // namespace Test

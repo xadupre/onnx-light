@@ -93,7 +93,7 @@ public:
  */
 class String {
 private:
-  static constexpr size_t kInlineCapacity = 23;
+  static constexpr size_t kInlineCapacity = 15;
   char *ptr_;
   size_t size_;
   bool is_inline_;

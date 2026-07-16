@@ -433,9 +433,22 @@ void RuntimeContext::ClearExecutionPlans() noexcept { execution_plans_.clear(); 
 
 RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
   RuntimeContext child(kernel_ctx_);
-  child.set_allocator(allocator_);
+  // Subgraph child contexts intentionally do not inherit the parent allocator.
+  // Kernels inside the subgraph produce outputs in inline storage; when those
+  // outputs are propagated back to the parent via Put/Set, EnsureAllocatorBacked
+  // migrates them to the parent allocator in a single copy.  Propagating the
+  // allocator would cause a double-free: the shallow-copied tensor map shares
+  // raw allocation_ pointers with the parent, and the child destructor would
+  // Free those slots while the parent still holds them.
   child.functions() = functions_;
   child.tensors() = tensors_;
+  // Disown all allocations inherited from the parent so that the child
+  // destructor does not attempt to Free slots the parent still holds.
+  // DisownAllocation() nulls allocation_owner_ while leaving allocation_
+  // readable, so subgraph nodes can still read outer-scope tensor values.
+  for (auto &kv : child.tensors()) {
+    kv.second.DisownAllocation();
+  }
   child.sequences() = sequences_;
   child.set_verbose(verbose_);
   child.set_events_enabled(events_enabled_);

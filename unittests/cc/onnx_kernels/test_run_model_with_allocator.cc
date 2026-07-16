@@ -32,8 +32,11 @@ using onnx_kernels::kernel::KernelContext;
 
 namespace {
 
-// Allocator slot capacity — sized for the largest single-level test-case data
-// set (no Loop/Scan iterations to multiply the slot demand).
+// Allocator slot capacity. Subgraph child contexts (If, Loop, Scan, etc.) do
+// not inherit the parent allocator (see MakeSubgraphContext), so iteration
+// bodies produce inline tensors and don't consume allocator slots. The only
+// demand comes from the parent context's own inputs/outputs. 256 slots is
+// ample for all backend test cases.
 constexpr size_t kAllocatorSlotCapacity = 256;
 
 // Fallback opset version when the model carries no default-domain opset import.
@@ -50,33 +53,21 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
   return kFallbackDefaultOpsetVersion;
 }
 
-// Returns true when any graph (top-level or function body) of ``model``
-// contains at least one node whose op_type is If, Loop, or Scan.
+// Returns true when the model contains a SequenceMap node.
 //
-// RuntimeContext::MakeSubgraphContext does a shallow copy of the parent
-// context's tensor map (including raw allocation_ pointers). The child
-// context's destructor therefore frees the same allocator slots that the
-// parent still holds, causing a use-after-free / SEGFAULT when the parent
-// subsequently accesses those tensors. Attaching a SimpleRawBufferAllocator
-// to the RuntimeContext is therefore unsafe for models that trigger subgraph
-// execution. Those cases are skipped in the allocator test below; their
-// correctness is already covered by the BackendRunModel.* tests.
-template <typename GraphLike> static bool GraphHasSubgraphOp(const GraphLike &graph) {
-  for (const auto &node : graph.ref_node()) {
-    const std::string_view op = node.ref_op_type().sv();
-    if (op == "If" || op == "Loop" || op == "Scan") {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool HasSubgraphOp(const ModelProto &model) {
-  if (GraphHasSubgraphOp(model.ref_graph())) {
-    return true;
-  }
-  for (const auto &fn : model.ref_functions()) {
-    if (GraphHasSubgraphOp(fn)) {
+// SequenceMap produces sequence-typed outputs that are stored in
+// RuntimeContext::sequences_, not in RuntimeContext::tensors_. The allocator
+// test verifies tensor outputs via rt.Get(), so SequenceMap cases are skipped
+// here; their correctness is already covered by the BackendRunModel.* tests.
+//
+// Note: models with If, Loop, Scan, and FlexAttention subgraph attributes are
+// exercised by this test (no longer skipped). RuntimeContext::MakeSubgraphContext
+// now disowns inherited tensor allocations and withholds the parent allocator
+// from child subgraph contexts, preventing the use-after-free that previously
+// required skipping those cases.
+bool HasSequenceMapOp(const ModelProto &model) {
+  for (const auto &node : model.ref_graph().ref_node()) {
+    if (node.ref_op_type().sv() == "SequenceMap") {
       return true;
     }
   }
@@ -178,11 +169,13 @@ namespace Test {
 // Runs every C++ backend test case collected by CollectTestCases() through
 // RunModel with a SimpleRawBufferAllocator attached to the RuntimeContext.
 //
-// Test cases whose top-level graph contains a subgraph op (If, Loop, Scan)
-// are skipped: RuntimeContext::MakeSubgraphContext shallow-copies the parent's
-// allocation pointers into the child context, whose destructor would free
-// those slots while the parent still holds them (use-after-free). Subgraph
-// correctness is already verified by the BackendRunModel.* tests.
+// SequenceMap cases are skipped because their graph outputs are
+// sequence-typed (stored in RuntimeContext::sequences_, not tensors_) and
+// cannot be retrieved with rt.Get(). All other cases — including If, Loop,
+// Scan, and FlexAttention with subgraph attributes — are exercised.
+// RuntimeContext::MakeSubgraphContext now withholds the parent allocator from
+// child subgraph contexts and disowns inherited tensor allocations, preventing
+// the use-after-free that previously required skipping those cases.
 //
 // For each remaining data set the test asserts:
 //   1. Outputs match the pre-computed expected values (bit-exact for numeric
@@ -195,13 +188,13 @@ TEST(RunModelWithAllocator, AllBackendTestCases) {
   size_t executed = 0;
   for (const TestCase &tc : cases) {
     SCOPED_TRACE(tc.name);
-    if (HasSubgraphOp(tc.model())) {
+    if (HasSequenceMapOp(tc.model())) {
       continue;
     }
     RunWithAllocatorAndVerify(tc);
     ++executed;
   }
-  EXPECT_GT(executed, 100u) << "Fewer non-subgraph test cases than expected were exercised";
+  EXPECT_GT(executed, 100u) << "Fewer verifiable test cases than expected were exercised";
 }
 
 } // namespace Test

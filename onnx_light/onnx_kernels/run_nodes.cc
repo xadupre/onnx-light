@@ -183,7 +183,16 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
                                 RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child = rt.MakeSubgraphContext(attr_name);
   for (const auto &kv : bindings) {
-    child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
+    // Disown the binding's allocation before storing it in the child context.
+    // The child context has no allocator (see MakeSubgraphContext), but the
+    // binding tensor may still carry an allocation_ pointer from its source
+    // (e.g. a sequence element or a parent-context tensor).  Disowning
+    // prevents the child destructor from freeing a slot that is still owned
+    // by the caller.  DisownAllocation() is a no-op for inline (non-allocated)
+    // tensors.
+    Tensor t = kv.second;
+    t.DisownAllocation();
+    child.Put(kv.first, std::move(t), RuntimeEventKind::kInput);
   }
   RunGraph(graph, child);
 
@@ -201,7 +210,10 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
-    outputs.push_back(it->second);
+    // Move the output tensor out of the child map and erase the entry so the
+    // child destructor does not attempt to release the same allocation twice.
+    outputs.push_back(std::move(it->second));
+    child.tensors().erase(it);
   }
   return outputs;
 }
@@ -267,6 +279,9 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
                           "' was not produced by the selected branch.");
       Tensor t = std::move(it->second);
+      // Erase the moved-from entry so the child destructor does not attempt to
+      // release the same allocation twice (Tensor move does not null pointers).
+      child.tensors().erase(it);
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -312,6 +327,9 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       } else {
         Tensor t = tensor_state[i];
         t.name = bname;
+        // Disown so the child context does not free a slot still owned by
+        // the caller's tensor_state vector.
+        t.DisownAllocation();
         child.Put(bname, std::move(t), RuntimeEventKind::kInput);
       }
     }

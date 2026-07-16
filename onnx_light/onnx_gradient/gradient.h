@@ -5,8 +5,8 @@
 #pragma once
 
 #include "onnx_proto/onnx.h"
+#include <span>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_gradient {
@@ -40,11 +40,10 @@ namespace onnx_gradient {
  * @throws std::runtime_error if an unsupported op_type is encountered on the
  *         path from the inputs to @p y.
  */
-FunctionProto GradientOfNodes(const std::vector<NodeProto> &nodes,
-                              const std::vector<std::string> &inputs,
-                              const std::vector<TensorProto> &initializers,
-                              const std::vector<std::string> &xs, const std::string &y,
-                              const std::vector<std::string> &zs);
+FunctionProto GradientOfNodes(std::span<const NodeProto> nodes, std::span<const std::string> inputs,
+                              std::span<const TensorProto> initializers,
+                              std::span<const std::string> xs, const std::string &y,
+                              std::span<const std::string> zs);
 
 /**
  * Computes the gradient FunctionProto from an existing FunctionProto.
@@ -63,8 +62,8 @@ FunctionProto GradientOfNodes(const std::vector<NodeProto> &nodes,
  * @throws std::invalid_argument on invalid arguments (same as GradientOfNodes).
  * @throws std::runtime_error on unsupported operators.
  */
-FunctionProto GradientOfFunction(const FunctionProto &function, const std::vector<std::string> &xs,
-                                 const std::string &y, const std::vector<std::string> &zs);
+FunctionProto GradientOfFunction(const FunctionProto &function, std::span<const std::string> xs,
+                                 const std::string &y, std::span<const std::string> zs);
 
 } // namespace onnx_gradient
 } // namespace ONNX_LIGHT_NAMESPACE

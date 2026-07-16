@@ -50,7 +50,8 @@ TEST(GradientOfNodes, MatMulGrad_W) {
   std::vector<std::string> inputs = {"X", "W"};
   std::vector<TensorProto> initializers;
 
-  FunctionProto grad = GradientOfNodes(nodes, inputs, initializers, {"W"}, "y", {"X"});
+  FunctionProto grad = GradientOfNodes(nodes, inputs, initializers, std::vector<std::string>{"W"},
+                                       "y", std::vector<std::string>{"X"});
 
   // The function should have inputs: W, X, dy
   ASSERT_EQ(grad.input_size(), 3);
@@ -76,7 +77,8 @@ TEST(GradientOfNodes, MatMulGrad_XW) {
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeTestNode("MatMul", {"X", "W"}, {"y"}));
 
-  FunctionProto grad = GradientOfNodes(nodes, {"X", "W"}, {}, {"X", "W"}, "y", {});
+  FunctionProto grad = GradientOfNodes(nodes, std::vector<std::string>{"X", "W"}, {},
+                                       std::vector<std::string>{"X", "W"}, "y", {});
 
   ASSERT_EQ(grad.output_size(), 2);
   EXPECT_EQ(std::string(grad.output()[0]), "grad_X");
@@ -92,7 +94,9 @@ TEST(GradientOfNodes, LinearRegression_NoBias) {
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeTestNode("MatMul", {"X", "W"}, {"y"}));
 
-  FunctionProto grad = GradientOfNodes(nodes, {"X", "W"}, {}, {"W"}, "y", {"X"});
+  FunctionProto grad =
+      GradientOfNodes(nodes, std::vector<std::string>{"X", "W"}, {}, std::vector<std::string>{"W"},
+                      "y", std::vector<std::string>{"X"});
 
   // Inputs: W, X, dy
   ASSERT_GE(grad.input_size(), 2);
@@ -118,7 +122,9 @@ TEST(GradientOfNodes, LinearRegressionWithBias) {
   nodes.push_back(MakeTestNode("MatMul", {"X", "W"}, {"mm"}));
   nodes.push_back(MakeTestNode("Add", {"mm", "b"}, {"y"}));
 
-  FunctionProto grad = GradientOfNodes(nodes, {"X", "W", "b"}, {}, {"W", "b"}, "y", {"X"});
+  FunctionProto grad =
+      GradientOfNodes(nodes, std::vector<std::string>{"X", "W", "b"}, {},
+                      std::vector<std::string>{"W", "b"}, "y", std::vector<std::string>{"X"});
 
   // Outputs: grad_W, grad_b
   ASSERT_EQ(grad.output_size(), 2);
@@ -138,7 +144,8 @@ TEST(GradientOfNodes, SubGrad) {
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeTestNode("Sub", {"A", "B"}, {"C"}));
 
-  FunctionProto grad = GradientOfNodes(nodes, {"A", "B"}, {}, {"A", "B"}, "C", {});
+  FunctionProto grad = GradientOfNodes(nodes, std::vector<std::string>{"A", "B"}, {},
+                                       std::vector<std::string>{"A", "B"}, "C", {});
 
   ASSERT_EQ(grad.output_size(), 2);
   auto types = NodeTypes(grad);
@@ -153,7 +160,8 @@ TEST(GradientOfNodes, MulGrad) {
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeTestNode("Mul", {"A", "B"}, {"C"}));
 
-  FunctionProto grad = GradientOfNodes(nodes, {"A", "B"}, {}, {"A", "B"}, "C", {});
+  FunctionProto grad = GradientOfNodes(nodes, std::vector<std::string>{"A", "B"}, {},
+                                       std::vector<std::string>{"A", "B"}, "C", {});
 
   ASSERT_EQ(grad.output_size(), 2);
   auto types = NodeTypes(grad);
@@ -168,7 +176,9 @@ TEST(GradientOfNodes, MulGrad) {
 TEST(GradientOfNodes, ErrorYNotProduced) {
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeTestNode("MatMul", {"X", "W"}, {"y"}));
-  EXPECT_THROW(GradientOfNodes(nodes, {"X", "W"}, {}, {"W"}, "z", {"X"}), std::invalid_argument);
+  EXPECT_THROW(GradientOfNodes(nodes, std::vector<std::string>{"X", "W"}, {},
+                               std::vector<std::string>{"W"}, "z", std::vector<std::string>{"X"}),
+               std::invalid_argument);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -177,7 +187,9 @@ TEST(GradientOfNodes, ErrorYNotProduced) {
 TEST(GradientOfNodes, ErrorEmptyXs) {
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeTestNode("MatMul", {"X", "W"}, {"y"}));
-  EXPECT_THROW(GradientOfNodes(nodes, {"X", "W"}, {}, {}, "y", {"X"}), std::invalid_argument);
+  EXPECT_THROW(GradientOfNodes(nodes, std::vector<std::string>{"X", "W"}, {}, {}, "y",
+                               std::vector<std::string>{"X"}),
+               std::invalid_argument);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -194,7 +206,8 @@ TEST(GradientOfFunction, BasicLinearRegression) {
   func.add_node("MatMul", {"X", "W"}, {"y"});
   func.add_opset("", 21);
 
-  FunctionProto grad = GradientOfFunction(func, {"W"}, "y", {"X"});
+  FunctionProto grad =
+      GradientOfFunction(func, std::vector<std::string>{"W"}, "y", std::vector<std::string>{"X"});
 
   // Name should be derived from the original function.
   EXPECT_EQ(std::string(grad.name()), "linear_grad");

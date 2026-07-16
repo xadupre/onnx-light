@@ -323,8 +323,8 @@ void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &op
       const int64_t filled_size = options.raw_data_callback(*it, rewritten_raw_data.data(),
                                                             rewritten_raw_data.size(), false);
       EXT_ENFORCE(filled_size == rewritten_size, "raw_data_callback returned ", filled_size,
-                  " bytes in the fill pass for tensor ", it->ref_name(),
-                  " after reporting ", rewritten_size, " bytes in the size pass.");
+                  " bytes in the fill pass for tensor ", it->ref_name(), " after reporting ",
+                  rewritten_size, " bytes in the size pass.");
       it->ref_raw_data() = std::move(rewritten_raw_data);
     } else {
       const int64_t filled_size = options.raw_data_callback(*it, nullptr, 0, false);
@@ -456,10 +456,10 @@ void ReadExternalDataEntries(const TensorProto &tensor, std::string &location, i
       length = ParseExternalDataInt64(entry.ref_value(), key.data());
     }
   }
-  EXT_ENFORCE(!location.empty(), "AlignExternalDataStreaming: tensor '",
-              tensor.ref_name(), "' has no external_data.location.");
-  EXT_ENFORCE(has_offset || offset == 0, "AlignExternalDataStreaming: tensor '",
-              tensor.ref_name(), "' has invalid external_data.offset.");
+  EXT_ENFORCE(!location.empty(), "AlignExternalDataStreaming: tensor '", tensor.ref_name(),
+              "' has no external_data.location.");
+  EXT_ENFORCE(has_offset || offset == 0, "AlignExternalDataStreaming: tensor '", tensor.ref_name(),
+              "' has invalid external_data.offset.");
   EXT_ENFORCE(length >= 0, "AlignExternalDataStreaming: tensor '", tensor.ref_name(),
               "' has no external_data.length.");
 }
@@ -759,8 +759,8 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
     if (stream_it == src_fds.end()) {
       int fd = OpenForRead(src_weights_key);
       EXT_ENFORCE(fd >= 0, "AlignExternalDataStreaming: cannot open source weights file '",
-                  src_weights_key, "' for tensor '", tensor.ref_name(),
-                  "' (errno=", errno, ": ", SafeStrerror(errno), ").");
+                  src_weights_key, "' for tensor '", tensor.ref_name(), "' (errno=", errno, ": ",
+                  SafeStrerror(errno), ").");
       stream_it = src_fds.emplace(src_weights_key, ScopedFd(fd)).first;
     }
 
@@ -893,8 +893,8 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
         continue;
 #endif
       EXT_ENFORCE(w > 0, "SaveModelWithSharedExternalData: failed to write tensor '",
-                  tensor.ref_name(), "' to destination weights file (errno=", errno,
-                  ": ", SafeStrerror(errno), ").");
+                  tensor.ref_name(), "' to destination weights file (errno=", errno, ": ",
+                  SafeStrerror(errno), ").");
       p += w;
       left -= static_cast<size_t>(w);
     }

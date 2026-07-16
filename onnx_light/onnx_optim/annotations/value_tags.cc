@@ -164,13 +164,11 @@ void CollectGraphSeedTags(const GraphProto &graph,
   }
   for (int i = 0; i < graph.value_info().size(); ++i) {
     const auto &value = graph.value_info()[i];
-    SetValueTag(value_tags, value.name(),
-                ReadMetadataValue(value, kValueTagMetadataKey));
+    SetValueTag(value_tags, value.name(), ReadMetadataValue(value, kValueTagMetadataKey));
   }
   for (int i = 0; i < graph.output().size(); ++i) {
     const auto &value = graph.output()[i];
-    SetValueTag(value_tags, value.name(),
-                ReadMetadataValue(value, kValueTagMetadataKey));
+    SetValueTag(value_tags, value.name(), ReadMetadataValue(value, kValueTagMetadataKey));
   }
 }
 
@@ -283,8 +281,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         if (output_tags_are_consistent && !current_output_tag.empty()) {
           for (int idx : backward_inputs) {
             if (idx >= 0 && idx < node->input().size()) {
-              changed |=
-                  TrySetValueTag(value_tags, node->input(idx), current_output_tag);
+              changed |= TrySetValueTag(value_tags, node->input(idx), current_output_tag);
             }
           }
         }

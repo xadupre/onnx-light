@@ -438,8 +438,7 @@ static bool CompareShape(const TensorShapeProto &inferredShape,
       EXPECT_EQ(inf.ref_dim_value(), exp.ref_dim_value()) << "dim_value mismatch at index " << i;
     }
     if (checkSameParam && inf.has_dim_param() && exp.has_dim_param()) {
-      EXPECT_EQ(inf.ref_dim_param(), exp.ref_dim_param())
-          << "dim_param mismatch at index " << i;
+      EXPECT_EQ(inf.ref_dim_param(), exp.ref_dim_param()) << "dim_param mismatch at index " << i;
     }
   }
   return true;

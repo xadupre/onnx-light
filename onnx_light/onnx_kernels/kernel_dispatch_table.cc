@@ -179,8 +179,7 @@ template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
     RequireOutputCount(node, 1);
     const Tensor &x = GetInput(node, 0, rt.tensors());
     const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
-    EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type(),
-                        " requires INT attribute 'to'.");
+    EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type(), " requires INT attribute 'to'.");
     KernelT kernel(rt.kernel_ctx());
     SetOutput(node, 0, kernel(x, to, &rt), rt);
   };
@@ -327,8 +326,8 @@ auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name,
 // attribute is missing or not of type TENSOR.
 inline Tensor GetRequiredAttributeTensor(const NodeProto &node, const std::string &name) {
   const AttributeProto *attr = FindAttribute(node, name);
-  EXT_ENFORCE_INVALID(attr != nullptr, "RunNode: op '", node.op_type(),
-                      "' is missing '", name, "' TENSOR attribute.");
+  EXT_ENFORCE_INVALID(attr != nullptr, "RunNode: op '", node.op_type(), "' is missing '", name,
+                      "' TENSOR attribute.");
   EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::TENSOR),
                       "RunNode: attribute '", name, "' of op '", node.op_type(),
                       "' must be a TENSOR.");
@@ -464,16 +463,14 @@ inline int64_t GetNormAxis(const NodeProto &node) {
 
 inline void RequireInputRange(const NodeProto &node, int min_inputs, int max_inputs) {
   const int n = node.input_size();
-  EXT_ENFORCE_INVALID(!(n < min_inputs || n > max_inputs), "RunNode: op '",
-                      node.op_type(), "' expects ", min_inputs, " to ", max_inputs,
-                      " input(s), got ", n, ".");
+  EXT_ENFORCE_INVALID(!(n < min_inputs || n > max_inputs), "RunNode: op '", node.op_type(),
+                      "' expects ", min_inputs, " to ", max_inputs, " input(s), got ", n, ".");
 }
 
 inline void RequireOutputRange(const NodeProto &node, int min_outputs, int max_outputs) {
   const int n = node.output_size();
-  EXT_ENFORCE_INVALID(!(n < min_outputs || n > max_outputs), "RunNode: op '",
-                      node.op_type(), "' expects ", min_outputs, " to ", max_outputs,
-                      " output(s), got ", n, ".");
+  EXT_ENFORCE_INVALID(!(n < min_outputs || n > max_outputs), "RunNode: op '", node.op_type(),
+                      "' expects ", min_outputs, " to ", max_outputs, " output(s), got ", n, ".");
 }
 
 void RunBatchNormalization(const NodeProto &node, RuntimeContext &rt) {

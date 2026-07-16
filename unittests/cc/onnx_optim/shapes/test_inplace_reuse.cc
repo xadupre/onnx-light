@@ -619,8 +619,7 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadataShapeTag) {
       EXPECT_EQ(prop.value(), std::string("S"));
       found_release_after = true;
     }
-    if (prop.key() ==
-        std::string(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey)) {
+    if (prop.key() == std::string(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey)) {
       EXPECT_EQ(prop.value(), std::string("S"));
       found_shape_tag = true;
     }

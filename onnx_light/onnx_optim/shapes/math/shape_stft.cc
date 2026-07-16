@@ -73,8 +73,7 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   // known as a constant.
   bool frame_length_known = false;
   int64_t frame_length_value = 0;
-  if (node.input_size() >= 4 && !node.input(3).empty() &&
-      ctx.Has(node.input(3))) {
+  if (node.input_size() >= 4 && !node.input(3).empty() && ctx.Has(node.input(3))) {
     int64_t v = 0;
     if (ReadScalarInt(ctx.Get(node.input(3)), v)) {
       frame_length_value = v;

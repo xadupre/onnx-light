@@ -134,8 +134,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
 
   std::vector<int64_t> axes;
   if (node.input_size() >= 4 && !node.input(3).empty()) {
-    const std::optional<std::vector<int64_t>> axes_opt =
-        TryReadIntVector(ctx.Get(node.input(3)));
+    const std::optional<std::vector<int64_t>> axes_opt = TryReadIntVector(ctx.Get(node.input(3)));
     if (!axes_opt.has_value()) {
       ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), std::move(out_shape)));
       return;
@@ -152,8 +151,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
 
   std::vector<int64_t> steps;
   if (node.input_size() >= 5 && !node.input(4).empty()) {
-    const std::optional<std::vector<int64_t>> steps_opt =
-        TryReadIntVector(ctx.Get(node.input(4)));
+    const std::optional<std::vector<int64_t>> steps_opt = TryReadIntVector(ctx.Get(node.input(4)));
     if (!steps_opt.has_value()) {
       ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), std::move(out_shape)));
       return;

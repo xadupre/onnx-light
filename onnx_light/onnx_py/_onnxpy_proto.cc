@@ -233,7 +233,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
   def_prop_rw(                                                                                     \
       #name,                                                                                       \
       [](const cls &self) -> std::string {                                                         \
-        std::string s = self.ref_##name();                                             \
+        std::string s = self.ref_##name();                                                         \
         return s;                                                                                  \
       },                                                                                           \
       [](cls &self, nb::object obj) {                                                              \
@@ -255,7 +255,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
   def_prop_rw(                                                                                     \
       #name,                                                                                       \
       [](const cls &self) -> nb::bytes {                                                           \
-        std::string s = self.ref_##name();                                             \
+        std::string s = self.ref_##name();                                                         \
         return nb::bytes(s.data(), s.size());                                                      \
       },                                                                                           \
       [](cls &self, nb::object obj) {                                                              \

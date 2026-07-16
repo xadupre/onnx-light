@@ -585,8 +585,7 @@ public:
       for (int i = 0; i < tp.dims_size(); ++i) {
         shape->add_dim()->set_dim_value(tp.dims(i));
       }
-      ProcessInitializer(tp.values().name(), tp, initializer_type,
-                         input_sparse_data_by_name);
+      ProcessInitializer(tp.values().name(), tp, initializer_type, input_sparse_data_by_name);
     }
     for (auto &n : *graph.mutable_node()) {
       Process(n);
@@ -634,8 +633,7 @@ public:
           input_data_by_name[func_proto.input().Get(i)] = ctx.getInputData(i);
         } else if (type->value_case() == TypeProto::kSparseTensorType &&
                    ctx.getInputSparseData(i) != nullptr) {
-          input_sparse_data_by_name[func_proto.input().Get(i)] =
-              ctx.getInputSparseData(i);
+          input_sparse_data_by_name[func_proto.input().Get(i)] = ctx.getInputSparseData(i);
         }
       }
     }
@@ -1014,8 +1012,7 @@ GraphInferencerImpl::doInferencing(const std::vector<const TypeProto *> &input_t
         if (i < num_inputs && initializer_name_set.count(g_->input(i).name()) > 0) {
           fail_shape_inference("Graph initializer names must appear after the actual inputs: ",
                                g_->input(i).name());
-        } else if (i >= num_inputs &&
-                   initializer_name_set.count(g_->input(i).name()) == 0) {
+        } else if (i >= num_inputs && initializer_name_set.count(g_->input(i).name()) == 0) {
           // Further check whether the additional input is in initializers
           fail_shape_inference("Cannot find missing input: ", g_->input(i).name(),
                                "in initializers. ");

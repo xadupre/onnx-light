@@ -70,8 +70,7 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
   if (axis_attr != nullptr) {
     axis = axis_attr->ref_i();
     axis_known = true;
-  } else if (node.input_size() >= 3 && !node.input(2).empty() &&
-             ctx.Has(node.input(2))) {
+  } else if (node.input_size() >= 3 && !node.input(2).empty() && ctx.Has(node.input(2))) {
     int64_t v = 0;
     if (ReadScalarInt(ctx.Get(node.input(2)), v)) {
       axis = v;
@@ -94,8 +93,7 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
   // Try to read dft_length as a constant when available.
   bool dft_length_known = false;
   int64_t dft_length = 0;
-  if (node.input_size() >= 2 && !node.input(1).empty() &&
-      ctx.Has(node.input(1))) {
+  if (node.input_size() >= 2 && !node.input(1).empty() && ctx.Has(node.input(1))) {
     int64_t v = 0;
     if (ReadScalarInt(ctx.Get(node.input(1)), v)) {
       dft_length = v;

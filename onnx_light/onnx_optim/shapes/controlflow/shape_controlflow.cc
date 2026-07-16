@@ -220,10 +220,8 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
       local.Set(name, std::move(tensor));
     }
   }
-  local.Set(body.input()[0].name(),
-            OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
-  local.Set(body.input()[1].name(),
-            OptimTensor(nullptr, TensorType::kBool, OptimShape{}));
+  local.Set(body.input()[0].name(), OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
+  local.Set(body.input()[1].name(), OptimTensor(nullptr, TensorType::kBool, OptimShape{}));
   for (int i = 0; i < n_carried; ++i) {
     const std::string v_initial_name = node.input(2 + i);
     EXT_ENFORCE_INVALID(!v_initial_name.empty(), "ComputeShapeLoop: 'v_initial' input #",

@@ -935,8 +935,7 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
   // Merge metadata_props.
   std::unordered_map<std::string, std::string> model_props;
   for (size_t i = 0; i < m1.metadata_props().size(); ++i) {
-    model_props[m1.metadata_props()[i].key()] =
-        m1.metadata_props()[i].value();
+    model_props[m1.metadata_props()[i].key()] = m1.metadata_props()[i].value();
   }
   for (size_t i = 0; i < m2.metadata_props().size(); ++i) {
     const std::string key = m2.metadata_props()[i].key();

@@ -43,8 +43,7 @@ void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x) 
   } else {
     // Opset >= 10: ``k`` is a 1-D tensor input at index 1 (mandatory).
     // An empty string is a safe fallback key for malformed nodes only.
-    const std::string k_input_name =
-        node.input_size() >= 2 ? node.input(1) : std::string();
+    const std::string k_input_name = node.input_size() >= 2 ? node.input(1) : std::string();
     axis_dim = OptimDim(ctx.TopKKDimName(k_input_name));
   }
 

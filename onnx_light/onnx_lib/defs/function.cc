@@ -24,8 +24,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     ss << address;
     uniq_prefix = ss.str();
   }
-  std::string node_name =
-      node.has_name() ? node.ref_name() : func.ref_name() + uniq_prefix;
+  std::string node_name = node.has_name() ? node.ref_name() : func.ref_name() + uniq_prefix;
   std::unordered_map<std::string, std::string> io_names_map;
   std::unordered_map<std::string, AttributeProto> attr_map;
 
@@ -67,8 +66,8 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   }
 
   const OpSchemaRegistry *schema_registry = OpSchemaRegistry::Instance();
-  const auto *const schema = schema_registry->GetSchema(
-      node.ref_op_type(), domain_version, node.ref_domain());
+  const auto *const schema =
+      schema_registry->GetSchema(node.ref_op_type(), domain_version, node.ref_domain());
   if (schema == nullptr) {
     ONNX_THROW("No schema registered for op '", node.ref_op_type(), "' in domain '",
                node.ref_domain(), "' at version ", domain_version,

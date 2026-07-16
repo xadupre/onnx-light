@@ -136,8 +136,8 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
     } else {
       // Disambiguate the synthetic symbolic dim by output name so multiple
       // ConcatFromSequence nodes in the same graph do not collide.
-      merged[resolved_axis] = OptimDim("ConcatFromSequence_" + node.output(0) +
-                                       "_axis" + std::to_string(resolved_axis));
+      merged[resolved_axis] = OptimDim("ConcatFromSequence_" + node.output(0) + "_axis" +
+                                       std::to_string(resolved_axis));
     }
     out_shape = std::move(merged);
   }

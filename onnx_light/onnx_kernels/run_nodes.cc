@@ -210,9 +210,9 @@ namespace {
 
 void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &outputs,
                               RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(outputs.size() == node.output_size(), "RunNode: op '",
-                      node.op_type(), "' produced ", outputs.size(),
-                      " output(s), node declares ", node.output_size(), ".");
+  EXT_ENFORCE_INVALID(outputs.size() == node.output_size(), "RunNode: op '", node.op_type(),
+                      "' produced ", outputs.size(), " output(s), node declares ",
+                      node.output_size(), ".");
   for (size_t i = 0; i < outputs.size(); ++i) {
     const std::string caller_name = node.output(i);
     if (caller_name.empty()) {
@@ -487,10 +487,8 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
                       const std::vector<Tensor> &state) -> std::vector<Tensor> {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(2 + n);
-    bindings.emplace_back(body.input(0).name(),
-                          MakeInt64Scalar(body.input(0).name(), iter));
-    bindings.emplace_back(body.input(1).name(),
-                          MakeBoolScalar(body.input(1).name(), cond_in));
+    bindings.emplace_back(body.input(0).name(), MakeInt64Scalar(body.input(0).name(), iter));
+    bindings.emplace_back(body.input(1).name(), MakeBoolScalar(body.input(1).name(), cond_in));
     for (size_t i = 0; i < n; ++i) {
       Tensor t = state[i];
       t.name = body.input(2 + i).name();
@@ -1052,8 +1050,7 @@ void RunModel(const ModelProto &model, RuntimeContext &rt) {
   const auto &fns = model.functions();
   for (size_t i = 0; i < fns.size(); ++i) {
     const FunctionProto &f = fns[i];
-    const std::string key =
-        FunctionLookupKey(f.domain(), f.name(), f.overload());
+    const std::string key = FunctionLookupKey(f.domain(), f.name(), f.overload());
     rt.functions()[key] = &f;
   }
   RunGraph(model.ref_graph(), rt);

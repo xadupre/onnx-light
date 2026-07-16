@@ -175,8 +175,7 @@ foo (x) => (y) {
   for (const auto &node : model.ref_graph().ref_node()) {
     for (const auto &out : node.ref_output()) {
       if (!out.empty()) {
-        ASSERT_TRUE(output_names.insert(out).second)
-            << "Duplicate output name: " << out;
+        ASSERT_TRUE(output_names.insert(out).second) << "Duplicate output name: " << out;
       }
     }
   }
@@ -242,8 +241,7 @@ foo (x) => (y) {
   for (const auto &node : model.ref_graph().ref_node()) {
     for (const auto &out : node.ref_output()) {
       if (!out.empty()) {
-        ASSERT_TRUE(output_names.insert(out).second)
-            << "Duplicate output name: " << out;
+        ASSERT_TRUE(output_names.insert(out).second) << "Duplicate output name: " << out;
       }
     }
   }

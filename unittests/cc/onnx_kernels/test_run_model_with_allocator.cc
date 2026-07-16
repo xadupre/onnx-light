@@ -61,7 +61,7 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
 // to the RuntimeContext is therefore unsafe for models that trigger subgraph
 // execution. Those cases are skipped in the allocator test below; their
 // correctness is already covered by the BackendRunModel.* tests.
-static bool GraphHasSubgraphOp(const GraphProto &graph) {
+template <typename GraphLike> static bool GraphHasSubgraphOp(const GraphLike &graph) {
   for (const auto &node : graph.ref_node()) {
     const std::string_view op = node.ref_op_type().sv();
     if (op == "If" || op == "Loop" || op == "Scan") {
@@ -76,11 +76,8 @@ bool HasSubgraphOp(const ModelProto &model) {
     return true;
   }
   for (const auto &fn : model.ref_function()) {
-    for (const auto &node : fn.ref_node()) {
-      const std::string_view op = node.ref_op_type().sv();
-      if (op == "If" || op == "Loop" || op == "Scan") {
-        return true;
-      }
+    if (GraphHasSubgraphOp(fn)) {
+      return true;
     }
   }
   return false;

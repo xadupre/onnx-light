@@ -38,6 +38,26 @@ LightOpSchema MakeGradientSchema() {
                            {"T2",
                             {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
                             "Allow inputs to be any kind of floating-point tensor."},
+                       },
+                       {
+                           {"xs",
+                            "Input tensor variables' names. The variables identified by all "
+                            "xs and zs will be inputs to the (sub)graph specified by this op. "
+                            "The value of this attribute determines the number of inputs of "
+                            "Gradient. Please note that xs and zs together define all inputs "
+                            "of the concerned graph.",
+                            AttributeType::STRINGS, true, std::monostate{}},
+                           {"y",
+                            "The targeted tensor. It must be one of the outputs of the "
+                            "subgraph.",
+                            AttributeType::STRING, true, std::monostate{}},
+                           {"zs",
+                            "Input tensor variables' names. The variables identified by all "
+                            "xs and zs will be inputs to the (sub)graph specified by this op. "
+                            "The value of this attribute determines the number of inputs of "
+                            "Gradient. Please note that xs and zs together define all inputs "
+                            "of the concerned graph.",
+                            AttributeType::STRINGS, false, std::monostate{}},
                        });
 }
 
@@ -80,6 +100,26 @@ LightOpSchema MakeAdamSchema() {
           {"T3",
            {TensorType::kFloat, TensorType::kDouble},
            "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha",
+           "Coefficient of previously accumulated gradient in running average. Default to 0.9.",
+           AttributeType::FLOAT, false, double{0.9}},
+          {"beta",
+           "Coefficient of previously accumulated squared-gradient in running average. "
+           "Default to 0.999.",
+           AttributeType::FLOAT, false, double{0.999}},
+          {"epsilon", "Small scalar to avoid dividing by 0. Default to 1e-6.", AttributeType::FLOAT,
+           false, double{1e-6}},
+          {"norm_coefficient",
+           "Regularization coefficient in 0.5 * norm_coefficient * ||X||_F^2. Default to 0, "
+           "which means no regularization.",
+           AttributeType::FLOAT, false, double{0.0}},
+          {"norm_coefficient_post",
+           "Regularization coefficient post computation, i.e., "
+           "grad = grad + norm_coefficient_post * X. Default to 0, "
+           "which means no regularization.",
+           AttributeType::FLOAT, false, double{0.0}},
       });
 }
 
@@ -120,6 +160,18 @@ LightOpSchema MakeAdagradSchema() {
           {"T3",
            {TensorType::kFloat, TensorType::kDouble},
            "Constrain input and output types to float tensors."},
+      },
+      {
+          {"decay_factor",
+           "Coefficient of previously accumulated squared-gradient in running average. "
+           "Default to 0, which means no decay.",
+           AttributeType::FLOAT, false, double{0.0}},
+          {"epsilon", "Small scalar to avoid dividing by 0. Default to 1e-6.", AttributeType::FLOAT,
+           false, double{1e-6}},
+          {"norm_coefficient",
+           "Regularization coefficient in 0.5 * norm_coefficient * ||X||_F^2. Default to 0, "
+           "which means no regularization.",
+           AttributeType::FLOAT, false, double{0.0}},
       });
 }
 
@@ -153,6 +205,22 @@ LightOpSchema MakeMomentumSchema() {
           {"T3",
            {TensorType::kFloat, TensorType::kDouble},
            "Constrain input types to float tensors."},
+      },
+      {
+          {"alpha",
+           "Coefficient of previously accumulated gradient in running average. This attribute "
+           "must be specified.",
+           AttributeType::FLOAT, true, std::monostate{}},
+          {"beta", "Dampening factor for updated gradient. This attribute must be specified.",
+           AttributeType::FLOAT, true, std::monostate{}},
+          {"mode",
+           "Momentum algorithm to be used. It must be one of \"nesterov\" and \"standard\". "
+           "This attribute must be specified.",
+           AttributeType::STRING, true, std::monostate{}},
+          {"norm_coefficient",
+           "Regularization coefficient in 0.5 * norm_coefficient * ||X||_F^2. This attribute "
+           "must be specified.",
+           AttributeType::FLOAT, true, std::monostate{}},
       });
 }
 

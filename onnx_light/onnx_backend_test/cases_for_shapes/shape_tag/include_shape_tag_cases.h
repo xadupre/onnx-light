@@ -25,7 +25,8 @@ namespace onnx_backend_test {
 /// ``"shape"`` node tag. The expected tag metadata is pre-embedded into the
 /// model so the test can verify that
 /// ``WriteValueAndNodeTagsToMetadata`` produces identical results.
-void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterShapeTagCases(std::vector<TestCase> &registry,
+                                                         TestMode mode = TestMode::TEST);
 
 /// Registers a ``Constant → Reshape`` case whose intermediate tensor ``S``
 /// should receive the ``"shape"`` value tag: the ``Constant`` node initially
@@ -36,8 +37,8 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode mode = Test
 /// ``"weight"``.  The expected metadata is pre-embedded into the model so the
 /// test can verify that ``WriteValueAndNodeTagsToMetadata`` produces identical
 /// results.
-void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry,
-                                    TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry,
+                                                                  TestMode mode = TestMode::TEST);
 
 /// Registers a ``Constant → Mul → Concat → Reshape`` case.  A ``Constant``
 /// node produces the shape tensor ``S1`` (INT64 [1]), which is multiplied by
@@ -50,43 +51,45 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry,
 /// ``Y`` receive the ``"weight"`` tag.  The expected metadata is pre-embedded
 /// into the model so the test can verify that
 /// ``WriteValueAndNodeTagsToMetadata`` produces identical results.
-void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &registry,
-                                                   TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &registry,
+                                              TestMode mode = TestMode::TEST);
 
 /// Registers a case where the model output is directly a shape tensor. The
 /// graph has a single ``Shape(X)`` node whose output ``Y`` is also the graph
 /// output (no intermediate ``Reshape``). ``Y`` should receive the ``"shape"``
 /// value tag because it is the direct output of a ``Shape`` node, exercising
 /// the code path that writes ``onnx_light.value_tag`` to a graph output entry.
-void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry,
-                                        TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers a ``Concat (weight wins)`` case. PAST (rank-3 FLOAT graph input,
 /// seeded "weight") and KH (rank-3 FLOAT initializer, "weight") are concatenated
 /// along axis 1.  Because KH is "weight", the output C inherits "weight"
 /// (weight-wins rule).  Concat backward then also tags PAST as "weight".
-void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry,
-                                           TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry,
+                                      TestMode mode = TestMode::TEST);
 
 /// Registers a ``Cast backward`` case. X (INT64 graph input, seeded "weight") is
 /// cast to FLOAT as Y.  W (FLOAT initializer, "weight") is added to Y to
 /// produce Z.  Z inherits "weight" from W; Add backward tags Y as "weight";
 /// Cast backward then tags X as "weight".
-void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry,
-                                       TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers a ``Reshape backward`` case. X (rank-1 FLOAT graph input, seeded
 /// "weight") is reshaped into Y (FLOAT [2,3]).  W (FLOAT [2,3] initializer,
 /// "weight") is added to Y to produce Z.  Z inherits "weight" from W; Add
 /// backward tags Y as "weight"; Reshape backward then tags X as "weight".
-void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry,
-                                          TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry,
+                                     TestMode mode = TestMode::TEST);
 
 /// Collects all shape-tag backend test cases by invoking every
 /// ``Register*ShapeTag*Cases`` helper declared in this header.
-ONNX_LIGHT_BACKEND_TEST_API void CollectShapeTagTestCases(std::vector<TestCase> &registry,
-                                                          const std::string &op_type = "",
-                                                          TestMode mode = TestMode::TEST);
+void CollectShapeTagTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
+                              TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

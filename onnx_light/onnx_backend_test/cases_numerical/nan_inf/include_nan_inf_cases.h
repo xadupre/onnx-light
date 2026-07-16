@@ -33,30 +33,35 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers backend test cases that ``Add`` tensors containing NaN/Inf.
-void RegisterAddNanInfCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterAddNanInfCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
 
 /// Registers backend test cases that ``Sub`` tensors containing NaN/Inf.
-void RegisterSubNanInfCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterSubNanInfCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
 
 /// Registers backend test cases that ``Mul`` tensors containing NaN/Inf.
-void RegisterMulNanInfCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterMulNanInfCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
 
 /// Registers backend test cases that ``Div`` tensors containing NaN/Inf.
-void RegisterDivNanInfCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterDivNanInfCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
 
 /// Registers backend test cases that run the ``Where`` node on tensors
 /// containing NaN/Inf in either branch.
-void RegisterWhereNanInfCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterWhereNanInfCases(std::vector<TestCase> &registry,
+                                                            TestMode mode = TestMode::TEST);
 
 /// Registers backend test cases that run ``TopK`` on tensors containing
 /// the non-finite IEEE-754 specials (NaN, +Inf, -Inf).
-void RegisterTopKNanInfCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterTopKNanInfCases(std::vector<TestCase> &registry,
+                                                           TestMode mode = TestMode::TEST);
 
 /// Collects all NaN/Inf backend test cases by invoking every
 /// ``Register*NanInfCases`` helper declared in this header.
-ONNX_LIGHT_BACKEND_TEST_API void CollectNanInfTestCases(std::vector<TestCase> &registry,
-                                                        const std::string &op_type = "",
-                                                        TestMode mode = TestMode::TEST);
+void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
+                            TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

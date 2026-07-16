@@ -18,19 +18,21 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers the ``ai.onnx.preview.training::Adam`` backend test node case(s).
-void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterAdamCases(std::vector<TestCase> &registry,
+                                                     TestMode mode = TestMode::TEST);
 
 /// Registers the ``ai.onnx.preview.training::Adagrad`` backend test node case(s).
-void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterAdagradCases(std::vector<TestCase> &registry,
+                                                        TestMode mode = TestMode::TEST);
 
 /// Registers the ``ai.onnx.preview.training::Momentum`` backend test node case(s).
-void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterMomentumCases(std::vector<TestCase> &registry,
+                                                         TestMode mode = TestMode::TEST);
 
 /// Collects all ``training`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
-ONNX_LIGHT_BACKEND_TEST_API void CollectTrainingTestCases(std::vector<TestCase> &registry,
-                                                          const std::string &op_type = "",
-                                                          TestMode mode = TestMode::TEST);
+void CollectTrainingTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
+                              TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -19,17 +19,17 @@
 #include <utility>
 #include <vector>
 
-// Marks the ``Collect*`` entry points as exported from the shared
-// ``lib_onnx_backend_test`` library. The library is compiled with
-// -fvisibility=hidden so ``Register*`` helpers (internal to the library)
-// carry no annotation and are hidden by default; only the ``Collect*``
-// aggregators decorated with this macro appear in the dynamic symbol table.
-// On MSVC all symbols are exported via WINDOWS_EXPORT_ALL_SYMBOLS, so the
-// macro is empty there.
+// Marks the per-operator ``Register*Cases`` helpers as internal to
+// ``lib_onnx_backend_test``. They are only ever invoked from the ``Collect*``
+// aggregators inside the library, so on ELF/Mach-O we give them hidden
+// visibility to keep them out of the shared library's dynamic symbol table.
+// The public ``Collect*`` entry points keep the compiler's default (visible)
+// visibility. On MSVC the macro is empty (symbols are exported via
+// WINDOWS_EXPORT_ALL_SYMBOLS).
 #if defined(__GNUC__) || defined(__clang__)
-#define ONNX_LIGHT_BACKEND_TEST_API __attribute__((visibility("default")))
+#define ONNX_LIGHT_BACKEND_TEST_LOCAL __attribute__((visibility("hidden")))
 #else
-#define ONNX_LIGHT_BACKEND_TEST_API
+#define ONNX_LIGHT_BACKEND_TEST_LOCAL
 #endif
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -588,9 +588,8 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
  * @return A fresh registry of test cases (Abs, Add equal-shape, Add scalar
  *         broadcast).
  */
-ONNX_LIGHT_BACKEND_TEST_API std::vector<TestCase> CollectTestCases(const std::string &op_type = "",
-                                                                   bool include_big = false,
-                                                                   TestMode mode = TestMode::TEST);
+std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool include_big = false,
+                                       TestMode mode = TestMode::TEST);
 
 /**
  * Collects C++-implemented backend test node cases whose
@@ -613,9 +612,9 @@ ONNX_LIGHT_BACKEND_TEST_API std::vector<TestCase> CollectTestCases(const std::st
  * @throws std::regex_error if ``name_regex`` is not a valid ECMAScript
  *         regular expression.
  */
-ONNX_LIGHT_BACKEND_TEST_API std::vector<TestCase>
-CollectTestCasesByName(const std::string &name_regex, bool include_big = false,
-                       TestMode mode = TestMode::TEST);
+std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
+                                             bool include_big = false,
+                                             TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

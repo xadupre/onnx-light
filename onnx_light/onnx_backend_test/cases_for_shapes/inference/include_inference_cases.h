@@ -38,28 +38,32 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 
 /// Registers a multi-node ``Add → Concat → Reshape`` case.
-void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry,
-                                                 TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry,
+                                            TestMode mode = TestMode::TEST);
 
 /// Registers a multi-node ``Abs → Relu → Add → Mul → NonZero → Transpose →
 /// Cast`` case with named output value-info dimensions.
-void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registry,
-                                                  TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registry,
+                                             TestMode mode = TestMode::TEST);
 
 /// Registers a multi-node ``Shape → Identity → Unsqueeze`` case that
 /// exercises shape-data propagation through ``Shape``/``Identity`` and the
 /// INT64 ``axes`` initializer path of ``Unsqueeze``. Mirrors the upstream
 /// onnxruntime regression model from
 /// https://github.com/microsoft/onnxruntime/pull/28778.
-void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registry,
-                                                       TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registry,
+                                                  TestMode mode = TestMode::TEST);
 
 /// Registers a single-node case whose op is a call to a **model-local
 /// function** (declared in ``ModelProto::functions``). The function body
 /// is a one-node ``Add`` of two same-shape inputs. Exercises the
 /// FunctionProto-expansion path of ``onnx_optim`` shape inference.
-void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry,
-                                                 TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry,
+                                            TestMode mode = TestMode::TEST);
 
 /// Registers a single-node case exercising **shape-as-value propagation
 /// through a local-function call boundary** when the function body contains
@@ -68,8 +72,9 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
 /// ``limit_val : int64[] = 5`` which is seeded with ``ValueAsShape = [5]``;
 /// ``ExpandLocalFunctionCall`` must copy that annotation into the
 /// sub-context so ``ComputeShapeRange`` can resolve the output length to 5.
-void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &registry,
-                                                   TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &registry,
+                                              TestMode mode = TestMode::TEST);
 
 /// Registers a single-node case whose op is a call to a **model-local
 /// function whose body itself calls another model-local function**. The
@@ -78,22 +83,26 @@ void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &regist
 /// Exercises the recursive FunctionProto-expansion path of ``onnx_optim``
 /// shape inference, including the forwarding of the local-function map
 /// into nested sub-contexts so nested calls are dispatched too.
-void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry,
-                                                       TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry,
+                                                  TestMode mode = TestMode::TEST);
 
 /// Registers a model including a NonZero followed by an expression.
 /// Expressions must be simplified.
-void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry);
 
 /// Registers a MaxPool case whose output spatial dim simplifies from
 /// ``(seq + 10) // 5`` to ``seq//5+2``.
-void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry);
 
 /// Registers a ``Slice(axis=2, starts=0, ends=-1) → Abs`` case on symbolic
 /// input ``X[a,b,c]`` to exercise symbolic Slice-length inference
 /// (``c-1``) without creating fresh dimension names.
-void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry,
-                                                 TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry,
+                                            TestMode mode = TestMode::TEST);
 
 /// Registers a ``Loop`` case that computes the pairwise Euclidean distance
 /// matrix of an input ``X`` of shape ``[N, D]``. The Loop iterates ``N``
@@ -103,8 +112,9 @@ void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry
 /// produces the ``[N, N]`` distance matrix. Exercises shape inference
 /// through a non-trivial ``Loop`` body, including outer-scope reference
 /// from inside the body subgraph.
-void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
-                                                     TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
+                                                TestMode mode = TestMode::TEST);
 
 /// Registers an ``Unsqueeze → Unsqueeze → Sub → Mul → ReduceSum → Sqrt →
 /// TopK → ReduceMean`` case that computes the pairwise Euclidean distance
@@ -115,8 +125,9 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
 /// ``ReduceMean`` then reduces away to recover the concrete-rank ``[N]``
 /// output. Exercises symbolic-dim propagation through broadcasting and a
 /// data-dependent ``TopK`` axis.
-void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
-                                                     TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
+                                                TestMode mode = TestMode::TEST);
 
 /// Registers a ``Shape → Gather → Loop → TopK → ReduceMean`` case that
 /// computes the pairwise Euclidean distance matrix of an input ``X`` of
@@ -128,8 +139,9 @@ void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
 /// for its output axis, which ``ReduceMean`` then reduces away to recover the
 /// rank-1 output. Exercises symbolic-dim propagation through a non-trivial
 /// ``Loop`` body and a data-dependent ``TopK`` axis.
-void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
-                                                         TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
+                                                    TestMode mode = TestMode::TEST);
 
 /// Registers a ``Scan → Sqrt → TopK → ReduceMean`` case that computes the
 /// pairwise Euclidean distance matrix of an input ``X`` of symbolic shape
@@ -141,8 +153,9 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
 /// axis, which ``ReduceMean`` then reduces away to recover the rank-1 output.
 /// Exercises symbolic-dim propagation through a non-trivial ``Scan`` body and
 /// a data-dependent ``TopK`` axis.
-void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
-                                                         TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
+                                                    TestMode mode = TestMode::TEST);
 
 /// Registers a ``Scan`` case that computes the running (cumulative) row sum
 /// of an input ``X`` of shape ``[T, D]``. Each Scan iteration accumulates
@@ -152,8 +165,9 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
 /// output ``Y = Abs(Y_pre_abs)`` exercises shape propagation through one
 /// node after the ``Scan``. Exercises :cpp:func:`ComputeShapeScan` state
 /// propagation and scan-output stacking.
-void RegisterScanRunningSumShapeInferenceCases(std::vector<TestCase> &registry,
-                                               TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterScanRunningSumShapeInferenceCases(std::vector<TestCase> &registry,
+                                          TestMode mode = TestMode::TEST);
 
 /// Registers the ``Shape → Shape → Concat → Add → Sub → Expand → 3 × Add →
 /// Add → Add`` value-as-shape case translated from
@@ -161,8 +175,9 @@ void RegisterScanRunningSumShapeInferenceCases(std::vector<TestCase> &registry,
 /// unittests/xshape/test_value_as_shape.py. Exercises value-as-shape
 /// propagation through ``Shape``/``Concat``/``Add``/``Sub`` so the
 /// downstream ``Expand`` can recover the precise symbolic output shape.
-void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry,
-                                             TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry,
+                                        TestMode mode = TestMode::TEST);
 
 /// Registers a ``Shape → Gather → Expand → Abs`` case whose input ``x``
 /// carries symbolic dims ``[N, D]``. ``Shape(x)`` lifts the symbolic dims into
@@ -172,8 +187,9 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry,
 /// target shape so shape inference must recover the precise output
 /// shape ``float[N]``. Directly exercises the VAS-propagation logic in
 /// :cpp:func:`onnx_optim::shapes::tensor::ComputeShapeGather`.
-void RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry,
-                                                   TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry,
+                                              TestMode mode = TestMode::TEST);
 
 /// Registers a single-node ``If`` model whose ``then_branch`` and
 /// ``else_branch`` each produce **two** outputs of the same rank but with
@@ -182,8 +198,9 @@ void RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &regist
 /// :cpp:func:`onnx_optim::shapes::controlflow::ComputeShapeIf`, which must
 /// keep matching axes and synthesize a fresh ``If_<out>_d<i>`` symbolic
 /// dim for the differing one.
-void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry,
-                                                 TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry,
+                                            TestMode mode = TestMode::TEST);
 
 /// Registers an ``Unsqueeze → Unsqueeze → Reshape → Reshape → Cast →
 /// MatMul → Reshape`` case translated from the ``test_check_shape`` example
@@ -191,16 +208,18 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
 /// unittests/xshape/test_shape_builder.py. Exercises shape inference through
 /// rank-changing ``Unsqueeze`` / ``Reshape`` and through ``MatMul`` of two
 /// 3-D tensors.
-void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry,
-                                           TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry,
+                                      TestMode mode = TestMode::TEST);
 
 /// Registers a ``Reshape → Reshape → Add`` case translated from the
 /// ``test_reshape_reshape`` example in https://github.com/xadupre/
 /// yet-another-onnx-builder/blob/main/unittests/xshape/test_shape_builder.py.
 /// Exercises shape inference through chained reshapes with the ``[0, 0, …]``
 /// "carry-over" pattern.
-void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry,
-                                               TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry,
+                                          TestMode mode = TestMode::TEST);
 
 /// Registers a ``Shape → Concat → 3 × MatMul → 3 × Reshape → 3 × Transpose``
 /// case translated from the ``test_value_as_shape`` example in
@@ -209,8 +228,9 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry,
 /// propagation: ``new_shape`` is built at graph-runtime from a ``Shape``
 /// node + a constant ``[32, 8]`` initializer and is then consumed by
 /// ``Reshape``.
-void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &registry,
-                                                    TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &registry,
+                                               TestMode mode = TestMode::TEST);
 
 /// Registers a ``Concat → Split → Concat → Relu`` case translated from the
 /// ``test_concat_split`` example in https://github.com/xadupre/
@@ -218,7 +238,8 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
 /// Exercises Concat / Split shape propagation when the concat axis dims
 /// are symbolic. When ``even`` is ``true``, the split sizes are equal;
 /// when ``false``, the split sizes differ.
-void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, bool even);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, bool even);
 
 /// Registers a ``Resize(scales=[0.5, 0.5]) → Tile(repeats=[2, 2])`` case
 /// whose input ``X`` carries symbolic dimensions ``H`` (odd concrete value)
@@ -227,8 +248,9 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
 /// ``Resize_dim{i}`` symbols) followed by ``Tile`` with an INT64
 /// ``repeats`` initializer (output dims become ``Tile_dim{i}`` because the
 /// input dims are still symbolic).
-void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry,
-                                           TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry,
+                                      TestMode mode = TestMode::TEST);
 
 /// Registers a ``Pad(reflect) → Conv(canny) → Sub(ReduceMean)`` case whose
 /// single input ``X`` is a grayscale image batch ``float[N, 1, H, W]`` with
@@ -238,8 +260,9 @@ void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry,
 /// Exercises symbolic-dim propagation through ``Pad`` (symbolic ``H+2`` /
 /// ``W+2`` expressions), ``Conv`` (which collapses them back to ``H`` / ``W``)
 /// and broadcasting ``Sub`` against a reduced ``[1, 1, 1, 1]`` mean.
-void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
-                                                TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
+                                           TestMode mode = TestMode::TEST);
 
 /// Registers a single decoder layer of a tiny Llama-style causal language
 /// model (mirroring ``arnir0/Tiny-LLM``) translated to ONNX. The model takes
@@ -252,8 +275,8 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
 /// additive ``attention_mask`` path (``Cast`` / ``Unsqueeze`` / ``Sub`` /
 /// ``Mul``), the SwiGLU activation and the ``Attention`` operator with a KV
 /// cache.
-void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry,
-                                        TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Registers the same single Llama-style decoder layer as
 /// :cpp:func:`RegisterTinyLlmShapeInferenceCases` but with the fused
@@ -264,8 +287,9 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry,
 /// shape inference through the longer chains an exporter emits when those
 /// operators are decomposed, while keeping the same four dynamic inputs and
 /// three outputs as the fused companion.
-void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry,
-                                               TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry,
+                                          TestMode mode = TestMode::TEST);
 
 /// Registers a ``TopK(K, axis=-1) → TopK(K, axis=-1) → ReduceMean`` case
 /// where both TopK nodes share the **same** runtime K input (INT64 ``[1]``).
@@ -274,8 +298,9 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry,
 /// ``ReduceMean`` then collapses the second symbolic axis to recover the
 /// rank-1 output ``Y [N]``. Exercises shape inference through two chained
 /// TopK nodes that share the same K but produce distinct symbolic axes.
-void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry,
-                                             TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry,
+                                        TestMode mode = TestMode::TEST);
 
 /// Registers a ``TopK(K1, axis=-1) → TopK(K2, axis=-1) → ReduceMean`` case
 /// where the two TopK nodes use **different** runtime K inputs (K1 > K2).
@@ -284,8 +309,9 @@ void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry,
 /// ``ReduceMean`` then collapses the second symbolic axis to recover the
 /// rank-1 output ``Y [N]``. Exercises shape inference through two chained
 /// TopK nodes with independent symbolic K axes.
-void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registry,
-                                                  TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registry,
+                                             TestMode mode = TestMode::TEST);
 
 /// Registers a ``Shape → Gather → Unsqueeze → Concat → Reshape`` case on
 /// inputs ``y: float[M, D1]`` and ``z: float[K, D2]`` whose dim-1 symbolic
@@ -297,8 +323,9 @@ void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registr
 /// VAS propagation through ``Unsqueeze``, ``Concat`` never sees the
 /// per-element symbolic values and ``Reshape`` falls back to inventing
 /// undefined placeholder names instead of the real dims ``D1``/``D2``.
-void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &registry,
-                                                    TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &registry,
+                                               TestMode mode = TestMode::TEST);
 
 /// Registers a 4-layer Qwen3-style causal language model (opset 21, IR 10)
 /// reproduced from a PyTorch-exported graph. The model uses GQA-style
@@ -307,18 +334,18 @@ void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &regis
 /// initializers are replaced with deterministic random FP16 values;
 /// doc_strings are omitted.  The test exercises shape inference on a
 /// realistic multi-layer transformer graph.
-void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry,
-                                                  TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry,
+                                             TestMode mode = TestMode::TEST);
 
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 /// @param include_big When ``false`` (the default), test cases whose name
 ///                    contains ``"_big_"`` are excluded from the output.
 ///                    Pass ``true`` to also include those large cases.
-ONNX_LIGHT_BACKEND_TEST_API void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,
-                                                                const std::string &op_type = "",
-                                                                bool include_big = false,
-                                                                TestMode mode = TestMode::TEST);
+void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,
+                                    const std::string &op_type = "", bool include_big = false,
+                                    TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

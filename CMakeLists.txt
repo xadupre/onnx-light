@@ -414,12 +414,6 @@ set_property(TARGET lib_onnx_backend_test PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto lib_onnx_kernels)
 
-# Only Collect* entry points need to be visible from lib_onnx_backend_test;
-# hide everything else (Register* helpers) by default.
-set_target_properties(lib_onnx_backend_test PROPERTIES
-    C_VISIBILITY_PRESET hidden
-    CXX_VISIBILITY_PRESET hidden)
-
 # Speed up the build of lib_onnx_backend_test by precompiling the small set
 # of headers that virtually every one of the case source files in
 # onnx_light/onnx_backend_test/cases/ ends up parsing. The common base is

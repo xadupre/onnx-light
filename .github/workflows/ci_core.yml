@@ -5,6 +5,13 @@ on:
     workflows: ["ci-debug-ubuntu"]
     types: [completed]
 
+# Minimal read-only permissions for the GITHUB_TOKEN in every job that does
+# not declare its own permissions block.  workflow_run workflows inherit the
+# permissions of the default branch, so explicitly declaring read-only access
+# here prevents accidental privilege escalation via checked-out PR code.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
@@ -23,6 +30,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Detect doc-only changes
         id: filter
         shell: bash
@@ -70,6 +78,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
@@ -111,6 +120,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
@@ -151,6 +161,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
@@ -203,6 +214,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -261,6 +273,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
 
       - name: Configure 32-bit CMake build
         run: |

@@ -524,7 +524,7 @@ class ReferenceEvaluator:
         omitted, since the caller does not have to supply them.
 
         Map-typed (``map(K, V)``) inputs are listed under their original
-        graph-input name.  Feed them as a Python ``dict`` (e.g.
+        graph-input name.  These are fed as a Python ``dict`` (e.g.
         ``{"x": {10: 1.5, 30: 2.5}}``) when calling :meth:`run`.
         """
         return list(self._public_input_names)
@@ -572,7 +572,7 @@ class ReferenceEvaluator:
             Mapping of input name to value. Tensor inputs are fed as a
             :class:`numpy.ndarray`; ``seq(T)`` inputs are fed as a ``list``
             (or ``tuple``) of arrays, one per sequence element; ``map(K, V)``
-            inputs are fed as a Python ``dict`` (e.g. ``{10: 1.5, 30: 2.5}``).
+            inputs are fed as a Python ``dict`` (e.g. ``{"x": {10: 1.5}}``).
             Every name listed by :attr:`input_names` must be present.
 
         Returns

@@ -9,7 +9,6 @@
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
-#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -52,11 +51,11 @@ int64_t OutputDimLpPool(int64_t in_dim, int64_t kernel, int64_t stride, int64_t 
 // Resolves ``auto_pad`` into concrete output dimensions and explicit
 // begin/end pads for one spatial axis. ``auto_pad`` must be one of
 // ``SAME_UPPER``, ``SAME_LOWER`` or ``VALID``.
-void ResolveAutoPadAxisLpPool(const std::string &auto_pad, int64_t in_dim, int64_t kernel,
-                              int64_t stride, int64_t dilation, int64_t &out_dim,
-                              int64_t &pad_begin, int64_t &pad_end) {
+void ResolveAutoPadAxisLpPool(AutoPad auto_pad, int64_t in_dim, int64_t kernel, int64_t stride,
+                              int64_t dilation, int64_t &out_dim, int64_t &pad_begin,
+                              int64_t &pad_end) {
   const int64_t eff_kernel = dilation * (kernel - 1) + 1;
-  if (auto_pad == "VALID") {
+  if (auto_pad == AutoPad::kValid) {
     pad_begin = 0;
     pad_end = 0;
     const double numerator = static_cast<double>(in_dim - eff_kernel) / static_cast<double>(stride);
@@ -69,7 +68,7 @@ void ResolveAutoPadAxisLpPool(const std::string &auto_pad, int64_t in_dim, int64
     out_dim = 0;
   }
   const int64_t pad_total = std::max<int64_t>(0, (out_dim - 1) * stride + eff_kernel - in_dim);
-  if (auto_pad == "SAME_UPPER") {
+  if (auto_pad == AutoPad::kSameUpper) {
     pad_begin = pad_total / 2;
     pad_end = pad_total - pad_begin;
   } else { // SAME_LOWER
@@ -83,7 +82,7 @@ void ResolveAutoPadAxisLpPool(const std::string &auto_pad, int64_t in_dim, int64
 Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                           const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
                           int64_t p, bool ceil_mode, const std::vector<int64_t> &dilations,
-                          const std::string &auto_pad, RuntimeContext *rt) const {
+                          AutoPad auto_pad, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LpPool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(), "kernel::LpPool: kernel_shape must be non-empty.");
@@ -99,10 +98,10 @@ Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_sh
   EXT_ENFORCE_INVALID(
       eff_dilations.size() == k,
       "kernel::LpPool: dilations must be empty or have one entry per spatial axis.");
-  EXT_ENFORCE_INVALID(auto_pad == "NOTSET" || auto_pad == "SAME_UPPER" ||
-                          auto_pad == "SAME_LOWER" || auto_pad == "VALID",
+  EXT_ENFORCE_INVALID(auto_pad == AutoPad::kNotSet || auto_pad == AutoPad::kSameUpper ||
+                          auto_pad == AutoPad::kSameLower || auto_pad == AutoPad::kValid,
                       "kernel::LpPool: auto_pad must be NOTSET, SAME_UPPER, SAME_LOWER or VALID.");
-  const bool use_auto_pad = auto_pad != "NOTSET";
+  const bool use_auto_pad = auto_pad != AutoPad::kNotSet;
   EXT_ENFORCE_INVALID(!use_auto_pad || pads.empty(),
                       "kernel::LpPool: pads must be empty when auto_pad is not NOTSET.");
   std::vector<int64_t> eff_pads;

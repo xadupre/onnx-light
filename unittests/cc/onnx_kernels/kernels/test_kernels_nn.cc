@@ -21,6 +21,7 @@ using onnx_kernels::RuntimeContext;
 using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Attention;
+using onnx_kernels::kernel::AutoPad;
 using onnx_kernels::kernel::AveragePool;
 using onnx_kernels::kernel::BatchNormalization;
 using onnx_kernels::kernel::Dropout;
@@ -185,7 +186,7 @@ TEST(KernelClass, AveragePool2DAutoPadSameUpperPrecomputed) {
                                 19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
   Tensor y = pool(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
                   /*ceil_mode=*/false, /*count_include_pad=*/false, /*dilations=*/{},
-                  /*auto_pad=*/"SAME_UPPER");
+                  /*auto_pad=*/AutoPad::kSameUpper);
   EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 3, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 4.0f);
@@ -208,12 +209,7 @@ TEST(KernelClass, AveragePoolAutoPadAndPadsAreMutuallyExclusive) {
   // Non-empty ``pads`` together with auto_pad != NOTSET is rejected.
   EXPECT_THROW(pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{1, 1, 1, 1},
                     /*ceil_mode=*/false, /*count_include_pad=*/false, /*dilations=*/{},
-                    /*auto_pad=*/"SAME_UPPER"),
-               std::invalid_argument);
-  // Unknown auto_pad value is rejected.
-  EXPECT_THROW(pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
-                    /*ceil_mode=*/false, /*count_include_pad=*/false, /*dilations=*/{},
-                    /*auto_pad=*/"NONSENSE"),
+                    /*auto_pad=*/AutoPad::kSameUpper),
                std::invalid_argument);
   // Wrong-length dilations is rejected.
   EXPECT_THROW(pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},

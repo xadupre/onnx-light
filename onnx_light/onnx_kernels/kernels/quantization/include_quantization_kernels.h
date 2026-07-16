@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "onnx_kernels/kernels/auto_pad.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/simple_tensor.h"
 
@@ -205,7 +206,7 @@ public:
     std::vector<int64_t> pads;
     std::vector<int64_t> dilations;
     int64_t group = 1;
-    std::string auto_pad = "NOTSET";
+    AutoPad auto_pad = AutoPad::kNotSet;
   };
 
   using KernelBase::KernelBase;

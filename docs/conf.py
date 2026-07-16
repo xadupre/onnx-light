@@ -48,9 +48,15 @@ sphinx_gallery_conf = {
         os.path.join(os.path.dirname(__file__), "examples", "backend"),
         os.path.join(os.path.dirname(__file__), "examples", "core"),
         os.path.join(os.path.dirname(__file__), "examples", "optimization"),
+        os.path.join(os.path.dirname(__file__), "examples", "gradient"),
     ],
     # path where to save gallery generated examples
-    "gallery_dirs": ["auto_examples_backend", "auto_examples_core", "auto_examples_optimization"],
+    "gallery_dirs": [
+        "auto_examples_backend",
+        "auto_examples_core",
+        "auto_examples_optimization",
+        "auto_examples_gradient",
+    ],
     # no parallelization to avoid conflict with environment variables
     "parallel": 1,
     # sorting

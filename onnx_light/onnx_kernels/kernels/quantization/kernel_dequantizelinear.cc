@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/_helpers/cast_float8.h"
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
+#include "onnx_kernels/kernels/_helpers/temporary_buffer.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 
 #include "onnx_kernels/runtime_context.h"
@@ -171,11 +172,10 @@ inline int64_t ComputeInnerStride(const onnx_kernels::Shape &shape, int64_t axis
 // scale_shape[d]`` (it is not passed in), so consecutive elements along ``axis``
 // share one scale. This mirrors the upstream ``np.repeat`` expansion of the
 // scale tensor.
-std::vector<int64_t> ComputeScaleIndex(const Tensor &x, const Tensor &x_scale, int64_t axis) {
+void ComputeScaleIndex(const Tensor &x, const Tensor &x_scale, int64_t axis, int64_t *scale_index) {
   const onnx_kernels::Shape &x_shape = x.shape;
   const std::size_t rank = x_shape.size();
   const int64_t n = x.element_count();
-  std::vector<int64_t> scale_index(static_cast<std::size_t>(n));
 
   if (x_scale.shape.size() == rank) {
     // Blocked: scale shape matches x rank, divides x element-wise (only ``axis``
@@ -204,7 +204,7 @@ std::vector<int64_t> ComputeScaleIndex(const Tensor &x, const Tensor &x_scale, i
         coord[d] = 0;
       }
     }
-    return scale_index;
+    return;
   }
 
   // Per-axis: 1-D scale indexed by the coordinate along ``axis``.
@@ -213,7 +213,6 @@ std::vector<int64_t> ComputeScaleIndex(const Tensor &x, const Tensor &x_scale, i
   for (int64_t i = 0; i < n; ++i) {
     scale_index[static_cast<std::size_t>(i)] = (i / inner_stride) % axis_size;
   }
-  return scale_index;
 }
 
 // Per-block dequantization for whole-byte integer input types.
@@ -522,8 +521,12 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
         x_scale.element_count() == axis_size,
         "kernel::DequantizeLinear: x_scale element count must equal axis dimension.");
   }
-  const std::vector<int64_t> scale_index = ComputeScaleIndex(x, x_scale, axis);
-  const int64_t *idx = scale_index.data();
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
+  detail::TemporaryTypedBuffer<int64_t> scale_index_buf(static_cast<std::size_t>(x.element_count()),
+                                                        allocator,
+                                                        "kernel::DequantizeLinear: scale-index");
+  ComputeScaleIndex(x, x_scale, axis, scale_index_buf.data());
+  const int64_t *idx = scale_index_buf.data();
   const float *scales = x_scale.AsFloat();
   const std::uint8_t *zp_bytes = x_zero_point.bytes();
 

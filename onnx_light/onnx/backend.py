@@ -17,9 +17,7 @@ from ..onnx_lib.backend.test.case import collect_test_case, make_test_class  # t
 
 
 def collect_test_cases_by_name(
-    pattern: Union[str, Pattern[str]],
-    include_big: bool = False,
-    mode: "TestMode | None" = None,
+    pattern: Union[str, Pattern[str]], include_big: bool = False, mode: "TestMode | None" = None
 ) -> list[TestCase]:
     """Returns the C++-implemented backend test cases whose name matches *pattern*.
 

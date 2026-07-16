@@ -182,7 +182,7 @@ TEST(KernelClass, QuantizeLinearPerAxisUint16ImplicitZeroPointUsesAllocator) {
     EXPECT_EQ(py[2], static_cast<uint16_t>(4));
     EXPECT_EQ(py[3], static_cast<uint16_t>(3));
     EXPECT_EQ(alloc.get_current_allocations(), 1u);
-    EXPECT_EQ(alloc.get_max_concurrent_allocations(), 2u);
+    EXPECT_EQ(alloc.get_max_concurrent_allocations(), 1u);
     alloc.Free(y.allocation());
     y.ClearAllocation();
   }

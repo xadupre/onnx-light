@@ -15,6 +15,8 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
+using onnx_kernels::kernel::AutoPad;
+
 // ---------------------------------------------------------------------------
 // AveragePool — y = avg-pool(x, kernel_shape[, strides, pads, ceil_mode,
 // count_include_pad, dilations, auto_pad]) (since opset 19 in the ai.onnx
@@ -461,7 +463,7 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor y =
                  average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
                                      /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                     /*dilations=*/{}, /*auto_pad=*/"SAME_UPPER");
+                                     /*dilations=*/{}, /*auto_pad=*/AutoPad::kSameUpper);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -483,7 +485,7 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                                            10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
              Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                             /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                            /*dilations=*/{}, /*auto_pad=*/"SAME_UPPER");
+                                            /*dilations=*/{}, /*auto_pad=*/AutoPad::kSameUpper);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -505,7 +507,7 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                                            10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
              Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                             /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                            /*dilations=*/{}, /*auto_pad=*/"SAME_LOWER");
+                                            /*dilations=*/{}, /*auto_pad=*/AutoPad::kSameLower);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -558,7 +560,7 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor y =
                  average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1}, /*pads=*/{},
                                      /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                     /*dilations=*/{2, 2}, /*auto_pad=*/"VALID");
+                                     /*dilations=*/{2, 2}, /*auto_pad=*/AutoPad::kValid);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });

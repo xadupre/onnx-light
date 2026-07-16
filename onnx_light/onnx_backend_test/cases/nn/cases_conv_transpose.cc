@@ -14,6 +14,8 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
+using onnx_kernels::kernel::AutoPad;
+
 namespace {
 
 NodeProto MakeConvTransposeNode(const std::vector<std::string> &inputs,
@@ -167,7 +169,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3}, std::vector<float>(18, 1.0f));
     Tensor B;
     kernel::ConvTranspose::Attributes attrs;
-    attrs.auto_pad = "SAME_UPPER";
+    attrs.auto_pad = AutoPad::kSameUpper;
     attrs.strides = {2, 2};
     Tensor Y = ct(X, W, B, attrs);
     Y.name = "Y";

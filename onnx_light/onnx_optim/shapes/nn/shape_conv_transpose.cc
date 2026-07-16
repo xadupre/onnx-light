@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "onnx_kernels/kernels/auto_pad.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -17,6 +18,9 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
 namespace nn {
+
+using onnx_kernels::kernel::AutoPad;
+using onnx_kernels::kernel::AutoPadFromString;
 
 namespace {
 
@@ -56,7 +60,8 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
 
   const size_t n_spatial = x_shape.Rank() - 2;
   const int64_t group = GetAttributeOr<int64_t>(node, "group", 1);
-  const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", "NOTSET");
+  const AutoPad auto_pad =
+      AutoPadFromString(GetAttributeOr<std::string>(node, "auto_pad", "NOTSET"));
 
   std::vector<int64_t> kernel_shape;
   GetAttributeInts(node, "kernel_shape", kernel_shape);
@@ -130,7 +135,7 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
       out_shape.PushBack(OptimDim(output_shape_attr[i]));
       continue;
     }
-    if (auto_pad == "SAME_UPPER" || auto_pad == "SAME_LOWER") {
+    if (auto_pad == AutoPad::kSameUpper || auto_pad == AutoPad::kSameLower) {
       // ``output_spatial = iD * stride`` per upstream default when output_shape
       // is not provided and auto_pad is SAME_*.
       if (x_shape[i + 2].IsInt()) {

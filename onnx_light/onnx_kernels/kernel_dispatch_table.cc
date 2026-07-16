@@ -28,6 +28,7 @@
 #include <cmath>
 #include <cstring>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -561,7 +562,7 @@ struct PoolCommonAttrs {
   Shape pads;
   Shape dilations;
   bool ceil_mode;
-  std::string auto_pad;
+  kernel::AutoPad auto_pad;
 };
 
 inline PoolCommonAttrs ParsePoolCommonAttrs(const NodeProto &node) {
@@ -571,20 +572,18 @@ inline PoolCommonAttrs ParsePoolCommonAttrs(const NodeProto &node) {
   a.pads = GetAttributeShapeOrDefault(node, "pads", Shape{});
   a.dilations = GetAttributeShapeOrDefault(node, "dilations", Shape{});
   a.ceil_mode = GetAttributeIntOrDefault(node, "ceil_mode", 0) != 0;
-  a.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+  a.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
   return a;
 }
 
-// Copies the typed contents of ``t`` into a ``std::vector<T>``. Throws
-// ``std::invalid_argument`` if ``t.data_type`` does not match ``T``.
-template <typename T> std::vector<T> TensorToVector(const Tensor &t) {
+// Returns a zero-copy span view of the typed element data in ``t``.
+// Throws ``std::invalid_argument`` if ``t.data_type`` does not match ``T``.
+template <typename T> std::span<const T> TensorSpan(const Tensor &t) {
   const int64_t count = t.element_count();
-  std::vector<T> out(static_cast<size_t>(count));
-  if (count > 0) {
-    const T *src = t.As<T>();
-    std::copy(src, src + count, out.begin());
+  if (count == 0) {
+    return {};
   }
-  return out;
+  return {t.As<T>(), static_cast<size_t>(count)};
 }
 
 } // namespace
@@ -906,7 +905,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
          attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
          attrs.group = GetAttributeIntOrDefault(node, "group", 1);
-         attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+         attrs.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
          kernel::Conv k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
        }},
@@ -926,7 +925,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
          attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
          attrs.group = GetAttributeIntOrDefault(node, "group", 1);
-         attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+         attrs.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
          kernel::ConvInteger k(rt.kernel_ctx());
          SetOutput(node, 0,
                    k(x, w, x_zp != nullptr ? *x_zp : Tensor{},
@@ -950,7 +949,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.output_padding = GetAttributeIntsOrDefault(node, "output_padding", {});
          attrs.output_shape = GetAttributeIntsOrDefault(node, "output_shape", {});
          attrs.group = GetAttributeIntOrDefault(node, "group", 1);
-         attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+         attrs.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
          kernel::ConvTranspose k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
        }},
@@ -1818,7 +1817,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
          attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
          attrs.group = GetAttributeIntOrDefault(node, "group", 1);
-         attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+         attrs.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
          kernel::QLinearConv k(rt.kernel_ctx());
          SetOutput(node, 0,
                    k(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point,
@@ -2224,12 +2223,16 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
 
          // Resolve ``split``: from the optional 2nd input (opset >= 13), from the
          // legacy ``split`` attribute (opset <= 12), or unspecified.
-         std::vector<int64_t> split;
+         // When the split sizes come from a tensor input, use a zero-copy span
+         // view; otherwise fall back to an attribute-sourced vector.
          const Tensor *split_input = GetOptionalInput(node, 1, rt.tensors());
+         std::vector<int64_t> split_attr;
+         std::span<const int64_t> split;
          if (split_input != nullptr) {
-           split = TensorToVector<int64_t>(*split_input);
+           split = TensorSpan<int64_t>(*split_input);
          } else {
-           split = GetAttributeIntsOrDefault(node, "split", {});
+           split_attr = GetAttributeIntsOrDefault(node, "split", {});
+           split = split_attr;
          }
 
          // ``num_outputs`` (opset >= 18) defaults to the number of outputs of the
@@ -2721,7 +2724,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &x_keys = cast_m.keys;
          const Tensor &x_values = cast_m.values;
          EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)), "RunNode: CastMap keys must be an INT64 tensor.");
-         const std::vector<int64_t> keys = TensorToVector<int64_t>(x_keys);
+         const std::span<const int64_t> keys = TensorSpan<int64_t>(x_keys);
          const std::string cast_to = GetAttributeStringOrDefault(node, "cast_to", "TO_FLOAT");
          const std::string map_form = GetAttributeStringOrDefault(node, "map_form", "DENSE");
          const int64_t max_map = GetAttributeIntOrDefault(node, "max_map", 0);
@@ -2732,7 +2735,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          Tensor y;
          switch (x_values.data_type) {
          case static_cast<int32_t>(DataType::FLOAT): {
-           const std::vector<float> values = TensorToVector<float>(x_values);
+           const std::span<const float> values = TensorSpan<float>(x_values);
            if (cast_to == "TO_FLOAT") {
              y = cast_map.operator()<float, float>(keys, values, cast_to, map_form, max_map);
            } else if (cast_to == "TO_INT64") {
@@ -2810,18 +2813,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            }
            switch (x_values.data_type) {
            case static_cast<int32_t>(DataType::INT64): {
-             const std::vector<int64_t> values = TensorToVector<int64_t>(x_values);
-             y = dict.operator()<std::string, int64_t>(keys, values, vocab);
+             y = dict.operator()<std::string, int64_t>(keys, TensorSpan<int64_t>(x_values), vocab);
              break;
            }
            case static_cast<int32_t>(DataType::FLOAT): {
-             const std::vector<float> values = TensorToVector<float>(x_values);
-             y = dict.operator()<std::string, float>(keys, values, vocab);
+             y = dict.operator()<std::string, float>(keys, TensorSpan<float>(x_values), vocab);
              break;
            }
            case static_cast<int32_t>(DataType::DOUBLE): {
-             const std::vector<double> values = TensorToVector<double>(x_values);
-             y = dict.operator()<std::string, double>(keys, values, vocab);
+             y = dict.operator()<std::string, double>(keys, TensorSpan<double>(x_values), vocab);
              break;
            }
            default:
@@ -2833,7 +2833,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)), 
                  "RunNode: DictVectorizer keys must be an INT64 tensor when "
                  "'int64_vocabulary' is set.");
-           const std::vector<int64_t> keys = TensorToVector<int64_t>(x_keys);
+           const std::span<const int64_t> keys = TensorSpan<int64_t>(x_keys);
            std::vector<int64_t> vocab;
            vocab.reserve(int_vocab->ints_size());
            for (size_t i = 0; i < int_vocab->ints_size(); ++i) {
@@ -2841,13 +2841,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            }
            switch (x_values.data_type) {
            case static_cast<int32_t>(DataType::FLOAT): {
-             const std::vector<float> values = TensorToVector<float>(x_values);
-             y = dict.operator()<int64_t, float>(keys, values, vocab);
+             y = dict.operator()<int64_t, float>(keys, TensorSpan<float>(x_values), vocab);
              break;
            }
            case static_cast<int32_t>(DataType::DOUBLE): {
-             const std::vector<double> values = TensorToVector<double>(x_values);
-             y = dict.operator()<int64_t, double>(keys, values, vocab);
+             y = dict.operator()<int64_t, double>(keys, TensorSpan<double>(x_values), vocab);
              break;
            }
            case static_cast<int32_t>(DataType::STRING): {
@@ -3238,41 +3236,48 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                "RunNode: LabelEncoder requires exactly one of 'values_int64s', "
                "'values_floats', 'values_strings' or 'values_tensor' to be set.");
 
-         // Resolve KeyT.
+         // Resolve KeyT. The tensor holder keeps the key data alive when the key
+         // source is a tensor attribute; spans reference either the holder or an
+         // attribute-sourced vector.
          enum class KeyKind { Int64, Float, String };
          KeyKind key_kind;
-         std::vector<int64_t> keys_i64;
-         std::vector<float> keys_f32;
+         Tensor keys_tensor_holder; // alive until after label_encoder call
+         std::vector<int64_t> keys_i64_vec;
+         std::vector<float> keys_f32_vec;
          std::vector<std::string> keys_str;
+         std::span<const int64_t> keys_i64;
+         std::span<const float> keys_f32;
          if (keys_int64s != nullptr) {
            key_kind = KeyKind::Int64;
            for (int64_t v : keys_int64s->ints()) {
-             keys_i64.push_back(v);
+             keys_i64_vec.push_back(v);
            }
+           keys_i64 = keys_i64_vec;
          } else if (keys_floats != nullptr) {
            key_kind = KeyKind::Float;
            for (float v : keys_floats->floats()) {
-             keys_f32.push_back(v);
+             keys_f32_vec.push_back(v);
            }
+           keys_f32 = keys_f32_vec;
          } else if (keys_strings != nullptr) {
            key_kind = KeyKind::String;
            for (const auto &v : keys_strings->strings()) {
              keys_str.push_back(v.as_string());
            }
          } else {
-           const Tensor kt = TensorFromProto(keys_tensor->t());
-           switch (kt.data_type) {
+           keys_tensor_holder = TensorFromProto(keys_tensor->t());
+           switch (keys_tensor_holder.data_type) {
            case static_cast<int32_t>(DataType::INT64):
              key_kind = KeyKind::Int64;
-             keys_i64 = TensorToVector<int64_t>(kt);
+             keys_i64 = TensorSpan<int64_t>(keys_tensor_holder);
              break;
            case static_cast<int32_t>(DataType::FLOAT):
              key_kind = KeyKind::Float;
-             keys_f32 = TensorToVector<float>(kt);
+             keys_f32 = TensorSpan<float>(keys_tensor_holder);
              break;
            case static_cast<int32_t>(DataType::STRING):
              key_kind = KeyKind::String;
-             keys_str = kt.AsStrings();
+             keys_str = keys_tensor_holder.AsStrings();
              break;
            default:
              EXT_THROW_INVALID(
@@ -3282,39 +3287,46 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
 
          // Resolve ValueT and look up the (optional) default attribute.
+         // Same pattern: tensor holder keeps value data alive for the span.
          enum class ValueKind { Int64, Float, Int16 };
          ValueKind value_kind;
-         std::vector<int64_t> values_i64;
-         std::vector<float> values_f32;
-         std::vector<int16_t> values_i16;
+         Tensor values_tensor_holder; // alive until after label_encoder call
+         std::vector<int64_t> values_i64_vec;
+         std::vector<float> values_f32_vec;
+         std::vector<int16_t> values_i16_vec;
+         std::span<const int64_t> values_i64;
+         std::span<const float> values_f32;
+         std::span<const int16_t> values_i16;
          if (values_int64s != nullptr) {
            value_kind = ValueKind::Int64;
            for (int64_t v : values_int64s->ints()) {
-             values_i64.push_back(v);
+             values_i64_vec.push_back(v);
            }
+           values_i64 = values_i64_vec;
          } else if (values_floats != nullptr) {
            value_kind = ValueKind::Float;
            for (float v : values_floats->floats()) {
-             values_f32.push_back(v);
+             values_f32_vec.push_back(v);
            }
+           values_f32 = values_f32_vec;
          } else if (values_strings != nullptr) {
            EXT_THROW_INVALID(
                "RunNode: LabelEncoder with 'values_strings' is not supported "
                "by this kernel registration.");
          } else {
-           const Tensor vt = TensorFromProto(values_tensor->t());
-           switch (vt.data_type) {
+           values_tensor_holder = TensorFromProto(values_tensor->t());
+           switch (values_tensor_holder.data_type) {
            case static_cast<int32_t>(DataType::INT64):
              value_kind = ValueKind::Int64;
-             values_i64 = TensorToVector<int64_t>(vt);
+             values_i64 = TensorSpan<int64_t>(values_tensor_holder);
              break;
            case static_cast<int32_t>(DataType::FLOAT):
              value_kind = ValueKind::Float;
-             values_f32 = TensorToVector<float>(vt);
+             values_f32 = TensorSpan<float>(values_tensor_holder);
              break;
            case static_cast<int32_t>(DataType::INT16):
              value_kind = ValueKind::Int16;
-             values_i16 = TensorToVector<int16_t>(vt);
+             values_i16 = TensorSpan<int16_t>(values_tensor_holder);
              break;
            default:
              EXT_THROW_INVALID(
@@ -3474,34 +3486,30 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              membership_values.data_type != x.data_type), 
                "RunNode: TreeEnsemble attribute 'membership_values' must have the same "
                "element type as input 'X'.");
-         const std::vector<uint8_t> nodes_modes_vec = TensorToVector<uint8_t>(nodes_modes_t);
+         const std::span<const uint8_t> nodes_modes_span = TensorSpan<uint8_t>(nodes_modes_t);
          kernel::TreeEnsemble tree_ens(rt.kernel_ctx());
          Tensor y;
          switch (x.data_type) {
          case static_cast<int32_t>(DataType::FLOAT): {
-           const std::vector<float> splits = TensorToVector<float>(nodes_splits);
-           const std::vector<float> leaves = TensorToVector<float>(leaf_weights);
-           const std::vector<float> members =
-               membership_values.element_count() > 0
-                   ? TensorToVector<float>(membership_values)
-                   : std::vector<float>{};
-           y = tree_ens.operator()<float>(x, tree_roots, nodes_featureids, splits, nodes_modes_vec,
-                                          nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs,
-                                          nodes_falseleafs, nodes_missing, leaf_targetids, leaves,
-                                          members, n_targets, aggregate_function, post_transform);
+           const std::span<const float> members =
+               membership_values.element_count() > 0 ? TensorSpan<float>(membership_values)
+                                                      : std::span<const float>{};
+           y = tree_ens.operator()<float>(
+               x, tree_roots, nodes_featureids, TensorSpan<float>(nodes_splits), nodes_modes_span,
+               nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs, nodes_falseleafs,
+               nodes_missing, leaf_targetids, TensorSpan<float>(leaf_weights), members, n_targets,
+               aggregate_function, post_transform);
            break;
          }
          case static_cast<int32_t>(DataType::DOUBLE): {
-           const std::vector<double> splits = TensorToVector<double>(nodes_splits);
-           const std::vector<double> leaves = TensorToVector<double>(leaf_weights);
-           const std::vector<double> members =
-               membership_values.element_count() > 0
-                   ? TensorToVector<double>(membership_values)
-                   : std::vector<double>{};
-           y = tree_ens.operator()<double>(x, tree_roots, nodes_featureids, splits, nodes_modes_vec,
-                                           nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs,
-                                           nodes_falseleafs, nodes_missing, leaf_targetids, leaves,
-                                           members, n_targets, aggregate_function, post_transform);
+           const std::span<const double> members =
+               membership_values.element_count() > 0 ? TensorSpan<double>(membership_values)
+                                                      : std::span<const double>{};
+           y = tree_ens.operator()<double>(
+               x, tree_roots, nodes_featureids, TensorSpan<double>(nodes_splits), nodes_modes_span,
+               nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs, nodes_falseleafs,
+               nodes_missing, leaf_targetids, TensorSpan<double>(leaf_weights), members, n_targets,
+               aggregate_function, post_transform);
            break;
          }
          default:

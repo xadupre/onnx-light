@@ -211,6 +211,15 @@ class ExtTestCase(unittest.TestCase):
                 return
         raise AssertionError(f"None of the substring in {sub} is part of {s!r}.")
 
+    def assertIn(self, member, container, msg: Optional[Union[Callable, str]] = None):
+        if not msg:
+            super().assertIn(member, container)
+        if member not in container:
+            if callable(msg):
+                super().assertIn(member, container, msg())
+            else:
+                super().assertIn(member, container, msg)
+
     def assertEqualArray(
         self,
         expected: np.ndarray,
@@ -267,12 +276,18 @@ class ExtTestCase(unittest.TestCase):
             return
         raise AssertionError(f"value is not empty: {value!r}.")
 
-    def assertNotEmpty(self, value: Any):
+    @classmethod
+    def _msg(cls, msg):
+        if callable(msg):
+            return msg()
+        return msg
+
+    def assertNotEmpty(self, value: Any, msg: Optional[Union[Callable, str]] = None):
         if value is None:
-            raise AssertionError(f"value is empty: {value!r}.")
+            raise AssertionError(self._msg(msg or f"value is empty: {value!r}."))
         if isinstance(value, (list, dict, tuple, set)):
             if not value:
-                raise AssertionError(f"value is empty: {value!r}.")
+                raise AssertionError(self._msg(msg or f"value is empty: {value!r}."))
 
     def assertStartsWith(self, prefix: str, full: str):
         if not full.startswith(prefix):

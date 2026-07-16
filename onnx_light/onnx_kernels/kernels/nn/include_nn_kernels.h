@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "onnx_kernels/kernels/auto_pad.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/simple_tensor.h"
 
@@ -74,12 +75,12 @@ public:
   /// empty (treated as all 1).
   Tensor operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides = {},
                     const Shape &pads = {}, bool ceil_mode = false, bool count_include_pad = false,
-                    const Shape &dilations = {}, const std::string &auto_pad = "NOTSET",
+                    const Shape &dilations = {}, AutoPad auto_pad = AutoPad::kNotSet,
                     RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
                   const Shape &pads, bool ceil_mode, bool count_include_pad, Tensor &output,
-                  const Shape &dilations = {}, const std::string &auto_pad = "NOTSET") const;
+                  const Shape &dilations = {}, AutoPad auto_pad = AutoPad::kNotSet) const;
 
   /// Output shape generally differs from the input shape, so the output
   /// buffer cannot in general alias the input buffer.
@@ -154,7 +155,7 @@ public:
   /// (treated as all 1).
   Tensor operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides = {},
                     const Shape &pads = {}, int64_t p = 2, bool ceil_mode = false,
-                    const Shape &dilations = {}, const std::string &auto_pad = "NOTSET",
+                    const Shape &dilations = {}, AutoPad auto_pad = AutoPad::kNotSet,
                     RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from the input shape, so the output
@@ -469,7 +470,7 @@ public:
   /// element type as ``x``).
   Tensor operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides = {},
                     const Shape &pads = {}, bool ceil_mode = false, const Shape &dilations = {},
-                    int64_t storage_order = 0, const std::string &auto_pad = "NOTSET",
+                    int64_t storage_order = 0, AutoPad auto_pad = AutoPad::kNotSet,
                     RuntimeContext *rt = nullptr) const;
 
   /// Returns ``(Y, Indices)`` where ``Indices`` is an ``int64`` tensor with
@@ -481,7 +482,7 @@ public:
                                         const Shape &strides = {}, const Shape &pads = {},
                                         bool ceil_mode = false, const Shape &dilations = {},
                                         int64_t storage_order = 0,
-                                        const std::string &auto_pad = "NOTSET") const;
+                                        AutoPad auto_pad = AutoPad::kNotSet) const;
 
   /// Output shape generally differs from the input shape.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -885,12 +886,12 @@ class Conv : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``Conv`` operator.
   struct Attributes {
-    std::vector<int64_t> kernel_shape; ///< Defaults to ``W.shape[2:]``.
-    std::vector<int64_t> strides;      ///< Defaults to all ones.
-    std::vector<int64_t> pads;         ///< Defaults to all zeros (length ``2 * rank``).
-    std::vector<int64_t> dilations;    ///< Defaults to all ones.
-    int64_t group = 1;                 ///< Number of conv groups.
-    std::string auto_pad = "NOTSET"; ///< ``NOTSET`` / ``SAME_UPPER`` / ``SAME_LOWER`` / ``VALID``.
+    std::vector<int64_t> kernel_shape;   ///< Defaults to ``W.shape[2:]``.
+    std::vector<int64_t> strides;        ///< Defaults to all ones.
+    std::vector<int64_t> pads;           ///< Defaults to all zeros (length ``2 * rank``).
+    std::vector<int64_t> dilations;      ///< Defaults to all ones.
+    int64_t group = 1;                   ///< Number of conv groups.
+    AutoPad auto_pad = AutoPad::kNotSet; ///< Padding strategy.
   };
 
   using KernelBase::KernelBase;
@@ -924,7 +925,7 @@ public:
     std::vector<int64_t> pads;
     std::vector<int64_t> dilations;
     int64_t group = 1;
-    std::string auto_pad = "NOTSET";
+    AutoPad auto_pad = AutoPad::kNotSet;
   };
 
   using KernelBase::KernelBase;
@@ -961,7 +962,7 @@ public:
     std::vector<int64_t> output_padding;
     std::vector<int64_t> output_shape;
     int64_t group = 1;
-    std::string auto_pad = "NOTSET";
+    AutoPad auto_pad = AutoPad::kNotSet;
   };
 
   using KernelBase::KernelBase;

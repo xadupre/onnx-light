@@ -107,8 +107,8 @@ Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &ca
   ValidateNumericInput<T>(x, cats);
   const onnx_kernels::Shape out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
-  std::vector<uint8_t> bytes(static_cast<size_t>(total) * sizeof(float));
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape, std::move(bytes));
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape,
+                                static_cast<size_t>(total) * sizeof(float), ctx_.allocator);
   FillOneHotNumeric<T>(x, cats, zeros, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }
@@ -118,8 +118,8 @@ Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string>
   ValidateStringInput(x, cats);
   const onnx_kernels::Shape out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
-  std::vector<uint8_t> bytes(static_cast<size_t>(total) * sizeof(float));
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape, std::move(bytes));
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape,
+                                static_cast<size_t>(total) * sizeof(float), ctx_.allocator);
   FillOneHotString(x, cats, zeros, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }

@@ -15,6 +15,8 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
+using onnx_kernels::kernel::AutoPad;
+
 namespace {
 
 NodeProto MakeConvNode(const std::vector<std::string> &inputs,
@@ -138,7 +140,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor B = Tensor::FromFloat("B", {1}, {0.5f});
     kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
-    attrs.auto_pad = "SAME_UPPER";
+    attrs.auto_pad = AutoPad::kSameUpper;
     Tensor Y = conv(X, W, B, attrs);
     Y.name = "Y";
     NodeProto node = MakeConvNode({"X", "W", "B"}, {"Y"});
@@ -213,7 +215,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor B;
     kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
-    attrs.auto_pad = "SAME_UPPER";
+    attrs.auto_pad = AutoPad::kSameUpper;
     attrs.strides = {2, 2};
     Tensor Y = conv(X, W, B, attrs);
     Y.name = "Y";

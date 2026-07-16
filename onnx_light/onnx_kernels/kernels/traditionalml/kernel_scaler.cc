@@ -61,8 +61,8 @@ Tensor Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
   ValidateInput<T>(x);
   ValidateAttrs(offset, scale, LastDim(x.shape));
   const int64_t n = x.element_count();
-  std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(float));
-  Tensor out("", TensorElementType<float>::value, x.shape, std::move(bytes));
+  Tensor out = MakeOutputTensor(TensorElementType<float>::value, x.shape,
+                                static_cast<size_t>(n) * sizeof(float), ctx_.allocator);
   ApplyScaler<T>(x, offset, scale, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }

@@ -4023,8 +4023,8 @@ TEST(NodeHelpers, GetAttributeShapeOrDefaultReturnsShape) {
   attr->add_ints(3);
   attr->add_ints(3);
 
-  const Shape result =
-      onnx_kernels::detail::GetAttributeShapeOrDefault(node, "kernel_shape", Shape{});
+  const onnx_kernels::Shape result =
+      onnx_kernels::detail::GetAttributeShapeOrDefault(node, "kernel_shape", onnx_kernels::Shape{});
   ASSERT_EQ(result.size(), static_cast<size_t>(2));
   EXPECT_EQ(result[0], 3);
   EXPECT_EQ(result[1], 3);
@@ -4034,8 +4034,8 @@ TEST(NodeHelpers, GetAttributeShapeOrDefaultReturnsFallback) {
   NodeProto node;
   node.set_op_type("Pool");
 
-  const Shape fallback{1, 1};
-  const Shape result =
+  const onnx_kernels::Shape fallback{1, 1};
+  const onnx_kernels::Shape result =
       onnx_kernels::detail::GetAttributeShapeOrDefault(node, "kernel_shape", fallback);
   ASSERT_EQ(result.size(), static_cast<size_t>(2));
   EXPECT_EQ(result[0], 1);

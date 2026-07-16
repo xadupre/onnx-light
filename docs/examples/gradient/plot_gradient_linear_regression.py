@@ -67,26 +67,21 @@ for n in forward_nodes:
 # * ``y`` — the scalar (or tensor) output whose gradient is propagated back.
 # * ``zs`` — non-differentiable inputs (the feature matrix ``X``).
 
-try:
-    from onnx_light.onnx_gradient import gradient_of_nodes  # noqa: E402
+from onnx_light.onnx_gradient import gradient_of_nodes  # noqa: E402
 
-    grad_fn = gradient_of_nodes(
-        nodes=forward_nodes,
-        inputs=["X", "W", "b"],
-        initializers=[],
-        xs=["W", "b"],
-        y="y_pred",
-        zs=["X"],
-    )
+grad_fn = gradient_of_nodes(
+    nodes=forward_nodes,
+    inputs=["X", "W", "b"],
+    initializers=[],
+    xs=["W", "b"],
+    y="y_pred",
+    zs=["X"],
+)
 
-    print("\nGradient FunctionProto:")
-    print(f"  inputs  = {list(grad_fn.input)}")
-    print(f"  outputs = {list(grad_fn.output)}")
-    print(f"  nodes   = {[str(n.op_type) for n in grad_fn.node]}")
-    _gradient_available = True
-except ImportError:
-    print("\nonnx_gradient bindings not available — skipping gradient computation.")
-    _gradient_available = False
+print("\nGradient FunctionProto:")
+print(f"  inputs  = {list(grad_fn.input)}")
+print(f"  outputs = {list(grad_fn.output)}")
+print(f"  nodes   = {[str(n.op_type) for n in grad_fn.node]}")
 
 ######################################
 # Training loop with NumPy

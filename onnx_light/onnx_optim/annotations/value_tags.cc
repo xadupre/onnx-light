@@ -359,6 +359,19 @@ void RecurseSubgraphs(NodeProto &node) {
   }
 }
 
+template <typename NodeIterator>
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+ComputeTagsFromNodeIterators(NodeIterator begin, NodeIterator end) {
+  std::unordered_map<std::string, std::string> computed_value_tags;
+  std::vector<std::string> computed_node_tags;
+  std::vector<const NodeProto *> ptrs;
+  for (NodeIterator it = begin; it != end; ++it) {
+    ptrs.push_back(&(*it));
+  }
+  InferNodesTags(ptrs, computed_value_tags, computed_node_tags);
+  return {computed_value_tags, computed_node_tags};
+}
+
 } // namespace
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
@@ -390,15 +403,7 @@ ComputeTags(const FunctionProto &function) {
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 ComputeTags(const std::vector<NodeProto> &nodes) {
-  std::unordered_map<std::string, std::string> computed_value_tags;
-  std::vector<std::string> computed_node_tags;
-  std::vector<const NodeProto *> ptrs;
-  ptrs.reserve(nodes.size());
-  for (const NodeProto &node : nodes) {
-    ptrs.push_back(&node);
-  }
-  InferNodesTags(ptrs, computed_value_tags, computed_node_tags);
-  return {computed_value_tags, computed_node_tags};
+  return ComputeTagsFromNodeIterators(nodes.begin(), nodes.end());
 }
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
@@ -447,12 +452,7 @@ InferValueAndNodeTags(const FunctionProto &function) {
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 InferValueAndNodeTags(const std::vector<NodeProto> &nodes) {
-  return ComputeTags(nodes);
-}
-
-std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-InferValueAndNodeTags(const std::vector<const NodeProto *> &nodes) {
-  return ComputeTags(nodes);
+  return ComputeTagsFromNodeIterators(nodes.begin(), nodes.end());
 }
 
 void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {

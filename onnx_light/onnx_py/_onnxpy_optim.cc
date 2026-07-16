@@ -1463,7 +1463,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.def(
       "write_value_and_node_tags_to_metadata",
       [node_ptr_list](nb::list nodes) {
-        const auto inferred = onnx_annotations::InferValueAndNodeTags(node_ptr_list(nodes));
+        onnx_annotations::ComputeContext ctx;
+        const auto inferred = ctx.ComputeValueAndNodeTags(node_ptr_list(nodes));
         const auto &node_tags = inferred.second;
         std::size_t i = 0;
         for (nb::handle h : nodes) {

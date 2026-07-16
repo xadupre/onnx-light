@@ -194,7 +194,7 @@ def _light_op_since_version(op_type: str, domain: str) -> int:
     return best
 
 
-def _transform_value(arr):
+def _transform_value(arr) -> BackendTestValue:
     if isinstance(arr, list):
         return [_transform_value(x) for x in arr]
     if isinstance(arr, (int, float, str, np.integer, np.floating, np.str_)):

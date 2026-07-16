@@ -139,6 +139,7 @@ set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
 set(ONNX_OPTIM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_optim")
 set(ONNX_BACKEND_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_backend_test")
 set(ONNX_KERNELS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_kernels")
+set(ONNX_GRADIENT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_gradient")
 
 # List all files to be built.
 file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS
@@ -162,6 +163,7 @@ set(ONNX_PY_PROTOLIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_on
 set(ONNX_PY_OPTIM_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_optim.cc")
 set(ONNX_PY_KERNELS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_kernels.cc")
 set(ONNX_PY_BACKEND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc")
+set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_gradient.cc")
 
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")
@@ -172,6 +174,7 @@ file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc"
 # that consumers can take a dependency on the kernels alone, independent
 # of the surrounding backend-test cases.
 file(GLOB_RECURSE ONNX_KERNELS_SOURCES CONFIGURE_DEPENDS "${ONNX_KERNELS_PATH}/*.cc")
+file(GLOB_RECURSE ONNX_GRADIENT_SOURCES CONFIGURE_DEPENDS "${ONNX_GRADIENT_PATH}/*.cc")
 # ``lib_onnx_backend_test`` only contains the test-case registries
 # (``cases/``, ``cases_for_shapes/``, ``cases_numerical/``) and depends
 # publicly on ``lib_onnx_kernels`` for ``TestCase`` / ``Tensor`` / kernel
@@ -439,7 +442,28 @@ target_precompile_headers(lib_onnx_backend_test PRIVATE
 )
 endif() # ONNX_LIGHT_BUILD_KERNELS
 
-# Drop-in `onnx` / `onnx_proto` targets.
+# Builds onnx_gradient library.
+# This library provides reverse-mode automatic differentiation for ONNX graphs.
+# It is guarded by ONNX_LIGHT_BUILD_KERNELS (the "extended" build variant) so
+# that the minimal schema/checker-only build remains lean.
+if(ONNX_LIGHT_BUILD_KERNELS)
+add_library(lib_onnx_gradient ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS}
+    ${ONNX_GRADIENT_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_gradient PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files"
+    FILES ${ONNX_GRADIENT_SOURCES})
+target_include_directories(lib_onnx_gradient PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+set_property(TARGET lib_onnx_gradient PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_gradient PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_gradient PUBLIC lib_onnx_proto)
+endif() # ONNX_LIGHT_BUILD_KERNELS (gradient)
 # When ONNX_LIGHT_PROVIDE_ONNX_TARGETS=ON, expose CMake targets named exactly
 # like the ones upstream onnx defines (`onnx`, `onnx_proto`) so a downstream
 # project (for example onnxruntime configured with -Donnxruntime_USE_ONNX_LIGHT=ON)
@@ -579,7 +603,14 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   endif()
   endif() # ONNX_LIGHT_BUILD_KERNELS
 
-  # All extensions and the shared lib_onnx_*.so are installed in the same
+  # _onnxpygradient: gradient (automatic differentiation) bindings.
+  # Only built in the extended variant (ONNX_LIGHT_BUILD_KERNELS=ON) because the
+  # gradient library links lib_onnx_gradient which depends on lib_onnx_proto.
+  if(ONNX_LIGHT_BUILD_KERNELS)
+  nanobind_add_module(_onnxpygradient STABLE_ABI ${ONNX_PY_GRADIENT_SOURCES})
+  target_include_directories(_onnxpygradient PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  target_link_libraries(_onnxpygradient PRIVATE lib_onnx_gradient)
+  endif() # ONNX_LIGHT_BUILD_KERNELS (gradient)
   # directory (onnx_light/onnx_py/). Set an $ORIGIN rpath so the dynamic loader
   # picks the colocated libraries at import time without LD_LIBRARY_PATH. The
   # rpath must also be set on the lib_onnx_*.so libraries themselves: when
@@ -589,7 +620,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # be located via the consuming library's own rpath.
   set(_onnxpy_rpath_targets _onnxpyprotoop _onnxpyprotolib _onnxpyoptim)
   if(ONNX_LIGHT_BUILD_KERNELS)
-    list(APPEND _onnxpy_rpath_targets _onnxpykernels _onnxpybackend)
+    list(APPEND _onnxpy_rpath_targets _onnxpykernels _onnxpybackend _onnxpygradient)
   endif()
   if(_lib_onnx_proto_type STREQUAL "SHARED")
     list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
@@ -597,7 +628,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   if(_onnx_light_lib_type STREQUAL "SHARED")
     list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_manipulations lib_onnx_op lib_onnx_optim)
     if(ONNX_LIGHT_BUILD_KERNELS)
-      list(APPEND _onnxpy_rpath_targets lib_onnx_kernels lib_onnx_backend_test)
+      list(APPEND _onnxpy_rpath_targets lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient)
     endif()
   endif()
   if((_onnx_light_lib_type STREQUAL "SHARED" OR _lib_onnx_proto_type STREQUAL "SHARED") AND (UNIX AND NOT APPLE))
@@ -620,6 +651,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   file(GLOB_RECURSE ONNX_CPP_OPTIM_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_optim/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_GRADIENT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_gradient/test_*.cc")
   set(ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST
       "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_stream_class_print.cc")
   list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
@@ -630,6 +662,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
       ${ONNX_CPP_OPTIM_TEST_SOURCES}
       ${ONNX_CPP_KERNELS_TEST_SOURCES}
       ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES}
+      ${ONNX_CPP_GRADIENT_TEST_SOURCES}
   )
   set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES} ${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST})
 
@@ -663,7 +696,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_PROTO_PATH}"
     "${ONNX_COMMON_PATH}"
   )
-  target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_kernels lib_onnx_backend_test GTest::gtest_main)
+  target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient GTest::gtest_main)
   # Precompile the heaviest headers shared across virtually every translation
   # unit in unittests/cc. ``<gtest/gtest.h>`` is by far the dominant cost
   # (~109/110 test files pull it in) and the standard headers below are
@@ -849,7 +882,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # instead of being duplicated inside each .so.
   install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim LIBRARY DESTINATION onnx_light/onnx_py)
   if(ONNX_LIGHT_BUILD_KERNELS)
-    install(TARGETS _onnxpykernels _onnxpybackend LIBRARY DESTINATION onnx_light/onnx_py)
+    install(TARGETS _onnxpykernels _onnxpybackend _onnxpygradient LIBRARY DESTINATION onnx_light/onnx_py)
   endif()
   if(_lib_onnx_proto_type STREQUAL "SHARED")
     install(TARGETS lib_onnx_proto
@@ -868,6 +901,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
       install(TARGETS
           lib_onnx_kernels
           lib_onnx_backend_test
+          lib_onnx_gradient
           LIBRARY DESTINATION onnx_light/onnx_py
           RUNTIME DESTINATION onnx_light/onnx_py)
     endif()
@@ -888,7 +922,7 @@ if(ONNX_LIGHT_INSTALL)
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
   )
   if(ONNX_LIGHT_BUILD_KERNELS)
-    install(TARGETS lib_onnx_kernels lib_onnx_backend_test
+    install(TARGETS lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient
       EXPORT onnx_lightTargets
       ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"

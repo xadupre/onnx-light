@@ -14,10 +14,37 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_gradient {
 
+const GradRegistry &DefaultGradRegistry() {
+  static const GradRegistry kRegistry = [] {
+    GradRegistry r;
+    r["Add"] = GradAdd;
+    r["Div"] = GradDiv;
+    r["Gemm"] = GradGemm;
+    r["Identity"] = GradIdentity;
+    r["MatMul"] = GradMatMul;
+    r["Mul"] = GradMul;
+    r["Neg"] = GradNeg;
+    r["ReduceMean"] = GradReduceMean;
+    r["ReduceSum"] = GradReduceSum;
+    r["Relu"] = GradRelu;
+    r["Reshape"] = GradReshape;
+    r["Sigmoid"] = GradSigmoid;
+    r["Sub"] = GradSub;
+    r["Tanh"] = GradTanh;
+    r["Transpose"] = GradTranspose;
+    return r;
+  }();
+  return kRegistry;
+}
+
+void RegisterGradientFunction(const std::string &op_type, GradFn fn, GradRegistry &registry) {
+  registry[op_type] = std::move(fn);
+}
+
 void ApplyBackward(const NodeProto &node,
                    const std::unordered_map<std::string, std::string> &grad_table,
                    std::unordered_map<std::string, std::string> &grad_accum, int &counter,
-                   FunctionProto &func) {
+                   FunctionProto &func, const GradRegistry &registry) {
   // Find the output gradient: take the first output that has a gradient.
   std::string output_grad;
   for (const auto &out : node.output()) {
@@ -31,42 +58,13 @@ void ApplyBackward(const NodeProto &node,
     return; // no gradient flows through this node
 
   const std::string op_type = node.op_type().as_string();
-
-  if (op_type == "Add") {
-    GradAdd(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Div") {
-    GradDiv(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Gemm") {
-    GradGemm(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Identity") {
-    GradIdentity(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "MatMul") {
-    GradMatMul(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Mul") {
-    GradMul(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Neg") {
-    GradNeg(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "ReduceMean") {
-    GradReduceMean(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "ReduceSum") {
-    GradReduceSum(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Relu") {
-    GradRelu(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Reshape") {
-    GradReshape(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Sigmoid") {
-    GradSigmoid(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Sub") {
-    GradSub(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Tanh") {
-    GradTanh(node, output_grad, grad_accum, counter, func);
-  } else if (op_type == "Transpose") {
-    GradTranspose(node, output_grad, grad_accum, counter, func);
-  } else {
+  auto it = registry.find(op_type);
+  if (it == registry.end()) {
     std::ostringstream oss;
     oss << "onnx_gradient: unsupported op_type '" << op_type << "'";
     throw std::runtime_error(oss.str());
   }
+  it->second(node, output_grad, grad_accum, counter, func);
 }
 
 } // namespace onnx_gradient

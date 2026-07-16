@@ -69,7 +69,8 @@ std::vector<size_t> TopologicalOrder(NodeIt nodes_begin, NodeIt nodes_end,
 template <typename NodeIt, typename StrIt>
 FunctionProto ComputeGradient(NodeIt nodes_begin, NodeIt nodes_end, StrIt xs_begin, StrIt xs_end,
                               const std::string &y, StrIt zs_begin, StrIt zs_end,
-                              const std::string &func_domain, const std::string &func_name) {
+                              const std::string &func_domain, const std::string &func_name,
+                              const GradRegistry &registry) {
   if (xs_begin == xs_end)
     throw std::invalid_argument("onnx_gradient: xs must not be empty");
   if (y.empty())
@@ -114,7 +115,7 @@ FunctionProto ComputeGradient(NodeIt nodes_begin, NodeIt nodes_end, StrIt xs_beg
   for (int i = static_cast<int>(topo_order.size()) - 1; i >= 0; --i) {
     auto node_it = nodes_begin;
     std::advance(node_it, static_cast<std::ptrdiff_t>(topo_order[static_cast<size_t>(i)]));
-    ApplyBackward(*node_it, grad_table, grad_accum, counter, func);
+    ApplyBackward(*node_it, grad_table, grad_accum, counter, func, registry);
     // Promote newly accumulated gradients into grad_table so downstream
     // backward passes can use them.
     for (const auto &[var, acc] : grad_accum) {
@@ -148,15 +149,16 @@ FunctionProto ComputeGradient(NodeIt nodes_begin, NodeIt nodes_end, StrIt xs_beg
 FunctionProto GradientOfNodes(std::span<const NodeProto> nodes, std::span<const std::string> inputs,
                               std::span<const TensorProto> initializers,
                               std::span<const std::string> xs, const std::string &y,
-                              std::span<const std::string> zs) {
+                              std::span<const std::string> zs, const GradRegistry &registry) {
   (void)inputs;
   (void)initializers;
   return ComputeGradient(nodes.begin(), nodes.end(), xs.begin(), xs.end(), y, zs.begin(), zs.end(),
-                         "", "gradient");
+                         "", "gradient", registry);
 }
 
 FunctionProto GradientOfFunction(const FunctionProto &function, std::span<const std::string> xs,
-                                 const std::string &y, std::span<const std::string> zs) {
+                                 const std::string &y, std::span<const std::string> zs,
+                                 const GradRegistry &registry) {
   std::vector<NodeProto> nodes;
   nodes.reserve(static_cast<size_t>(function.node_size()));
   for (int i = 0; i < function.node_size(); ++i) {
@@ -166,7 +168,7 @@ FunctionProto GradientOfFunction(const FunctionProto &function, std::span<const 
   const std::string name =
       function.has_name() ? std::string(function.name()) + "_grad" : "gradient";
   return ComputeGradient(nodes.begin(), nodes.end(), xs.begin(), xs.end(), y, zs.begin(), zs.end(),
-                         domain, name);
+                         domain, name, registry);
 }
 
 } // namespace onnx_gradient

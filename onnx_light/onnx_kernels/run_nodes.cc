@@ -210,10 +210,16 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
-    // Move the output tensor out of the child map and erase the entry so the
-    // child destructor does not attempt to release the same allocation twice.
-    outputs.push_back(std::move(it->second));
-    child.tensors().erase(it);
+    // Copy the output tensor from the child. Copying (not moving) correctly
+    // handles the ONNX-legal case where the same name appears more than once
+    // in the body's output list (e.g. a Scan body that uses the same tensor
+    // as both a state output and a scan output). After the copy, disown the
+    // child's allocation so its destructor does not free a slot now owned by
+    // the caller's copy. DisownAllocation() is a no-op for inline tensors
+    // (which are the common case since MakeSubgraphContext withholds the
+    // parent allocator from child contexts).
+    outputs.push_back(it->second);
+    it->second.DisownAllocation();
   }
   return outputs;
 }
@@ -279,9 +285,9 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
                           "' was not produced by the selected branch.");
       Tensor t = std::move(it->second);
-      // Erase the moved-from entry so the child destructor does not attempt to
-      // release the same allocation twice (Tensor move does not null pointers).
-      child.tensors().erase(it);
+      // Disown the allocation in the moved-from child entry so the child
+      // destructor does not free a slot now owned by t.
+      it->second.DisownAllocation();
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -923,14 +929,12 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
                         "' of model-local function '", op_type,
                         "' was not produced by the function body.");
     Tensor result = std::move(it->second);
-    // Erase the moved-from entry from the child map before the child context
-    // is destroyed.  Tensor uses compiler-generated move operations that
-    // copy (not null) raw pointer members such as allocation_ and
-    // allocation_owner_, so the moved-from entry still points at the same
-    // allocator slot.  Without the erase, the child destructor would call
-    // ReleaseTensorAllocation on that entry and free a slot that is now owned
-    // by the parent, causing a double-free.
-    child.tensors().erase(it);
+    // Disown the allocation in the moved-from child entry.  Tensor move copies
+    // raw pointer members (allocation_, allocation_owner_), so the moved-from
+    // entry still points at the same allocator slot as ``result``.  Disowning
+    // nulls allocation_owner_ in the child entry so ReleaseTensorAllocation
+    // skips Free, leaving ``result`` as the sole owner of the slot.
+    it->second.DisownAllocation();
     result.name = caller_name;
     rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
   }

@@ -76,8 +76,9 @@ Tensor ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices,
   ValidateIndices(x, indices);
   const onnx_kernels::Shape out_shape = ComputeOutputShape(x, indices);
   const int64_t outer = OuterSize(x);
-  std::vector<uint8_t> bytes(static_cast<size_t>(indices.element_count() * outer) * sizeof(T));
-  Tensor out("", TensorElementType<T>::value, out_shape, std::move(bytes));
+  Tensor out = MakeOutputTensor(TensorElementType<T>::value, out_shape,
+                                static_cast<size_t>(indices.element_count() * outer) * sizeof(T),
+                                ctx_.allocator);
   GatherLastAxis<T>(x, indices, out_shape, out.As<T>());
   return out;
 }

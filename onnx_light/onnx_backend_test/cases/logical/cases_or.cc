@@ -51,8 +51,8 @@ void RegisterOrCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = 1024 * 4096;
     Expect(registry, std::move(node), "test_cc_or_benchmark", {opset}, {count, count}, {count},
            [or_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromBool("", shape, RandUint<uint8_t>(2, shape, /*seed=*/9101));
-             Tensor y = Tensor::FromBool("", shape, RandUint<uint8_t>(2, shape, /*seed=*/9102));
+             Tensor x = RandBool(shape, /*seed=*/9101);
+             Tensor y = RandBool(shape, /*seed=*/9102);
              Tensor z = or_kernel(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });

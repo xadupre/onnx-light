@@ -129,8 +129,8 @@ Tensor CastMap::operator()(const std::vector<int64_t> &input_keys,
     FillStringOutput<V>(input_keys, input_values, map_form, out.string_data);
     return out;
   } else {
-    std::vector<uint8_t> bytes(static_cast<std::size_t>(n) * sizeof(OutT), 0u);
-    Tensor out("", static_cast<int32_t>(TensorElementType<OutT>::value), shape, std::move(bytes));
+    Tensor out = MakeOutputTensor(static_cast<int32_t>(TensorElementType<OutT>::value), shape,
+                                  static_cast<std::size_t>(n) * sizeof(OutT), ctx_.allocator);
     FillNumericOutput<V, OutT>(input_keys, input_values, map_form,
                                reinterpret_cast<OutT *>(out.mutable_bytes()));
     return out;

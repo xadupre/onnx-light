@@ -113,8 +113,8 @@ Tensor Normalizer::operator()(const Tensor &x, const std::string &norm, RuntimeC
   ValidateInput<T>(x);
   const NormMode mode = ParseNorm(norm);
   const int64_t n = x.element_count();
-  std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(float));
-  Tensor out("", TensorElementType<float>::value, x.shape, std::move(bytes));
+  Tensor out = MakeOutputTensor(TensorElementType<float>::value, x.shape,
+                                static_cast<size_t>(n) * sizeof(float), ctx_.allocator);
   ApplyNormalizer<T>(x, mode, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }

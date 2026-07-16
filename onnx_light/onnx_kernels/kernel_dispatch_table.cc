@@ -560,7 +560,7 @@ struct PoolCommonAttrs {
   std::vector<int64_t> pads;
   std::vector<int64_t> dilations;
   bool ceil_mode;
-  AutoPad auto_pad;
+  kernel::AutoPad auto_pad;
 };
 
 inline PoolCommonAttrs ParsePoolCommonAttrs(const NodeProto &node) {
@@ -570,7 +570,7 @@ inline PoolCommonAttrs ParsePoolCommonAttrs(const NodeProto &node) {
   a.pads = GetAttributeIntsOrDefault(node, "pads", {});
   a.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
   a.ceil_mode = GetAttributeIntOrDefault(node, "ceil_mode", 0) != 0;
-  a.auto_pad = AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
+  a.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
   return a;
 }
 
@@ -905,7 +905,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
          attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
          attrs.group = GetAttributeIntOrDefault(node, "group", 1);
-         attrs.auto_pad = AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
+         attrs.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
          kernel::Conv k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
        }},
@@ -925,7 +925,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
          attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
          attrs.group = GetAttributeIntOrDefault(node, "group", 1);
-         attrs.auto_pad = AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
+         attrs.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
          kernel::ConvInteger k(rt.kernel_ctx());
          SetOutput(node, 0,
                    k(x, w, x_zp != nullptr ? *x_zp : Tensor{},
@@ -949,7 +949,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.output_padding = GetAttributeIntsOrDefault(node, "output_padding", {});
          attrs.output_shape = GetAttributeIntsOrDefault(node, "output_shape", {});
          attrs.group = GetAttributeIntOrDefault(node, "group", 1);
-         attrs.auto_pad = AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
+         attrs.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
          kernel::ConvTranspose k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
        }},
@@ -1817,7 +1817,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
          attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
          attrs.group = GetAttributeIntOrDefault(node, "group", 1);
-         attrs.auto_pad = AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
+         attrs.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
          kernel::QLinearConv k(rt.kernel_ctx());
          SetOutput(node, 0,
                    k(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point,

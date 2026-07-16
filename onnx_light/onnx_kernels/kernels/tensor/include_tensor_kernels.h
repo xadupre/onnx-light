@@ -8,6 +8,7 @@
 #include "onnx_kernels/simple_tensor.h"
 
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -341,9 +342,22 @@ public:
   using KernelBase::KernelBase;
   /// Computes the split. Exactly one of ``split`` (non-empty) or
   /// ``num_outputs`` (> 0) must be provided.
+  ///
+  /// This overload accepts a zero-copy span view of the split sizes (preferred
+  /// when the sizes come directly from a tensor buffer).
+  std::vector<Tensor> operator()(const Tensor &input, int64_t axis, std::span<const int64_t> split,
+                                 int64_t num_outputs, RuntimeContext *rt = nullptr) const;
+
+  /// Convenience overload for brace-enclosed initializer lists such as
+  /// ``{2, 4}``; copies the values into a temporary vector and forwards to
+  /// the span overload.  Callers with an existing ``std::vector<int64_t>``
+  /// can pass it directly — it converts to ``std::span`` implicitly.
   std::vector<Tensor> operator()(const Tensor &input, int64_t axis,
-                                 const std::vector<int64_t> &split, int64_t num_outputs,
-                                 RuntimeContext *rt = nullptr) const;
+                                 std::initializer_list<int64_t> split, int64_t num_outputs,
+                                 RuntimeContext *rt = nullptr) const {
+    std::vector<int64_t> tmp(split);
+    return (*this)(input, axis, std::span<const int64_t>{tmp}, num_outputs, rt);
+  }
 
   /// Output buffers are strict subsets of the input and have a different
   /// shape, so storage can not generally be shared.

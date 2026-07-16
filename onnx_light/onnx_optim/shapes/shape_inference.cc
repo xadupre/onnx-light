@@ -860,13 +860,13 @@ void ShapesContext::LogConstraintEvent(ShapeEventAction action, const std::strin
   EmitEvent(events_.back());
 }
 
-void ShapesContext::AppendComputeNodeEvent(const std::string &op_domain, const std::string &op_type,
+void ShapesContext::AppendComputeNodeEvent(std::string_view op_domain, std::string_view op_type,
                                            std::vector<std::string> inputs) {
   ShapeEvent ev;
   ev.action = ShapeEventAction::kComputeNode;
   ev.data_type = static_cast<int32_t>(TensorProto::DataType::UNDEFINED);
-  ev.op_domain = op_domain;
-  ev.op_type = op_type;
+  ev.op_domain = std::string(op_domain);
+  ev.op_type = std::string(op_type);
   ev.inputs = std::move(inputs);
   ev.node_index = current_node_index_;
   ev.subgraph_node_index = current_subgraph_node_index_;

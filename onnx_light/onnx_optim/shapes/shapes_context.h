@@ -719,7 +719,7 @@ public:
   /// ``op_domain`` / ``op_type`` and the ``inputs`` it consumed).
   /// Appended by :cpp:func:`ComputeShapeNode` for every dispatched node
   /// when event logging is enabled.
-  void AppendComputeNodeEvent(const std::string &op_domain, const std::string &op_type,
+  void AppendComputeNodeEvent(std::string_view op_domain, std::string_view op_type,
                               std::vector<std::string> inputs);
 
 private:

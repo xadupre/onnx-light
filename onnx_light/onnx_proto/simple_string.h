@@ -239,9 +239,11 @@ inline RefString &RefString::operator=(const String &v) {
 std::string join_string(const std::vector<std::string> &rows, const char *delimiter = "\n");
 
 /** Quotes a string view for debug and error messages. */
-inline std::string quote_string(const RefString &s) { return "\"" + std::string(s) + "\""; }
+inline std::string quote_string(std::string_view s) { return "\"" + std::string(s) + "\""; }
+/** Quotes a RefString for debug and error messages. */
+inline std::string quote_string(const RefString &s) { return quote_string(s.sv()); }
 /** Quotes an owning string for debug and error messages. */
-inline std::string quote_string(const String &s) { return "\"" + std::string(s) + "\""; }
+inline std::string quote_string(const String &s) { return quote_string(s.sv()); }
 
 /** Streams a RefString to an output stream. */
 inline std::ostream &operator<<(std::ostream &os, const RefString &s) {

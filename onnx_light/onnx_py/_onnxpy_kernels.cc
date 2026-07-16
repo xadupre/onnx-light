@@ -20,6 +20,7 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
+using onnx_kernels::Map;
 using onnx_kernels::RuntimeContext;
 using onnx_kernels::Sequence;
 using onnx_kernels::Tensor;
@@ -419,6 +420,28 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "Inserts or overwrites the sequence stored under ``name`` from a list of "
           ":class:`Tensor` objects. The sequence element type is inferred from the "
           "first tensor (``UNDEFINED`` when the list is empty).")
+      .def("has_map", &RuntimeContext::HasMap, nb::arg("name"),
+           "Returns ``True`` if a map named ``name`` is currently held by the context.")
+      .def(
+          "map_names",
+          [](const RuntimeContext &rt) {
+            std::vector<std::string> out;
+            out.reserve(rt.maps().size());
+            for (const auto &kv : rt.maps()) {
+              out.push_back(kv.first);
+            }
+            return out;
+          },
+          "Returns the list of map names currently held by the context.")
+      .def(
+          "put_map",
+          [](RuntimeContext &rt, const std::string &name, Tensor keys, Tensor values) {
+            rt.PutMap(name, Map(name, std::move(keys), std::move(values)));
+          },
+          nb::arg("name"), nb::arg("keys"), nb::arg("values"),
+          "Inserts or overwrites the map stored under ``name`` from the given 1-D "
+          "``keys`` and ``values`` :class:`Tensor` objects. The map key/value types "
+          "are inferred from the tensor data types.")
       .def(
           "events",
           [](const RuntimeContext &rt) {

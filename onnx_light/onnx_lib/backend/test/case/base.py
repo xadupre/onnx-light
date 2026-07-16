@@ -393,20 +393,13 @@ def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
             inputs: list = []
             for gi in graph_inputs:
                 if gi.type.has_map_type():
-                    # Try Map object first: combine keys/values into a dict.
-                    if gi.name in maps_by_name:
-                        m = maps_by_name[gi.name]
+                    m = maps_by_name.get(gi.name)
+                    if m is not None:
                         keys_np = _tensor_to_np(m.keys)
                         values_np = _tensor_to_np(m.values)
                         inputs.append(dict(zip(keys_np.tolist(), values_np.tolist())))
-                        continue
-                    # Fall back to legacy _keys/_values tensor convention.
-                    keys_arr = by_name.get(f"{gi.name}_keys")
-                    values_arr = by_name.get(f"{gi.name}_values")
-                    if keys_arr is None or values_arr is None:
+                    else:
                         inputs.append(by_name.get(gi.name))
-                        continue
-                    inputs.append(dict(zip(keys_arr.tolist(), values_arr.tolist())))
                 else:
                     inputs.append(by_name.get(gi.name))
             data_sets.append(inputs)

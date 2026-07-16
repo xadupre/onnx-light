@@ -46,6 +46,7 @@ using detail::GetAttributeFloatOrDefault;
 using detail::GetAttributeFloatsOrDefault;
 using detail::GetAttributeIntOrDefault;
 using detail::GetAttributeIntsOrDefault;
+using detail::GetAttributeShapeOrDefault;
 using detail::GetAttributeStringOrDefault;
 using detail::GetAttributeStringsOrDefault;
 using detail::GetInput;
@@ -556,20 +557,20 @@ void RunRMSNormalization(const NodeProto &node, RuntimeContext &rt) {
 // Shared spatial pooling attributes consumed by AveragePool / MaxPool
 // (and other pool-style ops). The defaults mirror the ONNX schema.
 struct PoolCommonAttrs {
-  std::vector<int64_t> kernel_shape;
-  std::vector<int64_t> strides;
-  std::vector<int64_t> pads;
-  std::vector<int64_t> dilations;
+  Shape kernel_shape;
+  Shape strides;
+  Shape pads;
+  Shape dilations;
   bool ceil_mode;
   kernel::AutoPad auto_pad;
 };
 
 inline PoolCommonAttrs ParsePoolCommonAttrs(const NodeProto &node) {
   PoolCommonAttrs a;
-  a.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
-  a.strides = GetAttributeIntsOrDefault(node, "strides", {});
-  a.pads = GetAttributeIntsOrDefault(node, "pads", {});
-  a.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+  a.kernel_shape = GetAttributeShapeOrDefault(node, "kernel_shape", Shape{});
+  a.strides = GetAttributeShapeOrDefault(node, "strides", Shape{});
+  a.pads = GetAttributeShapeOrDefault(node, "pads", Shape{});
+  a.dilations = GetAttributeShapeOrDefault(node, "dilations", Shape{});
   a.ceil_mode = GetAttributeIntOrDefault(node, "ceil_mode", 0) != 0;
   a.auto_pad = kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
   return a;

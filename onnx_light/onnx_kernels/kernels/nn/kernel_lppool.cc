@@ -79,9 +79,8 @@ void ResolveAutoPadAxisLpPool(AutoPad auto_pad, int64_t in_dim, int64_t kernel, 
 
 } // namespace
 
-Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
-                          const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                          int64_t p, bool ceil_mode, const std::vector<int64_t> &dilations,
+Tensor LpPool::operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
+                          const Shape &pads, int64_t p, bool ceil_mode, const Shape &dilations,
                           AutoPad auto_pad, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LpPool: x must be FLOAT.");
@@ -91,8 +90,8 @@ Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_sh
       "kernel::LpPool: x must have rank == kernel_shape.size() + 2 (N, C, D1, ..., Dk).");
   EXT_ENFORCE_INVALID(p >= 1, "kernel::LpPool: p must be >= 1.");
   const size_t k = kernel_shape.size();
-  std::vector<int64_t> eff_strides = strides.empty() ? std::vector<int64_t>(k, 1) : strides;
-  std::vector<int64_t> eff_dilations = dilations.empty() ? std::vector<int64_t>(k, 1) : dilations;
+  Shape eff_strides = strides.empty() ? Shape(std::vector<int64_t>(k, 1)) : strides;
+  Shape eff_dilations = dilations.empty() ? Shape(std::vector<int64_t>(k, 1)) : dilations;
   EXT_ENFORCE_INVALID(eff_strides.size() == k,
                       "kernel::LpPool: strides must be empty or have one entry per spatial axis.");
   EXT_ENFORCE_INVALID(
@@ -104,11 +103,11 @@ Tensor LpPool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_sh
   const bool use_auto_pad = auto_pad != AutoPad::kNotSet;
   EXT_ENFORCE_INVALID(!use_auto_pad || pads.empty(),
                       "kernel::LpPool: pads must be empty when auto_pad is not NOTSET.");
-  std::vector<int64_t> eff_pads;
+  Shape eff_pads;
   if (use_auto_pad) {
     eff_pads.assign(2 * k, 0);
   } else {
-    eff_pads = pads.empty() ? std::vector<int64_t>(2 * k, 0) : pads;
+    eff_pads = pads.empty() ? Shape(std::vector<int64_t>(2 * k, 0)) : pads;
   }
   EXT_ENFORCE_INVALID(eff_pads.size() == 2 * k,
                       "kernel::LpPool: pads must be empty or have two entries per spatial axis "

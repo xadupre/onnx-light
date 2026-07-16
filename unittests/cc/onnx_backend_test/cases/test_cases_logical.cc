@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/random.h"
 
 #include <gtest/gtest.h>
 
@@ -13,9 +14,11 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectLogicalTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
+std::vector<onnx_backend_test::TestCase>
+CollectTestCases(const std::string &op_type = "",
+                 onnx_backend_test::TestMode mode = onnx_backend_test::TestMode::TEST) {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectLogicalTestCases(registry, op_type);
+  CollectLogicalTestCases(registry, op_type, mode);
   return registry;
 }
 } // namespace
@@ -215,6 +218,24 @@ TEST(BackendTestCase, OrXorBroadcastCasesHaveBroadcastShapes) {
     EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 1, 5, 6})) << name;
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5, 6})) << name;
   }
+}
+
+TEST(BackendTestCase, AndBenchmarkInputsUseRandBool) {
+  auto cases = CollectTestCases("And", onnx_backend_test::TestMode::BENCHMARK);
+  const TestCase *tc = FindLogicalCase(cases, "test_cc_and_benchmark");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &ds = tc->data_sets()[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{1024, 4096}));
+  EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{1024, 4096}));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+
+  const onnx_kernels::Tensor expected_x = onnx_kernels::RandBool({1024, 4096}, /*seed=*/9101);
+  const onnx_kernels::Tensor expected_y = onnx_kernels::RandBool({1024, 4096}, /*seed=*/9102);
+  EXPECT_EQ(ds.inputs[0].data, expected_x.data);
+  EXPECT_EQ(ds.inputs[1].data, expected_y.data);
 }
 
 TEST(BackendTestCase, GreaterLessCasesArePresent) {

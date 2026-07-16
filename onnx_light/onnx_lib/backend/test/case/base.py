@@ -375,7 +375,7 @@ def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
         arr = np.frombuffer(t.raw_data(), dtype=dtype)
         return arr.reshape(tuple(int(d) for d in t.shape))
 
-    def _ds_inputs_to_python(tc: Any) -> list[list[np.ndarray | dict | None]]:
+    def _ds_inputs_to_python(tc: Any) -> list[list[np.ndarray | dict[Any, Any] | None]]:
         """Returns per-DataSet positional inputs for ``tc``.
 
         For graph inputs declared with ``map(K, V)`` type (used by
@@ -386,11 +386,11 @@ def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
         map under its original graph-input name.
         """
         graph_inputs = list(tc.model.graph.input)
-        data_sets: list[list[np.ndarray | dict | None]] = []
+        data_sets: list[list[np.ndarray | dict[Any, Any] | None]] = []
         for ds in tc.data_sets:
             by_name = {t.name: _tensor_to_np(t) for t in ds.inputs}
             maps_by_name = {m.name: m for m in ds.maps} if ds.maps else {}
-            inputs: list[np.ndarray | dict | None] = []
+            inputs: list[np.ndarray | dict[Any, Any] | None] = []
             for gi in graph_inputs:
                 if gi.type.has_map_type():
                     m = maps_by_name.get(gi.name)

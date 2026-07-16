@@ -443,8 +443,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
               return;
             }
             auto it = d.begin();
-            nb::object first_key = (*it).first;
-            nb::object first_val = (*it).second;
+            nb::handle first_key = (*it).first;
+            nb::handle first_val = (*it).second;
 
             // Detect key and value scalar types from the first entry.
             // In Python, bool is a subclass of int, so exclude it explicitly.

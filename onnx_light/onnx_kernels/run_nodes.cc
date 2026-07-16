@@ -394,6 +394,15 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       rt.PutSequence(caller_name, sequence_state[i]);
     } else {
       Tensor t = tensor_state[i];
+      // Disown any allocator slot on the copied state tensor.
+      // When the loop runs zero iterations tensor_state[i] is still the
+      // initial-state copy (allocation_owner_ set); keeping ownership would
+      // cause both the input and the output entries in rt.tensors_ to free
+      // the same slot when the RuntimeContext is destroyed — a double-free.
+      // When the loop ran >= 1 iterations tensor_state[i] was updated from
+      // the child context (inline, no allocation), so DisownAllocation() is
+      // a no-op and EnsureAllocatorBacked will migrate it to a fresh slot.
+      t.DisownAllocation();
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }

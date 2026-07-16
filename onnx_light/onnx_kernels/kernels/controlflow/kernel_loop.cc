@@ -155,7 +155,19 @@ AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
   std::vector<Tensor> out;
   out.reserve(final_state.size() + scan_values_per_iter.size());
   for (std::size_t i = 0; i < final_state.size(); ++i) {
-    out.push_back(trip_count == 0 ? v_initial[i] : final_state[i]);
+    Tensor t = trip_count == 0 ? v_initial[i] : final_state[i];
+    // Disown any allocator slot carried by the copied state tensor.
+    // When trip_count == 0 the state output is a pass-through copy of the
+    // initial-state input tensor, which is already held (with ownership) in
+    // rt.tensors_.  Keeping allocation_owner_ on the copy would cause both the
+    // input and the output entries in rt.tensors_ to free the same slot when
+    // the RuntimeContext is destroyed — a double-free.
+    // When trip_count > 0 final_state[i] comes from the loop body (child
+    // context without an allocator) and is inline, so DisownAllocation() is a
+    // no-op; EnsureAllocatorBacked will migrate the inline tensor to a fresh
+    // allocator slot in PropagateOutputsToCaller.
+    t.DisownAllocation();
+    out.push_back(std::move(t));
   }
   for (const auto &row : scan_values_per_iter) {
     out.push_back(StackScanOutput(row, trip_count, allocator));

@@ -76,8 +76,8 @@ Tensor LabelEncoder::operator()(const Tensor &x, const std::vector<KeyT> &keys,
                                 RuntimeContext *rt) const {
   ValidateInputs<KeyT, ValueT>(x, keys, values);
   const int64_t n = x.element_count();
-  std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(ValueT));
-  Tensor out("", TensorElementType<ValueT>::value, x.shape, std::move(bytes));
+  Tensor out = MakeOutputTensor(TensorElementType<ValueT>::value, x.shape,
+                                static_cast<size_t>(n) * sizeof(ValueT), ctx_.allocator);
   LookupAndFill<KeyT, ValueT>(x, keys, values, default_value,
                               reinterpret_cast<ValueT *>(out.mutable_bytes()));
   return out;

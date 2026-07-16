@@ -18,7 +18,8 @@ from .....ext_test_case import ExtTestCase
 _LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
 # Backend test inputs/outputs are usually ndarrays, but ONNX sequence cases use
 # recursively nested Python lists of ndarrays, and map-typed inputs are Python dicts.
-BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"] | dict[Any, Any]
+# ``None`` marks a graph input with no associated data (model-only validation cases).
+BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"] | dict[Any, Any] | None
 BackendTestDataSets: TypeAlias = Sequence[
     tuple[Sequence[BackendTestValue], Sequence[BackendTestValue]]
 ]

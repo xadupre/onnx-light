@@ -381,9 +381,9 @@ def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
         For graph inputs declared with ``map(K, V)`` type (used by
         ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap``), the
         DataSet stores a Map object in ``ds.maps``. The keys and values
-        tensors are returned as two consecutive positional items so the
-        backend harness (which zips them against ``sess.input_names``)
-        receives them under the correct names.
+        tensors are combined into a single Python ``dict`` so the backend
+        harness (which zips them against ``sess.input_names``) feeds the
+        map under its original graph-input name.
         """
         graph_inputs = list(tc.model.graph.input)
         data_sets: list[list] = []
@@ -393,11 +393,12 @@ def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
             inputs: list = []
             for gi in graph_inputs:
                 if gi.type.has_map_type():
-                    # Try Map object first.
+                    # Try Map object first: combine keys/values into a dict.
                     if gi.name in maps_by_name:
                         m = maps_by_name[gi.name]
-                        inputs.append(_tensor_to_np(m.keys))
-                        inputs.append(_tensor_to_np(m.values))
+                        keys_np = _tensor_to_np(m.keys)
+                        values_np = _tensor_to_np(m.values)
+                        inputs.append(dict(zip(keys_np.tolist(), values_np.tolist())))
                         continue
                     # Fall back to legacy _keys/_values tensor convention.
                     keys_arr = by_name.get(f"{gi.name}_keys")
@@ -405,8 +406,7 @@ def _collect_cc_test_cases(include_big: bool = False) -> dict[str, TestCase]:
                     if keys_arr is None or values_arr is None:
                         inputs.append(by_name.get(gi.name))
                         continue
-                    inputs.append(keys_arr)
-                    inputs.append(values_arr)
+                    inputs.append(dict(zip(keys_arr.tolist(), values_arr.tolist())))
                 else:
                     inputs.append(by_name.get(gi.name))
             data_sets.append(inputs)

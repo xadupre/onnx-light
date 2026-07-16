@@ -13,11 +13,10 @@ of ONNX values at the graph boundary:
   Python ``list`` (or ``tuple``) of :class:`numpy.ndarray` objects, one per
   element; retrieve a ``list`` of :class:`numpy.ndarray` objects.
 * **Dictionary** – a key-value map (``map(K, V)``).  Feed a Python ``dict``
-  under the graph-input name.  Map-typed outputs are returned as stacked
-  float tensors whose columns correspond to the class labels.
+  under the graph-input name.
 
-This example builds three small ONNX models – one per value kind – and
-demonstrates both *how to supply the inputs* and *how to read the outputs*.
+This example builds small ONNX models and demonstrates both *how to supply
+the inputs* and *how to read the outputs*.
 """
 
 from __future__ import annotations
@@ -161,67 +160,8 @@ print("\nInput  d = { 10: 1.5, 30: 2.5 }")
 print("Output y :", dict_results[0])
 np.testing.assert_array_equal(dict_results[0], np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
-# ---------------------------------------------------------------------------
-# 4. Map (dictionary) output via ZipMap
-# ++++++++++++++++++++++++++++++++++++++
-#
-# ``ai.onnx.ml::ZipMap`` consumes a float tensor and returns a
-# ``sequence<map<K, float>>``.  In this runtime, the output is materialised
-# as a stacked float tensor:
-#
-# * 1-D input  ``[C]``   → output tensor ``[1, C]``
-# * 2-D input  ``[N, C]`` → output tensor ``[N, C]``
-#
-# The map keys come from the ``classlabels_int64s`` (or
-# ``classlabels_strings``) attribute.  To recover the per-sample Python
-# dicts, zip each output row with the class-label list.
-
-class_labels = [10, 20, 30]
-
-zipmap_graph = helper.make_graph(
-    nodes=[
-        helper.make_node(
-            "ZipMap", ["scores"], ["maps"], domain="ai.onnx.ml", classlabels_int64s=class_labels
-        )
-    ],
-    name="zipmap_graph",
-    inputs=[helper.make_tensor_value_info("scores", onnxl.TensorProto.FLOAT, [None, 3])],
-    # ZipMap output type is sequence<map<int64, float>>, declared here for
-    # documentation; the runtime stores it as a float tensor.
-    outputs=[helper.make_tensor_value_info("maps", onnxl.TensorProto.FLOAT, [None, 3])],
-)
-zipmap_model = helper.make_model(
-    zipmap_graph,
-    opset_imports=[helper.make_opsetid("", 13), helper.make_opsetid("ai.onnx.ml", 1)],
-)
-print("\n=== ZipMap model ===")
-print(pretty_onnx(zipmap_model))
-
-zipmap_sess = ReferenceEvaluator(zipmap_model)
-print("input_names :", zipmap_sess.input_names)
-print("output_names:", zipmap_sess.output_names)
-
-# Two samples, each with three class scores.
-scores = np.array([[0.1, 0.7, 0.2], [0.3, 0.4, 0.3]], dtype=np.float32)
-zipmap_results = zipmap_sess.run(None, {"scores": scores})
-
-# The output is a stacked numpy array: shape [N, C].
-maps_tensor = zipmap_results[0]
-assert isinstance(maps_tensor, np.ndarray)
-print("\nInput scores (shape", scores.shape, "):")
-print(scores)
-print("Output tensor (shape", maps_tensor.shape, "):")
-print(maps_tensor)
-
-# Reconstruct one Python dict per sample by zipping the class labels with
-# the corresponding row of the output tensor.
-dicts = [dict(zip(class_labels, row)) for row in maps_tensor]
-print("\nReconstructed per-sample dicts:")
-for i, d in enumerate(dicts):
-    print(f"  sample[{i}]:", d)
-
 #####################################
-# 5. Map of tensors – numpy_helper round-trip
+# 4. Map of tensors – numpy_helper round-trip
 # ++++++++++++++++++++++++++++++++++++++++++++
 #
 # An ONNX map whose *values* are tensors – e.g.

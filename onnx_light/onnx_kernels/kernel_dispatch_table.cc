@@ -45,6 +45,7 @@ using detail::GetAttributeFloatOrDefault;
 using detail::GetAttributeFloatsOrDefault;
 using detail::GetAttributeIntOrDefault;
 using detail::GetAttributeIntsOrDefault;
+using detail::GetAttributeShapeOrDefault;
 using detail::GetAttributeStringOrDefault;
 using detail::GetAttributeStringsOrDefault;
 using detail::GetInput;

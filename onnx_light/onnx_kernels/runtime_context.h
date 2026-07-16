@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -31,13 +32,37 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 
 /**
+ * Transparent hash functor for string-keyed maps.
+ * Accepts ``std::string``, ``std::string_view``, and ``const char *`` as
+ * lookup keys without constructing a temporary ``std::string``, enabling
+ * zero-copy heterogeneous ``find`` / ``contains`` on name-keyed maps.
+ */
+struct StringHash {
+  using is_transparent = void;
+  std::size_t operator()(std::string_view sv) const noexcept {
+    return std::hash<std::string_view>{}(sv);
+  }
+};
+
+/**
+ * Transparent equality predicate matching ``StringHash``.
+ */
+struct StringEqual {
+  using is_transparent = void;
+  bool operator()(std::string_view a, std::string_view b) const noexcept { return a == b; }
+};
+
+/**
  * Name-keyed map of tensors carrying both the graph inputs/initializers
  * and the intermediate values produced by previously executed nodes.
  * Owned by :cpp:class:`RuntimeContext`; the dispatcher reads a node's
  * inputs from this map by name (matching ``node.input(i)``) and inserts
  * every produced output under the name declared by ``node.output(i)``.
+ *
+ * Uses a transparent hasher so that ``find`` / ``contains`` accept
+ * ``std::string_view`` directly without allocating a temporary ``std::string``.
  */
-using TensorMap = std::unordered_map<std::string, Tensor>;
+using TensorMap = std::unordered_map<std::string, Tensor, StringHash, StringEqual>;
 
 /**
  * Name-keyed map of sequences carrying the sequence-typed graph
@@ -52,7 +77,7 @@ using TensorMap = std::unordered_map<std::string, Tensor>;
  * sequence-typed edges, looked up by the same ``NodeProto::input`` /
  * ``NodeProto::output`` names.
  */
-using SequenceMap = std::unordered_map<std::string, Sequence>;
+using SequenceMap = std::unordered_map<std::string, Sequence, StringHash, StringEqual>;
 
 /**
  * Name-keyed map of maps carrying the map-typed graph values produced or
@@ -64,7 +89,7 @@ using SequenceMap = std::unordered_map<std::string, Sequence>;
  * map-typed edges, looked up by the same ``NodeProto::input`` /
  * ``NodeProto::output`` names.
  */
-using OnnxMapMap = std::unordered_map<std::string, Map>;
+using OnnxMapMap = std::unordered_map<std::string, Map, StringHash, StringEqual>;
 
 /**
  * Name-keyed map of model-local :cpp:type:`FunctionProto` definitions
@@ -80,7 +105,7 @@ using OnnxMapMap = std::unordered_map<std::string, Map>;
  * ``ModelProto``; the entries are valid only as long as the model
  * outlives the runtime context.
  */
-using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
+using FunctionMap = std::unordered_map<std::string, const FunctionProto *, StringHash, StringEqual>;
 
 /**
  * Signature of a user-provided custom kernel callback. Mirrors
@@ -105,7 +130,7 @@ using CustomKernelFn = std::function<void(const NodeProto &, class RuntimeContex
  * ``"<domain>:<op_type>"``; a custom registration overrides any
  * built-in entry with the same key.
  */
-using CustomKernelMap = std::unordered_map<std::string, CustomKernelFn>;
+using CustomKernelMap = std::unordered_map<std::string, CustomKernelFn, StringHash, StringEqual>;
 
 /**
  * Maximum number of element values captured inline by
@@ -505,14 +530,14 @@ public:
   void ClearCustomKernels() { custom_kernels_.clear(); }
 
   /// Returns ``true`` if a tensor named ``name`` is currently held.
-  bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
+  bool Has(std::string_view name) const { return tensors_.find(name) != tensors_.end(); }
 
   /// Removes the tensor stored under ``name`` if present. Returns
   /// ``true`` if an entry was erased, ``false`` otherwise. When an entry
   /// is erased a :cpp:class:`RuntimeEvent` with action
   /// :cpp:enumerator:`RuntimeEventAction::kRemove` is appended to the
   /// event log; nothing is logged when ``name`` is not present.
-  bool Remove(const std::string &name);
+  bool Remove(std::string_view name);
 
   /// Inserts the tensor under ``name``. The name must not already
   /// be present in the map; use :cpp:func:`Put` (or ``tensors()``
@@ -521,8 +546,7 @@ public:
   /// is appended to the event log on successful insertion. ``kind``
   /// defaults to :cpp:enumerator:`RuntimeEventKind::kInput`, which is
   /// the typical role of values seeded by the caller before running.
-  void Set(const std::string &name, Tensor tensor,
-           RuntimeEventKind kind = RuntimeEventKind::kInput);
+  void Set(std::string_view name, Tensor tensor, RuntimeEventKind kind = RuntimeEventKind::kInput);
 
   /// Inserts or overwrites the tensor stored under ``name``. Appends a
   /// :cpp:class:`RuntimeEvent` describing the new state with action
@@ -531,7 +555,7 @@ public:
   /// entry was overwritten. ``kind`` defaults to
   /// :cpp:enumerator:`RuntimeEventKind::kIntermediate`, the typical role
   /// of values written by node kernels through :cpp:func:`SetOutput`.
-  void Put(const std::string &name, Tensor tensor,
+  void Put(std::string_view name, Tensor tensor,
            RuntimeEventKind kind = RuntimeEventKind::kIntermediate);
 
   /**
@@ -539,8 +563,8 @@ public:
    *
    * @throws std::out_of_range if ``name`` is not in the map.
    */
-  const Tensor &Get(const std::string &name) const;
-  Tensor &Get(const std::string &name);
+  const Tensor &Get(std::string_view name) const;
+  Tensor &Get(std::string_view name);
 
   /// Append-only log of every tensor map mutation performed through
   /// :cpp:func:`Set`, :cpp:func:`Put` and :cpp:func:`Remove`. See
@@ -704,7 +728,7 @@ public:
   const SequenceMap &sequences() const noexcept { return sequences_; }
 
   /// Returns ``true`` if a sequence named ``name`` is currently held.
-  bool HasSequence(const std::string &name) const {
+  bool HasSequence(std::string_view name) const {
     return sequences_.find(name) != sequences_.end();
   }
 
@@ -712,24 +736,25 @@ public:
   /// stored sequence's ``name`` field is updated to ``name``. No event
   /// is appended to the event log: sequence values are intentionally
   /// outside the tensor event stream.
-  void PutSequence(const std::string &name, Sequence sequence) {
-    sequence.name = name;
-    sequences_[name] = std::move(sequence);
+  void PutSequence(std::string_view name, Sequence sequence) {
+    sequence.name.assign(name.data(), name.size());
+    sequences_[sequence.name] = std::move(sequence);
   }
 
   /// Removes the sequence stored under ``name`` if present. Returns
   /// ``true`` if an entry was erased, ``false`` otherwise.
-  bool RemoveSequence(const std::string &name) { return sequences_.erase(name) > 0; }
+  bool RemoveSequence(std::string_view name) { return sequences_.erase(std::string(name)) > 0; }
 
   /**
    * Returns the sequence stored under ``name``.
    *
    * @throws std::out_of_range if ``name`` is not in the sequence map.
    */
-  const Sequence &GetSequence(const std::string &name) const {
+  const Sequence &GetSequence(std::string_view name) const {
     auto it = sequences_.find(name);
     if (it == sequences_.end()) {
-      throw std::out_of_range("RuntimeContext::GetSequence: no sequence named '" + name + "'.");
+      throw std::out_of_range("RuntimeContext::GetSequence: no sequence named '" +
+                              std::string(name) + "'.");
     }
     return it->second;
   }
@@ -741,26 +766,26 @@ public:
   const OnnxMapMap &maps() const noexcept { return maps_; }
 
   /// Returns ``true`` if a map named ``name`` is currently held.
-  bool HasMap(const std::string &name) const { return maps_.find(name) != maps_.end(); }
+  bool HasMap(std::string_view name) const { return maps_.find(name) != maps_.end(); }
 
   /// Inserts or overwrites the map stored under ``name``.
-  void PutMap(const std::string &name, Map map) {
-    map.name = name;
-    maps_[name] = std::move(map);
+  void PutMap(std::string_view name, Map map) {
+    map.name.assign(name.data(), name.size());
+    maps_[map.name] = std::move(map);
   }
 
   /// Removes the map stored under ``name`` if present.
-  bool RemoveMap(const std::string &name) { return maps_.erase(name) > 0; }
+  bool RemoveMap(std::string_view name) { return maps_.erase(std::string(name)) > 0; }
 
   /**
    * Returns the map stored under ``name``.
    *
    * @throws std::out_of_range if ``name`` is not in the map store.
    */
-  const Map &GetMap(const std::string &name) const {
+  const Map &GetMap(std::string_view name) const {
     auto it = maps_.find(name);
     if (it == maps_.end()) {
-      throw std::out_of_range("RuntimeContext::GetMap: no map named '" + name + "'.");
+      throw std::out_of_range("RuntimeContext::GetMap: no map named '" + std::string(name) + "'.");
     }
     return it->second;
   }

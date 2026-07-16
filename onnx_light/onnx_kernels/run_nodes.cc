@@ -53,12 +53,12 @@ bool ParseBoolScalar(const Tensor &t, const std::string &where) {
   return t.AsBool()[0] != 0;
 }
 
-Tensor MakeInt64Scalar(const std::string &name, int64_t v) {
-  return Tensor::FromInt64(name, {}, {v});
+Tensor MakeInt64Scalar(std::string_view name, int64_t v) {
+  return Tensor::FromInt64(std::string(name), {}, {v});
 }
 
-Tensor MakeBoolScalar(const std::string &name, bool v) {
-  return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)});
+Tensor MakeBoolScalar(std::string_view name, bool v) {
+  return Tensor::FromBool(std::string(name), {}, {static_cast<uint8_t>(v ? 1 : 0)});
 }
 
 int64_t CheckedMulInt64(int64_t a, int64_t b, const std::string &where) {
@@ -196,11 +196,11 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   std::vector<Tensor> outputs;
   outputs.reserve(graph.output().size());
   for (size_t i = 0; i < graph.output().size(); ++i) {
-    const std::string out_name = graph.output()[i].name();
+    auto out_name = graph.output()[i].name().sv();
     EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: a subgraph output has an empty name.");
     auto it = child.tensors().find(out_name);
-    EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
-                        "' was not produced.");
+    EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '",
+                        std::string(out_name), "' was not produced.");
     outputs.push_back(it->second);
   }
   return outputs;
@@ -214,13 +214,13 @@ void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &
                       "' produced ", outputs.size(), " output(s), node declares ",
                       node.output_size(), ".");
   for (size_t i = 0; i < outputs.size(); ++i) {
-    const std::string caller_name = node.output(i);
-    if (caller_name.empty()) {
+    auto caller_sv = node.output(i).sv();
+    if (caller_sv.empty()) {
       continue;
     }
     Tensor t = outputs[i];
-    t.name = caller_name;
-    rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
+    t.name.assign(caller_sv.data(), caller_sv.size());
+    rt.Put(caller_sv, std::move(t), RuntimeEventKind::kOutput);
   }
 }
 
@@ -254,21 +254,21 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   }
 
   for (int i = 0; i < branch.output_size(); ++i) {
-    const std::string out_name = branch.output()[i].name();
+    auto out_name = branch.output()[i].name().sv();
     EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: If: a subgraph output has an empty name.");
-    const std::string caller_name = node.output(i);
-    if (caller_name.empty()) {
+    auto caller_sv = node.output(i).sv();
+    if (caller_sv.empty()) {
       continue;
     }
     if (child.HasSequence(out_name)) {
-      rt.PutSequence(caller_name, child.GetSequence(out_name));
+      rt.PutSequence(caller_sv, child.GetSequence(out_name));
     } else {
       auto it = child.tensors().find(out_name);
-      EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
-                          "' was not produced by the selected branch.");
+      EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '",
+                          std::string(out_name), "' was not produced by the selected branch.");
       Tensor t = std::move(it->second);
-      t.name = caller_name;
-      rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
+      t.name.assign(caller_sv.data(), caller_sv.size());
+      rt.Put(caller_sv, std::move(t), RuntimeEventKind::kOutput);
     }
   }
 }
@@ -301,18 +301,18 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
   for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
     RuntimeContext child = rt.MakeSubgraphContext("body");
 
-    const std::string &iter_name = body.input(0).name();
-    const std::string &cond_name = body.input(1).name();
-    child.Put(iter_name, MakeInt64Scalar(iter_name, iter), RuntimeEventKind::kInput);
-    child.Put(cond_name, MakeBoolScalar(cond_name, cond_value), RuntimeEventKind::kInput);
+    auto iter_sv = body.input(0).name().sv();
+    auto cond_sv = body.input(1).name().sv();
+    child.Put(iter_sv, MakeInt64Scalar(iter_sv, iter), RuntimeEventKind::kInput);
+    child.Put(cond_sv, MakeBoolScalar(cond_sv, cond_value), RuntimeEventKind::kInput);
     for (std::size_t i = 0; i < n; ++i) {
-      const std::string &bname = body.input(static_cast<int>(2 + i)).name();
+      auto bsv = body.input(static_cast<int>(2 + i)).name().sv();
       if (is_seq_state[i]) {
-        child.PutSequence(bname, sequence_state[i]);
+        child.PutSequence(bsv, sequence_state[i]);
       } else {
         Tensor t = tensor_state[i];
-        t.name = bname;
-        child.Put(bname, std::move(t), RuntimeEventKind::kInput);
+        t.name.assign(bsv.data(), bsv.size());
+        child.Put(bsv, std::move(t), RuntimeEventKind::kInput);
       }
     }
     RunGraph(body, child);
@@ -323,33 +323,35 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       }
     }
 
-    const std::string &cond_out_name = body.output(0).name();
-    auto cond_it = child.tensors().find(cond_out_name);
+    auto cond_out_sv = body.output(0).name().sv();
+    auto cond_it = child.tensors().find(cond_out_sv);
     EXT_ENFORCE_INVALID(cond_it != child.tensors().end(),
-                        "RunNode: Loop body did not produce 'cond_out' output '", cond_out_name,
-                        "'.");
+                        "RunNode: Loop body did not produce 'cond_out' output '",
+                        std::string(cond_out_sv), "'.");
     cond_value = ParseBoolScalar(cond_it->second, "Loop body output 'cond_out'");
 
     for (std::size_t i = 0; i < n; ++i) {
-      const std::string &oname = body.output(static_cast<int>(1 + i)).name();
+      auto osv = body.output(static_cast<int>(1 + i)).name().sv();
       if (is_seq_state[i]) {
         EXT_ENFORCE_INVALID(
-            child.HasSequence(oname),
-            "RunNode: Loop body did not produce sequence-typed loop-carried output '", oname, "'.");
-        sequence_state[i] = child.GetSequence(oname);
+            child.HasSequence(osv),
+            "RunNode: Loop body did not produce sequence-typed loop-carried output '",
+            std::string(osv), "'.");
+        sequence_state[i] = child.GetSequence(osv);
       } else {
-        auto it = child.tensors().find(oname);
+        auto it = child.tensors().find(osv);
         EXT_ENFORCE_INVALID(it != child.tensors().end(),
                             "RunNode: Loop body did not produce tensor-typed loop-carried output '",
-                            oname, "'.");
+                            std::string(osv), "'.");
         tensor_state[i] = it->second;
       }
     }
     for (std::size_t j = 0; j < k; ++j) {
-      const std::string &oname = body.output(static_cast<int>(1 + n + j)).name();
-      auto it = child.tensors().find(oname);
+      auto osv = body.output(static_cast<int>(1 + n + j)).name().sv();
+      auto it = child.tensors().find(osv);
       EXT_ENFORCE_INVALID(it != child.tensors().end(),
-                          "RunNode: Loop body did not produce scan output '", oname, "'.");
+                          "RunNode: Loop body did not produce scan output '", std::string(osv),
+                          "'.");
       scan_values[j].push_back(it->second);
     }
     ++trip_count;
@@ -357,23 +359,23 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
 
   // Propagate loop-carried outputs (sequence- or tensor-typed) to caller.
   for (std::size_t i = 0; i < n; ++i) {
-    const std::string caller_name = node.output(static_cast<int>(i));
-    if (caller_name.empty()) {
+    auto caller_sv = node.output(static_cast<int>(i)).sv();
+    if (caller_sv.empty()) {
       continue;
     }
     if (is_seq_state[i]) {
-      rt.PutSequence(caller_name, sequence_state[i]);
+      rt.PutSequence(caller_sv, sequence_state[i]);
     } else {
       Tensor t = tensor_state[i];
-      t.name = caller_name;
-      rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
+      t.name.assign(caller_sv.data(), caller_sv.size());
+      rt.Put(caller_sv, std::move(t), RuntimeEventKind::kOutput);
     }
   }
 
   // Stack scan outputs along a new leading axis and propagate to caller.
   for (std::size_t j = 0; j < k; ++j) {
-    const std::string caller_name = node.output(static_cast<int>(n + j));
-    if (caller_name.empty()) {
+    auto caller_sv = node.output(static_cast<int>(n + j)).sv();
+    if (caller_sv.empty()) {
       continue;
     }
     const auto &row = scan_values[j];
@@ -399,7 +401,8 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         stacked_data.insert(stacked_data.end(), it.bytes(), it.bytes() + it.size_bytes());
       }
     }
-    Tensor stacked(caller_name, dtype, std::move(stacked_shape), std::move(stacked_data));
+    Tensor stacked(std::string(caller_sv), dtype, std::move(stacked_shape),
+                   std::move(stacked_data));
 
     // When the loop runs zero iterations the kernel has no template to seed
     // dtype/shape from. Patch using the body's declared output value-info so
@@ -424,7 +427,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         stacked.shape.insert(stacked.shape.end(), per_iter_shape.begin(), per_iter_shape.end());
       }
     }
-    rt.Put(caller_name, std::move(stacked), RuntimeEventKind::kOutput);
+    rt.Put(caller_sv, std::move(stacked), RuntimeEventKind::kOutput);
   }
 }
 
@@ -456,7 +459,7 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
     EXT_ENFORCE_INVALID(
         !(node.input(idx).empty()),
         "RunNode: Loop does not support empty placeholders in loop-carried inputs.");
-    const std::string name = node.input(idx);
+    auto name = node.input(idx).sv();
     if (rt.HasSequence(name)) {
       is_seq_state[i] = true;
       sequence_state[i] = rt.GetSequence(name);
@@ -701,14 +704,14 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
   std::vector<const Tensor *> additional_tensors(num_additional, nullptr);
   for (std::size_t k = 0; k < num_additional; ++k) {
     const int idx = static_cast<int>(1 + k);
-    const std::string name = node.input(idx);
+    auto name = node.input(idx).sv();
     EXT_ENFORCE_INVALID(
         !(name.empty()),
         "RunNode: SequenceMap does not support empty placeholders in additional inputs.");
     if (rt.HasSequence(name)) {
       const Sequence &seq = rt.GetSequence(name);
-      EXT_ENFORCE_INVALID(seq.size() == n, "RunNode: SequenceMap additional sequence input '", name,
-                          "' has length ", seq.size(), ", expected ", n,
+      EXT_ENFORCE_INVALID(seq.size() == n, "RunNode: SequenceMap additional sequence input '",
+                          std::string(name), "' has length ", seq.size(), ", expected ", n,
                           " (matching the first input sequence length).");
       additional_sequences[k] = &seq;
     } else {
@@ -742,15 +745,15 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
     bindings.emplace_back(elem0.name, std::move(elem0));
 
     for (std::size_t k = 0; k < num_additional; ++k) {
-      const std::string param_name = body.input(static_cast<int>(1 + k)).name();
+      auto param_sv = body.input(static_cast<int>(1 + k)).name().sv();
       Tensor t;
       if (additional_sequences[k] != nullptr) {
         t = additional_sequences[k]->values[i];
       } else {
         t = *additional_tensors[k];
       }
-      t.name = param_name;
-      bindings.emplace_back(param_name, std::move(t));
+      t.name.assign(param_sv.data(), param_sv.size());
+      bindings.emplace_back(t.name, std::move(t));
     }
 
     std::vector<Tensor> iter_outputs = RunSubgraph(body, bindings, rt, "body");
@@ -842,20 +845,20 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
 
   // Bind formal function inputs to the caller's actuals.
   for (size_t i = 0; i < func.input_size(); ++i) {
-    const std::string caller_name = node.input(i);
-    const std::string param_name = func.input(i);
+    auto caller_sv = node.input(i).sv();
+    auto param_sv = func.input(i).sv();
     // Optional/unused function inputs (empty actual or formal name) are skipped.
-    if (caller_name.empty() || param_name.empty()) {
+    if (caller_sv.empty() || param_sv.empty()) {
       continue;
     }
-    auto it = rt.tensors().find(caller_name);
-    EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", caller_name,
+    auto it = rt.tensors().find(caller_sv);
+    EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", std::string(caller_sv),
                         "' of call to model-local "
                         "function '",
                         op_type, "' is missing from the tensor map.");
     Tensor bound = it->second;
-    bound.name = param_name;
-    child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
+    bound.name.assign(param_sv.data(), param_sv.size());
+    child.Put(param_sv, std::move(bound), RuntimeEventKind::kInput);
   }
 
   // Resolve attribute references (``ref_attr_name``) inside the
@@ -885,28 +888,30 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
   // Copy the function's formal outputs back into the caller's tensor
   // map under the names declared by the node's output list.
   for (size_t i = 0; i < func.output_size(); ++i) {
-    const std::string caller_name = node.output(i);
-    const std::string param_name = func.output(i);
-    if (caller_name.empty()) {
+    auto caller_sv = node.output(i).sv();
+    auto param_sv = func.output(i).sv();
+    if (caller_sv.empty()) {
       // The caller does not want this output; skip it.
       continue;
     }
-    auto it = child.tensors().find(param_name);
-    EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: output '", param_name,
+    auto it = child.tensors().find(param_sv);
+    EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: output '", std::string(param_sv),
                         "' of model-local function '", op_type,
                         "' was not produced by the function body.");
     Tensor result = std::move(it->second);
-    result.name = caller_name;
-    rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
+    result.name.assign(caller_sv.data(), caller_sv.size());
+    rt.Put(caller_sv, std::move(result), RuntimeEventKind::kOutput);
   }
 }
 
 } // namespace
 
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
-  const std::string op_type = node.op_type();
+  auto op_type_sv = node.op_type().sv();
   const std::string domain = NormaliseDispatchDomain(node);
-  PrintNodeProgress(rt, node, domain, op_type);
+  if (rt.verbose() > 0) {
+    PrintNodeProgress(rt, node, domain, std::string(op_type_sv));
+  }
 
   // Only capture timing and input names when event logging is active.
   const bool logging = rt.events_enabled();
@@ -925,7 +930,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   // override same-named built-ins, matching the ONNX runtime semantics
   // for model-local functions.
   if (!rt.functions().empty()) {
-    const std::string fkey = FunctionLookupKey(domain, op_type, node.overload());
+    const std::string fkey = FunctionLookupKey(domain, std::string(op_type_sv), node.overload());
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       CallModelLocalFunction(node, *fit->second, rt);
@@ -938,22 +943,27 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
         for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
           inputs.push_back(node.input(i));
         }
-        rt.AppendRunNodeEvent(domain, op_type, std::move(inputs), start_time_ns, duration_ns);
+        rt.AppendRunNodeEvent(domain, std::string(op_type_sv), std::move(inputs), start_time_ns,
+                              duration_ns);
       }
       return;
     }
   }
 
-  if (domain == kDefaultOnnxDomain && op_type == "If") {
+  if (domain == kDefaultOnnxDomain && op_type_sv == "If") {
     RunIfNode(node, rt);
-  } else if (domain == kDefaultOnnxDomain && op_type == "Loop") {
+  } else if (domain == kDefaultOnnxDomain && op_type_sv == "Loop") {
     RunLoopNode(node, rt);
-  } else if (domain == kDefaultOnnxDomain && op_type == "Scan") {
+  } else if (domain == kDefaultOnnxDomain && op_type_sv == "Scan") {
     RunScanNode(node, rt);
-  } else if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
+  } else if (domain == kDefaultOnnxDomain && op_type_sv == "SequenceMap") {
     RunSequenceMapNode(node, rt);
   } else {
-    const std::string key = domain + ":" + op_type;
+    std::string key;
+    key.reserve(domain.size() + 1 + op_type_sv.size());
+    key = domain;
+    key += ':';
+    key += op_type_sv;
     // User-registered custom kernels take precedence over built-in
     // kernel dispatch table entries so callers can override (or
     // extend) the runtime with their own implementations.
@@ -963,8 +973,8 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
     } else {
       const auto &table = KernelDispatchTable();
       auto it = table.find(key);
-      EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '", op_type,
-                          "' in domain '", domain, "'.");
+      EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '",
+                          std::string(op_type_sv), "' in domain '", domain, "'.");
       it->second(node, rt);
     }
   }
@@ -978,7 +988,8 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
     for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
       inputs.push_back(node.input(i));
     }
-    rt.AppendRunNodeEvent(domain, op_type, std::move(inputs), start_time_ns, duration_ns);
+    rt.AppendRunNodeEvent(domain, std::string(op_type_sv), std::move(inputs), start_time_ns,
+                          duration_ns);
   }
 }
 

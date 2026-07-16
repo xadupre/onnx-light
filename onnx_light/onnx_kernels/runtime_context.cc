@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstring>
 #include <stdexcept>
+#include <string_view>
 #include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -209,59 +210,65 @@ RuntimeContext::~RuntimeContext() {
   }
 }
 
-void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
-  EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
+void RuntimeContext::Set(std::string_view name, Tensor tensor, RuntimeEventKind kind) {
+  EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", std::string(name),
+              "' already exists.");
   EnsureAllocatorBacked(tensor, allocator_);
   if (events_enabled_) {
-    events_.push_back(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor,
-                                            current_node_index_, current_subgraph_node_index_,
-                                            current_subgraph_attr_name_));
+    events_.push_back(MakeAddOrReplaceEvent(
+        RuntimeEventAction::kAdd, kind, std::string(name), tensor, current_node_index_,
+        current_subgraph_node_index_, current_subgraph_attr_name_));
   }
-  tensors_[name] = std::move(tensor);
+  tensors_.emplace(std::string(name), std::move(tensor));
 }
 
-void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
+void RuntimeContext::Put(std::string_view name, Tensor tensor, RuntimeEventKind kind) {
   EnsureAllocatorBacked(tensor, allocator_);
-  if (events_enabled_) {
-    const RuntimeEventAction action =
-        Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
-    events_.push_back(MakeAddOrReplaceEvent(action, kind, name, tensor, current_node_index_,
-                                            current_subgraph_node_index_,
-                                            current_subgraph_attr_name_));
-  }
   auto it = tensors_.find(name);
   if (it != tensors_.end()) {
+    if (events_enabled_) {
+      events_.push_back(MakeAddOrReplaceEvent(RuntimeEventAction::kReplace, kind, it->first, tensor,
+                                              current_node_index_, current_subgraph_node_index_,
+                                              current_subgraph_attr_name_));
+    }
     ReleaseTensorAllocation(it->second);
+    it->second = std::move(tensor);
+  } else {
+    if (events_enabled_) {
+      events_.push_back(MakeAddOrReplaceEvent(
+          RuntimeEventAction::kAdd, kind, std::string(name), tensor, current_node_index_,
+          current_subgraph_node_index_, current_subgraph_attr_name_));
+    }
+    tensors_.emplace(std::string(name), std::move(tensor));
   }
-  tensors_[name] = std::move(tensor);
 }
 
-bool RuntimeContext::Remove(const std::string &name) {
+bool RuntimeContext::Remove(std::string_view name) {
   auto it = tensors_.find(name);
   if (it == tensors_.end()) {
     return false;
   }
   ReleaseTensorAllocation(it->second);
-  tensors_.erase(it);
   if (events_enabled_) {
-    events_.push_back(MakeRemoveEvent(RuntimeEventKind::kUnknown, name,
+    events_.push_back(MakeRemoveEvent(RuntimeEventKind::kUnknown, it->first,
                                       current_subgraph_node_index_, current_subgraph_attr_name_));
   }
+  tensors_.erase(it);
   return true;
 }
 
-const Tensor &RuntimeContext::Get(const std::string &name) const {
+const Tensor &RuntimeContext::Get(std::string_view name) const {
   auto it = tensors_.find(name);
   if (it == tensors_.end()) {
-    throw std::out_of_range("RuntimeContext::Get: no tensor named '" + name + "'.");
+    throw std::out_of_range("RuntimeContext::Get: no tensor named '" + std::string(name) + "'.");
   }
   return it->second;
 }
 
-Tensor &RuntimeContext::Get(const std::string &name) {
+Tensor &RuntimeContext::Get(std::string_view name) {
   auto it = tensors_.find(name);
   if (it == tensors_.end()) {
-    throw std::out_of_range("RuntimeContext::Get: no tensor named '" + name + "'.");
+    throw std::out_of_range("RuntimeContext::Get: no tensor named '" + std::string(name) + "'.");
   }
   return it->second;
 }

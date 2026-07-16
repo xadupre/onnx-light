@@ -170,9 +170,9 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
 
 // Normalises the empty default ONNX domain to ``kOnnxDomain`` so that
 // dispatch-table lookups always use a canonical key.
-std::string NormaliseDispatchDomain(const NodeProto &node) {
-  const std::string domain = node.domain();
-  return domain.empty() ? std::string(kOnnxDomain) : domain;
+std::string_view NormaliseDispatchDomain(const NodeProto &node) {
+  const std::string_view domain = node.domain().sv();
+  return domain.empty() ? std::string_view(kOnnxDomain) : domain;
 }
 
 using AnchorMap = std::unordered_map<std::string, OptimTensor>;
@@ -792,11 +792,16 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   CheckOnnxDomain(node);
   ctx.CheckInputsAvailable(node);
   ctx.CheckOutputsNotAvailable(node);
-  const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
+  const std::string_view domain_sv = NormaliseDispatchDomain(node);
+  std::string key;
+  key.reserve(domain_sv.size() + 1 + op_type.size());
+  key.append(domain_sv);
+  key += ':';
+  key.append(op_type);
   const auto &table = DispatchTable();
   auto it = table.find(key);
   EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '", op_type,
-                      "' in domain '", NormaliseDispatchDomain(node), "'.");
+                      "' in domain '", domain_sv, "'.");
   it->second(ctx, node);
 }
 

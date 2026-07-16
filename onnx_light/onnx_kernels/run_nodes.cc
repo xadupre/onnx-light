@@ -86,10 +86,17 @@ namespace {
 // look up model-local FunctionProto definitions in
 // ``RuntimeContext::functions``. The default ONNX domain (empty
 // ``NodeProto::domain``) is normalised to ``ai.onnx``.
-std::string FunctionLookupKey(const std::string &domain, const std::string &op_type,
-                              const std::string &overload) {
-  const std::string d = domain.empty() ? std::string(kDefaultOnnxDomain) : domain;
-  return d + ":" + op_type + ":" + overload;
+std::string FunctionLookupKey(std::string_view domain, std::string_view op_type,
+                              std::string_view overload) {
+  const std::string_view d = domain.empty() ? std::string_view(kDefaultOnnxDomain) : domain;
+  std::string key;
+  key.reserve(d.size() + 1 + op_type.size() + 1 + overload.size());
+  key.append(d);
+  key += ':';
+  key.append(op_type);
+  key += ':';
+  key.append(overload);
+  return key;
 }
 
 template <class NameCollection> std::string FormatNameList(const NameCollection &names) {
@@ -107,8 +114,8 @@ template <class NameCollection> std::string FormatNameList(const NameCollection 
 // The format is
 // ``[ReferenceEvaluator] #<node_index> Domain::OpType(inputs) -> (outputs)``.
 // Nothing is printed when ``rt.verbose() <= 0``.
-void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
-                       const std::string &op_type) {
+void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, std::string_view domain,
+                       std::string_view op_type) {
   if (rt.verbose() <= 0) {
     return;
   }
@@ -908,9 +915,9 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
 
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
   auto op_type_sv = node.op_type().sv();
-  const std::string domain = NormaliseDispatchDomain(node);
+  const std::string_view domain = NormaliseDispatchDomain(node);
   if (rt.verbose() > 0) {
-    PrintNodeProgress(rt, node, domain, std::string(op_type_sv));
+    PrintNodeProgress(rt, node, domain, op_type_sv);
   }
 
   // Only capture timing and input names when event logging is active.
@@ -930,7 +937,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   // override same-named built-ins, matching the ONNX runtime semantics
   // for model-local functions.
   if (!rt.functions().empty()) {
-    const std::string fkey = FunctionLookupKey(domain, std::string(op_type_sv), node.overload());
+    const std::string fkey = FunctionLookupKey(domain, op_type_sv, node.overload().sv());
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       CallModelLocalFunction(node, *fit->second, rt);
@@ -943,8 +950,8 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
         for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
           inputs.push_back(node.input(i));
         }
-        rt.AppendRunNodeEvent(domain, std::string(op_type_sv), std::move(inputs), start_time_ns,
-                              duration_ns);
+        rt.AppendRunNodeEvent(std::string(domain), std::string(op_type_sv), std::move(inputs),
+                              start_time_ns, duration_ns);
       }
       return;
     }
@@ -988,8 +995,8 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
     for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
       inputs.push_back(node.input(i));
     }
-    rt.AppendRunNodeEvent(domain, std::string(op_type_sv), std::move(inputs), start_time_ns,
-                          duration_ns);
+    rt.AppendRunNodeEvent(std::string(domain), std::string(op_type_sv), std::move(inputs),
+                          start_time_ns, duration_ns);
   }
 }
 

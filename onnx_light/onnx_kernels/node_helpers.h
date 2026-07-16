@@ -37,9 +37,9 @@ namespace detail {
 // this value before dispatch-table lookups.
 inline constexpr const char *kDefaultOnnxDomain = "ai.onnx";
 
-inline std::string NormaliseDispatchDomain(const NodeProto &node) {
+inline std::string_view NormaliseDispatchDomain(const NodeProto &node) {
   auto sv = node.domain().sv();
-  return sv.empty() ? std::string(kDefaultOnnxDomain) : std::string(sv);
+  return sv.empty() ? std::string_view(kDefaultOnnxDomain) : sv;
 }
 
 inline const Tensor &GetInput(const NodeProto &node, int index, const TensorMap &tensors) {

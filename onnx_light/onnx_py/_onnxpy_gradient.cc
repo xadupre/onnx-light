@@ -29,7 +29,8 @@ void AddOnnxPyGradient(nb::module_ &m) {
       .def_static(
           "default",
           []() -> onnx_gradient::GradRegistry { return onnx_gradient::DefaultGradRegistry(); },
-          "Returns a copy of the built-in gradient registry.");
+          "Returns a new independent copy of the built-in gradient registry.  "
+          "Modifications to the returned registry do not affect the built-in defaults.");
 
   m.def(
       "register_gradient_function",

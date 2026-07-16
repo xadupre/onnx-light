@@ -13,7 +13,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_gradient {
 
 /**
- * Signature for a per-operator backward (gradient) function.
+ * Defines the signature for a per-operator backward (gradient) function.
  *
  * Parameters mirror those of ApplyBackward: @p node is the forward op, @p output_grad
  * is the name of the gradient tensor flowing into this op's output, @p grad_accum
@@ -25,7 +25,7 @@ using GradFn = std::function<bool(const NodeProto &node, const std::string &outp
                                   int &counter, FunctionProto &func)>;
 
 /**
- * Maps op_type strings to their corresponding GradFn implementations.
+ * Represents a mapping from op_type strings to their corresponding GradFn implementations.
  */
 using GradRegistry = std::unordered_map<std::string, GradFn>;
 

@@ -293,9 +293,8 @@ sess.run(
 
     def test_dict_vectorizer_int64_float(self):
         # ``ai.onnx.ml::DictVectorizer`` consumes a ``map(int64, float)``
-        # graph input through the runtime's two-tensor convention
-        # (``x_keys`` / ``x_values``). ReferenceEvaluator exposes those
-        # names directly in ``input_names`` so all map logic stays in C++.
+        # graph input. ReferenceEvaluator exposes the original input name
+        # in ``input_names`` and accepts a Python ``dict`` under that name.
         model = onnxl.ModelProto()
         model.ir_version = 10
         op = model.opset_import.add()
@@ -325,15 +324,10 @@ sess.run(
         attr.ints.extend([10, 20, 30])
 
         sess = ReferenceEvaluator(model)
-        self.assertEqual(sess.input_names, ["x_keys", "x_values"])
-        x_keys = np.array([10, 30], dtype=np.int64)
-        x_values = np.array([1.5, 2.5], dtype=np.float32)
-        (out,) = sess.run(None, {"x_keys": x_keys, "x_values": x_values})
-        np.testing.assert_array_equal(out, np.array([1.5, 0.0, 2.5], dtype=np.float32))
+        # Map-typed inputs are listed under their original graph-input name.
+        self.assertEqual(sess.input_names, ["x"])
 
-        # As a convenience, the same map(int64, float) input may be fed as a
-        # single Python ``dict`` under its original name ``x``; the evaluator
-        # splits it into the ``x_keys`` / ``x_values`` tensors internally.
+        # Feed a Python dict under the original input name.
         (out_dict,) = sess.run(None, {"x": {10: 1.5, 30: 2.5}})
         np.testing.assert_array_equal(out_dict, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
@@ -344,18 +338,15 @@ sess.run(
 
         # Regression test for issue #2577: a 0-D numpy object array produced
         # by ``np.asarray(some_dict, dtype=object)`` must also be unwrapped and
-        # accepted, rather than raising
-        # "Missing input(s) for ReferenceEvaluator.run: ['x_keys', 'x_values'].
-        #  Expected: ['x_keys', 'x_values'], got: ['x']."
+        # accepted.
         wrapped_0d = np.asarray({10: 1.5, 30: 2.5}, dtype=object)
         (out_0d,) = sess.run(None, {"x": wrapped_0d})
         np.testing.assert_array_equal(out_0d, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
     def test_cast_map_int64_float_dense_dict_feed(self):
         # Regression test for issue #2576: a ``map(int64, float)`` input fed to
-        # ``ai.onnx.ml::CastMap`` as a single Python ``dict`` under its original
-        # name ``x`` must be accepted (and split into ``x_keys`` / ``x_values``)
-        # rather than raising "Missing input(s) ... ['x_keys', 'x_values']".
+        # ``ai.onnx.ml::CastMap`` as a Python ``dict`` under its original name
+        # ``x`` must be accepted.
         model = onnxl.ModelProto()
         model.ir_version = 10
         op = model.opset_import.add()
@@ -389,26 +380,10 @@ sess.run(
         map_form.s = b"DENSE"
 
         sess = ReferenceEvaluator(model)
-        self.assertEqual(sess.input_names, ["x_keys", "x_values"])
+        self.assertEqual(sess.input_names, ["x"])
         # Keys are deliberately unsorted; CastMap DENSE sorts them ascending.
         (out,) = sess.run(None, {"x": {2: 2.5, 0: 0.5, 1: 1.5}})
         np.testing.assert_array_equal(out, np.array([0.5, 1.5, 2.5], dtype=np.float32))
-
-        # The explicit two-tensor convention still works.
-        (out2,) = sess.run(
-            None,
-            {
-                "x_keys": np.array([2, 0, 1], dtype=np.int64),
-                "x_values": np.array([2.5, 0.5, 1.5], dtype=np.float32),
-            },
-        )
-        np.testing.assert_array_equal(out2, np.array([0.5, 1.5, 2.5], dtype=np.float32))
-
-        # Backward-compatibility: callers that zip positional inputs against
-        # ``sess.input_names`` may produce ``{"x_keys": {...}}`` for a map
-        # input fed as a single dict. This shorthand is accepted.
-        (out3,) = sess.run(None, {"x_keys": {2: 2.5, 0: 0.5, 1: 1.5}})
-        np.testing.assert_array_equal(out3, np.array([0.5, 1.5, 2.5], dtype=np.float32))
 
     def test_lstm_layout1_matches_layout0(self):
         # Regression test for ``test_cc_lstm_batchwise``: the LSTM kernel

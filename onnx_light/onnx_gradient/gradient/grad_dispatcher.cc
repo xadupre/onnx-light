@@ -3,21 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_gradient/gradient/grad_dispatcher.h"
-#include "onnx_gradient/gradient/grad_add.h"
-#include "onnx_gradient/gradient/grad_div.h"
-#include "onnx_gradient/gradient/grad_gemm.h"
-#include "onnx_gradient/gradient/grad_identity.h"
-#include "onnx_gradient/gradient/grad_matmul.h"
-#include "onnx_gradient/gradient/grad_mul.h"
-#include "onnx_gradient/gradient/grad_neg.h"
-#include "onnx_gradient/gradient/grad_reducemean.h"
-#include "onnx_gradient/gradient/grad_reducesum.h"
-#include "onnx_gradient/gradient/grad_relu.h"
-#include "onnx_gradient/gradient/grad_reshape.h"
-#include "onnx_gradient/gradient/grad_sigmoid.h"
-#include "onnx_gradient/gradient/grad_sub.h"
-#include "onnx_gradient/gradient/grad_tanh.h"
-#include "onnx_gradient/gradient/grad_transpose.h"
+#include "onnx_gradient/gradient/math/include_math_grads.h"
+#include "onnx_gradient/gradient/nn/include_nn_grads.h"
+#include "onnx_gradient/gradient/reduction/include_reduction_grads.h"
+#include "onnx_gradient/gradient/tensor/include_tensor_grads.h"
 
 #include <sstream>
 #include <stdexcept>

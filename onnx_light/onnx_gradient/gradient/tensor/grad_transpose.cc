@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_gradient/gradient/grad_transpose.h"
+#include "onnx_gradient/gradient/tensor/grad_transpose.h"
 #include "onnx_gradient/gradient/grad_common.h"
 #include "onnx_proto/onnx_helper.h"
 

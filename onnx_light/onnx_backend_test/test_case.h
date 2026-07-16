@@ -19,6 +19,20 @@
 #include <utility>
 #include <vector>
 
+// Marks the per-operator ``Register*Cases`` / ``Register*ShapeInferenceCases``
+// backend-test registration helpers as hidden so they are not exported from the
+// shared ``lib_onnx_backend_test`` library. Those helpers are only ever invoked
+// by the ``Collect*`` aggregators within the same library, so hiding them keeps
+// the library's exported (dynamic) symbol set limited to the ``Collect*`` entry
+// points. This is a no-op on toolchains without ELF-style symbol visibility
+// (e.g. MSVC, where the library is built statically). It does not remove the
+// symbols from the local symbol table, so unstripped Debug builds keep them.
+#if defined(__GNUC__) || defined(__clang__)
+#define ONNX_LIGHT_BACKEND_TEST_LOCAL __attribute__((visibility("hidden")))
+#else
+#define ONNX_LIGHT_BACKEND_TEST_LOCAL
+#endif
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 

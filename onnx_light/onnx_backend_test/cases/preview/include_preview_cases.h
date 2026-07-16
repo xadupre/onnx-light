@@ -8,17 +8,14 @@
 
 #include <vector>
 
+// The per-operator ``Register*`` helpers used to build these cases live in the
+// library-private companion header below and are only needed while compiling
+// ``lib_onnx_backend_test`` itself; external consumers only see ``Collect*``.
+#ifdef ONNX_LIGHT_BACKEND_TEST_INTERNAL
+#include "onnx_backend_test/cases/preview/register_preview_cases.h"
+#endif
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
-
-// ---------------------------------------------------------------------------
-// Per-operator registration helpers for the ``preview`` op category —
-// exposed so individual cases live in separate translation units yet can be
-// invoked from ``CollectTestCases()``.
-// ---------------------------------------------------------------------------
-
-/// Registers the ``ai.onnx.preview::FlexAttention`` backend test node case(s).
-void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Collects all ``preview`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.

@@ -1,0 +1,69 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include "onnx_backend_test/test_case.h"
+
+#include <string>
+#include <vector>
+
+// Internal (library-private) header: the per-operator ``Register*`` backend
+// test registration helpers. These are only ever invoked by the ``Collect*``
+// aggregators inside ``lib_onnx_backend_test`` and are compiled with hidden
+// visibility, so they are not exported from the shared library. This header is
+// pulled in by the matching public header only when ONNX_LIGHT_BACKEND_TEST_INTERNAL is
+// defined (i.e. while building the library itself).
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_backend_test {
+
+// ---------------------------------------------------------------------------
+// Backend test cases that exercise operators on tensors containing the
+// non-finite IEEE-754 special values (``NaN``, ``+Inf`` and ``-Inf``). These
+// cases live in their own ``cases_numerical/nan_inf`` subtree so they are
+// easy to discover and extend with other numerically-oriented scenarios
+// later (the parent ``cases_numerical`` directory is reserved for other
+// special-value families such as denormals or signed zero).
+//
+// For each element-wise binary math operator we register a small case that
+// pairs the special values with regular finite operands so the
+// kernel/reference comparison exercises both well-defined results
+// (e.g. ``1 + Inf == Inf``) and propagation of ``NaN``. ``Where`` is also
+// covered because the issue explicitly asks for it: the condition tensor
+// selects between ``x`` and ``y`` tensors containing ``NaN``/``+Inf``/
+// ``-Inf``, ensuring the operator forwards the special values unchanged.
+//
+// Expected outputs are computed by the in-tree kernel so each case stays
+// self-consistent with the implementation under test.
+// ---------------------------------------------------------------------------
+
+/// Registers backend test cases that ``Add`` tensors containing NaN/Inf.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterAddNanInfCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
+
+/// Registers backend test cases that ``Sub`` tensors containing NaN/Inf.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterSubNanInfCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
+
+/// Registers backend test cases that ``Mul`` tensors containing NaN/Inf.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterMulNanInfCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
+
+/// Registers backend test cases that ``Div`` tensors containing NaN/Inf.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterDivNanInfCases(std::vector<TestCase> &registry,
+                                                          TestMode mode = TestMode::TEST);
+
+/// Registers backend test cases that run the ``Where`` node on tensors
+/// containing NaN/Inf in either branch.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterWhereNanInfCases(std::vector<TestCase> &registry,
+                                                            TestMode mode = TestMode::TEST);
+
+/// Registers backend test cases that run ``TopK`` on tensors containing
+/// the non-finite IEEE-754 specials (NaN, +Inf, -Inf).
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterTopKNanInfCases(std::vector<TestCase> &registry,
+                                                           TestMode mode = TestMode::TEST);
+
+} // namespace onnx_backend_test
+} // namespace ONNX_LIGHT_NAMESPACE

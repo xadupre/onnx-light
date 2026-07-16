@@ -8,23 +8,14 @@
 
 #include <vector>
 
+// The per-operator ``Register*`` helpers used to build these cases live in the
+// library-private companion header below and are only needed while compiling
+// ``lib_onnx_backend_test`` itself; external consumers only see ``Collect*``.
+#ifdef ONNX_LIGHT_BACKEND_TEST_INTERNAL
+#include "onnx_backend_test/cases/controlflow/register_controlflow_cases.h"
+#endif
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
-
-// ---------------------------------------------------------------------------
-// Per-operator registration helpers for the ``controlflow`` op category —
-// exposed so individual cases live in separate translation units yet can be
-// invoked from ``CollectTestCases()``.
-// ---------------------------------------------------------------------------
-
-/// Registers the ``If`` backend test node case(s).
-void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
-
-/// Registers the ``Loop`` backend test node case(s).
-void RegisterLoopCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
-
-/// Registers the ``Scan`` backend test node case(s).
-void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Collects all ``controlflow`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.

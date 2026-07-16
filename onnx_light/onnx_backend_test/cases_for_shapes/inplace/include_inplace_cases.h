@@ -8,20 +8,14 @@
 
 #include <vector>
 
+// The per-operator ``Register*`` helpers used to build these cases live in the
+// library-private companion header below and are only needed while compiling
+// ``lib_onnx_backend_test`` itself; external consumers only see ``Collect*``.
+#ifdef ONNX_LIGHT_BACKEND_TEST_INTERNAL
+#include "onnx_backend_test/cases_for_shapes/inplace/register_inplace_cases.h"
+#endif
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
-
-// ---------------------------------------------------------------------------
-// Backend test cases that exercise the in-place-reuse analysis metadata stored
-// in ``NodeProto::metadata_props``. These live in their own
-// ``cases_for_shapes`` subtree so callers can collect them independently from
-// the broader shape-inference gallery.
-// ---------------------------------------------------------------------------
-
-/// Registers an ``Abs → Abs → Abs`` case whose intermediate tensors all share
-/// the same shape so in-place-reuse inference can detect the recyclable
-/// buffers and record the expected metadata on the graph nodes.
-void RegisterInPlaceReuseCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
 
 /// Collects all in-place-reuse backend test cases by invoking every
 /// ``Register*InPlace*Cases`` helper declared in this header.

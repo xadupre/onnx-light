@@ -2726,16 +2726,16 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
   EXPECT_FLOAT_EQ(scan_data[2], 3.0f);
 }
 
-// RunLoopWithSequenceState: same as MixedTensorSequenceAndScanOutputs but with a
-// SimpleRawBufferAllocator attached to the RuntimeContext. Verifies that iter/cond
-// scalars are allocated from the parent allocator (not the child context) and that
-// the child context not inheriting the allocator prevents double-free of tensors
-// extracted from the child after it is destroyed.
+// Same as MixedTensorSequenceAndScanOutputs but with a SimpleRawBufferAllocator
+// attached to the RuntimeContext. Verifies that iter/cond scalars are allocated
+// from the parent allocator and that subgraph contexts not inheriting the parent
+// allocator prevents double-free of body outputs used as loop-carried state.
 TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
   // Two simultaneous slots are needed: iter and cond scalars are allocated from
-  // rt.allocator() during each iteration and freed when the child context is
-  // destroyed. After the loop, the tensor state output and the stacked scan
-  // output each occupy one slot.
+  // rt.allocator() via MakeInt64Scalar/MakeBoolScalar and stored in the child
+  // context. The child destructor frees them through each tensor's
+  // allocation_owner (the parent allocator). After the loop the tensor state
+  // output and the stacked scan output each occupy one slot.
   constexpr size_t kAllocatorSlotCapacity = 2;
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 

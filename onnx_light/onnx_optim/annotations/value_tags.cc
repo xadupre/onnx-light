@@ -447,14 +447,12 @@ InferValueAndNodeTags(const FunctionProto &function) {
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 InferValueAndNodeTags(const std::vector<NodeProto> &nodes) {
-  ComputeContext ctx;
-  return ctx.ComputeValueAndNodeTags(nodes);
+  return ComputeTags(nodes);
 }
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 InferValueAndNodeTags(const std::vector<const NodeProto *> &nodes) {
-  ComputeContext ctx;
-  return ctx.ComputeValueAndNodeTags(nodes);
+  return ComputeTags(nodes);
 }
 
 void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {

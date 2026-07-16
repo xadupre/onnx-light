@@ -83,14 +83,6 @@ else()
   endfunction()
 endif()
 
-# Size-reduction compile/link/target flags. Always on: the treatment is
-# driven by the build configuration (Debug/RelWithDebInfo keep full symbols
-# and debug info; Release is stripped and has unnecessary symbols hidden).
-# Like the hardening helper, the supported flags are resolved up front so each
-# shipped target can call onnx_light_apply_size_optimization unconditionally.
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-include(SizeOptimization)
-
 if(ONNX_LIGHT_BUILD_PYTHON)
   # Find Python. Development.SABIModule (CMake >= 3.26) is needed to enable
   # nanobind's STABLE_ABI mode, which produces a single abi3-tagged extension
@@ -1063,16 +1055,5 @@ endif()
 foreach(_t IN LISTS _onnx_light_hardening_targets)
   if(TARGET ${_t})
     onnx_light_apply_hardening(${_t})
-  endif()
-endforeach()
-
-# Apply size-reduction flags (visibility + section GC + Release symbol
-# stripping) to the same set of onnx-light targets. The shipped libraries and
-# Python extension modules are what benefit, but applying it to every
-# onnx-light target keeps the treatment uniform. The helper inspects each
-# target's type to decide whether full hidden visibility is safe.
-foreach(_t IN LISTS _onnx_light_hardening_targets)
-  if(TARGET ${_t})
-    onnx_light_apply_size_optimization(${_t})
   endif()
 endforeach()

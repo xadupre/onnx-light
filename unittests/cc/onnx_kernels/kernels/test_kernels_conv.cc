@@ -14,6 +14,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_kernels::Tensor;
+using onnx_kernels::kernel::AutoPad;
 using onnx_kernels::kernel::Conv;
 using onnx_kernels::kernel::KernelContext;
 
@@ -80,7 +81,7 @@ TEST(KernelClass, ConvSameUpperMatchesInputShape) {
   Tensor b;
   Conv::Attributes attrs;
   attrs.kernel_shape = {3, 3};
-  attrs.auto_pad = "SAME_UPPER";
+  attrs.auto_pad = AutoPad::kSameUpper;
   Tensor y = conv(x, w, b, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 4}));
 }
@@ -101,7 +102,7 @@ TEST(KernelClass, ConvSameUpperStride2AsymmetricPadding) {
   Tensor b;
   Conv::Attributes attrs;
   attrs.kernel_shape = {3, 3};
-  attrs.auto_pad = "SAME_UPPER";
+  attrs.auto_pad = AutoPad::kSameUpper;
   attrs.strides = {2, 2};
   Tensor y = conv(x, w, b, attrs);
   // pads resolved to [begin_h=0, begin_w=0, end_h=1, end_w=1].

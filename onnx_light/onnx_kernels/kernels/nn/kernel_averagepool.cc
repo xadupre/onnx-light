@@ -3,13 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
-
 #include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
-#include <string>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -58,10 +56,10 @@ int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_be
 // begin/end pads for one spatial axis. ``auto_pad`` must be one of
 // ``SAME_UPPER``, ``SAME_LOWER`` or ``VALID``; ``NOTSET`` is handled by
 // the caller using ``OutputDim`` and the explicit ``pads`` attribute.
-void ResolveAutoPadAxis(const std::string &auto_pad, int64_t in_dim, int64_t kernel, int64_t stride,
+void ResolveAutoPadAxis(AutoPad auto_pad, int64_t in_dim, int64_t kernel, int64_t stride,
                         int64_t dilation, int64_t &out_dim, int64_t &pad_begin, int64_t &pad_end) {
   const int64_t eff_kernel = dilation * (kernel - 1) + 1;
-  if (auto_pad == "VALID") {
+  if (auto_pad == AutoPad::kValid) {
     pad_begin = 0;
     pad_end = 0;
     const double numerator = static_cast<double>(in_dim - eff_kernel) / static_cast<double>(stride);
@@ -75,7 +73,7 @@ void ResolveAutoPadAxis(const std::string &auto_pad, int64_t in_dim, int64_t ker
     out_dim = 0;
   }
   const int64_t pad_total = std::max<int64_t>(0, (out_dim - 1) * stride + eff_kernel - in_dim);
-  if (auto_pad == "SAME_UPPER") {
+  if (auto_pad == AutoPad::kSameUpper) {
     pad_begin = pad_total / 2;
     pad_end = pad_total - pad_begin;
   } else { // SAME_LOWER
@@ -88,8 +86,7 @@ void ResolveAutoPadAxis(const std::string &auto_pad, int64_t in_dim, int64_t ker
 
 Tensor AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
                                const Shape &pads, bool ceil_mode, bool count_include_pad,
-                               const Shape &dilations, const std::string &auto_pad,
-                               RuntimeContext *rt) const {
+                               const Shape &dilations, AutoPad auto_pad, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(),
@@ -116,11 +113,7 @@ Tensor AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const
   EXT_ENFORCE_INVALID(
       eff_dilations.size() == k,
       "kernel::AveragePool: dilations must be empty or have one entry per spatial axis.");
-  EXT_ENFORCE_INVALID(auto_pad == "NOTSET" || auto_pad == "SAME_UPPER" ||
-                          auto_pad == "SAME_LOWER" || auto_pad == "VALID",
-                      "kernel::AveragePool: auto_pad must be NOTSET, SAME_UPPER, SAME_LOWER "
-                      "or VALID.");
-  const bool use_auto_pad = auto_pad != "NOTSET";
+  const bool use_auto_pad = auto_pad != AutoPad::kNotSet;
   EXT_ENFORCE_INVALID(!use_auto_pad || pads.empty(),
                       "kernel::AveragePool: pads must be empty when auto_pad is not NOTSET.");
   Shape eff_pads;
@@ -179,14 +172,13 @@ Tensor AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const
   // explicit pads (so the in-place overload need not duplicate the
   // resolution logic).
   (*this)(x, kernel_shape, eff_strides, eff_pads, ceil_mode, count_include_pad, out, eff_dilations,
-          std::string("NOTSET"));
+          AutoPad::kNotSet);
   return out;
 }
 
 void AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
                              const Shape &pads, bool ceil_mode, bool count_include_pad,
-                             Tensor &output, const Shape &dilations,
-                             const std::string &auto_pad) const {
+                             Tensor &output, const Shape &dilations, AutoPad auto_pad) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
@@ -196,11 +188,11 @@ void AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const S
   const size_t k = kernel_shape.size();
   EXT_ENFORCE_INVALID(strides.size() == k,
                       "kernel::AveragePool: strides must have one entry per spatial axis.");
-  EXT_ENFORCE_INVALID(auto_pad == "NOTSET" || auto_pad == "SAME_UPPER" ||
-                          auto_pad == "SAME_LOWER" || auto_pad == "VALID",
+  EXT_ENFORCE_INVALID(auto_pad == AutoPad::kNotSet || auto_pad == AutoPad::kSameUpper ||
+                          auto_pad == AutoPad::kSameLower || auto_pad == AutoPad::kValid,
                       "kernel::AveragePool: auto_pad must be NOTSET, SAME_UPPER, SAME_LOWER "
                       "or VALID.");
-  const bool use_auto_pad = auto_pad != "NOTSET";
+  const bool use_auto_pad = auto_pad != AutoPad::kNotSet;
   EXT_ENFORCE_INVALID(!use_auto_pad || pads.empty(),
                       "kernel::AveragePool: pads must be empty when auto_pad is not NOTSET.");
   Shape eff_dilations;

@@ -1,7 +1,3 @@
-// Copyright (c) ONNX Project Contributors
-//
-// SPDX-License-Identifier: Apache-2.0
-
 #include "onnx_optim/shapes/quantization/shape_quantization.h"
 
 #include <algorithm>
@@ -10,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "onnx_kernels/kernels/auto_pad.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -18,11 +15,14 @@ namespace onnx_optim {
 namespace shapes {
 namespace quantization {
 
+using onnx_kernels::kernel::AutoPad;
+using onnx_kernels::kernel::AutoPadFromString;
+
 namespace {
 
 OptimDim ComputeQLinearConvSpatialDim(const OptimDim &in_dim, int64_t kernel, int64_t stride,
                                       int64_t pad_begin, int64_t pad_end, int64_t dilation,
-                                      const std::string &auto_pad, const std::string &x_name,
+                                      AutoPad auto_pad, const std::string &x_name,
                                       size_t spatial_axis) {
   const std::string symbolic =
       std::string("QLinearConv.") + x_name + ":" + std::to_string(spatial_axis);
@@ -34,10 +34,10 @@ OptimDim ComputeQLinearConvSpatialDim(const OptimDim &in_dim, int64_t kernel, in
   if (stride <= 0 || kernel <= 0) {
     return OptimDim(symbolic);
   }
-  if (auto_pad == "SAME_UPPER" || auto_pad == "SAME_LOWER") {
+  if (auto_pad == AutoPad::kSameUpper || auto_pad == AutoPad::kSameLower) {
     return OptimDim((iD + stride - 1) / stride);
   }
-  if (auto_pad == "VALID") {
+  if (auto_pad == AutoPad::kValid) {
     const int64_t numer = iD - eff_k;
     if (numer < 0) {
       return OptimDim(symbolic);
@@ -69,7 +69,8 @@ void ComputeShapeQLinearConv(ShapesContext &ctx, const NodeProto &node, const ch
                       "' rank must match input rank.");
 
   const size_t n_spatial = x_shape.Rank() - 2;
-  const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", "NOTSET");
+  const AutoPad auto_pad =
+      AutoPadFromString(GetAttributeOr<std::string>(node, "auto_pad", "NOTSET"));
 
   std::vector<int64_t> kernel_shape;
   GetAttributeInts(node, "kernel_shape", kernel_shape);

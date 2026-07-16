@@ -366,7 +366,7 @@ ComputeTagsFromNodeIterators(std::vector<NodeProto>::const_iterator begin,
   std::unordered_map<std::string, std::string> computed_value_tags;
   std::vector<std::string> computed_node_tags;
   std::vector<const NodeProto *> ptrs;
-  ptrs.reserve(static_cast<std::size_t>(std::distance(begin, end)));
+  ptrs.reserve(std::distance(begin, end));
   for (auto it = begin; it != end; ++it) {
     ptrs.push_back(&(*it));
   }

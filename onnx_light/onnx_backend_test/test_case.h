@@ -19,18 +19,17 @@
 #include <utility>
 #include <vector>
 
-// Marks the per-operator ``Register*Cases`` / ``Register*ShapeInferenceCases``
-// backend-test registration helpers as hidden so they are not exported from the
-// shared ``lib_onnx_backend_test`` library. Those helpers are only ever invoked
-// by the ``Collect*`` aggregators within the same library, so hiding them keeps
-// the library's exported (dynamic) symbol set limited to the ``Collect*`` entry
-// points. This is a no-op on toolchains without ELF-style symbol visibility
-// (e.g. MSVC, where the library is built statically). It does not remove the
-// symbols from the local symbol table, so unstripped Debug builds keep them.
+// Marks the ``Collect*`` entry points as exported from the shared
+// ``lib_onnx_backend_test`` library. The library is compiled with
+// -fvisibility=hidden so ``Register*`` helpers (internal to the library)
+// carry no annotation and are hidden by default; only the ``Collect*``
+// aggregators decorated with this macro appear in the dynamic symbol table.
+// On MSVC all symbols are exported via WINDOWS_EXPORT_ALL_SYMBOLS, so the
+// macro is empty there.
 #if defined(__GNUC__) || defined(__clang__)
-#define ONNX_LIGHT_BACKEND_TEST_LOCAL __attribute__((visibility("hidden")))
+#define ONNX_LIGHT_BACKEND_TEST_API __attribute__((visibility("default")))
 #else
-#define ONNX_LIGHT_BACKEND_TEST_LOCAL
+#define ONNX_LIGHT_BACKEND_TEST_API
 #endif
 
 namespace ONNX_LIGHT_NAMESPACE {

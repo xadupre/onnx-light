@@ -8,19 +8,35 @@
 
 #include <vector>
 
-// The per-operator ``Register*`` helpers used to build these cases live in the
-// library-private companion header below and are only needed while compiling
-// ``lib_onnx_backend_test`` itself; external consumers only see ``Collect*``.
-#ifdef ONNX_LIGHT_BACKEND_TEST_INTERNAL
-#include "onnx_backend_test/cases/text/register_text_cases.h"
-#endif
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
+// ---------------------------------------------------------------------------
+// Per-operator registration helpers for the ``text`` op category — exposed
+// so individual cases live in separate translation units yet can be invoked
+// from ``CollectTestCases()``.
+// ---------------------------------------------------------------------------
+
+/// Registers the ``StringConcat`` backend test node case(s).
+void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+
+/// Registers the ``StringSplit`` backend test node case(s).
+void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+
+/// Registers the ``StringNormalizer`` backend test node case(s).
+void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+
+/// Registers the ``RegexFullMatch`` backend test node case(s).
+void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+
+/// Registers the ``TfIdfVectorizer`` backend test node case(s).
+void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode = TestMode::TEST);
+
 /// Collects all ``text`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
-void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
-                          TestMode mode = TestMode::TEST);
+ONNX_LIGHT_BACKEND_TEST_API void CollectTextTestCases(std::vector<TestCase> &registry,
+                                                      const std::string &op_type = "",
+                                                      TestMode mode = TestMode::TEST);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

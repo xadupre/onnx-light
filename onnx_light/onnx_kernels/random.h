@@ -46,13 +46,11 @@ std::pair<uint64_t, uint64_t> NextUint64(uint64_t state);
  * @throws std::invalid_argument when any dimension is negative.
  */
 template <typename T = double>
-std::vector<T> Rand(const std::vector<int64_t> &shape, std::optional<uint64_t> seed = std::nullopt);
+std::vector<T> Rand(const Shape &shape, std::optional<uint64_t> seed = std::nullopt);
 
 /// @cond DOXYGEN_SKIP_EXTERN_TEMPLATE
-extern template std::vector<double> Rand<double>(const std::vector<int64_t> &shape,
-                                                 std::optional<uint64_t> seed);
-extern template std::vector<float> Rand<float>(const std::vector<int64_t> &shape,
-                                               std::optional<uint64_t> seed);
+extern template std::vector<double> Rand<double>(const Shape &shape, std::optional<uint64_t> seed);
+extern template std::vector<float> Rand<float>(const Shape &shape, std::optional<uint64_t> seed);
 /// @endcond
 
 /**
@@ -68,7 +66,7 @@ extern template std::vector<float> Rand<float>(const std::vector<int64_t> &shape
  * @throws std::invalid_argument when ``high <= low`` or any dimension is
  *         negative.
  */
-std::vector<int64_t> RandInt(int64_t low, int64_t high, const std::vector<int64_t> &shape,
+std::vector<int64_t> RandInt(int64_t low, int64_t high, const Shape &shape,
                              std::optional<uint64_t> seed = std::nullopt);
 
 /**
@@ -89,14 +87,11 @@ std::vector<int64_t> RandInt(int64_t low, int64_t high, const std::vector<int64_
  * @throws std::invalid_argument when any dimension is negative.
  */
 template <typename T = double>
-std::vector<T> Randn(const std::vector<int64_t> &shape,
-                     std::optional<uint64_t> seed = std::nullopt);
+std::vector<T> Randn(const Shape &shape, std::optional<uint64_t> seed = std::nullopt);
 
 /// @cond DOXYGEN_SKIP_EXTERN_TEMPLATE
-extern template std::vector<double> Randn<double>(const std::vector<int64_t> &shape,
-                                                  std::optional<uint64_t> seed);
-extern template std::vector<float> Randn<float>(const std::vector<int64_t> &shape,
-                                                std::optional<uint64_t> seed);
+extern template std::vector<double> Randn<double>(const Shape &shape, std::optional<uint64_t> seed);
+extern template std::vector<float> Randn<float>(const Shape &shape, std::optional<uint64_t> seed);
 /// @endcond
 
 /**
@@ -157,18 +152,13 @@ extern template void RandNormalInto<float>(float *dst, int64_t count, double mea
  * @param seed 64-bit seed forwarded to :cpp:func:`Randn`.
  * @return Flat row-major ``std::vector<TInt>`` of length ``prod(shape)``.
  */
-template <typename TInt>
-std::vector<TInt> RandnInt(const std::vector<int64_t> &shape, uint64_t seed);
+template <typename TInt> std::vector<TInt> RandnInt(const Shape &shape, uint64_t seed);
 
 /// @cond DOXYGEN_SKIP_EXTERN_TEMPLATE
-extern template std::vector<int8_t> RandnInt<int8_t>(const std::vector<int64_t> &shape,
-                                                     uint64_t seed);
-extern template std::vector<int16_t> RandnInt<int16_t>(const std::vector<int64_t> &shape,
-                                                       uint64_t seed);
-extern template std::vector<int32_t> RandnInt<int32_t>(const std::vector<int64_t> &shape,
-                                                       uint64_t seed);
-extern template std::vector<int64_t> RandnInt<int64_t>(const std::vector<int64_t> &shape,
-                                                       uint64_t seed);
+extern template std::vector<int8_t> RandnInt<int8_t>(const Shape &shape, uint64_t seed);
+extern template std::vector<int16_t> RandnInt<int16_t>(const Shape &shape, uint64_t seed);
+extern template std::vector<int32_t> RandnInt<int32_t>(const Shape &shape, uint64_t seed);
+extern template std::vector<int64_t> RandnInt<int64_t>(const Shape &shape, uint64_t seed);
 /// @endcond
 
 /**
@@ -184,17 +174,17 @@ extern template std::vector<int64_t> RandnInt<int64_t>(const std::vector<int64_t
  * @return Flat row-major ``std::vector<TUInt>`` of length ``prod(shape)``.
  */
 template <typename TUInt>
-std::vector<TUInt> RandUint(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
+std::vector<TUInt> RandUint(int64_t high, const Shape &shape, uint64_t seed);
 
 /// @cond DOXYGEN_SKIP_EXTERN_TEMPLATE
-extern template std::vector<uint8_t>
-RandUint<uint8_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
-extern template std::vector<uint16_t>
-RandUint<uint16_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
-extern template std::vector<uint32_t>
-RandUint<uint32_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
-extern template std::vector<uint64_t>
-RandUint<uint64_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
+extern template std::vector<uint8_t> RandUint<uint8_t>(int64_t high, const Shape &shape,
+                                                       uint64_t seed);
+extern template std::vector<uint16_t> RandUint<uint16_t>(int64_t high, const Shape &shape,
+                                                         uint64_t seed);
+extern template std::vector<uint32_t> RandUint<uint32_t>(int64_t high, const Shape &shape,
+                                                         uint64_t seed);
+extern template std::vector<uint64_t> RandUint<uint64_t>(int64_t high, const Shape &shape,
+                                                         uint64_t seed);
 /// @endcond
 
 /**
@@ -210,7 +200,7 @@ RandUint<uint64_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t see
  *         row-major buffer of one byte per element (``0`` or ``1``).
  * @throws std::invalid_argument when any dimension is negative.
  */
-Tensor RandBool(const std::vector<int64_t> &shape, std::optional<uint64_t> seed = std::nullopt);
+Tensor RandBool(const Shape &shape, std::optional<uint64_t> seed = std::nullopt);
 
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

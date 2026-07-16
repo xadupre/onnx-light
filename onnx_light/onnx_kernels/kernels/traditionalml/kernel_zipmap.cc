@@ -41,10 +41,15 @@ onnx_kernels::Shape ValidateAndComputeOutputShape(const Tensor &x,
 }
 
 template <typename T>
-Tensor ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels) {
+Tensor ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels,
+                           RawBufferAllocator *allocator) {
   const onnx_kernels::Shape output_shape = ValidateAndComputeOutputShape(x, class_labels);
-  std::vector<uint8_t> output_bytes = x.data;
-  return Tensor("", static_cast<int32_t>(DataType::FLOAT), output_shape, std::move(output_bytes));
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), output_shape, x.size_bytes(),
+                                allocator);
+  if (x.size_bytes() > 0) {
+    std::memcpy(out.mutable_bytes(), x.bytes(), x.size_bytes());
+  }
+  return out;
 }
 
 template <typename T>
@@ -65,12 +70,12 @@ void ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels, Te
 
 Tensor ZipMap::operator()(const Tensor &x, const std::vector<int64_t> &class_labels,
                           RuntimeContext *rt) const {
-  return ComputeZipMapOutput(x, class_labels);
+  return ComputeZipMapOutput(x, class_labels, ctx_.allocator);
 }
 
 Tensor ZipMap::operator()(const Tensor &x, const std::vector<std::string> &class_labels,
                           RuntimeContext *rt) const {
-  return ComputeZipMapOutput(x, class_labels);
+  return ComputeZipMapOutput(x, class_labels, ctx_.allocator);
 }
 
 void ZipMap::operator()(const Tensor &x, const std::vector<int64_t> &class_labels,

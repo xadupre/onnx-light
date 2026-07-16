@@ -77,8 +77,8 @@ Tensor Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values
   ValidateInput<T>(x);
   ValidateImputedValues<T>(imputed_values, LastDim(x.shape));
   const int64_t n = x.element_count();
-  std::vector<uint8_t> bytes(static_cast<size_t>(n) * sizeof(T));
-  Tensor out("", TensorElementType<T>::value, x.shape, std::move(bytes));
+  Tensor out = MakeOutputTensor(TensorElementType<T>::value, x.shape,
+                                static_cast<size_t>(n) * sizeof(T), ctx_.allocator);
   ApplyImputer<T>(x, imputed_values, replaced_value, reinterpret_cast<T *>(out.mutable_bytes()));
   return out;
 }

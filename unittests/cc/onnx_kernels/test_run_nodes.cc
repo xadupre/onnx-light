@@ -1808,6 +1808,99 @@ TEST(RunModel, DelayedInitializerUsesAllocatorWhenProvided) {
   fs::remove(weights_path);
 }
 
+TEST(RunModel, DelayedInitializerCpuLoadUsesConstructionAllocator) {
+  namespace fs = std::filesystem;
+
+  const fs::path weights_path =
+      fs::temp_directory_path() / "onnx_light_delayed_initializer_cpu_alloc.bin";
+  fs::remove(weights_path);
+  {
+    std::ofstream out(weights_path, std::ios::binary);
+    ASSERT_TRUE(out.good());
+    const float values[3] = {1.0f, 2.0f, 3.0f};
+    out.write(reinterpret_cast<const char *>(values), sizeof(values));
+  }
+
+  // SimpleRawBufferAllocator capacity counts buffer slots, not bytes.
+  constexpr size_t kAllocatorSlotCapacity = 1;
+  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+
+  KernelContext ctx(DefaultOpset(18));
+  ctx.allocator = &alloc;
+
+  onnx_kernels::kernel::DelayedInitializer::Attributes attrs;
+  attrs.shape = {3};
+  attrs.dtype = static_cast<int32_t>(TensorProto::DataType::FLOAT);
+  attrs.load_device = "cpu";
+  attrs.runtime_device = "cpu";
+  attrs.filename = weights_path.string();
+  attrs.offset = 0;
+  // Construction with an allocator: loaded_bytes_ should be allocator-backed.
+  onnx_kernels::kernel::DelayedInitializer delayed(ctx, std::move(attrs));
+
+  // The internal buffer consumed one allocator slot at construction time.
+  EXPECT_EQ(alloc.TotalAllocatedSize(), 3 * sizeof(float));
+
+  // Calling operator() without a runtime allocator returns a vector-backed copy.
+  Tensor y = delayed(nullptr);
+  EXPECT_FALSE(y.has_allocation());
+  ASSERT_EQ(y.shape.size(), 1u);
+  EXPECT_EQ(y.shape[0], 3);
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 2.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], 3.0f);
+
+  fs::remove(weights_path);
+}
+
+TEST(RunModel, DelayedInitializerCpuLoadWithBothAllocators) {
+  namespace fs = std::filesystem;
+
+  const fs::path weights_path =
+      fs::temp_directory_path() / "onnx_light_delayed_initializer_cpu_both_alloc.bin";
+  fs::remove(weights_path);
+  {
+    std::ofstream out(weights_path, std::ios::binary);
+    ASSERT_TRUE(out.good());
+    const float values[2] = {7.0f, -8.5f};
+    out.write(reinterpret_cast<const char *>(values), sizeof(values));
+  }
+
+  // Allocator for the construction-time loaded_bytes_ buffer.
+  // SimpleRawBufferAllocator capacity counts buffer slots, not bytes.
+  constexpr size_t kConstructionAllocatorSlots = 1;
+  onnx_kernels::SimpleRawBufferAllocator construction_alloc(kConstructionAllocatorSlots);
+
+  KernelContext ctx(DefaultOpset(18));
+  ctx.allocator = &construction_alloc;
+
+  onnx_kernels::kernel::DelayedInitializer::Attributes attrs;
+  attrs.shape = {2};
+  attrs.dtype = static_cast<int32_t>(TensorProto::DataType::FLOAT);
+  attrs.load_device = "cpu";
+  attrs.runtime_device = "cpu";
+  attrs.filename = weights_path.string();
+  attrs.offset = 0;
+  onnx_kernels::kernel::DelayedInitializer delayed(ctx, std::move(attrs));
+
+  // Call operator() with a separate runtime allocator: the output must be
+  // backed by the runtime allocator, not the construction-time allocator.
+  constexpr size_t kRuntimeAllocatorSlots = 1;
+  onnx_kernels::SimpleRawBufferAllocator runtime_alloc(kRuntimeAllocatorSlots);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_allocator(&runtime_alloc);
+
+  Tensor y = delayed(&rt);
+  ASSERT_TRUE(y.has_allocation());
+  EXPECT_EQ(y.allocation_owner(), &runtime_alloc);
+  ASSERT_EQ(y.shape.size(), 1u);
+  EXPECT_EQ(y.shape[0], 2);
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 7.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], -8.5f);
+
+  fs::remove(weights_path);
+}
+
 // ---------------------------------------------------------------------------
 // RunFunction tests
 // ---------------------------------------------------------------------------
@@ -2590,9 +2683,72 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
   EXPECT_FLOAT_EQ(scan[2], 3.0f);
 }
 
-// RunLoopWithSequenceState: a Loop whose only loop-carried state is a
-// sequence. Each body iteration appends ``(float)iter`` to the sequence
-// via SequenceInsert, so a trip count of 3 yields ``[0, 1, 2]``.
+// Variant of LoopNodeRunsBodySubgraph with a SimpleRawBufferAllocator. Verifies
+// that subgraph contexts created inside RunSubgraph do not inherit the allocator,
+// preventing double-free of body-output tensors threaded as loop-carried state
+// across iterations.  Iter/cond scalars use inline storage (no allocator slot
+// consumed); only the final loop outputs are backed by the allocator.
+TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *loop = g->add_node();
+  loop->set_op_type("Loop");
+  loop->add_input("M");
+  loop->add_input("cond");
+  loop->add_input("s_init");
+  loop->add_output("s_final");
+  loop->add_output("scan");
+
+  AttributeProto *body_attr = loop->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->add_g();
+  body->set_name("loop_body");
+  body->add_input()->set_name("iter");
+  body->add_input()->set_name("cond_in");
+  body->add_input()->set_name("s_in");
+  TensorProto *one = body->add_initializer();
+  one->set_name("one");
+  one->set_data_type(TensorProto::DataType::FLOAT);
+  one->add_float_data(1.0f);
+  NodeProto *add = body->add_node();
+  add->set_op_type("Add");
+  add->add_input("s_in");
+  add->add_input("one");
+  add->add_output("s_out");
+  body->add_output()->set_name("cond_in");
+  body->add_output()->set_name("s_out");
+  body->add_output()->set_name("s_out");
+
+  // Two slots are sufficient: only the final loop outputs (s_final and scan)
+  // are backed by the allocator; iter/cond scalars injected into each child
+  // context use inline storage and consume no allocator slots.
+  constexpr size_t kAllocatorSlotCapacity = 2;
+  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+  rt.set_allocator(&alloc);
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("s_final"));
+  ASSERT_TRUE(rt.Has("scan"));
+  EXPECT_FLOAT_EQ(rt.Get("s_final").AsFloat()[0], 3.0f);
+  ASSERT_EQ(rt.Get("scan").shape, (std::vector<int64_t>{3}));
+  const float *scan = rt.Get("scan").AsFloat();
+  EXPECT_FLOAT_EQ(scan[0], 1.0f);
+  EXPECT_FLOAT_EQ(scan[1], 2.0f);
+  EXPECT_FLOAT_EQ(scan[2], 3.0f);
+}
+
 TEST(RunLoopWithSequenceState, SequenceOnlyStateGrowsPerIteration) {
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
@@ -2640,6 +2796,49 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
   rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+
+  RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},
+                       BuildMixedSequenceLoopBody()),
+          rt);
+
+  ASSERT_TRUE(rt.Has("acc_final"));
+  EXPECT_FLOAT_EQ(rt.Get("acc_final").AsFloat()[0], 3.0f);
+
+  ASSERT_TRUE(rt.HasSequence("seq_final"));
+  const Sequence &seq = rt.GetSequence("seq_final");
+  ASSERT_EQ(seq.size(), 3u);
+  for (std::size_t i = 0; i < seq.size(); ++i) {
+    EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(i));
+  }
+
+  ASSERT_TRUE(rt.Has("scan"));
+  const Tensor &scan = rt.Get("scan");
+  ASSERT_EQ(scan.shape, (std::vector<int64_t>{3}));
+  const float *scan_data = scan.AsFloat();
+  EXPECT_FLOAT_EQ(scan_data[0], 1.0f);
+  EXPECT_FLOAT_EQ(scan_data[1], 2.0f);
+  EXPECT_FLOAT_EQ(scan_data[2], 3.0f);
+}
+
+// Same as MixedTensorSequenceAndScanOutputs but with a SimpleRawBufferAllocator
+// attached to the RuntimeContext. Verifies that subgraph contexts do not inherit
+// the parent allocator (preventing double-free of loop-carried outputs) and that
+// the final loop outputs are correctly backed by the parent allocator.
+TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
+  // Two simultaneous slots are needed: only the final loop outputs (acc_final
+  // and scan) are backed by the allocator. Iter/cond scalars injected into
+  // each child context use inline storage and consume no allocator slots.
+  // Input tensors are set before attaching the allocator so they stay inline
+  // and do not consume allocator slots.
+  constexpr size_t kAllocatorSlotCapacity = 2;
+  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
+  rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+  rt.set_allocator(&alloc);
 
   RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},
                        BuildMixedSequenceLoopBody()),

@@ -40,19 +40,19 @@ DelayedInitializer::DelayedInitializer(const KernelContext &ctx, Attributes attr
     : KernelBase(ctx), attrs_(std::move(attrs)) {
   ValidateAttributes(attrs_);
   if (attrs_.load_device == "cpu") {
-    loaded_bytes_ = LoadBytes(attrs_);
+    loaded_bytes_ = LoadBytes(attrs_, ctx_.allocator);
   }
 }
 
 Tensor DelayedInitializer::operator()(RuntimeContext *rt) const {
   if (rt != nullptr && rt->allocator() != nullptr) {
     const size_t byte_count = attrs_.load_device == "cpu"
-                                  ? loaded_bytes_.size()
+                                  ? loaded_bytes_.size_bytes()
                                   : PackedByteSize(attrs_.dtype, ComputeElementCount(attrs_.shape));
     Tensor output = MakeOutputTensor(attrs_.dtype, attrs_.shape, byte_count, rt->allocator());
     if (attrs_.load_device == "cpu") {
       if (byte_count != 0) {
-        std::memcpy(output.mutable_bytes(), loaded_bytes_.data(), loaded_bytes_.size());
+        std::memcpy(output.mutable_bytes(), loaded_bytes_.bytes(), loaded_bytes_.size_bytes());
       }
     } else {
       LoadBytesInto(attrs_, output.mutable_bytes(), byte_count);
@@ -60,9 +60,12 @@ Tensor DelayedInitializer::operator()(RuntimeContext *rt) const {
     return output;
   }
   if (attrs_.load_device == "cpu") {
-    return Tensor("", attrs_.dtype, attrs_.shape, loaded_bytes_);
+    return Tensor("", attrs_.dtype, attrs_.shape,
+                  std::vector<uint8_t>(loaded_bytes_.bytes(),
+                                       loaded_bytes_.bytes() + loaded_bytes_.size_bytes()));
   }
-  return Tensor("", attrs_.dtype, attrs_.shape, LoadBytes(attrs_));
+  // No runtime allocator available: load from file into inline vector storage.
+  return LoadBytes(attrs_);
 }
 
 /// Computes the total number of elements described by a shape.
@@ -81,12 +84,12 @@ int64_t DelayedInitializer::ComputeElementCount(const onnx_kernels::Shape &shape
 }
 
 /// Loads the raw tensor payload described by the DelayedInitializer attributes.
-std::vector<uint8_t> DelayedInitializer::LoadBytes(const Attributes &attrs) {
+Tensor DelayedInitializer::LoadBytes(const Attributes &attrs, RawBufferAllocator *allocator) {
   const int64_t element_count = ComputeElementCount(attrs.shape);
   const size_t byte_count = PackedByteSize(attrs.dtype, element_count);
-  std::vector<uint8_t> bytes(byte_count);
-  LoadBytesInto(attrs, bytes.data(), byte_count);
-  return bytes;
+  Tensor t = MakeOutputTensor(attrs.dtype, attrs.shape, byte_count, allocator);
+  LoadBytesInto(attrs, t.mutable_bytes(), byte_count);
+  return t;
 }
 
 /// Loads bytes from ``attrs.filename`` at ``attrs.offset`` directly into

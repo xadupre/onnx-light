@@ -88,6 +88,68 @@ class TestGenOperators(ExtTestCase):
             op_file = op_dir / f"{name}.rst"
             self.assertTrue(op_file.exists(), f"Individual page {name}.rst must exist")
 
+    def test_operator_section_contains_attributes(self):
+        self._init()
+        # Transpose has a ``perm`` attribute (list of integers, optional).
+        content = Path(self.tmp_dir, "ai_onnx", "Transpose.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", content)
+        self.assertIn("perm", content)
+
+        # Cast has a required ``to`` attribute (target data type).
+        content = Path(self.tmp_dir, "ai_onnx", "Cast.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", content)
+        self.assertIn("to", content)
+
+        # Concat has a required ``axis`` attribute.
+        content = Path(self.tmp_dir, "ai_onnx", "Concat.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", content)
+        self.assertIn("axis", content)
+
+        # ArgMax has ``axis``, ``keepdims``, and ``select_last_index`` attributes.
+        content = Path(self.tmp_dir, "ai_onnx", "ArgMax.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", content)
+        self.assertIn("axis", content)
+        self.assertIn("keepdims", content)
+        self.assertIn("select_last_index", content)
+
+        # ArgMin has the same attributes as ArgMax.
+        content = Path(self.tmp_dir, "ai_onnx", "ArgMin.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", content)
+        self.assertIn("axis", content)
+        self.assertIn("keepdims", content)
+        self.assertIn("select_last_index", content)
+
+    def test_training_operator_section_contains_attributes(self):
+        self._init()
+        preview_dir = Path(self.tmp_dir, "ai_onnx_preview_training")
+
+        # Gradient has ``xs``, ``y``, and ``zs`` attributes.
+        content = (preview_dir / "Gradient.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", content)
+        self.assertIn("xs", content)
+        self.assertIn("zs", content)
+        self.assertIn("**y**", content)
+
+        # Adam has optimizer hyper-parameters as attributes.
+        content = (preview_dir / "Adam.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", content)
+        self.assertIn("alpha", content)
+        self.assertIn("beta", content)
+        self.assertIn("epsilon", content)
+        self.assertIn("norm_coefficient", content)
+
+        # Adagrad has decay_factor, epsilon, norm_coefficient attributes.
+        content = (preview_dir / "Adagrad.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", content)
+        self.assertIn("decay_factor", content)
+        self.assertIn("epsilon", content)
+
+        # Momentum has alpha, beta, mode, norm_coefficient attributes.
+        content = (preview_dir / "Momentum.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", content)
+        self.assertIn("alpha", content)
+        self.assertIn("mode", content)
+
     def test_runtime_domain_page_contains_delayed_initializer(self):
         self._init()
         content = Path(self.tmp_dir, "ai_rt.rst").read_text(encoding="utf-8")

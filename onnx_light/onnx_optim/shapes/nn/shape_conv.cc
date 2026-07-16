@@ -1,7 +1,3 @@
-// Copyright (c) ONNX Project Contributors
-//
-// SPDX-License-Identifier: Apache-2.0
-
 #include "onnx_optim/shapes/nn/shape_nn.h"
 
 #include <algorithm>
@@ -11,6 +7,7 @@
 #include <variant>
 #include <vector>
 
+#include "onnx_kernels/kernels/auto_pad.h"
 #include "onnx_optim/expressions.h"
 #include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
@@ -20,6 +17,9 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
 namespace nn {
+
+using onnx_kernels::kernel::AutoPad;
+using onnx_kernels::kernel::AutoPadFromString;
 
 namespace {
 
@@ -39,7 +39,7 @@ OptimDim FromDimType(const expressions::DimType &d) {
 // VALID convolution shrinks back), never a fresh opaque dimension name.
 OptimDim ComputeConvSpatialDim(const OptimDim &in_dim, int64_t kernel, int64_t stride,
                                int64_t pad_begin, int64_t pad_end, int64_t dilation,
-                               const std::string &auto_pad, const std::string &op_name,
+                               AutoPad auto_pad, const std::string &op_name,
                                const std::string &x_name, size_t spatial_axis) {
   const std::string symbolic = op_name + "." + x_name + ":" + std::to_string(spatial_axis);
   if (stride <= 0 || kernel <= 0) {
@@ -49,10 +49,10 @@ OptimDim ComputeConvSpatialDim(const OptimDim &in_dim, int64_t kernel, int64_t s
 
   if (in_dim.IsInt()) {
     const int64_t iD = in_dim.AsInt();
-    if (auto_pad == "SAME_UPPER" || auto_pad == "SAME_LOWER") {
+    if (auto_pad == AutoPad::kSameUpper || auto_pad == AutoPad::kSameLower) {
       return OptimDim((iD + stride - 1) / stride);
     }
-    if (auto_pad == "VALID") {
+    if (auto_pad == AutoPad::kValid) {
       const int64_t numer = iD - eff_k;
       if (numer < 0) {
         return OptimDim(symbolic);
@@ -69,12 +69,12 @@ OptimDim ComputeConvSpatialDim(const OptimDim &in_dim, int64_t kernel, int64_t s
   // Symbolic input dimension: evaluate the spatial formula with the symbolic
   // expression helpers so the output stays an expression of the input dim.
   const expressions::DimType iD = ToDimType(in_dim);
-  if (auto_pad == "SAME_UPPER" || auto_pad == "SAME_LOWER") {
+  if (auto_pad == AutoPad::kSameUpper || auto_pad == AutoPad::kSameLower) {
     return FromDimType(expressions::dim_div(
         expressions::dim_add(iD, expressions::DimType{stride - 1}), expressions::DimType{stride}));
   }
   expressions::DimType numer;
-  if (auto_pad == "VALID") {
+  if (auto_pad == AutoPad::kValid) {
     numer = expressions::dim_sub(iD, expressions::DimType{eff_k});
   } else {
     numer =
@@ -100,7 +100,8 @@ void ComputeShapeConvLike(ShapesContext &ctx, const NodeProto &node, const char 
                       "' rank must match input rank.");
 
   const size_t n_spatial = x_shape.Rank() - 2;
-  const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", "NOTSET");
+  const AutoPad auto_pad =
+      AutoPadFromString(GetAttributeOr<std::string>(node, "auto_pad", "NOTSET"));
 
   std::vector<int64_t> kernel_shape;
   GetAttributeInts(node, "kernel_shape", kernel_shape);

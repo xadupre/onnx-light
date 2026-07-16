@@ -181,6 +181,25 @@ inline std::vector<int64_t> GetAttributeIntsOrDefault(const NodeProto &node,
   return values;
 }
 
+/// Reads the repeated INTS attribute ``name`` of ``node`` and returns it as a
+/// ``Shape``. When the attribute is absent, ``fallback`` is returned unchanged.
+/// Throws when the attribute exists but has a type other than INTS.
+inline Shape GetAttributeShapeOrDefault(const NodeProto &node, const std::string &name,
+                                        const Shape &fallback) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  if (attr == nullptr) {
+    return fallback;
+  }
+  EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::INTS),
+                      "RunNode: attribute '", name, "' of op '", node.op_type().as_string(),
+                      "' must be INTS.");
+  Shape values;
+  for (size_t i = 0; i < attr->ints().size(); ++i) {
+    values.push_back(attr->ints()[i]);
+  }
+  return values;
+}
+
 inline std::vector<float> GetAttributeFloatsOrDefault(const NodeProto &node,
                                                       const std::string &name,
                                                       const std::vector<float> &fallback) {

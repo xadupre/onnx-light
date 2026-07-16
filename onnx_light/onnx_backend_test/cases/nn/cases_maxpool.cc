@@ -15,6 +15,8 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
+using onnx_kernels::kernel::AutoPad;
+
 namespace {
 
 // Builds a vector ``{1.0f, 2.0f, ..., n}`` used to generate the deterministic
@@ -246,7 +248,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor x = Tensor::FromFloat("", {1, 1, 5, 5}, Range1ToN(25));
              Tensor y = maxpool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
                                        /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/0,
-                                       /*auto_pad=*/"SAME_UPPER");
+                                       /*auto_pad=*/AutoPad::kSameUpper);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -281,7 +283,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromFloat("", {1, 3, 32, 32}, Randn<float>({1, 3, 32, 32}, /*seed=*/5));
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                 /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/0,
-                                /*auto_pad=*/"SAME_LOWER");
+                                /*auto_pad=*/AutoPad::kSameLower);
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -299,7 +301,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromFloat("", {1, 3, 32, 32}, Randn<float>({1, 3, 32, 32}, /*seed=*/6));
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                 /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/0,
-                                /*auto_pad=*/"SAME_UPPER");
+                                /*auto_pad=*/AutoPad::kSameUpper);
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });

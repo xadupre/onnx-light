@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
-#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -53,9 +52,10 @@ void ResolveAttributes(const Tensor &x, const Tensor &w, ConvTranspose::Attribut
         attrs.output_shape.size() == spatial_rank,
         "kernel::ConvTranspose: 'output_shape' size must match input spatial rank.");
   }
-  if (!attrs.auto_pad.empty()) {
-    EXT_ENFORCE_INVALID(attrs.auto_pad == "NOTSET" || attrs.auto_pad == "SAME_UPPER" ||
-                            attrs.auto_pad == "SAME_LOWER" || attrs.auto_pad == "VALID",
+  if (attrs.auto_pad != AutoPad::kNotSet) {
+    EXT_ENFORCE_INVALID(attrs.auto_pad == AutoPad::kSameUpper ||
+                            attrs.auto_pad == AutoPad::kSameLower ||
+                            attrs.auto_pad == AutoPad::kValid,
                         "kernel::ConvTranspose: invalid 'auto_pad' value.");
   }
 }
@@ -89,7 +89,7 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &x, ConvTranspose::Attribut
   const size_t spatial_rank = x.shape.size() - 2;
   std::vector<int64_t> out_spatial(spatial_rank);
   const bool has_output_shape = !attrs.output_shape.empty();
-  const std::string auto_pad = attrs.auto_pad.empty() ? std::string("NOTSET") : attrs.auto_pad;
+  const AutoPad auto_pad = attrs.auto_pad;
 
   for (size_t i = 0; i < spatial_rank; ++i) {
     const int64_t iD = x.shape[i + 2];
@@ -102,21 +102,20 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &x, ConvTranspose::Attribut
     if (has_output_shape) {
       const int64_t out = attrs.output_shape[i];
       const int64_t total_pad = std::max<int64_t>(0, s * (iD - 1) + op + eff_k - out);
-      const std::string pad_kind = (auto_pad == "SAME_LOWER") ? "LOWER" : "UPPER";
-      if (pad_kind == "UPPER") {
-        attrs.pads[i] = total_pad / 2;
-        attrs.pads[i + spatial_rank] = total_pad - total_pad / 2;
-      } else {
+      if (auto_pad == AutoPad::kSameLower) {
         attrs.pads[i + spatial_rank] = total_pad / 2;
         attrs.pads[i] = total_pad - total_pad / 2;
+      } else {
+        attrs.pads[i] = total_pad / 2;
+        attrs.pads[i + spatial_rank] = total_pad - total_pad / 2;
       }
       out_spatial[i] = out;
-    } else if (auto_pad == "SAME_UPPER" || auto_pad == "SAME_LOWER") {
+    } else if (auto_pad == AutoPad::kSameUpper || auto_pad == AutoPad::kSameLower) {
       // No explicit output_shape: per upstream, compute total_padding from
       // stride. ``output_spatial = iD * stride`` is the upstream default.
       const int64_t out = iD * s;
       const int64_t total_pad = std::max<int64_t>(0, s * (iD - 1) + op + eff_k - out);
-      if (auto_pad == "SAME_UPPER") {
+      if (auto_pad == AutoPad::kSameUpper) {
         attrs.pads[i] = total_pad / 2;
         attrs.pads[i + spatial_rank] = total_pad - total_pad / 2;
       } else {
@@ -126,7 +125,7 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &x, ConvTranspose::Attribut
       out_spatial[i] = out;
     } else {
       // NOTSET (or VALID with empty pads): use the standard formula.
-      if (auto_pad == "VALID") {
+      if (auto_pad == AutoPad::kValid) {
         attrs.pads[i] = 0;
         attrs.pads[i + spatial_rank] = 0;
       }

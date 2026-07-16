@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "onnx_kernels/kernels/auto_pad.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -17,6 +18,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
 namespace nn {
+
+using onnx_kernels::kernel::AutoPad;
+using onnx_kernels::kernel::AutoPadFromString;
+using onnx_kernels::kernel::AutoPadToString;
 
 namespace {
 
@@ -37,10 +42,10 @@ int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_be
   return out;
 }
 
-int64_t AutoPadOutputDim(const std::string &auto_pad, int64_t in_dim, int64_t kernel,
-                         int64_t stride, int64_t dilation) {
+int64_t AutoPadOutputDim(AutoPad auto_pad, int64_t in_dim, int64_t kernel, int64_t stride,
+                         int64_t dilation) {
   const int64_t eff_kernel = dilation * (kernel - 1) + 1;
-  if (auto_pad == "VALID") {
+  if (auto_pad == AutoPad::kValid) {
     const double numerator = static_cast<double>(in_dim - eff_kernel) / static_cast<double>(stride);
     return static_cast<int64_t>(std::floor(numerator)) + 1;
   }
@@ -92,13 +97,15 @@ void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *
     pads.assign(2 * n_input_dims, 0);
   }
 
-  const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET"));
-  EXT_ENFORCE_INVALID(auto_pad == "NOTSET" || auto_pad == "VALID" || auto_pad == "SAME_UPPER" ||
-                          auto_pad == "SAME_LOWER",
-                      "ComputeShapeMaxPool: auto_pad='", auto_pad,
+  const AutoPad auto_pad =
+      AutoPadFromString(GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET")));
+  EXT_ENFORCE_INVALID(auto_pad == AutoPad::kNotSet || auto_pad == AutoPad::kValid ||
+                          auto_pad == AutoPad::kSameUpper || auto_pad == AutoPad::kSameLower,
+                      "ComputeShapeMaxPool: auto_pad='",
+                      GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET")),
                       "' is not supported; must be one of NOTSET, SAME_UPPER, SAME_LOWER "
                       "or VALID.");
-  const bool use_auto_pad = auto_pad != "NOTSET";
+  const bool use_auto_pad = auto_pad != AutoPad::kNotSet;
 
   const bool ceil_mode = GetAttributeOr<int64_t>(node, "ceil_mode", 0) != 0;
 
@@ -120,7 +127,7 @@ void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *
       std::string expr = "MaxPool(" + d.AsExpr() + ",k=" + std::to_string(kernel_shape[i]) +
                          ",s=" + std::to_string(strides[i]) + ",d=" + std::to_string(dilations[i]);
       if (use_auto_pad) {
-        expr += ",auto_pad=" + auto_pad;
+        expr += std::string(",auto_pad=") + AutoPadToString(auto_pad);
       } else {
         expr += ",p=" + std::to_string(pads[i]) + "+" + std::to_string(pads[i + n_input_dims]) +
                 ",ceil=" + (ceil_mode ? "1" : "0");

@@ -444,6 +444,7 @@ void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {
   for (std::size_t i = 0; i < node_limit; ++i) {
     if (!node_tags[i].empty()) {
       SetMetadataValue(*graph.mutable_node(i), kNodeTagMetadataKey, node_tags[i]);
+      SetMetadataValue(*graph.mutable_node(i), kValueTagMetadataKey, node_tags[i]);
     }
   }
   SetMetadataValue(graph, kValueTagsMetadataKey, DumpValueTagsAsJson(value_tags));
@@ -490,6 +491,7 @@ void WriteValueAndNodeTagsToMetadata(FunctionProto &function) {
   for (std::size_t i = 0; i < node_limit; ++i) {
     if (!node_tags[i].empty()) {
       SetMetadataValue(*function.mutable_node(i), kNodeTagMetadataKey, node_tags[i]);
+      SetMetadataValue(*function.mutable_node(i), kValueTagMetadataKey, node_tags[i]);
     }
   }
   SetMetadataValue(function, kValueTagsMetadataKey, DumpValueTagsAsJson(value_tags));

@@ -1,5 +1,5 @@
-Getting Started
-===============
+Start
+=====
 
 Install the package in editable mode:
 

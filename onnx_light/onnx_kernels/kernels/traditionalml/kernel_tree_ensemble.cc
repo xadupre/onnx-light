@@ -9,6 +9,7 @@
 
 #include "onnx_kernels/runtime_context.h"
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -42,13 +43,13 @@ constexpr int64_t kPostSoftmax = 1;
 ///     leaf_targetids[leaf_idx] and leaf_weights[leaf_idx].
 template <typename T>
 void TraverseTreeV5(int64_t root_node_idx, const std::vector<int64_t> &nodes_featureids,
-                    const std::vector<T> &nodes_splits, const std::vector<uint8_t> &nodes_modes,
+                    std::span<const T> nodes_splits, std::span<const uint8_t> nodes_modes,
                     const std::vector<int64_t> &nodes_truenodeids,
                     const std::vector<int64_t> &nodes_falsenodeids,
                     const std::vector<int64_t> &nodes_trueleafs,
                     const std::vector<int64_t> &nodes_falseleafs,
                     const std::vector<int64_t> &nodes_missing,
-                    const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
+                    const std::vector<int64_t> &leaf_targetids, std::span<const T> leaf_weights,
                     const std::vector<std::vector<T>> &node_member_sets, const T *x_row,
                     int64_t feature_count, int64_t n_targets, int64_t aggregate_function,
                     std::vector<T> &accum, std::vector<int64_t> &counts) {
@@ -126,12 +127,12 @@ void TraverseTreeV5(int64_t root_node_idx, const std::vector<int64_t> &nodes_fea
 template <typename T>
 Tensor TreeEnsemble::operator()(
     const Tensor &x, const std::vector<int64_t> &tree_roots,
-    const std::vector<int64_t> &nodes_featureids, const std::vector<T> &nodes_splits,
-    const std::vector<uint8_t> &nodes_modes, const std::vector<int64_t> &nodes_truenodeids,
+    const std::vector<int64_t> &nodes_featureids, std::span<const T> nodes_splits,
+    std::span<const uint8_t> nodes_modes, const std::vector<int64_t> &nodes_truenodeids,
     const std::vector<int64_t> &nodes_falsenodeids, const std::vector<int64_t> &nodes_trueleafs,
     const std::vector<int64_t> &nodes_falseleafs, const std::vector<int64_t> &nodes_missing,
-    const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
-    const std::vector<T> &membership_values, int64_t n_targets, int64_t aggregate_function,
+    const std::vector<int64_t> &leaf_targetids, std::span<const T> leaf_weights,
+    std::span<const T> membership_values, int64_t n_targets, int64_t aggregate_function,
     int64_t post_transform, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(n_targets >= 1, "kernel::TreeEnsemble: n_targets must be >= 1.");
   EXT_ENFORCE_INVALID(post_transform == kPostNone || post_transform == kPostSoftmax,
@@ -219,10 +220,10 @@ Tensor TreeEnsemble::operator()(
 #define ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(T)                                                    \
   template Tensor TreeEnsemble::operator()<T>(                                                     \
       const Tensor &, const std::vector<int64_t> &, const std::vector<int64_t> &,                  \
-      const std::vector<T> &, const std::vector<uint8_t> &, const std::vector<int64_t> &,          \
+      std::span<const T>, std::span<const uint8_t>, const std::vector<int64_t> &,                  \
       const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
-      const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<T> &,          \
-      const std::vector<T> &, int64_t, int64_t, int64_t, RuntimeContext *) const
+      const std::vector<int64_t> &, const std::vector<int64_t> &, std::span<const T>,              \
+      std::span<const T>, int64_t, int64_t, int64_t, RuntimeContext *) const
 
 ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(float);
 ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(double);

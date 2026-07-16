@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -49,10 +48,10 @@ int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_be
 }
 
 // Mirrors ``kernel_averagepool.cc::ResolveAutoPadAxis``.
-void ResolveAutoPadAxis(const std::string &auto_pad, int64_t in_dim, int64_t kernel, int64_t stride,
+void ResolveAutoPadAxis(AutoPad auto_pad, int64_t in_dim, int64_t kernel, int64_t stride,
                         int64_t dilation, int64_t &out_dim, int64_t &pad_begin, int64_t &pad_end) {
   const int64_t eff_kernel = dilation * (kernel - 1) + 1;
-  if (auto_pad == "VALID") {
+  if (auto_pad == AutoPad::kValid) {
     pad_begin = 0;
     pad_end = 0;
     const double numerator = static_cast<double>(in_dim - eff_kernel) / static_cast<double>(stride);
@@ -65,7 +64,7 @@ void ResolveAutoPadAxis(const std::string &auto_pad, int64_t in_dim, int64_t ker
     out_dim = 0;
   }
   const int64_t pad_total = std::max<int64_t>(0, (out_dim - 1) * stride + eff_kernel - in_dim);
-  if (auto_pad == "SAME_UPPER") {
+  if (auto_pad == AutoPad::kSameUpper) {
     pad_begin = pad_total / 2;
     pad_end = pad_total - pad_begin;
   } else { // SAME_LOWER
@@ -178,7 +177,7 @@ void MaxPoolLoop(const T *px, T *py, int64_t *pi, bool produce_indices, int64_t 
 std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const Shape &kernel_shape,
                                      const Shape &strides_in, const Shape &pads_in, bool ceil_mode,
                                      const Shape &dilations_in, int64_t storage_order,
-                                     const std::string &auto_pad, bool produce_indices,
+                                     AutoPad auto_pad, bool produce_indices,
                                      RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           x.data_type == static_cast<int32_t>(DataType::DOUBLE) ||
@@ -209,10 +208,10 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const Shape &kernel_shape,
                       "kernel::MaxPool: strides must have one entry per spatial axis.");
   EXT_ENFORCE_INVALID(dilations.size() == k,
                       "kernel::MaxPool: dilations must have one entry per spatial axis.");
-  EXT_ENFORCE_INVALID(auto_pad == "NOTSET" || auto_pad == "SAME_UPPER" ||
-                          auto_pad == "SAME_LOWER" || auto_pad == "VALID",
+  EXT_ENFORCE_INVALID(auto_pad == AutoPad::kNotSet || auto_pad == AutoPad::kSameUpper ||
+                          auto_pad == AutoPad::kSameLower || auto_pad == AutoPad::kValid,
                       "kernel::MaxPool: auto_pad must be NOTSET, SAME_UPPER, SAME_LOWER or VALID.");
-  const bool use_auto_pad = auto_pad != "NOTSET";
+  const bool use_auto_pad = auto_pad != AutoPad::kNotSet;
   EXT_ENFORCE_INVALID(!use_auto_pad || pads_in.empty(),
                       "kernel::MaxPool: pads must be empty when auto_pad is not NOTSET.");
 
@@ -333,8 +332,7 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const Shape &kernel_shape,
 
 Tensor MaxPool::operator()(const Tensor &x, const Shape &kernel_shape, const Shape &strides,
                            const Shape &pads, bool ceil_mode, const Shape &dilations,
-                           int64_t storage_order, const std::string &auto_pad,
-                           RuntimeContext *rt) const {
+                           int64_t storage_order, AutoPad auto_pad, RuntimeContext *rt) const {
   auto result = RunMaxPool(x, kernel_shape, strides, pads, ceil_mode, dilations, storage_order,
                            auto_pad, /*produce_indices=*/false, rt ? rt->allocator() : nullptr);
   return std::move(result.first);
@@ -343,8 +341,7 @@ Tensor MaxPool::operator()(const Tensor &x, const Shape &kernel_shape, const Sha
 std::pair<Tensor, Tensor> MaxPool::WithIndices(const Tensor &x, const Shape &kernel_shape,
                                                const Shape &strides, const Shape &pads,
                                                bool ceil_mode, const Shape &dilations,
-                                               int64_t storage_order,
-                                               const std::string &auto_pad) const {
+                                               int64_t storage_order, AutoPad auto_pad) const {
   return RunMaxPool(x, kernel_shape, strides, pads, ceil_mode, dilations, storage_order, auto_pad,
                     /*produce_indices=*/true);
 }

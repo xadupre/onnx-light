@@ -15,6 +15,8 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
+using onnx_kernels::kernel::AutoPad;
+
 // ---------------------------------------------------------------------------
 // LpPool — y = (sum |x_i|^p)^(1/p) over the pooling window (since opset 22
 // in the ai.onnx domain; the subset of attributes exercised here has been
@@ -145,7 +147,7 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
                                           Randn<float>({1, 3, 32, 32}, /*seed=*/case_seed));
              Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                        /*p=*/2, /*ceil_mode=*/false, /*dilations=*/{},
-                                       /*auto_pad=*/"SAME_UPPER");
+                                       /*auto_pad=*/AutoPad::kSameUpper);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -167,7 +169,7 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
                                           Randn<float>({1, 3, 32, 32}, /*seed=*/case_seed));
              Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                        /*p=*/4, /*ceil_mode=*/false, /*dilations=*/{},
-                                       /*auto_pad=*/"SAME_LOWER");
+                                       /*auto_pad=*/AutoPad::kSameLower);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });

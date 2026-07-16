@@ -82,13 +82,6 @@ template <typename T> struct TemporaryTypedBuffer {
    *     bytes: Raw input bytes to copy from.
    */
   void CopyFromBytes(const std::uint8_t *bytes) { std::memcpy(data(), bytes, size * sizeof(T)); }
-
-  /**
-   * Fills the temporary storage with zeros.
-   *
-   * This is used for symmetric zero-point staging.
-   */
-  void ZeroFill() { std::memset(data(), 0, size * sizeof(T)); }
 };
 
 } // namespace detail

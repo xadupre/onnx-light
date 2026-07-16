@@ -7,6 +7,7 @@
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/simple_tensor.h"
 
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -197,14 +198,34 @@ class LabelEncoder : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
+  /// Primary overload accepting zero-copy span views of the keys and values
+  /// (preferred when the data comes directly from tensor buffers).
+  template <typename KeyT, typename ValueT>
+  Tensor operator()(const Tensor &x, std::span<const KeyT> keys, std::span<const ValueT> values,
+                    ValueT default_value, RuntimeContext *rt = nullptr) const;
+
+  /// Convenience overload for callers that already own ``std::vector`` objects;
+  /// forwards to the span overload without an extra allocation.
   template <typename KeyT, typename ValueT>
   Tensor operator()(const Tensor &x, const std::vector<KeyT> &keys,
                     const std::vector<ValueT> &values, ValueT default_value,
-                    RuntimeContext *rt = nullptr) const;
+                    RuntimeContext *rt = nullptr) const {
+    return (*this).template operator()<KeyT, ValueT>(
+        x, std::span<const KeyT>{keys}, std::span<const ValueT>{values}, default_value, rt);
+  }
 
+  /// Primary in-place overload accepting zero-copy span views.
+  template <typename KeyT, typename ValueT>
+  void operator()(const Tensor &x, std::span<const KeyT> keys, std::span<const ValueT> values,
+                  ValueT default_value, Tensor &output) const;
+
+  /// Convenience in-place overload forwarding to the span overload.
   template <typename KeyT, typename ValueT>
   void operator()(const Tensor &x, const std::vector<KeyT> &keys, const std::vector<ValueT> &values,
-                  ValueT default_value, Tensor &output) const;
+                  ValueT default_value, Tensor &output) const {
+    (*this).template operator()<KeyT, ValueT>(
+        x, std::span<const KeyT>{keys}, std::span<const ValueT>{values}, default_value, output);
+  }
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -561,6 +582,26 @@ public:
   /// @param n_targets            Number of regression targets.
   /// @param aggregate_function   0=AVERAGE, 1=SUM (default), 2=MIN, 3=MAX.
   /// @param post_transform       0=NONE (default), 1=SOFTMAX.
+  ///
+  /// The ``nodes_splits``, ``nodes_modes``, ``leaf_weights``, and
+  /// ``membership_values`` parameters are passed as zero-copy spans because
+  /// they originate from tensor attribute buffers. The integer index arrays
+  /// (``tree_roots``, ``nodes_featureids``, etc.) come from repeated-int64
+  /// attributes and remain as ``std::vector<int64_t>`` references.
+  template <typename T>
+  Tensor operator()(
+      const Tensor &x, const std::vector<int64_t> &tree_roots,
+      const std::vector<int64_t> &nodes_featureids, std::span<const T> nodes_splits,
+      std::span<const uint8_t> nodes_modes, const std::vector<int64_t> &nodes_truenodeids,
+      const std::vector<int64_t> &nodes_falsenodeids, const std::vector<int64_t> &nodes_trueleafs,
+      const std::vector<int64_t> &nodes_falseleafs, const std::vector<int64_t> &nodes_missing,
+      const std::vector<int64_t> &leaf_targetids, std::span<const T> leaf_weights,
+      std::span<const T> membership_values, int64_t n_targets, int64_t aggregate_function,
+      int64_t post_transform, RuntimeContext *rt = nullptr) const;
+
+  /// Convenience overload for callers that already own ``std::vector`` objects
+  /// for ``nodes_splits``, ``nodes_modes``, ``leaf_weights``, and
+  /// ``membership_values``; forwards to the span overload.
   template <typename T>
   Tensor operator()(
       const Tensor &x, const std::vector<int64_t> &tree_roots,
@@ -570,7 +611,14 @@ public:
       const std::vector<int64_t> &nodes_falseleafs, const std::vector<int64_t> &nodes_missing,
       const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
       const std::vector<T> &membership_values, int64_t n_targets, int64_t aggregate_function,
-      int64_t post_transform, RuntimeContext *rt = nullptr) const;
+      int64_t post_transform, RuntimeContext *rt = nullptr) const {
+    return (*this).template operator()<T>(
+        x, tree_roots, nodes_featureids, std::span<const T>{nodes_splits},
+        std::span<const uint8_t>{nodes_modes}, nodes_truenodeids, nodes_falsenodeids,
+        nodes_trueleafs, nodes_falseleafs, nodes_missing, leaf_targetids,
+        std::span<const T>{leaf_weights}, std::span<const T>{membership_values}, n_targets,
+        aggregate_function, post_transform, rt);
+  }
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -599,13 +647,35 @@ class DictVectorizer : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
+  /// Primary overload accepting zero-copy span views of the input keys and
+  /// values (preferred when the data comes directly from tensor buffers).
+  /// The vocabulary is always sourced from operator attributes and is passed
+  /// by reference.
   template <typename K, typename V>
-  Tensor operator()(const std::vector<K> &input_keys, const std::vector<V> &input_values,
+  Tensor operator()(std::span<const K> input_keys, std::span<const V> input_values,
                     const std::vector<K> &vocabulary, RuntimeContext *rt = nullptr) const;
 
+  /// Convenience overload for callers that already own ``std::vector`` objects;
+  /// forwards to the span overload without an extra allocation.
+  template <typename K, typename V>
+  Tensor operator()(const std::vector<K> &input_keys, const std::vector<V> &input_values,
+                    const std::vector<K> &vocabulary, RuntimeContext *rt = nullptr) const {
+    return (*this).template operator()<K, V>(std::span<const K>{input_keys},
+                                             std::span<const V>{input_values}, vocabulary, rt);
+  }
+
+  /// Primary in-place overload accepting zero-copy span views.
+  template <typename K, typename V>
+  void operator()(std::span<const K> input_keys, std::span<const V> input_values,
+                  const std::vector<K> &vocabulary, Tensor &output) const;
+
+  /// Convenience in-place overload forwarding to the span overload.
   template <typename K, typename V>
   void operator()(const std::vector<K> &input_keys, const std::vector<V> &input_values,
-                  const std::vector<K> &vocabulary, Tensor &output) const;
+                  const std::vector<K> &vocabulary, Tensor &output) const {
+    (*this).template operator()<K, V>(std::span<const K>{input_keys},
+                                      std::span<const V>{input_values}, vocabulary, output);
+  }
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -641,15 +711,39 @@ class CastMap : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
+  /// Primary overload accepting zero-copy span views of the input keys and
+  /// values (preferred when the data comes directly from tensor buffers).
   template <typename V, typename OutT>
-  Tensor operator()(const std::vector<int64_t> &input_keys, const std::vector<V> &input_values,
+  Tensor operator()(std::span<const int64_t> input_keys, std::span<const V> input_values,
                     const std::string &cast_to, const std::string &map_form, int64_t max_map,
                     RuntimeContext *rt = nullptr) const;
 
+  /// Convenience overload for callers that already own ``std::vector`` objects;
+  /// forwards to the span overload without an extra allocation.
+  template <typename V, typename OutT>
+  Tensor operator()(const std::vector<int64_t> &input_keys, const std::vector<V> &input_values,
+                    const std::string &cast_to, const std::string &map_form, int64_t max_map,
+                    RuntimeContext *rt = nullptr) const {
+    return (*this).template operator()<V, OutT>(std::span<const int64_t>{input_keys},
+                                                std::span<const V>{input_values}, cast_to, map_form,
+                                                max_map, rt);
+  }
+
+  /// Primary in-place overload accepting zero-copy span views.
+  template <typename V, typename OutT>
+  void operator()(std::span<const int64_t> input_keys, std::span<const V> input_values,
+                  const std::string &cast_to, const std::string &map_form, int64_t max_map,
+                  Tensor &output) const;
+
+  /// Convenience in-place overload forwarding to the span overload.
   template <typename V, typename OutT>
   void operator()(const std::vector<int64_t> &input_keys, const std::vector<V> &input_values,
                   const std::string &cast_to, const std::string &map_form, int64_t max_map,
-                  Tensor &output) const;
+                  Tensor &output) const {
+    (*this).template operator()<V, OutT>(std::span<const int64_t>{input_keys},
+                                         std::span<const V>{input_values}, cast_to, map_form,
+                                         max_map, output);
+  }
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
-#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -34,7 +33,7 @@ void ResolveAttributes(const Tensor &x, const Tensor &w, ConvInteger::Attributes
   }
   EXT_ENFORCE_INVALID(attrs.dilations.size() == spatial_rank,
                       "kernel::ConvInteger: 'dilations' size must match input spatial rank.");
-  if (attrs.auto_pad.empty() || attrs.auto_pad == "NOTSET") {
+  if (attrs.auto_pad == AutoPad::kNotSet) {
     if (attrs.pads.empty()) {
       attrs.pads.assign(spatial_rank * 2, 0);
     }
@@ -42,8 +41,8 @@ void ResolveAttributes(const Tensor &x, const Tensor &w, ConvInteger::Attributes
                         "kernel::ConvInteger: 'pads' size must be 2 * spatial rank.");
   } else {
     EXT_ENFORCE_INVALID(
-        attrs.auto_pad == "SAME_UPPER" || attrs.auto_pad == "SAME_LOWER" ||
-            attrs.auto_pad == "VALID",
+        attrs.auto_pad == AutoPad::kSameUpper || attrs.auto_pad == AutoPad::kSameLower ||
+            attrs.auto_pad == AutoPad::kValid,
         "kernel::ConvInteger: 'auto_pad' must be NOTSET/SAME_UPPER/SAME_LOWER/VALID.");
     attrs.pads.assign(spatial_rank * 2, 0);
   }
@@ -105,7 +104,7 @@ void ValidateInputs(const Tensor &x, const Tensor &w, const Tensor &x_zp, const 
 std::vector<int64_t> ComputeOutputSpatial(const Tensor &x, ConvInteger::Attributes &attrs) {
   const size_t spatial_rank = x.shape.size() - 2;
   std::vector<int64_t> out_spatial(spatial_rank);
-  const bool use_auto_pad = !attrs.auto_pad.empty() && attrs.auto_pad != "NOTSET";
+  const bool use_auto_pad = attrs.auto_pad != AutoPad::kNotSet;
   for (size_t i = 0; i < spatial_rank; ++i) {
     const int64_t iD = x.shape[i + 2];
     const int64_t k = attrs.kernel_shape[i];
@@ -113,14 +112,14 @@ std::vector<int64_t> ComputeOutputSpatial(const Tensor &x, ConvInteger::Attribut
     const int64_t d = attrs.dilations[i];
     const int64_t eff_k = (k - 1) * d + 1;
     if (use_auto_pad) {
-      if (attrs.auto_pad == "VALID") {
+      if (attrs.auto_pad == AutoPad::kValid) {
         attrs.pads[i] = 0;
         attrs.pads[i + spatial_rank] = 0;
         out_spatial[i] = (iD - eff_k) / s + 1;
       } else {
         const int64_t out = (iD + s - 1) / s;
         const int64_t pad_needed = std::max<int64_t>(0, (out - 1) * s + eff_k - iD);
-        if (attrs.auto_pad == "SAME_UPPER") {
+        if (attrs.auto_pad == AutoPad::kSameUpper) {
           attrs.pads[i] = pad_needed / 2;
           attrs.pads[i + spatial_rank] = pad_needed - pad_needed / 2;
         } else {

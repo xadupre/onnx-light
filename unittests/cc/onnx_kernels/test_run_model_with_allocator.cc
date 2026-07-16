@@ -50,8 +50,8 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
   return kFallbackDefaultOpsetVersion;
 }
 
-// Returns true when the top-level graph of ``model`` contains at least one
-// node whose op_type is If, Loop, or Scan.
+// Returns true when any graph (top-level or function body) of ``model``
+// contains at least one node whose op_type is If, Loop, or Scan.
 //
 // RuntimeContext::MakeSubgraphContext does a shallow copy of the parent
 // context's tensor map (including raw allocation_ pointers). The child
@@ -61,11 +61,26 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
 // to the RuntimeContext is therefore unsafe for models that trigger subgraph
 // execution. Those cases are skipped in the allocator test below; their
 // correctness is already covered by the BackendRunModel.* tests.
-bool HasSubgraphOp(const ModelProto &model) {
-  for (const auto &node : model.ref_graph().ref_node()) {
+static bool GraphHasSubgraphOp(const GraphProto &graph) {
+  for (const auto &node : graph.ref_node()) {
     const std::string_view op = node.ref_op_type().sv();
     if (op == "If" || op == "Loop" || op == "Scan") {
       return true;
+    }
+  }
+  return false;
+}
+
+bool HasSubgraphOp(const ModelProto &model) {
+  if (GraphHasSubgraphOp(model.ref_graph())) {
+    return true;
+  }
+  for (const auto &fn : model.ref_function()) {
+    for (const auto &node : fn.ref_node()) {
+      const std::string_view op = node.ref_op_type().sv();
+      if (op == "If" || op == "Loop" || op == "Scan") {
+        return true;
+      }
     }
   }
   return false;

@@ -857,6 +857,20 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
                         op_type, "' is missing from the tensor map.");
     Tensor bound = it->second;
     bound.name = param_name;
+    if (bound.has_allocation()) {
+      // Detach from the parent's allocator slot.  The child context must not
+      // co-own the same RawBuffer: its destructor would free the slot while the
+      // parent still holds it (use-after-free).  Copy the bytes into inline
+      // storage so that child.Put / EnsureAllocatorBacked migrates the copy
+      // into its own allocator slot instead.
+      const size_t n = bound.size_bytes();
+      RawBuffer inline_copy(n);
+      if (n > 0) {
+        std::memcpy(inline_copy.data(), bound.bytes(), n);
+      }
+      bound.ClearAllocation();
+      bound.data = std::move(inline_copy);
+    }
     child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
   }
 

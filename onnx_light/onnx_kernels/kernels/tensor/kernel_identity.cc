@@ -16,8 +16,15 @@ Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
   Tensor output;
   output.data_type = input.data_type;
   output.shape = input.shape;
-  output.data = input.data;
-  output.string_data = input.string_data;
+  if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
+    output.string_data = input.string_data;
+  } else {
+    const size_t n = input.size_bytes();
+    if (n > 0) {
+      output.data = RawBuffer(n);
+      std::memcpy(output.data.data(), input.bytes(), n);
+    }
+  }
   return output;
 }
 

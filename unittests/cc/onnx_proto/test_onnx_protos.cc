@@ -84,7 +84,7 @@ TEST(onnx_string, RefString_Assignment) {
   utils::String s("def", 3);
   utils::RefString c("123", 3);
   c = s;
-  EXPECT_NE(c.data(), s.data());
+  EXPECT_EQ(c.data(), s.data());
   EXPECT_EQ(c.size(), 3);
 }
 
@@ -462,12 +462,12 @@ TEST(onnx_string, String_AssignmentOperators) {
   EXPECT_EQ(s, "assigned from std::string");
 }
 
-TEST(onnx_string, RefString_AssignmentFromStringUsesInlineStorageForShortValues) {
+TEST(onnx_string, RefString_AssignmentFromStringSharesBuffer) {
   utils::String short_value("inline", 6);
   utils::RefString short_ref("seed", 4);
   short_ref = short_value;
   EXPECT_EQ(short_ref, "inline");
-  EXPECT_NE(short_ref.data(), short_value.data());
+  EXPECT_EQ(short_ref.data(), short_value.data());
 
   utils::String long_value("0123456789abcdefghijklmnop", 26);
   utils::RefString long_ref("seed", 4);

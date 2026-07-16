@@ -211,14 +211,14 @@ class ExtTestCase(unittest.TestCase):
                 return
         raise AssertionError(f"None of the substring in {sub} is part of {s!r}.")
 
-    def assertIn(self, value, ens, msg: Optional[Union[Callable, str]] = None):
+    def assertIn(self, member, container, msg: Optional[Union[Callable, str]] = None):
         if not msg:
-            super().assertIn(value, ens)
-        if value not in ens:
+            super().assertIn(member, container)
+        if member not in container:
             if callable(msg):
-                super().assertIn(value, ens, msg())
+                super().assertIn(member, container, msg())
             else:
-                super().assertIn(value, ens, msg)
+                super().assertIn(member, container, msg)
 
     def assertEqualArray(
         self,

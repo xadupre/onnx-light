@@ -28,6 +28,8 @@ void AddOnnxPyGradient(nb::module_ &m) {
       .def(nb::init<>(), "Creates an empty registry.")
       .def_static(
           "default",
+          // Returns a value copy so that Python callers get an independent mutable registry
+          // that can be customised without affecting the C++ static default.
           []() -> onnx_gradient::GradRegistry { return onnx_gradient::DefaultGradRegistry(); },
           "Returns a new independent copy of the built-in gradient registry.  "
           "Modifications to the returned registry do not affect the built-in defaults.");
@@ -37,6 +39,8 @@ void AddOnnxPyGradient(nb::module_ &m) {
       [](const std::string &op_type, nb::callable fn, onnx_gradient::GradRegistry &registry) {
         onnx_gradient::RegisterGradientFunction(
             op_type,
+            // Capture fn by value so the GradFn closure keeps the Python callable alive
+            // beyond the scope of register_gradient_function.
             [fn](const NodeProto &node, const std::string &output_grad,
                  std::unordered_map<std::string, std::string> &grad_accum, int &counter,
                  FunctionProto &func) -> bool {

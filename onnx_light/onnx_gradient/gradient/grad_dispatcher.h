@@ -32,9 +32,9 @@ using GradRegistry = std::unordered_map<std::string, GradFn>;
 /**
  * Returns a reference to the built-in gradient registry.
  *
- * The built-in registry contains backward rules for all natively supported
- * operators: Add, Div, Gemm, Identity, MatMul, Mul, Neg, ReduceMean,
- * ReduceSum, Relu, Reshape, Sigmoid, Sub, Tanh, Transpose.
+ * The registry contains backward rules for all natively supported operators.
+ * Callers who need a mutable copy should copy the returned registry and extend
+ * it via RegisterGradientFunction.
  */
 const GradRegistry &DefaultGradRegistry();
 

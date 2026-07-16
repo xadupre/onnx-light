@@ -360,14 +360,14 @@ void RecurseSubgraphs(NodeProto &node) {
   }
 }
 
-template <typename NodeIterator>
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-ComputeTagsFromNodeIterators(NodeIterator begin, NodeIterator end) {
+ComputeTagsFromNodeIterators(std::vector<NodeProto>::const_iterator begin,
+                             std::vector<NodeProto>::const_iterator end) {
   std::unordered_map<std::string, std::string> computed_value_tags;
   std::vector<std::string> computed_node_tags;
   std::vector<const NodeProto *> ptrs;
   ptrs.reserve(static_cast<std::size_t>(std::distance(begin, end)));
-  for (NodeIterator it = begin; it != end; ++it) {
+  for (auto it = begin; it != end; ++it) {
     ptrs.push_back(&(*it));
   }
   InferNodesTags(ptrs, computed_value_tags, computed_node_tags);

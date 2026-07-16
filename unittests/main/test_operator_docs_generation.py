@@ -128,6 +128,7 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("**Attributes**", content)
         self.assertIn("xs", content)
         self.assertIn("zs", content)
+        self.assertIn("**y**", content)
 
         # Adam has optimizer hyper-parameters as attributes.
         content = (preview_dir / "Adam.rst").read_text(encoding="utf-8")

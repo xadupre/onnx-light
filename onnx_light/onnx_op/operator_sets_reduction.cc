@@ -125,9 +125,12 @@ LightOpSchema MakeReduceAxesInputSchema(const std::string &op_type, int since_ve
 // Builds an ArgMax/ArgMin schema entry. All versions share the same I/O shape
 // (single input "data", single int64 output "reduced"); only docs and the set
 // of attributes differ (select_last_index was added in opset 12).
+// ``agg_name`` is the human-readable name of the aggregation ("max" or "min")
+// and is embedded in the select_last_index attribute description.
 LightOpSchema MakeArgReduceSchema(const std::string &op_type, int since_version,
                                   const std::string &doc,
                                   const std::vector<TensorType> &allowed_types,
+                                  const std::string &agg_name = "",
                                   bool include_select_last_index = false) {
   std::vector<AttributeParam> attrs = {
       {"axis",
@@ -138,10 +141,10 @@ LightOpSchema MakeArgReduceSchema(const std::string &op_type, int since_version,
        AttributeType::INT, false, int64_t{1}},
   };
   if (include_select_last_index) {
-    attrs.push_back({"select_last_index",
-                     "Whether to select the last index or the first index if the {name} appears in "
-                     "multiple indices, default is False (first index).",
-                     AttributeType::INT, false, int64_t{0}});
+    const std::string desc = "Whether to select the last index or the first index if the " +
+                             agg_name +
+                             " appears in multiple indices, default is False (first index).";
+    attrs.push_back({"select_last_index", desc, AttributeType::INT, false, int64_t{0}});
   }
   return LightOpSchema(
       op_type, kOnnxDomain, since_version, doc,
@@ -236,15 +239,15 @@ std::vector<LightOpSchema> BuildArgReduceSchemas(const std::string &op_type,
                                                  const std::string &name) {
   return std::vector<LightOpSchema>{
       // opset 13: bfloat16 added to type constraint.
-      MakeArgReduceSchema(op_type, 13, MakeArgReduceDoc(name, 13), AllNumericTypesIr4(),
+      MakeArgReduceSchema(op_type, 13, MakeArgReduceDoc(name, 13), AllNumericTypesIr4(), name,
                           /*include_select_last_index=*/true),
       // opset 12: select_last_index attribute introduced; doc requires non-empty input.
-      MakeArgReduceSchema(op_type, 12, MakeArgReduceDoc(name, 12), AllNumericTypes(),
+      MakeArgReduceSchema(op_type, 12, MakeArgReduceDoc(name, 12), AllNumericTypes(), name,
                           /*include_select_last_index=*/true),
       // opset 11: axis attribute supports negative values; input must not be empty.
-      MakeArgReduceSchema(op_type, 11, MakeArgReduceDoc(name, 11), AllNumericTypes()),
+      MakeArgReduceSchema(op_type, 11, MakeArgReduceDoc(name, 11), AllNumericTypes(), name),
       // opset 1: axis attribute, no negative axis support.
-      MakeArgReduceSchema(op_type, 1, MakeArgReduceDoc(name, 1), AllNumericTypes()),
+      MakeArgReduceSchema(op_type, 1, MakeArgReduceDoc(name, 1), AllNumericTypes(), name),
   };
 }
 

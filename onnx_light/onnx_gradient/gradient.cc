@@ -149,10 +149,12 @@ void ApplyBackward(const NodeProto &node,
     // Gradient for optional bias C_init: sum of dC over the batch axis.
     std::string C_init = input_name(2);
     if (!C_init.empty()) {
-      // Use ReduceSum over axis 0 to collapse the batch dimension.
+      // Use ReduceSum over axis 0 (the batch axis) to collapse the batch
+      // dimension. Gemm assumes batch-first layout, so axis 0 is always the
+      // batch dimension for the bias gradient.
       std::string dC_init = new_name("dC_init");
       NodeProto &rs = func.add_node("ReduceSum", {output_grad}, {dC_init});
-      AddAttribute(rs, "axes", std::vector<int64_t>{0});
+      AddAttribute(rs, "axes", std::vector<int64_t>{0}); // 0 = batch axis
       AddAttribute(rs, "keepdims", int64_t{0});
       AccumulateGrad(dC_init, grad_accum[C_init], counter, func);
     }
@@ -268,7 +270,8 @@ void ApplyBackward(const NodeProto &node,
     if (!A.empty() && !C.empty()) {
       std::string C2 = new_name("C2");
       func.add_node("Mul", {C, C}, {C2});
-      // Create Constant node with value=1.0f via direct attribute API.
+      // Create a scalar Constant node with value=1.0f, used in the Tanh
+      // derivative formula: d/dx tanh(x) = 1 - tanh^2(x).
       std::string ones = new_name("ones");
       {
         NodeProto &cst = func.add_node("Constant", {}, {ones});
@@ -277,7 +280,7 @@ void ApplyBackward(const NodeProto &node,
         attr->set_type(AttributeProto::AttributeType::TENSOR);
         TensorProto &t = attr->ref_t();
         t.set_data_type(static_cast<int32_t>(TensorProto::DataType::FLOAT));
-        t.ref_float_data().push_back(1.0f);
+        t.ref_float_data().push_back(1.0f); // scalar value 1.0
       }
       std::string ones_like = new_name("ones_like");
       func.add_node("CastLike", {ones, C2}, {ones_like});

@@ -23,12 +23,13 @@ namespace onnx_gradient {
  *              gradient of y, typically ones_like(y) for a scalar loss).
  *   - outputs: one gradient tensor per element of @p xs, named "grad_<xs[i]>".
  *
- * Supported forward operators: MatMul, Gemm, Add, Sub, Mul, Neg, Identity,
+ * Supported forward operators: MatMul, Gemm, Add, Sub, Mul, Div, Neg, Identity,
  * Relu, ReduceSum, ReduceMean, Reshape, Transpose, Sigmoid, Tanh.
  *
  * @param nodes        The forward computation nodes in topological order.
- * @param inputs       Names of all graph inputs (for documentation; unused by
- *                     the algorithm itself).
+ * @param inputs       Names of all graph inputs.  Accepted for API completeness;
+ *                     unused by the current algorithm but reserved for future
+ *                     use (e.g. gradient pruning based on graph-input status).
  * @param initializers Constant tensors embedded in the forward graph.
  * @param xs           Variable names to differentiate with respect to.
  * @param y            The output tensor name whose gradient is computed.

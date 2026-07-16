@@ -42,14 +42,17 @@ The returned FunctionProto has:
 * outputs – one gradient tensor per element of *xs*, named ``"grad_<x>"``.
 
 Supported forward operators: MatMul, Gemm, Add, Sub, Mul, Div, Neg, Identity,
-Relu, Sigmoid, Tanh, ReduceSum, ReduceMean, Reshape, Transpose.
+Relu, ReduceSum, ReduceMean, Reshape, Transpose, Sigmoid, Tanh.
 
 Parameters
 ----------
 nodes : list[NodeProto]
     The forward computation nodes in topological order.
 inputs : list[str]
-    Names of all graph inputs (informational; unused by the algorithm).
+    Names of all graph inputs.  This parameter is accepted for API symmetry
+    with the C++ ``GradientOfNodes`` signature; it is not used by the
+    current autodiff algorithm but is reserved for future use (e.g.
+    distinguishing graph inputs from initializers during gradient pruning).
 initializers : list[TensorProto]
     Constant tensors embedded in the forward graph.
 xs : list[str]

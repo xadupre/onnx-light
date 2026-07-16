@@ -60,7 +60,7 @@ except ImportError as exc:
     raise ImportError(
         "The onnx_gradient bindings are only available in the extended build "
         "(ONNX_LIGHT_BUILD_KERNELS=ON / full wheel).  "
-        "Install the full onnx-light wheel to use this module."
+        "Install the full onnx-light wheel with: pip install onnx-light"
     ) from exc
 
 __all__ = ["gradient_of_function", "gradient_of_nodes"]

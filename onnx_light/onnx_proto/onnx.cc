@@ -582,7 +582,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
       if (entry.ref_key() == "location") {
         EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
         {
-          std::filesystem::path loc_path(entry.ref_value());
+          std::filesystem::path loc_path(entry.ref_value().sv());
           auto normalized = loc_path.lexically_normal();
           auto parent = normalized.parent_path();
           EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
@@ -698,7 +698,7 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       EXT_ENFORCE(!external_data[0].ref_value().empty(),
                   "External data location must not be empty.");
       {
-        std::filesystem::path loc_path(external_data[0].ref_value());
+        std::filesystem::path loc_path(external_data[0].ref_value().sv());
         auto normalized = loc_path.lexically_normal();
         auto parent = normalized.parent_path();
         EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
@@ -725,7 +725,7 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
         if (entry.ref_key() == "location") {
           EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
           {
-            std::filesystem::path loc_path(entry.ref_value());
+            std::filesystem::path loc_path(entry.ref_value().sv());
             auto normalized = loc_path.lexically_normal();
             auto parent = normalized.parent_path();
             EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),

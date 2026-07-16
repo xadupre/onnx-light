@@ -70,8 +70,10 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode mode) {
   graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey,
                       "{\"S\":\"shape\",\"X\":\"weight\",\"Y\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "shape");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kValueTagMetadataKey, "shape");
   // Reshape (node[1]) inherits "weight" from its first input X.
   (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kValueTagMetadataKey, "weight");
   // S (value_info[0]) also receives onnx_light.value_tag = "shape".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
@@ -168,8 +170,10 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry, TestMode mo
   graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey,
                       "{\"S\":\"shape\",\"X\":\"weight\",\"Y\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "shape");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kValueTagMetadataKey, "shape");
   // Reshape (node[1]) inherits "weight" from X.
   (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kValueTagMetadataKey, "weight");
   // S (value_info[0]) receives onnx_light.value_tag = "shape".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
@@ -305,14 +309,24 @@ void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &regist
       "\"two\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey,
                                            "shape"); // Constant → S1
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kValueTagMetadataKey,
+                                           "shape"); // Constant → S1
   (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey,
+                                           "weight"); // Constant → two
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kValueTagMetadataKey,
                                            "weight"); // Constant → two
   (*graph->mutable_node())[2].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey,
                                            "shape"); // Mul
+  (*graph->mutable_node())[2].add_metadata(onnx_optim::annotations::kValueTagMetadataKey,
+                                           "shape"); // Mul
   (*graph->mutable_node())[3].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey,
+                                           "shape"); // Concat
+  (*graph->mutable_node())[3].add_metadata(onnx_optim::annotations::kValueTagMetadataKey,
                                            "shape"); // Concat
   // node[4] (Reshape) inherits "weight" from X.
   (*graph->mutable_node())[4].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey,
+                                           "weight"); // Reshape
+  (*graph->mutable_node())[4].add_metadata(onnx_optim::annotations::kValueTagMetadataKey,
                                            "weight"); // Reshape
 
   // S1 (value_info[0]) → "shape".
@@ -416,6 +430,7 @@ void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry, TestMod
   graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey,
                       "{\"X\":\"weight\",\"Y\":\"shape\"}");
   (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "shape");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kValueTagMetadataKey, "shape");
   // X (input[0]) receives onnx_light.value_tag = "weight".
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
@@ -492,6 +507,7 @@ void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry, Test
   graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey,
                       "{\"C\":\"weight\",\"KH\":\"weight\",\"PAST\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kValueTagMetadataKey, "weight");
   // PAST (input[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
@@ -580,7 +596,9 @@ void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry, TestMode
   graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey,
                       "{\"W\":\"weight\",\"X\":\"weight\",\"Y\":\"weight\",\"Z\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kValueTagMetadataKey, "weight");
   (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kValueTagMetadataKey, "weight");
   // X (input[0]) → "weight" (via Cast backward).
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
@@ -681,7 +699,9 @@ void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry, TestM
       onnx_optim::annotations::kValueTagsMetadataKey,
       "{\"S\":\"shape\",\"W\":\"weight\",\"X\":\"weight\",\"Y\":\"weight\",\"Z\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kValueTagMetadataKey, "weight");
   (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kValueTagMetadataKey, "weight");
   // X (input[0]) → "weight" (via Reshape backward).
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();

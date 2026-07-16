@@ -1,26 +1,19 @@
 name: ci-1-core
 
 on:
-  workflow_run:
-    workflows: ["ci-debug-ubuntu"]
-    types: [completed]
-
-# Minimal read-only permissions for the GITHUB_TOKEN in every job that does
-# not declare its own permissions block.  workflow_run workflows inherit the
-# permissions of the default branch, so explicitly declaring read-only access
-# here prevents accidental privilege escalation via checked-out PR code.
-permissions:
-  contents: read
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   changes:
     name: detect changes
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
     outputs:
@@ -28,15 +21,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-          persist-credentials: false
       - name: Detect doc-only changes
         id: filter
         shell: bash
         env:
-          BASE_REF: ${{ github.event.workflow_run.pull_requests[0].base.sha }}
-          HEAD_REF: ${{ github.event.workflow_run.head_sha }}
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           if [ -n "${BASE_REF}" ]; then
             base_sha="${BASE_REF}"
@@ -69,16 +60,12 @@ jobs:
     # schema / shape-inference / manipulation layers that ship in the reduced
     # build. Mirrors .github/workflows/build_reduced_wheel.yml's configure flags.
     name: reduced (ubuntu-latest, py3.13)
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
@@ -118,9 +105,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
@@ -159,9 +143,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
@@ -212,9 +193,6 @@ jobs:
         python-version: ["3.13"]
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -271,9 +249,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
 
       - name: Configure 32-bit CMake build
         run: |

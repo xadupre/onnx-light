@@ -8,6 +8,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_gradient {
@@ -24,10 +25,21 @@ using GradFn = std::function<bool(const NodeProto &node, const std::string &outp
                                   std::unordered_map<std::string, std::string> &grad_accum,
                                   int &counter, FunctionProto &func)>;
 
+/** Hash functor for std::pair<std::string, std::string> registry keys. */
+struct PairStringHash {
+  std::size_t operator()(const std::pair<std::string, std::string> &p) const noexcept {
+    std::size_t h1 = std::hash<std::string>{}(p.first);
+    std::size_t h2 = std::hash<std::string>{}(p.second);
+    return h1 ^ (h2 * 2654435761ULL + 0x9e3779b9ULL + (h1 << 6) + (h1 >> 2));
+  }
+};
+
 /**
- * Represents a mapping from op_type strings to their corresponding GradFn implementations.
+ * Represents a mapping from (domain, op_type) pairs to their corresponding GradFn
+ * implementations.  The empty string "" denotes the default ONNX operator domain.
  */
-using GradRegistry = std::unordered_map<std::string, GradFn>;
+using GradRegistry =
+    std::unordered_map<std::pair<std::string, std::string>, GradFn, PairStringHash>;
 
 /**
  * Returns a reference to the built-in gradient registry.
@@ -39,16 +51,19 @@ using GradRegistry = std::unordered_map<std::string, GradFn>;
 const GradRegistry &DefaultGradRegistry();
 
 /**
- * Registers a custom backward function for @p op_type in @p registry.
+ * Registers a custom backward function for (@p domain, @p op_type) in @p registry.
  *
- * Inserts or replaces the entry for @p op_type.  Pass a copy of
+ * Inserts or replaces the entry for the given key.  Pass a copy of
  * DefaultGradRegistry() to extend the built-in set while keeping the defaults.
+ * Use an empty string for @p domain to denote the default ONNX operator domain.
  *
+ * @param domain   The operator domain (e.g. "" for standard ONNX, "com.example" for custom).
  * @param op_type  The ONNX operator type name (e.g. "MyCustomOp").
  * @param fn       The backward function implementing the gradient rule.
  * @param registry The registry to insert into.
  */
-void RegisterGradientFunction(const std::string &op_type, GradFn fn, GradRegistry &registry);
+void RegisterGradientFunction(const std::string &domain, const std::string &op_type, GradFn fn,
+                              GradRegistry &registry);
 
 /**
  * Applies the backward rule for @p node using @p registry.
@@ -58,7 +73,8 @@ void RegisterGradientFunction(const std::string &op_type, GradFn fn, GradRegistr
  * @p grad_accum.  New nodes are appended to @p func.  @p counter is used to
  * generate unique intermediate names.
  *
- * @throws std::runtime_error if @p node carries an op_type not found in @p registry.
+ * Raises an exception if the (domain, op_type) of @p node is not found in
+ * @p registry, as the whole gradient computation would be incorrect.
  */
 void ApplyBackward(const NodeProto &node,
                    const std::unordered_map<std::string, std::string> &grad_table,

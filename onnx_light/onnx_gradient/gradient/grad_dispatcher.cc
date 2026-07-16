@@ -7,9 +7,7 @@
 #include "onnx_gradient/gradient/nn/include_nn_grads.h"
 #include "onnx_gradient/gradient/reduction/include_reduction_grads.h"
 #include "onnx_gradient/gradient/tensor/include_tensor_grads.h"
-
-#include <sstream>
-#include <stdexcept>
+#include "onnx_light_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_gradient {
@@ -17,28 +15,29 @@ namespace onnx_gradient {
 const GradRegistry &DefaultGradRegistry() {
   static const GradRegistry kRegistry = [] {
     GradRegistry r;
-    r["Add"] = GradAdd;
-    r["Div"] = GradDiv;
-    r["Gemm"] = GradGemm;
-    r["Identity"] = GradIdentity;
-    r["MatMul"] = GradMatMul;
-    r["Mul"] = GradMul;
-    r["Neg"] = GradNeg;
-    r["ReduceMean"] = GradReduceMean;
-    r["ReduceSum"] = GradReduceSum;
-    r["Relu"] = GradRelu;
-    r["Reshape"] = GradReshape;
-    r["Sigmoid"] = GradSigmoid;
-    r["Sub"] = GradSub;
-    r["Tanh"] = GradTanh;
-    r["Transpose"] = GradTranspose;
+    r[{"", "Add"}] = GradAdd;
+    r[{"", "Div"}] = GradDiv;
+    r[{"", "Gemm"}] = GradGemm;
+    r[{"", "Identity"}] = GradIdentity;
+    r[{"", "MatMul"}] = GradMatMul;
+    r[{"", "Mul"}] = GradMul;
+    r[{"", "Neg"}] = GradNeg;
+    r[{"", "ReduceMean"}] = GradReduceMean;
+    r[{"", "ReduceSum"}] = GradReduceSum;
+    r[{"", "Relu"}] = GradRelu;
+    r[{"", "Reshape"}] = GradReshape;
+    r[{"", "Sigmoid"}] = GradSigmoid;
+    r[{"", "Sub"}] = GradSub;
+    r[{"", "Tanh"}] = GradTanh;
+    r[{"", "Transpose"}] = GradTranspose;
     return r;
   }();
   return kRegistry;
 }
 
-void RegisterGradientFunction(const std::string &op_type, GradFn fn, GradRegistry &registry) {
-  registry[op_type] = std::move(fn);
+void RegisterGradientFunction(const std::string &domain, const std::string &op_type, GradFn fn,
+                              GradRegistry &registry) {
+  registry[{domain, op_type}] = std::move(fn);
 }
 
 void ApplyBackward(const NodeProto &node,
@@ -57,13 +56,11 @@ void ApplyBackward(const NodeProto &node,
   if (output_grad.empty())
     return; // no gradient flows through this node
 
+  const std::string domain = node.domain().as_string();
   const std::string op_type = node.op_type().as_string();
-  auto it = registry.find(op_type);
-  if (it == registry.end()) {
-    std::ostringstream oss;
-    oss << "onnx_gradient: unsupported op_type '" << op_type << "'";
-    throw std::runtime_error(oss.str());
-  }
+  auto it = registry.find({domain, op_type});
+  EXT_ENFORCE(it != registry.end(), "onnx_gradient: no gradient function registered for domain='",
+              domain, "' op_type='", op_type, "'");
   it->second(node, output_grad, grad_accum, counter, func);
 }
 

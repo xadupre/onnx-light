@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_gradient/gradient/math/grad_gemm.h"
 #include "onnx_gradient/gradient/grad_common.h"
+#include "onnx_gradient/gradient/math/include_math_grads.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

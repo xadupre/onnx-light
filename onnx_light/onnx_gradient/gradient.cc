@@ -4,11 +4,10 @@
 
 #include "onnx_gradient/gradient.h"
 #include "onnx_gradient/gradient/grad_dispatcher.h"
+#include "onnx_light_helpers.h"
 #include "onnx_proto/onnx_helper.h"
 #include <algorithm>
 #include <functional>
-#include <sstream>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -71,18 +70,13 @@ FunctionProto ComputeGradient(NodeIt nodes_begin, NodeIt nodes_end, StrIt xs_beg
                               const std::string &y, StrIt zs_begin, StrIt zs_end,
                               const std::string &func_domain, const std::string &func_name,
                               const GradRegistry &registry) {
-  if (xs_begin == xs_end)
-    throw std::invalid_argument("onnx_gradient: xs must not be empty");
-  if (y.empty())
-    throw std::invalid_argument("onnx_gradient: y must not be empty");
+  EXT_ENFORCE_INVALID(xs_begin != xs_end, "onnx_gradient: xs must not be empty");
+  EXT_ENFORCE_INVALID(!y.empty(), "onnx_gradient: y must not be empty");
 
   auto output_map = BuildOutputToNodeIndex(nodes_begin, nodes_end);
 
-  if (output_map.find(y) == output_map.end()) {
-    std::ostringstream oss;
-    oss << "onnx_gradient: output '" << y << "' is not produced by any node";
-    throw std::invalid_argument(oss.str());
-  }
+  EXT_ENFORCE_INVALID(output_map.find(y) != output_map.end(), "onnx_gradient: output '", y,
+                      "' is not produced by any node");
 
   auto topo_order = TopologicalOrder(nodes_begin, nodes_end, y, output_map);
 
@@ -127,11 +121,7 @@ FunctionProto ComputeGradient(NodeIt nodes_begin, NodeIt nodes_end, StrIt xs_beg
   for (auto it = xs_begin; it != xs_end; ++it) {
     const std::string &x = *it;
     auto git = grad_table.find(x);
-    if (git == grad_table.end()) {
-      std::ostringstream oss;
-      oss << "onnx_gradient: no gradient was computed for '" << x << "'";
-      throw std::runtime_error(oss.str());
-    }
+    EXT_ENFORCE(git != grad_table.end(), "onnx_gradient: no gradient was computed for '", x, "'");
     const std::string out_name = "grad_" + x;
     if (git->second != out_name) {
       func.add_node("Identity", {git->second}, {out_name});

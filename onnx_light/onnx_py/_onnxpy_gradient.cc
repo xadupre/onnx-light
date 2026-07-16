@@ -23,8 +23,8 @@ void AddOnnxPyGradient(nb::module_ &m) {
   // Expose GradRegistry as an opaque class so Python code can create a
   // customised copy of the default registry and pass it to the gradient
   // functions.
-  nb::class_<onnx_gradient::GradRegistry>(m, "GradRegistry",
-                                          "Maps op_type strings to backward gradient functions.")
+  nb::class_<onnx_gradient::GradRegistry>(
+      m, "GradRegistry", "Maps (domain, op_type) pairs to backward gradient functions.")
       .def(nb::init<>(), "Creates an empty registry.")
       .def_static(
           "default",
@@ -36,9 +36,10 @@ void AddOnnxPyGradient(nb::module_ &m) {
 
   m.def(
       "register_gradient_function",
-      [](const std::string &op_type, nb::callable fn, onnx_gradient::GradRegistry &registry) {
+      [](const std::string &domain, const std::string &op_type, nb::callable fn,
+         onnx_gradient::GradRegistry &registry) {
         onnx_gradient::RegisterGradientFunction(
-            op_type,
+            domain, op_type,
             // Capture fn by value so the GradFn closure keeps the Python callable alive
             // beyond the scope of register_gradient_function.
             [fn](const NodeProto &node, const std::string &output_grad,
@@ -49,9 +50,9 @@ void AddOnnxPyGradient(nb::module_ &m) {
             },
             registry);
       },
-      nb::arg("op_type"), nb::arg("fn"), nb::arg("registry"),
+      nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"), nb::arg("registry"),
       R"doc(
-Registers a custom backward function for *op_type* in *registry*.
+Registers a custom backward function for (*domain*, *op_type*) in *registry*.
 
 The callable *fn* must have the signature::
 
@@ -63,6 +64,8 @@ The callable *fn* must have the signature::
 
 Parameters
 ----------
+domain : str
+    The operator domain (e.g. ``""`` for standard ONNX, ``"com.example"`` for custom ops).
 op_type : str
     The ONNX operator type name (e.g. ``"MyCustomOp"``).
 fn : callable

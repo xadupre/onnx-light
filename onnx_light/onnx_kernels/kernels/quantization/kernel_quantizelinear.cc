@@ -141,6 +141,27 @@ void QuantizeAxisLoop(const Tensor &x, const float *scales, const ZP *zp_data, i
   }
 }
 
+// Per-axis quantization loop with zero zero-point (symmetric).
+template <typename ZP>
+void QuantizeAxisLoopSymmetric(const Tensor &x, const float *scales, int64_t inner_stride,
+                               int64_t axis_size, Tensor &output) {
+  const float *px = x.AsFloat();
+  ZP *py = reinterpret_cast<ZP *>(output.mutable_bytes());
+  const int64_t n = x.element_count();
+  constexpr float kMin = static_cast<float>(std::numeric_limits<ZP>::min());
+  constexpr float kMax = static_cast<float>(std::numeric_limits<ZP>::max());
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t axis_idx = (i / inner_stride) % axis_size;
+    float v = RoundHalfToEven(px[i] / scales[axis_idx]);
+    if (v < kMin) {
+      v = kMin;
+    } else if (v > kMax) {
+      v = kMax;
+    }
+    py[i] = static_cast<ZP>(v);
+  }
+}
+
 // Per-axis quantization for 4-bit (INT4/UINT4) packed output.
 void QuantizeAxisInt4Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
                           int32_t out_dtype, int64_t inner_stride, int64_t axis_size,
@@ -299,6 +320,27 @@ void QuantizeBlockLoop(const Tensor &x, const float *scales, const ZP *zp_data,
     const int64_t si = scale_index[i];
     const float zp = static_cast<float>(zp_data[si]);
     float v = RoundHalfToEven(px[i] / scales[si]) + zp;
+    if (v < kMin) {
+      v = kMin;
+    } else if (v > kMax) {
+      v = kMax;
+    }
+    py[i] = static_cast<ZP>(v);
+  }
+}
+
+// Per-block quantization for whole-byte integer output types with zero zero-point (symmetric).
+template <typename ZP>
+void QuantizeBlockLoopSymmetric(const Tensor &x, const float *scales, const int64_t *scale_index,
+                                Tensor &output) {
+  const float *px = x.AsFloat();
+  ZP *py = reinterpret_cast<ZP *>(output.mutable_bytes());
+  const int64_t n = x.element_count();
+  constexpr float kMin = static_cast<float>(std::numeric_limits<ZP>::min());
+  constexpr float kMax = static_cast<float>(std::numeric_limits<ZP>::max());
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t si = scale_index[i];
+    float v = RoundHalfToEven(px[i] / scales[si]);
     if (v < kMin) {
       v = kMin;
     } else if (v > kMax) {
@@ -751,42 +793,24 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_t 
 
   RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
   const float *scales = y_scale.AsFloat();
-  const int64_t n_scale = y_scale.element_count();
 
   if (!blocked) {
-    // Per-axis symmetric: use QuantizeAxisLoop with a zero ZP buffer.
-    // This avoids a simultaneous scale_index buffer + ZP buffer allocation.
+    // Per-axis symmetric: zero-point is always zero, no temporary buffer needed.
     const int64_t inner_stride = ComputeInnerStride(x.shape, axis);
     const int64_t axis_size = x.shape[static_cast<std::size_t>(axis)];
     switch (output.data_type) {
-    case static_cast<int32_t>(DataType::UINT8): {
-      detail::TemporaryTypedBuffer<uint8_t> zp(static_cast<std::size_t>(n_scale), allocator,
-                                               "kernel::QuantizeLinear: symmetric zero-point");
-      zp.ZeroFill();
-      QuantizeAxisLoop<uint8_t>(x, scales, zp.data(), inner_stride, axis_size, output);
+    case static_cast<int32_t>(DataType::UINT8):
+      QuantizeAxisLoopSymmetric<uint8_t>(x, scales, inner_stride, axis_size, output);
       return;
-    }
-    case static_cast<int32_t>(DataType::INT8): {
-      detail::TemporaryTypedBuffer<int8_t> zp(static_cast<std::size_t>(n_scale), allocator,
-                                              "kernel::QuantizeLinear: symmetric zero-point");
-      zp.ZeroFill();
-      QuantizeAxisLoop<int8_t>(x, scales, zp.data(), inner_stride, axis_size, output);
+    case static_cast<int32_t>(DataType::INT8):
+      QuantizeAxisLoopSymmetric<int8_t>(x, scales, inner_stride, axis_size, output);
       return;
-    }
-    case static_cast<int32_t>(DataType::UINT16): {
-      detail::TemporaryTypedBuffer<uint16_t> zp(static_cast<std::size_t>(n_scale), allocator,
-                                                "kernel::QuantizeLinear: symmetric zero-point");
-      zp.ZeroFill();
-      QuantizeAxisLoop<uint16_t>(x, scales, zp.data(), inner_stride, axis_size, output);
+    case static_cast<int32_t>(DataType::UINT16):
+      QuantizeAxisLoopSymmetric<uint16_t>(x, scales, inner_stride, axis_size, output);
       return;
-    }
-    case static_cast<int32_t>(DataType::INT16): {
-      detail::TemporaryTypedBuffer<int16_t> zp(static_cast<std::size_t>(n_scale), allocator,
-                                               "kernel::QuantizeLinear: symmetric zero-point");
-      zp.ZeroFill();
-      QuantizeAxisLoop<int16_t>(x, scales, zp.data(), inner_stride, axis_size, output);
+    case static_cast<int32_t>(DataType::INT16):
+      QuantizeAxisLoopSymmetric<int16_t>(x, scales, inner_stride, axis_size, output);
       return;
-    }
     default:
       EXT_THROW_INVALID("unsupported data type ", output.data_type, ", ",
                         "kernel::QuantizeLinear (symmetric per-axis): unsupported output dtype.");
@@ -800,35 +824,20 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_t 
   ComputeScaleIndex(x, y_scale, axis, scale_index_buf.data());
   const int64_t *idx = scale_index_buf.data();
 
+  // Symmetric case: zero-point is always zero, no temporary buffer needed.
   switch (output.data_type) {
-  case static_cast<int32_t>(DataType::UINT8): {
-    detail::TemporaryTypedBuffer<uint8_t> zp(static_cast<std::size_t>(n_scale), allocator,
-                                             "kernel::QuantizeLinear: symmetric zero-point");
-    zp.ZeroFill();
-    QuantizeBlockLoop<uint8_t>(x, scales, zp.data(), idx, output);
+  case static_cast<int32_t>(DataType::UINT8):
+    QuantizeBlockLoopSymmetric<uint8_t>(x, scales, idx, output);
     break;
-  }
-  case static_cast<int32_t>(DataType::INT8): {
-    detail::TemporaryTypedBuffer<int8_t> zp(static_cast<std::size_t>(n_scale), allocator,
-                                            "kernel::QuantizeLinear: symmetric zero-point");
-    zp.ZeroFill();
-    QuantizeBlockLoop<int8_t>(x, scales, zp.data(), idx, output);
+  case static_cast<int32_t>(DataType::INT8):
+    QuantizeBlockLoopSymmetric<int8_t>(x, scales, idx, output);
     break;
-  }
-  case static_cast<int32_t>(DataType::UINT16): {
-    detail::TemporaryTypedBuffer<uint16_t> zp(static_cast<std::size_t>(n_scale), allocator,
-                                              "kernel::QuantizeLinear: symmetric zero-point");
-    zp.ZeroFill();
-    QuantizeBlockLoop<uint16_t>(x, scales, zp.data(), idx, output);
+  case static_cast<int32_t>(DataType::UINT16):
+    QuantizeBlockLoopSymmetric<uint16_t>(x, scales, idx, output);
     break;
-  }
-  case static_cast<int32_t>(DataType::INT16): {
-    detail::TemporaryTypedBuffer<int16_t> zp(static_cast<std::size_t>(n_scale), allocator,
-                                             "kernel::QuantizeLinear: symmetric zero-point");
-    zp.ZeroFill();
-    QuantizeBlockLoop<int16_t>(x, scales, zp.data(), idx, output);
+  case static_cast<int32_t>(DataType::INT16):
+    QuantizeBlockLoopSymmetric<int16_t>(x, scales, idx, output);
     break;
-  }
   default:
     EXT_THROW_INVALID("unsupported data type ", output.data_type, ", ",
                       "kernel::QuantizeLinear (symmetric blocked): unsupported output dtype.");

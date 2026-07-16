@@ -219,7 +219,7 @@ void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &
       continue;
     }
     Tensor t = outputs[i];
-    t.name.assign(caller_sv.data(), caller_sv.size());
+    t.name = std::string(caller_sv);
     rt.Put(caller_sv, std::move(t), RuntimeEventKind::kOutput);
   }
 }
@@ -267,7 +267,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '",
                           std::string(out_name), "' was not produced by the selected branch.");
       Tensor t = std::move(it->second);
-      t.name.assign(caller_sv.data(), caller_sv.size());
+      t.name = std::string(caller_sv);
       rt.Put(caller_sv, std::move(t), RuntimeEventKind::kOutput);
     }
   }
@@ -311,7 +311,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         child.PutSequence(bsv, sequence_state[i]);
       } else {
         Tensor t = tensor_state[i];
-        t.name.assign(bsv.data(), bsv.size());
+        t.name = std::string(bsv);
         child.Put(bsv, std::move(t), RuntimeEventKind::kInput);
       }
     }
@@ -367,7 +367,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       rt.PutSequence(caller_sv, sequence_state[i]);
     } else {
       Tensor t = tensor_state[i];
-      t.name.assign(caller_sv.data(), caller_sv.size());
+      t.name = std::string(caller_sv);
       rt.Put(caller_sv, std::move(t), RuntimeEventKind::kOutput);
     }
   }
@@ -752,7 +752,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
       } else {
         t = *additional_tensors[k];
       }
-      t.name.assign(param_sv.data(), param_sv.size());
+      t.name = std::string(param_sv);
       bindings.emplace_back(t.name, std::move(t));
     }
 
@@ -857,7 +857,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
                         "function '",
                         op_type, "' is missing from the tensor map.");
     Tensor bound = it->second;
-    bound.name.assign(param_sv.data(), param_sv.size());
+    bound.name = std::string(param_sv);
     child.Put(param_sv, std::move(bound), RuntimeEventKind::kInput);
   }
 
@@ -899,7 +899,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
                         "' of model-local function '", op_type,
                         "' was not produced by the function body.");
     Tensor result = std::move(it->second);
-    result.name.assign(caller_sv.data(), caller_sv.size());
+    result.name = std::string(caller_sv);
     rt.Put(caller_sv, std::move(result), RuntimeEventKind::kOutput);
   }
 }
@@ -961,9 +961,9 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   } else {
     std::string key;
     key.reserve(domain.size() + 1 + op_type_sv.size());
-    key = domain;
+    key.append(domain);
     key += ':';
-    key += op_type_sv;
+    key.append(op_type_sv);
     // User-registered custom kernels take precedence over built-in
     // kernel dispatch table entries so callers can override (or
     // extend) the runtime with their own implementations.

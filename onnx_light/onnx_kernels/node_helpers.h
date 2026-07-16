@@ -76,7 +76,7 @@ inline void SetOutput(const NodeProto &node, int index, Tensor result, TensorMap
   auto name_sv = node.output(index).sv();
   EXT_ENFORCE_INVALID(!(name_sv.empty()), "RunNode: op '", node.op_type(), "' output #", index,
                       " is unset (empty name).");
-  result.name.assign(name_sv.data(), name_sv.size());
+  result.name = std::string(name_sv);
   tensors[result.name] = std::move(result);
 }
 
@@ -86,7 +86,7 @@ inline void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeCo
   auto name_sv = node.output(index).sv();
   EXT_ENFORCE_INVALID(!(name_sv.empty()), "RunNode: op '", node.op_type(), "' output #", index,
                       " is unset (empty name).");
-  result.name.assign(name_sv.data(), name_sv.size());
+  result.name = std::string(name_sv);
   rt.Put(name_sv, std::move(result), RuntimeEventKind::kIntermediate);
 }
 

@@ -737,7 +737,7 @@ public:
   /// is appended to the event log: sequence values are intentionally
   /// outside the tensor event stream.
   void PutSequence(std::string_view name, Sequence sequence) {
-    sequence.name.assign(name.data(), name.size());
+    sequence.name = std::string(name);
     sequences_[sequence.name] = std::move(sequence);
   }
 
@@ -770,7 +770,7 @@ public:
 
   /// Inserts or overwrites the map stored under ``name``.
   void PutMap(std::string_view name, Map map) {
-    map.name.assign(name.data(), name.size());
+    map.name = std::string(name);
     maps_[map.name] = std::move(map);
   }
 

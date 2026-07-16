@@ -304,6 +304,12 @@ LightOpSchema MakeCastSchema(int since_version, const std::vector<TensorType> &t
       {
           {"T1", types, MakeCastInputTypeConstraintDescription(since_version)},
           {"T2", types, MakeCastOutputTypeConstraintDescription(since_version)},
+      },
+      {
+          {"to",
+           "The data type to which the elements of the input tensor are cast. "
+           "Strictly must be one of the types from DataType enum in TensorProto.",
+           AttributeType::INT, /*required=*/true, std::monostate{}},
       });
 }
 
@@ -358,16 +364,23 @@ LightOpSchema MakeCastLikeSchema(int since_version, const std::vector<TensorType
 }
 
 LightOpSchema MakeConcatSchema(int since_version, const std::vector<TensorType> &types) {
-  return LightOpSchema("Concat", kOnnxDomain, since_version, MakeConcatDoc(since_version),
-                       {
-                           {"inputs", "List of tensors for concatenation", "T"},
-                       },
-                       {
-                           {"concat_result", "Concatenated tensor", "T"},
-                       },
-                       {
-                           {"T", types, MakeConcatTypeConstraintDescription(since_version)},
-                       });
+  return LightOpSchema(
+      "Concat", kOnnxDomain, since_version, MakeConcatDoc(since_version),
+      {
+          {"inputs", "List of tensors for concatenation", "T"},
+      },
+      {
+          {"concat_result", "Concatenated tensor", "T"},
+      },
+      {
+          {"T", types, MakeConcatTypeConstraintDescription(since_version)},
+      },
+      {
+          {"axis",
+           "Which axis to concat on. A negative value means counting dimensions from the back. "
+           "Accepted range is [-r, r-1] where r = rank(input tensor).",
+           AttributeType::INT, /*required=*/true, std::monostate{}},
+      });
 }
 
 LightOpSchema MakeExpandSchema(int since_version, const std::vector<TensorType> &types) {

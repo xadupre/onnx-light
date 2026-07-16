@@ -2590,9 +2590,71 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
   EXPECT_FLOAT_EQ(scan[2], 3.0f);
 }
 
-// RunLoopWithSequenceState: a Loop whose only loop-carried state is a
-// sequence. Each body iteration appends ``(float)iter`` to the sequence
-// via SequenceInsert, so a trip count of 3 yields ``[0, 1, 2]``.
+// Variant of LoopNodeRunsBodySubgraph with a SimpleRawBufferAllocator. Verifies
+// that iter/cond scalars produced by MakeInt64Scalar/MakeBoolScalar in the
+// run_body lambda are allocated from rt.allocator() and that subgraph contexts
+// created inside RunSubgraph do not inherit the allocator, preventing double-free
+// of body-output tensors threaded as loop-carried state across iterations.
+TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *loop = g->add_node();
+  loop->set_op_type("Loop");
+  loop->add_input("M");
+  loop->add_input("cond");
+  loop->add_input("s_init");
+  loop->add_output("s_final");
+  loop->add_output("scan");
+
+  AttributeProto *body_attr = loop->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->add_g();
+  body->set_name("loop_body");
+  body->add_input()->set_name("iter");
+  body->add_input()->set_name("cond_in");
+  body->add_input()->set_name("s_in");
+  TensorProto *one = body->add_initializer();
+  one->set_name("one");
+  one->set_data_type(TensorProto::DataType::FLOAT);
+  one->add_float_data(1.0f);
+  NodeProto *add = body->add_node();
+  add->set_op_type("Add");
+  add->add_input("s_in");
+  add->add_input("one");
+  add->add_output("s_out");
+  body->add_output()->set_name("cond_in");
+  body->add_output()->set_name("s_out");
+  body->add_output()->set_name("s_out");
+
+  // Two slots: iter+cond scalars during each iteration (freed when the child
+  // context is destroyed) and then s_final+scan after the loop.
+  constexpr size_t kAllocatorSlotCapacity = 2;
+  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_allocator(&alloc);
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("s_final"));
+  ASSERT_TRUE(rt.Has("scan"));
+  EXPECT_FLOAT_EQ(rt.Get("s_final").AsFloat()[0], 3.0f);
+  ASSERT_EQ(rt.Get("scan").shape, (std::vector<int64_t>{3}));
+  const float *scan = rt.Get("scan").AsFloat();
+  EXPECT_FLOAT_EQ(scan[0], 1.0f);
+  EXPECT_FLOAT_EQ(scan[1], 2.0f);
+  EXPECT_FLOAT_EQ(scan[2], 3.0f);
+}
+
 TEST(RunLoopWithSequenceState, SequenceOnlyStateGrowsPerIteration) {
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
@@ -2636,6 +2698,49 @@ TEST(RunLoopWithSequenceState, ZeroTripReturnsInputSequence) {
 // the tensor-state, sequence-state and scan-stacking paths together.
 TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
+  rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+
+  RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},
+                       BuildMixedSequenceLoopBody()),
+          rt);
+
+  ASSERT_TRUE(rt.Has("acc_final"));
+  EXPECT_FLOAT_EQ(rt.Get("acc_final").AsFloat()[0], 3.0f);
+
+  ASSERT_TRUE(rt.HasSequence("seq_final"));
+  const Sequence &seq = rt.GetSequence("seq_final");
+  ASSERT_EQ(seq.size(), 3u);
+  for (std::size_t i = 0; i < seq.size(); ++i) {
+    EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(i));
+  }
+
+  ASSERT_TRUE(rt.Has("scan"));
+  const Tensor &scan = rt.Get("scan");
+  ASSERT_EQ(scan.shape, (std::vector<int64_t>{3}));
+  const float *scan_data = scan.AsFloat();
+  EXPECT_FLOAT_EQ(scan_data[0], 1.0f);
+  EXPECT_FLOAT_EQ(scan_data[1], 2.0f);
+  EXPECT_FLOAT_EQ(scan_data[2], 3.0f);
+}
+
+// RunLoopWithSequenceState: same as MixedTensorSequenceAndScanOutputs but with a
+// SimpleRawBufferAllocator attached to the RuntimeContext. Verifies that iter/cond
+// scalars are allocated from the parent allocator (not the child context) and that
+// the child context not inheriting the allocator prevents double-free of tensors
+// extracted from the child after it is destroyed.
+TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
+  // Two simultaneous slots are needed: iter and cond scalars are allocated from
+  // rt.allocator() during each iteration and freed when the child context is
+  // destroyed. After the loop, the tensor state output and the stacked scan
+  // output each occupy one slot.
+  constexpr size_t kAllocatorSlotCapacity = 2;
+  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.set_allocator(&alloc);
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));

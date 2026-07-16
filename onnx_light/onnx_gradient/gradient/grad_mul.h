@@ -14,7 +14,7 @@ namespace onnx_gradient {
 /**
  * Applies the backward rule for the Mul operator.
  *
- * C = A * B  →  dA = dC * B,  dB = dC * A
+ * C = A * B  →  dA = dC * B,  dB = dC * A.
  */
 bool GradMul(const NodeProto &node, const std::string &output_grad,
              std::unordered_map<std::string, std::string> &grad_accum, int &counter,

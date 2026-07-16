@@ -14,7 +14,7 @@ namespace onnx_gradient {
 /**
  * Applies the backward rule for the ReduceMean operator.
  *
- * Y = ReduceMean(X)  →  dX = Expand(dY, Shape(X)) / Size(X)
+ * Y = ReduceMean(X)  →  dX = Expand(dY, Shape(X)) / Size(X).
  */
 bool GradReduceMean(const NodeProto &node, const std::string &output_grad,
                     std::unordered_map<std::string, std::string> &grad_accum, int &counter,

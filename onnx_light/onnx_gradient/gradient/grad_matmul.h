@@ -14,7 +14,7 @@ namespace onnx_gradient {
 /**
  * Applies the backward rule for the MatMul operator.
  *
- * C = A @ B  →  dA = dC @ B^T,  dB = A^T @ dC
+ * C = A @ B  →  dA = dC @ B^T,  dB = A^T @ dC.
  */
 bool GradMatMul(const NodeProto &node, const std::string &output_grad,
                 std::unordered_map<std::string, std::string> &grad_accum, int &counter,

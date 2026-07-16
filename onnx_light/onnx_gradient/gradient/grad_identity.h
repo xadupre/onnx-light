@@ -14,7 +14,7 @@ namespace onnx_gradient {
 /**
  * Applies the backward rule for the Identity operator.
  *
- * C = A  →  dA = dC
+ * C = A  →  dA = dC.
  */
 bool GradIdentity(const NodeProto &node, const std::string &output_grad,
                   std::unordered_map<std::string, std::string> &grad_accum, int &counter,

@@ -14,7 +14,7 @@ namespace onnx_gradient {
 /**
  * Applies the backward rule for the Transpose operator.
  *
- * Y = Transpose(X, perm)  →  dX = Transpose(dY, inverse_perm)
+ * Y = Transpose(X, perm)  →  dX = Transpose(dY, inverse_perm).
  */
 bool GradTranspose(const NodeProto &node, const std::string &output_grad,
                    std::unordered_map<std::string, std::string> &grad_accum, int &counter,

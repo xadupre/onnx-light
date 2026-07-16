@@ -14,7 +14,7 @@ namespace onnx_gradient {
 /**
  * Applies the backward rule for the Relu operator.
  *
- * C = relu(A)  →  dA = dC * relu(sign(A))
+ * C = relu(A)  →  dA = dC * relu(sign(A)).
  */
 bool GradRelu(const NodeProto &node, const std::string &output_grad,
               std::unordered_map<std::string, std::string> &grad_accum, int &counter,

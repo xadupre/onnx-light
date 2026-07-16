@@ -14,7 +14,7 @@ namespace onnx_gradient {
 /**
  * Applies the backward rule for the Tanh operator.
  *
- * C = tanh(A)  →  dA = dC * (1 - C^2)
+ * C = tanh(A)  →  dA = dC * (1 - C^2).
  */
 bool GradTanh(const NodeProto &node, const std::string &output_grad,
               std::unordered_map<std::string, std::string> &grad_accum, int &counter,

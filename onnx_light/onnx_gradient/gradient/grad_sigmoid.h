@@ -14,7 +14,7 @@ namespace onnx_gradient {
 /**
  * Applies the backward rule for the Sigmoid operator.
  *
- * C = sigmoid(A)  →  dA = dC * C * (1 - C)
+ * C = sigmoid(A)  →  dA = dC * C * (1 - C).
  */
 bool GradSigmoid(const NodeProto &node, const std::string &output_grad,
                  std::unordered_map<std::string, std::string> &grad_accum, int &counter,

@@ -14,7 +14,7 @@ namespace onnx_gradient {
 /**
  * Applies the backward rule for the Reshape operator.
  *
- * Y = Reshape(X, shape)  →  dX = Reshape(dY, Shape(X))
+ * Y = Reshape(X, shape)  →  dX = Reshape(dY, Shape(X)).
  */
 bool GradReshape(const NodeProto &node, const std::string &output_grad,
                  std::unordered_map<std::string, std::string> &grad_accum, int &counter,

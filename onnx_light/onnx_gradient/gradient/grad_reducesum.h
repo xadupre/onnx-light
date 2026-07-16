@@ -14,7 +14,7 @@ namespace onnx_gradient {
 /**
  * Applies the backward rule for the ReduceSum operator.
  *
- * Y = ReduceSum(X)  →  dX = Expand(dY, Shape(X))
+ * Y = ReduceSum(X)  →  dX = Expand(dY, Shape(X)).
  */
 bool GradReduceSum(const NodeProto &node, const std::string &output_grad,
                    std::unordered_map<std::string, std::string> &grad_accum, int &counter,

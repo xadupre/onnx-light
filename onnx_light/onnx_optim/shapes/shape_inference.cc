@@ -783,7 +783,7 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
     return;
   }
   if (const ShapesContext::CustomComputeShapeFn *custom_shape_fn =
-          ctx.GetCustomShapeInferenceFunction(std::string(node.domain()), op_type);
+          ctx.GetCustomShapeInferenceFunction(node.domain(), op_type);
       custom_shape_fn != nullptr) {
     ctx.CheckInputsAvailable(node);
     ctx.CheckOutputsNotAvailable(node);

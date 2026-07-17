@@ -640,7 +640,7 @@ void ConvConverter(ExportContext &ctx, const NodeProto &node,
     throw NNEFExportError("Conv requires at least input and weight");
   const NNEFTensor *init_w = nullptr;
   if (node.input().size() >= 2) {
-    init_w = ctx.GetInitializer(std::string(node.input(1)));
+    init_w = ctx.GetInitializer(node.input(1));
   }
   int spatial_rank = 0;
   if (init_w != nullptr) {
@@ -712,7 +712,7 @@ void ReshapeConverter(ExportContext &ctx, const NodeProto &node,
                       const std::vector<std::string> &outputs) {
   const NNEFTensor *init = nullptr;
   if (node.input().size() >= 2)
-    init = ctx.GetInitializer(std::string(node.input(1)));
+    init = ctx.GetInitializer(node.input(1));
   if (init == nullptr)
     throw NNEFExportError("Reshape requires a constant shape initializer to export to NNEF");
   auto shape = NNEFTensorToInt64Vec(*init);
@@ -856,14 +856,14 @@ void ClipConverter(ExportContext &ctx, const NodeProto &node,
     has_hi = true;
   }
   if (!has_lo && inputs.size() >= 2) {
-    const NNEFTensor *init = ctx.GetInitializer(std::string(node.input(1)));
+    const NNEFTensor *init = ctx.GetInitializer(node.input(1));
     if (init == nullptr)
       throw NNEFExportError("Clip min must be a constant initializer for NNEF export");
     lo = NNEFTensorFirstScalarAsDouble(*init);
     has_lo = true;
   }
   if (!has_hi && inputs.size() >= 3) {
-    const NNEFTensor *init = ctx.GetInitializer(std::string(node.input(2)));
+    const NNEFTensor *init = ctx.GetInitializer(node.input(2));
     if (init == nullptr)
       throw NNEFExportError("Clip max must be a constant initializer for NNEF export");
     hi = NNEFTensorFirstScalarAsDouble(*init);

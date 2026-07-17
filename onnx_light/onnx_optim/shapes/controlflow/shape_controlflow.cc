@@ -257,8 +257,8 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &v_initial = ctx.Get(std::string(node.input(2 + i)));
-    const OptimTensor &v_out = local.Get(std::string(body.output()[1 + i].name()));
+    const OptimTensor &v_initial = ctx.Get(node.input(2 + i));
+    const OptimTensor &v_out = local.Get(body.output()[1 + i].name());
     EXT_ENFORCE_INVALID(v_out.Dtype() == v_initial.Dtype(), "ComputeShapeLoop: body output #",
                         std::to_string(1 + i),
                         " has a different element type than the matching 'v_initial' input.");
@@ -293,7 +293,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &scan_out = local.Get(std::string(body.output()[1 + n_carried + k].name()));
+    const OptimTensor &scan_out = local.Get(body.output()[1 + n_carried + k].name());
     OptimShape stacked;
     stacked.PushBack(trip_dim);
     for (std::size_t d = 0; d < scan_out.Shape().Rank(); ++d) {
@@ -519,7 +519,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &state_in = ctx.Get(std::string(node.input(scan8_offset + i)));
+    const OptimTensor &state_in = ctx.Get(node.input(scan8_offset + i));
     const OptimTensor &v_out = local.Get(body.output()[i].name());
     EXT_ENFORCE_INVALID(v_out.Dtype() == state_in.Dtype(), "ComputeShapeScan: body output #",
                         std::to_string(i),
@@ -551,7 +551,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &scan_out_elt = local.Get(std::string(body.output()[n_state + k].name()));
+    const OptimTensor &scan_out_elt = local.Get(body.output()[n_state + k].name());
     const OptimDim trip_dim =
         trip_count_known ? trip_count_dim : OptimDim(std::string("Scan_") + node_out + "_trip");
 

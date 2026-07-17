@@ -101,6 +101,11 @@ public:
   inline std::string_view sv() const { return std::string_view(data(), size()); }
   /** Parses the content as a signed 64-bit integer. */
   inline int64_t toint64() const { return RefString(data(), size()).toint64(); }
+  /** Returns a shared empty String, usable to bind a reference to a default value. */
+  static inline const String &empty_string() {
+    static const String kEmpty;
+    return kEmpty;
+  }
 };
 
 /**

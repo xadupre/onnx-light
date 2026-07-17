@@ -13,7 +13,7 @@ import onnx_light.onnx_op as op
 
 
 class TestLightOpVsDefsSchemaAttributes(ExtTestCase):
-    """Checks that LightOpSchema and registered onnx_light OpSchema share the same attributes.
+    """Verifies that LightOpSchema and registered onnx_light OpSchema share the same attributes.
 
     Both ``onnx_light.onnx_op.get_all_schemas_with_history()`` and
     ``onnx_light.onnx.defs.get_all_schemas_with_history()`` expose the same

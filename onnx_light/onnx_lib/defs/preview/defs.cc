@@ -69,7 +69,7 @@ large negative value appropriate for the target precision).
 
 // Returns true if the element type supports softmax computation.
 // Softmax requires floating-point types for numerical stability.
-static bool IsValidSoftmaxElementType(int32_t elem_type) {
+static constexpr bool IsValidSoftmaxElementType(int32_t elem_type) {
   switch (elem_type) {
   case TensorProto::FLOAT:
   case TensorProto::FLOAT16:

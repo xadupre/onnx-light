@@ -119,10 +119,9 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
 
 FunctionBodyHelper::NodeList FunctionBodyHelper::BuildNodes(const std::vector<NodeDef> &node_defs) {
   NodeList nodes;
-  nodes.Reserve(static_cast<int>(node_defs.size()));
+  nodes.reserve(node_defs.size());
 
-  for (size_t i = 0; i < node_defs.size(); i++) {
-    const NodeDef &node = node_defs[i];
+  for (const NodeDef &node : node_defs) {
     NodeProto &n = nodes.add();
 
     n.set_op_type(node.op_type);

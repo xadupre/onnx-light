@@ -105,7 +105,7 @@ CollectReachableNodes(const GraphProto &graph, const std::vector<std::string> &i
   std::sort(sorted_indices.begin(), sorted_indices.end());
 
   utils::RepeatedProtoField<NodeProto> result;
-  result.Reserve(static_cast<int>(sorted_indices.size()));
+  result.reserve(sorted_indices.size());
   for (size_t idx : sorted_indices) {
     result.push_back(graph.node()[idx]);
   }

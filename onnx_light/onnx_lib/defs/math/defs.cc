@@ -1589,7 +1589,7 @@ static bool BuildContextDependentFunctionBody(const FunctionBodyBuildContext &ct
   bool float_input = input_type == TensorProto_DataType_FLOAT;
   const auto *const reduction_attr_proto = ctx.getAttribute("reduction");
   std::string reduction_attr = reduction_attr_proto != nullptr && reduction_attr_proto->has_s()
-                                   ? std::string(reduction_attr_proto->s())
+                                   ? reduction_attr_proto->s().value()
                                    : "mean";
 
   FunctionBuilder builder(functionProto);

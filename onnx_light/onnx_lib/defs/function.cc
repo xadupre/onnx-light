@@ -45,7 +45,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     if (node.ref_output()[idx].empty()) {
       continue;
     }
-    io_names_map[std::string(func.ref_output()[idx])] = std::string(node.ref_output()[idx]);
+    io_names_map[func.ref_output()[idx]] = node.ref_output()[idx];
   }
 
   for (const auto &attr : node.ref_attribute()) {
@@ -89,10 +89,10 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     new_node->clr_output();
     new_node->clr_attribute();
     for (const auto &input : function_node.ref_input()) {
-      if (io_names_map.count(std::string(input))) {
-        *new_node->add_input() = io_names_map[std::string(input)];
+      if (io_names_map.count(input)) {
+        *new_node->add_input() = io_names_map[input];
       } else {
-        *new_node->add_input() = InternalTensorNameGenerator(node_name, std::string(input));
+        *new_node->add_input() = InternalTensorNameGenerator(node_name, input);
       }
     }
     for (const auto &output : function_node.ref_output()) {

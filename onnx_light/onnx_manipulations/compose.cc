@@ -139,7 +139,7 @@ void CollectReachableTensors(const GraphProto &graph, const std::vector<NodeProt
       all_names.insert(std::string(nd.input()[j]));
     }
     for (size_t j = 0; j < nd.output().size(); ++j) {
-      all_names.insert(std::string(nd.output()[j]));
+      all_names.insert(nd.output()[j]);
     }
   }
 

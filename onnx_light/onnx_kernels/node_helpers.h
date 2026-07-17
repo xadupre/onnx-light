@@ -230,7 +230,7 @@ GetAttributeStringsOrDefault(const NodeProto &node, const std::string &name,
   std::vector<std::string> values;
   values.reserve(attr->strings().size());
   for (size_t i = 0; i < attr->strings().size(); ++i) {
-    values.push_back(std::string(attr->strings()[i]));
+    values.push_back(attr->strings()[i]);
   }
   return values;
 }
@@ -256,7 +256,7 @@ inline std::string GetAttributeStringOrDefault(const NodeProto &node, const std:
   EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::STRING),
                       "RunNode: attribute '", name, "' of op '", node.op_type(),
                       "' must be a STRING.");
-  return std::string(attr->s());
+  return attr->s();
 }
 
 inline std::string GetRequiredAttributeString(const NodeProto &node, const std::string &name) {
@@ -266,7 +266,7 @@ inline std::string GetRequiredAttributeString(const NodeProto &node, const std::
   EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::STRING),
                       "RunNode: attribute '", name, "' of op '", node.op_type(),
                       "' must be a STRING.");
-  return std::string(attr->s());
+  return attr->s();
 }
 
 inline int64_t GetRequiredAttributeInt(const NodeProto &node, const std::string &name) {

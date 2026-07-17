@@ -231,11 +231,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
 
 #define PYFIELD_STR(cls, name)                                                                     \
   def_prop_rw(                                                                                     \
-      #name,                                                                                       \
-      [](const cls &self) -> std::string {                                                         \
-        std::string s = std::string(self.ref_##name());                                            \
-        return s;                                                                                  \
-      },                                                                                           \
+      #name, [](const cls &self) -> std::string { return self.ref_##name(); },                     \
       [](cls &self, nb::object obj) {                                                              \
         if (nb::isinstance<nb::str>(obj)) {                                                        \
           std::string st = nb::cast<std::string>(obj);                                             \
@@ -255,7 +251,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
   def_prop_rw(                                                                                     \
       #name,                                                                                       \
       [](const cls &self) -> nb::bytes {                                                           \
-        std::string s = std::string(self.ref_##name());                                            \
+        std::string s = self.ref_##name();                                                         \
         return nb::bytes(s.data(), s.size());                                                      \
       },                                                                                           \
       [](cls &self, nb::object obj) {                                                              \

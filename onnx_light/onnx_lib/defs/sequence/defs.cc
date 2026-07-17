@@ -564,7 +564,7 @@ static bool BuildSequenceMapBodyFunc(const FunctionBodyBuildContext &ctx, const 
   std::vector<std::string> loop_node_inputs = {seqlen, cond_bool};
   std::vector<std::string> loop_node_outputs;
   for (int outputIndex = 0; outputIndex < noutputs; outputIndex++) {
-    std::string output_name = functionProto.output(outputIndex);
+    const std::string &output_name = functionProto.output(outputIndex);
     std::string out_prefix = MakeString("SequenceMap_", output_name);
 
     std::string seqempty_name = out_prefix + "_seqempty";

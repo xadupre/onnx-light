@@ -156,7 +156,7 @@ struct InferenceContextImpl : public InferenceContext {
     }
 
     for (const auto &input : n.input()) {
-      auto valueTypesIter = valueTypesByName.find(std::string(input));
+      auto valueTypesIter = valueTypesByName.find(input);
       if (valueTypesIter != valueTypesByName.end()) {
         allInputTypes_.push_back(valueTypesIter->second);
       } else {
@@ -167,21 +167,21 @@ struct InferenceContextImpl : public InferenceContext {
       // inputDataByName - this is when input is TensorProto
       // inputSparseDataByName - this is when input is SparseTensorProto
       // generatedShapeData - this is when input was generated as part of partial data propagation
-      const auto inputDataIter = inputDataByName.find(std::string(input));
+      const auto inputDataIter = inputDataByName.find(input);
       if (inputDataIter != inputDataByName.cend()) {
         allInputData_.push_back(inputDataIter->second);
         allInputSparseData_.push_back(nullptr);
         allShapeInputData_.push_back(nullptr);
       } else {
         allInputData_.push_back(nullptr);
-        const auto inputSparseDataIter = inputSparseDataByName.find(std::string(input));
+        const auto inputSparseDataIter = inputSparseDataByName.find(input);
         if (inputSparseDataIter != inputSparseDataByName.cend()) {
           allInputSparseData_.push_back(inputSparseDataIter->second);
           allShapeInputData_.push_back(nullptr);
         } else {
           allInputSparseData_.push_back(nullptr);
           if (generatedShapeData != nullptr) {
-            const auto inputShapeDataIter = generatedShapeData->find(std::string(input));
+            const auto inputShapeDataIter = generatedShapeData->find(input);
             if (inputShapeDataIter != generatedShapeData->cend()) {
               allShapeInputData_.push_back(&inputShapeDataIter->second);
             } else {
@@ -316,16 +316,16 @@ struct DataPropagationContextImpl : public DataPropagationContext {
     }
 
     for (const auto &input : n.input()) {
-      inputIndexToNameMap_.insert({input_idx++, std::string(input)});
+      inputIndexToNameMap_.insert({input_idx++, input});
 
-      auto valueTypesIter = valueTypesByName.find(std::string(input));
+      auto valueTypesIter = valueTypesByName.find(input);
       if (valueTypesIter != valueTypesByName.end()) {
         allInputTypes_.push_back(valueTypesIter->second);
       } else {
         allInputTypes_.push_back(nullptr);
       }
 
-      const auto inputDataIter = inputDataByName.find(std::string(input));
+      const auto inputDataIter = inputDataByName.find(input);
       if (inputDataIter != inputDataByName.cend()) {
         allInputData_.push_back(inputDataIter->second);
       } else {

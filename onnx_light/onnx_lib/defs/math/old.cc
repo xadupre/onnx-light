@@ -25,7 +25,7 @@ static bool BuildContextDependentFunctionBody_opset13(const FunctionBodyBuildCon
   bool float_input = input_type == TensorProto_DataType_FLOAT;
   const auto *const reduction_attr_proto = ctx.getAttribute("reduction");
   std::string reduction_attr = reduction_attr_proto != nullptr && reduction_attr_proto->has_s()
-                                   ? std::string(reduction_attr_proto->s())
+                                   ? reduction_attr_proto->s().value()
                                    : "mean";
 
   FunctionBuilder builder(functionProto);
@@ -1483,7 +1483,7 @@ static bool BuildContextDependentFunctionBody_opset12(const FunctionBodyBuildCon
   bool float_input = input_type == TensorProto_DataType_FLOAT;
   const auto *const reduction_attr_proto = ctx.getAttribute("reduction");
   std::string reduction_attr = reduction_attr_proto != nullptr && reduction_attr_proto->has_s()
-                                   ? std::string(reduction_attr_proto->s())
+                                   ? reduction_attr_proto->s().value()
                                    : "mean";
   std::vector<FunctionBodyHelper::NodeDef> body;
   body.reserve(23);

@@ -255,7 +255,7 @@ Tensor TensorFromProto(const TensorProto &tp) {
     std::vector<std::string> strings;
     strings.reserve(tp.string_data().size());
     for (size_t i = 0; i < tp.string_data().size(); ++i) {
-      strings.emplace_back(std::string(tp.string_data()[i]));
+      strings.emplace_back(tp.string_data()[i]);
     }
     return Tensor::FromStrings(name, shape, strings);
   }

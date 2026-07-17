@@ -710,17 +710,17 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
   for (const auto &sparse_init : graph.sparse_initializer()) {
     const auto &values = sparse_init.values();
     enforce_has_field(values, name);
-    const auto &name = values.name();
+    const std::string &name = values.name();
     if (name.empty()) {
       fail_check("Sparse tensor initializers must have a non-empty name");
     }
-    if (!initializer_name_checker.insert(std::string(name)).second) {
+    if (!initializer_name_checker.insert(name).second) {
       fail_check(
-          std::string(name) +
+          name +
           " sparse initializer name is not unique across initializers and sparse_initializers");
     }
     check_sparse_tensor(sparse_init, ctx);
-    lex_ctx.add(std::string(name));
+    lex_ctx.add(name);
   }
   std::unordered_set<std::string> used_experimental_ops;
   for (const auto &node : graph.node()) {
@@ -730,7 +730,7 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
       if (input.empty()) {
         continue;
       }
-      if (!lex_ctx.this_or_ancestor_graph_has(std::string(input))) {
+      if (!lex_ctx.this_or_ancestor_graph_has(input)) {
         fail_check("Nodes in a graph must be topologically sorted, however input '", input,
                    "' of node: \n", "name: ", node.name(), " OpType: ", node.op_type(),
                    "\n is not output of any previous nodes.");
@@ -1002,23 +1002,23 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
   for (const auto &input : function.input()) {
     // TODO(ONNX): If shadowing isn't allowed, this should maybe use
     // this_or_ancestor_graph_has
-    if (lex_ctx.this_graph_has(std::string(input))) {
+    if (lex_ctx.this_graph_has(input)) {
       fail_check("Graph must be in single static assignment (SSA) form, however '", input,
                  "' has been used multiple times.");
     }
-    lex_ctx.add(std::string(input));
+    lex_ctx.add(input);
   }
 
   std::unordered_set<std::string> outputs;
   for (const auto &output : function.output()) {
-    if (!outputs.insert(std::string(output)).second) {
+    if (!outputs.insert(output).second) {
       fail_check("function (", function.name(), ") should not have duplicate outputs specified.");
     }
   }
 
   std::unordered_set<std::string> attrs;
   for (const auto &attr : function.attribute()) {
-    if (!attrs.insert(std::string(attr)).second) {
+    if (!attrs.insert(attr).second) {
       fail_check("function (", function.name(),
                  ") should not have duplicate attributes specified.");
     }
@@ -1031,7 +1031,7 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
       if (input.empty()) {
         continue;
       }
-      if (!lex_ctx.this_graph_has(std::string(input))) {
+      if (!lex_ctx.this_graph_has(input)) {
         fail_check("Nodes in a function must be topologically sorted, however input '", input,
                    "' of node: \n", "Name: ", node.name(), " OpType: ", node.op_type(),
                    "\n is neither output of any previous nodes nor input of the function.");

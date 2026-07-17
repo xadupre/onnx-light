@@ -392,7 +392,7 @@ TEST(Renamer, BasicFunctionality) {
 
   // Verify renaming worked correctly.
   ASSERT_EQ(node.ref_input()[0], "actual_input");
-  ASSERT_NE(std::string(node.ref_output()[0]).find("test"), std::string::npos);
+  ASSERT_NE(node.ref_output()[0].find("test"), std::string::npos);
 }
 
 // Tests for GetUsedVars (ComputeInputs).

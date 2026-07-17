@@ -47,7 +47,7 @@ void ApplyBackward(const NodeProto &node,
   // Find the output gradient: take the first output that has a gradient.
   std::string output_grad;
   for (const auto &out : node.output()) {
-    auto it = grad_table.find(std::string(out));
+    auto it = grad_table.find(out);
     if (it != grad_table.end()) {
       output_grad = it->second;
       break;

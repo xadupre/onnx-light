@@ -566,7 +566,7 @@ struct InlinerImpl {
 #endif
         std::vector<TypeProto> input_types;
         for (const auto &input : node.input()) {
-          const TypeProto *t = TryGetType(model, std::string(input));
+          const TypeProto *t = TryGetType(model, input);
           if (t == nullptr) {
             // Type information is not available for this input (e.g. it is the
             // output of a node that was just inlined and whose type was not

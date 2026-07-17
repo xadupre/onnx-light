@@ -408,6 +408,8 @@ LightOpSchema MakeCastLikeSchema(int since_version, const std::vector<TensorType
 }
 
 LightOpSchema MakeConcatSchema(int since_version, const std::vector<TensorType> &types) {
+  // Concat v1 declares axis with OPTIONAL_VALUE (required=false); v4+ requires it.
+  const bool axis_required = since_version >= 4;
   return LightOpSchema(
       "Concat", kOnnxDomain, since_version, MakeConcatDoc(since_version),
       {
@@ -423,7 +425,7 @@ LightOpSchema MakeConcatSchema(int since_version, const std::vector<TensorType> 
           {"axis",
            "Which axis to concat on. A negative value means counting dimensions from the back. "
            "Accepted range is [-r, r-1] where r = rank(input tensor).",
-           AttributeType::INT, /*required=*/true, std::monostate{}},
+           AttributeType::INT, axis_required, std::monostate{}},
       });
 }
 

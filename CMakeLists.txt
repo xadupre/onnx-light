@@ -61,12 +61,19 @@ if(NOT ONNX_LIGHT_BUILD_KERNELS)
   endif()
 endif()
 
-# Enable parallel compilation (file-level) on MSVC. Without /MP, cl.exe
-# compiles source files within a single project sequentially even when
-# `cmake --build --parallel` is used (the --parallel flag only parallelizes
-# at the project/target level on MSBuild).
-if(MSVC)
+# Enable parallel compilation (file-level) on MSVC when using MSBuild. Without
+# /MP, cl.exe compiles source files within a single MSBuild project sequentially
+# even when `cmake --build --parallel` is used (that flag only parallelises at
+# the project/target level on MSBuild). With Ninja, /MP is counter-productive:
+# Ninja already spawns one cl.exe per TU in parallel, and adding /MP causes each
+# cl.exe to also fork child compiler processes, over-subscribing the available
+# CPU cores and slowing the build significantly. scikit-build-core (used in CI)
+# prefers Ninja when it is in PATH (as it is on GitHub-hosted Windows runners),
+# so guarding /MP on the generator prevents that over-subscription.
+if(MSVC AND NOT CMAKE_GENERATOR MATCHES "Ninja")
   add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/MP>)
+endif()
+if(MSVC)
   add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/WX>)
 endif()
 

@@ -19,7 +19,10 @@ class TestCMakeCppStandard(unittest.TestCase):
                 r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:/WX>\)\s*"
                 r"endif\(\)"
             ),
-            msg="MSVC /MP must be guarded by a Ninja check; /WX must remain in the outer MSVC block.",
+            msg=(
+                "MSVC /MP must be guarded by a Ninja check; /WX must remain "
+                "in the outer MSVC block.",
+            ),
         )
 
     def test_examples_cmake_use_cpp20(self):

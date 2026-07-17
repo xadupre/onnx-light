@@ -12,6 +12,16 @@ import onnx_light.onnx.defs as defs
 import onnx_light.onnx_op as op
 
 
+def _normalize_domain(domain: str) -> str:
+    """Normalizes the ONNX default domain.
+
+    Both ``""`` (empty string used by defs OpSchema) and ``"ai.onnx"``
+    (used by LightOpSchema) represent the same default ONNX domain.
+    Returns ``"ai.onnx"`` for both so that dict keys compare equal.
+    """
+    return "ai.onnx" if domain == "" else domain
+
+
 class TestLightOpVsDefsSchemaAttributes(ExtTestCase):
     """Verifies that LightOpSchema and registered onnx_light OpSchema share the same attributes.
 
@@ -30,12 +40,12 @@ class TestLightOpVsDefsSchemaAttributes(ExtTestCase):
 
         light_hist = op.get_all_schemas_with_history()
         cls.light_dict: dict[tuple[str, str, int], op.LightOpSchema] = {
-            (s.domain, s.name, s.since_version): s for s in light_hist
+            (_normalize_domain(s.domain), s.name, s.since_version): s for s in light_hist
         }
 
         defs_hist = defs.get_all_schemas_with_history()
         cls.defs_dict: dict[tuple[str, str, int], defs.OpSchema] = {
-            (s.domain, s.name, s.since_version): s for s in defs_hist
+            (_normalize_domain(s.domain), s.name, s.since_version): s for s in defs_hist
         }
 
     def test_same_operator_keys(self) -> None:

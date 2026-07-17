@@ -54,7 +54,7 @@ std::vector<size_t> TopologicalOrder(NodeIt nodes_begin, NodeIt nodes_end,
     auto node_it = nodes_begin;
     std::advance(node_it, static_cast<std::ptrdiff_t>(idx));
     for (const auto &inp : node_it->input()) {
-      if (!inp.empty() && !inp.empty())
+      if (!inp.empty())
         visit(std::string(inp));
     }
     order.push_back(idx);

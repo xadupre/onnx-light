@@ -149,6 +149,7 @@ public:                                                                         
 
 #define FIELD_REPEATED_STR(type, name, order, doc)                                                 \
   FIELD_REPEATED_BASE(type, utils::RepeatedStringField, name, order, doc)                          \
+  inline void add_##name(const char *v) { name##_.push_back(utils::String(v)); }                   \
   inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
   inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }
 

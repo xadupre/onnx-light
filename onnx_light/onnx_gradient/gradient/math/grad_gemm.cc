@@ -35,7 +35,7 @@ bool GradGemm(const NodeProto &node, const std::string &output_grad,
   AccumulateGrad(dB, grad_accum[B], counter, func);
 
   // Gradient for optional bias: sum over the batch axis.
-  if (inputs.size() >= 3 && !inputs[2].empty() && !inputs[2].empty()) {
+  if (inputs.size() >= 3 && !inputs[2].empty()) {
     std::string bias = inputs[2];
     std::string dBias = NewGradName("dC_init", counter);
     NodeProto &rs = func.add_node("ReduceSum", {output_grad}, {dBias});

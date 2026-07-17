@@ -233,7 +233,9 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
   def_prop_rw(                                                                                     \
       #name, [](const cls &self) -> std::string { return self.ref_##name(); },                     \
       [](cls &self, nb::object obj) {                                                              \
-        if (nb::isinstance<nb::str>(obj)) {                                                        \
+        if (obj.is_none()) {                                                                       \
+          self.clear_##name();                                                                     \
+        } else if (nb::isinstance<nb::str>(obj)) {                                                 \
           std::string st = nb::cast<std::string>(obj);                                             \
           self.set_##name(st);                                                                     \
         } else if (nb::isinstance<nb::bytes>(obj)) {                                               \
@@ -244,7 +246,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
           self.set_##name(nb::cast<cls::name##_t &>(obj));                                         \
         }                                                                                          \
       },                                                                                           \
-      cls::DOC_##name)                                                                             \
+      cls::DOC_##name, nb::for_setter(nb::arg("value").none()))                                    \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value")
 
 #define PYFIELD_STR_AS_BYTES(cls, name)                                                            \
@@ -294,7 +296,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
 
 #define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
   def_prop_rw(                                                                                     \
-      #name, [](cls & self)->cls::name##_t * {                                                     \
+      #name, [](cls & self) -> cls::name##_t * {                                                   \
         if (!self.name##_.has_value()) {                                                           \
           if (self.has_oneof_##name())                                                             \
             return nullptr;                                                                        \
@@ -314,7 +316,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
       nb::rv_policy::reference_internal, cls::DOC_##name, nb::for_setter(nb::arg("value").none())) \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
-          "add_" #name, [](cls & self)->cls::name##_t & {                                          \
+          "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
             self.name##_.set_empty_value();                                                        \
             return *self.name##_;                                                                  \
           },                                                                                       \

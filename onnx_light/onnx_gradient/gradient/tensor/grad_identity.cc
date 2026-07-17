@@ -12,7 +12,7 @@ bool GradIdentity(const NodeProto &node, const std::string &output_grad,
                   std::unordered_map<std::string, std::string> &grad_accum, int &counter,
                   FunctionProto &func) {
   const auto &inputs = node.input();
-  if (inputs.size() >= 1 && !inputs[0].empty() && !inputs[0].empty())
+  if (inputs.size() >= 1 && !inputs[0].empty())
     AccumulateGrad(output_grad, grad_accum[inputs[0]], counter, func);
   return true;
 }

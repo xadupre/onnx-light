@@ -2287,7 +2287,7 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
 
     // Every graph output must have a type after shape inference.
     for (const auto &out : model_copy.ref_graph().ref_output()) {
-      EXPECT_TRUE(out.has_type()) << "output " << std::string(out.ref_name())
+      EXPECT_TRUE(out.has_type()) << "output " << out.ref_name()
                                   << " missing type after shape inference";
     }
   }

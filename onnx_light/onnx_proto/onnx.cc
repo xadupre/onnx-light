@@ -759,8 +759,8 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     onnx_light_helpers::ValidateAlignmentOption(options.alignment, "ParseOptions.alignment");
     if (options.alignment > 1 && offset % options.alignment != 0) {
       std::ostringstream oss;
-      oss << "Serialized external-data offset " << offset << " for tensor '"
-          << std::string(ref_name()) << "' (location '" << location
+      oss << "Serialized external-data offset " << offset << " for tensor '" << ref_name()
+          << "' (location '" << location
           << "') is incompatible with ParseOptions.alignment=" << options.alignment << ".";
       if (options.no_copy) {
         EXT_THROW(oss.str(), " no_copy=true forbids automatic realignment.");
@@ -1272,7 +1272,7 @@ void AttributeProto::PrintToStringStream(std::stringstream &ss,
                                          utils::PrintOptions &options) const {
   switch (type_) {
   case AttributeType::UNDEFINED:
-    ss << "{ " << std::string(name_) << ": UNDEFINED }";
+    ss << "{ " << name_ << ": UNDEFINED }";
     return;
   case AttributeType::FLOAT:
     ss << "{ " << std::string(name_) << ": " << (has_f() ? MakeString(*f_) : "?") << " }";
@@ -1281,16 +1281,16 @@ void AttributeProto::PrintToStringStream(std::stringstream &ss,
     ss << "{ " << std::string(name_) << ": " << (has_i() ? MakeString(*i_) : "?") << " }";
     return;
   case AttributeType::STRING:
-    ss << "{ " << std::string(name_) << ": " << std::string(s_) << " }";
+    ss << "{ " << name_ << ": " << s_ << " }";
     return;
   case AttributeType::FLOATS:
-    ss << "{ " << std::string(name_) << ": " << write_as_string(options, floats_) << " }";
+    ss << "{ " << name_ << ": " << write_as_string(options, floats_) << " }";
     return;
   case AttributeType::INTS:
-    ss << "{ " << std::string(name_) << ": " << write_as_string(options, ints_) << " }";
+    ss << "{ " << name_ << ": " << write_as_string(options, ints_) << " }";
     return;
   case AttributeType::STRINGS:
-    ss << "{ " << std::string(name_) << ": " << write_as_string(options, strings_) << " }";
+    ss << "{ " << name_ << ": " << write_as_string(options, strings_) << " }";
     return;
   default:
     write_proto_into_vector_string(

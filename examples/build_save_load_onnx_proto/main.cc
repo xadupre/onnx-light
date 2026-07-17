@@ -79,11 +79,11 @@ void PrintModelSummary(const onnx_light::ModelProto &model) {
     std::cout << "  IR version       : " << model.ref_ir_version() << "\n";
   }
   if (model.has_producer_name()) {
-    std::cout << "  Producer name    : " << std::string(model.ref_producer_name()) << "\n";
+    std::cout << "  Producer name    : " << model.ref_producer_name() << "\n";
   }
   if (model.has_graph()) {
     const onnx_light::GraphProto &graph = model.ref_graph();
-    std::cout << "  Graph name       : " << std::string(graph.ref_name()) << "\n";
+    std::cout << "  Graph name       : " << graph.ref_name() << "\n";
     std::cout << "  Nodes            : " << graph.ref_node().size() << "\n";
     std::cout << "  Inputs           : " << graph.ref_input().size() << "\n";
     std::cout << "  Outputs          : " << graph.ref_output().size() << "\n";

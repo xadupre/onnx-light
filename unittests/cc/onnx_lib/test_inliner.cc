@@ -176,7 +176,7 @@ foo (x) => (y) {
     for (const auto &out : node.ref_output()) {
       if (!out.empty()) {
         ASSERT_TRUE(output_names.insert(std::string(out)).second)
-            << "Duplicate output name: " << std::string(out);
+            << "Duplicate output name: " << out;
       }
     }
   }
@@ -243,7 +243,7 @@ foo (x) => (y) {
     for (const auto &out : node.ref_output()) {
       if (!out.empty()) {
         ASSERT_TRUE(output_names.insert(std::string(out)).second)
-            << "Duplicate output name: " << std::string(out);
+            << "Duplicate output name: " << out;
       }
     }
   }

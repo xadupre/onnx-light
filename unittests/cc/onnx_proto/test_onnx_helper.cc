@@ -1773,7 +1773,7 @@ TEST(onnx_external_ressource, EditModelWithoutTouchingExternalData) {
   }
   ASSERT_EQ(edited.ref_graph().ref_initializer().size(), 2u);
   for (const auto &t : edited.ref_graph().ref_initializer()) {
-    ASSERT_TRUE(t.has_data_location()) << "name=" << std::string(t.ref_name());
+    ASSERT_TRUE(t.has_data_location()) << "name=" << t.ref_name();
     EXPECT_EQ(t.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
     EXPECT_FALSE(t.ref_external_data().empty());
     EXPECT_TRUE(t.ref_raw_data().empty()) << "raw bytes should not be loaded without weights file";

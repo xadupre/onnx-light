@@ -98,7 +98,7 @@ template <class NameCollection> std::string FormatNameList(const NameCollection 
     if (i > 0) {
       oss << ", ";
     }
-    oss << std::string(names[i]);
+    oss << names[i];
   }
   return oss.str();
 }

@@ -86,7 +86,7 @@ std::vector<Tensor> If::operator()(RuntimeContext &rt, const Tensor &cond,
   std::vector<Tensor> outputs;
   outputs.reserve(static_cast<size_t>(branch.output_size()));
   for (size_t i = 0; i < branch.output().size(); ++i) {
-    const std::string out_name = branch.output()[i].name().as_string();
+    const std::string out_name = std::string(branch.output()[i].name());
     EXT_ENFORCE_INVALID(!out_name.empty(), "kernel::If: a subgraph output has an empty name.");
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "kernel::If: subgraph output '", out_name,

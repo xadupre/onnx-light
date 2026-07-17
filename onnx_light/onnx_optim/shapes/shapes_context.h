@@ -230,25 +230,12 @@ public:
   /// Overload: ``name`` given as a null-terminated C string.
   void Set(const char *name, OptimTensor &&tensor) { Set(std::string(name), std::move(tensor)); }
 
-  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
-  void Set(const utils::String &name, OptimTensor &&tensor) {
-    Set(std::string(name.data(), name.size()), std::move(tensor));
-  }
-
   /// Returns ``true`` when an entry exists for ``name``.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
-
-  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
-  bool Has(const utils::String &name) const { return Has(std::string(name.data(), name.size())); }
 
   /// Returns the descriptor for ``name``. Throws ``std::out_of_range``
   /// if no such entry exists.
   const OptimTensor &Get(const std::string &name) const { return tensors_.at(name); }
-
-  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
-  const OptimTensor &Get(const utils::String &name) const {
-    return Get(std::string(name.data(), name.size()));
-  }
 
   /// Number of named entries currently stored.
   std::size_t Size() const noexcept { return tensors_.size(); }
@@ -302,29 +289,14 @@ public:
     sequences_[std::string(name)] = std::move(sequence);
   }
 
-  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
-  void SetSequence(const utils::String &name, OptimSequence &&sequence) {
-    sequences_[std::string(name.data(), name.size())] = std::move(sequence);
-  }
-
   /// Returns ``true`` when a sequence-typed entry exists for ``name``.
   bool HasSequence(const std::string &name) const {
     return sequences_.find(name) != sequences_.end();
   }
 
-  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
-  bool HasSequence(const utils::String &name) const {
-    return HasSequence(std::string(name.data(), name.size()));
-  }
-
   /// Returns the sequence descriptor for ``name``. Throws
   /// ``std::out_of_range`` if no such entry exists.
   const OptimSequence &GetSequence(const std::string &name) const { return sequences_.at(name); }
-
-  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
-  const OptimSequence &GetSequence(const utils::String &name) const {
-    return GetSequence(std::string(name.data(), name.size()));
-  }
 
   /// Number of sequence-typed entries currently stored.
   std::size_t SequencesSize() const noexcept { return sequences_.size(); }
@@ -430,7 +402,7 @@ public:
   /// not be ``nullptr``.
   void SetLocalFunction(const FunctionProto *func) {
     EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
-    const std::string key = func->domain().as_string() + ":" + func->name().as_string();
+    const std::string key = std::string(func->domain()) + ":" + std::string(func->name());
     local_functions_[key] = func;
   }
 

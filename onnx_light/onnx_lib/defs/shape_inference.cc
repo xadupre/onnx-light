@@ -203,7 +203,8 @@ static void UnionShapeInfo(const TensorShapeProto &source_shape, TensorShapeProt
       }
 
       if (source_dim.has_dim_param()) {
-        return !(target_dim.has_dim_param() && target_dim.dim_param() == source_dim.dim_param());
+        return !(target_dim.has_dim_param() &&
+                 target_dim.dim_param().sv() == source_dim.dim_param().sv());
       }
 
       return (target_dim.has_dim_value() || target_dim.has_dim_param());

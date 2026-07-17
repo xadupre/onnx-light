@@ -291,7 +291,7 @@ std::string ResolveTag(const NodeProto &node, const std::string &tag) {
   if (!tag.empty()) {
     return tag;
   }
-  const std::string node_domain = node.domain().as_string();
+  const std::string node_domain = std::string(node.domain());
   if (!node_domain.empty() && node_domain != "ai.onnx") {
     return node_domain;
   }

@@ -492,7 +492,7 @@ Common::Status OnnxParser::ParseInput(ValueInfoList &inputs, TensorList &initial
           // default value for input
           initializers.emplace_back();
           TensorProto &tp = initializers.back();
-          tp.set_name(vi.ref_name().as_string());
+          tp.set_name(std::string(vi.ref_name()));
           CHECK_PARSER_STATUS(Parse(tp, vi.ref_type()));
         }
       } while (Matches(','));
@@ -516,7 +516,7 @@ Common::Status OnnxParser::ParseValueInfo(ValueInfoList &value_infos, TensorList
           // initializer
           initializers.emplace_back();
           TensorProto &tp = initializers.back();
-          tp.set_name(vi.ref_name().as_string());
+          tp.set_name(std::string(vi.ref_name()));
           CHECK_PARSER_STATUS(Parse(tp, vi.ref_type()));
         } else {
           // valueinfo
@@ -643,8 +643,8 @@ Common::Status OnnxParser::Parse(TensorProto &tensorProto, const TypeProto &tens
     PARSE(externalData);
     for (auto &entry : externalData) {
       auto *ed = tensorProto.add_external_data();
-      ed->set_key(entry.ref_key().as_string());
-      ed->set_value(entry.ref_value().as_string());
+      ed->set_key(std::string(entry.ref_key()));
+      ed->set_value(std::string(entry.ref_value()));
     }
     MATCH(']');
   }
@@ -1097,8 +1097,8 @@ Common::Status OnnxParser::Parse(ModelProto &model) {
         }
         for (auto &entry : metadata_props) {
           auto *prop = model.add_metadata_props();
-          prop->set_key(entry.ref_key().as_string());
-          prop->set_value(entry.ref_value().as_string());
+          prop->set_key(std::string(entry.ref_key()));
+          prop->set_value(std::string(entry.ref_value()));
         }
         break;
       }

@@ -12,10 +12,10 @@ bool GradNeg(const NodeProto &node, const std::string &output_grad,
              std::unordered_map<std::string, std::string> &grad_accum, int &counter,
              FunctionProto &func) {
   const auto &inputs = node.input();
-  if (inputs.size() >= 1 && !inputs[0].null() && !inputs[0].empty()) {
+  if (inputs.size() >= 1 && !inputs[0].empty() && !inputs[0].empty()) {
     std::string neg = NewGradName("neg_grad", counter);
     func.add_node("Neg", {output_grad}, {neg});
-    AccumulateGrad(neg, grad_accum[inputs[0].as_string()], counter, func);
+    AccumulateGrad(neg, grad_accum[std::string(inputs[0])], counter, func);
   }
   return true;
 }

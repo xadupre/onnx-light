@@ -66,7 +66,7 @@ int CollectConstantValueAttributes(
       value_strings = nullptr;
   for (int i = 0; i < node.attribute().size(); ++i) {
     const AttributeProto &attr = node.attribute()[i];
-    const std::string name = attr.name().as_string();
+    const std::string name = std::string(attr.name());
     if (name == "value" && value == nullptr) {
       value = &attr;
     } else if (name == "sparse_value" && sparse_value == nullptr) {

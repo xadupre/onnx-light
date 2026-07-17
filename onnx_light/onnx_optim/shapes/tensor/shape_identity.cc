@@ -17,7 +17,7 @@ void ComputeShapeIdentity(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Identity", "ComputeShapeIdentity");
   EXT_ENFORCE_INVALID(node.input_size() >= 1, "ComputeShapeIdentity: Identity requires one input.");
 
-  const std::string input_name = node.input(0).as_string();
+  const std::string input_name = std::string(node.input(0));
 
   if (ctx.HasSequence(input_name)) {
     // Sequence input: propagate the sequence descriptor to the output.

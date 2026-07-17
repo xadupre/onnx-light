@@ -49,7 +49,7 @@ struct FunctionBodyBuildContextImpl : public FunctionBodyBuildContext {
                                         const std::vector<TypeProto> &input_types = {})
       : node_proto_(node_proto), input_types_(input_types) {
     for (const auto &attr : node_proto.attribute()) {
-      attributesByName_[attr.name().as_string()] = &attr;
+      attributesByName_[std::string(attr.name())] = &attr;
     }
   }
 
@@ -751,7 +751,7 @@ private:
    * @param node_name The prefix string used if the check fails.
    */
   void VerifyInputNum(int input_num, std::string_view node_name = "") const;
-  void VerifyInputNum(int input_num, const utils::String &node_name) const {
+  void VerifyInputNum(int input_num, const utils::OptionalString &node_name) const {
     return VerifyInputNum(input_num, node_name.sv());
   }
 
@@ -761,7 +761,7 @@ private:
    * @param node_name The prefix string used if the check fails.
    */
   void VerifyOutputNum(int output_num, std::string_view node_name = "") const;
-  void VerifyOutputNum(int output_num, const utils::String &node_name) const {
+  void VerifyOutputNum(int output_num, const utils::OptionalString &node_name) const {
     return VerifyOutputNum(output_num, node_name.sv());
   }
 
@@ -808,18 +808,6 @@ public:
 
   ONNX_API virtual const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
                                              const std::string &domain = ONNX_DOMAIN) const = 0;
-
-  ONNX_API virtual const OpSchema *GetSchema(const utils::String &key,
-                                             const int maxInclusiveVersion,
-                                             const utils::String &domain) const {
-    return GetSchema(key.as_string(), maxInclusiveVersion, domain.as_string());
-  }
-
-  ONNX_API virtual const OpSchema *GetSchema(const utils::RefString &key,
-                                             const int maxInclusiveVersion,
-                                             const utils::RefString &domain) const {
-    return GetSchema(key.as_string(), maxInclusiveVersion, domain.as_string());
-  }
 };
 
 /**
@@ -899,24 +887,17 @@ public:
   // Domain with default value ONNX_DOMAIN means ONNX.
   static const OpSchema *Schema(const std::string &key, const std::string &domain = ONNX_DOMAIN);
 
-  static const OpSchema *Schema(const utils::String &key, const utils::String &domain);
-
   // Return the schema with biggest version, which is not greater than specified
   // <maxInclusiveVersion> in specified domain. Domain with default value
   // ONNX_DOMAIN means ONNX.
   ONNX_API static const OpSchema *Schema(const std::string &key, const int maxInclusiveVersion,
                                          const std::string &domain = ONNX_DOMAIN);
 
-  ONNX_API static const OpSchema *Schema(const utils::String &key, const int maxInclusiveVersion,
-                                         const utils::String &domain);
-
   ONNX_API static OpSchemaRegistry *Instance();
 
   // NOLINTNEXTLINE(google-default-arguments)
   ONNX_API const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
                                      const std::string &domain = ONNX_DOMAIN) const override;
-  ONNX_API const OpSchema *GetSchema(const utils::String &key, const int maxInclusiveVersion,
-                                     const utils::String &domain) const override;
   ONNX_API static void SetLoadedSchemaVersion(int target_version);
   ONNX_API static int GetLoadedSchemaVersion();
 

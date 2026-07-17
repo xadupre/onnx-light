@@ -43,7 +43,7 @@ void ComputeShapeDropout(ShapesContext &ctx, const NodeProto &node, const char *
   CheckScalarInput(ctx, training_mode, "training_mode");
 
   if (node.output_size() >= 2) {
-    const std::string mask_name = node.output(1).as_string();
+    const std::string mask_name = std::string(node.output(1));
     if (!mask_name.empty()) {
       ctx.Set(mask_name, OptimTensor(nullptr, TensorType::kBool, in_shape));
     }

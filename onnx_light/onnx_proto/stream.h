@@ -265,8 +265,6 @@ public:
   /** Encodes *value* as a length-prefixed byte sequence and appends it. */
   virtual void write_string(const std::string &value);
   /** Encodes *value* as a length-prefixed byte sequence and appends it. */
-  virtual void write_string(const String &value);
-  /** Encodes *value* as a length-prefixed byte sequence and appends it. */
   virtual void write_string(const RefString &value);
   /** Encodes the contents of *stream* as a length-prefixed byte sequence and appends it. */
   virtual void write_string_stream(const StringWriteStream &stream);
@@ -296,8 +294,6 @@ public:
   virtual uint64_t size_double(double value);
   /** Returns the encoded byte size of the length-prefixed string *value*. */
   virtual uint64_t size_string(const std::string &value);
-  /** Returns the encoded byte size of the length-prefixed string *value*. */
-  virtual uint64_t size_string(const String &value);
   /** Returns the encoded byte size of the length-prefixed string *value*. */
   virtual uint64_t size_string(const RefString &value);
   /** Returns the encoded byte size of the contents of *stream* as a length-prefixed sequence. */

@@ -20,8 +20,8 @@ namespace {
 std::string ReadMetadataValueFromProps(const std::vector<StringStringEntryProto> &props,
                                        const char *key) {
   for (const auto &entry : props) {
-    if (entry.key().as_string() == key) {
-      return entry.value().as_string();
+    if (std::string(entry.key()) == key) {
+      return std::string(entry.value());
     }
   }
   return {};
@@ -33,7 +33,7 @@ template <typename T> std::string ReadMetadataValue(const T &obj, const char *ke
 
 template <typename T> void SetMetadataValue(T &obj, const char *key, const std::string &value) {
   for (int i = 0; i < obj.metadata_props().size(); ++i) {
-    if (obj.metadata_props()[i].key().as_string() == key) {
+    if (std::string(obj.metadata_props()[i].key()) == key) {
       obj.mutable_metadata_props(static_cast<std::size_t>(i))->set_value(value);
       return;
     }
@@ -107,7 +107,7 @@ void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const
 // Returns the input indices that can safely inherit the given output tag when
 // running backward propagation from consumers to producers.
 std::vector<int> BackwardTagInputIndices(const NodeProto &node, const std::string &output_tag) {
-  const std::string op_type = node.op_type().as_string();
+  const std::string op_type = std::string(node.op_type());
   if (op_type == "Concat") {
     // Do not propagate "ambiguous" backward to avoid overwriting inputs that
     // already carry a more specific tag (e.g. "shape" or "axes").
@@ -152,7 +152,7 @@ void CollectGraphSeedTags(const GraphProto &graph,
       // model data or parameters, and this tag is always known at graph level.
       tag = "weight";
     }
-    SetValueTag(value_tags, value.name().as_string(), tag);
+    SetValueTag(value_tags, std::string(value.name()), tag);
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
     const auto &value = graph.initializer()[i];
@@ -160,16 +160,16 @@ void CollectGraphSeedTags(const GraphProto &graph,
     if (tag.empty()) {
       tag = "weight";
     }
-    SetValueTag(value_tags, value.name().as_string(), tag);
+    SetValueTag(value_tags, std::string(value.name()), tag);
   }
   for (int i = 0; i < graph.value_info().size(); ++i) {
     const auto &value = graph.value_info()[i];
-    SetValueTag(value_tags, value.name().as_string(),
+    SetValueTag(value_tags, std::string(value.name()),
                 ReadMetadataValue(value, kValueTagMetadataKey));
   }
   for (int i = 0; i < graph.output().size(); ++i) {
     const auto &value = graph.output()[i];
-    SetValueTag(value_tags, value.name().as_string(),
+    SetValueTag(value_tags, std::string(value.name()),
                 ReadMetadataValue(value, kValueTagMetadataKey));
   }
 }
@@ -183,7 +183,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
     changed = false;
     for (std::size_t n = 0; n < nodes.size(); ++n) {
       const NodeProto *node = nodes[n];
-      const std::string op_type = node->op_type().as_string();
+      const std::string op_type = std::string(node->op_type());
       std::string explicit_output_tag;
       if (op_type == "Shape" || op_type == "Size") {
         explicit_output_tag = "shape";
@@ -193,28 +193,28 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
 
       if (node->input().size() >= 2) {
         if (op_type == "Reshape" || op_type == "Expand" || op_type == "Slice") {
-          changed |= TrySetValueTag(value_tags, node->input(1).as_string(), "shape");
+          changed |= TrySetValueTag(value_tags, std::string(node->input(1)), "shape");
         } else if (op_type == "Squeeze" || op_type == "Unsqueeze" || op_type == "ReduceSum" ||
                    op_type == "ReduceMean" || op_type == "ReduceMax" || op_type == "ReduceMin") {
-          changed |= TrySetValueTag(value_tags, node->input(1).as_string(), "axes");
+          changed |= TrySetValueTag(value_tags, std::string(node->input(1)), "axes");
         }
       }
       if (op_type == "Slice") {
         if (node->input().size() > 2) {
-          changed |= TrySetValueTag(value_tags, node->input(2).as_string(), "shape");
+          changed |= TrySetValueTag(value_tags, std::string(node->input(2)), "shape");
         }
         if (node->input().size() > 3) {
-          changed |= TrySetValueTag(value_tags, node->input(3).as_string(), "axes");
+          changed |= TrySetValueTag(value_tags, std::string(node->input(3)), "axes");
         }
         if (node->input().size() > 4) {
-          changed |= TrySetValueTag(value_tags, node->input(4).as_string(), "shape");
+          changed |= TrySetValueTag(value_tags, std::string(node->input(4)), "shape");
         }
       }
 
       std::string current_output_tag;
       bool output_tags_are_consistent = true;
       for (int o = 0; o < node->output().size(); ++o) {
-        auto it = value_tags.find(node->output(o).as_string());
+        auto it = value_tags.find(std::string(node->output(o)));
         if (it != value_tags.end()) {
           if (current_output_tag.empty()) {
             current_output_tag = it->second;
@@ -240,7 +240,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         bool all_same = true;
         std::string first_known_tag;
         for (int i = 0; i < node->input().size(); ++i) {
-          auto it = value_tags.find(node->input(i).as_string());
+          auto it = value_tags.find(std::string(node->input(i)));
           if (it != value_tags.end() && !it->second.empty()) {
             if (it->second == "weight") {
               any_weight = true;
@@ -261,7 +261,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           inherited_tag = "ambiguous";
         }
       } else if (!node->input().empty()) {
-        auto it = value_tags.find(node->input(0).as_string());
+        auto it = value_tags.find(std::string(node->input(0)));
         if (it != value_tags.end()) {
           inherited_tag = it->second;
         }
@@ -274,7 +274,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
       }
       if (!node_tag.empty()) {
         for (int o = 0; o < node->output().size(); ++o) {
-          changed |= TrySetValueTag(value_tags, node->output(o).as_string(), node_tag);
+          changed |= TrySetValueTag(value_tags, std::string(node->output(o)), node_tag);
         }
       }
 
@@ -284,7 +284,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           for (int idx : backward_inputs) {
             if (idx >= 0 && idx < node->input().size()) {
               changed |=
-                  TrySetValueTag(value_tags, node->input(idx).as_string(), current_output_tag);
+                  TrySetValueTag(value_tags, std::string(node->input(idx)), current_output_tag);
             }
           }
         }
@@ -452,28 +452,28 @@ void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {
   }
   SetMetadataValue(graph, kValueTagsMetadataKey, DumpValueTagsAsJson(value_tags));
   for (int i = 0; i < graph.input().size(); ++i) {
-    auto it = value_tags.find(graph.input(i).name().as_string());
+    auto it = value_tags.find(std::string(graph.input(i).name()));
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_input(static_cast<std::size_t>(i)), kValueTagMetadataKey,
                        it->second);
     }
   }
   for (int i = 0; i < graph.value_info().size(); ++i) {
-    auto it = value_tags.find(graph.value_info(i).name().as_string());
+    auto it = value_tags.find(std::string(graph.value_info(i).name()));
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_value_info(static_cast<std::size_t>(i)), kValueTagMetadataKey,
                        it->second);
     }
   }
   for (int i = 0; i < graph.output().size(); ++i) {
-    auto it = value_tags.find(graph.output(i).name().as_string());
+    auto it = value_tags.find(std::string(graph.output(i).name()));
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_output(static_cast<std::size_t>(i)), kValueTagMetadataKey,
                        it->second);
     }
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
-    auto it = value_tags.find(graph.initializer(i).name().as_string());
+    auto it = value_tags.find(std::string(graph.initializer(i).name()));
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_initializer(static_cast<std::size_t>(i)),
                        kValueTagMetadataKey, it->second);

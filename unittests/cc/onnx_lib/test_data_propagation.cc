@@ -70,11 +70,11 @@ public:
       : generatedShapeData_(generatedShapeData) {
 
     for (auto &attr : n.ref_attribute())
-      attributesByName_[attr.ref_name().as_string()] = &attr;
+      attributesByName_[std::string(attr.ref_name())] = &attr;
 
     size_t idx = 0;
     for (const auto &inp : n.ref_input()) {
-      std::string name = inp.as_string();
+      std::string name = std::string(inp);
       inputIndexToNameMap_[idx++] = name;
       auto typeIt = valueTypesByName.find(name);
       allInputTypes_.push_back(typeIt != valueTypesByName.end() ? typeIt->second : nullptr);
@@ -84,7 +84,7 @@ public:
 
     idx = 0;
     for (const auto &out : n.ref_output())
-      outputIndexToNameMap_[idx++] = out.as_string();
+      outputIndexToNameMap_[idx++] = std::string(out);
 
     allOutputTypes_.resize(n.ref_output().size());
   }
@@ -206,7 +206,7 @@ static void ShapeDataPropagator(DataPropagationContext &ctx) {
     if (src_dim.has_dim_value())
       dst_dim->set_dim_value(src_dim.ref_dim_value());
     else if (src_dim.has_dim_param())
-      dst_dim->set_dim_param(src_dim.ref_dim_param().as_string());
+      dst_dim->set_dim_param(std::string(src_dim.ref_dim_param()));
     // else: leave empty (unknown)
   }
   ctx.addOutputData(0, std::move(output_shape));
@@ -279,7 +279,7 @@ static void ConcatDataPropagator(DataPropagationContext &ctx) {
       if (src.has_dim_value())
         dst->set_dim_value(src.ref_dim_value());
       else if (src.has_dim_param())
-        dst->set_dim_param(src.ref_dim_param().as_string());
+        dst->set_dim_param(std::string(src.ref_dim_param()));
       // else: unknown dim
     }
   }
@@ -364,7 +364,7 @@ static void SliceDataPropagator(DataPropagationContext &ctx) {
       if (src.has_dim_value())
         dst->set_dim_value(src.ref_dim_value());
       else if (src.has_dim_param())
-        dst->set_dim_param(src.ref_dim_param().as_string());
+        dst->set_dim_param(std::string(src.ref_dim_param()));
     }
   } else {
     for (int64_t i = start; i > end; i += step) {
@@ -373,7 +373,7 @@ static void SliceDataPropagator(DataPropagationContext &ctx) {
       if (src.has_dim_value())
         dst->set_dim_value(src.ref_dim_value());
       else if (src.has_dim_param())
-        dst->set_dim_param(src.ref_dim_param().as_string());
+        dst->set_dim_param(std::string(src.ref_dim_param()));
     }
   }
   if (!tsp.ref_dim().empty())
@@ -438,7 +438,7 @@ static bool CompareShape(const TensorShapeProto &inferredShape,
       EXPECT_EQ(inf.ref_dim_value(), exp.ref_dim_value()) << "dim_value mismatch at index " << i;
     }
     if (checkSameParam && inf.has_dim_param() && exp.has_dim_param()) {
-      EXPECT_EQ(inf.ref_dim_param().as_string(), exp.ref_dim_param().as_string())
+      EXPECT_EQ(std::string(inf.ref_dim_param()), std::string(exp.ref_dim_param()))
           << "dim_param mismatch at index " << i;
     }
   }
@@ -461,21 +461,21 @@ static TensorShapeProto RunDataPropagation(const char *graphCode) {
   std::unordered_map<std::string, TypeProto *> valueTypesByName;
   for (auto &vi : graph.ref_value_info()) {
     if (vi.has_type())
-      valueTypesByName[vi.ref_name().as_string()] = &vi.ref_type();
+      valueTypesByName[std::string(vi.ref_name())] = &vi.ref_type();
   }
   for (auto &vi : graph.ref_input()) {
     if (vi.has_type())
-      valueTypesByName[vi.ref_name().as_string()] = &vi.ref_type();
+      valueTypesByName[std::string(vi.ref_name())] = &vi.ref_type();
   }
   for (auto &vi : graph.ref_output()) {
     if (vi.has_type())
-      valueTypesByName[vi.ref_name().as_string()] = &vi.ref_type();
+      valueTypesByName[std::string(vi.ref_name())] = &vi.ref_type();
   }
 
   // 3. Build name → TensorProto* maps from initializers.
   std::unordered_map<std::string, const TensorProto *> inputDataByName;
   for (const auto &tp : graph.ref_initializer())
-    inputDataByName[tp.ref_name().as_string()] = &tp;
+    inputDataByName[std::string(tp.ref_name())] = &tp;
 
   // 4. Collect data from Constant nodes.
   for (const auto &n : graph.ref_node()) {
@@ -483,7 +483,7 @@ static TensorShapeProto RunDataPropagation(const char *graphCode) {
       continue;
     for (const auto &attr : n.ref_attribute()) {
       if (attr.ref_name() == "value" && attr.ref_type() == AttributeProto::TENSOR && attr.has_t()) {
-        inputDataByName[n.ref_output()[0].as_string()] = &attr.ref_t();
+        inputDataByName[std::string(n.ref_output()[0])] = &attr.ref_t();
       }
     }
   }
@@ -495,11 +495,11 @@ static TensorShapeProto RunDataPropagation(const char *graphCode) {
       continue;
     LocalDataPropagationContextImpl ctx(n, valueTypesByName, inputDataByName,
                                         generatedShapeDataByName);
-    DispatchDataPropagation(ctx, n.ref_op_type().as_string());
+    DispatchDataPropagation(ctx, std::string(n.ref_op_type()));
   }
 
   // 6. Return propagated shape for the single graph output.
-  const std::string outputName = graph.ref_output()[0].ref_name().as_string();
+  const std::string outputName = std::string(graph.ref_output()[0].ref_name());
   const auto it = generatedShapeDataByName.find(outputName);
   EXPECT_TRUE(it != generatedShapeDataByName.cend())
       << "No propagated data found for output: " << outputName;

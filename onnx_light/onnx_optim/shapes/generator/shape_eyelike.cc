@@ -22,7 +22,7 @@ void ComputeShapeEyeLike(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "EyeLike", "ComputeShapeEyeLike");
   EXT_ENFORCE_INVALID(node.input_size() >= 1, "ComputeShapeEyeLike: EyeLike requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
   EXT_ENFORCE_INVALID(input.Shape().Rank() == 2,
                       "ComputeShapeEyeLike: input tensor must be 2-dimensional.");
 

@@ -68,15 +68,15 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   // (which can be either tensors or sequences).
   ShapesContext local = ctx;
 
-  const std::string input_seq_name = node.input(0).as_string();
+  const std::string input_seq_name = std::string(node.input(0));
   const OptimSequence &input_seq = ctx.GetSequence(input_seq_name);
   const TensorType elem_dtype = input_seq.ElemDtype();
   const OptimShape elem_shape = CommonElemShape(input_seq);
-  local.Set(body.input()[0].name().as_string(), OptimTensor(nullptr, elem_dtype, elem_shape));
+  local.Set(std::string(body.input()[0].name()), OptimTensor(nullptr, elem_dtype, elem_shape));
 
   for (int i = 1; i < node.input_size(); ++i) {
-    const std::string outer_name = node.input(i).as_string();
-    const std::string body_in_name = body.input()[i].name().as_string();
+    const std::string outer_name = std::string(node.input(i));
+    const std::string body_in_name = std::string(body.input()[i].name());
     if (ctx.HasSequence(outer_name)) {
       // Additional inputs that are sequences contribute one element per
       // iteration; bind the body input to a per-element tensor descriptor,
@@ -94,7 +94,7 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
 
   // Validate that every body output is known in the local context.
   for (int i = 0; i < body.output().size(); ++i) {
-    const std::string body_out = body.output()[i].name().as_string();
+    const std::string body_out = std::string(body.output()[i].name());
     EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeSequenceMap: body output '", body_out,
                         "' is missing from the inferred context.");
   }
@@ -104,11 +104,11 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   // known, otherwise symbolic). Per-element shapes are not recorded
   // because the body may vary the per-element shape across iterations.
   for (int i = 0; i < node.output_size(); ++i) {
-    const std::string node_out = node.output(i).as_string();
+    const std::string node_out = std::string(node.output(i));
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &body_out = local.Get(body.output()[i].name().as_string());
+    const OptimTensor &body_out = local.Get(std::string(body.output()[i].name()));
     OptimDim out_length = input_seq.Length().IsInt() ? OptimDim(input_seq.Length().AsInt())
                                                      : OptimDim("SequenceMap_" + node_out + "_len");
     ctx.SetSequence(node_out, OptimSequence(body_out.Dtype(), std::move(out_length)));

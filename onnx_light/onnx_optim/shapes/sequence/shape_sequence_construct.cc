@@ -31,7 +31,7 @@ void ComputeShapeSequenceConstruct(ShapesContext &ctx, const NodeProto &node) {
     return;
   }
 
-  const OptimTensor &first = ctx.Get(node.input(0).as_string());
+  const OptimTensor &first = ctx.Get(std::string(node.input(0)));
   const TensorType common_dtype = first.Dtype();
 
   std::vector<OptimShape> elem_shapes;
@@ -39,10 +39,10 @@ void ComputeShapeSequenceConstruct(ShapesContext &ctx, const NodeProto &node) {
   elem_shapes.push_back(first.Shape());
 
   for (int i = 1; i < n_inputs; ++i) {
-    const OptimTensor &t = ctx.Get(node.input(i).as_string());
+    const OptimTensor &t = ctx.Get(std::string(node.input(i)));
     EXT_ENFORCE_INVALID(t.Dtype() == common_dtype, "ComputeShapeSequenceConstruct: input '",
-                        node.input(i).as_string(), "' has a dtype that differs from input '",
-                        node.input(0).as_string(), "'.");
+                        std::string(node.input(i)), "' has a dtype that differs from input '",
+                        std::string(node.input(0)), "'.");
     elem_shapes.push_back(t.Shape());
   }
 

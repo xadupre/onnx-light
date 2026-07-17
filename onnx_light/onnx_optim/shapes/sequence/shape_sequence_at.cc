@@ -18,7 +18,7 @@ void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeSequenceAt: SequenceAt requires at least one input.");
 
-  const OptimSequence &seq = ctx.GetSequence(node.input(0).as_string());
+  const OptimSequence &seq = ctx.GetSequence(std::string(node.input(0)));
   const TensorType elem_dtype = seq.ElemDtype();
 
   // The output element type matches the input sequence's element type. The

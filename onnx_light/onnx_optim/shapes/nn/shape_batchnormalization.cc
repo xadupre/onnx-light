@@ -74,7 +74,7 @@ void ComputeShapeBatchNormalization(ShapesContext &ctx, const NodeProto &node, c
   const OptimShape channel_shape{ChannelDim(in_shape)};
 
   for (int i = 1; i < n_outputs; ++i) {
-    const std::string &name = node.output(i).as_string();
+    const std::string &name = std::string(node.output(i));
     if (name.empty()) {
       continue;
     }

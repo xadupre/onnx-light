@@ -46,7 +46,7 @@ using MetadataMap = std::unordered_map<std::string, std::string>;
 template <typename Proto> MetadataMap MetadataOf(const Proto &proto) {
   MetadataMap out;
   for (const auto &prop : proto.ref_metadata_props()) {
-    out[prop.ref_key().as_string()] = prop.ref_value().as_string();
+    out[std::string(prop.ref_key())] = std::string(prop.ref_value());
   }
   return out;
 }
@@ -659,9 +659,9 @@ TEST(BackendTestCaseShapeInference, OnnxOptimSupportsNestedLocalFunctionCall) {
     const auto &dims = out_tt->ref_shape().ref_dim();
     ASSERT_EQ(dims.size(), 2u);
     EXPECT_TRUE(dims[0].has_dim_param());
-    EXPECT_EQ(dims[0].ref_dim_param().as_string(), "batch");
+    EXPECT_EQ(std::string(dims[0].ref_dim_param()), "batch");
     EXPECT_TRUE(dims[1].has_dim_param());
-    EXPECT_EQ(dims[1].ref_dim_param().as_string(), "d_model");
+    EXPECT_EQ(std::string(dims[1].ref_dim_param()), "d_model");
   }
   ASSERT_TRUE(found) << "test_cc_shape_inference_nested_local_function_add case not registered";
 }
@@ -2287,7 +2287,7 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
 
     // Every graph output must have a type after shape inference.
     for (const auto &out : model_copy.ref_graph().ref_output()) {
-      EXPECT_TRUE(out.has_type()) << "output " << out.ref_name().as_string()
+      EXPECT_TRUE(out.has_type()) << "output " << std::string(out.ref_name())
                                   << " missing type after shape inference";
     }
   }

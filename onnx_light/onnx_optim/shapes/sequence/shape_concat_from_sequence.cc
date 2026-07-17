@@ -46,7 +46,7 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeConcatFromSequence: ConcatFromSequence requires one input.");
 
-  const std::string seq_name = node.input(0).as_string();
+  const std::string seq_name = std::string(node.input(0));
   const OptimSequence &seq = ctx.GetSequence(seq_name);
   const TensorType elem_dtype = seq.ElemDtype();
 
@@ -136,7 +136,7 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
     } else {
       // Disambiguate the synthetic symbolic dim by output name so multiple
       // ConcatFromSequence nodes in the same graph do not collide.
-      merged[resolved_axis] = OptimDim("ConcatFromSequence_" + node.output(0).as_string() +
+      merged[resolved_axis] = OptimDim("ConcatFromSequence_" + std::string(node.output(0)) +
                                        "_axis" + std::to_string(resolved_axis));
     }
     out_shape = std::move(merged);

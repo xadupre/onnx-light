@@ -92,16 +92,16 @@ TEST(BackendTestCase, ConcatFromSequenceCasesAreRegistered) {
     const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 2u) << tc->name;
     const NodeProto &seq_node = graph.ref_node()[0];
-    EXPECT_EQ(seq_node.ref_op_type().as_string(), "SequenceConstruct");
+    EXPECT_EQ(std::string(seq_node.ref_op_type()), "SequenceConstruct");
     EXPECT_EQ(seq_node.ref_input().size(), 3u);
     EXPECT_EQ(seq_node.ref_output().size(), 1u);
 
     const NodeProto &concat_node = graph.ref_node()[1];
-    EXPECT_EQ(concat_node.ref_op_type().as_string(), "ConcatFromSequence");
+    EXPECT_EQ(std::string(concat_node.ref_op_type()), "ConcatFromSequence");
     ASSERT_EQ(concat_node.ref_input().size(), 1u);
-    EXPECT_EQ(concat_node.ref_input()[0].as_string(), seq_node.ref_output()[0].as_string());
+    EXPECT_EQ(std::string(concat_node.ref_input()[0]), std::string(seq_node.ref_output()[0]));
     ASSERT_EQ(concat_node.ref_output().size(), 1u);
-    EXPECT_EQ(concat_node.ref_output()[0].as_string(), "concat_result");
+    EXPECT_EQ(std::string(concat_node.ref_output()[0]), "concat_result");
 
     ASSERT_EQ(graph.ref_input().size(), 3u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
@@ -134,8 +134,8 @@ TEST(BackendTestCase, SequenceLengthCaseIsPresent) {
 
   const GraphProto &graph = length_case->model().ref_graph();
   ASSERT_EQ(graph.ref_node().size(), 2u);
-  EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
-  EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceLength");
+  EXPECT_EQ(std::string(graph.ref_node()[0].ref_op_type()), "SequenceConstruct");
+  EXPECT_EQ(std::string(graph.ref_node()[1].ref_op_type()), "SequenceLength");
   ASSERT_EQ(graph.ref_output().size(), 1u);
   const ValueInfoProto &out_vi = graph.ref_output()[0];
   ASSERT_TRUE(out_vi.ref_type().has_tensor_type());
@@ -174,8 +174,8 @@ TEST(BackendTestCase, SequenceEraseCasesAreRegistered) {
   for (const TestCase *tc : {default_case, pos1_case, neg_case}) {
     const GraphProto &graph = tc->model().ref_graph();
     ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
-    EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
-    EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceErase");
+    EXPECT_EQ(std::string(graph.ref_node()[0].ref_op_type()), "SequenceConstruct");
+    EXPECT_EQ(std::string(graph.ref_node()[1].ref_op_type()), "SequenceErase");
     ASSERT_EQ(graph.ref_output().size(), 1u);
     // Output is a sequence type.
     EXPECT_TRUE(graph.ref_output()[0].ref_type().has_sequence_type()) << tc->name;
@@ -212,8 +212,8 @@ TEST(BackendTestCase, SequenceInsertCasesAreRegistered) {
   for (const TestCase *tc : {default_case, pos1_case, neg_case}) {
     const GraphProto &graph = tc->model().ref_graph();
     ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
-    EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
-    EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceInsert");
+    EXPECT_EQ(std::string(graph.ref_node()[0].ref_op_type()), "SequenceConstruct");
+    EXPECT_EQ(std::string(graph.ref_node()[1].ref_op_type()), "SequenceInsert");
     ASSERT_EQ(graph.ref_output().size(), 1u);
     EXPECT_TRUE(graph.ref_output()[0].ref_type().has_sequence_type()) << tc->name;
     ASSERT_EQ(tc->data_sets().size(), 1u);
@@ -247,8 +247,8 @@ TEST(BackendTestCase, SequenceAtCasesAreRegistered) {
   for (const TestCase *tc : {pos0_case, pos2_case, neg_case}) {
     const GraphProto &graph = tc->model().ref_graph();
     ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
-    EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
-    EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceAt");
+    EXPECT_EQ(std::string(graph.ref_node()[0].ref_op_type()), "SequenceConstruct");
+    EXPECT_EQ(std::string(graph.ref_node()[1].ref_op_type()), "SequenceAt");
     ASSERT_EQ(graph.ref_output().size(), 1u);
     // Output is a tensor type (not a sequence).
     EXPECT_TRUE(graph.ref_output()[0].ref_type().has_tensor_type()) << tc->name;
@@ -293,13 +293,13 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   for (const TestCase *tc : {float_case, int64_case}) {
     const GraphProto &graph = tc->model().ref_graph();
     ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
-    EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
-    EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceMap");
+    EXPECT_EQ(std::string(graph.ref_node()[0].ref_op_type()), "SequenceConstruct");
+    EXPECT_EQ(std::string(graph.ref_node()[1].ref_op_type()), "SequenceMap");
 
     // The SequenceMap node carries a 'body' GRAPH attribute.
     const NodeProto &map_node = graph.ref_node()[1];
     ASSERT_EQ(map_node.ref_attribute().size(), 1u) << tc->name;
-    EXPECT_EQ(map_node.ref_attribute()[0].ref_name().as_string(), "body");
+    EXPECT_EQ(std::string(map_node.ref_attribute()[0].ref_name()), "body");
     EXPECT_EQ(map_node.ref_attribute()[0].ref_type(), AttributeProto::AttributeType::GRAPH);
 
     ASSERT_EQ(graph.ref_output().size(), 1u);
@@ -319,9 +319,9 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   {
     const GraphProto &g = identity_2_seq->model().ref_graph();
     ASSERT_EQ(g.ref_node().size(), 3u);
-    EXPECT_EQ(g.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
-    EXPECT_EQ(g.ref_node()[1].ref_op_type().as_string(), "SequenceConstruct");
-    EXPECT_EQ(g.ref_node()[2].ref_op_type().as_string(), "SequenceMap");
+    EXPECT_EQ(std::string(g.ref_node()[0].ref_op_type()), "SequenceConstruct");
+    EXPECT_EQ(std::string(g.ref_node()[1].ref_op_type()), "SequenceConstruct");
+    EXPECT_EQ(std::string(g.ref_node()[2].ref_op_type()), "SequenceMap");
     ASSERT_EQ(g.ref_output().size(), 2u);
     EXPECT_TRUE(g.ref_output()[0].ref_type().has_sequence_type());
     EXPECT_TRUE(g.ref_output()[1].ref_type().has_sequence_type());
@@ -337,12 +337,12 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   {
     const GraphProto &g = add_2_seq->model().ref_graph();
     ASSERT_EQ(g.ref_node().size(), 3u);
-    EXPECT_EQ(g.ref_node()[2].ref_op_type().as_string(), "SequenceMap");
+    EXPECT_EQ(std::string(g.ref_node()[2].ref_op_type()), "SequenceMap");
     const NodeProto &map_node = g.ref_node()[2];
     // Body is Add (2 inputs, 1 output).
     const GraphProto &body = map_node.ref_attribute()[0].ref_g();
     ASSERT_EQ(body.ref_node().size(), 1u);
-    EXPECT_EQ(body.ref_node()[0].ref_op_type().as_string(), "Add");
+    EXPECT_EQ(std::string(body.ref_node()[0].ref_op_type()), "Add");
     ASSERT_EQ(g.ref_output().size(), 1u);
     EXPECT_TRUE(g.ref_output()[0].ref_type().has_sequence_type());
     EXPECT_EQ(add_2_seq->data_sets()[0].inputs.size(), 6u);
@@ -359,8 +359,8 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   {
     const GraphProto &g = add_1_seq_1_tensor->model().ref_graph();
     ASSERT_EQ(g.ref_node().size(), 2u);
-    EXPECT_EQ(g.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
-    EXPECT_EQ(g.ref_node()[1].ref_op_type().as_string(), "SequenceMap");
+    EXPECT_EQ(std::string(g.ref_node()[0].ref_op_type()), "SequenceConstruct");
+    EXPECT_EQ(std::string(g.ref_node()[1].ref_op_type()), "SequenceMap");
     const NodeProto &map_node = g.ref_node()[1];
     ASSERT_EQ(map_node.ref_input().size(), 2u);
     // 3 sequence-element tensors + 1 broadcast tensor → 4 graph inputs.
@@ -379,11 +379,11 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   {
     const GraphProto &g = extract_shapes->model().ref_graph();
     ASSERT_EQ(g.ref_node().size(), 2u);
-    EXPECT_EQ(g.ref_node()[1].ref_op_type().as_string(), "SequenceMap");
+    EXPECT_EQ(std::string(g.ref_node()[1].ref_op_type()), "SequenceMap");
     const NodeProto &map_node = g.ref_node()[1];
     const GraphProto &body = map_node.ref_attribute()[0].ref_g();
     ASSERT_EQ(body.ref_node().size(), 1u);
-    EXPECT_EQ(body.ref_node()[0].ref_op_type().as_string(), "Shape");
+    EXPECT_EQ(std::string(body.ref_node()[0].ref_op_type()), "Shape");
     ASSERT_EQ(g.ref_output().size(), 1u);
     EXPECT_TRUE(g.ref_output()[0].ref_type().has_sequence_type());
     // Output sequence element type must be INT64.
@@ -430,8 +430,8 @@ TEST(BackendTestCase, SequenceEmptyCasesAreRegistered) {
   for (const TestCase *tc : {default_case, int64_case}) {
     const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 2u) << tc->name;
-    EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceEmpty");
-    EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceLength");
+    EXPECT_EQ(std::string(graph.ref_node()[0].ref_op_type()), "SequenceEmpty");
+    EXPECT_EQ(std::string(graph.ref_node()[1].ref_op_type()), "SequenceLength");
     // No graph inputs (SequenceEmpty takes none and SequenceLength's input
     // is produced in-graph).
     EXPECT_EQ(graph.ref_input().size(), 0u) << tc->name;
@@ -451,7 +451,7 @@ TEST(BackendTestCase, SequenceEmptyCasesAreRegistered) {
   ASSERT_EQ(int64_case->model().ref_graph().ref_node()[0].ref_attribute().size(), 1u);
   const AttributeProto &dtype_attr =
       int64_case->model().ref_graph().ref_node()[0].ref_attribute()[0];
-  EXPECT_EQ(dtype_attr.ref_name().as_string(), "dtype");
+  EXPECT_EQ(std::string(dtype_attr.ref_name()), "dtype");
   EXPECT_EQ(dtype_attr.ref_type(), AttributeProto::AttributeType::INT);
   EXPECT_EQ(dtype_attr.ref_i(), static_cast<int64_t>(TensorProto::INT64));
 }
@@ -478,7 +478,7 @@ TEST(BackendTestCase, SplitToSequenceCasesAreRegistered) {
   for (const TestCase *tc : {case1, case2, case_nokd}) {
     const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u) << tc->name;
-    EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SplitToSequence") << tc->name;
+    EXPECT_EQ(std::string(graph.ref_node()[0].ref_op_type()), "SplitToSequence") << tc->name;
     ASSERT_EQ(graph.ref_output().size(), 1u);
     EXPECT_TRUE(graph.ref_output()[0].ref_type().has_sequence_type()) << tc->name;
     ASSERT_EQ(tc->data_sets().size(), 1u);

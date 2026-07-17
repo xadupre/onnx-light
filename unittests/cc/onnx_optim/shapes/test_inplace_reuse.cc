@@ -323,21 +323,21 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadata) {
   ASSERT_EQ(graph.node().size(), 3);
   // Node 0 reads the declared graph input X for the last time.
   ASSERT_EQ(graph.node()[0].metadata_props().size(), 1);
-  EXPECT_EQ(graph.node()[0].metadata_props()[0].key().as_string(),
+  EXPECT_EQ(std::string(graph.node()[0].metadata_props()[0].key()),
             std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey));
-  EXPECT_EQ(graph.node()[0].metadata_props()[0].value().as_string(), std::string("X"));
+  EXPECT_EQ(std::string(graph.node()[0].metadata_props()[0].value()), std::string("X"));
   ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
-  EXPECT_EQ(graph.node()[1].metadata_props()[0].key().as_string(),
+  EXPECT_EQ(std::string(graph.node()[1].metadata_props()[0].key()),
             std::string(onnx_optim::annotations::kInPlaceReuseMetadataKey));
-  EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
-  EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
+  EXPECT_EQ(std::string(graph.node()[1].metadata_props()[0].value()), std::string("0:0:equal"));
+  EXPECT_EQ(std::string(graph.node()[1].metadata_props()[1].key()),
             std::string(onnx_optim::annotations::kReleaseAfterMetadataKey));
-  EXPECT_EQ(graph.node()[1].metadata_props()[1].value().as_string(), std::string("A"));
+  EXPECT_EQ(std::string(graph.node()[1].metadata_props()[1].value()), std::string("A"));
   ASSERT_EQ(graph.node()[2].metadata_props().size(), 2);
-  EXPECT_EQ(graph.node()[2].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
-  EXPECT_EQ(graph.node()[2].metadata_props()[1].key().as_string(),
+  EXPECT_EQ(std::string(graph.node()[2].metadata_props()[0].value()), std::string("0:0:equal"));
+  EXPECT_EQ(std::string(graph.node()[2].metadata_props()[1].key()),
             std::string(onnx_optim::annotations::kReleaseAfterMetadataKey));
-  EXPECT_EQ(graph.node()[2].metadata_props()[1].value().as_string(), std::string("B"));
+  EXPECT_EQ(std::string(graph.node()[2].metadata_props()[1].value()), std::string("B"));
 }
 
 // A strictly larger reused buffer is recorded with the ``greater`` kind, and an
@@ -358,14 +358,14 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataGreaterAndUpdate) {
 
   WriteInPlaceReuseToMetadata(graph, ctx);
   ASSERT_EQ(graph.node()[0].metadata_props().size(), 1);
-  EXPECT_EQ(graph.node()[0].metadata_props()[0].key().as_string(),
+  EXPECT_EQ(std::string(graph.node()[0].metadata_props()[0].key()),
             std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey));
-  EXPECT_EQ(graph.node()[0].metadata_props()[0].value().as_string(), std::string("X"));
+  EXPECT_EQ(std::string(graph.node()[0].metadata_props()[0].value()), std::string("X"));
   ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
-  EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:greater"));
-  EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
+  EXPECT_EQ(std::string(graph.node()[1].metadata_props()[0].value()), std::string("0:0:greater"));
+  EXPECT_EQ(std::string(graph.node()[1].metadata_props()[1].key()),
             std::string(onnx_optim::annotations::kReleaseAfterMetadataKey));
-  EXPECT_EQ(graph.node()[1].metadata_props()[1].value().as_string(), std::string("A"));
+  EXPECT_EQ(std::string(graph.node()[1].metadata_props()[1].value()), std::string("A"));
 }
 
 // By default a declared graph input is never overwritten in place, but when
@@ -517,19 +517,19 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadata) {
   inplace.WriteToMetadata(graph);
   ASSERT_EQ(graph.node().size(), 3);
   ASSERT_EQ(graph.node()[0].metadata_props().size(), 1);
-  EXPECT_EQ(graph.node()[0].metadata_props()[0].key().as_string(),
+  EXPECT_EQ(std::string(graph.node()[0].metadata_props()[0].key()),
             std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey));
-  EXPECT_EQ(graph.node()[0].metadata_props()[0].value().as_string(), std::string("X"));
+  EXPECT_EQ(std::string(graph.node()[0].metadata_props()[0].value()), std::string("X"));
   ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
-  EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
-  EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
+  EXPECT_EQ(std::string(graph.node()[1].metadata_props()[0].value()), std::string("0:0:equal"));
+  EXPECT_EQ(std::string(graph.node()[1].metadata_props()[1].key()),
             std::string(onnx_optim::annotations::kReleaseAfterMetadataKey));
-  EXPECT_EQ(graph.node()[1].metadata_props()[1].value().as_string(), std::string("A"));
+  EXPECT_EQ(std::string(graph.node()[1].metadata_props()[1].value()), std::string("A"));
   ASSERT_EQ(graph.node()[2].metadata_props().size(), 2);
-  EXPECT_EQ(graph.node()[2].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
-  EXPECT_EQ(graph.node()[2].metadata_props()[1].key().as_string(),
+  EXPECT_EQ(std::string(graph.node()[2].metadata_props()[0].value()), std::string("0:0:equal"));
+  EXPECT_EQ(std::string(graph.node()[2].metadata_props()[1].key()),
             std::string(onnx_optim::annotations::kReleaseAfterMetadataKey));
-  EXPECT_EQ(graph.node()[2].metadata_props()[1].value().as_string(), std::string("B"));
+  EXPECT_EQ(std::string(graph.node()[2].metadata_props()[1].value()), std::string("B"));
 
   // Writing into a graph with a different node count is rejected.
   GraphProto smaller;
@@ -615,17 +615,17 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadataShapeTag) {
   bool found_not_used_after = false;
   for (int i = 0; i < graph.node()[1].metadata_props().size(); ++i) {
     const auto &prop = graph.node()[1].metadata_props()[i];
-    if (prop.key().as_string() == std::string(onnx_optim::annotations::kReleaseAfterMetadataKey)) {
-      EXPECT_EQ(prop.value().as_string(), std::string("S"));
+    if (std::string(prop.key()) == std::string(onnx_optim::annotations::kReleaseAfterMetadataKey)) {
+      EXPECT_EQ(std::string(prop.value()), std::string("S"));
       found_release_after = true;
     }
-    if (prop.key().as_string() ==
+    if (std::string(prop.key()) ==
         std::string(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey)) {
-      EXPECT_EQ(prop.value().as_string(), std::string("S"));
+      EXPECT_EQ(std::string(prop.value()), std::string("S"));
       found_shape_tag = true;
     }
-    if (prop.key().as_string() == std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey)) {
-      EXPECT_EQ(prop.value().as_string(), std::string("X"));
+    if (std::string(prop.key()) == std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey)) {
+      EXPECT_EQ(std::string(prop.value()), std::string("X"));
       found_not_used_after = true;
     }
   }
@@ -658,7 +658,7 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextNoValueTagsYieldsEmptyShapeTagged) {
   // kReleaseAfterShapeTagMetadataKey must not appear in metadata.
   for (int n = 0; n < graph.node().size(); ++n) {
     for (int i = 0; i < graph.node()[n].metadata_props().size(); ++i) {
-      EXPECT_NE(graph.node()[n].metadata_props()[i].key().as_string(),
+      EXPECT_NE(std::string(graph.node()[n].metadata_props()[i].key()),
                 std::string(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey));
     }
   }
@@ -750,9 +750,9 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataWithShapeTags) {
 
   bool found_shape_tag = false;
   for (int i = 0; i < graph.node()[1].metadata_props().size(); ++i) {
-    if (graph.node()[1].metadata_props()[i].key().as_string() ==
+    if (std::string(graph.node()[1].metadata_props()[i].key()) ==
         std::string(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey)) {
-      EXPECT_EQ(graph.node()[1].metadata_props()[i].value().as_string(), std::string("S"));
+      EXPECT_EQ(std::string(graph.node()[1].metadata_props()[i].value()), std::string("S"));
       found_shape_tag = true;
     }
   }

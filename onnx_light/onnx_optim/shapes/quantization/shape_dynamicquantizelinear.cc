@@ -24,11 +24,11 @@ void ComputeShapeDynamicQuantizeLinear(ShapesContext &ctx, const NodeProto &node
   ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kUint8, std::move(out_shape)));
 
   // y_scale: scalar float (rank 0).
-  if (node.output_size() >= 2 && !node.output(1).as_string().empty()) {
+  if (node.output_size() >= 2 && !std::string(node.output(1)).empty()) {
     ctx.Set(node.output(1), OptimTensor(nullptr, TensorType::kFloat, OptimShape{}));
   }
   // y_zero_point: scalar uint8 (rank 0).
-  if (node.output_size() >= 3 && !node.output(2).as_string().empty()) {
+  if (node.output_size() >= 3 && !std::string(node.output(2)).empty()) {
     ctx.Set(node.output(2), OptimTensor(nullptr, TensorType::kUint8, OptimShape{}));
   }
 }

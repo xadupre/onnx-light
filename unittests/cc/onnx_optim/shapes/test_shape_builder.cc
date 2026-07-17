@@ -628,7 +628,7 @@ TEST(OnnxOptimShapeBuilder, ConcatProducesSymbolicAxisDimAndAppliedToGraph) {
   const TensorShapeProto &shape = out.type().tensor_type().shape();
   ASSERT_EQ(shape.dim_size(), 2);
   // dim 0: "batch"
-  EXPECT_EQ(shape.dim(0).dim_param().as_string(), "batch");
+  EXPECT_EQ(std::string(shape.dim(0).dim_param()), "batch");
   // dim 1: symbolic (some non-empty string)
   EXPECT_FALSE(shape.dim(1).dim_param().empty());
 }
@@ -725,7 +725,7 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
   std::unordered_map<std::string, const ValueInfoProto *> vi_map;
   for (int i = 0; i < model.graph().value_info_size(); ++i) {
     const ValueInfoProto &vi = model.graph().value_info(i);
-    vi_map[vi.name().as_string()] = &vi;
+    vi_map[std::string(vi.name())] = &vi;
   }
   for (const std::string &name : {"xy", "S1", "S2", "zs"}) {
     EXPECT_TRUE(vi_map.count(name) > 0) << "value_info missing for " << name;
@@ -741,7 +741,7 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
     EXPECT_EQ(vi.type().tensor_type().elem_type(), static_cast<int>(TensorProto::DataType::FLOAT))
         << name;
     ASSERT_EQ(vi.type().tensor_type().shape().dim_size(), 2) << name;
-    EXPECT_EQ(vi.type().tensor_type().shape().dim(0).dim_param().as_string(), "a") << name;
+    EXPECT_EQ(std::string(vi.type().tensor_type().shape().dim(0).dim_param()), "a") << name;
     EXPECT_FALSE(vi.type().tensor_type().shape().dim(1).dim_param().empty()) << name;
   }
 }

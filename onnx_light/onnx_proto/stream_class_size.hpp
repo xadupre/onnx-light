@@ -79,6 +79,13 @@ SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
 
 template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
+                               const utils::OptionalString &field, SerializeOptions &) {
+  return make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                         stream.size_string(utils::RefString(field.data(), field.size())));
+}
+
+template <>
+SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
                                const utils::OptionalField<uint64_t> &field, SerializeOptions &) {
   if (field.has_value()) {
     return make_proto_size(stream.size_field_header(order, FIELD_VARINT) +

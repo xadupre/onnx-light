@@ -13,9 +13,9 @@ bool GradTranspose(const NodeProto &node, const std::string &output_grad,
                    std::unordered_map<std::string, std::string> &grad_accum, int &counter,
                    FunctionProto &func) {
   const auto &inputs = node.input();
-  if (inputs.size() < 1 || inputs[0].null() || inputs[0].empty())
+  if (inputs.size() < 1 || inputs[0].empty() || inputs[0].empty())
     return true;
-  const std::string A = inputs[0].as_string();
+  const std::string A = std::string(inputs[0]);
   std::string dA = NewGradName("dA", counter);
   const AttributeProto *perm_attr = FindAttribute(node, "perm");
   if (perm_attr != nullptr) {

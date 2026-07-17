@@ -231,7 +231,7 @@ bool IsValidExternalDataFilename(const std::string &name) {
 // carry inline raw_data; the bytes are left untouched so they can be written
 // out by a subsequent serialization call.
 void SetExternalDataLocation(TensorProto &tensor, const std::string &location) {
-  EXT_ENFORCE(tensor.has_raw_data(), "Tensor '", tensor.ref_name().as_string(),
+  EXT_ENFORCE(tensor.has_raw_data(), "Tensor '", std::string(tensor.ref_name()),
               "' does not have raw_data. Cannot set external data for this tensor.");
   tensor.clr_external_data();
   tensor.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
@@ -313,7 +313,7 @@ void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &op
     const int64_t rewritten_size = options.raw_data_callback(*it, nullptr, 0, true);
     EXT_ENFORCE(rewritten_size >= 0,
                 "raw_data_callback returned a negative size. Value=", rewritten_size,
-                ", tensor=", it->ref_name().as_string(), ".");
+                ", tensor=", std::string(it->ref_name()), ".");
     if (rewritten_size > 0) {
       utils::ByteSpan rewritten_raw_data;
       if (options.alignment > 1) {
@@ -325,13 +325,13 @@ void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &op
       const int64_t filled_size = options.raw_data_callback(*it, rewritten_raw_data.data(),
                                                             rewritten_raw_data.size(), false);
       EXT_ENFORCE(filled_size == rewritten_size, "raw_data_callback returned ", filled_size,
-                  " bytes in the fill pass for tensor ", it->ref_name().as_string(),
+                  " bytes in the fill pass for tensor ", std::string(it->ref_name()),
                   " after reporting ", rewritten_size, " bytes in the size pass.");
       it->ref_raw_data() = std::move(rewritten_raw_data);
     } else {
       const int64_t filled_size = options.raw_data_callback(*it, nullptr, 0, false);
       EXT_ENFORCE(filled_size == 0, "raw_data_callback returned ", filled_size,
-                  " bytes in the fill pass for tensor ", it->ref_name().as_string(),
+                  " bytes in the fill pass for tensor ", std::string(it->ref_name()),
                   " after reporting 0 bytes in the size pass.");
       it->ref_raw_data().clear();
     }
@@ -372,7 +372,7 @@ void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
     if (all_tensors_to_one_file) {
       SetExternalDataLocation(tensor, single_file_name);
     } else {
-      std::string tensor_location = tensor.ref_name().as_string();
+      std::string tensor_location = std::string(tensor.ref_name());
       if (!IsValidExternalDataFilename(tensor_location)) {
         tensor_location = MakeUuidFilename();
       }
@@ -427,14 +427,15 @@ namespace {
 std::string SafeStrerror(int err) { return std::error_code(err, std::system_category()).message(); }
 
 // Parses an int64_t encoded as decimal text inside external_data entries (offset/length/size).
-int64_t ParseExternalDataInt64(const utils::String &value, const char *key) {
+int64_t ParseExternalDataInt64(const utils::OptionalString &value, const char *key) {
   int64_t out = 0;
   const char *begin = value.data();
   const char *end = begin + value.size();
   auto parsed = std::from_chars(begin, end, out);
   EXT_ENFORCE(parsed.ec == std::errc() && parsed.ptr == end,
               "AlignExternalDataStreaming: unable to parse external_data '", key,
-              "' as int64, value='", value.as_string(true), "'.");
+              "' as int64, value='",
+              ::ONNX_LIGHT_NAMESPACE::utils::quote_string((value).sv(), true), "'.");
   return out;
 }
 
@@ -448,9 +449,9 @@ void ReadExternalDataEntries(const TensorProto &tensor, std::string &location, i
   bool has_offset = false;
   for (int i = 0; i < tensor.ref_external_data().size(); ++i) {
     const StringStringEntryProto &entry = tensor.ref_external_data()[i];
-    const utils::String &key = entry.ref_key();
+    const utils::OptionalString &key = entry.ref_key();
     if (key == "location") {
-      location = entry.ref_value().as_string();
+      location = std::string(entry.ref_value());
     } else if (key == "offset") {
       offset = ParseExternalDataInt64(entry.ref_value(), "offset");
       has_offset = true;
@@ -459,10 +460,10 @@ void ReadExternalDataEntries(const TensorProto &tensor, std::string &location, i
     }
   }
   EXT_ENFORCE(!location.empty(), "AlignExternalDataStreaming: tensor '",
-              tensor.ref_name().as_string(), "' has no external_data.location.");
+              std::string(tensor.ref_name()), "' has no external_data.location.");
   EXT_ENFORCE(has_offset || offset == 0, "AlignExternalDataStreaming: tensor '",
-              tensor.ref_name().as_string(), "' has invalid external_data.offset.");
-  EXT_ENFORCE(length >= 0, "AlignExternalDataStreaming: tensor '", tensor.ref_name().as_string(),
+              std::string(tensor.ref_name()), "' has invalid external_data.offset.");
+  EXT_ENFORCE(length >= 0, "AlignExternalDataStreaming: tensor '", std::string(tensor.ref_name()),
               "' has no external_data.length.");
 }
 
@@ -475,7 +476,7 @@ void RewriteExternalDataEntries(TensorProto &tensor, const std::string &new_loca
   for (int i = 0; i < tensor.ref_external_data().size(); ++i) {
     const StringStringEntryProto &entry = tensor.ref_external_data()[i];
     if (entry.ref_key() == "checksum") {
-      checksum = entry.ref_value().as_string();
+      checksum = std::string(entry.ref_value());
       has_checksum = true;
       break;
     }
@@ -732,7 +733,7 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
                              tensor.ref_data_location() == TensorProto::DataLocation::EXTERNAL &&
                              tensor.has_external_data();
     EXT_ENFORCE(!has_inline_raw || !is_external, "AlignExternalDataStreaming: tensor '",
-                tensor.ref_name().as_string(),
+                std::string(tensor.ref_name()),
                 "' has both inline raw_data and external_data; this is not supported.");
     if (!is_external) {
       // Inline tensors are preserved as-is in the destination .onnx. If they had large
@@ -740,7 +741,7 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
       // dropped the bytes; detect and refuse such cases so we never silently corrupt data.
       EXT_ENFORCE(!tensor.has_data_location() ||
                       tensor.ref_data_location() == TensorProto::DataLocation::DEFAULT,
-                  "AlignExternalDataStreaming: tensor '", tensor.ref_name().as_string(),
+                  "AlignExternalDataStreaming: tensor '", std::string(tensor.ref_name()),
                   "' is marked EXTERNAL but has no external_data entries.");
       continue;
     }
@@ -761,7 +762,7 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
     if (stream_it == src_fds.end()) {
       int fd = OpenForRead(src_weights_key);
       EXT_ENFORCE(fd >= 0, "AlignExternalDataStreaming: cannot open source weights file '",
-                  src_weights_key, "' for tensor '", tensor.ref_name().as_string(),
+                  src_weights_key, "' for tensor '", std::string(tensor.ref_name()),
                   "' (errno=", errno, ": ", SafeStrerror(errno), ").");
       stream_it = src_fds.emplace(src_weights_key, ScopedFd(fd)).first;
     }
@@ -853,7 +854,7 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
                              tensor.ref_data_location() == TensorProto::DataLocation::EXTERNAL &&
                              tensor.has_external_data();
     EXT_ENFORCE(!has_inline_raw || !is_external, "SaveModelWithSharedExternalData: tensor '",
-                tensor.ref_name().as_string(),
+                std::string(tensor.ref_name()),
                 "' has both inline raw_data and external_data; this is not supported.");
 
     if (is_external) {
@@ -867,7 +868,7 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
       // Nothing to externalize (e.g. tensors using typed *_data fields, or empty raw_data).
       EXT_ENFORCE(!tensor.has_data_location() ||
                       tensor.ref_data_location() == TensorProto::DataLocation::DEFAULT,
-                  "SaveModelWithSharedExternalData: tensor '", tensor.ref_name().as_string(),
+                  "SaveModelWithSharedExternalData: tensor '", std::string(tensor.ref_name()),
                   "' is marked EXTERNAL but has no external_data entries.");
       continue;
     }
@@ -895,7 +896,7 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
         continue;
 #endif
       EXT_ENFORCE(w > 0, "SaveModelWithSharedExternalData: failed to write tensor '",
-                  tensor.ref_name().as_string(), "' to destination weights file (errno=", errno,
+                  std::string(tensor.ref_name()), "' to destination weights file (errno=", errno,
                   ": ", SafeStrerror(errno), ").");
       p += w;
       left -= static_cast<size_t>(w);
@@ -1050,9 +1051,9 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
           int64_t length = -1;
           for (int k = 0; k < it_chunks->ref_external_data().size(); ++k) {
             const StringStringEntryProto &entry = it_chunks->ref_external_data()[k];
-            const utils::String &key = entry.ref_key();
+            const utils::OptionalString &key = entry.ref_key();
             if (key == "location") {
-              location = entry.ref_value().as_string();
+              location = std::string(entry.ref_value());
             } else if (key == "offset") {
               offset = entry.ref_value().toint64();
             } else if (key == "length" || key == "size") {
@@ -1342,11 +1343,11 @@ const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_nam
     }
     EXT_ENFORCE_INVALID(attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g(), prefix,
                         "attribute '", attr_name, "' must be a GRAPH on node of op_type '",
-                        node.op_type().as_string(), "'.");
+                        std::string(node.op_type()), "'.");
     return attr.g();
   }
   EXT_THROW_INVALID(prefix, "attribute '", attr_name, "' is missing on node of op_type '",
-                    node.op_type().as_string(), "'.");
+                    std::string(node.op_type()), "'.");
 }
 
 NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,

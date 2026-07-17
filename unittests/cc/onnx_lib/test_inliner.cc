@@ -175,8 +175,8 @@ foo (x) => (y) {
   for (const auto &node : model.ref_graph().ref_node()) {
     for (const auto &out : node.ref_output()) {
       if (!out.empty()) {
-        ASSERT_TRUE(output_names.insert(out.as_string()).second)
-            << "Duplicate output name: " << out.as_string();
+        ASSERT_TRUE(output_names.insert(std::string(out)).second)
+            << "Duplicate output name: " << std::string(out);
       }
     }
   }
@@ -203,7 +203,7 @@ foo (x) => (y)
   InlineFunctions(model, code);
   // Check that valueinfo is propagated from function to main graph.
   const auto &graph = model.ref_graph();
-  const std::string temp_new_name = graph.ref_node()[0].ref_output()[0].as_string();
+  const std::string temp_new_name = std::string(graph.ref_node()[0].ref_output()[0]);
   const auto &valueinfos = graph.ref_value_info();
   for (const auto &valueinfo : valueinfos) {
     if (valueinfo.ref_name() == temp_new_name) {
@@ -242,8 +242,8 @@ foo (x) => (y) {
   for (const auto &node : model.ref_graph().ref_node()) {
     for (const auto &out : node.ref_output()) {
       if (!out.empty()) {
-        ASSERT_TRUE(output_names.insert(out.as_string()).second)
-            << "Duplicate output name: " << out.as_string();
+        ASSERT_TRUE(output_names.insert(std::string(out)).second)
+            << "Duplicate output name: " << std::string(out);
       }
     }
   }
@@ -354,7 +354,7 @@ test_graph (float x) => (float y)
   // Check the first node is a Constant.
   ASSERT_EQ(function.ref_node()[0].ref_op_type(), "Constant");
   ASSERT_EQ(function.ref_node()[0].ref_output().size(), 1U);
-  ASSERT_NE(function.ref_node()[0].ref_output()[0].as_string().find("test"), std::string::npos);
+  ASSERT_NE(std::string(function.ref_node()[0].ref_output()[0]).find("test"), std::string::npos);
 
   // Check the second node is an Add.
   ASSERT_EQ(function.ref_node()[1].ref_op_type(), "Add");
@@ -392,7 +392,7 @@ TEST(Renamer, BasicFunctionality) {
 
   // Verify renaming worked correctly.
   ASSERT_EQ(node.ref_input()[0], "actual_input");
-  ASSERT_NE(node.ref_output()[0].as_string().find("test"), std::string::npos);
+  ASSERT_NE(std::string(node.ref_output()[0]).find("test"), std::string::npos);
 }
 
 // Tests for GetUsedVars (ComputeInputs).

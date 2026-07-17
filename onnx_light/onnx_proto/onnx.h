@@ -154,8 +154,8 @@ inline ValueCase value_case() const {
 }
 void Clear() {
   dim_value_.reset();
-  dim_param_.clear();
-  denotation_.clear();
+  dim_param_.reset();
+  denotation_.reset();
 }
 END_PROTO()
 inline TensorShapeProto() {}

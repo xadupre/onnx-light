@@ -127,11 +127,11 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
   // Collect input shapes and the dtype (propagated from the first input).
   std::vector<OptimShape> input_shapes;
   input_shapes.reserve(n_inputs);
-  const OptimTensor &first = ctx.Get(node.input(0).as_string());
+  const OptimTensor &first = ctx.Get(std::string(node.input(0)));
   const TensorType out_dtype = first.Dtype();
   input_shapes.push_back(first.Shape());
   for (int i = 1; i < n_inputs; ++i) {
-    input_shapes.push_back(ctx.Get(node.input(i).as_string()).Shape());
+    input_shapes.push_back(ctx.Get(std::string(node.input(i))).Shape());
   }
 
   // Determine ellipsis rank.

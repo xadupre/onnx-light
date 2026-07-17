@@ -29,7 +29,7 @@ void ComputeShapeHammingWindow(ShapesContext &ctx, const NodeProto &node) {
       GetAttributeOr<int64_t>(node, "output_datatype", static_cast<int64_t>(TensorProto::FLOAT));
   dtype = DataTypeToTensorType(static_cast<TensorProto::DataType>(output_datatype));
 
-  const OptimTensor &size_input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &size_input = ctx.Get(std::string(node.input(0)));
 
   OptimShape out_shape;
   if (size_input.HasValueAsShape() && size_input.ValueAsShape().Rank() == 1 &&

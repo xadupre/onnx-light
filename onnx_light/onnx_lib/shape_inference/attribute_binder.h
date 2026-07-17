@@ -38,11 +38,11 @@ public:
         // Attribute-references must be replaced by the corresponding attribute-value in the
         // call-node if the call-node contains the attribute. Otherwise, this attribute must be
         // removed.
-        auto it = attr_map_.find(attr.ref_attr_name().as_string());
+        auto it = attr_map_.find(std::string(attr.ref_attr_name()));
         if (it != attr_map_.end()) {
           const AttributeProto *replacement = it->second;
           // Copy value of attribute, but retain original name:
-          std::string name = attr.name().as_string();
+          std::string name = std::string(attr.name());
           attr.CopyFrom(*replacement);
           attr.set_name(name);
           ++attr_iter;
@@ -64,7 +64,7 @@ public:
   static void BindAttributes(const NodeProto &callnode, FunctionProto &callee) {
     AttributeMap map;
     for (const auto &attr : callnode.attribute()) {
-      map[attr.name().as_string()] = &attr;
+      map[std::string(attr.name())] = &attr;
     }
     AttributeBinder attr_binder(map);
     attr_binder.VisitFunction(callee);

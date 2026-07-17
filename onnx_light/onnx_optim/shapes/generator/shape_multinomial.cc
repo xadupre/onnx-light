@@ -23,7 +23,7 @@ void ComputeShapeMultinomial(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeMultinomial: Multinomial requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
 
   // Output element type: from the ``dtype`` attribute when present
   // (must be INT32 or INT64), otherwise defaults to INT32 per the schema.

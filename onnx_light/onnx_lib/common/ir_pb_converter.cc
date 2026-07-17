@@ -16,8 +16,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
-// Helper to convert onnx-light's utils::String to std::string
-static inline std::string to_std_string(const utils::String &s) {
+// Helper to convert an onnx-light string field to std::string.
+static inline std::string to_std_string(const std::string &s) {
   return std::string(s.data(), s.size());
 }
 

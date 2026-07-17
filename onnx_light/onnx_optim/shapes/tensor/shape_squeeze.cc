@@ -42,7 +42,7 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeSqueeze: Squeeze requires at least one input.");
 
-  const OptimTensor &data = ctx.Get(node.input(0).as_string());
+  const OptimTensor &data = ctx.Get(std::string(node.input(0)));
   const OptimShape &input_shape = data.Shape();
   const int64_t rank = static_cast<int64_t>(input_shape.Rank());
 
@@ -54,7 +54,7 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node) {
 
   if (node.input_size() >= 2 && !node.input(1).empty()) {
     axes_specified = true;
-    const OptimTensor &axes_tensor = ctx.Get(node.input(1).as_string());
+    const OptimTensor &axes_tensor = ctx.Get(std::string(node.input(1)));
     if (axes_tensor.HasValueAsShape()) {
       const OptimShape &axes = axes_tensor.ValueAsShape();
       std::vector<int64_t> raw_axes;

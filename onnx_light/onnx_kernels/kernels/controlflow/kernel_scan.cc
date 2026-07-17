@@ -258,14 +258,14 @@ std::vector<Tensor> Scan::operator()(RuntimeContext &rt, const GraphProto &body,
     bindings.reserve(n + m);
     for (std::size_t i = 0; i < n; ++i) {
       Tensor t = state[i];
-      t.name = body.input(static_cast<int>(i)).name().as_string();
+      t.name = std::string(body.input(static_cast<int>(i)).name());
       bindings.emplace_back(t.name, std::move(t));
     }
     for (std::size_t i = 0; i < m; ++i) {
       const int64_t index = (scan_input_directions[i] == 0) ? iter : (trip_count - 1 - iter);
       Tensor slice =
           SliceTensorAlongAxis(scan_inputs[i], resolved_scan_input_axes[i], index, "Scan");
-      slice.name = body.input(static_cast<int>(n + i)).name().as_string();
+      slice.name = std::string(body.input(static_cast<int>(n + i)).name());
       bindings.emplace_back(slice.name, std::move(slice));
     }
 
@@ -290,7 +290,7 @@ std::vector<Tensor> Scan::operator()(RuntimeContext &rt, const GraphProto &body,
     bindings.reserve(n + m);
     for (std::size_t i = 0; i < n; ++i) {
       Tensor t = state[i];
-      t.name = body.input(static_cast<int>(i)).name().as_string();
+      t.name = std::string(body.input(static_cast<int>(i)).name());
       bindings.emplace_back(t.name, std::move(t));
     }
     for (std::size_t i = 0; i < m; ++i) {
@@ -305,7 +305,7 @@ std::vector<Tensor> Scan::operator()(RuntimeContext &rt, const GraphProto &body,
                                                 std::multiplies<int64_t>());
       std::vector<uint8_t> dummy_data(PackedByteSize(scan_inputs[i].data_type, elt_count), 0);
       Tensor slice("", scan_inputs[i].data_type, std::move(slice_shape), std::move(dummy_data));
-      slice.name = body.input(static_cast<int>(n + i)).name().as_string();
+      slice.name = std::string(body.input(static_cast<int>(n + i)).name());
       bindings.emplace_back(slice.name, std::move(slice));
     }
 

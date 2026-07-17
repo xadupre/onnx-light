@@ -400,7 +400,7 @@ std::string StringStream::tell_around() const {
   offset_t end =
       pos_ + 10 < static_cast<offset_t>(size()) ? pos_ + 10 : static_cast<offset_t>(size());
   RefString ref(reinterpret_cast<const char *>(data_) + begin, end - begin);
-  return ref.as_string();
+  return std::string(ref);
 }
 
 void StringStream::LimitTo(uint64_t len) {
@@ -493,15 +493,6 @@ void BinaryWriteStream::write_string(const std::string &value) {
 }
 
 uint64_t BinaryWriteStream::size_string(const std::string &value) {
-  return VarintSize(value.size()) + value.size();
-}
-
-void BinaryWriteStream::write_string(const String &value) {
-  write_variant_uint64(value.size());
-  write_raw_bytes(reinterpret_cast<const uint8_t *>(value.data()), value.size());
-}
-
-uint64_t BinaryWriteStream::size_string(const String &value) {
   return VarintSize(value.size()) + value.size();
 }
 
@@ -957,7 +948,7 @@ offset_t FileStream::tell() const {
 std::string FileStream::tell_around() const {
   RefString ref(reinterpret_cast<const char *>(buffer_.data()),
                 buffer_.size() < 10 ? buffer_.size() : 10);
-  return ref.as_string();
+  return std::string(ref);
 }
 
 FileStream::~FileStream() {

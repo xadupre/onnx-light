@@ -56,7 +56,7 @@ std::vector<std::pair<std::string, std::string>> build_io_map(const GraphProto &
   const size_t count = outputs.size() < inputs.size() ? outputs.size() : inputs.size();
   io_map.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    io_map.emplace_back(outputs[i].name().as_string(), inputs[i].name().as_string());
+    io_map.emplace_back(std::string(outputs[i].name()), std::string(inputs[i].name()));
   }
   return io_map;
 }

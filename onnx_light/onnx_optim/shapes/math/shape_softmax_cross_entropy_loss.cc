@@ -56,7 +56,7 @@ void ComputeShapeSoftmaxCrossEntropyLoss(ShapesContext &ctx, const NodeProto &no
 
   // Optional second output: log_prob has same shape and dtype as scores.
   if (node.output_size() >= 2) {
-    const std::string log_prob_name = node.output(1).as_string();
+    const std::string log_prob_name = std::string(node.output(1));
     if (!log_prob_name.empty()) {
       ctx.Set(log_prob_name, OptimTensor(nullptr, scores_tensor.Dtype(), scores_shape));
     }

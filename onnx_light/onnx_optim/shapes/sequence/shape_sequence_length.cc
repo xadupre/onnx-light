@@ -18,7 +18,7 @@ void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "SequenceLength", "ComputeShapeSequenceLength");
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeSequenceLength: SequenceLength requires one input.");
-  (void)ctx.GetSequence(node.input(0).as_string());
+  (void)ctx.GetSequence(std::string(node.input(0)));
   ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
 }
 

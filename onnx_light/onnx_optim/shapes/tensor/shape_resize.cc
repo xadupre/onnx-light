@@ -93,7 +93,7 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapeResize: Resize requires at least one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
   const OptimShape &input_shape = input.Shape();
   const std::size_t rank = input_shape.Rank();
 
@@ -105,7 +105,7 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   // Index of the ``sizes`` input when present and non-empty.
   std::string sizes_name;
   if (has_v11_layout && node.input_size() >= 4) {
-    sizes_name = node.input(3).as_string();
+    sizes_name = std::string(node.input(3));
   }
 
   // The ``sizes`` input (INT64) is tracked via the data-propagation lattice
@@ -138,9 +138,9 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   if (!sizes_known) {
     std::string scales_name_str;
     if (has_v11_layout && node.input_size() >= 3) {
-      scales_name_str = node.input(2).as_string();
+      scales_name_str = std::string(node.input(2));
     } else if (!has_v11_layout && node.input_size() >= 2) {
-      scales_name_str = node.input(1).as_string();
+      scales_name_str = std::string(node.input(1));
     }
     if (!scales_name_str.empty() && ctx.Has(scales_name_str)) {
       const OptimTensor &scales_tensor = ctx.Get(scales_name_str);

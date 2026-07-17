@@ -21,8 +21,8 @@ void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 2,
                       "ComputeShapeSequenceInsert: SequenceInsert requires at least two inputs.");
 
-  const OptimSequence &seq = ctx.GetSequence(node.input(0).as_string());
-  const OptimTensor &inserted = ctx.Get(node.input(1).as_string());
+  const OptimSequence &seq = ctx.GetSequence(std::string(node.input(0)));
+  const OptimTensor &inserted = ctx.Get(std::string(node.input(1)));
 
   const bool seq_has_dtype = seq.HasElemDtype();
   const TensorType out_dtype = seq_has_dtype ? seq.ElemDtype() : inserted.Dtype();
@@ -39,7 +39,7 @@ void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node) {
                         "ComputeShapeSequenceInsert: input sequence length overflows int64.");
     out_length = OptimDim(in_len + 1);
   } else {
-    out_length = OptimDim("SequenceInsert_" + node.output(0).as_string() + "_len");
+    out_length = OptimDim("SequenceInsert_" + std::string(node.output(0)) + "_len");
   }
 
   ctx.SetSequence(node.output(0), OptimSequence(out_dtype, std::move(out_length)));

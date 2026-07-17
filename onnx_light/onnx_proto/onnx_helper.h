@@ -766,7 +766,7 @@ template <>
 inline std::string GetAttributeOr(const NodeProto &node, const char *name,
                                   const std::string &default_value) {
   const AttributeProto *attr = FindAttribute(node, name);
-  return attr == nullptr ? default_value : attr->ref_s().as_string();
+  return attr == nullptr ? default_value : std::string(attr->ref_s());
 }
 
 /**

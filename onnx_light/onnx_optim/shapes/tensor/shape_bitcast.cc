@@ -69,7 +69,7 @@ void ComputeShapeBitCast(ShapesContext &ctx, const NodeProto &node) {
 
   EXT_ENFORCE_INVALID(!(node.input_size() < 1), "ComputeShapeBitCast: BitCast requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
   OptimShape out_shape = input.Shape();
 
   const AttributeProto *to_attr = FindAttribute(node, "to");

@@ -23,7 +23,7 @@ void ComputeShapeScatterElements(ShapesContext &ctx, const NodeProto &node) {
                       "ComputeShapeScatterElements: ScatterElements requires three "
                       "inputs (data, indices, updates).");
 
-  const OptimTensor &data = ctx.Get(node.input(0).as_string());
+  const OptimTensor &data = ctx.Get(std::string(node.input(0)));
 
   // Output has the same shape and dtype as data.
   ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), data.Shape()));

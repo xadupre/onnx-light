@@ -254,14 +254,14 @@ TEST_F(FunctionContextTest, ContextDependentFunctionTest) {
   schema->BuildContextDependentFunction(ctx, fnProto);
   EXPECT_EQ(static_cast<int>(fnProto.ref_node().size()), 2);
   // Verify the function proto has correct metadata (set by BuildFunction).
-  EXPECT_EQ(fnProto.ref_name().as_string(), "CustomFuncFloat");
+  EXPECT_EQ(std::string(fnProto.ref_name()), "CustomFuncFloat");
   EXPECT_EQ(static_cast<int>(fnProto.ref_input().size()), 1);
   EXPECT_EQ(fnProto.ref_input()[0], "X");
   EXPECT_EQ(static_cast<int>(fnProto.ref_output().size()), 1);
   EXPECT_EQ(fnProto.ref_output()[0], "Y");
   // Verify that the nodes are the Constant and Mul ops.
-  EXPECT_EQ(fnProto.ref_node()[0].ref_op_type().as_string(), "Constant");
-  EXPECT_EQ(fnProto.ref_node()[1].ref_op_type().as_string(), "Mul");
+  EXPECT_EQ(std::string(fnProto.ref_node()[0].ref_op_type()), "Constant");
+  EXPECT_EQ(std::string(fnProto.ref_node()[1].ref_op_type()), "Mul");
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +290,7 @@ TEST_F(FunctionContextTest, VersionedFunctionBodyTest) {
     const FunctionProto *function = schema2->GetFunction(v);
     ASSERT_TRUE(function) << "Expected function body for MySub v2 at opset " << v;
     EXPECT_EQ(static_cast<int>(function->ref_node().size()), 1);
-    EXPECT_EQ(function->ref_node()[0].ref_op_type().as_string(), "Sub");
+    EXPECT_EQ(std::string(function->ref_node()[0].ref_op_type()), "Sub");
   }
 
   // schema9: MySub sinceVersion 9, bodies at opsets 9 and 16.
@@ -302,7 +302,7 @@ TEST_F(FunctionContextTest, VersionedFunctionBodyTest) {
     const FunctionProto *function = schema9->GetFunction(v);
     ASSERT_TRUE(function) << "Expected function body for MySub v9 at opset " << v;
     EXPECT_EQ(static_cast<int>(function->ref_node().size()), 1);
-    EXPECT_EQ(function->ref_node()[0].ref_op_type().as_string(), "Sub");
+    EXPECT_EQ(std::string(function->ref_node()[0].ref_op_type()), "Sub");
   }
 
   // Version 16 and above resolve to the opset-16 body.
@@ -342,14 +342,14 @@ TEST_F(FunctionContextTest, TypeContextTest) {
   schema->BuildContextDependentFunction(ctx, fnProto);
   EXPECT_EQ(static_cast<int>(fnProto.ref_node().size()), 2);
   // Verify the function proto has correct metadata (set by BuildFunction).
-  EXPECT_EQ(fnProto.ref_name().as_string(), "CustomFunction");
+  EXPECT_EQ(std::string(fnProto.ref_name()), "CustomFunction");
   EXPECT_EQ(static_cast<int>(fnProto.ref_input().size()), 1);
   EXPECT_EQ(fnProto.ref_input()[0], "X");
   EXPECT_EQ(static_cast<int>(fnProto.ref_output().size()), 1);
   EXPECT_EQ(fnProto.ref_output()[0], "Y");
   // The Constant node should hold a float tensor (type of X).
   const auto &constant_node = fnProto.ref_node()[0];
-  EXPECT_EQ(constant_node.ref_op_type().as_string(), "Constant");
+  EXPECT_EQ(std::string(constant_node.ref_op_type()), "Constant");
   ASSERT_EQ(static_cast<int>(constant_node.ref_attribute().size()), 1);
   EXPECT_EQ(constant_node.ref_attribute()[0].ref_t().ref_data_type(), TensorProto::DataType::FLOAT);
 }
@@ -357,7 +357,7 @@ TEST_F(FunctionContextTest, TypeContextTest) {
 TEST_F(FunctionContextTest, BuildContextDependentFunctionBodyGeluTest) {
   auto has_node_with_op_type = [](const FunctionProto &function_proto, const std::string &op_type) {
     for (const auto &node : function_proto.ref_node()) {
-      if (node.ref_op_type().as_string() == op_type) {
+      if (std::string(node.ref_op_type()) == op_type) {
         return true;
       }
     }
@@ -376,7 +376,7 @@ TEST_F(FunctionContextTest, BuildContextDependentFunctionBodyGeluTest) {
   GeluFunctionBodyBuildContext default_ctx(node_proto_default, nullptr);
   FunctionProto default_fn_proto;
   schema->BuildContextDependentFunction(default_ctx, default_fn_proto);
-  EXPECT_EQ(default_fn_proto.ref_name().as_string(), "Gelu");
+  EXPECT_EQ(std::string(default_fn_proto.ref_name()), "Gelu");
   EXPECT_TRUE(has_node_with_op_type(default_fn_proto, "Erf"));
   EXPECT_FALSE(has_node_with_op_type(default_fn_proto, "Tanh"));
 
@@ -392,7 +392,7 @@ TEST_F(FunctionContextTest, BuildContextDependentFunctionBodyGeluTest) {
   GeluFunctionBodyBuildContext tanh_ctx(node_proto_tanh, &approximate_attr);
   FunctionProto tanh_fn_proto;
   schema->BuildContextDependentFunction(tanh_ctx, tanh_fn_proto);
-  EXPECT_EQ(tanh_fn_proto.ref_name().as_string(), "Gelu");
+  EXPECT_EQ(std::string(tanh_fn_proto.ref_name()), "Gelu");
   EXPECT_TRUE(has_node_with_op_type(tanh_fn_proto, "Tanh"));
   EXPECT_FALSE(has_node_with_op_type(tanh_fn_proto, "Erf"));
 }

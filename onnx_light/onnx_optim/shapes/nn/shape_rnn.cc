@@ -57,7 +57,7 @@ bool IsRecurrentOp(const std::string &op_type) {
 } // namespace
 
 void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, const char *r) {
-  const std::string op_type = node.op_type().as_string();
+  const std::string op_type = std::string(node.op_type());
   EXT_ENFORCE_INVALID(IsRecurrentOp(op_type),
                       "ComputeShapeRNN: node.op_type() must be one of RNN, GRU or LSTM, got '",
                       op_type, "'.");
@@ -80,7 +80,7 @@ void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, c
   const OptimDim batch_size = layout == 0 ? x_shape[1] : x_shape[0];
 
   // Output 0: Y. Optional in the schema (an empty output name skips it).
-  const std::string &y_name = node.output(0).as_string();
+  const std::string &y_name = std::string(node.output(0));
   if (!y_name.empty()) {
     OptimShape y_shape;
     if (layout == 0) {
@@ -99,7 +99,7 @@ void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, c
 
   // Outputs 1 (Y_h) and 2 (Y_c, LSTM only): rank-3 hidden / cell states.
   for (int i = 1; i < node.output_size(); ++i) {
-    const std::string &name = node.output(i).as_string();
+    const std::string &name = std::string(node.output(i));
     if (name.empty()) {
       continue;
     }

@@ -27,7 +27,7 @@ std::unordered_map<std::string, size_t> BuildOutputToNodeIndex(NodeIt nodes_begi
   size_t i = 0;
   for (auto it = nodes_begin; it != nodes_end; ++it, ++i) {
     for (const auto &output : it->output()) {
-      output_map[output.as_string()] = i;
+      output_map[std::string(output)] = i;
     }
   }
   return output_map;
@@ -54,8 +54,8 @@ std::vector<size_t> TopologicalOrder(NodeIt nodes_begin, NodeIt nodes_end,
     auto node_it = nodes_begin;
     std::advance(node_it, static_cast<std::ptrdiff_t>(idx));
     for (const auto &inp : node_it->input()) {
-      if (!inp.null() && !inp.empty())
-        visit(inp.as_string());
+      if (!inp.empty() && !inp.empty())
+        visit(std::string(inp));
     }
     order.push_back(idx);
   };

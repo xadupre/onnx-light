@@ -233,7 +233,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
   def_prop_rw(                                                                                     \
       #name,                                                                                       \
       [](const cls &self) -> std::string {                                                         \
-        std::string s = self.ref_##name().as_string();                                             \
+        std::string s = std::string(self.ref_##name());                                            \
         return s;                                                                                  \
       },                                                                                           \
       [](cls &self, nb::object obj) {                                                              \
@@ -255,7 +255,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
   def_prop_rw(                                                                                     \
       #name,                                                                                       \
       [](const cls &self) -> nb::bytes {                                                           \
-        std::string s = self.ref_##name().as_string();                                             \
+        std::string s = std::string(self.ref_##name());                                            \
         return nb::bytes(s.data(), s.size());                                                      \
       },                                                                                           \
       [](cls &self, nb::object obj) {                                                              \
@@ -298,7 +298,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
 
 #define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
   def_prop_rw(                                                                                     \
-      #name, [](cls & self) -> cls::name##_t * {                                                   \
+      #name, [](cls & self)->cls::name##_t * {                                                     \
         if (!self.name##_.has_value()) {                                                           \
           if (self.has_oneof_##name())                                                             \
             return nullptr;                                                                        \
@@ -318,7 +318,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
       nb::rv_policy::reference_internal, cls::DOC_##name, nb::for_setter(nb::arg("value").none())) \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
-          "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
+          "add_" #name, [](cls & self)->cls::name##_t & {                                          \
             self.name##_.set_empty_value();                                                        \
             return *self.name##_;                                                                  \
           },                                                                                       \
@@ -1369,24 +1369,24 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
   nb::class_<utils::String>(m, "String", "Simplified string with no final null character.")
       .def(nb::init<std::string>())
       .def(
-          "__str__", [](const utils::String &self) -> std::string { return self.as_string(); },
+          "__str__", [](const utils::String &self) -> std::string { return std::string(self); },
           "Converts this instance into a python string.")
       .def(
           "__add__",
           [](const utils::String &self, const nb::str &s) -> std::string {
-            return self.as_string() + nb::cast<std::string>(s);
+            return std::string(self) + nb::cast<std::string>(s);
           },
           "Concatenates this string and a python string.", nb::is_operator())
       .def(
           "__radd__",
           [](const utils::String &self, const nb::str &s) -> std::string {
-            return nb::cast<std::string>(s) + self.as_string();
+            return nb::cast<std::string>(s) + std::string(self);
           },
           "Concatenates a python string and this string.", nb::is_operator())
       .def(
           "__repr__",
           [](const utils::String &self) -> std::string {
-            return std::string("'") + self.as_string() + std::string("'");
+            return std::string("'") + std::string(self) + std::string("'");
           },
           "Representation with surrounding quotes.")
       .def(
@@ -1470,7 +1470,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .def(
           "decode",
           [](const utils::String &self, const char *encoding, const char *errors) -> nb::object {
-            std::string s = self.as_string();
+            std::string s = std::string(self);
             nb::bytes data(s.data(), s.size());
             return data.attr("decode")(encoding, errors);
           },
@@ -1530,7 +1530,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       [](utils::RepeatedStringField &self) -> nb::object {
         nb::list values;
         for (const auto &it : self) {
-          values.append(nb::cast(it.as_string()));
+          values.append(nb::cast(std::string(it)));
         }
         return nb::iter(values);
       },

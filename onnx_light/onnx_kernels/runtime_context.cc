@@ -354,19 +354,19 @@ ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
 
 ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
   for (size_t i = 0; i < graph.input().size(); ++i) {
-    const std::string name = graph.input()[i].name().as_string();
+    const std::string name = std::string(graph.input()[i].name());
     if (!name.empty()) {
       keep_.insert(name);
     }
   }
   for (size_t i = 0; i < graph.initializer().size(); ++i) {
-    const std::string name = graph.initializer()[i].name().as_string();
+    const std::string name = std::string(graph.initializer()[i].name());
     if (!name.empty()) {
       keep_.insert(name);
     }
   }
   for (size_t i = 0; i < graph.output().size(); ++i) {
-    const std::string name = graph.output()[i].name().as_string();
+    const std::string name = std::string(graph.output()[i].name());
     if (!name.empty()) {
       keep_.insert(name);
     }
@@ -379,13 +379,13 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
 
 ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
   for (size_t i = 0; i < func.input_size(); ++i) {
-    const std::string name = func.input(i).as_string();
+    const std::string name = std::string(func.input(i));
     if (!name.empty()) {
       keep_.insert(name);
     }
   }
   for (size_t i = 0; i < func.output_size(); ++i) {
-    const std::string name = func.output(i).as_string();
+    const std::string name = std::string(func.output(i));
     if (!name.empty()) {
       keep_.insert(name);
     }

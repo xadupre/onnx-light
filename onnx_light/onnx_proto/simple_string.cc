@@ -52,31 +52,27 @@ int64_t RefString::toint64() const {
 }
 
 void String::set(const char *ptr, size_t size) {
+  if (ptr == nullptr) {
+    reset_null_();
+    return;
+  }
   size_t effective_size = size;
   if (size == SIZE_MAX) {
-    if (ptr == nullptr) {
-      effective_size = 0;
-    } else {
-      const char *p = ptr;
-      effective_size = 0;
-      for (; *p != 0; ++p, ++effective_size)
-        ;
-    }
-  }
-  if (ptr == nullptr) {
-    clear();
-    return;
+    const char *p = ptr;
+    effective_size = 0;
+    for (; *p != 0; ++p, ++effective_size)
+      ;
   }
   if (effective_size > 0 && ptr[effective_size - 1] == 0) {
     --effective_size;
   }
-  if (!null_ && ptr >= value_.data() && ptr < value_.data() + value_.size()) {
+  std::string &v = mutable_value_();
+  if (!v.empty() && ptr >= v.data() && ptr < v.data() + v.size()) {
     std::string copy(ptr, effective_size);
-    value_ = std::move(copy);
+    v = std::move(copy);
   } else {
-    value_.assign(ptr, effective_size);
+    v.assign(ptr, effective_size);
   }
-  null_ = false;
 }
 
 bool String::operator==(const char *other) const {
@@ -164,9 +160,12 @@ String &String::operator=(const char *s) {
 String &String::operator=(String &&other) noexcept {
   if (this == &other)
     return *this;
-  value_ = std::move(other.value_);
-  null_ = other.null_;
-  other.clear();
+  if (other.null()) {
+    reset_null_();
+  } else {
+    mutable_value_() = std::move(other.value_);
+    other.reset_null_();
+  }
   return *this;
 }
 
@@ -178,20 +177,25 @@ String &String::operator=(const RefString &s) {
 String &String::operator=(const String &s) {
   if (this == &s)
     return *this;
-  value_ = s.value_;
-  null_ = s.null_;
+  if (s.null()) {
+    reset_null_();
+  } else {
+    mutable_value_() = s.value_;
+  }
   return *this;
 }
 
 String &String::operator=(const std::string &s) {
-  value_ = s;
-  normalize_std_string_value();
+  std::string &v = mutable_value_();
+  v = s;
+  normalize_std_string_value(v);
   return *this;
 }
 
 String &String::operator=(std::string &&s) noexcept {
-  value_ = std::move(s);
-  normalize_std_string_value();
+  std::string &v = mutable_value_();
+  v = std::move(s);
+  normalize_std_string_value(v);
   return *this;
 }
 

@@ -3,6 +3,7 @@
 #include "onnx_light_helpers.h"
 #include <cassert>
 #include <cstring>
+#include <new>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -83,73 +84,154 @@ public:
 /** Shared empty string returned by null String conversions (avoids a per-call static guard). */
 inline const std::string kEmptyString;
 
+// The "null" (unset) state is stored without a dedicated bool on standard library
+// implementations where a live std::string never has an all-zero object representation
+// (verified for libstdc++ and the Microsoft STL). There, String overlaps the std::string
+// with a byte buffer and treats all-zero storage as the unset state, so sizeof(String) ==
+// sizeof(std::string). Other implementations (e.g. libc++, whose empty string can be
+// all-zero) fall back to an explicit bool flag.
+#if !defined(ONNX_LIGHT_STRING_NULL_VIA_BYTES)
+#if defined(__GLIBCXX__) || defined(_MSVC_STL_VERSION)
+#define ONNX_LIGHT_STRING_NULL_VIA_BYTES 1
+#else
+#define ONNX_LIGHT_STRING_NULL_VIA_BYTES 0
+#endif
+#endif
+
 /**
  * Owning string type used by ONNX-light protobuf fields.
  * It keeps short values in an internal buffer and uses heap storage for larger values.
  */
 class String {
 private:
+#if ONNX_LIGHT_STRING_NULL_VIA_BYTES
+  static_assert(sizeof(std::string) % 8 == 0,
+                "null-via-bytes String assumes std::string size is a multiple of 8 bytes.");
+  // value_ is alive iff the object representation is not all-zero (see null()).
+  union {
+    std::string value_;
+    unsigned char raw_[sizeof(std::string)];
+  };
+#else
   std::string value_;
   bool null_;
+#endif
 
-public:
-  /** Releases owned memory. */
-  inline ~String() = default;
-  /** Resets the instance to an empty state and frees owned memory. */
-  inline void clear() {
+  /** Ensures value_ holds a live (non-null) std::string and returns it. */
+  inline std::string &mutable_value_() {
+#if ONNX_LIGHT_STRING_NULL_VIA_BYTES
+    if (null())
+      new (&value_) std::string();
+#else
+    null_ = false;
+#endif
+    return value_;
+  }
+  /** Resets the instance to the null (unset) state, releasing any owned memory. */
+  inline void reset_null_() {
+#if ONNX_LIGHT_STRING_NULL_VIA_BYTES
+    if (!null())
+      value_.~basic_string();
+    std::memset(static_cast<void *>(raw_), 0, sizeof(raw_));
+#else
     value_.clear();
     null_ = true;
+#endif
   }
-  /** Initializes an empty string. */
+  /** Strips a single trailing NUL left by a direct std::string assignment. */
+  static inline void normalize_std_string_value(std::string &v) {
+    if (!v.empty() && v.back() == 0)
+      v.pop_back();
+  }
+  /** Replaces the content with a copy of the provided buffer. */
+  void set(const char *ptr, size_t size);
+
+public:
+#if ONNX_LIGHT_STRING_NULL_VIA_BYTES
+  /** Indicates whether the string is unset (distinct from an empty value). */
+  inline bool null() const {
+    // On the supported standard libraries a live std::string never has an all-zero object
+    // representation, so all-zero storage uniquely encodes the unset state.
+    const unsigned char *bytes = reinterpret_cast<const unsigned char *>(this);
+    for (size_t i = 0; i < sizeof(std::string); ++i) {
+      if (bytes[i] != 0)
+        return false;
+    }
+    return true;
+  }
+  /** Releases owned memory. */
+  inline ~String() {
+    if (!null())
+      value_.~basic_string();
+  }
+  /** Initializes an empty (unset) string. */
+  explicit inline String() : raw_{} {}
+  /** Initializes by copying another owning string. Explicit to keep accidental deep copies
+   *  visible at call sites (use references or std::move for cheap passing). */
+  explicit inline String(const String &s) : raw_{} {
+    if (!s.null())
+      new (&value_) std::string(s.value_);
+  }
+  /** Initializes by taking ownership from another instance. */
+  inline String(String &&other) noexcept : raw_{} {
+    if (!other.null()) {
+      new (&value_) std::string(std::move(other.value_));
+      other.reset_null_();
+    }
+  }
+#else
+  /** Indicates whether the string is unset (distinct from an empty value). */
+  inline bool null() const { return null_; }
+  /** Releases owned memory. */
+  inline ~String() = default;
+  /** Initializes an empty (unset) string. */
   explicit inline String() : value_(), null_(true) {}
-  /** Initializes by copying content from a non-owning string view. */
-  explicit inline String(const RefString &s) : value_(), null_(true) { set(s.data(), s.size()); }
-  /** Initializes by copying a pointer and explicit size. */
-  explicit inline String(const char *ptr, size_t size) : value_(), null_(true) { set(ptr, size); }
-  /** Initializes by copying a standard string. */
-  explicit inline String(const std::string &s) : value_(s), null_(false) {
-    normalize_std_string_value();
-  }
-  /** Initializes by taking ownership from a standard string. */
-  explicit inline String(std::string &&s) noexcept : value_(std::move(s)), null_(false) {
-    normalize_std_string_value();
-  }
   /** Initializes by copying another owning string. Explicit to keep accidental deep copies
    *  visible at call sites (use references or std::move for cheap passing). */
   explicit inline String(const String &s) : value_(s.value_), null_(s.null_) {}
   /** Initializes by taking ownership from another instance. */
   inline String(String &&other) noexcept : value_(std::move(other.value_)), null_(other.null_) {
-    other.clear();
+    other.reset_null_();
   }
+#endif
+
+  /** Resets the instance to an empty state and frees owned memory. */
+  inline void clear() { reset_null_(); }
+  /** Initializes by copying content from a non-owning string view. */
+  explicit inline String(const RefString &s) : String() { set(s.data(), s.size()); }
+  /** Initializes by copying a pointer and explicit size. */
+  explicit inline String(const char *ptr, size_t size) : String() { set(ptr, size); }
+  /** Initializes by copying a standard string. */
+  explicit inline String(const std::string &s) : String() { *this = s; }
+  /** Initializes by taking ownership from a standard string. */
+  explicit inline String(std::string &&s) noexcept : String() { *this = std::move(s); }
   /** Returns the number of characters. */
-  inline size_t size() const { return value_.size(); }
+  inline size_t size() const { return null() ? 0 : value_.size(); }
   /** Returns the number of characters. */
-  inline size_t length() const { return value_.size(); }
+  inline size_t length() const { return size(); }
   /** Returns the underlying pointer. */
-  inline const char *data() const { return null_ ? nullptr : value_.data(); }
+  inline const char *data() const { return null() ? nullptr : value_.data(); }
   /** Returns a null-terminated C string (never nullptr). */
-  inline const char *c_str() const { return null_ ? "" : value_.c_str(); }
+  inline const char *c_str() const { return null() ? "" : value_.c_str(); }
   /** Indicates whether the string is empty. */
-  inline bool empty() const { return value_.empty(); }
+  inline bool empty() const { return null() || value_.empty(); }
   /** Returns a string_view. */
   inline const std::string_view sv() const {
-    return null_ ? std::string_view() : std::string_view(value_.data(), value_.size());
+    return null() ? std::string_view() : std::string_view(value_.data(), value_.size());
   }
   /** Returns a const reference to the underlying std::string (empty string for null). */
-  inline operator const std::string &() const { return null_ ? kEmptyString : value_; }
+  inline operator const std::string &() const { return null() ? kEmptyString : value_; }
   /** Returns a shared empty std::string usable as a zero-copy reference fallback, e.g. the
    *  else-branch of a conditional bound to a const std::string&. */
   static inline const std::string &empty_string() { return kEmptyString; }
   /** Materializes the string into a string_view. */
   inline operator std::string_view() const { return sv(); }
-  /** Indicates whether the string is empty and has no allocated buffer. */
-  inline bool null() const { return null_; }
   /** Finds a substring inside the string. */
   inline size_t find(std::string_view needle, size_t pos = 0) const {
     return sv().find(needle, pos);
   }
   /** Returns the character at the specified index. */
-  inline char operator[](size_t i) const { return value_[i]; }
+  inline char operator[](size_t i) const { return null() ? char(0) : value_[i]; }
   /** Assigns from a null-terminated string. */
   String &operator=(const char *s);
   /** Assigns by taking ownership from another instance. */
@@ -198,17 +280,6 @@ public:
    *  protobuf string fields (which are std::string) in consuming code. */
   /** Parses the content as a signed 64-bit integer. */
   inline int64_t toint64() const { return RefString(data(), size()).toint64(); }
-
-private:
-  /** Normalizes std::string-backed state after direct assignment. */
-  inline void normalize_std_string_value() {
-    if (!value_.empty() && value_.back() == 0) {
-      value_.pop_back();
-    }
-    null_ = false;
-  }
-  /** Replaces the content with a copy of the provided buffer. */
-  void set(const char *ptr, size_t size);
 };
 
 /** Assigns a non-owning view from an owning string. */

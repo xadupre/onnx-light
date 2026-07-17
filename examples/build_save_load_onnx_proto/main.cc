@@ -99,7 +99,7 @@ std::vector<float> ExtractInitializerB(const onnx_light::ModelProto &model) {
   const onnx_light::GraphProto &graph = model.ref_graph();
   for (size_t i = 0; i < graph.ref_initializer().size(); ++i) {
     const onnx_light::TensorProto &t = graph.ref_initializer()[i];
-    if (std::string(t.ref_name()) != "B") {
+    if (t.ref_name() != "B") {
       continue;
     }
     if (t.ref_data_type() != onnx_light::TensorProto::DataType::FLOAT) {

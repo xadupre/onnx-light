@@ -13,11 +13,13 @@ class TestCMakeCppStandard(unittest.TestCase):
             content,
             (
                 r"(?s)if\(MSVC\)\s*"
+                r"if\(NOT CMAKE_GENERATOR MATCHES \"Ninja\"\)\s*"
                 r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:/MP>\)\s*"
+                r"endif\(\)\s*"
                 r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:/WX>\)\s*"
                 r"endif\(\)"
             ),
-            msg="MSVC /WX must remain scoped to the MSVC compile options block.",
+            msg="MSVC /MP must be guarded by a Ninja check; /WX must remain in the outer MSVC block.",
         )
 
     def test_examples_cmake_use_cpp20(self):

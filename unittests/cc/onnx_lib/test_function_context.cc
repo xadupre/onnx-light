@@ -8,8 +8,8 @@
 // Key differences from vanilla ONNX:
 //   - Schemas are NOT auto-registered at startup in onnx-light.
 //   - Use ONNX_LIGHT_NAMESPACE instead of ONNX_LIGHT_NAMESPACE.
-//   - FunctionBody() only accepts std::vector<NodeProto>, not ONNX text.
-//     For VersionedFunctionBodyTest, nodes are built programmatically.
+//   - FunctionBody() does not parse ONNX text for these tests; for
+//     VersionedFunctionBodyTest, nodes are built programmatically.
 //   - BuildContextDependentFunction() returns void in onnx-light;
 //     success is verified by checking the resulting FunctionProto node count.
 //   - checker::check_function is not called because checker.cc is not compiled
@@ -126,8 +126,7 @@ void RegisterCustomFunctionSchema() {
 }
 
 // Build a single-node FunctionProto body for "Z = Sub(X, Y)".
-// In onnx-light, FunctionBody() only accepts std::vector<NodeProto> (not
-// ONNX text), so the Sub node is constructed programmatically.
+// In onnx-light, the Sub node is constructed programmatically for these tests.
 static NodeProto MakeSubNode() {
   NodeProto n;
   n.set_op_type("Sub");
@@ -226,6 +225,19 @@ protected:
     DeregisterSchema("MySub", 9, ONNX_DOMAIN);
   }
 };
+
+TEST(FunctionContextStandaloneTest, FunctionBodyAcceptsRepeatedProtoField) {
+  OpSchema schema;
+  FunctionBodyHelper::NodeList nodes;
+  FunctionBodyHelper::BuildNodes(nodes, {{{"Z"}, "Sub", {"X", "Y"}}});
+
+  schema.SetName("MyRepeatedSub").SetDomain(ONNX_DOMAIN).SinceVersion(2).FunctionBody(nodes, 2);
+
+  const FunctionProto *function = schema.GetFunction(2, false);
+  ASSERT_NE(function, nullptr);
+  ASSERT_EQ(function->node().size(), 1);
+  EXPECT_EQ(function->node(0).op_type().as_string(), "Sub");
+}
 
 // ---------------------------------------------------------------------------
 // Test: ContextDependentFunctionTest

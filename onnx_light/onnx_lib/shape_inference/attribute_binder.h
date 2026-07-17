@@ -38,7 +38,7 @@ public:
         // Attribute-references must be replaced by the corresponding attribute-value in the
         // call-node if the call-node contains the attribute. Otherwise, this attribute must be
         // removed.
-        auto it = attr_map_.find(std::string(attr.ref_attr_name()));
+        auto it = attr_map_.find(attr.ref_attr_name());
         if (it != attr_map_.end()) {
           const AttributeProto *replacement = it->second;
           // Copy value of attribute, but retain original name:

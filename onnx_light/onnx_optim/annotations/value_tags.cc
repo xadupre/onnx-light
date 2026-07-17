@@ -20,8 +20,8 @@ namespace {
 std::string ReadMetadataValueFromProps(const std::vector<StringStringEntryProto> &props,
                                        const char *key) {
   for (const auto &entry : props) {
-    if (std::string(entry.key()) == key) {
-      return std::string(entry.value());
+    if (entry.key() == key) {
+      return entry.value();
     }
   }
   return {};

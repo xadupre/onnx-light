@@ -7019,7 +7019,7 @@ TEST(onnx_proto, ParseFromIstream_ModelProto) {
   EXPECT_TRUE(parsed.has_ir_version());
   EXPECT_EQ(parsed.ref_ir_version(), 8);
   EXPECT_TRUE(parsed.has_producer_name());
-  EXPECT_EQ(std::string(parsed.ref_producer_name()), "test_producer");
+  EXPECT_EQ(parsed.ref_producer_name(), "test_producer");
   EXPECT_TRUE(parsed.has_graph());
   EXPECT_EQ(parsed.ref_graph().ref_name(), "test_graph");
 }
@@ -7044,7 +7044,7 @@ TEST(onnx_proto, ParseFromIstream_TensorProto) {
   std::istringstream iss(serialized, std::ios::binary);
   TensorProto parsed;
   EXPECT_TRUE(parsed.ParseFromIstream(&iss));
-  EXPECT_EQ(std::string(parsed.ref_name()), "my_tensor");
+  EXPECT_EQ(parsed.ref_name(), "my_tensor");
   EXPECT_EQ(parsed.ref_dims().size(), 1u);
   EXPECT_EQ(parsed.ref_dims()[0], 2);
   EXPECT_EQ(parsed.ref_float_data().size(), 2u);

@@ -615,17 +615,16 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadataShapeTag) {
   bool found_not_used_after = false;
   for (int i = 0; i < graph.node()[1].metadata_props().size(); ++i) {
     const auto &prop = graph.node()[1].metadata_props()[i];
-    if (std::string(prop.key()) == std::string(onnx_optim::annotations::kReleaseAfterMetadataKey)) {
-      EXPECT_EQ(std::string(prop.value()), std::string("S"));
+    if (prop.key() == std::string(onnx_optim::annotations::kReleaseAfterMetadataKey)) {
+      EXPECT_EQ(prop.value(), std::string("S"));
       found_release_after = true;
     }
-    if (std::string(prop.key()) ==
-        std::string(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey)) {
-      EXPECT_EQ(std::string(prop.value()), std::string("S"));
+    if (prop.key() == std::string(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey)) {
+      EXPECT_EQ(prop.value(), std::string("S"));
       found_shape_tag = true;
     }
-    if (std::string(prop.key()) == std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey)) {
-      EXPECT_EQ(std::string(prop.value()), std::string("X"));
+    if (prop.key() == std::string(onnx_optim::annotations::kNotUsedAfterMetadataKey)) {
+      EXPECT_EQ(prop.value(), std::string("X"));
       found_not_used_after = true;
     }
   }

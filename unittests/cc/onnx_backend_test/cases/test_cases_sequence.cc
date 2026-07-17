@@ -92,16 +92,16 @@ TEST(BackendTestCase, ConcatFromSequenceCasesAreRegistered) {
     const GraphProto &graph = tc->model().ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 2u) << tc->name;
     const NodeProto &seq_node = graph.ref_node()[0];
-    EXPECT_EQ(std::string(seq_node.ref_op_type()), "SequenceConstruct");
+    EXPECT_EQ(seq_node.ref_op_type(), "SequenceConstruct");
     EXPECT_EQ(seq_node.ref_input().size(), 3u);
     EXPECT_EQ(seq_node.ref_output().size(), 1u);
 
     const NodeProto &concat_node = graph.ref_node()[1];
-    EXPECT_EQ(std::string(concat_node.ref_op_type()), "ConcatFromSequence");
+    EXPECT_EQ(concat_node.ref_op_type(), "ConcatFromSequence");
     ASSERT_EQ(concat_node.ref_input().size(), 1u);
-    EXPECT_EQ(std::string(concat_node.ref_input()[0]), std::string(seq_node.ref_output()[0]));
+    EXPECT_EQ(concat_node.ref_input()[0], seq_node.ref_output()[0]);
     ASSERT_EQ(concat_node.ref_output().size(), 1u);
-    EXPECT_EQ(std::string(concat_node.ref_output()[0]), "concat_result");
+    EXPECT_EQ(concat_node.ref_output()[0], "concat_result");
 
     ASSERT_EQ(graph.ref_input().size(), 3u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
@@ -451,7 +451,7 @@ TEST(BackendTestCase, SequenceEmptyCasesAreRegistered) {
   ASSERT_EQ(int64_case->model().ref_graph().ref_node()[0].ref_attribute().size(), 1u);
   const AttributeProto &dtype_attr =
       int64_case->model().ref_graph().ref_node()[0].ref_attribute()[0];
-  EXPECT_EQ(std::string(dtype_attr.ref_name()), "dtype");
+  EXPECT_EQ(dtype_attr.ref_name(), "dtype");
   EXPECT_EQ(dtype_attr.ref_type(), AttributeProto::AttributeType::INT);
   EXPECT_EQ(dtype_attr.ref_i(), static_cast<int64_t>(TensorProto::INT64));
 }

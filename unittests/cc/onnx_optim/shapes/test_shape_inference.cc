@@ -733,7 +733,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   // The Y output has type float and shape {6, 2}.
   ASSERT_EQ(graph.output_size(), 1u);
   const ValueInfoProto &out = graph.output(0);
-  EXPECT_EQ(std::string(out.name()), "Y");
+  EXPECT_EQ(out.name(), "Y");
   ASSERT_TRUE(out.has_type());
   ASSERT_TRUE(out.type().has_tensor_type());
   EXPECT_EQ(static_cast<int>(out.type().tensor_type().elem_type()),
@@ -746,7 +746,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   bool found_s = false;
   for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
     const ValueInfoProto &vi = graph.value_info()[i];
-    if (std::string(vi.name()) == "S") {
+    if (vi.name() == "S") {
       found_s = true;
       ASSERT_TRUE(vi.has_type());
       ASSERT_TRUE(vi.type().has_tensor_type());

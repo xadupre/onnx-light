@@ -3389,7 +3389,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            std::vector<std::string> cats;
            cats.reserve(cats_strings->strings().size());
            for (size_t i = 0; i < cats_strings->strings().size(); ++i) {
-             cats.push_back(std::string(cats_strings->strings()[i]));
+             cats.push_back(cats_strings->strings()[i]);
            }
            EXT_ENFORCE_INVALID(!(x.data_type != static_cast<int32_t>(DataType::STRING)), 
                  "RunNode: OneHotEncoder with 'cats_strings' requires input X "

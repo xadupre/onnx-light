@@ -1836,7 +1836,7 @@ TEST(onnx_external_ressource, EditModelWithoutTouchingExternalData) {
   // Negate W1 and store it inline in the main file: drop the external metadata
   // and write the new raw bytes directly into the TensorProto.
   TensorProto &w1_loaded = full.ref_graph().ref_initializer()[0];
-  ASSERT_EQ(std::string(w1_loaded.ref_name()), "W1");
+  ASSERT_EQ(w1_loaded.ref_name(), "W1");
   ASSERT_TRUE(w1_loaded.ref_raw_data().empty());
   w1_loaded.reset_data_location();
   w1_loaded.clr_external_data();
@@ -1849,7 +1849,7 @@ TEST(onnx_external_ressource, EditModelWithoutTouchingExternalData) {
 
   // W2 remains external, pointing at the original file.
   const TensorProto &w2_loaded = full.ref_graph().ref_initializer()[1];
-  ASSERT_EQ(std::string(w2_loaded.ref_name()), "W2");
+  ASSERT_EQ(w2_loaded.ref_name(), "W2");
   ASSERT_TRUE(w2_loaded.has_data_location());
   ASSERT_EQ(w2_loaded.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
   ASSERT_FALSE(w2_loaded.ref_external_data().empty());
@@ -2254,11 +2254,11 @@ TEST(onnx_alignment, AlignExternalDataStreamingRewritesAlignedWeights) {
     for (int j = 0; j < meta.ref_external_data().size(); ++j) {
       const StringStringEntryProto &e = meta.ref_external_data()[j];
       if (e.ref_key() == "location")
-        loc = std::string(e.ref_value());
+        loc = e.ref_value();
       else if (e.ref_key() == "offset")
-        off = std::stoll(std::string(e.ref_value()));
+        off = std::stoll(e.ref_value());
       else if (e.ref_key() == "length" || e.ref_key() == "size")
-        len = std::stoll(std::string(e.ref_value()));
+        len = std::stoll(e.ref_value());
     }
     EXPECT_EQ(loc, dst_weights);
     ASSERT_GE(off, 0);
@@ -2349,7 +2349,7 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
     for (int j = 0; j < t->ref_external_data().size(); ++j) {
       const StringStringEntryProto &e = t->ref_external_data()[j];
       if (e.ref_key() == "location") {
-        reused_expected_location[std::string(t->ref_name())] = std::string(e.ref_value());
+        reused_expected_location[t->ref_name()] = e.ref_value();
         break;
       }
     }
@@ -2394,11 +2394,11 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
     for (int j = 0; j < t.ref_external_data().size(); ++j) {
       const StringStringEntryProto &e = t.ref_external_data()[j];
       if (e.ref_key() == "location")
-        loc = std::string(e.ref_value());
+        loc = e.ref_value();
       else if (e.ref_key() == "offset")
-        off = std::stoll(std::string(e.ref_value()));
+        off = std::stoll(e.ref_value());
       else if (e.ref_key() == "length" || e.ref_key() == "size")
-        len = std::stoll(std::string(e.ref_value()));
+        len = std::stoll(e.ref_value());
     }
     if (t.ref_name()[0] == 'a') {
       // Reused — must still reference the first model's weights file using the exact

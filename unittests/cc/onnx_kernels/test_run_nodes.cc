@@ -419,7 +419,7 @@ TEST(RunNodes, RunNodeNormalisesDefaultDomain) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.tensors()["x"] = Tensor::FromFloat("x", {2}, {-1.5f, 2.5f});
   NodeProto node = MakeNode("Abs", {"x"}, {"y"}); // empty domain
-  EXPECT_TRUE(std::string(node.domain()).empty());
+  EXPECT_TRUE(node.domain().empty());
   RunNode(node, rt);
   const float *got = rt.tensors()["y"].AsFloat();
   ASSERT_EQ(rt.tensors()["y"].element_count(), 2);
@@ -2568,7 +2568,7 @@ TEST(RunModel, ModelLocalFunctionDoesNotMutateModel) {
   // call-site attribute.
   const FunctionProto &saved = model.functions()[0];
   const AttributeProto &a = saved.node()[0].attribute()[0];
-  EXPECT_EQ(std::string(a.ref_attr_name()), "then_branch");
+  EXPECT_EQ(a.ref_attr_name(), "then_branch");
   EXPECT_FALSE(a.has_g());
 }
 

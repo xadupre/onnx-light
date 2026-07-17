@@ -205,7 +205,7 @@ inline std::string getAttribute(const InferenceContext &ctx, const std::string &
                                 const std::string &defaultValue) {
   const auto *attr_proto = ctx.getAttribute(attributeName);
   if ((nullptr != attr_proto) && attr_proto->has_s())
-    return std::string(attr_proto->s());
+    return attr_proto->s();
   else if (nullptr != attr_proto)
     return ""; // protobuf default for strings
   else

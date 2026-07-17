@@ -313,7 +313,7 @@ void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &op
     const int64_t rewritten_size = options.raw_data_callback(*it, nullptr, 0, true);
     EXT_ENFORCE(rewritten_size >= 0,
                 "raw_data_callback returned a negative size. Value=", rewritten_size,
-                ", tensor=", std::string(it->ref_name()), ".");
+                ", tensor=", it->ref_name(), ".");
     if (rewritten_size > 0) {
       utils::ByteSpan rewritten_raw_data;
       if (options.alignment > 1) {
@@ -325,13 +325,13 @@ void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &op
       const int64_t filled_size = options.raw_data_callback(*it, rewritten_raw_data.data(),
                                                             rewritten_raw_data.size(), false);
       EXT_ENFORCE(filled_size == rewritten_size, "raw_data_callback returned ", filled_size,
-                  " bytes in the fill pass for tensor ", std::string(it->ref_name()),
-                  " after reporting ", rewritten_size, " bytes in the size pass.");
+                  " bytes in the fill pass for tensor ", it->ref_name(), " after reporting ",
+                  rewritten_size, " bytes in the size pass.");
       it->ref_raw_data() = std::move(rewritten_raw_data);
     } else {
       const int64_t filled_size = options.raw_data_callback(*it, nullptr, 0, false);
       EXT_ENFORCE(filled_size == 0, "raw_data_callback returned ", filled_size,
-                  " bytes in the fill pass for tensor ", std::string(it->ref_name()),
+                  " bytes in the fill pass for tensor ", it->ref_name(),
                   " after reporting 0 bytes in the size pass.");
       it->ref_raw_data().clear();
     }
@@ -451,7 +451,7 @@ void ReadExternalDataEntries(const TensorProto &tensor, std::string &location, i
     const StringStringEntryProto &entry = tensor.ref_external_data()[i];
     const utils::OptionalString &key = entry.ref_key();
     if (key == "location") {
-      location = std::string(entry.ref_value());
+      location = entry.ref_value();
     } else if (key == "offset") {
       offset = ParseExternalDataInt64(entry.ref_value(), "offset");
       has_offset = true;
@@ -476,7 +476,7 @@ void RewriteExternalDataEntries(TensorProto &tensor, const std::string &new_loca
   for (int i = 0; i < tensor.ref_external_data().size(); ++i) {
     const StringStringEntryProto &entry = tensor.ref_external_data()[i];
     if (entry.ref_key() == "checksum") {
-      checksum = std::string(entry.ref_value());
+      checksum = entry.ref_value();
       has_checksum = true;
       break;
     }
@@ -1053,7 +1053,7 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
             const StringStringEntryProto &entry = it_chunks->ref_external_data()[k];
             const utils::OptionalString &key = entry.ref_key();
             if (key == "location") {
-              location = std::string(entry.ref_value());
+              location = entry.ref_value();
             } else if (key == "offset") {
               offset = entry.ref_value().toint64();
             } else if (key == "length" || key == "size") {

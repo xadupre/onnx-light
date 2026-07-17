@@ -67,7 +67,7 @@ void BindNodeAttributes(NodeProto &node, const AttributeMap &attr_map) {
   for (auto attr_iter = attributes.begin(); attr_iter != attributes.end();) {
     auto &attr = *attr_iter;
     if (!attr.ref_attr_name().empty()) {
-      auto it = attr_map.find(std::string(attr.ref_attr_name()));
+      auto it = attr_map.find(attr.ref_attr_name());
       if (it != attr_map.end()) {
         const AttributeProto *replacement = it->second;
         // Copy the value of the call-site attribute, but retain the original name.

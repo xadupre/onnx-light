@@ -136,7 +136,7 @@ void CollectReachableTensors(const GraphProto &graph, const std::vector<NodeProt
   std::unordered_set<std::string> all_names;
   for (const NodeProto &nd : nodes) {
     for (size_t j = 0; j < nd.input().size(); ++j) {
-      all_names.insert(std::string(nd.input()[j]));
+      all_names.insert(nd.input()[j]);
     }
     for (size_t j = 0; j < nd.output().size(); ++j) {
       all_names.insert(nd.output()[j]);
@@ -195,7 +195,7 @@ GraphProto ExtractGraph(const GraphProto &graph, const std::vector<std::string> 
 
   GraphProto g;
   const std::string graph_name =
-      "Extracted from {" + (graph.has_name() ? std::string(graph.name()) : "") + "}";
+      "Extracted from {" + (graph.has_name() ? graph.name().value() : "") + "}";
   g.set_name(graph_name);
 
   for (const NodeProto &nd : nodes) {
@@ -829,16 +829,16 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
   if (!name.empty()) {
     g.set_name(name);
   } else {
-    const std::string n1 = g1.has_name() ? std::string(g1.name()) : "";
-    const std::string n2 = g2.has_name() ? std::string(g2.name()) : "";
+    const std::string n1 = g1.has_name() ? g1.name().value() : "";
+    const std::string n2 = g2.has_name() ? g2.name().value() : "";
     g.set_name(n1 + "_" + n2);
   }
 
   if (!doc_string.empty()) {
     g.set_doc_string(doc_string);
   } else {
-    const std::string n1 = g1.has_name() ? std::string(g1.name()) : "";
-    const std::string n2 = g2.has_name() ? std::string(g2.name()) : "";
+    const std::string n1 = g1.has_name() ? g1.name().value() : "";
+    const std::string n2 = g2.has_name() ? g2.name().value() : "";
     const std::string ds1 = g1.has_doc_string() ? std::string(g1.doc_string()) : "";
     const std::string ds2 = g2.has_doc_string() ? std::string(g2.doc_string()) : "";
     g.set_doc_string("Graph combining " + n1 + " and " + n2 + "\n" + n1 + "\n\n" + ds1 + "\n\n" +
@@ -1006,8 +1006,7 @@ GraphProto ExpandOutDimGraph(const GraphProto &graph, int64_t dim_idx, bool /*in
   }
 
   // Build unique name for the dim-index constant.
-  const std::string expand_dim_k =
-      (g.has_name() ? std::string(g.name()) : "") + "_expand_out_dim_idx";
+  const std::string expand_dim_k = (g.has_name() ? g.name().value() : "") + "_expand_out_dim_idx";
 
   // Constant node holding the axis index.
   {

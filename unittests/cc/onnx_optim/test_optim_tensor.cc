@@ -514,7 +514,7 @@ TEST(OnnxOptimValueInfo, ToValueInfoWritesTypeShape) {
   // No device set => no metadata_props entry added.
   EXPECT_EQ(vi.metadata_props().size(), 0u);
   // The original name is preserved.
-  EXPECT_EQ(std::string(vi.name()), "y");
+  EXPECT_EQ(vi.name(), "y");
 }
 
 TEST(OnnxOptimValueInfo, ToValueInfoUndefinedDtypeReturnsFalse) {

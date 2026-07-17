@@ -154,9 +154,8 @@ FunctionProto GradientOfFunction(const FunctionProto &function, std::span<const 
   for (int i = 0; i < function.node_size(); ++i) {
     nodes.push_back(function.node(i));
   }
-  const std::string domain = function.has_domain() ? std::string(function.domain()) : "";
-  const std::string name =
-      function.has_name() ? std::string(function.name()) + "_grad" : "gradient";
+  const std::string domain = function.has_domain() ? function.domain().value() : "";
+  const std::string name = function.has_name() ? function.name().value() + "_grad" : "gradient";
   return ComputeGradient(nodes.begin(), nodes.end(), xs.begin(), xs.end(), y, zs.begin(), zs.end(),
                          domain, name, registry);
 }

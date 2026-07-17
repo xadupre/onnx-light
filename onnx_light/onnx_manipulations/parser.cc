@@ -643,8 +643,8 @@ Common::Status OnnxParser::Parse(TensorProto &tensorProto, const TypeProto &tens
     PARSE(externalData);
     for (auto &entry : externalData) {
       auto *ed = tensorProto.add_external_data();
-      ed->set_key(std::string(entry.ref_key()));
-      ed->set_value(std::string(entry.ref_value()));
+      ed->set_key(entry.ref_key());
+      ed->set_value(entry.ref_value());
     }
     MATCH(']');
   }
@@ -1097,8 +1097,8 @@ Common::Status OnnxParser::Parse(ModelProto &model) {
         }
         for (auto &entry : metadata_props) {
           auto *prop = model.add_metadata_props();
-          prop->set_key(std::string(entry.ref_key()));
-          prop->set_value(std::string(entry.ref_value()));
+          prop->set_key(entry.ref_key());
+          prop->set_value(entry.ref_value());
         }
         break;
       }

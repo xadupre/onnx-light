@@ -154,8 +154,7 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
     for (const StringStringEntryProto &entry : tensor.external_data()) {
       if (entry.has_key() && entry.has_value() && entry.key() == "location") {
         has_location = true;
-        resolve_external_data_location(ctx.get_model_dir(), std::string(entry.value()),
-                                       tensor.name());
+        resolve_external_data_location(ctx.get_model_dir(), entry.value(), tensor.name());
       }
     }
     if (!has_location) {
@@ -1074,7 +1073,7 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
   if (model.metadata_props_size() > 1) {
     std::unordered_set<std::string> keys;
     for (const StringStringEntryProto &entry : model.metadata_props()) {
-      auto i = keys.insert(std::string(entry.key()));
+      auto i = keys.insert(entry.key());
       if (!i.second) {
         fail_check("Your model has duplicate keys in metadata_props.");
       }

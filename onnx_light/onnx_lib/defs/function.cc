@@ -25,7 +25,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     uniq_prefix = ss.str();
   }
   std::string node_name =
-      node.has_name() ? std::string(node.ref_name()) : std::string(func.ref_name()) + uniq_prefix;
+      node.has_name() ? node.ref_name().value() : std::string(func.ref_name()) + uniq_prefix;
   std::unordered_map<std::string, std::string> io_names_map;
   std::unordered_map<std::string, AttributeProto> attr_map;
 
@@ -33,7 +33,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     if (idx >= (int)func.ref_input().size()) {
       ONNX_THROW("Input for function node " + node_name + " is out of bounds");
     }
-    io_names_map[std::string(func.ref_input()[idx])] = std::string(node.ref_input()[idx]);
+    io_names_map[func.ref_input()[idx]] = node.ref_input()[idx];
   }
   for (int idx = 0; idx < (int)node.ref_output().size(); ++idx) {
     if (idx >= (int)func.ref_output().size()) {
@@ -104,9 +104,9 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     }
     for (const auto &attr : function_node.ref_attribute()) {
       if (attr.has_ref_attr_name()) {
-        if (attr_map.count(std::string(attr.ref_ref_attr_name()))) {
+        if (attr_map.count(attr.ref_ref_attr_name())) {
           AttributeProto *new_attr = new_node->add_attribute();
-          new_attr->CopyFrom(attr_map[std::string(attr.ref_ref_attr_name())]);
+          new_attr->CopyFrom(attr_map[attr.ref_ref_attr_name()]);
           new_attr->set_name(attr.ref_name());
         }
       } else {

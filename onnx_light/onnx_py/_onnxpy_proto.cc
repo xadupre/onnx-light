@@ -1365,25 +1365,22 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
   nb::class_<utils::String>(m, "String", "Simplified string with no final null character.")
       .def(nb::init<std::string>())
       .def(
-          "__str__", [](const utils::String &self) -> std::string { return std::string(self); },
+          "__str__", [](const utils::String &self) -> std::string { return self; },
           "Converts this instance into a python string.")
       .def(
           "__add__",
           [](const utils::String &self, const nb::str &s) -> std::string {
-            return std::string(self) + nb::cast<std::string>(s);
+            return self + nb::cast<std::string>(s);
           },
           "Concatenates this string and a python string.", nb::is_operator())
       .def(
           "__radd__",
           [](const utils::String &self, const nb::str &s) -> std::string {
-            return nb::cast<std::string>(s) + std::string(self);
+            return nb::cast<std::string>(s) + self;
           },
           "Concatenates a python string and this string.", nb::is_operator())
       .def(
-          "__repr__",
-          [](const utils::String &self) -> std::string {
-            return std::string("'") + std::string(self) + std::string("'");
-          },
+          "__repr__", [](const utils::String &self) -> std::string { return "'" + self + "'"; },
           "Representation with surrounding quotes.")
       .def(
           "__len__", [](const utils::String &self) -> int { return self.size(); },

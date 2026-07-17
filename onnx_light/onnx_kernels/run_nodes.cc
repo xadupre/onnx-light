@@ -784,8 +784,8 @@ void BindRefAttributes(NodeProto &node,
   auto &attributes = node.attribute();
   for (auto it = attributes.begin(); it != attributes.end();) {
     AttributeProto &attr = *it;
-    if (!std::string(attr.ref_attr_name()).empty()) {
-      auto found = attr_map.find(std::string(attr.ref_attr_name()));
+    if (!attr.ref_attr_name().empty()) {
+      auto found = attr_map.find(attr.ref_attr_name());
       if (found != attr_map.end()) {
         const std::string local_name = attr.name();
         attr.CopyFrom(*found->second);

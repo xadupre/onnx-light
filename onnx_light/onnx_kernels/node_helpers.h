@@ -136,7 +136,7 @@ inline void RequireOutputCount(const NodeProto &node, int expected) {
 inline const AttributeProto *FindAttribute(const NodeProto &node, const std::string &name) {
   for (size_t i = 0; i < node.attribute().size(); ++i) {
     const AttributeProto &attr = node.attribute()[i];
-    if (std::string(attr.name()) == name) {
+    if (attr.name() == name) {
       return &attr;
     }
   }

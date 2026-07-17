@@ -28,7 +28,7 @@ int64_t get_external_i64(const TensorProto &tensor, const char *key) {
 std::string get_external_location(const TensorProto &tensor) {
   for (const auto &entry : tensor.ref_external_data()) {
     if (entry.ref_key() == "location") {
-      return std::string(entry.ref_value());
+      return entry.ref_value();
     }
   }
   return "";

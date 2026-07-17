@@ -392,7 +392,7 @@ ConstNodeMap FindConstantNodes(const GraphProto &graph) {
   ConstNodeMap result;
   for (const NodeProto &node : graph.node()) {
     if (IsOnnxDomain(node.domain()) && (node.op_type() == "Constant")) {
-      result[std::string(node.output()[0])] = &node;
+      result[node.output()[0]] = &node;
     }
   }
   return result;

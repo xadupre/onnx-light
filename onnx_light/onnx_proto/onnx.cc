@@ -90,7 +90,7 @@ std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t thre
     const size_t tensor_size = it->raw_data_.size();
     EXT_ENFORCE(tensor_size <= max_external_file_size, "Tensor raw_data is too large (",
                 tensor_size, ") for max_external_file_size=", max_external_file_size, " name='",
-                std::string(it->ref_name()), "'.");
+                it->ref_name(), "'.");
     // Align the current offset within the file before checking the size cap.
     int64_t aligned_offset = align_up_offset(file_offset, alignment);
     if (aligned_offset > 0 && aligned_offset + static_cast<int64_t>(tensor_size) >
@@ -587,8 +587,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
           auto parent = normalized.parent_path();
           EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
                       "External data location must be a filename with no folder, name='",
-                      std::string(ref_name()), "', location='", std::string(entry.ref_value()),
-                      "'");
+                      std::string(ref_name()), "', location='", entry.ref_value(), "'");
         }
         external_location = &entry.ref_value();
         has_location = true;
@@ -735,10 +734,9 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
             auto parent = normalized.parent_path();
             EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
                         "External data location must be a filename with no folder, name='",
-                        std::string(ref_name()), "', location='", std::string(entry.ref_value()),
-                        "'");
+                        std::string(ref_name()), "', location='", entry.ref_value(), "'");
           }
-          location = std::string(entry.ref_value());
+          location = entry.ref_value();
           // Should check the value with the location of the second stream?
         } else if (entry.ref_key() == "length" || entry.ref_key() == "size") {
           size = ParseInt64Fast(entry.ref_value());
@@ -833,7 +831,7 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
   for (const StringStringEntryProto &entry : ref_external_data()) {
     const utils::OptionalString &key = entry.ref_key();
     if (key == "location") {
-      location = std::string(entry.ref_value());
+      location = entry.ref_value();
     } else if (key == "offset") {
       offset = ParseInt64Fast(entry.ref_value());
     } else if (key == "length" || key == "size") {

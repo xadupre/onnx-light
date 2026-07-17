@@ -46,7 +46,7 @@ using MetadataMap = std::unordered_map<std::string, std::string>;
 template <typename Proto> MetadataMap MetadataOf(const Proto &proto) {
   MetadataMap out;
   for (const auto &prop : proto.ref_metadata_props()) {
-    out[std::string(prop.ref_key())] = std::string(prop.ref_value());
+    out[prop.ref_key()] = prop.ref_value();
   }
   return out;
 }

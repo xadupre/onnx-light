@@ -338,16 +338,21 @@ LightOpSchema MakeSVMClassifierSchema() {
                          "List of 3 elements containing gamma, coef0, and degree, in that order. "
                          "Zero if unused for the kernel.",
                          AttributeType::FLOATS, false, std::monostate{}},
-          AttributeParam{"vectors_per_class", "", AttributeType::INTS, false, std::monostate{}},
-          AttributeParam{"support_vectors", "", AttributeType::FLOATS, false, std::monostate{}},
-          AttributeParam{"coefficients", "", AttributeType::FLOATS, false, std::monostate{}},
+          AttributeParam{"vectors_per_class", "Number of support vectors per class.",
+                         AttributeType::INTS, false, std::monostate{}},
+          AttributeParam{"support_vectors", "Chosen support vectors (all classes concatenated).",
+                         AttributeType::FLOATS, false, std::monostate{}},
+          AttributeParam{"coefficients",
+                         "Dual coefficients of the support vector in the decision function.",
+                         AttributeType::FLOATS, false, std::monostate{}},
           AttributeParam{"prob_a", "First set of probability coefficients.", AttributeType::FLOATS,
                          false, std::monostate{}},
           AttributeParam{"prob_b",
                          "Second set of probability coefficients. This array must be same size as "
                          "prob_a.",
                          AttributeType::FLOATS, false, std::monostate{}},
-          AttributeParam{"rho", "", AttributeType::FLOATS, false, std::monostate{}},
+          AttributeParam{"rho", "Intercept bias terms for the decision function.",
+                         AttributeType::FLOATS, false, std::monostate{}},
           AttributeParam{"post_transform", "Indicates the transform to apply to the score.",
                          AttributeType::STRING, false, std::string("NONE")},
           AttributeParam{"classlabels_strings",
@@ -393,7 +398,8 @@ LightOpSchema MakeSVMRegressorSchema() {
                          static_cast<int64_t>(0)},
           AttributeParam{"post_transform", "Indicates the transform to apply to the score.",
                          AttributeType::STRING, false, std::string("NONE")},
-          AttributeParam{"rho", "", AttributeType::FLOATS, false, std::monostate{}},
+          AttributeParam{"rho", "Intercept bias terms for the decision function.",
+                         AttributeType::FLOATS, false, std::monostate{}},
       });
 }
 

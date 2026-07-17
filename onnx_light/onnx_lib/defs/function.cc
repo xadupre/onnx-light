@@ -129,8 +129,7 @@ std::vector<NodeProto> FunctionBodyHelper::BuildNodes(const std::vector<NodeDef>
 }
 
 void FunctionBodyHelper::BuildNodes(NodeList &nodes, const std::vector<NodeDef> &node_defs) {
-  nodes.clear();
-  nodes.reserve(node_defs.size());
+  nodes.reserve(nodes.size() + node_defs.size());
 
   for (const NodeDef &node : node_defs) {
     NodeProto &n = nodes.add();

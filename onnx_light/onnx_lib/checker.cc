@@ -738,7 +738,7 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
     }
 
     if (check_is_experimental_op(node)) {
-      used_experimental_ops.insert(std::string(node.op_type()));
+      used_experimental_ops.insert(node.op_type());
     }
 
     // This needs to happen before SSA check since we don't want to recurse and
@@ -1045,7 +1045,7 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
     if (!ctx_copy.skip_opset_compatibility_check())
       check_opset_compatibility(node, ctx_copy, func_opset_imports, model_opset_imports);
     if (check_is_experimental_op(node)) {
-      used_experimental_ops.insert(std::string(node.op_type()));
+      used_experimental_ops.insert(node.op_type());
     }
     check_node(node, ctx_copy, lex_ctx);
 
@@ -1455,7 +1455,7 @@ static const std::unordered_set<std::string> experimental_ops = {"ATen",
 
 bool check_is_experimental_op(const NodeProto &node) {
   return (node.domain().sv() == ONNX_DOMAIN || node.domain().sv() == "ai.onnx") &&
-         experimental_ops.count(std::string(node.op_type()));
+         experimental_ops.count(node.op_type());
 }
 
 #undef enforce_has_field

@@ -41,7 +41,7 @@ void CheckOnnxDomain(const NodeProto &node) {
                           node.domain() == rt::kAiRtDomain ||
                           node.domain() == training::kOnnxPreviewTrainingDomain,
                       "ComputeShapeNode: unsupported domain '", std::string(node.domain()),
-                      "' for op '", std::string(node.op_type()), "'.");
+                      "' for op '", node.op_type(), "'.");
 }
 
 // Returns the ``"<domain>:<name>"`` identifier used as a key in
@@ -878,8 +878,7 @@ void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {
       continue;
     }
     EXT_ENFORCE_INVALID(Has(name) || HasSequence(name), "CheckInputsAvailable: input '", name,
-                        "' of op '", std::string(node.op_type()),
-                        "' is missing from ShapesContext.");
+                        "' of op '", node.op_type(), "' is missing from ShapesContext.");
   }
 }
 
@@ -890,7 +889,7 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
       continue;
     }
     EXT_ENFORCE_INVALID(!Has(name) && !HasSequence(name), "CheckOutputsNotAvailable: output '",
-                        name, "' of op '", std::string(node.op_type()),
+                        name, "' of op '", node.op_type(),
                         "' is already present in ShapesContext.");
   }
 }
@@ -909,8 +908,7 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
     for (int i = 0; i < node.input_size(); ++i) {
       inputs.push_back(std::string(node.input(i)));
     }
-    AppendComputeNodeEvent(NormaliseDispatchDomain(node), std::string(node.op_type()),
-                           std::move(inputs));
+    AppendComputeNodeEvent(NormaliseDispatchDomain(node), node.op_type(), std::move(inputs));
   }
 }
 

@@ -871,7 +871,7 @@ bool OpSchema::ValidateReferencedOpsInFunction(const FunctionProto *function,
           node.op_type(), function_since_version, node.domain());
       if (op1 != op2) {
         if (updated_ops) {
-          updated_ops->insert(std::string(node.op_type()));
+          updated_ops->insert(node.op_type());
         }
         all_ops_are_invalid = false;
       }

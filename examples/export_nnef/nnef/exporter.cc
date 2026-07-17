@@ -1036,10 +1036,11 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
   if (!model.has_graph())
     throw NNEFExportError("Model has no graph");
   const auto &graph = model.graph();
-  std::string name = !graph_name.empty() ? graph_name
-                                         : (!graph.name().empty() ? std::string(graph.name())
-                                                                  : std::string("main"));
-  name = SanitizeGraphName(name);
+  static const std::string kMainGraphName = "main";
+  const std::string &selected_name =
+      !graph_name.empty() ? graph_name
+                          : (!graph.name().empty() ? graph.name().value() : kMainGraphName);
+  std::string name = SanitizeGraphName(selected_name);
 
   ExportContext ctx;
 
@@ -1070,7 +1071,7 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
   }
   // Outputs.
   for (const auto &vi : graph.output()) {
-    std::string nnef_name = ctx.MapName(std::string(vi.name()));
+    std::string nnef_name = ctx.MapName(vi.name());
     output_names.push_back(nnef_name);
   }
 

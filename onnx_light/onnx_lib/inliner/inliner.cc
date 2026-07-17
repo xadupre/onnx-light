@@ -543,7 +543,7 @@ struct InlinerImpl {
     if (schema_registry != nullptr) {
       int64_t domain_version = GetDomainVersion(model, domain);
       const auto *const op_schema =
-          schema_registry->GetSchema(std::string(node.op_type()), domain_version, domain);
+          schema_registry->GetSchema(node.op_type(), domain_version, domain);
 
       if (op_schema == nullptr) {
         // If the schema is not found, we cannot inline the function.

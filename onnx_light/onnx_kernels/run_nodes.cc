@@ -210,9 +210,9 @@ namespace {
 
 void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &outputs,
                               RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(outputs.size() == node.output_size(), "RunNode: op '",
-                      std::string(node.op_type()), "' produced ", outputs.size(),
-                      " output(s), node declares ", node.output_size(), ".");
+  EXT_ENFORCE_INVALID(outputs.size() == node.output_size(), "RunNode: op '", node.op_type(),
+                      "' produced ", outputs.size(), " output(s), node declares ",
+                      node.output_size(), ".");
   for (size_t i = 0; i < outputs.size(); ++i) {
     const std::string caller_name = std::string(node.output(i));
     if (caller_name.empty()) {

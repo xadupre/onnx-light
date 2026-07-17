@@ -101,7 +101,7 @@ template <class KernelT> NodeKernelFn MakeBinaryTrampoline() {
 template <class KernelT> NodeKernelFn MakeBinaryWithOptionalThirdTrampoline() {
   return [](const NodeProto &node, RuntimeContext &rt) {
     RequireMinInputCount(node, 2);
-    EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", std::string(node.op_type()),
+    EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type(),
                         "' expects 2 or 3 inputs, got ", node.input_size(), ".");
     RequireOutputCount(node, 1);
     const Tensor &a = GetInput(node, 0, rt.tensors());
@@ -181,8 +181,7 @@ template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
     RequireOutputCount(node, 1);
     const Tensor &x = GetInput(node, 0, rt.tensors());
     const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
-    EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", std::string(node.op_type()),
-                        " requires INT attribute 'to'.");
+    EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type(), " requires INT attribute 'to'.");
     KernelT kernel(rt.kernel_ctx());
     SetOutput(node, 0, kernel(x, to, &rt), rt);
   };
@@ -196,7 +195,7 @@ template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
 template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
   return [](const NodeProto &node, RuntimeContext &rt) {
     RequireMinInputCount(node, 1);
-    EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", std::string(node.op_type()),
+    EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
                         "' expects at most 2 inputs.");
     RequireOutputCount(node, 1);
     const Tensor &data = GetInput(node, 0, rt.tensors());
@@ -329,10 +328,10 @@ auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name,
 // attribute is missing or not of type TENSOR.
 inline Tensor GetRequiredAttributeTensor(const NodeProto &node, const std::string &name) {
   const AttributeProto *attr = FindAttribute(node, name);
-  EXT_ENFORCE_INVALID(attr != nullptr, "RunNode: op '", std::string(node.op_type()),
-                      "' is missing '", name, "' TENSOR attribute.");
+  EXT_ENFORCE_INVALID(attr != nullptr, "RunNode: op '", node.op_type(), "' is missing '", name,
+                      "' TENSOR attribute.");
   EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::TENSOR),
-                      "RunNode: attribute '", name, "' of op '", std::string(node.op_type()),
+                      "RunNode: attribute '", name, "' of op '", node.op_type(),
                       "' must be a TENSOR.");
   return TensorFromProto(attr->t());
 }
@@ -346,7 +345,7 @@ inline Tensor GetAttributeTensorOrEmpty(const NodeProto &node, const std::string
     return Tensor("", fallback_dtype, std::vector<int64_t>{0}, std::vector<uint8_t>{});
   }
   EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::TENSOR),
-                      "RunNode: attribute '", name, "' of op '", std::string(node.op_type()),
+                      "RunNode: attribute '", name, "' of op '", node.op_type(),
                       "' must be a TENSOR.");
   return TensorFromProto(attr->t());
 }
@@ -466,16 +465,14 @@ inline int64_t GetNormAxis(const NodeProto &node) {
 
 inline void RequireInputRange(const NodeProto &node, int min_inputs, int max_inputs) {
   const int n = node.input_size();
-  EXT_ENFORCE_INVALID(!(n < min_inputs || n > max_inputs), "RunNode: op '",
-                      std::string(node.op_type()), "' expects ", min_inputs, " to ", max_inputs,
-                      " input(s), got ", n, ".");
+  EXT_ENFORCE_INVALID(!(n < min_inputs || n > max_inputs), "RunNode: op '", node.op_type(),
+                      "' expects ", min_inputs, " to ", max_inputs, " input(s), got ", n, ".");
 }
 
 inline void RequireOutputRange(const NodeProto &node, int min_outputs, int max_outputs) {
   const int n = node.output_size();
-  EXT_ENFORCE_INVALID(!(n < min_outputs || n > max_outputs), "RunNode: op '",
-                      std::string(node.op_type()), "' expects ", min_outputs, " to ", max_outputs,
-                      " output(s), got ", n, ".");
+  EXT_ENFORCE_INVALID(!(n < min_outputs || n > max_outputs), "RunNode: op '", node.op_type(),
+                      "' expects ", min_outputs, " to ", max_outputs, " output(s), got ", n, ".");
 }
 
 void RunBatchNormalization(const NodeProto &node, RuntimeContext &rt) {
@@ -636,10 +633,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Atanh", MakeUnaryTrampoline<kernel::Atanh>()},
       {"ai.onnx:Attention",
        [](const NodeProto &node, RuntimeContext &rt) {
-         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 7), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 7), "RunNode: op '" , node.op_type() ,
                                        "' expects between 3 and 7 input(s), got " ,
                                        node.input_size() , ".");
-         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 4), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 4), "RunNode: op '" , node.op_type() ,
                                        "' expects between 1 and 4 output(s), got " ,
                                        node.output_size() , ".");
          const Tensor &q = GetInput(node, 0, rt.tensors());
@@ -732,7 +729,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:BlackmanWindow", MakeWindowTrampoline<kernel::BlackmanWindow>("BlackmanWindow")},
       {"ai.onnx:CausalConvWithState",
        [](const NodeProto &node, RuntimeContext &rt) {
-         EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 4), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 4), "RunNode: op '" , node.op_type() ,
                                        "' expects between 2 and 4 input(s), got " ,
                                        node.input_size() , ".");
          RequireOutputCount(node, 2);
@@ -1029,7 +1026,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:DFT",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
-         EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '" , node.op_type() ,
                                        "' expects at most 3 inputs.");
          RequireOutputCount(node, 1);
          const Tensor &input = GetInput(node, 0, rt.tensors());
@@ -1204,7 +1201,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Gemm",
        [](const NodeProto &node, RuntimeContext &rt) {
-         EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 3), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 3), "RunNode: op '" , node.op_type() ,
                                        "' expects between 2 and 3 input(s), got " ,
                                        node.input_size() , ".");
          RequireOutputCount(node, 1);
@@ -1263,10 +1260,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:GroupNormalization", RunGroupNormalization},
       {"ai.onnx:GRU",
        [](const NodeProto &node, RuntimeContext &rt) {
-         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '" , node.op_type() ,
                                        "' expects between 3 and 6 input(s), got " ,
                                        node.input_size() , ".");
-         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '" , node.op_type() ,
                                        "' expects 1 or 2 output(s), got " ,
                                        node.output_size() , ".");
 
@@ -1416,10 +1413,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:LogSoftmax", MakeAxisTrampoline<kernel::LogSoftmax>()},
       {"ai.onnx:LSTM",
        [](const NodeProto &node, RuntimeContext &rt) {
-         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 8), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 8), "RunNode: op '" , node.op_type() ,
                                        "' expects between 3 and 8 input(s), got " ,
                                        node.input_size() , ".");
-         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 3), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 3), "RunNode: op '" , node.op_type() ,
                                        "' expects between 1 and 3 output(s), got " ,
                                        node.output_size() , ".");
 
@@ -1670,7 +1667,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:NonMaxSuppression",
        [](const NodeProto &node, RuntimeContext &rt) {
-         EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 5), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 5), "RunNode: op '" , node.op_type() ,
                                        "' expects between 2 and 5 inputs, got " ,
                                        node.input_size() , ".");
          RequireOutputCount(node, 1);
@@ -1917,7 +1914,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Resize",
        [](const NodeProto &node, RuntimeContext &rt) {
-         EXT_ENFORCE_INVALID(!(node.input_size() < 1 || node.input_size() > 4), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() < 1 || node.input_size() > 4), "RunNode: op '" , node.op_type() ,
                                        "' expects between 1 and 4 input(s), got " ,
                                        node.input_size() , ".");
          RequireOutputCount(node, 1);
@@ -2004,10 +2001,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Round", MakeUnaryTrampoline<kernel::Round>()},
       {"ai.onnx:RNN",
        [](const NodeProto &node, RuntimeContext &rt) {
-         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '" , node.op_type() ,
                                        "' expects between 3 and 6 input(s), got " ,
                                        node.input_size() , ".");
-         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '" , node.op_type() ,
                                        "' expects 1 or 2 output(s), got " ,
                                        node.output_size() , ".");
 
@@ -2064,7 +2061,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:RotaryEmbedding",
        [](const NodeProto &node, RuntimeContext &rt) {
-         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 4), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 4), "RunNode: op '" , node.op_type() ,
                                        "' expects between 3 and 4 input(s), got " ,
                                        node.input_size() , ".");
          RequireOutputCount(node, 1);
@@ -2180,7 +2177,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:SequenceErase",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
-         EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , node.op_type() ,
                                        "' expects 1 or 2 inputs, got " ,
                                        node.input_size() , ".");
          RequireOutputCount(node, 1);
@@ -2192,7 +2189,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:SequenceInsert",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
-         EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '" , node.op_type() ,
                                        "' expects 2 or 3 inputs, got " ,
                                        node.input_size() , ".");
          RequireOutputCount(node, 1);
@@ -2213,10 +2210,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Split",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
-         EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , node.op_type() ,
                                        "' expects 1 or 2 inputs, got " ,
                                        node.input_size() , ".");
-         EXT_ENFORCE_INVALID(!(node.output_size() < 1), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1), "RunNode: op '" , node.op_type() ,
                                        "' expects at least 1 output, got 0.");
          const Tensor &input = GetInput(node, 0, rt.tensors());
          const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
@@ -2254,7 +2251,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:SplitToSequence",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
-         EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , node.op_type() ,
                                        "' expects 1 or 2 inputs, got " ,
                                        node.input_size() , ".");
          RequireOutputCount(node, 1);
@@ -2305,7 +2302,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Slice",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 3);
-         EXT_ENFORCE_INVALID(!(node.input_size() > 5), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() > 5), "RunNode: op '" , node.op_type() ,
                                        "' expects between 3 and 5 input(s), got " ,
                                        node.input_size() , ".");
          RequireOutputCount(node, 1);
@@ -2343,7 +2340,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:STFT",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
-         EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op '" , std::string(node.op_type()) ,
+         EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op '" , node.op_type() ,
                                        "' expects at most 4 inputs.");
          RequireOutputCount(node, 1);
          const Tensor &signal = GetInput(node, 0, rt.tensors());

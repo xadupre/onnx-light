@@ -1343,11 +1343,11 @@ const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_nam
     }
     EXT_ENFORCE_INVALID(attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g(), prefix,
                         "attribute '", attr_name, "' must be a GRAPH on node of op_type '",
-                        std::string(node.op_type()), "'.");
+                        node.op_type(), "'.");
     return attr.g();
   }
   EXT_THROW_INVALID(prefix, "attribute '", attr_name, "' is missing on node of op_type '",
-                    std::string(node.op_type()), "'.");
+                    node.op_type(), "'.");
 }
 
 NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,

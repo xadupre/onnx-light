@@ -16,11 +16,6 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
-// Helper to convert an onnx-light string field to std::string.
-static inline std::string to_std_string(const std::string &s) {
-  return std::string(s.data(), s.size());
-}
-
 // Part 1: convert ONNX Protobuf to IR
 static std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
                                                 int64_t ir_version = IR_VERSION);
@@ -93,7 +88,7 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
   case TensorProto::DataType::STRING: {
     ret.strings().reserve(tp.string_data().size());
     for (int i = 0; i < tp.string_data().size(); i++) {
-      ret.strings().push_back(to_std_string(tp.string_data()[i]));
+      ret.strings().push_back(tp.string_data()[i]);
     }
     break;
   }
@@ -113,15 +108,14 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
   }
 
   if (tp.has_name()) {
-    ret.setName(to_std_string(tp.name()));
+    ret.setName(tp.name());
   }
   if (tp.has_segment()) {
     ret.set_segment_begin_and_end(tp.segment().begin(), tp.segment().end());
   }
 
   for (int i = 0; i < tp.external_data().size(); i++) {
-    ret.external_data().emplace_back(to_std_string(tp.external_data()[i].key()),
-                                     to_std_string(tp.external_data()[i].value()));
+    ret.external_data().emplace_back(tp.external_data()[i].key(), tp.external_data()[i].value());
   }
   if (tp.has_data_location()) {
     ret.data_location() = tp.data_location();
@@ -131,7 +125,7 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
 
 static void convertAttribute(const AttributeProto &ap, Node &n,
                              const int64_t ir_version = IR_VERSION) {
-  Symbol sym = Symbol(to_std_string(ap.name()));
+  Symbol sym = Symbol(ap.name());
   switch (ap.type()) {
   case AttributeProto::AttributeType::FLOAT:
     n.f_(sym, ap.f());
@@ -158,13 +152,13 @@ static void convertAttribute(const AttributeProto &ap, Node &n,
     break;
   }
   case AttributeProto::AttributeType::STRING:
-    n.s_(sym, to_std_string(ap.s()));
+    n.s_(sym, ap.s());
     break;
   case AttributeProto::AttributeType::STRINGS: {
     std::vector<std::string> strings;
     strings.reserve(ap.strings().size());
     for (int i = 0; i < ap.strings().size(); i++) {
-      strings.push_back(to_std_string(ap.strings()[i]));
+      strings.push_back(ap.strings()[i]);
     }
     n.ss_(sym, std::move(strings));
     break;
@@ -228,7 +222,7 @@ static std::vector<Dimension> tensorShapeProtoToDimensions(const TensorShapeProt
     if (tsp.dim()[i].has_dim_value()) {
       dims.emplace_back(tsp.dim()[i].dim_value());
     } else if (tsp.dim()[i].has_dim_param()) {
-      dims.emplace_back(to_std_string(tsp.dim()[i].dim_param()));
+      dims.emplace_back(tsp.dim()[i].dim_param());
     } else {
       // a dimension that has neither dim_value nor dim_param set
       // represents an unknown dimension unrelated to other unknown dimensions.
@@ -256,10 +250,10 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
   auto g = std::make_unique<Graph>();
 
   if (gp.has_name()) {
-    g->setName(to_std_string(gp.name()));
+    g->setName(gp.name());
   }
   if (gp.has_doc_string()) {
-    g->setDocString(to_std_string(gp.doc_string()));
+    g->setDocString(gp.doc_string());
   }
 
   // Values are created (as in `new Value(..)`) by the Node that
@@ -308,8 +302,8 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
     if (!vip.type().has_tensor_type()) {
       v->type() = std::make_unique<TypeProto>(vip.type());
     }
-    v->setUniqueName(to_std_string(vip.name()));
-    value_by_name_of[to_std_string(vip.name())] = v;
+    v->setUniqueName(vip.name());
+    value_by_name_of[vip.name()] = v;
   }
 
   // initializers should be added before all nodes,
@@ -331,34 +325,33 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
 
   for (int i = 0; i < gp.node().size(); i++) {
     const auto &np = gp.node()[i];
-    auto *n =
-        g->create(Symbol(to_std_string(np.op_type())), /* num_outputs = */ np.output().size());
+    auto *n = g->create(Symbol(np.op_type()), /* num_outputs = */ np.output().size());
     g->appendNode(n);
     for (int j = 0; j < np.output().size(); j++) {
       auto *out = n->outputs()[j];
       // we don't know the real type here, so that's done in a later pass
       out->setElemType(TensorProto::DataType::UNDEFINED);
-      out->setUniqueName(to_std_string(np.output()[j]));
-      value_by_name_of[to_std_string(np.output()[j])] = out;
+      out->setUniqueName(np.output()[j]);
+      value_by_name_of[np.output()[j]] = out;
     }
     convertAttributes(np, *n, ir_version);
     std::vector<std::string> inputs;
     inputs.reserve(np.input().size());
     for (int j = 0; j < np.input().size(); j++) {
-      inputs.push_back(to_std_string(np.input()[j]));
+      inputs.push_back(np.input()[j]);
     }
     inputs_by_node[n] = inputs;
     if (np.has_doc_string()) {
-      n->setDocString(to_std_string(np.doc_string()));
+      n->setDocString(np.doc_string());
     }
     if (np.has_name()) {
-      n->setName(to_std_string(np.name()));
+      n->setName(np.name());
     }
     if (np.has_domain()) {
-      n->setDomain(to_std_string(np.domain()));
+      n->setDomain(np.domain());
     }
     if (np.has_overload()) {
-      n->setOverload(to_std_string(np.overload()));
+      n->setOverload(np.overload());
     }
   }
 
@@ -383,7 +376,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
 
   for (int i = 0; i < gp.output().size(); i++) {
     const auto &output = gp.output()[i];
-    const std::string output_name = to_std_string(output.name());
+    const std::string output_name = output.name();
     auto it = value_by_name_of.find(output_name);
     Value *output_value = nullptr;
     if (it != value_by_name_of.end()) {
@@ -409,7 +402,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
 
   for (int i = 0; i < gp.value_info().size(); i++) {
     const auto &tensor_type = gp.value_info()[i].type().tensor_type();
-    auto it = value_by_name_of.find(to_std_string(gp.value_info()[i].name()));
+    auto it = value_by_name_of.find(gp.value_info()[i].name());
     if (it == value_by_name_of.end()) {
       // Ideally the model should not have a value_info whose name does not exist in the graph
       // (unused); simply skip it
@@ -441,8 +434,7 @@ std::unique_ptr<Graph> ImportModelProto(const ModelProto &mp) {
 
   std::unique_ptr<Graph> g(graphProtoToGraph(mp.graph(), false, mp.ir_version()));
   for (int i = 0; i < mp.opset_import().size(); i++) {
-    OpSetID new_opset_version(to_std_string(mp.opset_import()[i].domain()),
-                              mp.opset_import()[i].version());
+    OpSetID new_opset_version(mp.opset_import()[i].domain(), mp.opset_import()[i].version());
     g->forSelfAndEachSubGraph([&new_opset_version](Graph *graph) {
       graph->opset_versions_mutable().emplace_back(new_opset_version);
     });

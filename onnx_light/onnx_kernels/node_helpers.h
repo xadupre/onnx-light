@@ -38,7 +38,7 @@ namespace detail {
 inline constexpr const char *kDefaultOnnxDomain = "ai.onnx";
 
 inline std::string NormaliseDispatchDomain(const NodeProto &node) {
-  const std::string domain = std::string(node.domain());
+  const std::string domain = node.domain();
   return domain.empty() ? std::string(kDefaultOnnxDomain) : domain;
 }
 

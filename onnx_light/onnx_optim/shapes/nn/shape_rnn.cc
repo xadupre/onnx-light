@@ -57,7 +57,7 @@ bool IsRecurrentOp(const std::string &op_type) {
 } // namespace
 
 void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, const char *r) {
-  const std::string op_type = std::string(node.op_type());
+  const std::string op_type = node.op_type();
   EXT_ENFORCE_INVALID(IsRecurrentOp(op_type),
                       "ComputeShapeRNN: node.op_type() must be one of RNN, GRU or LSTM, got '",
                       op_type, "'.");

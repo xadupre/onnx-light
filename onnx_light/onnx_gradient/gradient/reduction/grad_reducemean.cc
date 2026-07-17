@@ -13,7 +13,7 @@ bool GradReduceMean(const NodeProto &node, const std::string &output_grad,
                     FunctionProto &func) {
   const auto &inputs = node.input();
   if (inputs.size() >= 1 && !inputs[0].empty() && !inputs[0].empty()) {
-    const std::string A = std::string(inputs[0]);
+    const std::string A = inputs[0];
     std::string shape_A = NewGradName("shape_A", counter);
     func.add_node("Shape", {A}, {shape_A});
     std::string expanded = NewGradName("expanded", counter);

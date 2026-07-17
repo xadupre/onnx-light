@@ -38,7 +38,7 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
   local.set_current_subgraph(local.current_node_index(), branch_name);
   for (int i = 0; i < subgraph.initializer().size(); ++i) {
     const TensorProto &init = subgraph.initializer()[i];
-    const std::string name = std::string(init.name());
+    const std::string name = init.name();
     if (name.empty() || local.Has(name)) {
       continue;
     }
@@ -71,7 +71,7 @@ const OptimTensor &GetSubgraphOutput(const ShapesContext &local_ctx, const Graph
   EXT_ENFORCE_INVALID(subgraph.output().size() == expected, "ComputeShapeIf: sub-graph '",
                       branch_name, "' declares ", std::to_string(subgraph.output().size()),
                       " output(s), expected ", std::to_string(expected), ".");
-  const std::string name = std::string(subgraph.output()[output_index].name());
+  const std::string name = subgraph.output()[output_index].name();
   EXT_ENFORCE_INVALID(local_ctx.Has(name), "ComputeShapeIf: output '", name, "' of sub-graph '",
                       branch_name, "' is missing from the inferred context.");
   return local_ctx.Get(name);
@@ -211,7 +211,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   local.set_current_subgraph(local.current_node_index(), "body");
   for (int i = 0; i < body.initializer().size(); ++i) {
     const TensorProto &init = body.initializer()[i];
-    const std::string name = std::string(init.name());
+    const std::string name = init.name();
     if (name.empty() || local.Has(name)) {
       continue;
     }
@@ -244,7 +244,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
 
   // Validate that every body output is known in the local context.
   for (int i = 0; i < body.output().size(); ++i) {
-    const std::string body_out = std::string(body.output()[i].name());
+    const std::string body_out = body.output()[i].name();
     EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeLoop: body output '", body_out,
                         "' is missing from the inferred context.");
   }
@@ -406,7 +406,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   local.set_current_subgraph(local.current_node_index(), "body");
   for (int i = 0; i < body.initializer().size(); ++i) {
     const TensorProto &init = body.initializer()[i];
-    const std::string name = std::string(init.name());
+    const std::string name = init.name();
     if (name.empty() || local.Has(name)) {
       continue;
     }
@@ -508,7 +508,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   }
 
   for (int i = 0; i < body.output().size(); ++i) {
-    const std::string body_out = std::string(body.output()[i].name());
+    const std::string body_out = body.output()[i].name();
     EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeScan: body output '", body_out,
                         "' is missing from the inferred context.");
   }

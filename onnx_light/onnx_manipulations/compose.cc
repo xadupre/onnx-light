@@ -27,7 +27,7 @@ namespace {
 void UpdateRepeatedStr(utils::RepeatedField<utils::String> &field,
                        const std::unordered_map<std::string, std::string> &name_map) {
   for (size_t i = 0; i < field.size(); ++i) {
-    const std::string s = std::string(field[i]);
+    const std::string s = field[i];
     auto it = name_map.find(s);
     if (it != name_map.end()) {
       field[i] = it->second;
@@ -46,7 +46,7 @@ std::unordered_map<std::string, size_t> BuildOutputDict(const GraphProto &graph)
   for (size_t i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];
     for (size_t j = 0; j < nd.output().size(); ++j) {
-      const std::string name = std::string(nd.output()[j]);
+      const std::string name = nd.output()[j];
       if (!name.empty()) {
         outmap[name] = i;
       }
@@ -77,7 +77,7 @@ void DfsSearchReachableNodes(const std::string &node_output_name,
       if (reachable.insert(idx).second) {
         const NodeProto &nd = graph.node()[idx];
         for (size_t j = 0; j < nd.input().size(); ++j) {
-          const std::string inp = std::string(nd.input()[j]);
+          const std::string inp = nd.input()[j];
           if (!inp.empty()) {
             stack.push_back(inp);
           }
@@ -223,7 +223,7 @@ GraphProto ExtractGraph(const GraphProto &graph, const std::vector<std::string> 
   const std::unordered_set<std::string> input_set(input_names.begin(), input_names.end());
   const std::unordered_set<std::string> output_set(output_names.begin(), output_names.end());
   for (const ValueInfoProto &vi : value_infos_collected) {
-    const std::string name = std::string(vi.name());
+    const std::string name = vi.name();
     if (!input_set.count(name) && !output_set.count(name)) {
       g.add_value_info(vi);
     }
@@ -275,7 +275,7 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
     for (size_t i = 0; i < g.node().size(); ++i) {
       const NodeProto &nd = g.node()[i];
       for (size_t j = 0; j < nd.output().size(); ++j) {
-        const std::string e = std::string(nd.output()[j]);
+        const std::string e = nd.output()[j];
         if (!e.empty() && !graph_output_names.count(e)) {
           name_map[e] = pfx(e);
         }
@@ -285,13 +285,13 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
 
   if (rename_inputs) {
     for (size_t i = 0; i < g.input().size(); ++i) {
-      const std::string n = std::string(g.input()[i].name());
+      const std::string n = g.input()[i].name();
       name_map[n] = pfx(n);
     }
   }
   if (rename_outputs) {
     for (size_t i = 0; i < g.output().size(); ++i) {
-      const std::string n = std::string(g.output()[i].name());
+      const std::string n = g.output()[i].name();
       name_map[n] = pfx(n);
     }
   }
@@ -323,16 +323,16 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
 
   if (rename_initializers) {
     for (size_t i = 0; i < g.initializer().size(); ++i) {
-      const std::string n = std::string(g.initializer()[i].name());
+      const std::string n = g.initializer()[i].name();
       name_map[n] = pfx(n);
     }
     for (size_t i = 0; i < g.sparse_initializer().size(); ++i) {
       {
-        const std::string n = std::string(g.sparse_initializer()[i].values().name());
+        const std::string n = g.sparse_initializer()[i].values().name();
         name_map[n] = pfx(n);
       }
       {
-        const std::string n = std::string(g.sparse_initializer()[i].indices().name());
+        const std::string n = g.sparse_initializer()[i].indices().name();
         name_map[n] = pfx(n);
       }
     }
@@ -340,7 +340,7 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
 
   if (rename_value_infos) {
     for (size_t i = 0; i < g.value_info().size(); ++i) {
-      const std::string n = std::string(g.value_info()[i].name());
+      const std::string n = g.value_info()[i].name();
       name_map[n] = pfx(n);
     }
   }
@@ -355,7 +355,7 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
   // Apply to graph inputs.
   for (size_t i = 0; i < g.input().size(); ++i) {
     ValueInfoProto &vi = (*g.mutable_input())[i];
-    const std::string n = std::string(vi.name());
+    const std::string n = vi.name();
     auto it = name_map.find(n);
     if (it != name_map.end()) {
       vi.set_name(it->second);
@@ -365,7 +365,7 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
   // Apply to graph outputs.
   for (size_t i = 0; i < g.output().size(); ++i) {
     ValueInfoProto &vi = (*g.mutable_output())[i];
-    const std::string n = std::string(vi.name());
+    const std::string n = vi.name();
     auto it = name_map.find(n);
     if (it != name_map.end()) {
       vi.set_name(it->second);
@@ -375,7 +375,7 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
   // Apply to initializers.
   for (size_t i = 0; i < g.initializer().size(); ++i) {
     TensorProto &init = (*g.mutable_initializer())[i];
-    const std::string n = std::string(init.name());
+    const std::string n = init.name();
     auto it = name_map.find(n);
     if (it != name_map.end()) {
       init.set_name(it->second);
@@ -386,14 +386,14 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
   for (size_t i = 0; i < g.sparse_initializer().size(); ++i) {
     SparseTensorProto &si = (*g.mutable_sparse_initializer())[i];
     {
-      const std::string n = std::string(si.values().name());
+      const std::string n = si.values().name();
       auto it = name_map.find(n);
       if (it != name_map.end()) {
         si.values().set_name(it->second);
       }
     }
     {
-      const std::string n = std::string(si.indices().name());
+      const std::string n = si.indices().name();
       auto it = name_map.find(n);
       if (it != name_map.end()) {
         si.indices().set_name(it->second);
@@ -404,7 +404,7 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
   // Apply to value_infos.
   for (size_t i = 0; i < g.value_info().size(); ++i) {
     ValueInfoProto &vi = (*g.mutable_value_info())[i];
-    const std::string n = std::string(vi.name());
+    const std::string n = vi.name();
     auto it = name_map.find(n);
     if (it != name_map.end()) {
       vi.set_name(it->second);
@@ -434,13 +434,13 @@ CheckOverlappingNames(const GraphProto &g1, const GraphProto &g2,
     for (size_t i = 0; i < g.node().size(); ++i) {
       const NodeProto &nd = g.node()[i];
       for (size_t j = 0; j < nd.input().size(); ++j) {
-        const std::string s = std::string(nd.input()[j]);
+        const std::string s = nd.input()[j];
         if (!s.empty() && !exclude.count(s)) {
           result.push_back(s);
         }
       }
       for (size_t j = 0; j < nd.output().size(); ++j) {
-        const std::string s = std::string(nd.output()[j]);
+        const std::string s = nd.output()[j];
         if (!s.empty() && !exclude.count(s)) {
           result.push_back(s);
         }
@@ -553,7 +553,7 @@ ModelProto AddPrefix(const ModelProto &model, const std::string &prefix, bool re
     // Build function rename map.
     std::unordered_map<std::string, std::string> f_name_map;
     for (size_t i = 0; i < m.functions().size(); ++i) {
-      const std::string old_name = std::string(m.functions()[i].name());
+      const std::string old_name = m.functions()[i].name();
       const std::string new_name = prefix + old_name;
       f_name_map[old_name] = new_name;
     }
@@ -561,7 +561,7 @@ ModelProto AddPrefix(const ModelProto &model, const std::string &prefix, bool re
     // Rename functions.
     for (size_t i = 0; i < m.functions().size(); ++i) {
       FunctionProto &fn = (*m.mutable_functions())[i];
-      const std::string old_name = std::string(fn.name());
+      const std::string old_name = fn.name();
       auto it = f_name_map.find(old_name);
       if (it != f_name_map.end()) {
         fn.set_name(it->second);
@@ -662,13 +662,13 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
     } else {
       const std::unordered_set<std::string> input_set(inputs.begin(), inputs.end());
       for (size_t i = 0; i < g1.input().size(); ++i) {
-        const std::string n = std::string(g1.input()[i].name());
+        const std::string n = g1.input()[i].name();
         if (input_set.count(n)) {
           g1_inputs_filt.push_back(n);
         }
       }
       for (size_t i = 0; i < g2.input().size(); ++i) {
-        const std::string n = std::string(g2.input()[i].name());
+        const std::string n = g2.input()[i].name();
         if (input_set.count(n) || io_map_g2_ins.count(n)) {
           g2_inputs_filt.push_back(n);
         }
@@ -685,13 +685,13 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
     } else {
       const std::unordered_set<std::string> output_set(outputs.begin(), outputs.end());
       for (size_t i = 0; i < g1.output().size(); ++i) {
-        const std::string n = std::string(g1.output()[i].name());
+        const std::string n = g1.output()[i].name();
         if (output_set.count(n) || io_map_g1_outs.count(n)) {
           g1_outputs_filt.push_back(n);
         }
       }
       for (size_t i = 0; i < g2.output().size(); ++i) {
-        const std::string n = std::string(g2.output()[i].name());
+        const std::string n = g2.output()[i].name();
         if (output_set.count(n)) {
           g2_outputs_filt.push_back(n);
         }
@@ -818,7 +818,7 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
       out_names.insert(std::string(g.output()[i].name()));
     }
     for (size_t i = 0; i < g1.output().size(); ++i) {
-      const std::string n = std::string(g1.output()[i].name());
+      const std::string n = g1.output()[i].name();
       if (io_map_g1_outs.count(n) && !vi_names.count(n) && !out_names.count(n)) {
         g.add_value_info(g1.output()[i]);
       }
@@ -867,7 +867,7 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
   auto merge_opset = [&](const utils::RepeatedProtoField<OperatorSetIdProto> &ops,
                          const ModelProto &src) {
     for (size_t i = 0; i < ops.size(); ++i) {
-      const std::string dom = std::string(ops[i].domain());
+      const std::string dom = ops[i].domain();
       const int64_t ver = ops[i].version();
       auto it = opset_import_map.find(dom);
       if (it != opset_import_map.end()) {
@@ -939,8 +939,8 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
         std::string(m1.metadata_props()[i].value());
   }
   for (size_t i = 0; i < m2.metadata_props().size(); ++i) {
-    const std::string key = std::string(m2.metadata_props()[i].key());
-    const std::string val = std::string(m2.metadata_props()[i].value());
+    const std::string key = m2.metadata_props()[i].key();
+    const std::string val = m2.metadata_props()[i].value();
     auto it = model_props.find(key);
     if (it != model_props.end()) {
       EXT_ENFORCE_INVALID(
@@ -963,7 +963,7 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
   }
   std::vector<std::string> fn_overlap;
   for (size_t i = 0; i < m2.functions().size(); ++i) {
-    const std::string fn_name = std::string(m2.functions()[i].name());
+    const std::string fn_name = m2.functions()[i].name();
     if (fn_names_1.count(fn_name)) {
       fn_overlap.push_back(fn_name);
     }
@@ -994,7 +994,7 @@ GraphProto ExpandOutDimGraph(const GraphProto &graph, int64_t dim_idx, bool /*in
   // Build rename map: each original output name → collapsed name.
   std::unordered_map<std::string, std::string> collapsed_map;
   for (size_t i = 0; i < g.output().size(); ++i) {
-    const std::string name = std::string(g.output()[i].name());
+    const std::string name = g.output()[i].name();
     collapsed_map[name] = name + "_collapsed_dim_" + std::to_string(dim_idx);
   }
 
@@ -1033,7 +1033,7 @@ GraphProto ExpandOutDimGraph(const GraphProto &graph, int64_t dim_idx, bool /*in
   g.mutable_output()->clear();
 
   for (const ValueInfoProto &o : orig_outputs) {
-    const std::string orig_name = std::string(o.name());
+    const std::string orig_name = o.name();
     const std::string prev_name = orig_name + "_collapsed_dim_" + std::to_string(dim_idx);
 
     // Unsqueeze node.

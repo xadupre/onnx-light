@@ -72,7 +72,7 @@ void BindNodeAttributes(NodeProto &node, const AttributeMap &attr_map) {
       if (it != attr_map.end()) {
         const AttributeProto *replacement = it->second;
         // Copy the value of the call-site attribute, but retain the original name.
-        std::string name = std::string(attr.name());
+        std::string name = attr.name();
         attr.CopyFrom(*replacement);
         attr.set_name(name);
         ++attr_iter;
@@ -172,7 +172,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
 // Normalises the empty default ONNX domain to ``kOnnxDomain`` so that
 // dispatch-table lookups always use a canonical key.
 std::string NormaliseDispatchDomain(const NodeProto &node) {
-  const std::string domain = std::string(node.domain());
+  const std::string domain = node.domain();
   return domain.empty() ? std::string(kOnnxDomain) : domain;
 }
 
@@ -231,7 +231,7 @@ bool ValueInfoHasTensorShape(const ValueInfoProto &vi) {
 }
 
 bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
-  const std::string name = std::string(vi.name());
+  const std::string name = vi.name();
   if (name.empty() || ctx.Has(name) || ctx.HasSequence(name)) {
     return false;
   }
@@ -257,7 +257,7 @@ bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
 }
 
 void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
-  const std::string name = std::string(vi.name());
+  const std::string name = vi.name();
   if (name.empty() || !ValueInfoHasTensorShape(vi)) {
     return;
   }
@@ -562,7 +562,7 @@ void AddValueInfoSymbols(const ValueInfoProto &vi, std::unordered_set<std::strin
     if (!dim.has_dim_param()) {
       continue;
     }
-    const std::string param = std::string(dim.dim_param());
+    const std::string param = dim.dim_param();
     if (param.empty()) {
       continue;
     }
@@ -774,7 +774,7 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   // Model-local function calls bypass the domain check (their domain
   // is arbitrary) and the op-type dispatch table; they are expanded
   // by recursively running shape inference on the FunctionProto body.
-  const std::string op_type = std::string(node.op_type());
+  const std::string op_type = node.op_type();
   const std::string local_key = LocalFunctionKey(std::string(node.domain()), op_type);
   if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
     ctx.CheckInputsAvailable(node);
@@ -929,7 +929,7 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   current_node_index_ = -2;
   for (int i = 0; i < graph.initializer().size(); ++i) {
     const TensorProto &init = graph.initializer()[i];
-    const std::string name = std::string(init.name());
+    const std::string name = init.name();
     if (name.empty() || Has(name)) {
       continue;
     }
@@ -995,7 +995,7 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   std::unordered_set<std::string> output_names;
   for (int i = 0; i < graph.output_size(); ++i) {
     ValueInfoProto &vi = *graph.mutable_output(i);
-    const std::string name = std::string(vi.name());
+    const std::string name = vi.name();
     output_names.insert(name);
     if (!name.empty() && Has(name)) {
       OptimTensorToValueInfo(Get(name), vi);
@@ -1006,7 +1006,7 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   std::unordered_set<std::string> existing_value_info;
   for (int i = 0; i < graph.value_info_size(); ++i) {
     ValueInfoProto &vi = *graph.mutable_value_info(i);
-    const std::string name = std::string(vi.name());
+    const std::string name = vi.name();
     existing_value_info.insert(name);
     if (!name.empty() && Has(name)) {
       OptimTensorToValueInfo(Get(name), vi);

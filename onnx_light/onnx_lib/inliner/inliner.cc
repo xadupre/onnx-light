@@ -220,7 +220,7 @@ public:
     size_t i = 0;
     for (; i < actuals.size(); ++i) {
       utils::String &formal = formals[i];
-      std::string rename_as = std::string(actuals[i]);
+      std::string rename_as = actuals[i];
       if (isOutput)
         if (rename_as.empty())
           rename_as = MakeUnique(std::string(formal));
@@ -243,12 +243,12 @@ public:
       node.set_name(MakeUnique(std::string(node.name())));
 
     for (auto &x : node.input()) {
-      std::string s = std::string(x);
+      std::string s = x;
       LookupOrRename(s, false);
       x = s;
     }
     for (auto &y : node.output()) {
-      std::string s = std::string(y);
+      std::string s = y;
       LookupOrRename(s, true);
       y = s;
     }
@@ -261,17 +261,17 @@ public:
   void VisitGraph(GraphProto &graph) override {
     rename_scopes.emplace_back();
     for (auto &x : graph.input()) {
-      std::string s = std::string(x.name());
+      std::string s = x.name();
       Rename(s);
       x.set_name(s);
     }
     for (auto &init : graph.initializer()) {
-      std::string s = std::string(init.name());
+      std::string s = init.name();
       Rename(s);
       init.set_name(s);
     }
     for (auto &y : graph.output()) {
-      std::string s = std::string(y.name());
+      std::string s = y.name();
       Rename(s);
       y.set_name(s);
     }
@@ -320,7 +320,7 @@ public:
 
     renamer.VisitFunction(callee);
     for (auto &v : callee.value_info()) {
-      std::string name_str = std::string(v.name());
+      std::string name_str = v.name();
       renamer.LookupOrRename(name_str, false);
       v.set_name(name_str);
     }
@@ -525,8 +525,8 @@ struct InlinerImpl {
   ~InlinerImpl() = default;
 
   bool GetCallee(const NodeProto &node, FunctionProto &callee, int64_t &target_version) {
-    std::string domain = std::string(node.domain());
-    std::string function_name = std::string(node.op_type());
+    std::string domain = node.domain();
+    std::string function_name = node.op_type();
     if (!to_inline.Contains(domain, function_name)) {
       return false;
     }

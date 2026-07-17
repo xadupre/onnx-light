@@ -648,7 +648,7 @@ public:
     }
 
     for (const auto &default_value : func_proto.attribute_proto()) {
-      const std::string name = std::string(default_value.name());
+      const std::string name = default_value.name();
       const AttributeProto *value = ctx.getAttribute(name);
       attr_map[name] = (value != nullptr) ? value : &default_value;
     }

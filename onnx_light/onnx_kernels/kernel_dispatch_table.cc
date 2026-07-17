@@ -2553,7 +2553,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            const GraphProto &score_mod_graph = score_mod_attr->ref_g();
            EXT_ENFORCE_INVALID(!(score_mod_graph.input().empty()), 
                  "RunNode: 'score_mod' subgraph must declare at least one input.");
-           const std::string in_name = std::string(score_mod_graph.input()[0].name());
+           const std::string in_name = score_mod_graph.input()[0].name();
            score_mod_fn = [&score_mod_graph, in_name, &rt](Tensor &scores) {
              auto outputs = RunSubgraph(score_mod_graph, {{in_name, scores}}, rt, "score_mod");
              if (!outputs.empty()) {
@@ -2566,7 +2566,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            const GraphProto &prob_mod_graph = prob_mod_attr->ref_g();
            EXT_ENFORCE_INVALID(!(prob_mod_graph.input().empty()), 
                  "RunNode: 'prob_mod' subgraph must declare at least one input.");
-           const std::string in_name = std::string(prob_mod_graph.input()[0].name());
+           const std::string in_name = prob_mod_graph.input()[0].name();
            prob_mod_fn = [&prob_mod_graph, in_name, &rt](Tensor &probs) {
              auto outputs = RunSubgraph(prob_mod_graph, {{in_name, probs}}, rt, "prob_mod");
              if (!outputs.empty()) {

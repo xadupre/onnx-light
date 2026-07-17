@@ -1470,7 +1470,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .def(
           "decode",
           [](const utils::String &self, const char *encoding, const char *errors) -> nb::object {
-            std::string s = std::string(self);
+            std::string s = self;
             nb::bytes data(s.data(), s.size());
             return data.attr("decode")(encoding, errors);
           },

@@ -196,7 +196,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   std::vector<Tensor> outputs;
   outputs.reserve(graph.output().size());
   for (size_t i = 0; i < graph.output().size(); ++i) {
-    const std::string out_name = std::string(graph.output()[i].name());
+    const std::string out_name = graph.output()[i].name();
     EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: a subgraph output has an empty name.");
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
@@ -254,7 +254,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   }
 
   for (int i = 0; i < branch.output_size(); ++i) {
-    const std::string out_name = std::string(branch.output()[i].name());
+    const std::string out_name = branch.output()[i].name();
     EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: If: a subgraph output has an empty name.");
     const std::string caller_name = std::string(node.output(i));
     if (caller_name.empty()) {
@@ -789,7 +789,7 @@ void BindRefAttributes(NodeProto &node,
     if (!std::string(attr.ref_attr_name()).empty()) {
       auto found = attr_map.find(std::string(attr.ref_attr_name()));
       if (found != attr_map.end()) {
-        const std::string local_name = std::string(attr.name());
+        const std::string local_name = attr.name();
         attr.CopyFrom(*found->second);
         attr.set_name(local_name);
         ++it;
@@ -828,7 +828,7 @@ void BindRefAttributes(NodeProto &node,
 // falling back to the typed defaults declared in
 // ``FunctionProto::attribute_proto`` when the call-site omits a value.
 void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, RuntimeContext &rt) {
-  const std::string op_type = std::string(node.op_type());
+  const std::string op_type = node.op_type();
   EXT_ENFORCE_INVALID(!(static_cast<int>(node.input_size()) != static_cast<int>(func.input_size())),
                       "RunNode: call to model-local function '", op_type, "' expects ",
                       func.input_size(), " input(s), got ", node.input_size(), ".");
@@ -906,7 +906,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
 } // namespace
 
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
-  const std::string op_type = std::string(node.op_type());
+  const std::string op_type = node.op_type();
   const std::string domain = NormaliseDispatchDomain(node);
   PrintNodeProgress(rt, node, domain, op_type);
 
@@ -1019,7 +1019,7 @@ void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
   const auto &inits = graph.initializer();
   for (size_t i = 0; i < inits.size(); ++i) {
     const TensorProto &tp = inits[i];
-    const std::string init_name = std::string(tp.name());
+    const std::string init_name = tp.name();
     // Only insert if the caller has not already provided a value for this
     // name (i.e. runtime overrides of initializers are respected).
     if (!rt.Has(init_name)) {

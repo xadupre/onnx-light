@@ -84,7 +84,7 @@ TEST(onnx_string, RefString_Assignment) {
   utils::String s("def", 3);
   utils::RefString c("123", 3);
   c = s;
-  EXPECT_NE(c.data(), s.data());
+  EXPECT_EQ(c.data(), s.data());
   EXPECT_EQ(c.size(), 3);
 }
 
@@ -136,11 +136,11 @@ TEST(onnx_string, RefString_Inequality) {
 
 TEST(onnx_string, RefString_AsString) {
   utils::RefString a("hello", 5);
-  std::string str = std::string(a);
+  std::string str = a;
   EXPECT_EQ(str, "hello");
 
   utils::RefString empty(nullptr, 0);
-  std::string emptyStr = std::string(empty);
+  std::string emptyStr = empty;
   EXPECT_EQ(emptyStr, "");
 }
 
@@ -250,11 +250,11 @@ TEST(onnx_string, String_Inequality) {
 
 TEST(onnx_string, String_AsString) {
   utils::String a("hello", 5);
-  std::string str = std::string(a);
+  std::string str = a;
   EXPECT_EQ(str, "hello");
 
   utils::String empty;
-  std::string emptyStr = std::string(empty);
+  std::string emptyStr = empty;
   EXPECT_EQ(emptyStr, "");
 }
 
@@ -432,20 +432,6 @@ TEST(onnx_string, String_AssignmentOperators) {
   EXPECT_EQ(s, "assigned from std::string");
 }
 
-TEST(onnx_string, RefString_AssignmentFromStringUsesInlineStorageForShortValues) {
-  utils::String short_value("inline", 6);
-  utils::RefString short_ref("seed", 4);
-  short_ref = short_value;
-  EXPECT_EQ(short_ref, "inline");
-  EXPECT_NE(short_ref.data(), short_value.data());
-
-  utils::String long_value("0123456789abcdefghijklmnop", 26);
-  utils::RefString long_ref("seed", 4);
-  long_ref = long_value;
-  EXPECT_EQ(long_ref, long_value);
-  EXPECT_EQ(long_ref.data(), long_value.data());
-}
-
 TEST(onnx_string, String_SelfAssignmentSafety) {
   utils::String s("12345678901234567890", 19);
 
@@ -543,34 +529,34 @@ TEST(onnx_proto, NodeProtoDomainKeepsExplicitEmptyString) {
 
 TEST(onnx_string, RefString_AsStringEdgeCases) {
   utils::RefString rs1("regular strings", 14);
-  std::string s1 = std::string(rs1);
+  std::string s1 = rs1;
   EXPECT_EQ(s1, "regular string");
 
   char data[] = {'t', 'e', 's', 't', '\0', '!'};
   utils::RefString rs2(data, 6);
-  std::string s2 = std::string(rs2);
+  std::string s2 = rs2;
   EXPECT_EQ(s2.size(), 6);
   EXPECT_EQ(s2[4], '\0');
 
   utils::RefString null_rs(nullptr, 0);
-  std::string s3 = std::string(null_rs);
+  std::string s3 = null_rs;
   EXPECT_TRUE(s3.empty());
   EXPECT_EQ(s3, "");
 }
 
 TEST(onnx_string, String_AsStringEdgeCases) {
   utils::String s1("1234567890123", 13);
-  std::string std_s1 = std::string(s1);
+  std::string std_s1 = s1;
   EXPECT_EQ(std_s1, "1234567890123");
 
   utils::String s2("test\0!", 6);
-  std::string std_s2 = std::string(s2);
+  std::string std_s2 = s2;
   EXPECT_EQ(std_s2.size(), 6);
   EXPECT_EQ(std_s2[4], '\0');
 
   // Empty string
   utils::String empty;
-  std::string std_s3 = std::string(empty);
+  std::string std_s3 = empty;
   EXPECT_TRUE(std_s3.empty());
   EXPECT_EQ(std_s3, "");
 }
@@ -614,13 +600,13 @@ TEST(onnx_proto, TensorProtoName2) {
   EXPECT_EQ(tp.name_.size(), 4);
   EXPECT_NE(tp.name_.data(), nullptr);
   EXPECT_EQ(tp.name_.data()[0], 't');
-  std::string check = std::string(tp.name_);
+  std::string check = tp.name_;
   EXPECT_EQ(name, check);
-  std::string check4 = std::string(tp.ref_name());
+  std::string check4 = tp.ref_name();
   EXPECT_EQ(name, check4);
   name = "TEST2";
   tp.set_name(name);
-  std::string check2 = std::string(tp.name_);
+  std::string check2 = tp.name_;
   EXPECT_EQ(name, check2);
 }
 

@@ -14,10 +14,10 @@ bool GradTanh(const NodeProto &node, const std::string &output_grad,
   const auto &inputs = node.input();
   if (inputs.size() < 1 || inputs[0].empty() || inputs[0].empty())
     return true;
-  const std::string A = std::string(inputs[0]);
+  const std::string A = inputs[0];
   if (node.output().empty() || node.output()[0].empty() || node.output()[0].empty())
     return true;
-  const std::string C = std::string(node.output()[0]);
+  const std::string C = node.output()[0];
 
   // dA = dC * (1 - C^2): use dA = dC - dC * C * C to avoid a constant node.
   std::string C2 = NewGradName("C2", counter);

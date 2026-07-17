@@ -107,7 +107,7 @@ void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const
 // Returns the input indices that can safely inherit the given output tag when
 // running backward propagation from consumers to producers.
 std::vector<int> BackwardTagInputIndices(const NodeProto &node, const std::string &output_tag) {
-  const std::string op_type = std::string(node.op_type());
+  const std::string op_type = node.op_type();
   if (op_type == "Concat") {
     // Do not propagate "ambiguous" backward to avoid overwriting inputs that
     // already carry a more specific tag (e.g. "shape" or "axes").
@@ -183,7 +183,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
     changed = false;
     for (std::size_t n = 0; n < nodes.size(); ++n) {
       const NodeProto *node = nodes[n];
-      const std::string op_type = std::string(node->op_type());
+      const std::string op_type = node->op_type();
       std::string explicit_output_tag;
       if (op_type == "Shape" || op_type == "Size") {
         explicit_output_tag = "shape";

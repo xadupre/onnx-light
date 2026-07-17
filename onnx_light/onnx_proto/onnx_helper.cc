@@ -372,7 +372,7 @@ void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
     if (all_tensors_to_one_file) {
       SetExternalDataLocation(tensor, single_file_name);
     } else {
-      std::string tensor_location = std::string(tensor.ref_name());
+      std::string tensor_location = tensor.ref_name();
       if (!IsValidExternalDataFilename(tensor_location)) {
         tensor_location = MakeUuidFilename();
       }

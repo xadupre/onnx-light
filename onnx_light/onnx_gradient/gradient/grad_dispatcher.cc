@@ -56,8 +56,8 @@ void ApplyBackward(const NodeProto &node,
   if (output_grad.empty())
     return; // no gradient flows through this node
 
-  const std::string domain = std::string(node.domain());
-  const std::string op_type = std::string(node.op_type());
+  const std::string domain = node.domain();
+  const std::string op_type = node.op_type();
   auto it = registry.find({domain, op_type});
   EXT_ENFORCE(it != registry.end(), "onnx_gradient: no gradient function registered for domain='",
               domain, "' op_type='", op_type, "'");

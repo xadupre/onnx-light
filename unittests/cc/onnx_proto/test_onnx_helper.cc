@@ -1816,7 +1816,7 @@ TEST(onnx_external_ressource, EditModelWithoutTouchingExternalData) {
       ASSERT_TRUE(t.has_data_location());
       EXPECT_EQ(t.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
       ASSERT_FALSE(t.ref_external_data().empty());
-      const std::string loc = std::string(t.ref_external_data()[0].ref_value());
+      const std::string loc = t.ref_external_data()[0].ref_value();
       EXPECT_NE(loc.find(weights_file), std::string::npos)
           << "external location='" << loc << "' does not reference '" << weights_file << "'";
     }

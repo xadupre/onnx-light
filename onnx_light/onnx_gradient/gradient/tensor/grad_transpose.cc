@@ -15,7 +15,7 @@ bool GradTranspose(const NodeProto &node, const std::string &output_grad,
   const auto &inputs = node.input();
   if (inputs.size() < 1 || inputs[0].empty() || inputs[0].empty())
     return true;
-  const std::string A = std::string(inputs[0]);
+  const std::string A = inputs[0];
   std::string dA = NewGradName("dA", counter);
   const AttributeProto *perm_attr = FindAttribute(node, "perm");
   if (perm_attr != nullptr) {

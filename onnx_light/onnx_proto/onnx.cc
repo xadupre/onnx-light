@@ -1745,7 +1745,7 @@ OperatorSetIdProto &AddOpsetEntry(RepeatedT &opset_import, const std::string &do
 } // namespace
 
 AttributeProto &NodeProto::set_attribute(const AttributeProto &attr) {
-  const std::string name = std::string(attr.ref_name());
+  const std::string name = attr.ref_name();
   for (size_t i = 0; i < attribute_.size(); ++i) {
     if (std::string(attribute_[i].ref_name()) == name) {
       attribute_[i] = attr;

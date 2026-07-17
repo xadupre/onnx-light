@@ -203,7 +203,7 @@ foo (x) => (y)
   InlineFunctions(model, code);
   // Check that valueinfo is propagated from function to main graph.
   const auto &graph = model.ref_graph();
-  const std::string temp_new_name = std::string(graph.ref_node()[0].ref_output()[0]);
+  const std::string temp_new_name = graph.ref_node()[0].ref_output()[0];
   const auto &valueinfos = graph.ref_value_info();
   for (const auto &valueinfo : valueinfos) {
     if (valueinfo.ref_name() == temp_new_name) {

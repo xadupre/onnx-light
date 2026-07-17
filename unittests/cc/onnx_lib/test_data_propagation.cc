@@ -74,7 +74,7 @@ public:
 
     size_t idx = 0;
     for (const auto &inp : n.ref_input()) {
-      std::string name = std::string(inp);
+      std::string name = inp;
       inputIndexToNameMap_[idx++] = name;
       auto typeIt = valueTypesByName.find(name);
       allInputTypes_.push_back(typeIt != valueTypesByName.end() ? typeIt->second : nullptr);
@@ -499,7 +499,7 @@ static TensorShapeProto RunDataPropagation(const char *graphCode) {
   }
 
   // 6. Return propagated shape for the single graph output.
-  const std::string outputName = std::string(graph.ref_output()[0].ref_name());
+  const std::string outputName = graph.ref_output()[0].ref_name();
   const auto it = generatedShapeDataByName.find(outputName);
   EXPECT_TRUE(it != generatedShapeDataByName.cend())
       << "No propagated data found for output: " << outputName;

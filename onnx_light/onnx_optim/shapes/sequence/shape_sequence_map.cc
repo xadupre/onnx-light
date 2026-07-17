@@ -76,7 +76,7 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
 
   for (int i = 1; i < node.input_size(); ++i) {
     const std::string outer_name = std::string(node.input(i));
-    const std::string body_in_name = std::string(body.input()[i].name());
+    const std::string body_in_name = body.input()[i].name();
     if (ctx.HasSequence(outer_name)) {
       // Additional inputs that are sequences contribute one element per
       // iteration; bind the body input to a per-element tensor descriptor,
@@ -94,7 +94,7 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
 
   // Validate that every body output is known in the local context.
   for (int i = 0; i < body.output().size(); ++i) {
-    const std::string body_out = std::string(body.output()[i].name());
+    const std::string body_out = body.output()[i].name();
     EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeSequenceMap: body output '", body_out,
                         "' is missing from the inferred context.");
   }

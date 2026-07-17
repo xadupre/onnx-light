@@ -13,7 +13,7 @@ bool GradRelu(const NodeProto &node, const std::string &output_grad,
               FunctionProto &func) {
   const auto &inputs = node.input();
   if (inputs.size() >= 1 && !inputs[0].empty() && !inputs[0].empty()) {
-    const std::string A = std::string(inputs[0]);
+    const std::string A = inputs[0];
     std::string sgn = NewGradName("relu_sign", counter);
     func.add_node("Sign", {A}, {sgn});
     std::string mask = NewGradName("relu_mask", counter);

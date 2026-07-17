@@ -628,8 +628,8 @@ void RemoveMetadataAt(ValueInfoProto &vi, int idx) {
   const std::size_t last = storage.size() - 1;
   const std::size_t i = static_cast<std::size_t>(idx);
   if (i != last) {
-    const std::string key = std::string(storage[last].key());
-    const std::string value = std::string(storage[last].value());
+    const std::string key = storage[last].key();
+    const std::string value = storage[last].value();
     storage[i].set_key(key);
     storage[i].set_value(value);
   }
@@ -665,7 +665,7 @@ std::optional<double> ReadNumericMetadata(const ValueInfoProto &vi, const char *
   }
   try {
     std::size_t consumed = 0;
-    const std::string value = std::string(vi.metadata_props()[idx].value());
+    const std::string value = vi.metadata_props()[idx].value();
     const double parsed = std::stod(value, &consumed);
     if (consumed != value.size()) {
       return std::nullopt;

@@ -1053,7 +1053,7 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
 
   // Map input names (skip those that are also initializers).
   for (const auto &vi : graph.input()) {
-    const std::string n = std::string(vi.name());
+    const std::string n = vi.name();
     if (initializer_names.count(n))
       continue;
     std::string nnef_name = ctx.MapName(n);
@@ -1063,7 +1063,7 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
   std::vector<std::pair<std::string, NNEFTensor>> ordered_inits;
   for (const auto &init : graph.initializer()) {
     NNEFTensor t = TensorProtoToNNEFTensor(init);
-    std::string n = std::string(init.name());
+    std::string n = init.name();
     std::string nnef_name = ctx.MapName(n);
     ctx.SetInitializer(n, t);
     ordered_inits.push_back({nnef_name, std::move(t)});
@@ -1076,7 +1076,7 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
 
   // Emit external statements for graph inputs.
   for (const auto &vi : graph.input()) {
-    const std::string n = std::string(vi.name());
+    const std::string n = vi.name();
     if (initializer_names.count(n))
       continue;
     std::string nnef_name = ctx.MapName(n);
@@ -1103,7 +1103,7 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
 
   // Walk nodes.
   for (const auto &node : graph.node()) {
-    std::string op = std::string(node.op_type());
+    std::string op = node.op_type();
     if (!HasOpConverter(op)) {
       throw NNEFExportError("No NNEF converter registered for ONNX op '" + op + "' (node '" +
                             std::string(node.name()) +
@@ -1112,12 +1112,12 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
     auto attrs = AttrsToDict(node);
     std::vector<std::string> inputs;
     for (const auto &n : node.input()) {
-      const std::string s = std::string(n);
+      const std::string s = n;
       inputs.push_back(s.empty() ? std::string("0.0") : ctx.MapName(s));
     }
     std::vector<std::string> outputs;
     for (const auto &n : node.output()) {
-      const std::string s = std::string(n);
+      const std::string s = n;
       if (s.empty()) {
         outputs.push_back(ctx.MakeTemp("unused"));
       } else {

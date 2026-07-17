@@ -38,6 +38,9 @@ ONNX_API void FunctionExpandHelper(const NodeProto &node, const FunctionProto &f
 /// Provides utility types and helpers to build function-body nodes.
 class FunctionBodyHelper {
 public:
+  using NodeList = utils::RepeatedProtoField<NodeProto>;
+  using OperatorSetList = utils::RepeatedProtoField<OperatorSetIdProto>;
+
   /// Wraps an attribute proto or typed attribute value.
   struct AttributeProtoWrapper {
     AttributeProto proto;
@@ -77,7 +80,7 @@ public:
    * @param node_defs Node definitions describing outputs, op type, inputs, and attributes.
    * @return Materialized nodes for a function body.
    */
-  ONNX_API static std::vector<NodeProto> BuildNodes(const std::vector<NodeDef> &node_defs);
+  ONNX_API static NodeList BuildNodes(const std::vector<NodeDef> &node_defs);
 
   /**
    * Appends nodes built from node_defs into functionProto.
@@ -95,6 +98,9 @@ public:
    * @param relied_opsets Opsets that the generated function body relies on.
    * @return True if the function body is built successfully.
    */
+  ONNX_API static bool BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
+                                          const std::vector<NodeDef> &node_defs,
+                                          const OperatorSetList &relied_opsets);
   ONNX_API static bool BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
                                           const std::vector<NodeDef> &node_defs,
                                           const std::vector<OperatorSetIdProto> &relied_opsets);

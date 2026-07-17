@@ -107,6 +107,8 @@ ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::vector<std::st
  * @return The constructed AttributeProto instance.
  */
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::vector<TensorProto> values);
+ONNX_API AttributeProto MakeAttribute(std::string attr_name,
+                                      utils::RepeatedProtoField<TensorProto> values);
 /**
  * Creates a GRAPHS attribute from a list of graph values.
  *
@@ -115,6 +117,8 @@ ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::vector<TensorP
  * @return The constructed AttributeProto instance.
  */
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::vector<GraphProto> values);
+ONNX_API AttributeProto MakeAttribute(std::string attr_name,
+                                      utils::RepeatedProtoField<GraphProto> values);
 /**
  * Creates a TYPE_PROTOS attribute from a list of type description values.
  *
@@ -123,6 +127,8 @@ ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::vector<GraphPr
  * @return The constructed AttributeProto instance.
  */
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::vector<TypeProto> values);
+ONNX_API AttributeProto MakeAttribute(std::string attr_name,
+                                      utils::RepeatedProtoField<TypeProto> values);
 
 /**
  * Creates a reference attribute for a node in a function body.

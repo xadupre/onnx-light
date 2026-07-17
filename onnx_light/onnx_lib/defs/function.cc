@@ -117,12 +117,13 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   }
 }
 
-std::vector<NodeProto> FunctionBodyHelper::BuildNodes(const std::vector<NodeDef> &node_defs) {
-  std::vector<NodeProto> nodes(node_defs.size());
+FunctionBodyHelper::NodeList FunctionBodyHelper::BuildNodes(const std::vector<NodeDef> &node_defs) {
+  NodeList nodes;
+  nodes.Reserve(static_cast<int>(node_defs.size()));
 
   for (size_t i = 0; i < node_defs.size(); i++) {
     const NodeDef &node = node_defs[i];
-    NodeProto &n = nodes[i];
+    NodeProto &n = nodes.add();
 
     n.set_op_type(node.op_type);
     n.set_domain(node.domain);
@@ -161,7 +162,7 @@ void FunctionBodyHelper::BuildNodes(FunctionProto &functionProto,
 
 bool FunctionBodyHelper::BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
                                             const std::vector<NodeDef> &node_defs,
-                                            const std::vector<OperatorSetIdProto> &relied_opsets) {
+                                            const OperatorSetList &relied_opsets) {
   BuildNodes(functionProto, node_defs);
 
   for (const auto &relied_opset : relied_opsets) {
@@ -177,6 +178,12 @@ bool FunctionBodyHelper::BuildFunctionProto(FunctionProto &functionProto, const 
     *functionProto.add_output() = output.GetName();
   }
   return true;
+}
+
+bool FunctionBodyHelper::BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
+                                            const std::vector<NodeDef> &node_defs,
+                                            const std::vector<OperatorSetIdProto> &relied_opsets) {
+  return BuildFunctionProto(functionProto, schema, node_defs, OperatorSetList(relied_opsets));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

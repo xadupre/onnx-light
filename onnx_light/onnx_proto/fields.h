@@ -257,6 +257,13 @@ public:
       values_.push_back(std::make_shared<T>(src[i]));
     }
   }
+  /** Constructs by copying elements from a vector. */
+  inline RepeatedProtoField(const std::vector<T> &src) {
+    values_.reserve(src.size());
+    for (const auto &value : src) {
+      values_.push_back(std::make_shared<T>(value));
+    }
+  }
   /** Reserves storage for at least n elements. */
   inline void reserve(size_t n) { values_.reserve(n); }
   /** Reserves storage for at least n elements (protobuf compat). */

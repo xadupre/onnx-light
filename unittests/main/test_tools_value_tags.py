@@ -127,6 +127,26 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(value_tags["S"], "shape")
         self.assertEqual(node_tags, ["shape"])
 
+    def test_accepts_repeated_proto_field_of_nodes(self):
+        from onnx_light.onnx import TensorProto, helper
+
+        graph = helper.make_graph(
+            [
+                helper.make_node("Shape", ["X"], ["S"]),
+                helper.make_node("Expand", ["Y", "S"], ["Z"]),
+            ],
+            "g",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
+            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, [2, 2])],
+        )
+
+        value_tags, node_tags = compute_value_and_node_tags(graph.node)
+        self.assertEqual(value_tags["S"], "shape")
+        self.assertEqual(node_tags[0], "shape")
+
+        write_value_and_node_tags_to_metadata(graph.node)
+        self.assertEqual(_meta_dict(graph.node[0])[NODE_TAG_METADATA_KEY], "shape")
+
     def test_reshape_shape_tag_propagates_backward(self):
         from onnx_light.onnx import helper
 

@@ -50,7 +50,64 @@ using TensorType = ONNX_LIGHT_NAMESPACE::onnx_op::TensorType;
  * :cpp:enumerator:`TensorType::kUndefined` for any data type that is not
  * representable in the ``onnx_optim`` stack (e.g. ``UNDEFINED``).
  */
-TensorType DataTypeToTensorType(TensorProto::DataType dtype);
+constexpr TensorType DataTypeToTensorType(TensorProto::DataType dtype) {
+  switch (dtype) {
+  case TensorProto::DataType::BOOL:
+    return TensorType::kBool;
+  case TensorProto::DataType::UINT8:
+    return TensorType::kUint8;
+  case TensorProto::DataType::UINT16:
+    return TensorType::kUint16;
+  case TensorProto::DataType::UINT32:
+    return TensorType::kUint32;
+  case TensorProto::DataType::UINT64:
+    return TensorType::kUint64;
+  case TensorProto::DataType::INT8:
+    return TensorType::kInt8;
+  case TensorProto::DataType::INT16:
+    return TensorType::kInt16;
+  case TensorProto::DataType::INT32:
+    return TensorType::kInt32;
+  case TensorProto::DataType::INT64:
+    return TensorType::kInt64;
+  case TensorProto::DataType::FLOAT16:
+    return TensorType::kFloat16;
+  case TensorProto::DataType::BFLOAT16:
+    return TensorType::kBfloat16;
+  case TensorProto::DataType::FLOAT:
+    return TensorType::kFloat;
+  case TensorProto::DataType::DOUBLE:
+    return TensorType::kDouble;
+  case TensorProto::DataType::STRING:
+    return TensorType::kString;
+  case TensorProto::DataType::COMPLEX64:
+    return TensorType::kComplex64;
+  case TensorProto::DataType::COMPLEX128:
+    return TensorType::kComplex128;
+  case TensorProto::DataType::FLOAT8E4M3FN:
+    return TensorType::kFloat8e4m3fn;
+  case TensorProto::DataType::FLOAT8E4M3FNUZ:
+    return TensorType::kFloat8e4m3fnuz;
+  case TensorProto::DataType::FLOAT8E5M2:
+    return TensorType::kFloat8e5m2;
+  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+    return TensorType::kFloat8e5m2fnuz;
+  case TensorProto::DataType::FLOAT8E8M0:
+    return TensorType::kFloat8e8m0;
+  case TensorProto::DataType::FLOAT4E2M1:
+    return TensorType::kFloat4e2m1;
+  case TensorProto::DataType::UINT4:
+    return TensorType::kUint4;
+  case TensorProto::DataType::INT4:
+    return TensorType::kInt4;
+  case TensorProto::DataType::UINT2:
+    return TensorType::kUint2;
+  case TensorProto::DataType::INT2:
+    return TensorType::kInt2;
+  default:
+    return TensorType::kUndefined;
+  }
+}
 
 /**
  * Maps a :cpp:type:`TensorType` enumerator back to the matching
@@ -64,7 +121,64 @@ TensorType DataTypeToTensorType(TensorProto::DataType dtype);
  * :cpp:enumerator:`TensorType::kUndefined`, the function returns
  * ``TensorProto::DataType::UNDEFINED``.
  */
-TensorProto::DataType TensorTypeToDataType(TensorType t);
+constexpr TensorProto::DataType TensorTypeToDataType(TensorType t) {
+  switch (t) {
+  case TensorType::kBool:
+    return TensorProto::DataType::BOOL;
+  case TensorType::kString:
+    return TensorProto::DataType::STRING;
+  case TensorType::kUint8:
+    return TensorProto::DataType::UINT8;
+  case TensorType::kUint16:
+    return TensorProto::DataType::UINT16;
+  case TensorType::kUint32:
+    return TensorProto::DataType::UINT32;
+  case TensorType::kUint64:
+    return TensorProto::DataType::UINT64;
+  case TensorType::kInt8:
+    return TensorProto::DataType::INT8;
+  case TensorType::kInt16:
+    return TensorProto::DataType::INT16;
+  case TensorType::kInt32:
+    return TensorProto::DataType::INT32;
+  case TensorType::kInt64:
+    return TensorProto::DataType::INT64;
+  case TensorType::kFloat16:
+    return TensorProto::DataType::FLOAT16;
+  case TensorType::kBfloat16:
+    return TensorProto::DataType::BFLOAT16;
+  case TensorType::kFloat:
+    return TensorProto::DataType::FLOAT;
+  case TensorType::kDouble:
+    return TensorProto::DataType::DOUBLE;
+  case TensorType::kComplex64:
+    return TensorProto::DataType::COMPLEX64;
+  case TensorType::kComplex128:
+    return TensorProto::DataType::COMPLEX128;
+  case TensorType::kFloat8e4m3fn:
+    return TensorProto::DataType::FLOAT8E4M3FN;
+  case TensorType::kFloat8e4m3fnuz:
+    return TensorProto::DataType::FLOAT8E4M3FNUZ;
+  case TensorType::kFloat8e5m2:
+    return TensorProto::DataType::FLOAT8E5M2;
+  case TensorType::kFloat8e5m2fnuz:
+    return TensorProto::DataType::FLOAT8E5M2FNUZ;
+  case TensorType::kFloat8e8m0:
+    return TensorProto::DataType::FLOAT8E8M0;
+  case TensorType::kFloat4e2m1:
+    return TensorProto::DataType::FLOAT4E2M1;
+  case TensorType::kUint4:
+    return TensorProto::DataType::UINT4;
+  case TensorType::kInt4:
+    return TensorProto::DataType::INT4;
+  case TensorType::kUint2:
+    return TensorProto::DataType::UINT2;
+  case TensorType::kInt2:
+    return TensorProto::DataType::INT2;
+  default:
+    return TensorProto::DataType::UNDEFINED;
+  }
+}
 
 /**
  * Returns whether a tensor element type can be interpreted as shape
@@ -76,7 +190,21 @@ TensorProto::DataType TensorTypeToDataType(TensorType t);
  * @param t Tensor element type to evaluate.
  * @return ``true`` if ``t`` is one of the supported integer types.
  */
-bool IsIntegerTensorType(TensorType t);
+constexpr bool IsIntegerTensorType(TensorType t) {
+  switch (t) {
+  case TensorType::kInt8:
+  case TensorType::kInt16:
+  case TensorType::kInt32:
+  case TensorType::kInt64:
+  case TensorType::kUint8:
+  case TensorType::kUint16:
+  case TensorType::kUint32:
+  case TensorType::kUint64:
+    return true;
+  default:
+    return false;
+  }
+}
 
 /**
  * A single shape dimension that is either a concrete non-negative integer or

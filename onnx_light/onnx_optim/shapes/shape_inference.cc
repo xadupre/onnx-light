@@ -803,22 +803,6 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
 
 } // namespace
 
-const char *ShapeEventActionName(ShapeEventAction action) noexcept {
-  switch (action) {
-  case ShapeEventAction::kAdd:
-    return "add";
-  case ShapeEventAction::kReplace:
-    return "replace";
-  case ShapeEventAction::kComputeNode:
-    return "compute_node";
-  case ShapeEventAction::kConstraint:
-    return "constraint";
-  case ShapeEventAction::kConstraintMax:
-    return "constraint_max";
-  }
-  return "unknown";
-}
-
 void ShapesContext::RegisterSubgraphContext(int64_t node_index, const std::string &attr_name,
                                             ShapesContext context) {
   subgraph_contexts_[SubgraphContextKey(node_index, attr_name)] =

@@ -291,6 +291,34 @@ LightOpSchema MakeGridSampleSchema(int since_version, const std::vector<TensorTy
 }
 
 LightOpSchema MakeCastSchema(int since_version, const std::vector<TensorType> &types) {
+  // Cast v1 uses a STRING attribute for "to" (the type name); v6+ uses INT
+  // (the DataType enum value). v19+ also add "saturate"; v24+ add "round_mode".
+  const std::string to_doc = "The data type to which the elements of the input tensor are cast. "
+                             "Strictly must be one of the types from DataType enum in TensorProto.";
+  std::vector<AttributeParam> attrs;
+  if (since_version == 1) {
+    attrs.push_back({"to", to_doc, AttributeType::STRING, /*required=*/true, std::monostate{}});
+  } else {
+    attrs.push_back({"to", to_doc, AttributeType::INT, /*required=*/true, std::monostate{}});
+    if (since_version >= 19) {
+      attrs.push_back(
+          {"saturate",
+           "The parameter defines how the conversion behaves if an input value is out of "
+           "range of the destination type. It only applies for float 8 conversion "
+           "(float8e4m3fn, float8e4m3fnuz, float8e5m2, float8e5m2fnuz). It is true by default. "
+           "All cases are fully described in two tables inserted in the operator description.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)});
+    }
+    if (since_version >= 24) {
+      attrs.push_back({"round_mode",
+                       "Rounding mode for conversion to float8e8m0. It only applies to casting to "
+                       "float8e8m0 and is `up` by default. "
+                       "`up`: round to nearest value away from zero, "
+                       "`down`: round to nearest value towards zero, "
+                       "`nearest`: round to nearest value and ties round up.",
+                       AttributeType::STRING, /*required=*/false, std::string("up")});
+    }
+  }
   return LightOpSchema(
       "Cast", kOnnxDomain, since_version, MakeCastDoc(since_version),
       {
@@ -305,12 +333,7 @@ LightOpSchema MakeCastSchema(int since_version, const std::vector<TensorType> &t
           {"T1", types, MakeCastInputTypeConstraintDescription(since_version)},
           {"T2", types, MakeCastOutputTypeConstraintDescription(since_version)},
       },
-      {
-          {"to",
-           "The data type to which the elements of the input tensor are cast. "
-           "Strictly must be one of the types from DataType enum in TensorProto.",
-           AttributeType::INT, /*required=*/true, std::monostate{}},
-      });
+      std::move(attrs));
 }
 
 LightOpSchema MakeBitCastSchema() {
@@ -341,6 +364,27 @@ LightOpSchema MakeBitCastSchema() {
 }
 
 LightOpSchema MakeCastLikeSchema(int since_version, const std::vector<TensorType> &types) {
+  // CastLike v15 has no attributes; v19-v23 add "saturate"; v24+ also add "round_mode".
+  std::vector<AttributeParam> attrs;
+  if (since_version >= 19) {
+    attrs.push_back(
+        {"saturate",
+         "The parameter defines how the conversion behaves if an input value is out of "
+         "range of the destination type. It only applies for float 8 conversion "
+         "(float8e4m3fn, float8e4m3fnuz, float8e5m2, float8e5m2fnuz). It is true by default. "
+         "Please refer to operator Cast description for further details.",
+         AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)});
+  }
+  if (since_version >= 24) {
+    attrs.push_back({"round_mode",
+                     "Rounding mode for conversion to float8e8m0. It only applies to casting to "
+                     "float8e8m0 and is `up` by default. "
+                     "`up`: round to nearest value away from zero, "
+                     "`down`: round to nearest value towards zero, "
+                     "`nearest`: round to nearest value and ties round up. "
+                     "Please refer to operator Cast description for further details.",
+                     AttributeType::STRING, /*required=*/false, std::string("up")});
+  }
   return LightOpSchema(
       "CastLike", kOnnxDomain, since_version, MakeCastLikeDoc(since_version),
       {
@@ -360,7 +404,7 @@ LightOpSchema MakeCastLikeSchema(int since_version, const std::vector<TensorType
           {"T1", types, MakeCastLikeInputTypeConstraintDescription(since_version)},
           {"T2", types, MakeCastLikeOutputTypeConstraintDescription(since_version)},
       },
-      /*has_function_implementation=*/true);
+      std::move(attrs), /*has_function_implementation=*/true);
 }
 
 LightOpSchema MakeConcatSchema(int since_version, const std::vector<TensorType> &types) {
@@ -1115,6 +1159,40 @@ LightOpSchema MakeResizeSchema(int since_version) {
         {
             {"T1", ConcatTypesVer13(), MakeResizeT1TypeConstraintDescription(since_version)},
             {"T2", ResizeRoiTypes(), MakeResizeT2TypeConstraintDescription(since_version)},
+        },
+        {
+            {"mode",
+             "Three interpolation modes: nearest (default), linear and cubic. "
+             "The \"linear\" mode includes linear interpolation for 1D tensor and N-linear "
+             "interpolation for N-D tensor (for example, bilinear interpolation for 2D tensor). "
+             "The \"cubic\" mode includes cubic interpolation for 1D tensor and N-cubic "
+             "interpolation for N-D tensor (for example, bicubic interpolation for 2D tensor).",
+             AttributeType::STRING, /*required=*/false, std::string("nearest")},
+            {"cubic_coeff_a",
+             "The coefficient 'a' used in cubic interpolation. Two common choice are -0.5 (in "
+             "some cases of TensorFlow) and -0.75 (in PyTorch). Check out Equation (4) in "
+             "https://ieeexplore.ieee.org/document/1163711 for the details. "
+             "This attribute is valid only if \"mode\" is \"cubic\".",
+             AttributeType::FLOAT, /*required=*/false, static_cast<double>(-0.75)},
+            {"exclude_outside",
+             "If set to 1, the weight of sampling locations outside the tensor will be set to 0"
+             " and the weight will be renormalized so that their sum is 1.0. The default value "
+             "is 0.",
+             AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+            {"coordinate_transformation_mode",
+             "Describes how to transform coordinates between the resized and original tensor.",
+             AttributeType::STRING, /*required=*/false, std::string("half_pixel")},
+            {"nearest_mode",
+             "Four modes: round_prefer_floor (default, as known as round half down), "
+             "round_prefer_ceil (as known as round half up), floor, ceil. Only used by nearest "
+             "interpolation. It indicates how to get \"nearest\" pixel in input tensor from "
+             "x_original, so this attribute is valid only if \"mode\" is \"nearest\".",
+             AttributeType::STRING, /*required=*/false, std::string("round_prefer_floor")},
+            {"extrapolation_value",
+             "When coordinate_transformation_mode is \"tf_crop_and_resize\" and x_original is "
+             "outside the range [0, length_original - 1], this value is used as the "
+             "corresponding output value. Default is 0.0f.",
+             AttributeType::FLOAT, /*required=*/false, static_cast<double>(0)},
         });
   }
   // v18 and v19 share the same set of formal parameters; only the doc body and
@@ -1151,6 +1229,60 @@ LightOpSchema MakeResizeSchema(int since_version) {
       {
           {"T1", ConcatTypesVer13(), MakeResizeT1TypeConstraintDescription(since_version)},
           {"T2", ResizeRoiTypes(), MakeResizeT2TypeConstraintDescription(since_version)},
+      },
+      {
+          {"mode",
+           "Three interpolation modes: \"nearest\" (default), \"linear\" and \"cubic\". "
+           "The \"linear\" mode includes linear interpolation for 1D tensor and N-linear "
+           "interpolation for N-D tensor (for example, bilinear interpolation for 2D tensor). "
+           "The \"cubic\" mode includes cubic interpolation for 1D tensor and N-cubic "
+           "interpolation for N-D tensor (for example, bicubic interpolation for 2D tensor).",
+           AttributeType::STRING, /*required=*/false, std::string("nearest")},
+          {"cubic_coeff_a",
+           "The coefficient 'a' used in cubic interpolation. Two common choice are -0.5 (in "
+           "some cases of TensorFlow) and -0.75 (in PyTorch). Check out Equation (4) in "
+           "https://ieeexplore.ieee.org/document/1163711 for the details. "
+           "This attribute is valid only if mode is \"cubic\".",
+           AttributeType::FLOAT, /*required=*/false, static_cast<double>(-0.75)},
+          {"exclude_outside",
+           "If set to 1, the weight of sampling locations outside the tensor will be set to 0"
+           " and the weight will be renormalized so that their sum is 1.0. The default value is "
+           "0.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+          {"coordinate_transformation_mode",
+           "Describes how to transform coordinates between the resized and original tensor.",
+           AttributeType::STRING, /*required=*/false, std::string("half_pixel")},
+          {"nearest_mode",
+           "Four modes: \"round_prefer_floor\" (default, as known as round half down), "
+           "\"round_prefer_ceil\" (as known as round half up), \"floor\", \"ceil\". Only used "
+           "by nearest interpolation. It indicates how to get \"nearest\" pixel in input tensor "
+           "from x_original, so this attribute is valid only if \"mode\" is \"nearest\".",
+           AttributeType::STRING, /*required=*/false, std::string("round_prefer_floor")},
+          {"extrapolation_value",
+           "When coordinate_transformation_mode is \"tf_crop_and_resize\" and x_original is "
+           "outside the range [0, length_original - 1], this value is used as the corresponding "
+           "output value. Default is 0.0f.",
+           AttributeType::FLOAT, /*required=*/false, static_cast<double>(0)},
+          {"antialias",
+           "If set to 1, \"linear\" and \"cubic\" interpolation modes will use an antialiasing "
+           "filter when downscaling. "
+           "Antialiasing is achieved by stretching the resampling filter by a factor max(1, 1 / "
+           "scale), which means that when downsampling, more input pixels contribute to an "
+           "output pixel.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+          {"axes",
+           "If provided, it specifies a subset of axes that 'roi', 'scales' and 'sizes' refer to. "
+           "If not provided, all axes are assumed [0, 1, ..., r-1], where r = rank(data). "
+           "Non-specified dimensions are interpreted as non-resizable. "
+           "Negative value means counting dimensions from the back. Accepted range is [-r, r-1], "
+           "where r = rank(data). "
+           "Behavior is undefined if an axis is repeated.",
+           AttributeType::INTS, /*required=*/false, std::monostate{}},
+          {"keep_aspect_ratio_policy",
+           "This attribute describes how to interpret the sizes input with regard to keeping the "
+           "original aspect ratio of the input, and it is not applicable when the sizes input is "
+           "not provided.",
+           AttributeType::STRING, /*required=*/false, std::string("stretch")},
       });
 }
 

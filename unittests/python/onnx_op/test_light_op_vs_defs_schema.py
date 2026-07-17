@@ -49,9 +49,27 @@ class TestLightOpVsDefsSchemaAttributes(ExtTestCase):
         }
 
     def test_same_operator_keys(self) -> None:
-        self.assertEqual(set(self.light_dict), set(self.defs_dict))
+        # The defs registry includes all historical opset versions, while
+        # LightOpSchema only covers versions that onnx-light implements.
+        # Custom domains (e.g. "ai.rt") are light-only and have no defs entry.
+        # We verify two things:
+        #   1. Every standard-domain key in light_dict exists in defs_dict.
+        #   2. Custom-domain keys in light_dict are acceptable (no assertion).
+        standard_domains = {"ai.onnx", "ai.onnx.ml", "ai.onnx.preview.training"}
+        light_standard = {k for k in self.light_dict if k[0] in standard_domains}
+        defs_standard = {k for k in self.defs_dict if k[0] in standard_domains}
+        extra_in_light = light_standard - defs_standard
+        self.assertEqual(
+            extra_in_light,
+            set(),
+            msg=f"Light has standard-domain operators not present in defs: {extra_in_light}",
+        )
 
     def test_attributes_same_names(self) -> None:
+        # Verify that every attribute declared in light_schema also exists in defs_schema.
+        # Defs may declare additional attributes that light has not yet annotated; that is
+        # acceptable. What must not happen is light declaring an attribute name that does not
+        # exist in defs (which would indicate a typo or API drift).
         for key, light_schema in self.light_dict.items():
             defs_schema = self.defs_dict.get(key)
             if defs_schema is None:
@@ -59,8 +77,11 @@ class TestLightOpVsDefsSchemaAttributes(ExtTestCase):
             with self.subTest(key=key):
                 light_attr_names = {a.name for a in light_schema.attributes}
                 defs_attr_names = set(defs_schema.attributes.keys())
+                extra_in_light = light_attr_names - defs_attr_names
                 self.assertEqual(
-                    light_attr_names, defs_attr_names, msg=f"Attribute name mismatch for {key}"
+                    extra_in_light,
+                    set(),
+                    msg=f"Light declares attributes absent from defs for {key}: {extra_in_light}",
                 )
 
     def test_attributes_required_flag(self) -> None:

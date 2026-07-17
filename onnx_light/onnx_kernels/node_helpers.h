@@ -43,7 +43,7 @@ inline std::string NormaliseDispatchDomain(const NodeProto &node) {
 }
 
 inline const Tensor &GetInput(const NodeProto &node, int index, const TensorMap &tensors) {
-  const std::string name = std::string(node.input(index));
+  const std::string &name = node.input(index);
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type(), "' input #", index,
                       " is unset (empty name).");
   auto it = tensors.find(name);
@@ -62,7 +62,7 @@ inline const Tensor *GetOptionalInput(const NodeProto &node, int index, const Te
   if (index >= node.input_size()) {
     return nullptr;
   }
-  const std::string name = std::string(node.input(index));
+  const std::string &name = node.input(index);
   if (name.empty()) {
     return nullptr;
   }
@@ -73,7 +73,7 @@ inline const Tensor *GetOptionalInput(const NodeProto &node, int index, const Te
 }
 
 inline void SetOutput(const NodeProto &node, int index, Tensor result, TensorMap &tensors) {
-  const std::string name = std::string(node.output(index));
+  const std::string &name = node.output(index);
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type(), "' output #", index,
                       " is unset (empty name).");
   result.name = name;
@@ -83,7 +83,7 @@ inline void SetOutput(const NodeProto &node, int index, Tensor result, TensorMap
 // Overload that routes the assignment through :cpp:func:`RuntimeContext::Put`
 // so the tensor map mutation is recorded in the context's event log.
 inline void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeContext &rt) {
-  const std::string name = std::string(node.output(index));
+  const std::string &name = node.output(index);
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type(), "' output #", index,
                       " is unset (empty name).");
   result.name = name;
@@ -96,7 +96,7 @@ inline void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeCo
 // produced by an earlier node / supplied by the caller.
 inline const Sequence &GetInputSequence(const NodeProto &node, int index,
                                         const RuntimeContext &rt) {
-  const std::string name = std::string(node.input(index));
+  const std::string &name = node.input(index);
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type(), "' sequence input #", index,
                       " is unset (empty name).");
   EXT_ENFORCE_INVALID(rt.HasSequence(name), "RunNode: sequence input '", name, "' of op '",
@@ -109,7 +109,7 @@ inline const Sequence &GetInputSequence(const NodeProto &node, int index,
 // is empty.
 inline void SetOutputSequence(const NodeProto &node, int index, Sequence result,
                               RuntimeContext &rt) {
-  const std::string name = std::string(node.output(index));
+  const std::string &name = node.output(index);
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type(), "' sequence output #",
                       index, " is unset (empty name).");
   rt.PutSequence(name, std::move(result));

@@ -476,7 +476,7 @@ AttributeValue ExtractAttribute(const AttributeProto &attr) {
   case AttributeProto::FLOAT:
     return static_cast<double>(attr.f());
   case AttributeProto::STRING:
-    return std::string(attr.s());
+    return attr.s();
   case AttributeProto::INTS: {
     std::vector<int64_t> v;
     for (auto x : attr.ints())
@@ -492,7 +492,7 @@ AttributeValue ExtractAttribute(const AttributeProto &attr) {
   case AttributeProto::STRINGS: {
     std::vector<std::string> v;
     for (const auto &x : attr.strings())
-      v.push_back(std::string(x));
+      v.push_back(x);
     return v;
   }
   case AttributeProto::TENSOR:
@@ -506,7 +506,7 @@ AttributeValue ExtractAttribute(const AttributeProto &attr) {
 std::map<std::string, AttributeValue> AttrsToDict(const NodeProto &node) {
   std::map<std::string, AttributeValue> out;
   for (const auto &a : node.attribute()) {
-    out[std::string(a.name())] = ExtractAttribute(a);
+    out[a.name()] = ExtractAttribute(a);
   }
   return out;
 }
@@ -1113,16 +1113,14 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
     auto attrs = AttrsToDict(node);
     std::vector<std::string> inputs;
     for (const auto &n : node.input()) {
-      const std::string s = n;
-      inputs.push_back(s.empty() ? std::string("0.0") : ctx.MapName(s));
+      inputs.push_back(n.empty() ? std::string("0.0") : ctx.MapName(n));
     }
     std::vector<std::string> outputs;
     for (const auto &n : node.output()) {
-      const std::string s = n;
-      if (s.empty()) {
+      if (n.empty()) {
         outputs.push_back(ctx.MakeTemp("unused"));
       } else {
-        outputs.push_back(ctx.MapName(s));
+        outputs.push_back(ctx.MapName(n));
       }
     }
     GetOpConverter(op)(ctx, node, attrs, inputs, outputs);

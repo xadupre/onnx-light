@@ -668,7 +668,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            if (index >= node.output_size()) {
              return;
            }
-           const std::string name = std::string(node.output(index));
+           const std::string &name = node.output(index);
            if (name.empty()) {
              return;
            }
@@ -1308,7 +1308,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            if (index >= node.output_size()) {
              return;
            }
-           const std::string name = std::string(node.output(index));
+           const std::string &name = node.output(index);
            if (name.empty()) {
              return;
            }
@@ -1483,7 +1483,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            if (index >= node.output_size()) {
              return;
            }
-           const std::string name = std::string(node.output(index));
+           const std::string &name = node.output(index);
            if (name.empty()) {
              return;
            }
@@ -2049,7 +2049,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            if (index >= node.output_size()) {
              return;
            }
-           const std::string name = std::string(node.output(index));
+           const std::string &name = node.output(index);
            if (name.empty()) {
              return;
            }

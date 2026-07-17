@@ -117,8 +117,31 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   }
 }
 
-FunctionBodyHelper::NodeList FunctionBodyHelper::BuildNodes(const std::vector<NodeDef> &node_defs) {
-  NodeList nodes;
+std::vector<NodeProto> FunctionBodyHelper::BuildNodes(const std::vector<NodeDef> &node_defs) {
+  std::vector<NodeProto> nodes(node_defs.size());
+
+  for (size_t i = 0; i < node_defs.size(); i++) {
+    const NodeDef &node = node_defs[i];
+    NodeProto &n = nodes[i];
+
+    n.set_op_type(node.op_type);
+    n.set_domain(node.domain);
+    for (const auto &i : node.inputs) {
+      *n.add_input() = i;
+    }
+    for (const auto &o : node.outputs) {
+      *n.add_output() = o;
+    }
+    for (const auto &attr : node.attributes) {
+      *n.add_attribute() = attr.proto;
+    }
+  }
+
+  return nodes;
+}
+
+void FunctionBodyHelper::BuildNodes(NodeList &nodes, const std::vector<NodeDef> &node_defs) {
+  nodes.clear();
   nodes.reserve(node_defs.size());
 
   for (const NodeDef &node : node_defs) {
@@ -136,8 +159,6 @@ FunctionBodyHelper::NodeList FunctionBodyHelper::BuildNodes(const std::vector<No
       *n.add_attribute() = attr.proto;
     }
   }
-
-  return nodes;
 }
 
 void FunctionBodyHelper::BuildNodes(FunctionProto &functionProto,

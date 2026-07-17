@@ -80,7 +80,14 @@ public:
    * @param node_defs Node definitions describing outputs, op type, inputs, and attributes.
    * @return Materialized nodes for a function body.
    */
-  ONNX_API static NodeList BuildNodes(const std::vector<NodeDef> &node_defs);
+  ONNX_API static std::vector<NodeProto> BuildNodes(const std::vector<NodeDef> &node_defs);
+
+  /**
+   * Builds NodeProto entries into a repeated proto field from lightweight node definitions.
+   * @param nodes Repeated proto field receiving the materialized nodes.
+   * @param node_defs Node definitions describing outputs, op type, inputs, and attributes.
+   */
+  ONNX_API static void BuildNodes(NodeList &nodes, const std::vector<NodeDef> &node_defs);
 
   /**
    * Appends nodes built from node_defs into functionProto.

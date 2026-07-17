@@ -228,7 +228,8 @@ protected:
 
 TEST(FunctionContextStandaloneTest, FunctionBodyAcceptsRepeatedProtoField) {
   OpSchema schema;
-  auto nodes = FunctionBodyHelper::BuildNodes({{{"Z"}, "Sub", {"X", "Y"}}});
+  FunctionBodyHelper::NodeList nodes;
+  FunctionBodyHelper::BuildNodes(nodes, {{{"Z"}, "Sub", {"X", "Y"}}});
 
   schema.SetName("MyRepeatedSub").SetDomain(ONNX_DOMAIN).SinceVersion(2).FunctionBody(nodes, 2);
 

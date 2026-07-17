@@ -80,6 +80,9 @@ public:
   int64_t toint64() const;
 };
 
+/** Shared empty string returned by null String conversions (avoids a per-call static guard). */
+inline const std::string kEmptyString;
+
 /**
  * Owning string type used by ONNX-light protobuf fields.
  * It keeps short values in an internal buffer and uses heap storage for larger values.
@@ -111,8 +114,9 @@ public:
   explicit inline String(std::string &&s) noexcept : value_(std::move(s)), null_(false) {
     normalize_std_string_value();
   }
-  /** Initializes by copying another owning string. */
-  inline String(const String &s) : value_(s.value_), null_(s.null_) {}
+  /** Initializes by copying another owning string. Explicit to keep accidental deep copies
+   *  visible at call sites (use references or std::move for cheap passing). */
+  explicit inline String(const String &s) : value_(s.value_), null_(s.null_) {}
   /** Initializes by taking ownership from another instance. */
   inline String(String &&other) noexcept : value_(std::move(other.value_)), null_(other.null_) {
     other.clear();
@@ -132,10 +136,7 @@ public:
     return null_ ? std::string_view() : std::string_view(value_.data(), value_.size());
   }
   /** Returns a const reference to the underlying std::string (empty string for null). */
-  inline operator const std::string &() const {
-    static const std::string kEmpty;
-    return null_ ? kEmpty : value_;
-  }
+  inline operator const std::string &() const { return null_ ? kEmptyString : value_; }
   /** Materializes the string into a string_view. */
   inline operator std::string_view() const { return sv(); }
   /** Indicates whether the string is empty and has no allocated buffer. */

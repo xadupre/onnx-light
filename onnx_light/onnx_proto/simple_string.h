@@ -137,6 +137,9 @@ public:
   }
   /** Returns a const reference to the underlying std::string (empty string for null). */
   inline operator const std::string &() const { return null_ ? kEmptyString : value_; }
+  /** Returns a shared empty std::string usable as a zero-copy reference fallback, e.g. the
+   *  else-branch of a conditional bound to a const std::string&. */
+  static inline const std::string &empty_string() { return kEmptyString; }
   /** Materializes the string into a string_view. */
   inline operator std::string_view() const { return sv(); }
   /** Indicates whether the string is empty and has no allocated buffer. */

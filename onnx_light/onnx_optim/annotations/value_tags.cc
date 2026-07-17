@@ -152,7 +152,7 @@ void CollectGraphSeedTags(const GraphProto &graph,
       // model data or parameters, and this tag is always known at graph level.
       tag = "weight";
     }
-    SetValueTag(value_tags, std::string(value.name()), tag);
+    SetValueTag(value_tags, value.name(), tag);
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
     const auto &value = graph.initializer()[i];
@@ -160,17 +160,15 @@ void CollectGraphSeedTags(const GraphProto &graph,
     if (tag.empty()) {
       tag = "weight";
     }
-    SetValueTag(value_tags, std::string(value.name()), tag);
+    SetValueTag(value_tags, value.name(), tag);
   }
   for (int i = 0; i < graph.value_info().size(); ++i) {
     const auto &value = graph.value_info()[i];
-    SetValueTag(value_tags, std::string(value.name()),
-                ReadMetadataValue(value, kValueTagMetadataKey));
+    SetValueTag(value_tags, value.name(), ReadMetadataValue(value, kValueTagMetadataKey));
   }
   for (int i = 0; i < graph.output().size(); ++i) {
     const auto &value = graph.output()[i];
-    SetValueTag(value_tags, std::string(value.name()),
-                ReadMetadataValue(value, kValueTagMetadataKey));
+    SetValueTag(value_tags, value.name(), ReadMetadataValue(value, kValueTagMetadataKey));
   }
 }
 
@@ -452,28 +450,28 @@ void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {
   }
   SetMetadataValue(graph, kValueTagsMetadataKey, DumpValueTagsAsJson(value_tags));
   for (int i = 0; i < graph.input().size(); ++i) {
-    auto it = value_tags.find(std::string(graph.input(i).name()));
+    auto it = value_tags.find(graph.input(i).name());
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_input(static_cast<std::size_t>(i)), kValueTagMetadataKey,
                        it->second);
     }
   }
   for (int i = 0; i < graph.value_info().size(); ++i) {
-    auto it = value_tags.find(std::string(graph.value_info(i).name()));
+    auto it = value_tags.find(graph.value_info(i).name());
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_value_info(static_cast<std::size_t>(i)), kValueTagMetadataKey,
                        it->second);
     }
   }
   for (int i = 0; i < graph.output().size(); ++i) {
-    auto it = value_tags.find(std::string(graph.output(i).name()));
+    auto it = value_tags.find(graph.output(i).name());
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_output(static_cast<std::size_t>(i)), kValueTagMetadataKey,
                        it->second);
     }
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
-    auto it = value_tags.find(std::string(graph.initializer(i).name()));
+    auto it = value_tags.find(graph.initializer(i).name());
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_initializer(static_cast<std::size_t>(i)),
                        kValueTagMetadataKey, it->second);

@@ -61,9 +61,8 @@ void ComputeShapeSplitToSequence(ShapesContext &ctx, const NodeProto &node) {
 
   // Without a known input rank we can only forward the element dtype.
   if (in_shape.Rank() == 0) {
-    ctx.SetSequence(node.output(0),
-                    OptimSequence(elem_dtype, OptimDim("SplitToSequence_" +
-                                                       std::string(node.output(0)) + "_len")));
+    ctx.SetSequence(node.output(0), OptimSequence(elem_dtype, OptimDim("SplitToSequence_" +
+                                                                       node.output(0) + "_len")));
     return;
   }
 
@@ -131,9 +130,8 @@ void ComputeShapeSplitToSequence(ShapesContext &ctx, const NodeProto &node) {
 
   if (!sizes.has_value()) {
     // Unknown number of chunks → only forward dtype and symbolic length.
-    ctx.SetSequence(node.output(0),
-                    OptimSequence(elem_dtype, OptimDim("SplitToSequence_" +
-                                                       std::string(node.output(0)) + "_len")));
+    ctx.SetSequence(node.output(0), OptimSequence(elem_dtype, OptimDim("SplitToSequence_" +
+                                                                       node.output(0) + "_len")));
     return;
   }
 

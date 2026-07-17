@@ -119,18 +119,18 @@ void CollectReachableTensors(const GraphProto &graph, const std::vector<NodeProt
   // Build name→TensorProto / name→ValueInfoProto maps from the graph.
   std::unordered_map<std::string, const TensorProto *> init_map;
   for (size_t i = 0; i < graph.initializer().size(); ++i) {
-    init_map[std::string(graph.initializer()[i].name())] = &graph.initializer()[i];
+    init_map[graph.initializer()[i].name()] = &graph.initializer()[i];
   }
 
   std::unordered_map<std::string, const ValueInfoProto *> vi_map;
   for (size_t i = 0; i < graph.value_info().size(); ++i) {
-    vi_map[std::string(graph.value_info()[i].name())] = &graph.value_info()[i];
+    vi_map[graph.value_info()[i].name()] = &graph.value_info()[i];
   }
   for (size_t i = 0; i < graph.input().size(); ++i) {
-    vi_map[std::string(graph.input()[i].name())] = &graph.input()[i];
+    vi_map[graph.input()[i].name()] = &graph.input()[i];
   }
   for (size_t i = 0; i < graph.output().size(); ++i) {
-    vi_map[std::string(graph.output()[i].name())] = &graph.output()[i];
+    vi_map[graph.output()[i].name()] = &graph.output()[i];
   }
 
   std::unordered_set<std::string> all_names;
@@ -160,13 +160,13 @@ void CollectReachableTensors(const GraphProto &graph, const std::vector<NodeProt
 std::unordered_map<std::string, ValueInfoProto> BuildValueInfoMap(const GraphProto &graph) {
   std::unordered_map<std::string, ValueInfoProto> vi_map;
   for (size_t i = 0; i < graph.value_info().size(); ++i) {
-    vi_map[std::string(graph.value_info()[i].name())] = graph.value_info()[i];
+    vi_map[graph.value_info()[i].name()] = graph.value_info()[i];
   }
   for (size_t i = 0; i < graph.input().size(); ++i) {
-    vi_map[std::string(graph.input()[i].name())] = graph.input()[i];
+    vi_map[graph.input()[i].name()] = graph.input()[i];
   }
   for (size_t i = 0; i < graph.output().size(); ++i) {
-    vi_map[std::string(graph.output()[i].name())] = graph.output()[i];
+    vi_map[graph.output()[i].name()] = graph.output()[i];
   }
   return vi_map;
 }
@@ -270,7 +270,7 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
   if (rename_edges) {
     std::unordered_set<std::string> graph_output_names;
     for (size_t i = 0; i < g.output().size(); ++i) {
-      graph_output_names.insert(std::string(g.output()[i].name()));
+      graph_output_names.insert(g.output()[i].name());
     }
     for (size_t i = 0; i < g.node().size(); ++i) {
       const NodeProto &nd = g.node()[i];
@@ -300,7 +300,7 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
     for (size_t i = 0; i < g.node().size(); ++i) {
       NodeProto &nd = (*g.mutable_node())[i];
       if (nd.has_name()) {
-        nd.set_name(pfx(std::string(nd.name())));
+        nd.set_name(pfx(nd.name()));
       }
       // Recurse into subgraph attributes.
       for (size_t a = 0; a < nd.attribute().size(); ++a) {
@@ -475,10 +475,10 @@ CheckOverlappingNames(const GraphProto &g1, const GraphProto &g2,
   {
     std::vector<std::string> vi1, vi2;
     for (size_t i = 0; i < g1.value_info().size(); ++i) {
-      vi1.push_back(std::string(g1.value_info()[i].name()));
+      vi1.push_back(g1.value_info()[i].name());
     }
     for (size_t i = 0; i < g2.value_info().size(); ++i) {
-      vi2.push_back(std::string(g2.value_info()[i].name()));
+      vi2.push_back(g2.value_info()[i].name());
     }
     auto ov = overlapping(vi1, vi2);
     if (!ov.empty()) {
@@ -489,10 +489,10 @@ CheckOverlappingNames(const GraphProto &g1, const GraphProto &g2,
   {
     std::vector<std::string> in1, in2;
     for (size_t i = 0; i < g1.initializer().size(); ++i) {
-      in1.push_back(std::string(g1.initializer()[i].name()));
+      in1.push_back(g1.initializer()[i].name());
     }
     for (size_t i = 0; i < g2.initializer().size(); ++i) {
-      in2.push_back(std::string(g2.initializer()[i].name()));
+      in2.push_back(g2.initializer()[i].name());
     }
     auto ov = overlapping(in1, in2);
     if (!ov.empty()) {
@@ -503,12 +503,12 @@ CheckOverlappingNames(const GraphProto &g1, const GraphProto &g2,
   {
     std::vector<std::string> si1, si2;
     for (size_t i = 0; i < g1.sparse_initializer().size(); ++i) {
-      si1.push_back(std::string(g1.sparse_initializer()[i].values().name()));
-      si1.push_back(std::string(g1.sparse_initializer()[i].indices().name()));
+      si1.push_back(g1.sparse_initializer()[i].values().name());
+      si1.push_back(g1.sparse_initializer()[i].indices().name());
     }
     for (size_t i = 0; i < g2.sparse_initializer().size(); ++i) {
-      si2.push_back(std::string(g2.sparse_initializer()[i].values().name()));
-      si2.push_back(std::string(g2.sparse_initializer()[i].indices().name()));
+      si2.push_back(g2.sparse_initializer()[i].values().name());
+      si2.push_back(g2.sparse_initializer()[i].indices().name());
     }
     auto ov = overlapping(si1, si2);
     if (!ov.empty()) {
@@ -573,7 +573,7 @@ ModelProto AddPrefix(const ModelProto &model, const std::string &prefix, bool re
       FunctionProto &fn = (*m.mutable_functions())[i];
       for (size_t j = 0; j < fn.node().size(); ++j) {
         NodeProto &nd = (*fn.mutable_node())[j];
-        auto it = f_name_map.find(std::string(nd.op_type()));
+        auto it = f_name_map.find(nd.op_type());
         if (it != f_name_map.end()) {
           nd.set_op_type(it->second);
         }
@@ -583,7 +583,7 @@ ModelProto AddPrefix(const ModelProto &model, const std::string &prefix, bool re
     // Rename function call sites in the main graph.
     for (size_t i = 0; i < m.graph().node().size(); ++i) {
       NodeProto &nd = (*m.mutable_graph()->mutable_node())[i];
-      auto it = f_name_map.find(std::string(nd.op_type()));
+      auto it = f_name_map.find(nd.op_type());
       if (it != f_name_map.end()) {
         nd.set_op_type(it->second);
       }
@@ -640,11 +640,11 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
 
   std::unordered_set<std::string> g1_outs;
   for (size_t i = 0; i < g1.output().size(); ++i) {
-    g1_outs.insert(std::string(g1.output()[i].name()));
+    g1_outs.insert(g1.output()[i].name());
   }
   std::unordered_set<std::string> g2_ins;
   for (size_t i = 0; i < g2.input().size(); ++i) {
-    g2_ins.insert(std::string(g2.input()[i].name()));
+    g2_ins.insert(g2.input()[i].name());
   }
 
   // Optional subgraph extraction.
@@ -654,10 +654,10 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
 
     if (inputs.empty()) {
       for (size_t i = 0; i < g1.input().size(); ++i) {
-        g1_inputs_filt.push_back(std::string(g1.input()[i].name()));
+        g1_inputs_filt.push_back(g1.input()[i].name());
       }
       for (size_t i = 0; i < g2.input().size(); ++i) {
-        g2_inputs_filt.push_back(std::string(g2.input()[i].name()));
+        g2_inputs_filt.push_back(g2.input()[i].name());
       }
     } else {
       const std::unordered_set<std::string> input_set(inputs.begin(), inputs.end());
@@ -677,10 +677,10 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
 
     if (outputs.empty()) {
       for (size_t i = 0; i < g1.output().size(); ++i) {
-        g1_outputs_filt.push_back(std::string(g1.output()[i].name()));
+        g1_outputs_filt.push_back(g1.output()[i].name());
       }
       for (size_t i = 0; i < g2.output().size(); ++i) {
-        g2_outputs_filt.push_back(std::string(g2.output()[i].name()));
+        g2_outputs_filt.push_back(g2.output()[i].name());
       }
     } else {
       const std::unordered_set<std::string> output_set(outputs.begin(), outputs.end());
@@ -742,19 +742,19 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
   if (!inputs.empty()) {
     const std::unordered_set<std::string> input_set(inputs.begin(), inputs.end());
     for (size_t i = 0; i < g1.input().size(); ++i) {
-      if (input_set.count(std::string(g1.input()[i].name()))) {
+      if (input_set.count(g1.input()[i].name())) {
         g.add_input(g1.input()[i]);
       }
     }
     for (size_t i = 0; i < g2.input().size(); ++i) {
-      if (input_set.count(std::string(g2.input()[i].name()))) {
+      if (input_set.count(g2.input()[i].name())) {
         g.add_input(g2.input()[i]);
       }
     }
   } else {
     g.mutable_input()->extend(g1.input());
     for (size_t i = 0; i < g2.input().size(); ++i) {
-      if (!io_map_g2_ins.count(std::string(g2.input()[i].name()))) {
+      if (!io_map_g2_ins.count(g2.input()[i].name())) {
         g.add_input(g2.input()[i]);
       }
     }
@@ -764,18 +764,18 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
   if (!outputs.empty()) {
     const std::unordered_set<std::string> output_set(outputs.begin(), outputs.end());
     for (size_t i = 0; i < g1.output().size(); ++i) {
-      if (output_set.count(std::string(g1.output()[i].name()))) {
+      if (output_set.count(g1.output()[i].name())) {
         g.add_output(g1.output()[i]);
       }
     }
     for (size_t i = 0; i < g2.output().size(); ++i) {
-      if (output_set.count(std::string(g2.output()[i].name()))) {
+      if (output_set.count(g2.output()[i].name())) {
         g.add_output(g2.output()[i]);
       }
     }
   } else {
     for (size_t i = 0; i < g1.output().size(); ++i) {
-      if (!io_map_g1_outs.count(std::string(g1.output()[i].name()))) {
+      if (!io_map_g1_outs.count(g1.output()[i].name())) {
         g.add_output(g1.output()[i]);
       }
     }
@@ -785,7 +785,7 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
   // Initializers.
   g.mutable_initializer()->extend(g1.initializer());
   for (size_t i = 0; i < g2.initializer().size(); ++i) {
-    if (!io_map_g2_ins.count(std::string(g2.initializer()[i].name()))) {
+    if (!io_map_g2_ins.count(g2.initializer()[i].name())) {
       g.add_initializer(g2.initializer()[i]);
     }
   }
@@ -793,7 +793,7 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
   // Sparse initializers.
   g.mutable_sparse_initializer()->extend(g1.sparse_initializer());
   for (size_t i = 0; i < g2.sparse_initializer().size(); ++i) {
-    if (!io_map_g2_ins.count(std::string(g2.sparse_initializer()[i].values().name()))) {
+    if (!io_map_g2_ins.count(g2.sparse_initializer()[i].values().name())) {
       g.add_sparse_initializer(g2.sparse_initializer()[i]);
     }
   }
@@ -801,7 +801,7 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
   // Value infos.
   g.mutable_value_info()->extend(g1.value_info());
   for (size_t i = 0; i < g2.value_info().size(); ++i) {
-    if (!io_map_g2_ins.count(std::string(g2.value_info()[i].name()))) {
+    if (!io_map_g2_ins.count(g2.value_info()[i].name())) {
       g.add_value_info(g2.value_info()[i]);
     }
   }
@@ -811,11 +811,11 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
   {
     std::unordered_set<std::string> vi_names;
     for (size_t i = 0; i < g.value_info().size(); ++i) {
-      vi_names.insert(std::string(g.value_info()[i].name()));
+      vi_names.insert(g.value_info()[i].name());
     }
     std::unordered_set<std::string> out_names;
     for (size_t i = 0; i < g.output().size(); ++i) {
-      out_names.insert(std::string(g.output()[i].name()));
+      out_names.insert(g.output()[i].name());
     }
     for (size_t i = 0; i < g1.output().size(); ++i) {
       const std::string n = g1.output()[i].name();
@@ -959,7 +959,7 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
   // Check for overlapping local function names.
   std::unordered_set<std::string> fn_names_1;
   for (size_t i = 0; i < m1.functions().size(); ++i) {
-    fn_names_1.insert(std::string(m1.functions()[i].name()));
+    fn_names_1.insert(m1.functions()[i].name());
   }
   std::vector<std::string> fn_overlap;
   for (size_t i = 0; i < m2.functions().size(); ++i) {
@@ -1070,7 +1070,7 @@ GraphProto ExpandOutDimGraph(const GraphProto &graph, int64_t dim_idx, bool /*in
             if (src_dim.has_dim_value()) {
               dim->set_dim_value(src_dim.dim_value());
             } else if (src_dim.has_dim_param()) {
-              dim->set_dim_param(std::string(src_dim.dim_param()));
+              dim->set_dim_param(src_dim.dim_param());
             }
           }
         }

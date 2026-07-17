@@ -155,7 +155,7 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
       if (entry.has_key() && entry.has_value() && entry.key() == "location") {
         has_location = true;
         resolve_external_data_location(ctx.get_model_dir(), std::string(entry.value()),
-                                       std::string(tensor.name()));
+                                       tensor.name());
       }
     }
     if (!has_location) {
@@ -612,7 +612,7 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
 
   // Resolve domain for node
   const auto &opset_imports = ctx.get_opset_imports();
-  auto dit = opset_imports.find(std::string(node.domain()));
+  auto dit = opset_imports.find(node.domain());
   if (dit == opset_imports.end()) {
     fail_check("No opset import for domain '" + std::string(node.domain()) + "'");
   }
@@ -622,8 +622,8 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
   // will add a check to verify consistency between these ops and local functions.
   std::unordered_set<std::string> seen_attr_names{};
   for (const auto &attr : node.attribute()) {
-    if (!seen_attr_names.insert(std::string(attr.name())).second) {
-      fail_check("Attribute '", std::string(attr.name()), "' appeared multiple times.");
+    if (!seen_attr_names.insert(attr.name()).second) {
+      fail_check("Attribute '", attr.name(), "' appeared multiple times.");
     }
 
     check_attribute(attr, ctx, lex_ctx);
@@ -673,18 +673,18 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
   for (const auto &value_info : graph.input()) {
     // TODO(ONNX): If shadowing isn't allowed, this should maybe use
     // this_or_ancestor_graph_has
-    if (lex_ctx.this_graph_has(std::string(value_info.name()))) {
+    if (lex_ctx.this_graph_has(value_info.name())) {
       fail_check("Graph must be in single static assignment (SSA) form, however '",
                  value_info.name(), "' has been used as graph input names multiple times.");
     }
-    lex_ctx.add(std::string(value_info.name()));
+    lex_ctx.add(value_info.name());
   }
 
   std::unordered_set<std::string> initializer_name_checker;
 
   for (const auto &init : graph.initializer()) {
     enforce_has_field(init, name);
-    const auto &name = std::string(init.name());
+    const std::string &name = init.name();
     if (name.empty()) {
       fail_check("Tensor initializers must have a non-empty name");
     }
@@ -772,7 +772,7 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
     }
   }
   for (const auto &value_info : graph.output()) {
-    if (!lex_ctx.this_graph_has(std::string(value_info.name()))) {
+    if (!lex_ctx.this_graph_has(value_info.name())) {
       fail_check("Graph output '", value_info.name(), "' is not an output of any node in graph.");
     }
   }
@@ -795,9 +795,8 @@ static int get_version_for_domain(const std::string &domain,
 void check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
                                const std::unordered_map<std::string, int> &func_opset_imports,
                                const std::unordered_map<std::string, int> &model_opset_imports) {
-  auto func_opset_version = get_version_for_domain(std::string(node.domain()), func_opset_imports);
-  auto model_opset_version =
-      get_version_for_domain(std::string(node.domain()), model_opset_imports);
+  auto func_opset_version = get_version_for_domain(node.domain(), func_opset_imports);
+  auto model_opset_version = get_version_for_domain(node.domain(), model_opset_imports);
 
   if (func_opset_version == -1) {
     fail_check("No Opset registered for domain " + std::string(node.domain()));
@@ -964,8 +963,8 @@ void check_model_local_functions(const ModelProto &model, const CheckerContext &
   // check_opset_compatibility called by check_function.
   for (const auto &function_proto : model.functions()) {
     for (const auto &opset_import : function_proto.opset_import()) {
-      if (get_version_for_domain(std::string(opset_import.domain()), model_opset_imports) == -1) {
-        model_opset_imports[std::string(opset_import.domain())] = opset_import.version();
+      if (get_version_for_domain(opset_import.domain(), model_opset_imports) == -1) {
+        model_opset_imports[opset_import.domain()] = opset_import.version();
       }
     }
   }
@@ -993,8 +992,7 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
 
   std::unordered_map<std::string, int> func_opset_imports;
   for (const auto &relied_opset : function.opset_import()) {
-    func_opset_imports[std::string(relied_opset.domain())] =
-        static_cast<int>(relied_opset.version());
+    func_opset_imports[relied_opset.domain()] = static_cast<int>(relied_opset.version());
   }
 
   ctx_copy.set_opset_imports(func_opset_imports);
@@ -1085,7 +1083,7 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
   ctx.set_ir_version(static_cast<int>(model.ir_version()));
   std::unordered_map<std::string, int> opset_imports;
   for (const auto &opset_import : model.opset_import()) {
-    opset_imports[std::string(opset_import.domain())] = static_cast<int>(opset_import.version());
+    opset_imports[opset_import.domain()] = static_cast<int>(opset_import.version());
   }
   if (model.ir_version() >= 3) {
     if (opset_imports.empty()) {

@@ -55,7 +55,7 @@ private:
   OpsetMapBase Mismatches(const utils::RepeatedProtoField<OperatorSetIdProto> &list) const {
     OpsetMapBase result;
     for (const auto &pair : list) {
-      auto iter = this->find(NormalizeDomain(std::string(pair.domain())));
+      auto iter = this->find(NormalizeDomain(pair.domain()));
       if ((iter != this->end()) && (iter->second != pair.version()))
         result.insert(*iter);
     }
@@ -64,7 +64,7 @@ private:
 
   bool Add(const utils::RepeatedProtoField<OperatorSetIdProto> &list) {
     for (const auto &pair : list) {
-      auto domain = NormalizeDomain(std::string(pair.domain()));
+      auto domain = NormalizeDomain(pair.domain());
       auto version = pair.version();
       auto iter = this->find(domain);
       if (iter != this->end()) {
@@ -118,13 +118,13 @@ public:
 
   bool ProcessGraph(const GraphProto &graph) override {
     for (const auto &x : graph.input())
-      Add(std::string(x.name()));
+      Add(x.name());
     for (const auto &x : graph.initializer())
-      Add(std::string(x.name()));
+      Add(x.name());
     // Adding graph outputs is redundant for a valid graph, but we do it anyway,
     // to produce better results for invalid graphs.
     for (const auto &x : graph.output())
-      Add(std::string(x.name()));
+      Add(x.name());
     return true;
   }
 
@@ -138,7 +138,7 @@ public:
 
   bool ProcessNode(const NodeProto &node) override {
     // We use a single name-space for node names and variable names, to keep name-generation simple.
-    Add(std::string(node.name()));
+    Add(node.name());
     for (const auto &name : node.input()) {
       Add(std::string(name));
     }
@@ -240,7 +240,7 @@ public:
   // Process a node:
   bool ProcessNode(NodeProto &node) override {
     if (!node.name().empty())
-      node.set_name(MakeUnique(std::string(node.name())));
+      node.set_name(MakeUnique(node.name()));
 
     for (auto &x : node.input()) {
       std::string s = x;
@@ -353,9 +353,9 @@ private:
   void VisitGraph(const GraphProto &graph) override {
     namescopes.emplace_back();
     for (const auto &x : graph.input())
-      CurrentScope().insert(std::string(x.name()));
+      CurrentScope().insert(x.name());
     for (const auto &init : graph.initializer())
-      CurrentScope().insert(std::string(init.name()));
+      CurrentScope().insert(init.name());
     for (const auto &n : graph.node())
       VisitNode(n);
     namescopes.pop_back();
@@ -391,7 +391,7 @@ using ConstNodeMap = std::unordered_map<std::string, const NodeProto *>;
 ConstNodeMap FindConstantNodes(const GraphProto &graph) {
   ConstNodeMap result;
   for (const NodeProto &node : graph.node()) {
-    if (IsOnnxDomain(std::string(node.domain())) && (node.op_type() == "Constant")) {
+    if (IsOnnxDomain(node.domain()) && (node.op_type() == "Constant")) {
       result[std::string(node.output()[0])] = &node;
     }
   }
@@ -617,7 +617,7 @@ struct InlinerImpl {
           actual_parameters.insert(std::string(x));
         // Append valueinfos of called function
         for (const auto &callee_vi : callee.value_info()) {
-          if (actual_parameters.count(std::string(callee_vi.name())) == 0) {
+          if (actual_parameters.count(callee_vi.name()) == 0) {
             value_infos.push_back(callee_vi);
           }
         }
@@ -719,7 +719,7 @@ struct InlinerImpl {
     for (auto &function : model.functions()) {
       if (!model_imports.Add(function))
         ONNX_THROW("Model has functions with incompatible opset versions.");
-      if (to_inline.Contains(std::string(function.domain()), std::string(function.name()))) {
+      if (to_inline.Contains(function.domain(), function.name())) {
         map[GetFunctionImplId(function)] =
             std::pair<const FunctionProto *, int64_t>(&function, kNoConversion);
       } else {
@@ -933,7 +933,7 @@ FunctionBuilder &FunctionBuilder::AddInlinedCall(std::initializer_list<std::stri
   const auto *input_it = inputs.begin();
   for (const auto &graph_input : graph.input()) {
     if (input_it != inputs.end()) {
-      renamer.BindName(std::string(graph_input.name()), std::string(*input_it));
+      renamer.BindName(graph_input.name(), std::string(*input_it));
       ++input_it;
     }
   }
@@ -942,14 +942,14 @@ FunctionBuilder &FunctionBuilder::AddInlinedCall(std::initializer_list<std::stri
   const auto *output_it = outputs.begin();
   for (const auto &graph_output : graph.output()) {
     if (output_it != outputs.end()) {
-      renamer.BindName(std::string(graph_output.name()), std::string(*output_it));
+      renamer.BindName(graph_output.name(), std::string(*output_it));
       ++output_it;
     }
   }
 
   // Add Constant nodes for every initializer in the graph
   for (const auto &initializer : graph.initializer()) {
-    std::string const_name = renamer.BindToUniqueName(std::string(initializer.name()));
+    std::string const_name = renamer.BindToUniqueName(initializer.name());
     Const(const_name, initializer);
   }
 

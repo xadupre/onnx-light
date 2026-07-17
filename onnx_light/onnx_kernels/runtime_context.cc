@@ -379,13 +379,13 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
 
 ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
   for (size_t i = 0; i < func.input_size(); ++i) {
-    const std::string name = std::string(func.input(i));
+    const std::string name = func.input(i);
     if (!name.empty()) {
       keep_.insert(name);
     }
   }
   for (size_t i = 0; i < func.output_size(); ++i) {
-    const std::string name = std::string(func.output(i));
+    const std::string name = func.output(i);
     if (!name.empty()) {
       keep_.insert(name);
     }

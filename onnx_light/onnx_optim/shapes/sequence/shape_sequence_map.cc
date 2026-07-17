@@ -68,14 +68,14 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   // (which can be either tensors or sequences).
   ShapesContext local = ctx;
 
-  const std::string input_seq_name = std::string(node.input(0));
+  const std::string input_seq_name = node.input(0);
   const OptimSequence &input_seq = ctx.GetSequence(input_seq_name);
   const TensorType elem_dtype = input_seq.ElemDtype();
   const OptimShape elem_shape = CommonElemShape(input_seq);
   local.Set(body.input()[0].name(), OptimTensor(nullptr, elem_dtype, elem_shape));
 
   for (int i = 1; i < node.input_size(); ++i) {
-    const std::string outer_name = std::string(node.input(i));
+    const std::string outer_name = node.input(i);
     const std::string body_in_name = body.input()[i].name();
     if (ctx.HasSequence(outer_name)) {
       // Additional inputs that are sequences contribute one element per
@@ -104,7 +104,7 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   // known, otherwise symbolic). Per-element shapes are not recorded
   // because the body may vary the per-element shape across iterations.
   for (int i = 0; i < node.output_size(); ++i) {
-    const std::string node_out = std::string(node.output(i));
+    const std::string node_out = node.output(i);
     if (node_out.empty()) {
       continue;
     }

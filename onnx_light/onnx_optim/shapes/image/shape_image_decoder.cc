@@ -41,7 +41,7 @@ void ComputeShapeImageDecoder(ShapesContext &ctx, const NodeProto &node, const c
 
   // The spatial extent of the decoded image is only known at runtime,
   // so the H and W dimensions are kept symbolic and unique per output.
-  const std::string output_name = std::string(node.output(0));
+  const std::string output_name = node.output(0);
   OptimShape out_shape{
       OptimDim("ImageDecoder(" + output_name + ").H"),
       OptimDim("ImageDecoder(" + output_name + ").W"),

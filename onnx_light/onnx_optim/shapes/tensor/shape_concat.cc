@@ -82,9 +82,8 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node) {
 
   for (int i = 1; i < n_inputs; ++i) {
     const OptimTensor &t = ctx.Get(node.input(i));
-    EXT_ENFORCE_INVALID(t.Dtype() == common_dtype, "ComputeShapeConcat: input '",
-                        std::string(node.input(i)), "' has a dtype that differs from input '",
-                        std::string(node.input(0)), "'.");
+    EXT_ENFORCE_INVALID(t.Dtype() == common_dtype, "ComputeShapeConcat: input '", node.input(i),
+                        "' has a dtype that differs from input '", node.input(0), "'.");
     const OptimShape &shape = t.Shape();
     EXT_ENFORCE_INVALID(!(static_cast<int>(shape.Rank()) != rank), "ComputeShapeConcat: input ", i,
                         " has rank ", shape.Rank(), " != ", rank, " (first input).");

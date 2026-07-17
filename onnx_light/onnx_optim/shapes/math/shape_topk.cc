@@ -53,7 +53,7 @@ void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x) 
 
   const TensorType out_dtype = input.Dtype();
   ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, out_shape));
-  if (node.output_size() >= 2 && !std::string(node.output(1)).empty()) {
+  if (node.output_size() >= 2 && !node.output(1).empty()) {
     ctx.Set(node.output(1), OptimTensor(nullptr, TensorType::kInt64, std::move(out_shape)));
   }
 }

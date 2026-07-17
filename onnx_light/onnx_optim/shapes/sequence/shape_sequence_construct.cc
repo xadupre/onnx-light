@@ -41,8 +41,8 @@ void ComputeShapeSequenceConstruct(ShapesContext &ctx, const NodeProto &node) {
   for (int i = 1; i < n_inputs; ++i) {
     const OptimTensor &t = ctx.Get(node.input(i));
     EXT_ENFORCE_INVALID(t.Dtype() == common_dtype, "ComputeShapeSequenceConstruct: input '",
-                        std::string(node.input(i)), "' has a dtype that differs from input '",
-                        std::string(node.input(0)), "'.");
+                        node.input(i), "' has a dtype that differs from input '", node.input(0),
+                        "'.");
     elem_shapes.push_back(t.Shape());
   }
 

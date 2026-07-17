@@ -142,7 +142,7 @@ TEST(FunctionVerification, VerifyFunctionBodyWithMultipleDomains) {
 
   std::unordered_map<std::string, int> imported;
   for (const auto &opset : function_proto.ref_opset_import()) {
-    imported[std::string(opset.ref_domain())] = static_cast<int>(opset.ref_version());
+    imported[opset.ref_domain()] = static_cast<int>(opset.ref_version());
   }
   ASSERT_EQ(imported.size(), 2U);
   EXPECT_EQ(imported["onnx.light.test.domain_a"], 1);

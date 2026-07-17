@@ -49,7 +49,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   }
 
   for (const auto &attr : node.ref_attribute()) {
-    attr_map[std::string(attr.ref_name())] = attr;
+    attr_map[attr.ref_name()] = attr;
   }
 
   // For undefined attributes of the function node
@@ -67,11 +67,11 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   }
 
   const OpSchemaRegistry *schema_registry = OpSchemaRegistry::Instance();
-  const auto *const schema = schema_registry->GetSchema(
-      std::string(node.ref_op_type()), domain_version, std::string(node.ref_domain()));
+  const auto *const schema =
+      schema_registry->GetSchema(node.ref_op_type(), domain_version, node.ref_domain());
   if (schema == nullptr) {
-    ONNX_THROW("No schema registered for op '", std::string(node.ref_op_type()), "' in domain '",
-               std::string(node.ref_domain()), "' at version ", domain_version,
+    ONNX_THROW("No schema registered for op '", node.ref_op_type(), "' in domain '",
+               node.ref_domain(), "' at version ", domain_version,
                " while expanding function node ", node_name);
   }
   const auto &default_attrs = schema->attributes();
@@ -107,7 +107,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
         if (attr_map.count(std::string(attr.ref_ref_attr_name()))) {
           AttributeProto *new_attr = new_node->add_attribute();
           new_attr->CopyFrom(attr_map[std::string(attr.ref_ref_attr_name())]);
-          new_attr->set_name(std::string(attr.ref_name()));
+          new_attr->set_name(attr.ref_name());
         }
       } else {
         AttributeProto *new_attr = new_node->add_attribute();

@@ -105,7 +105,7 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   // Index of the ``sizes`` input when present and non-empty.
   std::string sizes_name;
   if (has_v11_layout && node.input_size() >= 4) {
-    sizes_name = std::string(node.input(3));
+    sizes_name = node.input(3);
   }
 
   // The ``sizes`` input (INT64) is tracked via the data-propagation lattice
@@ -138,9 +138,9 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   if (!sizes_known) {
     std::string scales_name_str;
     if (has_v11_layout && node.input_size() >= 3) {
-      scales_name_str = std::string(node.input(2));
+      scales_name_str = node.input(2);
     } else if (!has_v11_layout && node.input_size() >= 2) {
-      scales_name_str = std::string(node.input(1));
+      scales_name_str = node.input(1);
     }
     if (!scales_name_str.empty() && ctx.Has(scales_name_str)) {
       const OptimTensor &scales_tensor = ctx.Get(scales_name_str);

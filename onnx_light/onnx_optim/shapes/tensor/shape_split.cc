@@ -214,7 +214,7 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
 
   size_t vas_offset = 0;
   for (int i = 0; i < num_outputs_decl; ++i) {
-    const std::string &name = std::string(node.output(i));
+    const std::string &name = node.output(i);
     const int64_t size_i = sizes.empty() ? int64_t{0} : sizes[static_cast<size_t>(i)];
     if (name.empty()) {
       vas_offset += static_cast<size_t>(size_i);

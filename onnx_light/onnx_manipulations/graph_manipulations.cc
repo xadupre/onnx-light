@@ -15,10 +15,10 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
                                 const std::unordered_set<std::string> &outer_produced) {
   std::unordered_set<std::string> local;
   for (size_t i = 0; i < graph.input().size(); ++i) {
-    local.insert(std::string(graph.input()[i].name()));
+    local.insert(graph.input()[i].name());
   }
   for (size_t i = 0; i < graph.initializer().size(); ++i) {
-    local.insert(std::string(graph.initializer()[i].name()));
+    local.insert(graph.initializer()[i].name());
   }
   for (size_t i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];

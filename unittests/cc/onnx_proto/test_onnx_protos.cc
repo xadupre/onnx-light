@@ -6929,7 +6929,7 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_InvokedAndDeleterAttached) {
   ParseOptions options;
   options.raw_data_callback = [&](TensorProto &t) -> std::function<void()> {
     ++callback_calls;
-    seen_name = std::string(t.ref_name());
+    seen_name = t.ref_name();
     seen_size = t.ref_raw_data().size();
     return [&deleter_called]() { deleter_called = true; };
   };

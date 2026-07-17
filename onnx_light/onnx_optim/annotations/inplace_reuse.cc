@@ -317,10 +317,10 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
                                 const std::unordered_set<std::string> &ancestor_locals) {
   std::unordered_set<std::string> local;
   for (int i = 0; i < graph.input().size(); ++i) {
-    local.insert(std::string(graph.input()[i].name()));
+    local.insert(graph.input()[i].name());
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
-    local.insert(std::string(graph.initializer()[i].name()));
+    local.insert(graph.initializer()[i].name());
   }
   for (int i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];
@@ -440,7 +440,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     keep.insert(name);
   }
   for (int i = 0; i < graph.output().size(); ++i) {
-    keep.insert(std::string(graph.output()[i].name()));
+    keep.insert(graph.output()[i].name());
   }
 
   // Producer node index for every top-level intermediate, and the index of
@@ -453,7 +453,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   std::vector<std::vector<std::string>> referenced_per_node(static_cast<std::size_t>(num_nodes));
   std::unordered_set<std::string> graph_outputs;
   for (int i = 0; i < graph.output().size(); ++i) {
-    graph_outputs.insert(std::string(graph.output()[i].name()));
+    graph_outputs.insert(graph.output()[i].name());
   }
   if (allow_input_overwrite) {
     for (const std::string &name : graph_inputs) {
@@ -470,7 +470,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       last_use[name] = i;
     }
     for (int o = 0; o < node.output_size(); ++o) {
-      const std::string name = std::string(node.output(o));
+      const std::string name = node.output(o);
       if (!name.empty() && producer.find(name) == producer.end()) {
         producer[name] = i;
       }
@@ -519,7 +519,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     // Count direct-input occurrences so a value read twice is never aliased.
     std::unordered_map<std::string, int> input_occurrences;
     for (int k = 0; k < node.input_size(); ++k) {
-      const std::string name = std::string(node.input(k));
+      const std::string name = node.input(k);
       if (!name.empty()) {
         ++input_occurrences[name];
       }
@@ -534,7 +534,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
         if (matched_outputs.count(o)) {
           continue;
         }
-        const std::string out_name = std::string(node.output(o));
+        const std::string out_name = node.output(o);
         if (out_name.empty() || !ctx.Has(out_name)) {
           continue;
         }
@@ -544,7 +544,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           if (used_inputs.count(k)) {
             continue;
           }
-          const std::string in_name = std::string(node.input(k));
+          const std::string in_name = node.input(k);
           if (in_name.empty() || in_name == out_name) {
             continue;
           }
@@ -657,7 +657,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       if (reuse_by_output.find(o) != reuse_by_output.end()) {
         continue;
       }
-      const std::string out_name = std::string(node.output(o));
+      const std::string out_name = node.output(o);
       if (out_name.empty() || !ctx.Has(out_name)) {
         continue;
       }
@@ -684,14 +684,14 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;
     for (int o = 0; o < node.output_size(); ++o) {
-      const std::string out_name = std::string(node.output(o));
+      const std::string out_name = node.output(o);
       if (out_name.empty() || !ctx.Has(out_name)) {
         continue;
       }
       expressions::DimType alloc_bytes = int64_t{0};
       auto reuse_it = reuse_by_output.find(o);
       if (reuse_it != reuse_by_output.end()) {
-        const std::string in_name = std::string(node.input(reuse_it->second));
+        const std::string in_name = node.input(reuse_it->second);
         auto alive_it = alive.find(in_name);
         if (alive_it == alive.end()) {
           continue;

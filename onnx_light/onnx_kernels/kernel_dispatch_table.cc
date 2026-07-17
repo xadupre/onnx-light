@@ -1336,7 +1336,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
-         const std::string input_name = std::string(node.input(0));
+         const std::string input_name = node.input(0);
          if (rt.HasSequence(input_name)) {
            SetOutputSequence(node, 0, rt.GetSequence(input_name), rt);
          } else {
@@ -1402,7 +1402,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, std::move(result.output), rt.tensors());
 
          if (node.output_size() >= 2) {
-           const std::string present_name = std::string(node.output(1));
+           const std::string present_name = node.output(1);
            if (!present_name.empty()) {
              result.present_state.name = present_name;
              rt.tensors()[present_name] = std::move(result.present_state);
@@ -1439,7 +1439,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
 
          // The current kernel only produces (Y, Y_h); the optional third
          // output ``Y_c`` (final cell state) is not implemented.
-         EXT_ENFORCE_INVALID(!(node.output_size() >= 3 && !std::string(node.output(2)).empty()), 
+         EXT_ENFORCE_INVALID(!(node.output_size() >= 3 && !node.output(2).empty()), 
                "RunNode: op 'LSTM' does not support the optional third output 'Y_c'.");
 
          const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -1555,12 +1555,12 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t storage_order = GetAttributeIntOrDefault(node, "storage_order", 0);
          kernel::MaxPool k(rt.kernel_ctx());
          const bool need_indices =
-             node.output_size() == 2 && !std::string(node.output(1)).empty();
+             node.output_size() == 2 && !node.output(1).empty();
          if (need_indices) {
            auto result = k.WithIndices(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode,
                                        a.dilations, storage_order, a.auto_pad);
            SetOutput(node, 0, std::move(result.first), rt.tensors());
-           const std::string indices_name = std::string(node.output(1));
+           const std::string indices_name = node.output(1);
            result.second.name = indices_name;
            rt.tensors()[indices_name] = std::move(result.second);
          } else {
@@ -1709,7 +1709,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
-         const std::string input_name = std::string(node.input(0));
+         const std::string input_name = node.input(0);
          if (rt.HasSequence(input_name)) {
            // Sequence-typed input: passthrough into the optional-of-sequence
            // output. The Optional kernel itself has no sequence overload
@@ -1726,7 +1726,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
-         const std::string input_name = std::string(node.input(0));
+         const std::string input_name = node.input(0);
          kernel::OptionalGetElement k(rt.kernel_ctx());
          if (rt.HasSequence(input_name)) {
            const Sequence &input_seq = GetInputSequence(node, 0, rt);
@@ -1743,12 +1743,12 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                node.input_size() , ".");
          RequireOutputCount(node, 1);
          kernel::OptionalHasElement k(rt.kernel_ctx());
-         if (node.input_size() == 0 || std::string(node.input(0)).empty()) {
+         if (node.input_size() == 0 || node.input(0).empty()) {
            // Opset 18 omitted-input flavour: scalar ``false``.
            SetOutput(node, 0, k(&rt), rt);
            return;
          }
-         const std::string input_name = std::string(node.input(0));
+         const std::string input_name = node.input(0);
          if (rt.HasSequence(input_name)) {
            const Sequence &input_seq = GetInputSequence(node, 0, rt);
            SetOutput(node, 0, k(input_seq, &rt), rt);
@@ -2696,7 +2696,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
-         const std::string map_input = std::string(node.input(0));
+         const std::string map_input = node.input(0);
 
          EXT_ENFORCE_INVALID(rt.HasMap(map_input), "RunNode: CastMap map input '", map_input,
                              "' not found in the runtime context. Map-typed inputs "
@@ -2749,7 +2749,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
-         const std::string map_input = std::string(node.input(0));
+         const std::string map_input = node.input(0);
 
          EXT_ENFORCE_INVALID(rt.HasMap(map_input), "RunNode: DictVectorizer map input '",
                              map_input,

@@ -108,7 +108,7 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
     const OptimTensor &pads_input = ctx.Get(node.input(1));
     std::vector<int64_t> axes_values;
     bool axes_known = true;
-    if (node.input_size() >= 4 && !std::string(node.input(3)).empty()) {
+    if (node.input_size() >= 4 && !node.input(3).empty()) {
       const OptimTensor &axes_input = ctx.Get(node.input(3));
       if (axes_input.HasValueAsShape()) {
         const OptimShape &axes_shape = axes_input.ValueAsShape();

@@ -174,7 +174,7 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
   }
 
   // Output 1: present_state = (B, kv_num_heads, d_k, d_v).
-  if (node.output_size() > 1 && !std::string(node.output(1)).empty()) {
+  if (node.output_size() > 1 && !node.output(1).empty()) {
     OptimShape ps_shape;
     ps_shape.PushBack(batch);
     ps_shape.PushBack(OptimDim(kv_num_heads));

@@ -35,13 +35,12 @@ namespace {
 // Domain-specific dispatch can be added here when other domains gain
 // support.
 void CheckOnnxDomain(const NodeProto &node) {
-  EXT_ENFORCE_INVALID(node.domain().empty() || node.domain() == kOnnxDomain ||
-                          node.domain() == traditionalml::kOnnxMlDomain ||
-                          node.domain() == preview::kOnnxPreviewDomain ||
-                          node.domain() == rt::kAiRtDomain ||
-                          node.domain() == training::kOnnxPreviewTrainingDomain,
-                      "ComputeShapeNode: unsupported domain '", std::string(node.domain()),
-                      "' for op '", node.op_type(), "'.");
+  EXT_ENFORCE_INVALID(
+      node.domain().empty() || node.domain() == kOnnxDomain ||
+          node.domain() == traditionalml::kOnnxMlDomain ||
+          node.domain() == preview::kOnnxPreviewDomain || node.domain() == rt::kAiRtDomain ||
+          node.domain() == training::kOnnxPreviewTrainingDomain,
+      "ComputeShapeNode: unsupported domain '", node.domain(), "' for op '", node.op_type(), "'.");
 }
 
 // Returns the ``"<domain>:<name>"`` identifier used as a key in
@@ -116,7 +115,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   }
   for (int i = 0; i < func.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = func.opset_import()[i];
-    sub_ctx.SetOpsetVersion(std::string(osi.domain()), static_cast<int>(osi.version()));
+    sub_ctx.SetOpsetVersion(osi.domain(), static_cast<int>(osi.version()));
   }
   // Forward the local-function map so nested calls are dispatched too.
   for (const auto &kv : ctx.LocalFunctions()) {
@@ -126,8 +125,8 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   // the caller's input names.
   const int n_inputs = std::min(node.input_size(), func.input_size());
   for (int i = 0; i < n_inputs; ++i) {
-    const std::string caller_name = std::string(node.input(i));
-    const std::string callee_name = std::string(func.input(i));
+    const std::string caller_name = node.input(i);
+    const std::string callee_name = func.input(i);
     if (caller_name.empty() || callee_name.empty()) {
       continue;
     }
@@ -143,7 +142,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   // site are removed (see ``BindNodeAttributes``).
   AttributeMap attr_map;
   for (const auto &attr : node.attribute()) {
-    attr_map[std::string(attr.name())] = &attr;
+    attr_map[attr.name()] = &attr;
   }
   // Recursively run shape inference on the function body, binding
   // attribute references on a per-node copy to avoid mutating ``func``.
@@ -156,8 +155,8 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   // Map function outputs back to caller-visible names.
   const int n_outputs = std::min(node.output_size(), func.output_size());
   for (int i = 0; i < n_outputs; ++i) {
-    const std::string callee_name = std::string(func.output(i));
-    const std::string caller_name = std::string(node.output(i));
+    const std::string callee_name = func.output(i);
+    const std::string caller_name = node.output(i);
     if (caller_name.empty() || callee_name.empty()) {
       continue;
     }
@@ -775,7 +774,7 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   // is arbitrary) and the op-type dispatch table; they are expanded
   // by recursively running shape inference on the FunctionProto body.
   const std::string op_type = node.op_type();
-  const std::string local_key = LocalFunctionKey(std::string(node.domain()), op_type);
+  const std::string local_key = LocalFunctionKey(node.domain(), op_type);
   if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
     ctx.CheckInputsAvailable(node);
     ctx.CheckOutputsNotAvailable(node);
@@ -873,7 +872,7 @@ void ShapesContext::AppendComputeNodeEvent(const std::string &op_domain, const s
 
 void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {
   for (int i = 0; i < node.input_size(); ++i) {
-    const std::string name = std::string(node.input(i));
+    const std::string name = node.input(i);
     if (name.empty()) {
       continue;
     }
@@ -884,7 +883,7 @@ void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {
 
 void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
   for (int i = 0; i < node.output_size(); ++i) {
-    const std::string name = std::string(node.output(i));
+    const std::string name = node.output(i);
     if (name.empty()) {
       continue;
     }
@@ -906,7 +905,7 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
     std::vector<std::string> inputs;
     inputs.reserve(static_cast<size_t>(node.input_size()));
     for (int i = 0; i < node.input_size(); ++i) {
-      inputs.push_back(std::string(node.input(i)));
+      inputs.push_back(node.input(i));
     }
     AppendComputeNodeEvent(NormaliseDispatchDomain(node), node.op_type(), std::move(inputs));
   }
@@ -950,7 +949,7 @@ void ShapesContext::ComputeShapeModel(const ModelProto &model,
                                       bool prefill_with_value_info_output) {
   for (int i = 0; i < model.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = model.opset_import()[i];
-    SetOpsetVersion(std::string(osi.domain()), static_cast<int>(osi.version()));
+    SetOpsetVersion(osi.domain(), static_cast<int>(osi.version()));
   }
   // Register every model-local function so node-level dispatch can
   // expand calls to them. The pointers reference entries owned by
@@ -984,10 +983,10 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   // the proto and must not be overwritten.
   std::unordered_set<std::string> seeded;
   for (int i = 0; i < graph.input().size(); ++i) {
-    seeded.insert(std::string(graph.input()[i].name()));
+    seeded.insert(graph.input()[i].name());
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
-    seeded.insert(std::string(graph.initializer()[i].name()));
+    seeded.insert(graph.initializer()[i].name());
   }
   // Update graph outputs in place.
   std::unordered_set<std::string> output_names;

@@ -1256,7 +1256,7 @@ TEST(onnx_file, FileStream_ModelProto_WriteRead) {
     EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
               model2.ref_graph().ref_initializer()[i].ref_raw_data());
     EXPECT_EQ(std::string(model.ref_graph().ref_initializer()[i].ref_name()),
-              std::string(model2.ref_graph().ref_initializer()[i].ref_name()));
+              model2.ref_graph().ref_initializer()[i].ref_name());
   }
 
   std::remove(temp_filename.c_str());
@@ -2400,10 +2400,10 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
       else if (e.ref_key() == "length" || e.ref_key() == "size")
         len = std::stoll(std::string(e.ref_value()));
     }
-    if (std::string(t.ref_name())[0] == 'a') {
+    if (t.ref_name()[0] == 'a') {
       // Reused — must still reference the first model's weights file using the exact
       // location string recorded when the first model was originally saved.
-      auto it = reused_expected_location.find(std::string(t.ref_name()));
+      auto it = reused_expected_location.find(t.ref_name());
       ASSERT_NE(it, reused_expected_location.end());
       EXPECT_EQ(loc, it->second);
       EXPECT_NE(loc.find(src_weights), std::string::npos);

@@ -32,7 +32,7 @@ static std::vector<std::string> NodeTypes(const FunctionProto &func) {
   std::vector<std::string> types;
   types.reserve(static_cast<size_t>(func.node_size()));
   for (int i = 0; i < func.node_size(); ++i) {
-    types.push_back(std::string(func.node(i).op_type()));
+    types.push_back(func.node(i).op_type());
   }
   return types;
 }

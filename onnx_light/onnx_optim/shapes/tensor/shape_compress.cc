@@ -33,7 +33,7 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
 
   // The symbol used for the unknown output count (number of selected slices).
-  const std::string sym = "Compress_" + std::string(node.output(0)) + "_count";
+  const std::string sym = "Compress_" + node.output(0) + "_count";
 
   const AttributeProto *axis_attr = FindAttribute(node, "axis");
   if (axis_attr == nullptr) {

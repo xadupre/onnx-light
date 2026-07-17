@@ -214,7 +214,7 @@ void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &
                       "' produced ", outputs.size(), " output(s), node declares ",
                       node.output_size(), ".");
   for (size_t i = 0; i < outputs.size(); ++i) {
-    const std::string caller_name = std::string(node.output(i));
+    const std::string caller_name = node.output(i);
     if (caller_name.empty()) {
       continue;
     }
@@ -256,7 +256,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   for (int i = 0; i < branch.output_size(); ++i) {
     const std::string out_name = branch.output()[i].name();
     EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: If: a subgraph output has an empty name.");
-    const std::string caller_name = std::string(node.output(i));
+    const std::string caller_name = node.output(i);
     if (caller_name.empty()) {
       continue;
     }
@@ -301,12 +301,12 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
   for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
     RuntimeContext child = rt.MakeSubgraphContext("body");
 
-    const std::string &iter_name = std::string(body.input(0).name());
-    const std::string &cond_name = std::string(body.input(1).name());
+    const std::string &iter_name = body.input(0).name();
+    const std::string &cond_name = body.input(1).name();
     child.Put(iter_name, MakeInt64Scalar(iter_name, iter), RuntimeEventKind::kInput);
     child.Put(cond_name, MakeBoolScalar(cond_name, cond_value), RuntimeEventKind::kInput);
     for (std::size_t i = 0; i < n; ++i) {
-      const std::string &bname = std::string(body.input(static_cast<int>(2 + i)).name());
+      const std::string &bname = body.input(static_cast<int>(2 + i)).name();
       if (is_seq_state[i]) {
         child.PutSequence(bname, sequence_state[i]);
       } else {
@@ -323,7 +323,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       }
     }
 
-    const std::string &cond_out_name = std::string(body.output(0).name());
+    const std::string &cond_out_name = body.output(0).name();
     auto cond_it = child.tensors().find(cond_out_name);
     EXT_ENFORCE_INVALID(cond_it != child.tensors().end(),
                         "RunNode: Loop body did not produce 'cond_out' output '", cond_out_name,
@@ -331,7 +331,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     cond_value = ParseBoolScalar(cond_it->second, "Loop body output 'cond_out'");
 
     for (std::size_t i = 0; i < n; ++i) {
-      const std::string &oname = std::string(body.output(static_cast<int>(1 + i)).name());
+      const std::string &oname = body.output(static_cast<int>(1 + i)).name();
       if (is_seq_state[i]) {
         EXT_ENFORCE_INVALID(
             child.HasSequence(oname),
@@ -346,7 +346,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       }
     }
     for (std::size_t j = 0; j < k; ++j) {
-      const std::string &oname = std::string(body.output(static_cast<int>(1 + n + j)).name());
+      const std::string &oname = body.output(static_cast<int>(1 + n + j)).name();
       auto it = child.tensors().find(oname);
       EXT_ENFORCE_INVALID(it != child.tensors().end(),
                           "RunNode: Loop body did not produce scan output '", oname, "'.");
@@ -434,11 +434,11 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
   const GraphProto &body = GetRequiredGraphAttribute(node, "body");
 
   Tensor m_tensor;
-  if (!std::string(node.input(0)).empty()) {
+  if (!node.input(0).empty()) {
     m_tensor = GetInput(node, 0, rt.tensors());
   }
   Tensor cond_tensor;
-  if (!std::string(node.input(1)).empty()) {
+  if (!node.input(1).empty()) {
     cond_tensor = GetInput(node, 1, rt.tensors());
   }
 
@@ -454,9 +454,9 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
   for (std::size_t i = 0; i < n_inputs; ++i) {
     const int idx = static_cast<int>(2 + i);
     EXT_ENFORCE_INVALID(
-        !(std::string(node.input(idx)).empty()),
+        !(node.input(idx).empty()),
         "RunNode: Loop does not support empty placeholders in loop-carried inputs.");
-    const std::string name = std::string(node.input(idx));
+    const std::string name = node.input(idx);
     if (rt.HasSequence(name)) {
       is_seq_state[i] = true;
       sequence_state[i] = rt.GetSequence(name);
@@ -487,13 +487,11 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
                       const std::vector<Tensor> &state) -> std::vector<Tensor> {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(2 + n);
-    bindings.emplace_back(std::string(body.input(0).name()),
-                          MakeInt64Scalar(std::string(body.input(0).name()), iter));
-    bindings.emplace_back(std::string(body.input(1).name()),
-                          MakeBoolScalar(std::string(body.input(1).name()), cond_in));
+    bindings.emplace_back(body.input(0).name(), MakeInt64Scalar(body.input(0).name(), iter));
+    bindings.emplace_back(body.input(1).name(), MakeBoolScalar(body.input(1).name(), cond_in));
     for (size_t i = 0; i < n; ++i) {
       Tensor t = state[i];
-      t.name = std::string(body.input(2 + i).name());
+      t.name = body.input(2 + i).name();
       bindings.emplace_back(t.name, std::move(t));
     }
     return RunSubgraph(body, bindings, rt, "body");
@@ -563,7 +561,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(!(node.output_size() != static_cast<int>(n + k)),
                       "RunNode: Scan node output count does not match body outputs.");
 
-  if (is_scan8 && !std::string(node.input(0)).empty()) {
+  if (is_scan8 && !node.input(0).empty()) {
     // Per-batch sequence lengths are not yet supported; the only
     // exercised form (e.g. backend test ``test_scan_sum``) passes an
     // empty placeholder, meaning "use the full sequence length for
@@ -576,7 +574,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   initial_state.reserve(n);
   for (size_t i = 0; i < n; ++i) {
     const int idx = static_cast<int>(scan8_offset + i);
-    EXT_ENFORCE_INVALID(!(std::string(node.input(idx)).empty()),
+    EXT_ENFORCE_INVALID(!(node.input(idx).empty()),
                         "RunNode: Scan does not support empty placeholders in state inputs.");
     initial_state.push_back(GetInput(node, idx, rt.tensors()));
   }
@@ -585,7 +583,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   scan_inputs.reserve(m);
   for (size_t i = 0; i < m; ++i) {
     const int idx = static_cast<int>(scan8_offset + n + i);
-    EXT_ENFORCE_INVALID(!(std::string(node.input(idx)).empty()),
+    EXT_ENFORCE_INVALID(!(node.input(idx).empty()),
                         "RunNode: Scan does not support empty placeholders in scan inputs.");
     scan_inputs.push_back(GetInput(node, idx, rt.tensors()));
   }
@@ -703,7 +701,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
   std::vector<const Tensor *> additional_tensors(num_additional, nullptr);
   for (std::size_t k = 0; k < num_additional; ++k) {
     const int idx = static_cast<int>(1 + k);
-    const std::string name = std::string(node.input(idx));
+    const std::string name = node.input(idx);
     EXT_ENFORCE_INVALID(
         !(name.empty()),
         "RunNode: SequenceMap does not support empty placeholders in additional inputs.");
@@ -740,11 +738,11 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
     bindings.reserve(1u + num_additional);
 
     Tensor elem0 = input_sequence.values[i];
-    elem0.name = std::string(body.input(0).name());
+    elem0.name = body.input(0).name();
     bindings.emplace_back(elem0.name, std::move(elem0));
 
     for (std::size_t k = 0; k < num_additional; ++k) {
-      const std::string param_name = std::string(body.input(static_cast<int>(1 + k)).name());
+      const std::string param_name = body.input(static_cast<int>(1 + k)).name();
       Tensor t;
       if (additional_sequences[k] != nullptr) {
         t = additional_sequences[k]->values[i];
@@ -844,8 +842,8 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
 
   // Bind formal function inputs to the caller's actuals.
   for (size_t i = 0; i < func.input_size(); ++i) {
-    const std::string caller_name = std::string(node.input(i));
-    const std::string param_name = std::string(func.input(i));
+    const std::string caller_name = node.input(i);
+    const std::string param_name = func.input(i);
     // Optional/unused function inputs (empty actual or formal name) are skipped.
     if (caller_name.empty() || param_name.empty()) {
       continue;
@@ -871,11 +869,11 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
   std::unordered_map<std::string, const AttributeProto *> attr_map;
   for (size_t i = 0; i < func.attribute_proto().size(); ++i) {
     const AttributeProto &a = func.attribute_proto()[i];
-    attr_map[std::string(a.name())] = &a;
+    attr_map[a.name()] = &a;
   }
   for (size_t i = 0; i < node.attribute().size(); ++i) {
     const AttributeProto &a = node.attribute()[i];
-    attr_map[std::string(a.name())] = &a;
+    attr_map[a.name()] = &a;
   }
   FunctionProto bound_func;
   bound_func.CopyFrom(func);
@@ -887,8 +885,8 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
   // Copy the function's formal outputs back into the caller's tensor
   // map under the names declared by the node's output list.
   for (size_t i = 0; i < func.output_size(); ++i) {
-    const std::string caller_name = std::string(node.output(i));
-    const std::string param_name = std::string(func.output(i));
+    const std::string caller_name = node.output(i);
+    const std::string param_name = func.output(i);
     if (caller_name.empty()) {
       // The caller does not want this output; skip it.
       continue;
@@ -927,7 +925,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   // override same-named built-ins, matching the ONNX runtime semantics
   // for model-local functions.
   if (!rt.functions().empty()) {
-    const std::string fkey = FunctionLookupKey(domain, op_type, std::string(node.overload()));
+    const std::string fkey = FunctionLookupKey(domain, op_type, node.overload());
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       CallModelLocalFunction(node, *fit->second, rt);
@@ -938,7 +936,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
         std::vector<std::string> inputs;
         inputs.reserve(static_cast<size_t>(node.input_size()));
         for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
-          inputs.push_back(std::string(node.input(i)));
+          inputs.push_back(node.input(i));
         }
         rt.AppendRunNodeEvent(domain, op_type, std::move(inputs), start_time_ns, duration_ns);
       }
@@ -978,7 +976,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
     std::vector<std::string> inputs;
     inputs.reserve(static_cast<size_t>(node.input_size()));
     for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
-      inputs.push_back(std::string(node.input(i)));
+      inputs.push_back(node.input(i));
     }
     rt.AppendRunNodeEvent(domain, op_type, std::move(inputs), start_time_ns, duration_ns);
   }
@@ -1052,8 +1050,7 @@ void RunModel(const ModelProto &model, RuntimeContext &rt) {
   const auto &fns = model.functions();
   for (size_t i = 0; i < fns.size(); ++i) {
     const FunctionProto &f = fns[i];
-    const std::string key = FunctionLookupKey(std::string(f.domain()), std::string(f.name()),
-                                              std::string(f.overload()));
+    const std::string key = FunctionLookupKey(f.domain(), f.name(), f.overload());
     rt.functions()[key] = &f;
   }
   RunGraph(model.ref_graph(), rt);

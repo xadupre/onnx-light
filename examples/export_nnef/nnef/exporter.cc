@@ -1046,7 +1046,7 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
 
   std::set<std::string> initializer_names;
   for (const auto &init : graph.initializer()) {
-    initializer_names.insert(std::string(init.name()));
+    initializer_names.insert(init.name());
   }
 
   std::vector<std::string> input_names;
@@ -1098,7 +1098,7 @@ NNEFGraph ExportToNNEF(const ModelProto &model, const std::string &graph_name) {
     const auto &pair = ordered_inits[i];
     std::vector<KV> kvs;
     kvs.push_back({"shape", FormatIntList(pair.second.shape)});
-    kvs.push_back({"label", FormatScalarString(std::string(init.name()))});
+    kvs.push_back({"label", FormatScalarString(init.name())});
     ctx.AddStatement(EmitAssign({pair.first}, EmitCallRaw("variable", {}, kvs)));
   }
 

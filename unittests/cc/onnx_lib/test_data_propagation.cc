@@ -70,7 +70,7 @@ public:
       : generatedShapeData_(generatedShapeData) {
 
     for (auto &attr : n.ref_attribute())
-      attributesByName_[std::string(attr.ref_name())] = &attr;
+      attributesByName_[attr.ref_name()] = &attr;
 
     size_t idx = 0;
     for (const auto &inp : n.ref_input()) {
@@ -461,21 +461,21 @@ static TensorShapeProto RunDataPropagation(const char *graphCode) {
   std::unordered_map<std::string, TypeProto *> valueTypesByName;
   for (auto &vi : graph.ref_value_info()) {
     if (vi.has_type())
-      valueTypesByName[std::string(vi.ref_name())] = &vi.ref_type();
+      valueTypesByName[vi.ref_name()] = &vi.ref_type();
   }
   for (auto &vi : graph.ref_input()) {
     if (vi.has_type())
-      valueTypesByName[std::string(vi.ref_name())] = &vi.ref_type();
+      valueTypesByName[vi.ref_name()] = &vi.ref_type();
   }
   for (auto &vi : graph.ref_output()) {
     if (vi.has_type())
-      valueTypesByName[std::string(vi.ref_name())] = &vi.ref_type();
+      valueTypesByName[vi.ref_name()] = &vi.ref_type();
   }
 
   // 3. Build name → TensorProto* maps from initializers.
   std::unordered_map<std::string, const TensorProto *> inputDataByName;
   for (const auto &tp : graph.ref_initializer())
-    inputDataByName[std::string(tp.ref_name())] = &tp;
+    inputDataByName[tp.ref_name()] = &tp;
 
   // 4. Collect data from Constant nodes.
   for (const auto &n : graph.ref_node()) {
@@ -495,7 +495,7 @@ static TensorShapeProto RunDataPropagation(const char *graphCode) {
       continue;
     LocalDataPropagationContextImpl ctx(n, valueTypesByName, inputDataByName,
                                         generatedShapeDataByName);
-    DispatchDataPropagation(ctx, std::string(n.ref_op_type()));
+    DispatchDataPropagation(ctx, n.ref_op_type());
   }
 
   // 6. Return propagated shape for the single graph output.

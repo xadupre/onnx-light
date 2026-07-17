@@ -27,7 +27,7 @@ void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node) {
   const OptimShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
 
-  const std::string sym = "Unique_" + std::string(node.output(0)) + "_n";
+  const std::string sym = "Unique_" + node.output(0) + "_n";
 
   // Output 0: Y has the dtype of the input.
   OptimShape y_shape;
@@ -60,7 +60,7 @@ void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node) {
   // Skip outputs declared as the empty string (missing optional).
   const int n_out = node.output_size();
   for (int i = 1; i < n_out && i < 4; ++i) {
-    const std::string out_name = std::string(node.output(i));
+    const std::string out_name = node.output(i);
     if (out_name.empty()) {
       continue;
     }

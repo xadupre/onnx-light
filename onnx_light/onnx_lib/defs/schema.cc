@@ -1566,10 +1566,10 @@ OpSchema::NodeDeterminism OpSchema::GetNodeDeterminism() const {
       const OpSchemaRegistry &reg = *OpSchemaRegistry::Instance();
       std::unordered_map<std::string, int64_t> domain_to_opset_version;
       for (const auto &opset : func_proto->opset_import()) {
-        domain_to_opset_version[std::string(opset.domain())] = opset.version();
+        domain_to_opset_version[opset.domain()] = opset.version();
       }
       for (const NodeProto &n : func_proto->node()) {
-        const int64_t opset = domain_to_opset_version[std::string(n.domain())];
+        const int64_t opset = domain_to_opset_version[n.domain()];
         const OpSchema *sch = reg.GetSchema(n.op_type(), static_cast<int>(opset), n.domain());
         if (!sch) {
           return NodeDeterminism::Unknown;

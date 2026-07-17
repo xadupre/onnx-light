@@ -492,7 +492,7 @@ Common::Status OnnxParser::ParseInput(ValueInfoList &inputs, TensorList &initial
           // default value for input
           initializers.emplace_back();
           TensorProto &tp = initializers.back();
-          tp.set_name(std::string(vi.ref_name()));
+          tp.set_name(vi.ref_name());
           CHECK_PARSER_STATUS(Parse(tp, vi.ref_type()));
         }
       } while (Matches(','));
@@ -516,7 +516,7 @@ Common::Status OnnxParser::ParseValueInfo(ValueInfoList &value_infos, TensorList
           // initializer
           initializers.emplace_back();
           TensorProto &tp = initializers.back();
-          tp.set_name(std::string(vi.ref_name()));
+          tp.set_name(vi.ref_name());
           CHECK_PARSER_STATUS(Parse(tp, vi.ref_type()));
         } else {
           // valueinfo

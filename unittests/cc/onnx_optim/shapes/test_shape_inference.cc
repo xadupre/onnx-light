@@ -1059,8 +1059,8 @@ TEST(OnnxOptimShapeInference, ComputeShapeNodeUsesRegisteredCustomDomainCallback
       "com.acme", "CustomIdentity",
       [&called](onnx_optim::shapes::ShapesContext &inner_ctx, const NodeProto &inner_node) {
         called = true;
-        const std::string input_name = std::string(inner_node.input(0));
-        const std::string output_name = std::string(inner_node.output(0));
+        const std::string input_name = inner_node.input(0);
+        const std::string output_name = inner_node.output(0);
         inner_ctx.Set(output_name, onnx_optim::OptimTensor(inner_ctx.Get(input_name)));
       });
 

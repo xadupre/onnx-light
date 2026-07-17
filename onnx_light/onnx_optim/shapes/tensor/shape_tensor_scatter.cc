@@ -55,7 +55,7 @@ void ComputeShapeTensorScatter(ShapesContext &ctx, const NodeProto &node) {
                         "dimension other than 'axis'.");
   }
 
-  if (node.input_size() >= 3 && !std::string(node.input(2)).empty()) {
+  if (node.input_size() >= 3 && !node.input(2).empty()) {
     const OptimTensor &write_indices = ctx.Get(node.input(2));
     EXT_ENFORCE_INVALID(write_indices.Shape().Rank() == 1,
                         "ComputeShapeTensorScatter: 'write_indices' must have rank 1.");

@@ -62,7 +62,7 @@ private:
     if (tensorType.has_shape()) {
       for (int i = 0; i < tensorType.shape().dim_size(); ++i) {
         if (tensorType.shape().dim(i).has_dim_param()) {
-          existing_symbols.insert(std::string(tensorType.shape().dim(i).dim_param()));
+          existing_symbols.insert(tensorType.shape().dim(i).dim_param());
         }
       }
     }
@@ -148,10 +148,10 @@ struct InferenceContextImpl : public InferenceContext {
       GraphInferenceContext *graphInferenceContext = nullptr)
       : graphInferenceContext_{graphInferenceContext}, options_(options), node_(&n) {
     for (auto &attr : *n.mutable_attribute()) {
-      attributesByName_[std::string(attr.name())] = &attr;
+      attributesByName_[attr.name()] = &attr;
       if (attr.has_g()) {
         // need a mutable GraphProto to run inferencing on this attribute
-        graphProtoAttributesByName_[std::string(attr.name())] = attr.mutable_g();
+        graphProtoAttributesByName_[attr.name()] = attr.mutable_g();
       }
     }
 
@@ -312,7 +312,7 @@ struct DataPropagationContextImpl : public DataPropagationContext {
     size_t input_idx = 0;
 
     for (auto &attr : *n.mutable_attribute()) {
-      attributesByName_[std::string(attr.name())] = &attr;
+      attributesByName_[attr.name()] = &attr;
     }
 
     for (const auto &input : n.input()) {

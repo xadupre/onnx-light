@@ -266,7 +266,7 @@ void MaterializeSymbolicShape(TypeProto *inferred_type, SymbolTable &symbol_tabl
 static std::string GetFunctionIdentifier(const FunctionProto &function) {
   // Note: Models with IR version < 10 do not have the overload attribute.
   // However, that will be mapped to an empty identifier.
-  const std::string &overload = std::string(function.overload());
+  const std::string &overload = function.overload();
   if (overload.empty()) {
     return std::string(function.domain()) + ":" + std::string(function.name());
   }
@@ -276,7 +276,7 @@ static std::string GetFunctionIdentifier(const FunctionProto &function) {
 static std::string GetFunctionIdentifier(const NodeProto &node) {
   // Note: Models with IR version < 10 do not have the overload attribute.
   // However, that will be mapped to an empty identifier.
-  const std::string &overload = std::string(node.overload());
+  const std::string &overload = node.overload();
   if (overload.empty()) {
     return std::string(node.domain()) + ":" + std::string(node.op_type());
   }
@@ -288,7 +288,7 @@ namespace {
 template <class T> std::unordered_map<std::string, int> GetOpsetImportsFromProto(const T &proto) {
   std::unordered_map<std::string, int> opset_imports;
   for (const auto &opset_import : proto.opset_import()) {
-    opset_imports[std::string(opset_import.domain())] = static_cast<int>(opset_import.version());
+    opset_imports[opset_import.domain()] = static_cast<int>(opset_import.version());
   }
   return opset_imports;
 }
@@ -326,8 +326,8 @@ void BindValuesOnCall(const DataValueMap &caller_map, const NodeProto &caller,
                       DataValueMap &callee_map, const FunctionProto &callee) {
   auto num_inputs = std::min(caller.input_size(), callee.input_size());
   for (int i = 0; i < num_inputs; ++i) {
-    const std::string &actual = std::string(caller.input(i));
-    const std::string &formal = std::string(callee.input(i));
+    const std::string &actual = caller.input(i);
+    const std::string &formal = callee.input(i);
     if (!actual.empty()) {
       auto it = caller_map.find(actual);
       if (it != caller_map.end()) {
@@ -342,8 +342,8 @@ void BindValuesOnReturn(const DataValueMap &callee_map, const FunctionProto &cal
                         DataValueMap &caller_map, const NodeProto &caller) {
   auto num_outputs = std::min(caller.output_size(), callee.output_size());
   for (int i = 0; i < num_outputs; ++i) {
-    const std::string &actual = std::string(caller.output(i));
-    const std::string &formal = std::string(callee.output(i));
+    const std::string &actual = caller.output(i);
+    const std::string &formal = callee.output(i);
     if (!actual.empty()) {
       auto it = callee_map.find(formal);
       if (it != callee_map.end()) {
@@ -383,9 +383,9 @@ public:
 
   void UpdateType(ValueInfoProto &valueInfo) {
     if (valueInfo.has_type()) {
-      value_types_by_name[std::string(valueInfo.name())] = valueInfo.mutable_type();
+      value_types_by_name[valueInfo.name()] = valueInfo.mutable_type();
     } else {
-      undefined_value_types_by_name[std::string(valueInfo.name())] = valueInfo.mutable_type();
+      undefined_value_types_by_name[valueInfo.name()] = valueInfo.mutable_type();
     }
   }
 
@@ -401,7 +401,7 @@ public:
 
   void ProcessConstant(const NodeProto &n) {
     if (IsOnnxDomainOp(n, "Constant") && n.output().size() == 1) {
-      const std::string &output_name = std::string(n.output(0));
+      const std::string &output_name = n.output(0);
       for (const auto &attr : n.attribute()) {
         if (attr.name() == "value") {
           if (attr.type() == AttributeProto::TENSOR && attr.has_t()) {
@@ -450,7 +450,7 @@ public:
 
   void Process(NodeProto &n) {
     // Resolve domain for node
-    auto dit = opset_imports.find(std::string(n.domain()));
+    auto dit = opset_imports.find(n.domain());
     if (dit == opset_imports.end()) {
       // Both "" (ONNX_DOMAIN) and "ai.onnx" (AI_ONNX_DOMAIN) refer to the default ONNX domain
       if (n.domain().sv() == ONNX_DOMAIN) {
@@ -492,7 +492,7 @@ public:
       for (int i = 0; i < n.output_size(); ++i) {
         // skip type and shape propagation for missing optional outputs.
         if (!n.output(i).empty())
-          UpdateType(std::string(n.output(i)), ctx.getOutputType(i));
+          UpdateType(n.output(i), ctx.getOutputType(i));
       }
       // Constant values are tracked to improve inference/checking for subsequent nodes.
       ProcessConstant(n);
@@ -574,7 +574,7 @@ public:
       for (int i = 0; i < tp.dims_size(); ++i) {
         shape->add_dim()->set_dim_value(tp.dims(i));
       }
-      ProcessInitializer(std::string(tp.name()), tp, initializer_type, input_data_by_name);
+      ProcessInitializer(tp.name(), tp, initializer_type, input_data_by_name);
     }
     for (const auto &tp : graph.sparse_initializer()) {
       TypeProto initializer_type;
@@ -585,8 +585,7 @@ public:
       for (int i = 0; i < tp.dims_size(); ++i) {
         shape->add_dim()->set_dim_value(tp.dims(i));
       }
-      ProcessInitializer(std::string(tp.values().name()), tp, initializer_type,
-                         input_sparse_data_by_name);
+      ProcessInitializer(tp.values().name(), tp, initializer_type, input_sparse_data_by_name);
     }
     for (auto &n : *graph.mutable_node()) {
       Process(n);
@@ -880,7 +879,7 @@ struct FunctionInferenceContext : public InferenceContext {
                            const ShapeInferenceOptions &options)
       : input_types_(input_types), options_(options), func_proto_(&func_proto) {
     for (const auto &attr : attributes) {
-      attributesByName_[std::string(attr.name())] = &attr;
+      attributesByName_[attr.name()] = &attr;
     }
     auto num_outputs = func_proto.output_size();
     for (int i = 0; i < num_outputs; i++) {
@@ -987,7 +986,7 @@ GraphInferencerImpl::doInferencing(const std::vector<const TypeProto *> &input_t
   int num_inputs = static_cast<int>(input_types.size());
   std::unordered_set<std::string> initializer_name_set;
   for (const auto &tp : g_->initializer()) {
-    initializer_name_set.insert(std::string(tp.name()));
+    initializer_name_set.insert(tp.name());
   }
 
   if (context_->ir_version >= 4) {
@@ -996,7 +995,7 @@ GraphInferencerImpl::doInferencing(const std::vector<const TypeProto *> &input_t
                            " were provided");
     }
     for (int i = 0; i < g_->input_size(); ++i) {
-      if (initializer_name_set.count(std::string(g_->input(i).name())) > 0) {
+      if (initializer_name_set.count(g_->input(i).name()) > 0) {
         fail_shape_inference(
             "Cannot use the same name as both a subgraph initializer and subgraph input: ",
             g_->input(i).name());
@@ -1011,11 +1010,10 @@ GraphInferencerImpl::doInferencing(const std::vector<const TypeProto *> &input_t
           "The number of graph input cannot be smaller than the number of node input");
     } else if (num_inputs < g_->input_size()) {
       for (int i = 0; i < g_->input_size(); ++i) {
-        if (i < num_inputs && initializer_name_set.count(std::string(g_->input(i).name())) > 0) {
+        if (i < num_inputs && initializer_name_set.count(g_->input(i).name()) > 0) {
           fail_shape_inference("Graph initializer names must appear after the actual inputs: ",
                                g_->input(i).name());
-        } else if (i >= num_inputs &&
-                   initializer_name_set.count(std::string(g_->input(i).name())) == 0) {
+        } else if (i >= num_inputs && initializer_name_set.count(g_->input(i).name()) == 0) {
           // Further check whether the additional input is in initializers
           fail_shape_inference("Cannot find missing input: ", g_->input(i).name(),
                                "in initializers. ");

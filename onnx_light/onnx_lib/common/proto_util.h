@@ -56,7 +56,7 @@ inline FunctionImplId GetFunctionImplId(const std::string &domain, const std::st
  *          @c "domain::name::overload".
  */
 inline FunctionImplId GetFunctionImplId(const FunctionProto &function) {
-  return GetFunctionImplId(std::string(function.ref_domain()), std::string(function.ref_name()),
+  return GetFunctionImplId(function.ref_domain(), function.ref_name(),
                            std::string(function.ref_overload()));
 }
 
@@ -72,8 +72,7 @@ inline FunctionImplId GetFunctionImplId(const FunctionProto &function) {
  *          @c "domain::op_type::overload".
  */
 inline FunctionImplId GetCalleeId(const NodeProto &node) {
-  return GetFunctionImplId(std::string(node.ref_domain()), std::string(node.ref_op_type()),
-                           std::string(node.ref_overload()));
+  return GetFunctionImplId(node.ref_domain(), node.ref_op_type(), std::string(node.ref_overload()));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

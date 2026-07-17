@@ -60,7 +60,7 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   // Try to read frame_step as a known constant.
   bool frame_step_known = false;
   int64_t frame_step_value = 0;
-  if (!std::string(node.input(1)).empty() && ctx.Has(node.input(1))) {
+  if (!node.input(1).empty() && ctx.Has(node.input(1))) {
     int64_t v = 0;
     if (ReadScalarInt(ctx.Get(node.input(1)), v)) {
       frame_step_value = v;
@@ -73,14 +73,14 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   // known as a constant.
   bool frame_length_known = false;
   int64_t frame_length_value = 0;
-  if (node.input_size() >= 4 && !std::string(node.input(3)).empty() && ctx.Has(node.input(3))) {
+  if (node.input_size() >= 4 && !node.input(3).empty() && ctx.Has(node.input(3))) {
     int64_t v = 0;
     if (ReadScalarInt(ctx.Get(node.input(3)), v)) {
       frame_length_value = v;
       frame_length_known = true;
     }
   }
-  if (!frame_length_known && node.input_size() >= 3 && !std::string(node.input(2)).empty() &&
+  if (!frame_length_known && node.input_size() >= 3 && !node.input(2).empty() &&
       ctx.Has(node.input(2))) {
     const OptimTensor &window = ctx.Get(node.input(2));
     if (window.Shape().Rank() == 1 && window.Shape()[0].IsInt()) {
@@ -90,7 +90,7 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   }
 
   // Compute output shape: [batch_size, n_frames, dft_unique_bins, 2].
-  const std::string sym = "STFT_" + std::string(node.output(0));
+  const std::string sym = "STFT_" + node.output(0);
   OptimShape out_shape;
   // batch_size from signal input.
   if (in_shape.Rank() >= 1) {

@@ -725,7 +725,7 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
   std::unordered_map<std::string, const ValueInfoProto *> vi_map;
   for (int i = 0; i < model.graph().value_info_size(); ++i) {
     const ValueInfoProto &vi = model.graph().value_info(i);
-    vi_map[std::string(vi.name())] = &vi;
+    vi_map[vi.name()] = &vi;
   }
   for (const std::string &name : {"xy", "S1", "S2", "zs"}) {
     EXPECT_TRUE(vi_map.count(name) > 0) << "value_info missing for " << name;

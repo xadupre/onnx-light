@@ -64,7 +64,7 @@ public:
   static void BindAttributes(const NodeProto &callnode, FunctionProto &callee) {
     AttributeMap map;
     for (const auto &attr : callnode.attribute()) {
-      map[std::string(attr.name())] = &attr;
+      map[attr.name()] = &attr;
     }
     AttributeBinder attr_binder(map);
     attr_binder.VisitFunction(callee);

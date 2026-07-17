@@ -231,7 +231,7 @@ bool IsValidExternalDataFilename(const std::string &name) {
 // carry inline raw_data; the bytes are left untouched so they can be written
 // out by a subsequent serialization call.
 void SetExternalDataLocation(TensorProto &tensor, const std::string &location) {
-  EXT_ENFORCE(tensor.has_raw_data(), "Tensor '", std::string(tensor.ref_name()),
+  EXT_ENFORCE(tensor.has_raw_data(), "Tensor '", tensor.ref_name(),
               "' does not have raw_data. Cannot set external data for this tensor.");
   tensor.clr_external_data();
   tensor.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
@@ -459,11 +459,11 @@ void ReadExternalDataEntries(const TensorProto &tensor, std::string &location, i
       length = ParseExternalDataInt64(entry.ref_value(), key.data());
     }
   }
-  EXT_ENFORCE(!location.empty(), "AlignExternalDataStreaming: tensor '",
-              std::string(tensor.ref_name()), "' has no external_data.location.");
-  EXT_ENFORCE(has_offset || offset == 0, "AlignExternalDataStreaming: tensor '",
-              std::string(tensor.ref_name()), "' has invalid external_data.offset.");
-  EXT_ENFORCE(length >= 0, "AlignExternalDataStreaming: tensor '", std::string(tensor.ref_name()),
+  EXT_ENFORCE(!location.empty(), "AlignExternalDataStreaming: tensor '", tensor.ref_name(),
+              "' has no external_data.location.");
+  EXT_ENFORCE(has_offset || offset == 0, "AlignExternalDataStreaming: tensor '", tensor.ref_name(),
+              "' has invalid external_data.offset.");
+  EXT_ENFORCE(length >= 0, "AlignExternalDataStreaming: tensor '", tensor.ref_name(),
               "' has no external_data.length.");
 }
 
@@ -733,7 +733,7 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
                              tensor.ref_data_location() == TensorProto::DataLocation::EXTERNAL &&
                              tensor.has_external_data();
     EXT_ENFORCE(!has_inline_raw || !is_external, "AlignExternalDataStreaming: tensor '",
-                std::string(tensor.ref_name()),
+                tensor.ref_name(),
                 "' has both inline raw_data and external_data; this is not supported.");
     if (!is_external) {
       // Inline tensors are preserved as-is in the destination .onnx. If they had large
@@ -741,7 +741,7 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
       // dropped the bytes; detect and refuse such cases so we never silently corrupt data.
       EXT_ENFORCE(!tensor.has_data_location() ||
                       tensor.ref_data_location() == TensorProto::DataLocation::DEFAULT,
-                  "AlignExternalDataStreaming: tensor '", std::string(tensor.ref_name()),
+                  "AlignExternalDataStreaming: tensor '", tensor.ref_name(),
                   "' is marked EXTERNAL but has no external_data entries.");
       continue;
     }
@@ -762,8 +762,8 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
     if (stream_it == src_fds.end()) {
       int fd = OpenForRead(src_weights_key);
       EXT_ENFORCE(fd >= 0, "AlignExternalDataStreaming: cannot open source weights file '",
-                  src_weights_key, "' for tensor '", std::string(tensor.ref_name()),
-                  "' (errno=", errno, ": ", SafeStrerror(errno), ").");
+                  src_weights_key, "' for tensor '", tensor.ref_name(), "' (errno=", errno, ": ",
+                  SafeStrerror(errno), ").");
       stream_it = src_fds.emplace(src_weights_key, ScopedFd(fd)).first;
     }
 
@@ -854,7 +854,7 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
                              tensor.ref_data_location() == TensorProto::DataLocation::EXTERNAL &&
                              tensor.has_external_data();
     EXT_ENFORCE(!has_inline_raw || !is_external, "SaveModelWithSharedExternalData: tensor '",
-                std::string(tensor.ref_name()),
+                tensor.ref_name(),
                 "' has both inline raw_data and external_data; this is not supported.");
 
     if (is_external) {
@@ -868,7 +868,7 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
       // Nothing to externalize (e.g. tensors using typed *_data fields, or empty raw_data).
       EXT_ENFORCE(!tensor.has_data_location() ||
                       tensor.ref_data_location() == TensorProto::DataLocation::DEFAULT,
-                  "SaveModelWithSharedExternalData: tensor '", std::string(tensor.ref_name()),
+                  "SaveModelWithSharedExternalData: tensor '", tensor.ref_name(),
                   "' is marked EXTERNAL but has no external_data entries.");
       continue;
     }
@@ -896,8 +896,8 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
         continue;
 #endif
       EXT_ENFORCE(w > 0, "SaveModelWithSharedExternalData: failed to write tensor '",
-                  std::string(tensor.ref_name()), "' to destination weights file (errno=", errno,
-                  ": ", SafeStrerror(errno), ").");
+                  tensor.ref_name(), "' to destination weights file (errno=", errno, ": ",
+                  SafeStrerror(errno), ").");
       p += w;
       left -= static_cast<size_t>(w);
     }

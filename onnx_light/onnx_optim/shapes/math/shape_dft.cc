@@ -70,8 +70,7 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
   if (axis_attr != nullptr) {
     axis = axis_attr->ref_i();
     axis_known = true;
-  } else if (node.input_size() >= 3 && !std::string(node.input(2)).empty() &&
-             ctx.Has(node.input(2))) {
+  } else if (node.input_size() >= 3 && !node.input(2).empty() && ctx.Has(node.input(2))) {
     int64_t v = 0;
     if (ReadScalarInt(ctx.Get(node.input(2)), v)) {
       axis = v;
@@ -94,7 +93,7 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
   // Try to read dft_length as a constant when available.
   bool dft_length_known = false;
   int64_t dft_length = 0;
-  if (node.input_size() >= 2 && !std::string(node.input(1)).empty() && ctx.Has(node.input(1))) {
+  if (node.input_size() >= 2 && !node.input(1).empty() && ctx.Has(node.input(1))) {
     int64_t v = 0;
     if (ReadScalarInt(ctx.Get(node.input(1)), v)) {
       dft_length = v;
@@ -108,7 +107,7 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
     ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
     return;
   }
-  const std::string sym = "DFT_" + std::string(node.output(0)) + "_axis";
+  const std::string sym = "DFT_" + node.output(0) + "_axis";
   for (int64_t d = 0; d < rank; ++d) {
     if (d == rank - 1) {
       out_shape.PushBack(OptimDim(out_last));

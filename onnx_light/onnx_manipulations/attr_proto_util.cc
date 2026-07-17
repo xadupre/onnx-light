@@ -50,6 +50,17 @@ namespace ONNX_LIGHT_NAMESPACE {
     return a;                                                                                      \
   }
 
+#define ADD_LIST_REPEATED_PROTO_ATTR_IMPL(type, enumType, field)                                   \
+  AttributeProto MakeAttribute(std::string attr_name, utils::RepeatedProtoField<type> values) {    \
+    AttributeProto a;                                                                              \
+    a.set_name(std::move(attr_name));                                                              \
+    a.set_type(enumType);                                                                          \
+    for (const auto &val : values) {                                                               \
+      a.add_##field(val);                                                                          \
+    }                                                                                              \
+    return a;                                                                                      \
+  }
+
 ADD_BASIC_ATTR_IMPL(float, AttributeProto::AttributeType::FLOAT, f)
 ADD_BASIC_ATTR_IMPL(int64_t, AttributeProto::AttributeType::INT, i)
 ADD_BASIC_ATTR_IMPL(int, AttributeProto::AttributeType::INT, i)
@@ -65,11 +76,16 @@ ADD_LIST_ATTR_IMPL(std::string, AttributeProto::AttributeType::STRINGS, strings)
 ADD_LIST_PROTO_ATTR_IMPL(TensorProto, AttributeProto::AttributeType::TENSORS, tensors)
 ADD_LIST_PROTO_ATTR_IMPL(GraphProto, AttributeProto::AttributeType::GRAPHS, graphs)
 ADD_LIST_PROTO_ATTR_IMPL(TypeProto, AttributeProto::AttributeType::TYPE_PROTOS, type_protos)
+ADD_LIST_REPEATED_PROTO_ATTR_IMPL(TensorProto, AttributeProto::AttributeType::TENSORS, tensors)
+ADD_LIST_REPEATED_PROTO_ATTR_IMPL(GraphProto, AttributeProto::AttributeType::GRAPHS, graphs)
+ADD_LIST_REPEATED_PROTO_ATTR_IMPL(TypeProto, AttributeProto::AttributeType::TYPE_PROTOS,
+                                  type_protos)
 
 #undef ADD_BASIC_ATTR_IMPL
 #undef ADD_ATTR_IMPL
 #undef ADD_LIST_ATTR_IMPL
 #undef ADD_LIST_PROTO_ATTR_IMPL
+#undef ADD_LIST_REPEATED_PROTO_ATTR_IMPL
 
 AttributeProto MakeRefAttribute(const std::string &attr_name, AttributeProto::AttributeType type) {
   return MakeRefAttribute(attr_name, attr_name, type);

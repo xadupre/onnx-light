@@ -43,6 +43,13 @@ template <typename T> inline const T &RepeatedProtoField<T>::operator[](size_t i
 
 template <typename T> void RepeatedProtoField<T>::push_back(const T &v) { add().CopyFrom(v); }
 
+template <typename T> void RepeatedProtoField<T>::extend(const std::vector<T> &v) {
+  values_.reserve(values_.size() + v.size());
+  for (const auto &value : v) {
+    push_back(value);
+  }
+}
+
 template <typename T> void RepeatedProtoField<T>::extend(const RepeatedProtoField<T> &v) {
   values_.reserve(values_.size() + v.values_.size());
   for (size_t i = 0; i < v.size(); ++i)

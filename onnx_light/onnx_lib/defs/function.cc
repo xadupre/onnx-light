@@ -118,11 +118,21 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
 }
 
 std::vector<NodeProto> FunctionBodyHelper::BuildNodes(const std::vector<NodeDef> &node_defs) {
-  std::vector<NodeProto> nodes(node_defs.size());
+  NodeList repeated_nodes;
+  BuildNodes(repeated_nodes, node_defs);
+  std::vector<NodeProto> nodes;
+  nodes.reserve(repeated_nodes.size());
+  for (const auto &node : repeated_nodes) {
+    nodes.push_back(node);
+  }
+  return nodes;
+}
 
-  for (size_t i = 0; i < node_defs.size(); i++) {
-    const NodeDef &node = node_defs[i];
-    NodeProto &n = nodes[i];
+void FunctionBodyHelper::BuildNodes(NodeList &nodes, const std::vector<NodeDef> &node_defs) {
+  nodes.reserve(nodes.size() + node_defs.size());
+
+  for (const NodeDef &node : node_defs) {
+    NodeProto &n = nodes.add();
 
     n.set_op_type(node.op_type);
     n.set_domain(node.domain);
@@ -136,8 +146,6 @@ std::vector<NodeProto> FunctionBodyHelper::BuildNodes(const std::vector<NodeDef>
       *n.add_attribute() = attr.proto;
     }
   }
-
-  return nodes;
 }
 
 void FunctionBodyHelper::BuildNodes(FunctionProto &functionProto,
@@ -161,7 +169,7 @@ void FunctionBodyHelper::BuildNodes(FunctionProto &functionProto,
 
 bool FunctionBodyHelper::BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
                                             const std::vector<NodeDef> &node_defs,
-                                            const std::vector<OperatorSetIdProto> &relied_opsets) {
+                                            const OperatorSetList &relied_opsets) {
   BuildNodes(functionProto, node_defs);
 
   for (const auto &relied_opset : relied_opsets) {
@@ -177,6 +185,12 @@ bool FunctionBodyHelper::BuildFunctionProto(FunctionProto &functionProto, const 
     *functionProto.add_output() = output.GetName();
   }
   return true;
+}
+
+bool FunctionBodyHelper::BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
+                                            const std::vector<NodeDef> &node_defs,
+                                            const std::vector<OperatorSetIdProto> &relied_opsets) {
+  return BuildFunctionProto(functionProto, schema, node_defs, OperatorSetList(relied_opsets));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

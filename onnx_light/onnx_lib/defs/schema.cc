@@ -787,7 +787,8 @@ OpSchema &OpSchema::FunctionBody(const char *func_body, int opset_version) {
   return *this;
 }
 
-OpSchema &OpSchema::FunctionBody(const std::vector<NodeProto> &func_nodes, int opset_version) {
+OpSchema &OpSchema::FunctionBody(const utils::RepeatedProtoField<NodeProto> &func_nodes,
+                                 int opset_version) {
   if (opset_version == OpSchema::kUninitializedSinceVersion &&
       since_version_ != OpSchema::kUninitializedSinceVersion) {
     opset_version = since_version_;
@@ -805,8 +806,12 @@ OpSchema &OpSchema::FunctionBody(const std::vector<NodeProto> &func_nodes, int o
   return *this;
 }
 
-OpSchema &OpSchema::FunctionBody(const std::vector<NodeProto> &func_nodes,
-                                 const std::vector<OperatorSetIdProto> &relied_opsets,
+OpSchema &OpSchema::FunctionBody(const std::vector<NodeProto> &func_nodes, int opset_version) {
+  return FunctionBody(utils::RepeatedProtoField<NodeProto>(func_nodes), opset_version);
+}
+
+OpSchema &OpSchema::FunctionBody(const utils::RepeatedProtoField<NodeProto> &func_nodes,
+                                 const utils::RepeatedProtoField<OperatorSetIdProto> &relied_opsets,
                                  int opset_version) {
   if (opset_version == OpSchema::kUninitializedSinceVersion &&
       since_version_ != OpSchema::kUninitializedSinceVersion) {
@@ -827,6 +832,13 @@ OpSchema &OpSchema::FunctionBody(const std::vector<NodeProto> &func_nodes,
   UpdateFunctionProtoOpsetImportVersion(*function_proto, opset_version);
   opset_version_to_function_body_.emplace(opset_version, std::move(function_proto));
   return *this;
+}
+
+OpSchema &OpSchema::FunctionBody(const std::vector<NodeProto> &func_nodes,
+                                 const std::vector<OperatorSetIdProto> &relied_opsets,
+                                 int opset_version) {
+  return FunctionBody(utils::RepeatedProtoField<NodeProto>(func_nodes),
+                      utils::RepeatedProtoField<OperatorSetIdProto>(relied_opsets), opset_version);
 }
 
 const FunctionProto *OpSchema::GetFunction(int requested_opset_version, bool validate) const {

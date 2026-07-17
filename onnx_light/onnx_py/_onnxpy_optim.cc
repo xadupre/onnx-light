@@ -1195,13 +1195,15 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.attr("NODE_MEMORY_INTERMEDIATES_KEY") = onnx_annotations::kNodeMemoryIntermediatesKey;
   shape_mod.attr("NODE_MEMORY_OUTPUTS_KEY") = onnx_annotations::kNodeMemoryOutputsKey;
 
-  auto copy_node_list = [](nb::list nodes) {
-    std::vector<NodeProto> copied;
-    copied.reserve(nodes.size());
-    for (nb::handle h : nodes) {
+  auto with_node_list = [](nb::handle nodes, auto &&fn) {
+    if (nb::isinstance<utils::RepeatedProtoField<NodeProto>>(nodes)) {
+      return fn(nb::cast<utils::RepeatedProtoField<NodeProto> &>(nodes));
+    }
+    utils::RepeatedProtoField<NodeProto> copied;
+    for (nb::handle h : nb::borrow<nb::iterable>(nodes)) {
       copied.push_back(nb::cast<const NodeProto &>(h));
     }
-    return copied;
+    return fn(copied);
   };
 
   nb::class_<onnx_annotations::ComputeContext>(
@@ -1238,10 +1240,12 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "for API compatibility and has no effect.")
       .def(
           "compute_value_and_node_tags",
-          [copy_node_list](onnx_annotations::ComputeContext &self, nb::list nodes, int verbose) {
+          [with_node_list](onnx_annotations::ComputeContext &self, nb::handle nodes, int verbose) {
             (void)verbose;
-            const auto inferred = self.ComputeValueAndNodeTags(copy_node_list(nodes));
-            return nb::make_tuple(inferred.first, inferred.second);
+            return with_node_list(nodes, [&self](const auto &typed_nodes) {
+              const auto inferred = self.ComputeValueAndNodeTags(typed_nodes);
+              return nb::make_tuple(inferred.first, inferred.second);
+            });
           },
           nb::arg("nodes"), nb::arg("verbose") = 0,
           "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for a node list and "
@@ -1437,11 +1441,13 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "``function``. ``verbose`` is currently accepted for API compatibility and has no effect.");
   shape_mod.def(
       "compute_value_and_node_tags",
-      [copy_node_list](nb::list nodes, int verbose) {
+      [with_node_list](nb::handle nodes, int verbose) {
         (void)verbose;
-        onnx_annotations::ComputeContext ctx;
-        const auto inferred = ctx.ComputeValueAndNodeTags(copy_node_list(nodes));
-        return nb::make_tuple(inferred.first, inferred.second);
+        return with_node_list(nodes, [](const auto &typed_nodes) {
+          onnx_annotations::ComputeContext ctx;
+          const auto inferred = ctx.ComputeValueAndNodeTags(typed_nodes);
+          return nb::make_tuple(inferred.first, inferred.second);
+        });
       },
       nb::arg("nodes"), nb::arg("verbose") = 0,
       "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for a node list. "
@@ -1462,11 +1468,13 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       nb::arg("model"), "Writes inferred value/node tags into ``model.graph`` metadata.");
   shape_mod.def(
       "write_value_and_node_tags_to_metadata",
-      [copy_node_list](nb::list nodes) {
-        const auto inferred = onnx_annotations::InferValueAndNodeTags(copy_node_list(nodes));
+      [with_node_list](nb::handle nodes) {
+        const auto inferred = with_node_list(nodes, [](const auto &typed_nodes) {
+          return onnx_annotations::InferValueAndNodeTags(typed_nodes);
+        });
         const auto &node_tags = inferred.second;
         std::size_t i = 0;
-        for (nb::handle h : nodes) {
+        for (nb::handle h : nb::borrow<nb::iterable>(nodes)) {
           if (i < node_tags.size() && !node_tags[i].empty()) {
             nb::cast<NodeProto &>(h).add_metadata(onnx_annotations::kNodeTagMetadataKey,
                                                   node_tags[i]);

@@ -42,8 +42,8 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 2,
                       "ComputeShapeUnsqueeze: Unsqueeze requires two inputs (data, axes).");
 
-  const OptimTensor &data = ctx.Get(std::string(node.input(0)));
-  const OptimTensor &axes_tensor = ctx.Get(std::string(node.input(1)));
+  const OptimTensor &data = ctx.Get(node.input(0));
+  const OptimTensor &axes_tensor = ctx.Get(node.input(1));
   const int64_t input_rank = static_cast<int64_t>(data.Shape().Rank());
 
   OptimShape out_shape;

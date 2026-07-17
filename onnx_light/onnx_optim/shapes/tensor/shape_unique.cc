@@ -22,7 +22,7 @@ void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Unique", "ComputeShapeUnique");
   EXT_ENFORCE_INVALID(!(node.input_size() < 1), "ComputeShapeUnique: Unique requires one input.");
 
-  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
+  const OptimTensor &input = ctx.Get(node.input(0));
   const TensorType dtype = input.Dtype();
   const OptimShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());

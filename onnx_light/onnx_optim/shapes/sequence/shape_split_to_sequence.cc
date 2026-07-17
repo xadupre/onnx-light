@@ -50,7 +50,7 @@ void ComputeShapeSplitToSequence(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeSplitToSequence: SplitToSequence requires at least one input.");
 
-  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
+  const OptimTensor &input = ctx.Get(node.input(0));
   const OptimShape &in_shape = input.Shape();
   const TensorType elem_dtype = input.Dtype();
 
@@ -85,7 +85,7 @@ void ComputeShapeSplitToSequence(ShapesContext &ctx, const NodeProto &node) {
       sizes = std::vector<int64_t>(static_cast<std::size_t>(axis_dim), int64_t{1});
     }
   } else {
-    const OptimTensor &split_t = ctx.Get(std::string(node.input(1)));
+    const OptimTensor &split_t = ctx.Get(node.input(1));
     const OptimShape &split_shape = split_t.Shape();
     split_is_scalar = split_shape.Rank() == 0;
     if (std::optional<std::vector<int64_t>> v = TryReadIntVector(split_t); v.has_value()) {

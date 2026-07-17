@@ -24,8 +24,8 @@ void ComputeShapeTensorScatter(ShapesContext &ctx, const NodeProto &node) {
                       "ComputeShapeTensorScatter: TensorScatter requires at least two inputs "
                       "(past_cache, update).");
 
-  const OptimTensor &past_cache = ctx.Get(std::string(node.input(0)));
-  const OptimTensor &update = ctx.Get(std::string(node.input(1)));
+  const OptimTensor &past_cache = ctx.Get(node.input(0));
+  const OptimTensor &update = ctx.Get(node.input(1));
 
   const OptimShape &cache_shape = past_cache.Shape();
   const OptimShape &update_shape = update.Shape();
@@ -56,7 +56,7 @@ void ComputeShapeTensorScatter(ShapesContext &ctx, const NodeProto &node) {
   }
 
   if (node.input_size() >= 3 && !std::string(node.input(2)).empty()) {
-    const OptimTensor &write_indices = ctx.Get(std::string(node.input(2)));
+    const OptimTensor &write_indices = ctx.Get(node.input(2));
     EXT_ENFORCE_INVALID(write_indices.Shape().Rank() == 1,
                         "ComputeShapeTensorScatter: 'write_indices' must have rank 1.");
   }

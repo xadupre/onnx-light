@@ -3614,7 +3614,7 @@ TEST(RunNodes, RunNodeDispatchesCustomKernelForUnknownOp) {
                                 factor = a.f();
                               }
                             }
-                            const Tensor &in = ctx.Get(std::string(node.input(0)));
+                            const Tensor &in = ctx.Get(node.input(0));
                             std::vector<float> out(static_cast<size_t>(in.element_count()));
                             const float *src = in.AsFloat();
                             for (size_t i = 0; i < out.size(); ++i) {
@@ -3649,7 +3649,7 @@ TEST(RunNodes, RunNodeCustomKernelOverridesBuiltin) {
   // Replace Abs with negation: a custom override must take precedence over
   // the entry that KernelDispatchTable() would otherwise resolve.
   rt.RegisterCustomKernel("", "Abs", [](const NodeProto &node, RuntimeContext &ctx) {
-    const Tensor &in = ctx.Get(std::string(node.input(0)));
+    const Tensor &in = ctx.Get(node.input(0));
     std::vector<float> out(static_cast<size_t>(in.element_count()));
     const float *src = in.AsFloat();
     for (size_t i = 0; i < out.size(); ++i) {
@@ -3706,7 +3706,7 @@ TEST(RunModel, CustomKernelChainsWithBuiltinKernels) {
         factor = node.attribute(i).f();
       }
     }
-    const Tensor &in = ctx.Get(std::string(node.input(0)));
+    const Tensor &in = ctx.Get(node.input(0));
     std::vector<float> out(static_cast<size_t>(in.element_count()));
     const float *src = in.AsFloat();
     for (size_t i = 0; i < out.size(); ++i) {

@@ -49,7 +49,7 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeSTFT: STFT requires at least two inputs (signal, frame_step).");
 
-  const OptimTensor &signal = ctx.Get(std::string(node.input(0)));
+  const OptimTensor &signal = ctx.Get(node.input(0));
   const TensorType dtype = signal.Dtype();
   const OptimShape &in_shape = signal.Shape();
 
@@ -60,9 +60,9 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   // Try to read frame_step as a known constant.
   bool frame_step_known = false;
   int64_t frame_step_value = 0;
-  if (!std::string(node.input(1)).empty() && ctx.Has(std::string(node.input(1)))) {
+  if (!std::string(node.input(1)).empty() && ctx.Has(node.input(1))) {
     int64_t v = 0;
-    if (ReadScalarInt(ctx.Get(std::string(node.input(1))), v)) {
+    if (ReadScalarInt(ctx.Get(node.input(1)), v)) {
       frame_step_value = v;
       frame_step_known = true;
     }
@@ -73,17 +73,16 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   // known as a constant.
   bool frame_length_known = false;
   int64_t frame_length_value = 0;
-  if (node.input_size() >= 4 && !std::string(node.input(3)).empty() &&
-      ctx.Has(std::string(node.input(3)))) {
+  if (node.input_size() >= 4 && !std::string(node.input(3)).empty() && ctx.Has(node.input(3))) {
     int64_t v = 0;
-    if (ReadScalarInt(ctx.Get(std::string(node.input(3))), v)) {
+    if (ReadScalarInt(ctx.Get(node.input(3)), v)) {
       frame_length_value = v;
       frame_length_known = true;
     }
   }
   if (!frame_length_known && node.input_size() >= 3 && !std::string(node.input(2)).empty() &&
-      ctx.Has(std::string(node.input(2)))) {
-    const OptimTensor &window = ctx.Get(std::string(node.input(2)));
+      ctx.Has(node.input(2))) {
+    const OptimTensor &window = ctx.Get(node.input(2));
     if (window.Shape().Rank() == 1 && window.Shape()[0].IsInt()) {
       frame_length_value = window.Shape()[0].AsInt();
       frame_length_known = true;

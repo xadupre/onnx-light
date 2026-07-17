@@ -72,7 +72,7 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   const OptimSequence &input_seq = ctx.GetSequence(input_seq_name);
   const TensorType elem_dtype = input_seq.ElemDtype();
   const OptimShape elem_shape = CommonElemShape(input_seq);
-  local.Set(std::string(body.input()[0].name()), OptimTensor(nullptr, elem_dtype, elem_shape));
+  local.Set(body.input()[0].name(), OptimTensor(nullptr, elem_dtype, elem_shape));
 
   for (int i = 1; i < node.input_size(); ++i) {
     const std::string outer_name = std::string(node.input(i));
@@ -108,7 +108,7 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &body_out = local.Get(std::string(body.output()[i].name()));
+    const OptimTensor &body_out = local.Get(body.output()[i].name());
     OptimDim out_length = input_seq.Length().IsInt() ? OptimDim(input_seq.Length().AsInt())
                                                      : OptimDim("SequenceMap_" + node_out + "_len");
     ctx.SetSequence(node_out, OptimSequence(body_out.Dtype(), std::move(out_length)));

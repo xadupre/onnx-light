@@ -23,8 +23,8 @@ void ComputeShapeGatherElements(ShapesContext &ctx, const NodeProto &node) {
       !(node.input_size() < 2),
       "ComputeShapeGatherElements: GatherElements requires two inputs (data, indices).");
 
-  const OptimTensor &data = ctx.Get(std::string(node.input(0)));
-  const OptimTensor &indices = ctx.Get(std::string(node.input(1)));
+  const OptimTensor &data = ctx.Get(node.input(0));
+  const OptimTensor &indices = ctx.Get(node.input(1));
 
   // Output has the same shape as indices and the same dtype as data.
   ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), indices.Shape()));

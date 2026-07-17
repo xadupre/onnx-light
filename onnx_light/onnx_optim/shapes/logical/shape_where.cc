@@ -23,8 +23,7 @@ void ComputeShapeWhere(ShapesContext &ctx, const NodeProto &node, const char *co
   const onnx_optim::OptimShape xy_shape = BroadcastShapes(x_tensor.Shape(), y_tensor.Shape());
   const onnx_optim::OptimShape out_shape = BroadcastShapes(condition_tensor.Shape(), xy_shape);
 
-  ctx.Set(std::string(node.output(0)),
-          onnx_optim::OptimTensor(nullptr, x_tensor.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), onnx_optim::OptimTensor(nullptr, x_tensor.Dtype(), std::move(out_shape)));
 }
 
 } // namespace logical

@@ -93,7 +93,7 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapeResize: Resize requires at least one input.");
 
-  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
+  const OptimTensor &input = ctx.Get(node.input(0));
   const OptimShape &input_shape = input.Shape();
   const std::size_t rank = input_shape.Rank();
 

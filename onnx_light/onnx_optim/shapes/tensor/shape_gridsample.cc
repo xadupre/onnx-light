@@ -45,8 +45,8 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeGridSample: GridSample requires two inputs (X, grid).");
 
-  const OptimTensor &x = ctx.Get(std::string(node.input(0)));
-  const OptimTensor &grid = ctx.Get(std::string(node.input(1)));
+  const OptimTensor &x = ctx.Get(node.input(0));
+  const OptimTensor &grid = ctx.Get(node.input(1));
 
   const OptimShape &x_shape = x.Shape();
   const OptimShape &grid_shape = grid.Shape();

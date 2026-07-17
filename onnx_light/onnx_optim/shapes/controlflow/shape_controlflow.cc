@@ -220,10 +220,8 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
       local.Set(name, std::move(tensor));
     }
   }
-  local.Set(std::string(body.input()[0].name()),
-            OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
-  local.Set(std::string(body.input()[1].name()),
-            OptimTensor(nullptr, TensorType::kBool, OptimShape{}));
+  local.Set(body.input()[0].name(), OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
+  local.Set(body.input()[1].name(), OptimTensor(nullptr, TensorType::kBool, OptimShape{}));
   for (int i = 0; i < n_carried; ++i) {
     const std::string v_initial_name = std::string(node.input(2 + i));
     EXT_ENFORCE_INVALID(!v_initial_name.empty(), "ComputeShapeLoop: 'v_initial' input #",
@@ -441,10 +439,10 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
       for (std::size_t d = 1; d < state_in.Shape().Rank(); ++d) {
         body_state_shape.PushBack(state_in.Shape()[d]);
       }
-      local.Set(std::string(body.input()[i].name()),
+      local.Set(body.input()[i].name(),
                 OptimTensor(nullptr, state_in.Dtype(), std::move(body_state_shape)));
     } else {
-      local.Set(std::string(body.input()[i].name()), OptimTensor(state_in));
+      local.Set(body.input()[i].name(), OptimTensor(state_in));
     }
   }
 
@@ -522,7 +520,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
       continue;
     }
     const OptimTensor &state_in = ctx.Get(std::string(node.input(scan8_offset + i)));
-    const OptimTensor &v_out = local.Get(std::string(body.output()[i].name()));
+    const OptimTensor &v_out = local.Get(body.output()[i].name());
     EXT_ENFORCE_INVALID(v_out.Dtype() == state_in.Dtype(), "ComputeShapeScan: body output #",
                         std::to_string(i),
                         " has a different element type than the matching state input.");

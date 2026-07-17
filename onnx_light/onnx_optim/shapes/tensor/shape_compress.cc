@@ -27,7 +27,7 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeCompress: Compress requires two inputs (input, condition).");
 
-  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
+  const OptimTensor &input = ctx.Get(node.input(0));
   const TensorType dtype = input.Dtype();
   const OptimShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());

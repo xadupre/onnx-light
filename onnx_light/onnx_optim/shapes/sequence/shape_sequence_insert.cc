@@ -21,8 +21,8 @@ void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 2,
                       "ComputeShapeSequenceInsert: SequenceInsert requires at least two inputs.");
 
-  const OptimSequence &seq = ctx.GetSequence(std::string(node.input(0)));
-  const OptimTensor &inserted = ctx.Get(std::string(node.input(1)));
+  const OptimSequence &seq = ctx.GetSequence(node.input(0));
+  const OptimTensor &inserted = ctx.Get(node.input(1));
 
   const bool seq_has_dtype = seq.HasElemDtype();
   const TensorType out_dtype = seq_has_dtype ? seq.ElemDtype() : inserted.Dtype();

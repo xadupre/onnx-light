@@ -73,7 +73,7 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapePad: Pad requires at least one input.");
 
-  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
+  const OptimTensor &input = ctx.Get(node.input(0));
   const TensorType dtype = input.Dtype();
   const OptimShape &in_shape = input.Shape();
   const std::size_t rank = in_shape.Rank();
@@ -105,11 +105,11 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
     }
   } else {
     // v11+: pads are input(1); v18+ adds optional axes input(3).
-    const OptimTensor &pads_input = ctx.Get(std::string(node.input(1)));
+    const OptimTensor &pads_input = ctx.Get(node.input(1));
     std::vector<int64_t> axes_values;
     bool axes_known = true;
     if (node.input_size() >= 4 && !std::string(node.input(3)).empty()) {
-      const OptimTensor &axes_input = ctx.Get(std::string(node.input(3)));
+      const OptimTensor &axes_input = ctx.Get(node.input(3));
       if (axes_input.HasValueAsShape()) {
         const OptimShape &axes_shape = axes_input.ValueAsShape();
         for (std::size_t i = 0; i < axes_shape.Rank(); ++i) {

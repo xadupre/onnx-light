@@ -43,7 +43,7 @@ void ComputeShapeSpaceToDepth(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapeSpaceToDepth: SpaceToDepth requires one input.");
 
-  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
+  const OptimTensor &input = ctx.Get(node.input(0));
   const OptimShape &input_shape = input.Shape();
 
   const AttributeProto *blocksize_attr = FindAttribute(node, "blocksize");

@@ -24,8 +24,8 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeAffineGrid: AffineGrid requires two inputs (theta, size).");
 
-  const OptimTensor &theta = ctx.Get(std::string(node.input(0)));
-  const OptimTensor &size_tensor = ctx.Get(std::string(node.input(1)));
+  const OptimTensor &theta = ctx.Get(node.input(0));
+  const OptimTensor &size_tensor = ctx.Get(node.input(1));
 
   const OptimShape &theta_shape = theta.Shape();
   EXT_ENFORCE_INVALID(

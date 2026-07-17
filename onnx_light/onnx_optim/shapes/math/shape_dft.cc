@@ -49,7 +49,7 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapeDFT: DFT requires at least one input (input).");
 
-  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
+  const OptimTensor &input = ctx.Get(node.input(0));
   const TensorType dtype = input.Dtype();
   const OptimShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
@@ -71,9 +71,9 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
     axis = axis_attr->ref_i();
     axis_known = true;
   } else if (node.input_size() >= 3 && !std::string(node.input(2)).empty() &&
-             ctx.Has(std::string(node.input(2)))) {
+             ctx.Has(node.input(2))) {
     int64_t v = 0;
-    if (ReadScalarInt(ctx.Get(std::string(node.input(2))), v)) {
+    if (ReadScalarInt(ctx.Get(node.input(2)), v)) {
       axis = v;
       axis_known = true;
     }
@@ -94,10 +94,9 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
   // Try to read dft_length as a constant when available.
   bool dft_length_known = false;
   int64_t dft_length = 0;
-  if (node.input_size() >= 2 && !std::string(node.input(1)).empty() &&
-      ctx.Has(std::string(node.input(1)))) {
+  if (node.input_size() >= 2 && !std::string(node.input(1)).empty() && ctx.Has(node.input(1))) {
     int64_t v = 0;
-    if (ReadScalarInt(ctx.Get(std::string(node.input(1))), v)) {
+    if (ReadScalarInt(ctx.Get(node.input(1)), v)) {
       dft_length = v;
       dft_length_known = true;
     }

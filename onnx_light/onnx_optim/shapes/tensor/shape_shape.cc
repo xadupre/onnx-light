@@ -42,7 +42,7 @@ void ComputeShapeShape(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Shape", "ComputeShapeShape");
   EXT_ENFORCE_INVALID(node.input_size() >= 1, "ComputeShapeShape: Shape requires one input.");
 
-  const OptimTensor &input = ctx.Get(std::string(node.input(0)));
+  const OptimTensor &input = ctx.Get(node.input(0));
   const int64_t rank = static_cast<int64_t>(input.Shape().Rank());
 
   const int64_t start = ClampAxis(GetAttributeOr(node, "start", static_cast<int64_t>(0)), rank);

@@ -40,6 +40,20 @@ LightOpSchema MakeFlexAttentionSchema() {
       {
           {"T1", FlexAttentionFloatTypes(), "Constrain Q, K, V to float tensors."},
       },
+      {
+          AttributeParam{"scale", "Scaling factor for Q*K^T. Defaults to 1/sqrt(head_size).",
+                         AttributeType::FLOAT, false, std::monostate{}},
+          AttributeParam{"softmax_precision", "Floating-point precision for softmax computation.",
+                         AttributeType::INT, false, std::monostate{}},
+          AttributeParam{"score_mod",
+                         "Optional score modifier subgraph with 1 rank-4 tensor input and 1 "
+                         "rank-4 tensor output of the same shape and element type.",
+                         AttributeType::GRAPH, false, std::monostate{}},
+          AttributeParam{"prob_mod",
+                         "Optional probability modifier subgraph with 1 rank-4 tensor input and "
+                         "1 rank-4 tensor output of the same shape and element type.",
+                         AttributeType::GRAPH, false, std::monostate{}},
+      },
       /*has_function_implementation=*/true);
 }
 

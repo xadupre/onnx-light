@@ -1530,7 +1530,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       [](utils::RepeatedStringField &self) -> nb::object {
         nb::list values;
         for (const auto &it : self) {
-          values.append(nb::cast(it));
+          values.append(nb::str(it.data(), it.size()));
         }
         return nb::iter(values);
       },

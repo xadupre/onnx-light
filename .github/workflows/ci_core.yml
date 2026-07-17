@@ -219,12 +219,12 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
 
-      # Windows builds ONNX_LIGHT_BUILD_TESTS=OFF because:
-      #   1. C++ tests are already compiled and run in core_tests_ubuntu (Linux).
-      #   2. Skipping the 100+ test translation units saves ~10 minutes of MSVC
-      #      compilation per PR push.
-      # sccache caches compiled objects in GitHub Actions cache so that repeated
-      # runs (e.g. after a rebase) that do not touch C++ source are near-instant.
+      # Windows skips C++ tests: they are already compiled and run in
+      # core_tests_ubuntu (Linux), so skipping the 100+ test translation units
+      # saves ~10 minutes of MSVC compilation per PR push.
+      # sccache (set up above) caches compiled objects in GitHub Actions cache so
+      # that repeated runs that do not touch C++ source are near-instant on both
+      # Windows and macOS.
       - name: Build and Install package (Windows)
         if: runner.os == 'Windows'
         env:

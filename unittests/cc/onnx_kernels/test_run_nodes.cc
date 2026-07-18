@@ -2791,6 +2791,8 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  // Attach allocator first so every tensor inserted into this RuntimeContext
+  // follows allocator-backed subgraph execution semantics.
   rt.set_allocator(&alloc);
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
@@ -2890,6 +2892,8 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  // Attach allocator first so every tensor inserted into this RuntimeContext
+  // follows allocator-backed subgraph execution semantics.
   rt.set_allocator(&alloc);
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));

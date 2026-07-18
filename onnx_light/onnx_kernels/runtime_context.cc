@@ -77,8 +77,9 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
   tensor.SetAllocation(allocator, allocated);
 }
 
-void EnsureAllocatorOwnedTensorCopy(Tensor &tensor, RawBufferAllocator *allocator) {
+void MakeAllocatorOwnedTensorCopy(Tensor &tensor, RawBufferAllocator *allocator) {
   // STRING tensors keep payload in string_data and are not allocator-backed.
+  // A null allocator keeps the tensor unchanged.
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return;
   }
@@ -90,13 +91,11 @@ void EnsureAllocatorOwnedTensorCopy(Tensor &tensor, RawBufferAllocator *allocato
   const size_t n_bytes = tensor.size_bytes();
   RawBuffer *allocated = allocator->Allocate(n_bytes);
   EXT_ENFORCE(allocated != nullptr,
-              "RuntimeContext::MakeSubgraphContext: allocator returned a null RawBuffer "
-              "allocation.");
+              "MakeAllocatorOwnedTensorCopy: allocator returned a null RawBuffer allocation.");
   if (n_bytes > 0) {
     const uint8_t *src = tensor.bytes();
     EXT_ENFORCE(src != nullptr,
-                "RuntimeContext::MakeSubgraphContext: allocator-backed tensor has a null data "
-                "pointer.");
+                "MakeAllocatorOwnedTensorCopy: allocator-backed tensor has a null data pointer.");
     std::memcpy(allocated->data(), src, n_bytes);
   }
   tensor.ClearAllocation();
@@ -500,7 +499,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   // therefore needs allocator-owned deep copies to prevent parent/child
   // contexts from aliasing the same RawBuffer.
   for (auto &kv : child.tensors()) {
-    EnsureAllocatorOwnedTensorCopy(kv.second, allocator_);
+    MakeAllocatorOwnedTensorCopy(kv.second, allocator_);
   }
   child.sequences() = sequences_;
   child.set_verbose(verbose_);

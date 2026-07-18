@@ -25,8 +25,8 @@ void ReleaseTensorAllocation(Tensor &tensor) {
   tensor.ClearAllocation();
 }
 
-bool HasOtherAllocationUser(const std::unordered_map<std::string, Tensor> &tensors,
-                            const std::string &name, RawBuffer *allocation) {
+bool IsAllocationSharedByOtherTensors(const std::unordered_map<std::string, Tensor> &tensors,
+                                      const std::string &name, RawBuffer *allocation) {
   for (const auto &kv : tensors) {
     if (kv.first == name || !kv.second.has_allocation()) {
       continue;
@@ -38,13 +38,13 @@ bool HasOtherAllocationUser(const std::unordered_map<std::string, Tensor> &tenso
   return false;
 }
 
-void ReleaseTensorAllocationIfUnshared(const std::unordered_map<std::string, Tensor> &tensors,
-                                       const std::string &name, Tensor &tensor) {
+void DetachOrFreeTensorAllocation(const std::unordered_map<std::string, Tensor> &tensors,
+                                  const std::string &name, Tensor &tensor) {
   if (!tensor.has_allocation()) {
     return;
   }
   RawBuffer *allocation = tensor.allocation();
-  if (HasOtherAllocationUser(tensors, name, allocation)) {
+  if (IsAllocationSharedByOtherTensors(tensors, name, allocation)) {
     tensor.ClearAllocation();
     return;
   }
@@ -286,7 +286,7 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
   }
   auto it = tensors_.find(name);
   if (it != tensors_.end()) {
-    ReleaseTensorAllocationIfUnshared(tensors_, name, it->second);
+    DetachOrFreeTensorAllocation(tensors_, name, it->second);
   }
   tensors_[name] = std::move(tensor);
 }
@@ -296,7 +296,7 @@ bool RuntimeContext::Remove(const std::string &name) {
   if (it == tensors_.end()) {
     return false;
   }
-  ReleaseTensorAllocationIfUnshared(tensors_, name, it->second);
+  DetachOrFreeTensorAllocation(tensors_, name, it->second);
   tensors_.erase(it);
   if (events_enabled_) {
     events_.push_back(MakeRemoveEvent(RuntimeEventKind::kUnknown, name,
@@ -487,10 +487,11 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.set_allocator(allocator_);
   child.functions() = functions_;
   child.tensors() = tensors_;
-  // ``Tensor`` holds raw allocator pointers. Copying allocator-backed tensors
+  // Tensor holds raw allocator pointers. Copying allocator-backed tensors
   // into a child context must therefore detach the storage from allocator
   // ownership to avoid the child destructor releasing buffers still owned by
-  // the parent context.
+  // the parent context. Specific callers may still override the child
+  // allocator for fallback execution paths.
   for (auto &kv : child.tensors()) {
     DetachAllocatorBackedTensorCopy(kv.second);
   }

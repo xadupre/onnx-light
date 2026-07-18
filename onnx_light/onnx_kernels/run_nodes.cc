@@ -82,6 +82,8 @@ namespace {
 // look up model-local FunctionProto definitions in
 // ``RuntimeContext::functions``. The default ONNX domain (empty
 // ``NodeProto::domain``) is normalised to ``ai.onnx``.
+// Returns a tensor copy detached from allocator ownership so it can be
+// propagated from a subgraph context back to a parent context safely.
 Tensor CopyTensorForParent(const Tensor &tensor) {
   Tensor out = tensor;
   if (!out.has_allocation()) {
@@ -101,6 +103,7 @@ Tensor CopyTensorForParent(const Tensor &tensor) {
   return out;
 }
 
+// Returns a sequence copy detached from allocator ownership tensor-by-tensor.
 Sequence CopySequenceForParent(const Sequence &sequence) {
   Sequence out = sequence;
   for (Tensor &t : out.values) {

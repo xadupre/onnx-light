@@ -89,7 +89,7 @@ namespace {
 std::string FunctionLookupKey(const std::string &domain, const std::string &op_type,
                               const std::string &overload) {
   if (domain.empty())
-      return std::string(":") + op_type + ":" + overload;
+    return std::string(":") + op_type + ":" + overload;
   return domain + ":" + op_type + ":" + overload;
 }
 
@@ -358,7 +358,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
 
   // Propagate loop-carried outputs (sequence- or tensor-typed) to caller.
   for (std::size_t i = 0; i < n; ++i) {
-    const std::string& caller_name = node.output(static_cast<int>(i));
+    const std::string &caller_name = node.output(static_cast<int>(i));
     if (caller_name.empty()) {
       continue;
     }
@@ -373,7 +373,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
 
   // Stack scan outputs along a new leading axis and propagate to caller.
   for (std::size_t j = 0; j < k; ++j) {
-    const std::string& caller_name = node.output(static_cast<int>(n + j));
+    const std::string &caller_name = node.output(static_cast<int>(n + j));
     if (caller_name.empty()) {
       continue;
     }

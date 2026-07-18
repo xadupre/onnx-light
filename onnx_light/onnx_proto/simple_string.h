@@ -199,6 +199,16 @@ public:
     return static_cast<const base &>(*this) == static_cast<const base &>(other);
   }
   inline bool operator!=(const OptionalString &other) const { return !(*this == other); }
+  /** Compares against a null-terminated string (nullptr matches absent). */
+  inline bool operator==(const char *other) const {
+    if (other == nullptr)
+      return !has_value();
+    return has_value() && **this == other;
+  }
+  inline bool operator!=(const char *other) const { return !(*this == other); }
+  /** Compares against a standard string (unset never equals any std::string). */
+  inline bool operator==(const std::string &other) const { return has_value() && **this == other; }
+  inline bool operator!=(const std::string &other) const { return !(*this == other); }
 };
 
 /** Assigns a non-owning view from an owning string. */

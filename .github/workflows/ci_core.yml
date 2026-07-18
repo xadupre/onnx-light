@@ -222,6 +222,12 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
 
+      - name: Set up MSVC for Ninja (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: x64
+
       # sccache (set up above) caches compiled objects in GitHub Actions cache so
       # that repeated runs that do not touch C++ source are near-instant on both
       # Windows and macOS. This is especially effective for Windows where each
@@ -229,6 +235,7 @@ jobs:
       - name: Build and Install package (Windows)
         if: runner.os == 'Windows'
         env:
+          CMAKE_GENERATOR: Ninja
           SCCACHE_GHA_ENABLED: "true"
         run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 

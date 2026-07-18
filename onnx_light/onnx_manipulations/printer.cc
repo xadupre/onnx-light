@@ -8,6 +8,7 @@
 #include <charconv>
 #include <cmath>
 #include <iomanip>
+#include <limits>
 #include <string>
 #include <type_traits>
 
@@ -17,6 +18,11 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace {
 
 using StringStringEntryProtos = utils::RepeatedField<StringStringEntryProto>;
+
+static_assert(32 >= std::numeric_limits<uint64_t>::digits10 + 1,
+              "PrintNumber buffer must hold uint64_t decimal text");
+static_assert(32 >= std::numeric_limits<double>::max_digits10 + 8,
+              "PrintNumber buffer must hold double shortest-roundtrip text");
 
 template <typename T> void PrintNumber(std::ostream &os, T value) {
   if constexpr (std::is_floating_point_v<T>) {
@@ -28,9 +34,8 @@ template <typename T> void PrintNumber(std::ostream &os, T value) {
       return;
     }
   }
-  // 32 bytes comfortably covers every supported integer/float textual form
-  // emitted here: int64_t/uint64_t need at most 20 chars, and shortest
-  // round-trip double forms stay well below that even with sign/exponent.
+  // 32 bytes comfortably covers every currently supported textual form; the
+  // static_asserts above document the concrete bounds we rely on today.
   std::array<char, 32> buf{};
   const auto res = std::to_chars(buf.data(), buf.data() + buf.size(), value);
   os.write(buf.data(), res.ptr - buf.data());

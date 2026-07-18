@@ -731,7 +731,9 @@ Common::Status OnnxParser::ParseSingleAttributeValue(AttributeProto &attr,
     case LiteralType::INT_LITERAL:
       if (expected == AttributeProto::AttributeType::FLOAT) {
         // Implicit INT->FLOAT cast. Only "-0" needs the float parser to
-        // preserve its sign bit; other integral literals can be cast directly.
+        // preserve its sign bit. Spellings like "-0.0" or "-0e0" are parsed
+        // as FLOAT_LITERAL earlier, so this INT_LITERAL branch only needs to
+        // detect the exact integer token "-0".
         attr.set_type(AttributeProto::AttributeType::FLOAT);
         attr.set_f(literal.value == "-0" ? LocaleIndependentStof(literal.value)
                                          : static_cast<float>(std::stol(literal.value)));

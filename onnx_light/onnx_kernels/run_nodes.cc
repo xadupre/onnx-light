@@ -82,6 +82,33 @@ namespace {
 // look up model-local FunctionProto definitions in
 // ``RuntimeContext::functions``. The default ONNX domain (empty
 // ``NodeProto::domain``) is normalised to ``ai.onnx``.
+Tensor CopyTensorForParent(const Tensor &tensor) {
+  Tensor out = tensor;
+  if (!out.has_allocation()) {
+    return out;
+  }
+  const size_t n_bytes = out.size_bytes();
+  RawBuffer copied(n_bytes);
+  if (n_bytes > 0) {
+    const uint8_t *src = out.bytes();
+    EXT_ENFORCE(src != nullptr,
+                "RunNode: allocator-backed tensor has a null data pointer while copying subgraph "
+                "outputs.");
+    std::memcpy(copied.data(), src, n_bytes);
+  }
+  out.data = std::move(copied);
+  out.ClearAllocation();
+  return out;
+}
+
+Sequence CopySequenceForParent(const Sequence &sequence) {
+  Sequence out = sequence;
+  for (Tensor &t : out.values) {
+    t = CopyTensorForParent(t);
+  }
+  return out;
+}
+
 std::string FunctionLookupKey(const std::string &domain, const std::string &op_type,
                               const std::string &overload) {
   if (domain.empty())
@@ -198,7 +225,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
-    outputs.push_back(it->second);
+    outputs.push_back(CopyTensorForParent(it->second));
   }
   return outputs;
 }
@@ -258,12 +285,12 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
       continue;
     }
     if (child.HasSequence(out_name)) {
-      rt.PutSequence(caller_name, child.GetSequence(out_name));
+      rt.PutSequence(caller_name, CopySequenceForParent(child.GetSequence(out_name)));
     } else {
       auto it = child.tensors().find(out_name);
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
                           "' was not produced by the selected branch.");
-      Tensor t = std::move(it->second);
+      Tensor t = CopyTensorForParent(it->second);
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -297,6 +324,10 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
   int64_t trip_count = 0;
   for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
     RuntimeContext child = rt.MakeSubgraphContext("body");
+    // Sequence-typed loop-carried state is copied value-by-value between
+    // iterations. Keep this fallback path on inline tensor storage to avoid
+    // aliasing allocator-backed tensors through Sequence elements.
+    child.set_allocator(nullptr);
 
     const std::string &iter_name = body.input(0).name();
     const std::string &cond_name = body.input(1).name();
@@ -333,13 +364,13 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         EXT_ENFORCE_INVALID(
             child.HasSequence(oname),
             "RunNode: Loop body did not produce sequence-typed loop-carried output '", oname, "'.");
-        sequence_state[i] = child.GetSequence(oname);
+        sequence_state[i] = CopySequenceForParent(child.GetSequence(oname));
       } else {
         auto it = child.tensors().find(oname);
         EXT_ENFORCE_INVALID(it != child.tensors().end(),
                             "RunNode: Loop body did not produce tensor-typed loop-carried output '",
                             oname, "'.");
-        tensor_state[i] = it->second;
+        tensor_state[i] = CopyTensorForParent(it->second);
       }
     }
     for (std::size_t j = 0; j < k; ++j) {
@@ -347,7 +378,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       auto it = child.tensors().find(oname);
       EXT_ENFORCE_INVALID(it != child.tensors().end(),
                           "RunNode: Loop body did not produce scan output '", oname, "'.");
-      scan_values[j].push_back(it->second);
+      scan_values[j].push_back(CopyTensorForParent(it->second));
     }
     ++trip_count;
   }

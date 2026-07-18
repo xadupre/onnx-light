@@ -174,21 +174,21 @@ public:
   /** Indicates whether the field is unset (absent). */
   inline bool null() const { return !has_value(); }
   /** Returns the number of characters (0 when unset). */
-  inline size_t size() const { return has_value() ? (*this)->size() : 0; }
+  inline size_t size() const { return has_value() ? value().size() : 0; }
   /** Returns the number of characters (0 when unset). */
   inline size_t length() const { return size(); }
   /** Indicates whether the value is unset or empty. */
-  inline bool empty() const { return !has_value() || (*this)->empty(); }
+  inline bool empty() const { return !has_value() || value().empty(); }
   /** Returns the underlying pointer (nullptr when unset). */
-  inline const char *data() const { return has_value() ? (*this)->data() : nullptr; }
+  inline const char *data() const { return has_value() ? value().data() : nullptr; }
   /** Returns a null-terminated C string (never nullptr; empty when unset). */
-  inline const char *c_str() const { return has_value() ? (*this)->c_str() : ""; }
+  inline const char *c_str() const { return has_value() ? value().c_str() : ""; }
   /** Returns a string_view over the content (empty when unset). */
   inline std::string_view sv() const {
-    return has_value() ? std::string_view(**this) : std::string_view();
+    return has_value() ? std::string_view(value()) : std::string_view();
   }
   /** Returns the character at the specified index (requires a value). */
-  inline char operator[](size_t i) const { return (**this)[i]; }
+  inline char operator[](size_t i) const { return value()[i]; }
   /** Parses the content as a signed 64-bit integer. */
   inline int64_t toint64() const { return RefString(data(), size()).toint64(); }
   /** Implicit conversion to a standard string (empty when unset). */
@@ -203,11 +203,11 @@ public:
   inline bool operator==(const char *other) const {
     if (other == nullptr)
       return !has_value();
-    return has_value() && **this == other;
+    return has_value() && value() == other;
   }
   inline bool operator!=(const char *other) const { return !(*this == other); }
   /** Compares against a standard string (unset never equals any std::string). */
-  inline bool operator==(const std::string &other) const { return has_value() && **this == other; }
+  inline bool operator==(const std::string &other) const { return has_value() && value() == other; }
   inline bool operator!=(const std::string &other) const { return !(*this == other); }
 };
 

@@ -169,6 +169,9 @@ ORT_EXCLUDE_REGEX = [
     r"^test_bitshift_left_uint16$",
     r"^test_bitcast_",
     r"^test_cc_top_k_uint64$",
+    # TopK(sorted=0) is valid, but ORT may return the top-k set in a different
+    # order because the schema leaves it undefined.
+    r"^test_cc_top_k_not_sorted$",
     r"^test_pow_types_float32_uint32$",
     r"^test_pow_types_float32_uint64$",
     r"^test_max_int16$",

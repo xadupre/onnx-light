@@ -79,7 +79,7 @@ void RunBackendCasesFor(const std::string &op_type,
       continue;
     }
     const NodeProto &node = graph.ref_node()[0];
-    if (node.ref_op_type().as_string() != op_type) {
+    if (node.ref_op_type() != op_type) {
       continue;
     }
     if (!accept_test_case(tc)) {

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernel_dispatch_table.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
@@ -419,7 +420,7 @@ TEST(RunNodes, RunNodeNormalisesDefaultDomain) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.tensors()["x"] = Tensor::FromFloat("x", {2}, {-1.5f, 2.5f});
   NodeProto node = MakeNode("Abs", {"x"}, {"y"}); // empty domain
-  EXPECT_TRUE(node.domain().as_string().empty());
+  EXPECT_TRUE(node.domain().empty());
   RunNode(node, rt);
   const float *got = rt.tensors()["y"].AsFloat();
   ASSERT_EQ(rt.tensors()["y"].element_count(), 2);
@@ -2568,7 +2569,7 @@ TEST(RunModel, ModelLocalFunctionDoesNotMutateModel) {
   // call-site attribute.
   const FunctionProto &saved = model.functions()[0];
   const AttributeProto &a = saved.node()[0].attribute()[0];
-  EXPECT_EQ(a.ref_attr_name().as_string(), "then_branch");
+  EXPECT_EQ(a.ref_attr_name(), "then_branch");
   EXPECT_FALSE(a.has_g());
 }
 
@@ -3603,26 +3604,25 @@ TEST(RunNodes, RunNodeDispatchesCustomKernelForUnknownOp) {
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
 
   int call_count = 0;
-  rt.RegisterCustomKernel("my.domain", "Scale",
-                          [&call_count](const NodeProto &node, RuntimeContext &ctx) {
-                            ++call_count;
-                            // Read the "factor" attribute (default 1.0f).
-                            float factor = 1.0f;
-                            for (int i = 0; i < node.attribute_size(); ++i) {
-                              const AttributeProto &a = node.attribute(i);
-                              if (a.name() == "factor") {
-                                factor = a.f();
-                              }
-                            }
-                            const Tensor &in = ctx.Get(node.input(0).as_string());
-                            std::vector<float> out(static_cast<size_t>(in.element_count()));
-                            const float *src = in.AsFloat();
-                            for (size_t i = 0; i < out.size(); ++i) {
-                              out[i] = src[i] * factor;
-                            }
-                            ctx.Put(node.output(0).as_string(),
-                                    Tensor::FromFloat(node.output(0).as_string(), in.shape, out));
-                          });
+  rt.RegisterCustomKernel(
+      "my.domain", "Scale", [&call_count](const NodeProto &node, RuntimeContext &ctx) {
+        ++call_count;
+        // Read the "factor" attribute (default 1.0f).
+        float factor = 1.0f;
+        for (int i = 0; i < node.attribute_size(); ++i) {
+          const AttributeProto &a = node.attribute(i);
+          if (a.name() == "factor") {
+            factor = a.f();
+          }
+        }
+        const Tensor &in = ctx.Get(node.input(0));
+        std::vector<float> out(static_cast<size_t>(in.element_count()));
+        const float *src = in.AsFloat();
+        for (size_t i = 0; i < out.size(); ++i) {
+          out[i] = src[i] * factor;
+        }
+        ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out));
+      });
 
   NodeProto node = MakeNode("Scale", {"x"}, {"y"}, "my.domain");
   AttributeProto *attr = node.add_attribute();
@@ -3649,14 +3649,13 @@ TEST(RunNodes, RunNodeCustomKernelOverridesBuiltin) {
   // Replace Abs with negation: a custom override must take precedence over
   // the entry that KernelDispatchTable() would otherwise resolve.
   rt.RegisterCustomKernel("", "Abs", [](const NodeProto &node, RuntimeContext &ctx) {
-    const Tensor &in = ctx.Get(node.input(0).as_string());
+    const Tensor &in = ctx.Get(node.input(0));
     std::vector<float> out(static_cast<size_t>(in.element_count()));
     const float *src = in.AsFloat();
     for (size_t i = 0; i < out.size(); ++i) {
       out[i] = -src[i];
     }
-    ctx.Put(node.output(0).as_string(),
-            Tensor::FromFloat(node.output(0).as_string(), in.shape, out));
+    ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out));
   });
 
   NodeProto node = MakeNode("Abs", {"x"}, {"y"});
@@ -3706,14 +3705,13 @@ TEST(RunModel, CustomKernelChainsWithBuiltinKernels) {
         factor = node.attribute(i).f();
       }
     }
-    const Tensor &in = ctx.Get(node.input(0).as_string());
+    const Tensor &in = ctx.Get(node.input(0));
     std::vector<float> out(static_cast<size_t>(in.element_count()));
     const float *src = in.AsFloat();
     for (size_t i = 0; i < out.size(); ++i) {
       out[i] = src[i] * factor;
     }
-    ctx.Put(node.output(0).as_string(),
-            Tensor::FromFloat(node.output(0).as_string(), in.shape, out));
+    ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out));
   });
 
   RunModel(model, rt);

@@ -62,8 +62,7 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
   tc.atol = 1e-7;
 
   ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion,
-            {opset, OpsetId(std::string(kLocalDomain), static_cast<int64_t>(1))});
+  InitModel(model, kDefaultIrVersion, {opset, OpsetId(kLocalDomain, static_cast<int64_t>(1))});
 
   // Inner function ``local:func_inner_add(a, b) -> c { c = Add(a, b) }``.
   {

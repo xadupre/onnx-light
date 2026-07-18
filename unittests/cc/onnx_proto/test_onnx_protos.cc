@@ -84,7 +84,7 @@ TEST(onnx_string, RefString_Assignment) {
   utils::String s("def", 3);
   utils::RefString c("123", 3);
   c = s;
-  EXPECT_NE(c.data(), s.data());
+  EXPECT_EQ(c.data(), s.data());
   EXPECT_EQ(c.size(), 3);
 }
 
@@ -136,18 +136,18 @@ TEST(onnx_string, RefString_Inequality) {
 
 TEST(onnx_string, RefString_AsString) {
   utils::RefString a("hello", 5);
-  std::string str = a.as_string();
+  std::string str = a;
   EXPECT_EQ(str, "hello");
 
   utils::RefString empty(nullptr, 0);
-  std::string emptyStr = empty.as_string();
+  std::string emptyStr = empty;
   EXPECT_EQ(emptyStr, "");
 }
 
 TEST(onnx_string, String_Constructors) {
   utils::String defaultStr;
   EXPECT_EQ(defaultStr.size(), 0);
-  EXPECT_EQ(defaultStr.data(), nullptr);
+  EXPECT_EQ(defaultStr, "");
   EXPECT_TRUE(defaultStr.empty());
   utils::RefString ref("test", 4);
   utils::String fromRef(ref);
@@ -160,8 +160,8 @@ TEST(onnx_string, String_Constructors) {
   EXPECT_EQ(fromCharPtr, "hello");
 
   utils::String withNull("abc\0", 4);
-  EXPECT_EQ(withNull.size(), 3);
-  EXPECT_EQ(withNull, "abc");
+  EXPECT_EQ(withNull.size(), 4);
+  EXPECT_EQ(withNull, std::string("abc\0", 4));
 
   std::string stdStr = "world";
   utils::String fromStdStr(stdStr);
@@ -204,7 +204,7 @@ TEST(onnx_string, String_Methods) {
   EXPECT_EQ(s[4], 'o');
   s.clear();
   EXPECT_EQ(s.size(), 0);
-  EXPECT_EQ(s.data(), nullptr);
+  EXPECT_EQ(s, "");
   EXPECT_TRUE(s.empty());
 }
 
@@ -223,7 +223,7 @@ TEST(onnx_string, String_Equality) {
   EXPECT_FALSE(a == "different");
   utils::String empty;
   EXPECT_TRUE(empty == "");
-  EXPECT_TRUE(empty == nullptr);
+  EXPECT_TRUE(empty.empty());
 }
 
 TEST(onnx_string, String_Inequality) {
@@ -250,11 +250,11 @@ TEST(onnx_string, String_Inequality) {
 
 TEST(onnx_string, String_AsString) {
   utils::String a("hello", 5);
-  std::string str = a.as_string();
+  std::string str = a;
   EXPECT_EQ(str, "hello");
 
   utils::String empty;
-  std::string emptyStr = empty.as_string();
+  std::string emptyStr = empty;
   EXPECT_EQ(emptyStr, "");
 }
 
@@ -263,7 +263,7 @@ TEST(onnx_string, String_EdgeCases) {
   EXPECT_TRUE(empty.empty());
   EXPECT_EQ(empty.size(), 0);
 
-  utils::String null(nullptr, 0);
+  utils::String null("", 0);
   EXPECT_TRUE(null.empty());
   EXPECT_EQ(null.size(), 0);
 
@@ -331,7 +331,7 @@ TEST(onnx_string, String_ConstructorFromConstCharPtrVariations) {
   EXPECT_EQ(s3.size(), 0);
   EXPECT_TRUE(s3.empty());
 
-  utils::String s4(nullptr, 0);
+  utils::String s4("", 0);
   EXPECT_EQ(s4.size(), 0);
   EXPECT_TRUE(s4.empty());
 }
@@ -349,9 +349,8 @@ TEST(onnx_string, String_ConstructorFromStdString) {
 
   std::string null_str(10, '\0');
   utils::String s3(null_str);
-  // String loses the last character if it is a null terminator.
-  EXPECT_EQ(s3.size(), 9);
-  for (size_t i = 0; i < 9; i++) {
+  EXPECT_EQ(s3.size(), 10);
+  for (size_t i = 0; i < 10; i++) {
     EXPECT_EQ(s3[i], '\0');
   }
 }
@@ -433,20 +432,6 @@ TEST(onnx_string, String_AssignmentOperators) {
   EXPECT_EQ(s, "assigned from std::string");
 }
 
-TEST(onnx_string, RefString_AssignmentFromStringUsesInlineStorageForShortValues) {
-  utils::String short_value("inline", 6);
-  utils::RefString short_ref("seed", 4);
-  short_ref = short_value;
-  EXPECT_EQ(short_ref, "inline");
-  EXPECT_NE(short_ref.data(), short_value.data());
-
-  utils::String long_value("0123456789abcdefghijklmnop", 26);
-  utils::RefString long_ref("seed", 4);
-  long_ref = long_value;
-  EXPECT_EQ(long_ref, long_value);
-  EXPECT_EQ(long_ref.data(), long_value.data());
-}
-
 TEST(onnx_string, String_SelfAssignmentSafety) {
   utils::String s("12345678901234567890", 19);
 
@@ -492,8 +477,7 @@ TEST(onnx_string, String_EqualityEdgeCases) {
   utils::String empty;
   EXPECT_TRUE(empty.empty());
   EXPECT_EQ(empty, "");
-  EXPECT_EQ(empty, nullptr);
-  EXPECT_NE(s1, nullptr);
+  EXPECT_FALSE(s1.empty());
   EXPECT_NE(s1, "");
 
   utils::RefString rs("test", 4);
@@ -502,21 +486,24 @@ TEST(onnx_string, String_EqualityEdgeCases) {
 }
 
 TEST(onnx_string, String_NullVersusSizeZero) {
-  utils::String null_string;
-  EXPECT_TRUE(null_string.empty());
-  EXPECT_EQ(null_string.size(), 0);
-  EXPECT_EQ(null_string.data(), nullptr);
-  EXPECT_TRUE(null_string.null());
-
-  utils::String empty_string("", 0);
+  // String is now a plain std::string: there is no null state, only empty.
+  utils::String empty_string;
   EXPECT_TRUE(empty_string.empty());
   EXPECT_EQ(empty_string.size(), 0);
-  EXPECT_NE(empty_string.data(), nullptr);
-  EXPECT_FALSE(empty_string.null());
-
-  EXPECT_EQ(null_string, empty_string);
-  EXPECT_EQ(null_string, "");
   EXPECT_EQ(empty_string, "");
+
+  // Presence semantics live in OptionalString.
+  utils::OptionalString unset;
+  EXPECT_TRUE(unset.null());
+  EXPECT_TRUE(unset.empty());
+  EXPECT_EQ(unset.size(), 0);
+  EXPECT_EQ(unset.data(), nullptr);
+
+  utils::OptionalString present("");
+  EXPECT_FALSE(present.null());
+  EXPECT_TRUE(present.empty());
+  EXPECT_EQ(present.size(), 0);
+  EXPECT_NE(present.data(), nullptr);
 }
 
 TEST(onnx_proto, NodeProtoDomainKeepsExplicitEmptyString) {
@@ -542,34 +529,34 @@ TEST(onnx_proto, NodeProtoDomainKeepsExplicitEmptyString) {
 
 TEST(onnx_string, RefString_AsStringEdgeCases) {
   utils::RefString rs1("regular strings", 14);
-  std::string s1 = rs1.as_string();
+  std::string s1 = rs1;
   EXPECT_EQ(s1, "regular string");
 
   char data[] = {'t', 'e', 's', 't', '\0', '!'};
   utils::RefString rs2(data, 6);
-  std::string s2 = rs2.as_string();
+  std::string s2 = rs2;
   EXPECT_EQ(s2.size(), 6);
   EXPECT_EQ(s2[4], '\0');
 
   utils::RefString null_rs(nullptr, 0);
-  std::string s3 = null_rs.as_string();
+  std::string s3 = null_rs;
   EXPECT_TRUE(s3.empty());
   EXPECT_EQ(s3, "");
 }
 
 TEST(onnx_string, String_AsStringEdgeCases) {
   utils::String s1("1234567890123", 13);
-  std::string std_s1 = s1.as_string();
+  std::string std_s1 = s1;
   EXPECT_EQ(std_s1, "1234567890123");
 
   utils::String s2("test\0!", 6);
-  std::string std_s2 = s2.as_string();
+  std::string std_s2 = s2;
   EXPECT_EQ(std_s2.size(), 6);
   EXPECT_EQ(std_s2[4], '\0');
 
   // Empty string
   utils::String empty;
-  std::string std_s3 = empty.as_string();
+  std::string std_s3 = empty;
   EXPECT_TRUE(std_s3.empty());
   EXPECT_EQ(std_s3, "");
 }
@@ -613,13 +600,13 @@ TEST(onnx_proto, TensorProtoName2) {
   EXPECT_EQ(tp.name_.size(), 4);
   EXPECT_NE(tp.name_.data(), nullptr);
   EXPECT_EQ(tp.name_.data()[0], 't');
-  std::string check = tp.name_.as_string();
+  std::string check = tp.name_;
   EXPECT_EQ(name, check);
-  std::string check4 = tp.ref_name().as_string();
+  std::string check4 = tp.ref_name();
   EXPECT_EQ(name, check4);
   name = "TEST2";
   tp.set_name(name);
-  std::string check2 = tp.name_.as_string();
+  std::string check2 = tp.name_;
   EXPECT_EQ(name, check2);
 }
 
@@ -641,7 +628,7 @@ TEST(onnx_proto, TensorProtoNameStringToString1) {
       EXPECT_EQ(tp2.order_name(), 8);
       EXPECT_EQ(tp2.name_, "test");
     } else {
-      tp.name_.clear();
+      tp.name_.reset();
     }
     EXPECT_EQ(tp.name_.size(), 4);
     EXPECT_NE(tp.name_.data(), nullptr);
@@ -669,7 +656,7 @@ TEST(onnx_proto, TensorProtoNameStringToString2) {
       EXPECT_EQ(tp2.order_name(), 8);
       EXPECT_EQ(tp2.name_, "test");
     } else {
-      tp2.name_.clear();
+      tp2.name_.reset();
     }
     EXPECT_EQ(tp2.name_.size(), 4);
     EXPECT_NE(tp2.name_.data(), nullptr);
@@ -696,8 +683,8 @@ TEST(onnx_proto, serialization_StringStringEntryProto) {
   EXPECT_EQ(serialized.size(), proto.SerializeSize().size());
   StringStringEntryProto proto2;
   proto2.ParseFromString(serialized);
-  EXPECT_EQ(proto.ref_key(), proto2.ref_key());
-  EXPECT_EQ(proto.ref_value(), proto2.ref_value());
+  EXPECT_EQ(proto.ref_key().sv(), proto2.ref_key().sv());
+  EXPECT_EQ(proto.ref_value().sv(), proto2.ref_value().sv());
   std::string serialized2;
   proto2.SerializeToString(serialized2);
   EXPECT_EQ(serialized2.size(), proto2.SerializeSize().size());
@@ -4731,7 +4718,7 @@ TEST(onnx_proto, TensorProto_uint64) {
   ParseOptions parse_options;
   t2.ParseFromString(serialized, parse_options);
 
-  EXPECT_EQ(t2.ref_name(), tensor.ref_name());
+  EXPECT_EQ(t2.ref_name().sv(), tensor.ref_name().sv());
   EXPECT_EQ(t2.ref_data_type(), tensor.ref_data_type());
   EXPECT_EQ(t2.ref_dims().size(), tensor.ref_dims().size());
   EXPECT_EQ(t2.ref_uint64_data().size(), tensor.ref_uint64_data().size());
@@ -4755,7 +4742,7 @@ TEST(onnx_proto, AttributeProto_float) {
   ParseOptions parse_options;
   t2.ParseFromString(serialized, parse_options);
 
-  EXPECT_EQ(t2.ref_name(), attribute.ref_name());
+  EXPECT_EQ(t2.ref_name().sv(), attribute.ref_name().sv());
   EXPECT_EQ(t2.ref_type(), attribute.ref_type());
   EXPECT_EQ(t2.ref_f(), attribute.ref_f());
   utils::StringWriteStream stream;
@@ -6334,10 +6321,10 @@ TEST(onnx_string, String_LessThan) {
   EXPECT_TRUE(ab < abc); // shorter prefix sorts first
   EXPECT_FALSE(abc < abc);
 
-  // operator<(const RefString &)
-  EXPECT_TRUE(abc < abd_ref);
-  EXPECT_FALSE(abd < abc_ref);
-  EXPECT_FALSE(abc < abc_ref);
+  // compared against a RefString via its owning std::string
+  EXPECT_TRUE(abc < std::string(abd_ref));
+  EXPECT_FALSE(abd < std::string(abc_ref));
+  EXPECT_FALSE(abc < std::string(abc_ref));
 
   // operator<(const std::string &)
   EXPECT_TRUE(abc < abd_std);
@@ -6354,11 +6341,8 @@ TEST(onnx_string, String_LessThanEdgeCases) {
   utils::String empty;
   utils::String a("a", 1);
 
-  // ptr_ == nullptr branch of operator<(const char *)
   EXPECT_TRUE(empty < "a");
   EXPECT_FALSE(empty < "");
-  // other == nullptr returns false
-  EXPECT_FALSE(a < static_cast<const char *>(nullptr));
   // exhausting *this without exhausting other
   EXPECT_FALSE(a < "");
 }
@@ -6377,10 +6361,10 @@ TEST(onnx_string, String_GreaterThan) {
   EXPECT_TRUE(abc > ab); // longer string with shared prefix sorts later
   EXPECT_FALSE(abc > abc);
 
-  // operator>(const RefString &)
-  EXPECT_TRUE(abd > abc_ref);
-  EXPECT_FALSE(abc > abd_ref);
-  EXPECT_FALSE(abc > abc_ref);
+  // compared against a RefString via its owning std::string
+  EXPECT_TRUE(abd > std::string(abc_ref));
+  EXPECT_FALSE(abc > std::string(abd_ref));
+  EXPECT_FALSE(abc > std::string(abc_ref));
 
   // operator>(const std::string &)
   EXPECT_TRUE(abd > abc_std);
@@ -6397,11 +6381,8 @@ TEST(onnx_string, String_GreaterThanEdgeCases) {
   utils::String empty;
   utils::String a("a", 1);
 
-  // ptr_ == nullptr || size_ == 0 returns false
   EXPECT_FALSE(empty > "");
   EXPECT_FALSE(empty > "anything");
-  // other == nullptr returns true for a non-empty string
-  EXPECT_TRUE(a > static_cast<const char *>(nullptr));
   // *this longer than other once other is exhausted
   EXPECT_TRUE(a > "");
 }
@@ -6948,7 +6929,7 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_InvokedAndDeleterAttached) {
   ParseOptions options;
   options.raw_data_callback = [&](TensorProto &t) -> std::function<void()> {
     ++callback_calls;
-    seen_name = t.ref_name().as_string();
+    seen_name = t.ref_name();
     seen_size = t.ref_raw_data().size();
     return [&deleter_called]() { deleter_called = true; };
   };
@@ -7038,7 +7019,7 @@ TEST(onnx_proto, ParseFromIstream_ModelProto) {
   EXPECT_TRUE(parsed.has_ir_version());
   EXPECT_EQ(parsed.ref_ir_version(), 8);
   EXPECT_TRUE(parsed.has_producer_name());
-  EXPECT_EQ(parsed.ref_producer_name().as_string(), "test_producer");
+  EXPECT_EQ(parsed.ref_producer_name(), "test_producer");
   EXPECT_TRUE(parsed.has_graph());
   EXPECT_EQ(parsed.ref_graph().ref_name(), "test_graph");
 }
@@ -7063,7 +7044,7 @@ TEST(onnx_proto, ParseFromIstream_TensorProto) {
   std::istringstream iss(serialized, std::ios::binary);
   TensorProto parsed;
   EXPECT_TRUE(parsed.ParseFromIstream(&iss));
-  EXPECT_EQ(parsed.ref_name().as_string(), "my_tensor");
+  EXPECT_EQ(parsed.ref_name(), "my_tensor");
   EXPECT_EQ(parsed.ref_dims().size(), 1u);
   EXPECT_EQ(parsed.ref_dims()[0], 2);
   EXPECT_EQ(parsed.ref_float_data().size(), 2u);

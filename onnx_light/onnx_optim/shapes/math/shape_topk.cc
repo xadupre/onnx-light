@@ -44,7 +44,7 @@ void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x) 
     // Opset >= 10: ``k`` is a 1-D tensor input at index 1 (mandatory).
     // An empty string is a safe fallback key for malformed nodes only.
     const std::string k_input_name =
-        node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+        node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
     axis_dim = OptimDim(ctx.TopKKDimName(k_input_name));
   }
 
@@ -53,7 +53,7 @@ void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x) 
 
   const TensorType out_dtype = input.Dtype();
   ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, out_shape));
-  if (node.output_size() >= 2 && !node.output(1).as_string().empty()) {
+  if (node.output_size() >= 2 && !node.output(1).empty()) {
     ctx.Set(node.output(1), OptimTensor(nullptr, TensorType::kInt64, std::move(out_shape)));
   }
 }

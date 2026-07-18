@@ -54,7 +54,7 @@ std::string RequiredStringAttributeValue(const NodeProto &node, const char *name
   EXT_ENFORCE_INVALID(attr != nullptr, op_name, ": required attribute '", name, "' is missing.");
   EXT_ENFORCE_INVALID(attr->type() == AttributeProto::AttributeType::STRING, op_name,
                       ": attribute '", name, "' must be STRING.");
-  return attr->s().as_string();
+  return attr->s();
 }
 
 int64_t RequiredIntAttributeValue(const NodeProto &node, const char *name, const char *op_name) {

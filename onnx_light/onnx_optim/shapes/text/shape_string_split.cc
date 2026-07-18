@@ -17,8 +17,8 @@ void ComputeShapeStringSplit(ShapesContext &ctx, const NodeProto &node, const ch
   CheckNodeOpAndOutput(node, "StringSplit", "ComputeShapeStringSplit");
   EXT_ENFORCE_INVALID(node.output_size() >= 2,
                       "ComputeShapeStringSplit: node must declare at least two outputs.");
-  const std::string &y_name = node.output(0).as_string();
-  const std::string &z_name = node.output(1).as_string();
+  const std::string &y_name = node.output(0);
+  const std::string &z_name = node.output(1);
   EXT_ENFORCE_INVALID(!y_name.empty() && !z_name.empty(),
                       "ComputeShapeStringSplit: both outputs must be named.");
 

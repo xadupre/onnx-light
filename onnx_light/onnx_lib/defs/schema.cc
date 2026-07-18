@@ -265,7 +265,7 @@ void OpSchema::Verify(const NodeProto &node) const {
   // An internal symbol is defined as starting with two underscores. Attributes
   // with names meeting this condition are considered implementation details
   // and should be ignored for the purpose of schema checking.
-  auto isInternalSymbol = [](const utils::String &sym) -> bool {
+  auto isInternalSymbol = [](const std::string &sym) -> bool {
     return sym.length() >= 2 && sym[0] == '_' && sym[1] == '_';
   };
 
@@ -274,11 +274,11 @@ void OpSchema::Verify(const NodeProto &node) const {
   for (const auto &attr_proto : node.attribute()) {
     const auto &name = attr_proto.name();
 
-    if (!seen_attr_names.insert(name.as_string()).second) {
+    if (!seen_attr_names.insert(name).second) {
       fail_check("Attribute '", name, "' appeared multiple times.");
     }
 
-    const auto search = attributes_.find(name.as_string());
+    const auto search = attributes_.find(std::string(name));
     AttributeProto::AttributeType expected_type{};
     if (search != attributes_.end()) {
       expected_type = search->second.type;
@@ -883,7 +883,7 @@ bool OpSchema::ValidateReferencedOpsInFunction(const FunctionProto *function,
           node.op_type(), function_since_version, node.domain());
       if (op1 != op2) {
         if (updated_ops) {
-          updated_ops->insert(node.op_type().as_string());
+          updated_ops->insert(node.op_type());
         }
         all_ops_are_invalid = false;
       }
@@ -1578,10 +1578,10 @@ OpSchema::NodeDeterminism OpSchema::GetNodeDeterminism() const {
       const OpSchemaRegistry &reg = *OpSchemaRegistry::Instance();
       std::unordered_map<std::string, int64_t> domain_to_opset_version;
       for (const auto &opset : func_proto->opset_import()) {
-        domain_to_opset_version[opset.domain().as_string()] = opset.version();
+        domain_to_opset_version[opset.domain()] = opset.version();
       }
       for (const NodeProto &n : func_proto->node()) {
-        const int64_t opset = domain_to_opset_version[n.domain().as_string()];
+        const int64_t opset = domain_to_opset_version[n.domain()];
         const OpSchema *sch = reg.GetSchema(n.op_type(), static_cast<int>(opset), n.domain());
         if (!sch) {
           return NodeDeterminism::Unknown;
@@ -1889,10 +1889,6 @@ const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::stri
   return nullptr;
 }
 
-const OpSchema *OpSchemaRegistry::Schema(const utils::String &key, const utils::String &domain) {
-  return Schema(key.as_string(), domain.as_string());
-}
-
 const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const int maxInclusiveVersion,
                                          const std::string &domain) {
   auto &m = map();
@@ -1917,19 +1913,9 @@ const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const int maxIn
   return nullptr;
 }
 
-const OpSchema *OpSchemaRegistry::Schema(const utils::String &key, const int maxInclusiveVersion,
-                                         const utils::String &domain) {
-  return Schema(key.as_string(), maxInclusiveVersion, domain.as_string());
-}
-
 const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int maxInclusiveVersion,
                                             const std::string &domain) const {
   return Schema(key, maxInclusiveVersion, domain);
-}
-
-const OpSchema *OpSchemaRegistry::GetSchema(const utils::String &key, const int maxInclusiveVersion,
-                                            const utils::String &domain) const {
-  return Schema(key.as_string(), maxInclusiveVersion, domain.as_string());
 }
 
 void OpSchemaRegistry::SetLoadedSchemaVersion(int target_version) {

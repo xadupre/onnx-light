@@ -34,9 +34,9 @@ namespace {
 
 // Verifies the node declares at least `expected` inputs.
 void RequireInputs(const NodeProto &node, int expected) {
-  EXT_ENFORCE_INVALID(node.input_size() >= expected, "ComputeShapeNode: op '",
-                      node.op_type().as_string(), "' expects at least ", std::to_string(expected),
-                      " input(s), got ", std::to_string(node.input_size()), ".");
+  EXT_ENFORCE_INVALID(node.input_size() >= expected, "ComputeShapeNode: op '", node.op_type(),
+                      "' expects at least ", std::to_string(expected), " input(s), got ",
+                      std::to_string(node.input_size()), ".");
 }
 
 } // namespace
@@ -46,23 +46,23 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Abs",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeAbs(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeAbs(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Acos",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeAcos(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeAcos(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Acosh",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeAcosh(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeAcosh(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Add",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeAdd(ctx, node, node.input(0).as_string().c_str(),
-                               node.input(1).as_string().c_str());
+         math::ComputeShapeAdd(ctx, node, node.input(0).c_str(),
+                               node.input(1).c_str());
        }},
       {"ai.onnx:AffineGrid",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -72,47 +72,47 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:And",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeAnd(ctx, node, node.input(0).as_string().c_str(),
-                                  node.input(1).as_string().c_str());
+         logical::ComputeShapeAnd(ctx, node, node.input(0).c_str(),
+                                  node.input(1).c_str());
        }},
       {"ai.onnx:ArgMax",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         reduction::ComputeShapeArgReduce(ctx, node, node.input(0).as_string().c_str());
+         reduction::ComputeShapeArgReduce(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:ArgMin",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         reduction::ComputeShapeArgReduce(ctx, node, node.input(0).as_string().c_str());
+         reduction::ComputeShapeArgReduce(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Asin",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeAsin(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeAsin(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Asinh",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeAsinh(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeAsinh(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Atan",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeAtan(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeAtan(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Atanh",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeAtanh(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeAtanh(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Attention",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         const std::string q_name = node.input(0).as_string();
-         const std::string k_name = node.input(1).as_string();
-         const std::string v_name = node.input(2).as_string();
-         const std::string past_k_name = node.input_size() > 4 ? node.input(4).as_string() : "";
-         const std::string past_v_name = node.input_size() > 5 ? node.input(5).as_string() : "";
+         const std::string& q_name = node.input(0);
+         const std::string& k_name = node.input(1);
+         const std::string& v_name = node.input(2);
+         const std::string& past_k_name = node.input_size() > 4 ? node.input(4) : utils::String::empty_string();
+         const std::string& past_v_name = node.input_size() > 5 ? node.input(5) : utils::String::empty_string();
          nn::ComputeShapeAttention(ctx, node, q_name.c_str(), k_name.c_str(), v_name.c_str(),
                                    past_k_name.empty() ? nullptr : past_k_name.c_str(),
                                    past_v_name.empty() ? nullptr : past_v_name.c_str());
@@ -120,24 +120,24 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:AveragePool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         nn::ComputeShapeAveragePool(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeAveragePool(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:BatchNormalization",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 5);
-         const std::string x_name = node.input(0).as_string();
-         const std::string mean_name = node.input(3).as_string();
+         const std::string x_name = node.input(0);
+         const std::string mean_name = node.input(3);
          nn::ComputeShapeBatchNormalization(ctx, node, x_name.c_str(),
                                             mean_name.empty() ? nullptr : mean_name.c_str());
        }},
       {"ai.onnx:Dropout",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 1);
-        const std::string data_name = node.input(0).as_string();
-        const std::string ratio_name =
-            node.input_size() >= 2 ? node.input(1).as_string() : std::string();
-        const std::string training_mode_name =
-            node.input_size() >= 3 ? node.input(2).as_string() : std::string();
+        const std::string& data_name = node.input(0);
+        const std::string& ratio_name =
+            node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
+        const std::string& training_mode_name =
+            node.input_size() >= 3 ? node.input(2) : utils::String::empty_string();
         nn::ComputeShapeDropout(ctx, node, data_name.c_str(),
                                 ratio_name.empty() ? nullptr : ratio_name.c_str(),
                                 training_mode_name.empty() ? nullptr : training_mode_name.c_str());
@@ -155,31 +155,31 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Flatten",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         nn::ComputeShapeFlatten(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeFlatten(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:GroupNormalization",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         nn::ComputeShapeGroupNormalization(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeGroupNormalization(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:InstanceNormalization",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         nn::ComputeShapeInstanceNormalization(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeInstanceNormalization(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:LayerNormalization",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         nn::ComputeShapeLayerNormalization(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeLayerNormalization(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:LinearAttention",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         const std::string q_name = node.input(0).as_string();
-         const std::string k_name = node.input(1).as_string();
-         const std::string v_name = node.input(2).as_string();
-         const std::string past_state_name =
-             node.input_size() > 3 ? node.input(3).as_string() : "";
+         const std::string& q_name = node.input(0);
+         const std::string& k_name = node.input(1);
+         const std::string& v_name = node.input(2);
+         const std::string& past_state_name =
+             node.input_size() > 3 ? node.input(3) : utils::String::empty_string();
          nn::ComputeShapeLinearAttention(
              ctx, node, q_name.c_str(), k_name.c_str(), v_name.c_str(),
              past_state_name.empty() ? nullptr : past_state_name.c_str());
@@ -187,12 +187,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:MeanVarianceNormalization",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         nn::ComputeShapeMeanVarianceNormalization(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeMeanVarianceNormalization(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:RMSNormalization",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         nn::ComputeShapeRMSNormalization(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeRMSNormalization(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Bernoulli",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -225,31 +225,31 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:BitShift",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeBitShift(ctx, node, node.input(0).as_string().c_str(),
-                                       node.input(1).as_string().c_str());
+         logical::ComputeShapeBitShift(ctx, node, node.input(0).c_str(),
+                                       node.input(1).c_str());
        }},
       {"ai.onnx:BitwiseAnd",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeBitwiseAnd(ctx, node, node.input(0).as_string().c_str(),
-                                         node.input(1).as_string().c_str());
+         logical::ComputeShapeBitwiseAnd(ctx, node, node.input(0).c_str(),
+                                         node.input(1).c_str());
        }},
       {"ai.onnx:BitwiseNot",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         logical::ComputeShapeBitwiseNot(ctx, node, node.input(0).as_string().c_str());
+         logical::ComputeShapeBitwiseNot(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:BitwiseOr",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeBitwiseOr(ctx, node, node.input(0).as_string().c_str(),
-                                        node.input(1).as_string().c_str());
+         logical::ComputeShapeBitwiseOr(ctx, node, node.input(0).c_str(),
+                                        node.input(1).c_str());
        }},
       {"ai.onnx:BitwiseXor",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeBitwiseXor(ctx, node, node.input(0).as_string().c_str(),
-                                         node.input(1).as_string().c_str());
+         logical::ComputeShapeBitwiseXor(ctx, node, node.input(0).c_str(),
+                                         node.input(1).c_str());
        }},
       {"ai.onnx:BlackmanWindow",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -288,22 +288,22 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Cos",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeCos(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeCos(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Cosh",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeCosh(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeCosh(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:CumProd",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeCumProd(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeCumProd(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:CumSum",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeCumSum(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeCumSum(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:DFT",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -313,47 +313,47 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Ceil",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeCeil(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeCeil(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Clip",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeClip(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeClip(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Floor",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeFloor(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeFloor(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Reciprocal",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeReciprocal(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeReciprocal(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Round",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeRound(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeRound(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Sign",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeSign(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeSign(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Sin",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeSin(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeSin(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Sinh",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeSinh(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeSinh(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Sqrt",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeSqrt(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeSqrt(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:STFT",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -368,107 +368,107 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Swish",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeSwish(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeSwish(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Tan",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeTan(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeTan(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Tanh",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeTanh(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeTanh(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:ThresholdedRelu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeThresholdedRelu(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeThresholdedRelu(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Relu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeRelu(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeRelu(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:LeakyRelu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeLeakyRelu(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeLeakyRelu(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Elu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeElu(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeElu(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Celu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeCelu(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeCelu(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Gelu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeGelu(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeGelu(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Selu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeSelu(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeSelu(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:TopK",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeTopK(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeTopK(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:DequantizeLinear",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         const std::string x_name = node.input(0).as_string();
-         const std::string x_scale_name = node.input(1).as_string();
+         const std::string x_name = node.input(0);
+         const std::string x_scale_name = node.input(1);
          quantization::ComputeShapeDequantizeLinear(ctx, node, x_name.c_str(),
                                                     x_scale_name.c_str());
        }},
       {"ai.onnx:Col2Im",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         nn::ComputeShapeCol2Im(ctx, node, node.input(0).as_string().c_str(),
-                                node.input(1).as_string().c_str(),
-                                node.input(2).as_string().c_str());
+         nn::ComputeShapeCol2Im(ctx, node, node.input(0).c_str(),
+                                node.input(1).c_str(),
+                                node.input(2).c_str());
        }},
       {"ai.onnx:Conv",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         nn::ComputeShapeConv(ctx, node, node.input(0).as_string().c_str(),
-                              node.input(1).as_string().c_str());
+         nn::ComputeShapeConv(ctx, node, node.input(0).c_str(),
+                              node.input(1).c_str());
        }},
       {"ai.onnx:ConvInteger",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         nn::ComputeShapeConvInteger(ctx, node, node.input(0).as_string().c_str(),
-                                     node.input(1).as_string().c_str());
+         nn::ComputeShapeConvInteger(ctx, node, node.input(0).c_str(),
+                                     node.input(1).c_str());
        }},
       {"ai.onnx:ConvTranspose",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         nn::ComputeShapeConvTranspose(ctx, node, node.input(0).as_string().c_str(),
-                                       node.input(1).as_string().c_str());
+         nn::ComputeShapeConvTranspose(ctx, node, node.input(0).c_str(),
+                                       node.input(1).c_str());
        }},
       {"ai.onnx:DeformConv",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         nn::ComputeShapeDeformConv(ctx, node, node.input(0).as_string().c_str(),
-                                    node.input(1).as_string().c_str());
+         nn::ComputeShapeDeformConv(ctx, node, node.input(0).c_str(),
+                                    node.input(1).c_str());
        }},
       {"ai.onnx:Det",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeDet(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeDet(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Div",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeDiv(ctx, node, node.input(0).as_string().c_str(),
-                               node.input(1).as_string().c_str());
+         math::ComputeShapeDiv(ctx, node, node.input(0).c_str(),
+                               node.input(1).c_str());
        }},
       {"ai.onnx:Einsum",
       [](ShapesContext &ctx, const NodeProto &node) {
@@ -478,37 +478,37 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Erf",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-        math::ComputeShapeErf(ctx, node, node.input(0).as_string().c_str());
+        math::ComputeShapeErf(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Exp",
       [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 1);
-        math::ComputeShapeExp(ctx, node, node.input(0).as_string().c_str());
+        math::ComputeShapeExp(ctx, node, node.input(0).c_str());
       }},
       {"ai.onnx:Equal",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeEqual(ctx, node, node.input(0).as_string().c_str(),
-                                    node.input(1).as_string().c_str());
+         logical::ComputeShapeEqual(ctx, node, node.input(0).c_str(),
+                                    node.input(1).c_str());
        }},
       {"ai.onnx:Where",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         logical::ComputeShapeWhere(ctx, node, node.input(0).as_string().c_str(),
-                                    node.input(1).as_string().c_str(),
-                                    node.input(2).as_string().c_str());
+         logical::ComputeShapeWhere(ctx, node, node.input(0).c_str(),
+                                    node.input(1).c_str(),
+                                    node.input(2).c_str());
        }},
       {"ai.onnx:Or",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeOr(ctx, node, node.input(0).as_string().c_str(),
-                                 node.input(1).as_string().c_str());
+         logical::ComputeShapeOr(ctx, node, node.input(0).c_str(),
+                                 node.input(1).c_str());
        }},
       {"ai.onnx:Xor",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeXor(ctx, node, node.input(0).as_string().c_str(),
-                                  node.input(1).as_string().c_str());
+         logical::ComputeShapeXor(ctx, node, node.input(0).c_str(),
+                                  node.input(1).c_str());
        }},
       {"ai.onnx:Expand",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -518,35 +518,35 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Gemm",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeGemm(ctx, node, node.input(0).as_string().c_str(),
-                                node.input(1).as_string().c_str());
+         math::ComputeShapeGemm(ctx, node, node.input(0).c_str(),
+                                node.input(1).c_str());
        }},
       {"ai.onnx:GlobalAveragePool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         nn::ComputeShapeGlobalPool(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeGlobalPool(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:GlobalLpPool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         nn::ComputeShapeGlobalPool(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeGlobalPool(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:GlobalMaxPool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         nn::ComputeShapeGlobalPool(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeGlobalPool(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Greater",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeGreater(ctx, node, node.input(0).as_string().c_str(),
-                                      node.input(1).as_string().c_str());
+         logical::ComputeShapeGreater(ctx, node, node.input(0).c_str(),
+                                      node.input(1).c_str());
        }},
       {"ai.onnx:GreaterOrEqual",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeGreaterOrEqual(ctx, node, node.input(0).as_string().c_str(),
-                                             node.input(1).as_string().c_str());
+         logical::ComputeShapeGreaterOrEqual(ctx, node, node.input(0).c_str(),
+                                             node.input(1).c_str());
        }},
       {"ai.onnx:GridSample",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -601,34 +601,34 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:HardSigmoid",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeHardSigmoid(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeHardSigmoid(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:HardSwish",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeHardSwish(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeHardSwish(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Hardmax",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeHardmax(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeHardmax(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
       {"ai.onnx:ImageDecoder",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         image::ComputeShapeImageDecoder(ctx, node, node.input(0).as_string().c_str());
+         image::ComputeShapeImageDecoder(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:IsInf",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         logical::ComputeShapeIsInf(ctx, node, node.input(0).as_string().c_str());
+         logical::ComputeShapeIsInf(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:IsNaN",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         logical::ComputeShapeIsNaN(ctx, node, node.input(0).as_string().c_str());
+         logical::ComputeShapeIsNaN(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Loop",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -641,74 +641,74 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Log",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeLog(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeLog(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Less",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeLess(ctx, node, node.input(0).as_string().c_str(),
-                                   node.input(1).as_string().c_str());
+         logical::ComputeShapeLess(ctx, node, node.input(0).c_str(),
+                                   node.input(1).c_str());
        }},
       {"ai.onnx:LessOrEqual",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeLessOrEqual(ctx, node, node.input(0).as_string().c_str(),
-                                          node.input(1).as_string().c_str());
+         logical::ComputeShapeLessOrEqual(ctx, node, node.input(0).c_str(),
+                                          node.input(1).c_str());
        }},
       {"ai.onnx:LRN",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         nn::ComputeShapeLRN(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeLRN(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:LpNormalization",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         nn::ComputeShapeLpNormalization(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeLpNormalization(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:LpPool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         nn::ComputeShapeLpPool(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeLpPool(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:MaxPool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         nn::ComputeShapeMaxPool(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeMaxPool(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:MaxUnpool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
          const char *output_shape = nullptr;
          std::string output_shape_name;
-         if (node.input_size() >= 3 && !node.input(2).as_string().empty()) {
-           output_shape_name = node.input(2).as_string();
+         if (node.input_size() >= 3 && !node.input(2).empty()) {
+           output_shape_name = node.input(2);
            output_shape = output_shape_name.c_str();
          }
-         nn::ComputeShapeMaxUnpool(ctx, node, node.input(0).as_string().c_str(),
-                                   node.input(1).as_string().c_str(), output_shape);
+         nn::ComputeShapeMaxUnpool(ctx, node, node.input(0).c_str(),
+                                   node.input(1).c_str(), output_shape);
        }},
       {"ai.onnx:MaxRoiPool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         nn::ComputeShapeMaxRoiPool(ctx, node, node.input(0).as_string().c_str(),
-                                    node.input(1).as_string().c_str());
+         nn::ComputeShapeMaxRoiPool(ctx, node, node.input(0).c_str(),
+                                    node.input(1).c_str());
        }},
       {"ai.onnx:Mul",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeMul(ctx, node, node.input(0).as_string().c_str(),
-                               node.input(1).as_string().c_str());
+         math::ComputeShapeMul(ctx, node, node.input(0).c_str(),
+                               node.input(1).c_str());
        }},
       {"ai.onnx:Mod",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeMod(ctx, node, node.input(0).as_string().c_str(),
-                               node.input(1).as_string().c_str());
+         math::ComputeShapeMod(ctx, node, node.input(0).c_str(),
+                               node.input(1).c_str());
        }},
       {"ai.onnx:Mish",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeMish(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeMish(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Multinomial",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -718,18 +718,18 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Neg",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeNeg(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeNeg(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Not",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         logical::ComputeShapeNot(ctx, node, node.input(0).as_string().c_str());
+         logical::ComputeShapeNot(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:PRelu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapePRelu(ctx, node, node.input(0).as_string().c_str(),
-                                 node.input(1).as_string().c_str());
+         math::ComputeShapePRelu(ctx, node, node.input(0).c_str(),
+                                 node.input(1).c_str());
        }},
       {"ai.onnx:Pad",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -739,26 +739,26 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Pow",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapePow(ctx, node, node.input(0).as_string().c_str(),
-                               node.input(1).as_string().c_str());
+         math::ComputeShapePow(ctx, node, node.input(0).c_str(),
+                               node.input(1).c_str());
        }},
       {"ai.onnx:Sub",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeSub(ctx, node, node.input(0).as_string().c_str(),
-                               node.input(1).as_string().c_str());
+         math::ComputeShapeSub(ctx, node, node.input(0).c_str(),
+                               node.input(1).c_str());
        }},
       {"ai.onnx:MatMul",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeMatMul(ctx, node, node.input(0).as_string().c_str(),
-                                  node.input(1).as_string().c_str());
+         math::ComputeShapeMatMul(ctx, node, node.input(0).c_str(),
+                                  node.input(1).c_str());
        }},
       {"ai.onnx:MatMulInteger",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeMatMulInteger(ctx, node, node.input(0).as_string().c_str(),
-                                         node.input(1).as_string().c_str());
+         math::ComputeShapeMatMulInteger(ctx, node, node.input(0).c_str(),
+                                         node.input(1).c_str());
        }},
       {"ai.onnx:Max",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -795,51 +795,51 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:QuantizeLinear",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         const std::string x_name = node.input(0).as_string();
+         const std::string x_name = node.input(0);
          const std::string zp_name =
-             node.input_size() >= 3 ? node.input(2).as_string() : std::string();
+             node.input_size() >= 3 ? std::string(node.input(2)) : std::string();
          quantization::ComputeShapeQuantizeLinear(ctx, node, x_name.c_str(),
                                                   zp_name.empty() ? nullptr : zp_name.c_str());
        }},
       {"ai.onnx:DynamicQuantizeLinear",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string x_name = node.input(0).as_string();
+         const std::string& x_name = node.input(0);
          quantization::ComputeShapeDynamicQuantizeLinear(ctx, node, x_name.c_str());
        }},
       {"ai.onnx:QLinearConv",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 8);
-         const std::string x_name = node.input(0).as_string();
-         const std::string w_name = node.input(3).as_string();
-         const std::string yzp_name = node.input(7).as_string();
+         const std::string& x_name = node.input(0);
+         const std::string& w_name = node.input(3);
+         const std::string& yzp_name = node.input(7);
          quantization::ComputeShapeQLinearConv(ctx, node, x_name.c_str(), w_name.c_str(),
                                                yzp_name.c_str());
        }},
       {"ai.onnx:QLinearMatMul",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 8);
-         const std::string a_name = node.input(0).as_string();
-         const std::string b_name = node.input(3).as_string();
-         const std::string yzp_name = node.input(7).as_string();
+         const std::string& a_name = node.input(0);
+         const std::string& b_name = node.input(3);
+         const std::string& yzp_name = node.input(7);
          quantization::ComputeShapeQLinearMatMul(ctx, node, a_name.c_str(), b_name.c_str(),
                                                  yzp_name.c_str());
        }},
       {"ai.onnx:ReduceSum",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0).as_string();
-         const std::string axes_name =
-             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceSum(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceSumSquare",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0).as_string();
-         const std::string axes_name =
-             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceSumSquare(
              ctx, node, data_name.c_str(),
              node.input_size() >= 2 ? axes_name.c_str() : nullptr);
@@ -847,27 +847,27 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:ReduceL1",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0).as_string();
-         const std::string axes_name =
-             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceL1(ctx, node, data_name.c_str(),
                                          node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceL2",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0).as_string();
-         const std::string axes_name =
-             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceL2(ctx, node, data_name.c_str(),
                                          node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceLogSum",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0).as_string();
-         const std::string axes_name =
-             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceLogSum(
              ctx, node, data_name.c_str(),
              node.input_size() >= 2 ? axes_name.c_str() : nullptr);
@@ -875,9 +875,9 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:ReduceLogSumExp",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0).as_string();
-         const std::string axes_name =
-             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceLogSumExp(
              ctx, node, data_name.c_str(),
              node.input_size() >= 2 ? axes_name.c_str() : nullptr);
@@ -885,36 +885,36 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:ReduceMax",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0).as_string();
-         const std::string axes_name =
-             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceMax(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceMean",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0).as_string();
-         const std::string axes_name =
-             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceMean(ctx, node, data_name.c_str(),
                                            node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceMin",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0).as_string();
-         const std::string axes_name =
-             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceMin(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceProd",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0).as_string();
-         const std::string axes_name =
-             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceProd(ctx, node, data_name.c_str(),
                                            node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
@@ -1021,46 +1021,46 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:RoiAlign",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 3);
-        nn::ComputeShapeRoiAlign(ctx, node, node.input(0).as_string().c_str(),
-                                 node.input(1).as_string().c_str(),
-                                  node.input(2).as_string().c_str());
+        nn::ComputeShapeRoiAlign(ctx, node, node.input(0).c_str(),
+                                 node.input(1).c_str(),
+                                  node.input(2).c_str());
        }},
       {"ai.onnx:RotaryEmbedding",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         nn::ComputeShapeRotaryEmbedding(ctx, node, node.input(0).as_string().c_str());
+         nn::ComputeShapeRotaryEmbedding(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:CausalConvWithState",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         nn::ComputeShapeCausalConvWithState(ctx, node, node.input(0).as_string().c_str(),
-                                             node.input(1).as_string().c_str());
+         nn::ComputeShapeCausalConvWithState(ctx, node, node.input(0).c_str(),
+                                             node.input(1).c_str());
        }},
       {"ai.onnx:NonMaxSuppression",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         nn::ComputeShapeNonMaxSuppression(ctx, node, node.input(0).as_string().c_str(),
-                                           node.input(1).as_string().c_str());
+         nn::ComputeShapeNonMaxSuppression(ctx, node, node.input(0).c_str(),
+                                           node.input(1).c_str());
        }},
       {"ai.onnx:RNN",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         const std::string x_name = node.input(0).as_string();
-         const std::string r_name = node.input(2).as_string();
+         const std::string x_name = node.input(0);
+         const std::string r_name = node.input(2);
          nn::ComputeShapeRNN(ctx, node, x_name.c_str(), r_name.empty() ? nullptr : r_name.c_str());
        }},
       {"ai.onnx:GRU",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         const std::string x_name = node.input(0).as_string();
-         const std::string r_name = node.input(2).as_string();
+         const std::string x_name = node.input(0);
+         const std::string r_name = node.input(2);
          nn::ComputeShapeRNN(ctx, node, x_name.c_str(), r_name.empty() ? nullptr : r_name.c_str());
        }},
       {"ai.onnx:LSTM",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         const std::string x_name = node.input(0).as_string();
-         const std::string r_name = node.input(2).as_string();
+         const std::string x_name = node.input(0);
+         const std::string r_name = node.input(2);
          nn::ComputeShapeRNN(ctx, node, x_name.c_str(), r_name.empty() ? nullptr : r_name.c_str());
        }},
       {"ai.onnx:SequenceConstruct",
@@ -1109,40 +1109,40 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Sigmoid",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeSigmoid(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeSigmoid(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Softmax",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeSoftmax(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeSoftmax(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:LogSoftmax",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeLogSoftmax(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeLogSoftmax(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Softplus",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeSoftplus(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeSoftplus(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Softsign",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeSoftsign(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeSoftsign(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:Shrink",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeShrink(ctx, node, node.input(0).as_string().c_str());
+         math::ComputeShapeShrink(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:SoftmaxCrossEntropyLoss",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         const std::string scores_name = node.input(0).as_string();
-         const std::string labels_name = node.input(1).as_string();
-         const std::string weights_name =
-             node.input_size() >= 3 ? node.input(2).as_string() : std::string();
+         const std::string& scores_name = node.input(0);
+         const std::string& labels_name = node.input(1);
+         const std::string& weights_name =
+             node.input_size() >= 3 ? node.input(2) : utils::String::empty_string();
          math::ComputeShapeSoftmaxCrossEntropyLoss(
              ctx, node, scores_name.c_str(), labels_name.c_str(),
              weights_name.empty() ? nullptr : weights_name.c_str());
@@ -1150,10 +1150,10 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:NegativeLogLikelihoodLoss",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         const std::string input_name = node.input(0).as_string();
-         const std::string target_name = node.input(1).as_string();
-         const std::string weight_name =
-             node.input_size() >= 3 ? node.input(2).as_string() : std::string();
+         const std::string& input_name = node.input(0);
+         const std::string& target_name = node.input(1);
+         const std::string& weight_name =
+             node.input_size() >= 3 ? node.input(2) : utils::String::empty_string();
          math::ComputeShapeNegativeLogLikelihoodLoss(
              ctx, node, input_name.c_str(), target_name.c_str(),
              weight_name.empty() ? nullptr : weight_name.c_str());
@@ -1161,49 +1161,49 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:StringConcat",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         text::ComputeShapeStringConcat(ctx, node, node.input(0).as_string().c_str(),
-                                        node.input(1).as_string().c_str());
+         text::ComputeShapeStringConcat(ctx, node, node.input(0).c_str(),
+                                        node.input(1).c_str());
        }},
       {"ai.onnx:StringSplit",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         text::ComputeShapeStringSplit(ctx, node, node.input(0).as_string().c_str());
+         text::ComputeShapeStringSplit(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:StringNormalizer",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         text::ComputeShapeStringNormalizer(ctx, node, node.input(0).as_string().c_str());
+         text::ComputeShapeStringNormalizer(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:RegexFullMatch",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         text::ComputeShapeRegexFullMatch(ctx, node, node.input(0).as_string().c_str());
+         text::ComputeShapeRegexFullMatch(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx:TfIdfVectorizer",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         text::ComputeShapeTfIdfVectorizer(ctx, node, node.input(0).as_string().c_str());
+         text::ComputeShapeTfIdfVectorizer(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:Binarizer",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         traditionalml::ComputeShapeBinarizer(ctx, node, node.input(0).as_string().c_str());
+         traditionalml::ComputeShapeBinarizer(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:CastMap",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         traditionalml::ComputeShapeCastMap(ctx, node, node.input(0).as_string().c_str());
+         traditionalml::ComputeShapeCastMap(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:CategoryMapper",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         traditionalml::ComputeShapeCategoryMapper(ctx, node, node.input(0).as_string().c_str());
+         traditionalml::ComputeShapeCategoryMapper(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:DictVectorizer",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeDictVectorizer(ctx, node,
-                                                   node.input(0).as_string().c_str());
+                                                   node.input(0).c_str());
        }},
       {"ai.onnx.ml:FeatureVectorizer",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -1211,90 +1211,90 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          std::vector<std::string> inputs;
          inputs.reserve(static_cast<size_t>(node.input_size()));
          for (int i = 0; i < node.input_size(); ++i) {
-           inputs.emplace_back(node.input(i).as_string());
+           inputs.emplace_back(node.input(i));
          }
          traditionalml::ComputeShapeFeatureVectorizer(ctx, node, inputs);
        }},
       {"ai.onnx.ml:Imputer",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         traditionalml::ComputeShapeImputer(ctx, node, node.input(0).as_string().c_str());
+         traditionalml::ComputeShapeImputer(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:ArrayFeatureExtractor",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
          traditionalml::ComputeShapeArrayFeatureExtractor(
-             ctx, node, node.input(0).as_string().c_str(), node.input(1).as_string().c_str());
+             ctx, node, node.input(0).c_str(), node.input(1).c_str());
        }},
       {"ai.onnx.ml:LabelEncoder",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         traditionalml::ComputeShapeLabelEncoder(ctx, node, node.input(0).as_string().c_str());
+         traditionalml::ComputeShapeLabelEncoder(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:LinearClassifier",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeLinearClassifier(ctx, node,
-                                                    node.input(0).as_string().c_str());
+                                                    node.input(0).c_str());
        }},
       {"ai.onnx.ml:LinearRegressor",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         traditionalml::ComputeShapeLinearRegressor(ctx, node, node.input(0).as_string().c_str());
+         traditionalml::ComputeShapeLinearRegressor(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:Normalizer",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         traditionalml::ComputeShapeNormalizer(ctx, node, node.input(0).as_string().c_str());
+         traditionalml::ComputeShapeNormalizer(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:OneHotEncoder",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         traditionalml::ComputeShapeOneHotEncoder(ctx, node, node.input(0).as_string().c_str());
+         traditionalml::ComputeShapeOneHotEncoder(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:Scaler",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         traditionalml::ComputeShapeScaler(ctx, node, node.input(0).as_string().c_str());
+         traditionalml::ComputeShapeScaler(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:SVMClassifier",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 1);
-        traditionalml::ComputeShapeSVMClassifier(ctx, node, node.input(0).as_string().c_str());
+        traditionalml::ComputeShapeSVMClassifier(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:SVMRegressor",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 1);
-        traditionalml::ComputeShapeSVMRegressor(ctx, node, node.input(0).as_string().c_str());
+        traditionalml::ComputeShapeSVMRegressor(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:TreeEnsemble",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 1);
-        traditionalml::ComputeShapeTreeEnsemble(ctx, node, node.input(0).as_string().c_str());
+        traditionalml::ComputeShapeTreeEnsemble(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.ml:TreeEnsembleClassifier",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 1);
         traditionalml::ComputeShapeTreeEnsembleClassifier(ctx, node,
-                                                         node.input(0).as_string().c_str());
+                                                         node.input(0).c_str());
        }},
       {"ai.onnx.ml:TreeEnsembleRegressor",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 1);
         traditionalml::ComputeShapeTreeEnsembleRegressor(ctx, node,
-                                                        node.input(0).as_string().c_str());
+                                                        node.input(0).c_str());
        }},
       {"ai.onnx.ml:ZipMap",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 1);
-        traditionalml::ComputeShapeZipMap(ctx, node, node.input(0).as_string().c_str());
+        traditionalml::ComputeShapeZipMap(ctx, node, node.input(0).c_str());
        }},
       {"ai.onnx.preview:FlexAttention",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 3);
-        preview::ComputeShapeFlexAttention(ctx, node, node.input(0).as_string().c_str(),
-                                           node.input(1).as_string().c_str(),
-                                            node.input(2).as_string().c_str());
+        preview::ComputeShapeFlexAttention(ctx, node, node.input(0).c_str(),
+                                           node.input(1).c_str(),
+                                            node.input(2).c_str());
        }},
       {"ai.onnx.preview.training:Adagrad",
        [](ShapesContext &ctx, const NodeProto &node) {

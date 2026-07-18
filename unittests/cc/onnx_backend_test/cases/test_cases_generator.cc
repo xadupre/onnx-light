@@ -34,7 +34,7 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
   return nullptr;
 }
 
-std::string ConvertUtilsString(const utils::String &s) { return std::string(s.data(), s.size()); }
+std::string ConvertUtilsString(const std::string &s) { return s; }
 
 const AttributeProto *FindAttribute(const NodeProto &node, const std::string &name) {
   for (const auto &attr : node.ref_attribute()) {

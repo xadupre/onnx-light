@@ -12,8 +12,10 @@ bool GradMul(const NodeProto &node, const std::string &output_grad,
              std::unordered_map<std::string, std::string> &grad_accum, int &counter,
              FunctionProto &func) {
   const auto &inputs = node.input();
-  std::string A = (inputs.size() >= 1 && !inputs[0].null()) ? inputs[0].as_string() : "";
-  std::string B = (inputs.size() >= 2 && !inputs[1].null()) ? inputs[1].as_string() : "";
+  const std::string &A =
+      (inputs.size() >= 1 && !inputs[0].empty()) ? inputs[0] : utils::String::empty_string();
+  const std::string &B =
+      (inputs.size() >= 2 && !inputs[1].empty()) ? inputs[1] : utils::String::empty_string();
   if (!A.empty()) {
     std::string dA = NewGradName("dA", counter);
     func.add_node("Mul", {output_grad, B}, {dA});

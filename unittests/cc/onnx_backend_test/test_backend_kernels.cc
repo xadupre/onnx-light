@@ -28,9 +28,7 @@ namespace {
 
 constexpr int64_t kFallbackDefaultOpsetVersion = 18;
 
-std::string UtilsStringToStdString(const utils::String &s) {
-  return std::string(s.data(), s.size());
-}
+std::string UtilsStringToStdString(const std::string &s) { return s; }
 
 int64_t GetDefaultOpsetVersion(const ModelProto &model) {
   for (const auto &opset : model.ref_opset_import()) {

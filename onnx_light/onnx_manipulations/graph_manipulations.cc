@@ -15,15 +15,15 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
                                 const std::unordered_set<std::string> &outer_produced) {
   std::unordered_set<std::string> local;
   for (size_t i = 0; i < graph.input().size(); ++i) {
-    local.insert(graph.input()[i].name().as_string());
+    local.insert(graph.input()[i].name());
   }
   for (size_t i = 0; i < graph.initializer().size(); ++i) {
-    local.insert(graph.initializer()[i].name().as_string());
+    local.insert(graph.initializer()[i].name());
   }
   for (size_t i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];
     for (size_t j = 0; j < nd.output().size(); ++j) {
-      const std::string name = nd.output()[j].as_string();
+      const std::string name = nd.output()[j];
       if (!name.empty()) {
         local.insert(name);
       }
@@ -36,7 +36,7 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
   for (size_t i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];
     for (size_t j = 0; j < nd.input().size(); ++j) {
-      const std::string name = nd.input()[j].as_string();
+      const std::string name = nd.input()[j];
       if (name.empty() || local.count(name) || outer_produced.count(name)) {
         continue;
       }
@@ -63,7 +63,7 @@ std::vector<std::string> CollectExternalInputsImpl(const NodeRange &nodes) {
   for (size_t i = 0; i < nodes.size(); ++i) {
     const NodeProto &nd = nodes[i];
     for (size_t j = 0; j < nd.output().size(); ++j) {
-      const std::string name = nd.output()[j].as_string();
+      const std::string name = nd.output()[j];
       if (!name.empty()) {
         produced.insert(name);
       }
@@ -74,7 +74,7 @@ std::vector<std::string> CollectExternalInputsImpl(const NodeRange &nodes) {
   for (size_t i = 0; i < nodes.size(); ++i) {
     const NodeProto &nd = nodes[i];
     for (size_t j = 0; j < nd.input().size(); ++j) {
-      const std::string name = nd.input()[j].as_string();
+      const std::string name = nd.input()[j];
       if (name.empty() || produced.count(name)) {
         continue;
       }
@@ -111,7 +111,7 @@ CollectRemainingInputsImpl(const NodeRange &nodes, const std::vector<std::string
     deps[k] = CollectNodeInputs(nodes[k]);
     const NodeProto &nd = nodes[k];
     for (size_t j = 0; j < nd.output().size(); ++j) {
-      const std::string name = nd.output()[j].as_string();
+      const std::string name = nd.output()[j];
       if (!name.empty()) {
         produced[k].push_back(name);
       }
@@ -202,7 +202,7 @@ std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
   std::vector<std::string> out;
   std::unordered_set<std::string> seen;
   for (size_t i = 0; i < node.input().size(); ++i) {
-    const std::string name = node.input()[i].as_string();
+    const std::string name = node.input()[i];
     if (name.empty()) {
       continue;
     }

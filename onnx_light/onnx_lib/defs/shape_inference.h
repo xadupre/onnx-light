@@ -205,7 +205,7 @@ inline std::string getAttribute(const InferenceContext &ctx, const std::string &
                                 const std::string &defaultValue) {
   const auto *attr_proto = ctx.getAttribute(attributeName);
   if ((nullptr != attr_proto) && attr_proto->has_s())
-    return attr_proto->s().as_string();
+    return attr_proto->s();
   else if (nullptr != attr_proto)
     return ""; // protobuf default for strings
   else
@@ -691,7 +691,7 @@ multidirectionalBroadcastShapeInference(const std::vector<const TensorShapeProto
         if (num_symbolic_dims == 0) {
           symbolic_dim = dim_i_j;
           ++num_symbolic_dims;
-        } else if (dim_i_j.dim_param() != symbolic_dim.dim_param()) {
+        } else if (dim_i_j.dim_param().sv() != symbolic_dim.dim_param().sv()) {
           ++num_symbolic_dims;
         }
       }

@@ -133,6 +133,18 @@ void read_field(utils::BinaryStream &stream, int wire_type, utils::String &field
 }
 
 template <>
+void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalString &field,
+                const char *name, ParseOptions &) {
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
+  utils::RefString ref = stream.next_string();
+  if (ref.data() == nullptr)
+    field.emplace();
+  else
+    field.emplace(ref.data(), ref.size());
+}
+
+template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalField<int64_t> &field,
                 const char *name, ParseOptions &) {
   EXT_ENFORCE(wire_type == FIELD_VARINT, "unexpected wire_type=", wire_type, " for field '", name,

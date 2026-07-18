@@ -231,13 +231,11 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
 
 #define PYFIELD_STR(cls, name)                                                                     \
   def_prop_rw(                                                                                     \
-      #name,                                                                                       \
-      [](const cls &self) -> std::string {                                                         \
-        std::string s = self.ref_##name().as_string();                                             \
-        return s;                                                                                  \
-      },                                                                                           \
+      #name, [](const cls &self) -> std::string { return self.ref_##name(); },                     \
       [](cls &self, nb::object obj) {                                                              \
-        if (nb::isinstance<nb::str>(obj)) {                                                        \
+        if (obj.is_none()) {                                                                       \
+          self.clear_##name();                                                                     \
+        } else if (nb::isinstance<nb::str>(obj)) {                                                 \
           std::string st = nb::cast<std::string>(obj);                                             \
           self.set_##name(st);                                                                     \
         } else if (nb::isinstance<nb::bytes>(obj)) {                                               \
@@ -248,14 +246,14 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
           self.set_##name(nb::cast<cls::name##_t &>(obj));                                         \
         }                                                                                          \
       },                                                                                           \
-      cls::DOC_##name)                                                                             \
+      cls::DOC_##name, nb::for_setter(nb::arg("value").none()))                                    \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value")
 
 #define PYFIELD_STR_AS_BYTES(cls, name)                                                            \
   def_prop_rw(                                                                                     \
       #name,                                                                                       \
       [](const cls &self) -> nb::bytes {                                                           \
-        std::string s = self.ref_##name().as_string();                                             \
+        std::string s = self.ref_##name();                                                         \
         return nb::bytes(s.data(), s.size());                                                      \
       },                                                                                           \
       [](cls &self, nb::object obj) {                                                              \
@@ -1369,25 +1367,22 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
   nb::class_<utils::String>(m, "String", "Simplified string with no final null character.")
       .def(nb::init<std::string>())
       .def(
-          "__str__", [](const utils::String &self) -> std::string { return self.as_string(); },
+          "__str__", [](const utils::String &self) -> std::string { return self; },
           "Converts this instance into a python string.")
       .def(
           "__add__",
           [](const utils::String &self, const nb::str &s) -> std::string {
-            return self.as_string() + nb::cast<std::string>(s);
+            return self + nb::cast<std::string>(s);
           },
           "Concatenates this string and a python string.", nb::is_operator())
       .def(
           "__radd__",
           [](const utils::String &self, const nb::str &s) -> std::string {
-            return nb::cast<std::string>(s) + self.as_string();
+            return nb::cast<std::string>(s) + self;
           },
           "Concatenates a python string and this string.", nb::is_operator())
       .def(
-          "__repr__",
-          [](const utils::String &self) -> std::string {
-            return std::string("'") + self.as_string() + std::string("'");
-          },
+          "__repr__", [](const utils::String &self) -> std::string { return "'" + self + "'"; },
           "Representation with surrounding quotes.")
       .def(
           "__len__", [](const utils::String &self) -> int { return self.size(); },
@@ -1470,7 +1465,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .def(
           "decode",
           [](const utils::String &self, const char *encoding, const char *errors) -> nb::object {
-            std::string s = self.as_string();
+            std::string s = self;
             nb::bytes data(s.data(), s.size());
             return data.attr("decode")(encoding, errors);
           },
@@ -1530,7 +1525,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       [](utils::RepeatedStringField &self) -> nb::object {
         nb::list values;
         for (const auto &it : self) {
-          values.append(nb::cast(it.as_string()));
+          values.append(nb::cast(std::string(it)));
         }
         return nb::iter(values);
       },

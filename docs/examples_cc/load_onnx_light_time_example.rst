@@ -145,11 +145,11 @@ freed blocks).
       if (model.has_ir_version())
         std::cout << "  IR version   : " << model.ref_ir_version() << "\n";
       if (model.has_producer_name())
-        std::cout << "  Producer     : " << model.ref_producer_name().as_string() << "\n";
+        std::cout << "  Producer     : " << model.ref_producer_name() << "\n";
 
       if (model.has_graph()) {
         const onnx::GraphProto &graph = model.ref_graph();
-        std::cout << "  Graph name   : " << graph.ref_name().as_string() << "\n";
+        std::cout << "  Graph name   : " << graph.ref_name() << "\n";
         std::cout << "  Nodes        : " << graph.ref_node().size() << "\n";
         std::cout << "  Inputs       : " << graph.ref_input().size() << "\n";
         std::cout << "  Outputs      : " << graph.ref_output().size() << "\n";

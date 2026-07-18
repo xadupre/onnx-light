@@ -290,8 +290,8 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalData) {
   for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
     EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
               model2.ref_graph().ref_initializer()[i].ref_raw_data());
-    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_name().as_string(),
-              model2.ref_graph().ref_initializer()[i].ref_name().as_string());
+    EXPECT_EQ(std::string(model.ref_graph().ref_initializer()[i].ref_name()),
+              model2.ref_graph().ref_initializer()[i].ref_name());
   }
 
   std::remove(temp_filename.c_str());
@@ -419,8 +419,8 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalDataManyInitializers) {
   for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
     EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
               model2.ref_graph().ref_initializer()[i].ref_raw_data());
-    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_name().as_string(),
-              model2.ref_graph().ref_initializer()[i].ref_name().as_string());
+    EXPECT_EQ(std::string(model.ref_graph().ref_initializer()[i].ref_name()),
+              model2.ref_graph().ref_initializer()[i].ref_name());
   }
 
   std::remove(temp_filename.c_str());
@@ -723,8 +723,8 @@ TEST(onnx_threads, ParallelExternalWriteRoundTrip) {
     EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
               model2.ref_graph().ref_initializer()[i].ref_raw_data())
         << "Mismatch at initializer " << i;
-    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_name().as_string(),
-              model2.ref_graph().ref_initializer()[i].ref_name().as_string());
+    EXPECT_EQ(std::string(model.ref_graph().ref_initializer()[i].ref_name()),
+              model2.ref_graph().ref_initializer()[i].ref_name());
   }
 
   std::remove(onnx_path.c_str());
@@ -907,8 +907,8 @@ TEST(onnx_threads, ParallelSerializeToStringRoundTrip) {
     EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
               model2.ref_graph().ref_initializer()[i].ref_raw_data())
         << "Mismatch at initializer " << i;
-    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_name().as_string(),
-              model2.ref_graph().ref_initializer()[i].ref_name().as_string());
+    EXPECT_EQ(std::string(model.ref_graph().ref_initializer()[i].ref_name()),
+              model2.ref_graph().ref_initializer()[i].ref_name());
   }
 }
 
@@ -943,8 +943,8 @@ TEST(onnx_threads, FileStreamBasicLoad) {
     EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
               model2.ref_graph().ref_initializer()[i].ref_raw_data())
         << "Mismatch at initializer " << i;
-    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_name().as_string(),
-              model2.ref_graph().ref_initializer()[i].ref_name().as_string());
+    EXPECT_EQ(std::string(model.ref_graph().ref_initializer()[i].ref_name()),
+              model2.ref_graph().ref_initializer()[i].ref_name());
   }
 
   std::remove(onnx_path.c_str());
@@ -1039,8 +1039,8 @@ TEST(onnx_threads, MmapFileStreamBasicLoad) {
     EXPECT_EQ(via_file.ref_graph().ref_initializer()[i].ref_raw_data(),
               via_mmap.ref_graph().ref_initializer()[i].ref_raw_data())
         << "Mismatch at initializer " << i;
-    EXPECT_EQ(via_file.ref_graph().ref_initializer()[i].ref_name().as_string(),
-              via_mmap.ref_graph().ref_initializer()[i].ref_name().as_string());
+    EXPECT_EQ(std::string(via_file.ref_graph().ref_initializer()[i].ref_name()),
+              via_mmap.ref_graph().ref_initializer()[i].ref_name());
   }
 
   std::remove(onnx_path.c_str());

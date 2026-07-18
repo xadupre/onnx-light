@@ -55,6 +55,13 @@ void write_field(utils::BinaryWriteStream &stream, int order, const utils::Strin
 }
 
 template <>
+void write_field(utils::BinaryWriteStream &stream, int order, const utils::OptionalString &field,
+                 SerializeOptions &) {
+  stream.write_field_header(order, FIELD_FIXED_SIZE);
+  stream.write_string(utils::RefString(field.data(), field.size()));
+}
+
+template <>
 void write_field(utils::BinaryWriteStream &stream, int order,
                  const utils::OptionalField<uint64_t> &field, SerializeOptions &) {
   if (field.has_value()) {

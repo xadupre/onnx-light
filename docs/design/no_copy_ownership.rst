@@ -115,7 +115,7 @@ deleter is layered on top of the existing storage without moving the bytes::
     options.raw_data_callback = [](TensorProto &tensor) -> std::function<void()> {
       // Inspect tensor.ref_raw_data(); optionally relocate it (e.g. to a device) and
       // return the matching cleanup. Returning {} keeps the default ownership.
-      return [name = tensor.ref_name().as_string()]() { /* release resources */ };
+      return [name = tensor.ref_name()]() { /* release resources */ };
     };
     model.ParseFromString(bytes, options);
 

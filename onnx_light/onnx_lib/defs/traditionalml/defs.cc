@@ -55,7 +55,7 @@ ONNX_ML_OPERATOR_SET_SCHEMA(
                   if (single_symbolic_dim.empty()) {
                     // it is possible to set symbolic dimension param if the rest dim values are all
                     // value 1
-                    single_symbolic_dim = indices_shape.dim(i).dim_param().as_string();
+                    single_symbolic_dim = indices_shape.dim(i).dim_param();
                   } else {
                     return;
                   }

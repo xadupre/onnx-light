@@ -79,11 +79,11 @@ void PrintModelSummary(const onnx_light::ModelProto &model) {
     std::cout << "  IR version       : " << model.ref_ir_version() << "\n";
   }
   if (model.has_producer_name()) {
-    std::cout << "  Producer name    : " << model.ref_producer_name().as_string() << "\n";
+    std::cout << "  Producer name    : " << model.ref_producer_name() << "\n";
   }
   if (model.has_graph()) {
     const onnx_light::GraphProto &graph = model.ref_graph();
-    std::cout << "  Graph name       : " << graph.ref_name().as_string() << "\n";
+    std::cout << "  Graph name       : " << graph.ref_name() << "\n";
     std::cout << "  Nodes            : " << graph.ref_node().size() << "\n";
     std::cout << "  Inputs           : " << graph.ref_input().size() << "\n";
     std::cout << "  Outputs          : " << graph.ref_output().size() << "\n";
@@ -99,7 +99,7 @@ std::vector<float> ExtractInitializerB(const onnx_light::ModelProto &model) {
   const onnx_light::GraphProto &graph = model.ref_graph();
   for (size_t i = 0; i < graph.ref_initializer().size(); ++i) {
     const onnx_light::TensorProto &t = graph.ref_initializer()[i];
-    if (t.ref_name().as_string() != "B") {
+    if (t.ref_name() != "B") {
       continue;
     }
     if (t.ref_data_type() != onnx_light::TensorProto::DataType::FLOAT) {

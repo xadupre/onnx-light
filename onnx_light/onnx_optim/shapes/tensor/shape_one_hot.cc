@@ -22,9 +22,9 @@ void ComputeShapeOneHot(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 3),
                       "ComputeShapeOneHot: OneHot requires three inputs (indices, depth, values).");
 
-  const OptimTensor &indices = ctx.Get(node.input(0).as_string());
-  const OptimTensor &depth = ctx.Get(node.input(1).as_string());
-  const OptimTensor &values = ctx.Get(node.input(2).as_string());
+  const OptimTensor &indices = ctx.Get(node.input(0));
+  const OptimTensor &depth = ctx.Get(node.input(1));
+  const OptimTensor &values = ctx.Get(node.input(2));
 
   const OptimShape &indices_shape = indices.Shape();
   const std::size_t in_rank = indices_shape.Rank();

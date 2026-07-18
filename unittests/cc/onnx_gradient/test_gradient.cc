@@ -32,7 +32,7 @@ static std::vector<std::string> NodeTypes(const FunctionProto &func) {
   std::vector<std::string> types;
   types.reserve(static_cast<size_t>(func.node_size()));
   for (int i = 0; i < func.node_size(); ++i) {
-    types.push_back(std::string(func.node(i).op_type()));
+    types.push_back(func.node(i).op_type());
   }
   return types;
 }
@@ -55,13 +55,13 @@ TEST(GradientOfNodes, MatMulGrad_W) {
 
   // The function should have inputs: W, X, dy
   ASSERT_EQ(grad.input_size(), 3);
-  EXPECT_EQ(std::string(grad.input()[0]), "W");
-  EXPECT_EQ(std::string(grad.input()[1]), "X");
-  EXPECT_EQ(std::string(grad.input()[2]), "dy");
+  EXPECT_EQ(grad.input()[0], "W");
+  EXPECT_EQ(grad.input()[1], "X");
+  EXPECT_EQ(grad.input()[2], "dy");
 
   // The function should have one output: grad_W
   ASSERT_EQ(grad.output_size(), 1);
-  EXPECT_EQ(std::string(grad.output()[0]), "grad_W");
+  EXPECT_EQ(grad.output()[0], "grad_W");
 
   // The backward graph must contain at least: Transpose, MatMul
   auto types = NodeTypes(grad);
@@ -81,8 +81,8 @@ TEST(GradientOfNodes, MatMulGrad_XW) {
                                        std::vector<std::string>{"X", "W"}, "y", {});
 
   ASSERT_EQ(grad.output_size(), 2);
-  EXPECT_EQ(std::string(grad.output()[0]), "grad_X");
-  EXPECT_EQ(std::string(grad.output()[1]), "grad_W");
+  EXPECT_EQ(grad.output()[0], "grad_X");
+  EXPECT_EQ(grad.output()[1], "grad_W");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -100,11 +100,11 @@ TEST(GradientOfNodes, LinearRegression_NoBias) {
 
   // Inputs: W, X, dy
   ASSERT_GE(grad.input_size(), 2);
-  EXPECT_EQ(std::string(grad.input()[0]), "W");
+  EXPECT_EQ(grad.input()[0], "W");
 
   // Outputs: grad_W
   ASSERT_EQ(grad.output_size(), 1);
-  EXPECT_EQ(std::string(grad.output()[0]), "grad_W");
+  EXPECT_EQ(grad.output()[0], "grad_W");
 
   // We expect at least two nodes: Transpose(X) and MatMul(X^T, dy)
   EXPECT_GE(grad.node_size(), 2);
@@ -128,8 +128,8 @@ TEST(GradientOfNodes, LinearRegressionWithBias) {
 
   // Outputs: grad_W, grad_b
   ASSERT_EQ(grad.output_size(), 2);
-  EXPECT_EQ(std::string(grad.output()[0]), "grad_W");
-  EXPECT_EQ(std::string(grad.output()[1]), "grad_b");
+  EXPECT_EQ(grad.output()[0], "grad_W");
+  EXPECT_EQ(grad.output()[1], "grad_b");
 
   // The backward graph must visit both Add and MatMul backward rules.
   auto types = NodeTypes(grad);
@@ -210,11 +210,11 @@ TEST(GradientOfFunction, BasicLinearRegression) {
       GradientOfFunction(func, std::vector<std::string>{"W"}, "y", std::vector<std::string>{"X"});
 
   // Name should be derived from the original function.
-  EXPECT_EQ(std::string(grad.name()), "linear_grad");
+  EXPECT_EQ(grad.name(), "linear_grad");
 
   // Outputs: grad_W
   ASSERT_EQ(grad.output_size(), 1);
-  EXPECT_EQ(std::string(grad.output()[0]), "grad_W");
+  EXPECT_EQ(grad.output()[0], "grad_W");
 
   // Backward nodes must include Transpose and MatMul.
   auto types = NodeTypes(grad);

@@ -155,7 +155,7 @@ void ComputeShapeAttentionRank3(ShapesContext &ctx, const NodeProto &node, const
   }
 
   // Output 1: present_key = (batch, kv_num_heads, total_seq_len, head_size).
-  if (node.output_size() > 1 && !node.output(1).as_string().empty()) {
+  if (node.output_size() > 1 && !node.output(1).empty()) {
     OptimShape pk_shape;
     pk_shape.PushBack(batch);
     pk_shape.PushBack(OptimDim(kv_num_heads));
@@ -165,7 +165,7 @@ void ComputeShapeAttentionRank3(ShapesContext &ctx, const NodeProto &node, const
   }
 
   // Output 2: present_value = (batch, kv_num_heads, total_seq_len, v_head_size).
-  if (node.output_size() > 2 && !node.output(2).as_string().empty()) {
+  if (node.output_size() > 2 && !node.output(2).empty()) {
     OptimShape pv_shape;
     pv_shape.PushBack(batch);
     pv_shape.PushBack(OptimDim(kv_num_heads));
@@ -175,7 +175,7 @@ void ComputeShapeAttentionRank3(ShapesContext &ctx, const NodeProto &node, const
   }
 
   // Output 3: qk_matmul_output = (batch, q_num_heads, q_seq_len, total_seq_len).
-  if (node.output_size() > 3 && !node.output(3).as_string().empty()) {
+  if (node.output_size() > 3 && !node.output(3).empty()) {
     OptimShape qk_shape;
     qk_shape.PushBack(batch);
     qk_shape.PushBack(OptimDim(q_num_heads));
@@ -268,7 +268,7 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
   }
 
   // Output 1: present_key = (batch, kv_num_heads, total_seq_len, head_size).
-  if (node.output_size() > 1 && !node.output(1).as_string().empty()) {
+  if (node.output_size() > 1 && !node.output(1).empty()) {
     OptimShape pk_shape;
     pk_shape.PushBack(batch);
     pk_shape.PushBack(kv_num_heads);
@@ -278,7 +278,7 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
   }
 
   // Output 2: present_value = (batch, kv_num_heads, total_seq_len, v_head_size).
-  if (node.output_size() > 2 && !node.output(2).as_string().empty()) {
+  if (node.output_size() > 2 && !node.output(2).empty()) {
     OptimShape pv_shape;
     pv_shape.PushBack(batch);
     pv_shape.PushBack(kv_num_heads);
@@ -288,7 +288,7 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
   }
 
   // Output 3: qk_matmul_output = (batch, q_num_heads, q_seq_len, total_seq_len).
-  if (node.output_size() > 3 && !node.output(3).as_string().empty()) {
+  if (node.output_size() > 3 && !node.output(3).empty()) {
     OptimShape qk_shape;
     qk_shape.PushBack(batch);
     qk_shape.PushBack(q_shape[1]);

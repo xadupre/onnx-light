@@ -75,7 +75,7 @@ void ComputeShapeLayerNormalization(ShapesContext &ctx, const NodeProto &node, c
   }
 
   for (int i = 1; i < n_outputs; ++i) {
-    const std::string &name = node.output(i).as_string();
+    const std::string &name = node.output(i);
     if (name.empty()) {
       continue;
     }

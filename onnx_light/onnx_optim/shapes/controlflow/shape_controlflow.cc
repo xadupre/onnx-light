@@ -38,7 +38,7 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
   local.set_current_subgraph(local.current_node_index(), branch_name);
   for (int i = 0; i < subgraph.initializer().size(); ++i) {
     const TensorProto &init = subgraph.initializer()[i];
-    const std::string name = init.name().as_string();
+    const std::string name = init.name();
     if (name.empty() || local.Has(name)) {
       continue;
     }
@@ -71,7 +71,7 @@ const OptimTensor &GetSubgraphOutput(const ShapesContext &local_ctx, const Graph
   EXT_ENFORCE_INVALID(subgraph.output().size() == expected, "ComputeShapeIf: sub-graph '",
                       branch_name, "' declares ", std::to_string(subgraph.output().size()),
                       " output(s), expected ", std::to_string(expected), ".");
-  const std::string name = subgraph.output()[output_index].name().as_string();
+  const std::string name = subgraph.output()[output_index].name();
   EXT_ENFORCE_INVALID(local_ctx.Has(name), "ComputeShapeIf: output '", name, "' of sub-graph '",
                       branch_name, "' is missing from the inferred context.");
   return local_ctx.Get(name);
@@ -144,7 +144,7 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
   const ShapesContext else_ctx = InferSubgraph(ctx, "else_branch", else_branch);
 
   for (int i = 0; i < n_outputs; ++i) {
-    const std::string out_name = node.output(i).as_string();
+    const std::string out_name = node.output(i);
     if (out_name.empty()) {
       continue; // Optional output not produced.
     }
@@ -211,7 +211,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   local.set_current_subgraph(local.current_node_index(), "body");
   for (int i = 0; i < body.initializer().size(); ++i) {
     const TensorProto &init = body.initializer()[i];
-    const std::string name = init.name().as_string();
+    const std::string name = init.name();
     if (name.empty() || local.Has(name)) {
       continue;
     }
@@ -220,17 +220,15 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
       local.Set(name, std::move(tensor));
     }
   }
-  local.Set(body.input()[0].name().as_string(),
-            OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
-  local.Set(body.input()[1].name().as_string(),
-            OptimTensor(nullptr, TensorType::kBool, OptimShape{}));
+  local.Set(body.input()[0].name(), OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
+  local.Set(body.input()[1].name(), OptimTensor(nullptr, TensorType::kBool, OptimShape{}));
   for (int i = 0; i < n_carried; ++i) {
-    const std::string v_initial_name = node.input(2 + i).as_string();
+    const std::string v_initial_name = node.input(2 + i);
     EXT_ENFORCE_INVALID(!v_initial_name.empty(), "ComputeShapeLoop: 'v_initial' input #",
                         std::to_string(i), " has an empty name.");
     EXT_ENFORCE_INVALID(local.Has(v_initial_name), "ComputeShapeLoop: 'v_initial' input '",
                         v_initial_name, "' is missing from the inferred context.");
-    local.Set(body.input()[2 + i].name().as_string(), OptimTensor(local.Get(v_initial_name)));
+    local.Set(body.input()[2 + i].name(), OptimTensor(local.Get(v_initial_name)));
   }
 
   const size_t events_before = local.Events().size();
@@ -244,7 +242,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
 
   // Validate that every body output is known in the local context.
   for (int i = 0; i < body.output().size(); ++i) {
-    const std::string body_out = body.output()[i].name().as_string();
+    const std::string body_out = body.output()[i].name();
     EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeLoop: body output '", body_out,
                         "' is missing from the inferred context.");
   }
@@ -255,12 +253,12 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // symbolic otherwise to model the fact that the body may grow/shrink
   // the carried tensor's shape across iterations.
   for (int i = 0; i < n_carried; ++i) {
-    const std::string node_out = node.output(i).as_string();
+    const std::string node_out = node.output(i);
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &v_initial = ctx.Get(node.input(2 + i).as_string());
-    const OptimTensor &v_out = local.Get(body.output()[1 + i].name().as_string());
+    const OptimTensor &v_initial = ctx.Get(node.input(2 + i));
+    const OptimTensor &v_out = local.Get(body.output()[1 + i].name());
     EXT_ENFORCE_INVALID(v_out.Dtype() == v_initial.Dtype(), "ComputeShapeLoop: body output #",
                         std::to_string(1 + i),
                         " has a different element type than the matching 'v_initial' input.");
@@ -277,7 +275,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // symbolic dim is introduced.
   OptimDim trip_dim;
   {
-    const std::string m_name = node.input(0).as_string();
+    const std::string m_name = node.input(0);
     bool resolved = false;
     if (!m_name.empty() && ctx.Has(m_name)) {
       const OptimTensor &m_tensor = ctx.Get(m_name);
@@ -291,11 +289,11 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     }
   }
   for (int k = 0; k < k_scan; ++k) {
-    const std::string node_out = node.output(n_carried + k).as_string();
+    const std::string node_out = node.output(n_carried + k);
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &scan_out = local.Get(body.output()[1 + n_carried + k].name().as_string());
+    const OptimTensor &scan_out = local.Get(body.output()[1 + n_carried + k].name());
     OptimShape stacked;
     stacked.PushBack(trip_dim);
     for (std::size_t d = 0; d < scan_out.Shape().Rank(); ++d) {
@@ -406,7 +404,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   local.set_current_subgraph(local.current_node_index(), "body");
   for (int i = 0; i < body.initializer().size(); ++i) {
     const TensorProto &init = body.initializer()[i];
-    const std::string name = init.name().as_string();
+    const std::string name = init.name();
     if (name.empty() || local.Has(name)) {
       continue;
     }
@@ -420,12 +418,13 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   // Use the first scan input in the node (after the sequence_lens slot) as the
   // anchor for the symbolic name — this avoids accessing node.output(0), which
   // could be out-of-bounds if the node has no outputs.
-  const std::string scan8_anchor =
-      is_scan8 ? node.input(scan8_offset < node.input_size() ? scan8_offset : 0).as_string() : "";
+  const std::string &scan8_anchor =
+      is_scan8 ? node.input(scan8_offset < node.input_size() ? scan8_offset : 0)
+               : utils::String::empty_string();
   OptimDim batch_dim(std::string("Scan8_") + scan8_anchor + "_batch");
 
   for (int i = 0; i < n_state; ++i) {
-    const std::string state_in_name = node.input(scan8_offset + i).as_string();
+    const std::string state_in_name = node.input(scan8_offset + i);
     EXT_ENFORCE_INVALID(local.Has(state_in_name), "ComputeShapeScan: state input '", state_in_name,
                         "' is missing from the inferred context.");
     const OptimTensor &state_in = local.Get(state_in_name);
@@ -441,19 +440,19 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
       for (std::size_t d = 1; d < state_in.Shape().Rank(); ++d) {
         body_state_shape.PushBack(state_in.Shape()[d]);
       }
-      local.Set(body.input()[i].name().as_string(),
+      local.Set(body.input()[i].name(),
                 OptimTensor(nullptr, state_in.Dtype(), std::move(body_state_shape)));
     } else {
-      local.Set(body.input()[i].name().as_string(), OptimTensor(state_in));
+      local.Set(body.input()[i].name(), OptimTensor(state_in));
     }
   }
 
   // The trip count is taken from the first scan input's scan axis.
-  OptimDim trip_count_dim(std::string("Scan_") + node.output(0).as_string() + "_trip_count");
+  OptimDim trip_count_dim(std::string("Scan_") + node.output(0) + "_trip_count");
   bool trip_count_known = false;
 
   for (int m = 0; m < num_scan_inputs; ++m) {
-    const std::string scan_in_name = node.input(scan8_offset + n_state + m).as_string();
+    const std::string scan_in_name = node.input(scan8_offset + n_state + m);
     EXT_ENFORCE_INVALID(local.Has(scan_in_name), "ComputeShapeScan: scan input '", scan_in_name,
                         "' is missing from the inferred context.");
     const OptimTensor &scan_in = local.Get(scan_in_name);
@@ -494,7 +493,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
         body_in_shape.PushBack(scan_in.Shape()[d]);
       }
     }
-    local.Set(body.input()[n_state + m].name().as_string(),
+    local.Set(body.input()[n_state + m].name(),
               OptimTensor(nullptr, scan_in.Dtype(), std::move(body_in_shape)));
   }
 
@@ -508,7 +507,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   }
 
   for (int i = 0; i < body.output().size(); ++i) {
-    const std::string body_out = body.output()[i].name().as_string();
+    const std::string body_out = body.output()[i].name();
     EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeScan: body output '", body_out,
                         "' is missing from the inferred context.");
   }
@@ -517,12 +516,12 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   // validated against v_initial when shapes agree).
   // For Scan opset 8, restore the leading batch dimension on state outputs.
   for (int i = 0; i < n_state; ++i) {
-    const std::string node_out = node.output(i).as_string();
+    const std::string node_out = node.output(i);
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &state_in = ctx.Get(node.input(scan8_offset + i).as_string());
-    const OptimTensor &v_out = local.Get(body.output()[i].name().as_string());
+    const OptimTensor &state_in = ctx.Get(node.input(scan8_offset + i));
+    const OptimTensor &v_out = local.Get(body.output()[i].name());
     EXT_ENFORCE_INVALID(v_out.Dtype() == state_in.Dtype(), "ComputeShapeScan: body output #",
                         std::to_string(i),
                         " has a different element type than the matching state input.");
@@ -549,11 +548,11 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   // For Scan opset 8, an additional leading batch dimension B is also
   // prepended so the output shape is [B, T, D...].
   for (int k = 0; k < k_scan; ++k) {
-    const std::string node_out = node.output(n_state + k).as_string();
+    const std::string node_out = node.output(n_state + k);
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &scan_out_elt = local.Get(body.output()[n_state + k].name().as_string());
+    const OptimTensor &scan_out_elt = local.Get(body.output()[n_state + k].name());
     const OptimDim trip_dim =
         trip_count_known ? trip_count_dim : OptimDim(std::string("Scan_") + node_out + "_trip");
 

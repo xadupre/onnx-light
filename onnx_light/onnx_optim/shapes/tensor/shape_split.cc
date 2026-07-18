@@ -102,7 +102,7 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapeSplit: Split requires at least one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(node.input(0));
   const OptimShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
 
@@ -136,7 +136,7 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
   // 1) Opset 13+ takes ``split`` as an optional input; opset 1/2/11 carry it
   //    as an INTS attribute.
   if (node.input_size() >= 2 && !node.input(1).empty()) {
-    const OptimTensor &split_t = ctx.Get(node.input(1).as_string());
+    const OptimTensor &split_t = ctx.Get(node.input(1));
     if (std::optional<std::vector<int64_t>> v = TryReadIntVector(split_t); v.has_value()) {
       sizes = std::move(*v);
     }
@@ -214,7 +214,7 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
 
   size_t vas_offset = 0;
   for (int i = 0; i < num_outputs_decl; ++i) {
-    const std::string &name = node.output(i).as_string();
+    const std::string &name = node.output(i);
     const int64_t size_i = sizes.empty() ? int64_t{0} : sizes[static_cast<size_t>(i)];
     if (name.empty()) {
       vas_offset += static_cast<size_t>(size_i);

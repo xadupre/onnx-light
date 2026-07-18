@@ -24,12 +24,12 @@ void ComputeShapeNonZero(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "NonZero", "ComputeShapeNonZero");
   EXT_ENFORCE_INVALID(!(node.input_size() < 1), "ComputeShapeNonZero: NonZero requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(node.input(0));
 
   // The output is always a 2-D INT64 tensor whose first dimension is the
   // input rank (concrete integer) and whose second dimension is the number
   // of non-zero elements (a runtime value, kept symbolic).
-  const std::string nnz_sym = "NonZero_" + node.output(0).as_string() + "_nnz";
+  const std::string nnz_sym = "NonZero_" + node.output(0) + "_nnz";
   OptimShape out_shape;
   out_shape.PushBack(OptimDim(static_cast<int64_t>(input.Shape().Rank())));
   out_shape.PushBack(OptimDim(nnz_sym));

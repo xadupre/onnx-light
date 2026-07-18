@@ -65,7 +65,7 @@ void ComputeShapeRandomLikeImpl(ShapesContext &ctx, const NodeProto &node, const
   const std::string caller = std::string("ComputeShape") + op_name;
   CheckNodeOpAndOutput(node, op_name, caller.c_str());
   EXT_ENFORCE_INVALID(node.input_size() >= 1, caller, ": ", op_name, " requires one input.");
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const OptimTensor &input = ctx.Get(node.input(0));
   TensorType out_dtype = ResolveDtype(node, input.Dtype(), caller.c_str());
   OptimShape out_shape = input.Shape();
   ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));

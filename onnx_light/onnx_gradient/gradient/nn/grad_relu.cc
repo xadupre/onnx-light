@@ -12,8 +12,8 @@ bool GradRelu(const NodeProto &node, const std::string &output_grad,
               std::unordered_map<std::string, std::string> &grad_accum, int &counter,
               FunctionProto &func) {
   const auto &inputs = node.input();
-  if (inputs.size() >= 1 && !inputs[0].null() && !inputs[0].empty()) {
-    const std::string A = inputs[0].as_string();
+  if (inputs.size() >= 1 && !inputs[0].empty()) {
+    const std::string &A = inputs[0];
     std::string sgn = NewGradName("relu_sign", counter);
     func.add_node("Sign", {A}, {sgn});
     std::string mask = NewGradName("relu_mask", counter);

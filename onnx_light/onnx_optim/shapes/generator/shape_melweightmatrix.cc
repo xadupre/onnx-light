@@ -32,8 +32,8 @@ void ComputeShapeMelWeightMatrix(ShapesContext &ctx, const NodeProto &node) {
 
   // First output dim: floor(dft_length / 2) + 1 when ``dft_length`` is a
   // known constant scalar; symbolic otherwise.
-  const OptimTensor &num_mel_bins_input = ctx.Get(node.input(0).as_string());
-  const OptimTensor &dft_length_input = ctx.Get(node.input(1).as_string());
+  const OptimTensor &num_mel_bins_input = ctx.Get(node.input(0));
+  const OptimTensor &dft_length_input = ctx.Get(node.input(1));
 
   OptimShape out_shape;
   if (dft_length_input.HasValueAsShape() && dft_length_input.ValueAsShape().Rank() == 1 &&

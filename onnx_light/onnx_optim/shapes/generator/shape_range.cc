@@ -86,9 +86,9 @@ void ComputeShapeRange(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 3,
                       "ComputeShapeRange: Range requires three inputs (start, limit, delta).");
 
-  const OptimTensor &start = ctx.Get(node.input(0).as_string());
-  const OptimTensor &limit = ctx.Get(node.input(1).as_string());
-  const OptimTensor &delta = ctx.Get(node.input(2).as_string());
+  const OptimTensor &start = ctx.Get(node.input(0));
+  const OptimTensor &limit = ctx.Get(node.input(1));
+  const OptimTensor &delta = ctx.Get(node.input(2));
 
   const TensorType out_dtype = start.Dtype();
 

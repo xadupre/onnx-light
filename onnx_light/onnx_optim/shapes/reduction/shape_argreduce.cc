@@ -32,7 +32,7 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 void ComputeShapeArgReduce(ShapesContext &ctx, const NodeProto &node, const char *data) {
   // Accept either ArgMax or ArgMin: same shape semantics for both.
-  const std::string op_type = node.op_type().as_string();
+  const std::string op_type = node.op_type();
   EXT_ENFORCE_INVALID(op_type == "ArgMax" || op_type == "ArgMin",
                       "ComputeShapeArgReduce: expected ArgMax or ArgMin, got '", op_type, "'.");
   EXT_ENFORCE_INVALID(node.output_size() >= 1,

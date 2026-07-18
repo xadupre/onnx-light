@@ -21,8 +21,8 @@ void ComputeShapeCastLike(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeCastLike: CastLike requires two inputs.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
-  const OptimTensor &target_type = ctx.Get(node.input(1).as_string());
+  const OptimTensor &input = ctx.Get(node.input(0));
+  const OptimTensor &target_type = ctx.Get(node.input(1));
 
   const TensorType out_dtype = target_type.Dtype();
   EXT_ENFORCE_INVALID(out_dtype != TensorType::kUndefined,

@@ -38,8 +38,8 @@ void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeTile: Tile requires two inputs (input, repeats).");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
-  const OptimTensor &repeats_input = ctx.Get(node.input(1).as_string());
+  const OptimTensor &input = ctx.Get(node.input(0));
+  const OptimTensor &repeats_input = ctx.Get(node.input(1));
 
   const TensorType dtype = input.Dtype();
   const OptimShape &in_shape = input.Shape();

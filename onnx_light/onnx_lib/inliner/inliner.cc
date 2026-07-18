@@ -55,7 +55,7 @@ private:
   OpsetMapBase Mismatches(const utils::RepeatedProtoField<OperatorSetIdProto> &list) const {
     OpsetMapBase result;
     for (const auto &pair : list) {
-      auto iter = this->find(NormalizeDomain(pair.domain().as_string()));
+      auto iter = this->find(NormalizeDomain(pair.domain()));
       if ((iter != this->end()) && (iter->second != pair.version()))
         result.insert(*iter);
     }
@@ -64,7 +64,7 @@ private:
 
   bool Add(const utils::RepeatedProtoField<OperatorSetIdProto> &list) {
     for (const auto &pair : list) {
-      auto domain = NormalizeDomain(pair.domain().as_string());
+      auto domain = NormalizeDomain(pair.domain());
       auto version = pair.version();
       auto iter = this->find(domain);
       if (iter != this->end()) {
@@ -118,32 +118,32 @@ public:
 
   bool ProcessGraph(const GraphProto &graph) override {
     for (const auto &x : graph.input())
-      Add(x.name().as_string());
+      Add(x.name());
     for (const auto &x : graph.initializer())
-      Add(x.name().as_string());
+      Add(x.name());
     // Adding graph outputs is redundant for a valid graph, but we do it anyway,
     // to produce better results for invalid graphs.
     for (const auto &x : graph.output())
-      Add(x.name().as_string());
+      Add(x.name());
     return true;
   }
 
   bool ProcessFunction(const FunctionProto &function) override {
     for (const auto &x : function.input())
-      Add(x.as_string());
+      Add(x);
     for (const auto &x : function.output())
-      Add(x.as_string());
+      Add(x);
     return true;
   }
 
   bool ProcessNode(const NodeProto &node) override {
     // We use a single name-space for node names and variable names, to keep name-generation simple.
-    Add(node.name().as_string());
+    Add(node.name());
     for (const auto &name : node.input()) {
-      Add(name.as_string());
+      Add(name);
     }
     for (const auto &name : node.output()) {
-      Add(name.as_string());
+      Add(name);
     }
     return true;
   }
@@ -220,18 +220,18 @@ public:
     size_t i = 0;
     for (; i < actuals.size(); ++i) {
       utils::String &formal = formals[i];
-      std::string rename_as = actuals[i].as_string();
+      std::string rename_as = actuals[i];
       if (isOutput)
         if (rename_as.empty())
-          rename_as = MakeUnique(formal.as_string());
-      current_scope[formal.as_string()] = rename_as;
+          rename_as = MakeUnique(formal);
+      current_scope[formal] = rename_as;
       if (!rename_as.empty())
         formal = rename_as;
     }
     for (; i < formals.size(); ++i) {
       utils::String &formal = formals[i];
-      std::string rename_as = isOutput ? MakeUnique(formal.as_string()) : std::string();
-      current_scope[formal.as_string()] = rename_as;
+      std::string rename_as = isOutput ? MakeUnique(formal) : std::string();
+      current_scope[formal] = rename_as;
       if (!rename_as.empty())
         formal = rename_as;
     }
@@ -240,15 +240,15 @@ public:
   // Process a node:
   bool ProcessNode(NodeProto &node) override {
     if (!node.name().empty())
-      node.set_name(MakeUnique(node.name().as_string()));
+      node.set_name(MakeUnique(node.name()));
 
     for (auto &x : node.input()) {
-      std::string s = x.as_string();
+      std::string s = x;
       LookupOrRename(s, false);
       x = s;
     }
     for (auto &y : node.output()) {
-      std::string s = y.as_string();
+      std::string s = y;
       LookupOrRename(s, true);
       y = s;
     }
@@ -261,17 +261,17 @@ public:
   void VisitGraph(GraphProto &graph) override {
     rename_scopes.emplace_back();
     for (auto &x : graph.input()) {
-      std::string s = x.name().as_string();
+      std::string s = x.name();
       Rename(s);
       x.set_name(s);
     }
     for (auto &init : graph.initializer()) {
-      std::string s = init.name().as_string();
+      std::string s = init.name();
       Rename(s);
       init.set_name(s);
     }
     for (auto &y : graph.output()) {
-      std::string s = y.name().as_string();
+      std::string s = y.name();
       Rename(s);
       y.set_name(s);
     }
@@ -320,7 +320,7 @@ public:
 
     renamer.VisitFunction(callee);
     for (auto &v : callee.value_info()) {
-      std::string name_str = v.name().as_string();
+      std::string name_str = v.name();
       renamer.LookupOrRename(name_str, false);
       v.set_name(name_str);
     }
@@ -353,9 +353,9 @@ private:
   void VisitGraph(const GraphProto &graph) override {
     namescopes.emplace_back();
     for (const auto &x : graph.input())
-      CurrentScope().insert(x.name().as_string());
+      CurrentScope().insert(x.name());
     for (const auto &init : graph.initializer())
-      CurrentScope().insert(init.name().as_string());
+      CurrentScope().insert(init.name());
     for (const auto &n : graph.node())
       VisitNode(n);
     namescopes.pop_back();
@@ -363,14 +363,14 @@ private:
 
   bool ProcessNode(const NodeProto &node) override {
     for (const auto &var : node.input()) {
-      if (!var.empty() && !IsLocalVar(var.as_string())) {
-        result.push_back(var.as_string());
+      if (!var.empty() && !IsLocalVar(std::string(var))) {
+        result.push_back(std::string(var));
       }
     }
     if (InNestedScope()) {
       for (const auto &var : node.output()) {
         if (!var.empty()) {
-          CurrentScope().insert(var.as_string());
+          CurrentScope().insert(std::string(var));
         }
       }
     }
@@ -391,8 +391,8 @@ using ConstNodeMap = std::unordered_map<std::string, const NodeProto *>;
 ConstNodeMap FindConstantNodes(const GraphProto &graph) {
   ConstNodeMap result;
   for (const NodeProto &node : graph.node()) {
-    if (IsOnnxDomain(node.domain().as_string()) && (node.op_type() == "Constant")) {
-      result[node.output()[0].as_string()] = &node;
+    if (IsOnnxDomain(node.domain()) && (node.op_type() == "Constant")) {
+      result[node.output()[0]] = &node;
     }
   }
   return result;
@@ -454,8 +454,8 @@ void ConvertVersion(ModelProto &model, const NodeProto &call_node, FunctionProto
   for (const auto &var : call_node.output()) {
     if (!var.empty()) {
       auto *new_output = graph.add_output();
-      new_output->set_name(var.as_string());
-      new_output->set_type(GetType(model, var.as_string()));
+      new_output->set_name(std::string(var));
+      new_output->set_type(GetType(model, std::string(var)));
     }
   }
 
@@ -525,8 +525,8 @@ struct InlinerImpl {
   ~InlinerImpl() = default;
 
   bool GetCallee(const NodeProto &node, FunctionProto &callee, int64_t &target_version) {
-    std::string domain = node.domain().as_string();
-    std::string function_name = node.op_type().as_string();
+    std::string domain = node.domain();
+    std::string function_name = node.op_type();
     if (!to_inline.Contains(domain, function_name)) {
       return false;
     }
@@ -543,7 +543,7 @@ struct InlinerImpl {
     if (schema_registry != nullptr) {
       int64_t domain_version = GetDomainVersion(model, domain);
       const auto *const op_schema =
-          schema_registry->GetSchema(node.op_type().as_string(), domain_version, domain);
+          schema_registry->GetSchema(node.op_type(), domain_version, domain);
 
       if (op_schema == nullptr) {
         // If the schema is not found, we cannot inline the function.
@@ -566,7 +566,7 @@ struct InlinerImpl {
 #endif
         std::vector<TypeProto> input_types;
         for (const auto &input : node.input()) {
-          const TypeProto *t = TryGetType(model, input.as_string());
+          const TypeProto *t = TryGetType(model, input);
           if (t == nullptr) {
             // Type information is not available for this input (e.g. it is the
             // output of a node that was just inlined and whose type was not
@@ -612,12 +612,12 @@ struct InlinerImpl {
         }
         std::unordered_set<std::string> actual_parameters;
         for (const auto &x : node.input())
-          actual_parameters.insert(x.as_string());
+          actual_parameters.insert(std::string(x));
         for (const auto &x : node.output())
-          actual_parameters.insert(x.as_string());
+          actual_parameters.insert(std::string(x));
         // Append valueinfos of called function
         for (const auto &callee_vi : callee.value_info()) {
-          if (actual_parameters.count(callee_vi.name().as_string()) == 0) {
+          if (actual_parameters.count(callee_vi.name()) == 0) {
             value_infos.push_back(callee_vi);
           }
         }
@@ -719,7 +719,7 @@ struct InlinerImpl {
     for (auto &function : model.functions()) {
       if (!model_imports.Add(function))
         ONNX_THROW("Model has functions with incompatible opset versions.");
-      if (to_inline.Contains(function.domain().as_string(), function.name().as_string())) {
+      if (to_inline.Contains(function.domain(), function.name())) {
         map[GetFunctionImplId(function)] =
             std::pair<const FunctionProto *, int64_t>(&function, kNoConversion);
       } else {
@@ -933,7 +933,7 @@ FunctionBuilder &FunctionBuilder::AddInlinedCall(std::initializer_list<std::stri
   const auto *input_it = inputs.begin();
   for (const auto &graph_input : graph.input()) {
     if (input_it != inputs.end()) {
-      renamer.BindName(graph_input.name().as_string(), std::string(*input_it));
+      renamer.BindName(graph_input.name(), std::string(*input_it));
       ++input_it;
     }
   }
@@ -942,14 +942,14 @@ FunctionBuilder &FunctionBuilder::AddInlinedCall(std::initializer_list<std::stri
   const auto *output_it = outputs.begin();
   for (const auto &graph_output : graph.output()) {
     if (output_it != outputs.end()) {
-      renamer.BindName(graph_output.name().as_string(), std::string(*output_it));
+      renamer.BindName(graph_output.name(), std::string(*output_it));
       ++output_it;
     }
   }
 
   // Add Constant nodes for every initializer in the graph
   for (const auto &initializer : graph.initializer()) {
-    std::string const_name = renamer.BindToUniqueName(initializer.name().as_string());
+    std::string const_name = renamer.BindToUniqueName(initializer.name());
     Const(const_name, initializer);
   }
 

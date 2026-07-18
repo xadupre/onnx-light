@@ -119,7 +119,7 @@ static bool IsIdentityModifierGraph(const AttributeProto *attr) {
   }
   const auto &graph = attr->g();
   return graph.node_size() == 0 && graph.input_size() == kModifierInputCount &&
-         graph.output_size() == 1 && graph.input(0).name() == graph.output(0).name();
+         graph.output_size() == 1 && graph.input(0).name().sv() == graph.output(0).name().sv();
 }
 
 // ---------------------------------------------------------------------------

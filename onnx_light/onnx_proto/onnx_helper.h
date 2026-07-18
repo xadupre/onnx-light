@@ -8,6 +8,17 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+// Canonical name of the default ONNX domain. The empty string used by
+// ``NodeProto::domain()`` for the default ONNX domain is normalised to
+// this value before dispatch-table lookups.
+inline const std::string kDefaultOnnxDomain = "ai.onnx";
+
+inline const std::string &NormaliseDispatchDomain(const NodeProto &node) {
+  if (node.domain().empty())
+    return kDefaultOnnxDomain;
+  return node.domain().value();
+}
+
 /**
  * The function populates external data for every tensor.
  * The function does not remove anything from the model.
@@ -766,7 +777,7 @@ template <>
 inline std::string GetAttributeOr(const NodeProto &node, const char *name,
                                   const std::string &default_value) {
   const AttributeProto *attr = FindAttribute(node, name);
-  return attr == nullptr ? default_value : attr->ref_s().as_string();
+  return attr == nullptr ? default_value : std::string(attr->ref_s());
 }
 
 /**

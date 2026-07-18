@@ -47,7 +47,7 @@ void ApplyBackward(const NodeProto &node,
   // Find the output gradient: take the first output that has a gradient.
   std::string output_grad;
   for (const auto &out : node.output()) {
-    auto it = grad_table.find(out.as_string());
+    auto it = grad_table.find(out);
     if (it != grad_table.end()) {
       output_grad = it->second;
       break;
@@ -56,8 +56,8 @@ void ApplyBackward(const NodeProto &node,
   if (output_grad.empty())
     return; // no gradient flows through this node
 
-  const std::string domain = node.domain().as_string();
-  const std::string op_type = node.op_type().as_string();
+  const std::string domain = node.domain();
+  const std::string op_type = node.op_type();
   auto it = registry.find({domain, op_type});
   EXT_ENFORCE(it != registry.end(), "onnx_gradient: no gradient function registered for domain='",
               domain, "' op_type='", op_type, "'");

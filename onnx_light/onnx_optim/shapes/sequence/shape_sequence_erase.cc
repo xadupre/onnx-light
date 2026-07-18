@@ -20,7 +20,7 @@ void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeSequenceErase: SequenceErase requires at least one input.");
 
-  const std::string seq_name = node.input(0).as_string();
+  const std::string seq_name = node.input(0);
   const OptimSequence &seq = ctx.GetSequence(seq_name);
   const TensorType elem_dtype = seq.ElemDtype();
 
@@ -36,7 +36,7 @@ void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node) {
     out_length = OptimDim(in_len > 0 ? in_len - 1 : int64_t{0});
   } else {
     // Symbolic length: produce a fresh symbolic name for the output.
-    out_length = OptimDim("SequenceErase_" + node.output(0).as_string() + "_len");
+    out_length = OptimDim("SequenceErase_" + node.output(0) + "_len");
   }
 
   ctx.SetSequence(node.output(0), OptimSequence(elem_dtype, std::move(out_length)));

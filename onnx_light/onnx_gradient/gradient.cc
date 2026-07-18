@@ -27,7 +27,7 @@ std::unordered_map<std::string, size_t> BuildOutputToNodeIndex(NodeIt nodes_begi
   size_t i = 0;
   for (auto it = nodes_begin; it != nodes_end; ++it, ++i) {
     for (const auto &output : it->output()) {
-      output_map[output.as_string()] = i;
+      output_map[output] = i;
     }
   }
   return output_map;
@@ -54,8 +54,8 @@ std::vector<size_t> TopologicalOrder(NodeIt nodes_begin, NodeIt nodes_end,
     auto node_it = nodes_begin;
     std::advance(node_it, static_cast<std::ptrdiff_t>(idx));
     for (const auto &inp : node_it->input()) {
-      if (!inp.null() && !inp.empty())
-        visit(inp.as_string());
+      if (!inp.empty())
+        visit(inp);
     }
     order.push_back(idx);
   };
@@ -154,9 +154,8 @@ FunctionProto GradientOfFunction(const FunctionProto &function, std::span<const 
   for (int i = 0; i < function.node_size(); ++i) {
     nodes.push_back(function.node(i));
   }
-  const std::string domain = function.has_domain() ? std::string(function.domain()) : "";
-  const std::string name =
-      function.has_name() ? std::string(function.name()) + "_grad" : "gradient";
+  const std::string domain = function.has_domain() ? function.domain().value() : "";
+  const std::string name = function.has_name() ? function.name().value() + "_grad" : "gradient";
   return ComputeGradient(nodes.begin(), nodes.end(), xs.begin(), xs.end(), y, zs.begin(), zs.end(),
                          domain, name, registry);
 }

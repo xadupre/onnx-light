@@ -97,8 +97,9 @@ public:                                                                         
   using name##_t = type;
 
 #define FIELD_STR(name, order, doc)                                                                \
-  FIELD(utils::String, name, order, doc)                                                           \
-  inline void clear_##name() { name##_.clear(); }                                                  \
+  FIELD(utils::OptionalString, name, order, doc)                                                   \
+  inline void clear_##name() { name##_.reset(); }                                                  \
+  inline void set_##name(const char *v) { name##_ = v; }                                           \
   inline void set_##name(const std::string &v) { name##_ = v; }                                    \
   inline void set_##name(const utils::RefString &v) { name##_ = v; }
 
@@ -148,6 +149,7 @@ public:                                                                         
 
 #define FIELD_REPEATED_STR(type, name, order, doc)                                                 \
   FIELD_REPEATED_BASE(type, utils::RepeatedStringField, name, order, doc)                          \
+  inline void add_##name(const char *v) { name##_.push_back(utils::String(v)); }                   \
   inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
   inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }
 
@@ -505,6 +507,10 @@ using utils::offset_t;
 template <typename T> inline bool _has_field_(const T &) { return true; }
 /** Returns true if the string field is non-empty. */
 template <> inline bool _has_field_(const utils::String &field) { return !field.empty(); }
+/** Returns true if the optional string field is present (proto2 optional-string presence). */
+template <> inline bool _has_field_(const utils::OptionalString &field) {
+  return field.has_value();
+}
 /** Returns true if the raw-bytes field is non-empty. */
 template <> inline bool _has_field_(const std::vector<uint8_t> &field) { return !field.empty(); }
 /** Returns true if the ByteSpan field is non-empty (owned or borrowed). */

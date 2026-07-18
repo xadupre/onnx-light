@@ -281,8 +281,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         if (output_tags_are_consistent && !current_output_tag.empty()) {
           for (int idx : backward_inputs) {
             if (idx >= 0 && idx < node->input().size()) {
-              changed |=
-                  TrySetValueTag(value_tags, node->input(idx), current_output_tag);
+              changed |= TrySetValueTag(value_tags, node->input(idx), current_output_tag);
             }
           }
         }

@@ -111,8 +111,8 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          const std::string& q_name = node.input(0);
          const std::string& k_name = node.input(1);
          const std::string& v_name = node.input(2);
-         const std::string& past_k_name = node.input_size() > 4 ? node.input(4) : utils::String::default_empty();
-         const std::string& past_v_name = node.input_size() > 5 ? node.input(5) : utils::String::default_empty();
+         const std::string& past_k_name = node.input_size() > 4 ? node.input(4) : utils::String::empty_string();
+         const std::string& past_v_name = node.input_size() > 5 ? node.input(5) : utils::String::empty_string();
          nn::ComputeShapeAttention(ctx, node, q_name.c_str(), k_name.c_str(), v_name.c_str(),
                                    past_k_name.empty() ? nullptr : past_k_name.c_str(),
                                    past_v_name.empty() ? nullptr : past_v_name.c_str());
@@ -135,9 +135,9 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
         RequireInputs(node, 1);
         const std::string& data_name = node.input(0);
         const std::string& ratio_name =
-            node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+            node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
         const std::string& training_mode_name =
-            node.input_size() >= 3 ? node.input(2) : utils::String::default_empty();
+            node.input_size() >= 3 ? node.input(2) : utils::String::empty_string();
         nn::ComputeShapeDropout(ctx, node, data_name.c_str(),
                                 ratio_name.empty() ? nullptr : ratio_name.c_str(),
                                 training_mode_name.empty() ? nullptr : training_mode_name.c_str());
@@ -179,7 +179,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          const std::string& k_name = node.input(1);
          const std::string& v_name = node.input(2);
          const std::string& past_state_name =
-             node.input_size() > 3 ? node.input(3) : utils::String::default_empty();
+             node.input_size() > 3 ? node.input(3) : utils::String::empty_string();
          nn::ComputeShapeLinearAttention(
              ctx, node, q_name.c_str(), k_name.c_str(), v_name.c_str(),
              past_state_name.empty() ? nullptr : past_state_name.c_str());
@@ -830,7 +830,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          const std::string& data_name = node.input(0);
          const std::string& axes_name =
-             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceSum(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
@@ -839,7 +839,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          const std::string& data_name = node.input(0);
          const std::string& axes_name =
-             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceSumSquare(
              ctx, node, data_name.c_str(),
              node.input_size() >= 2 ? axes_name.c_str() : nullptr);
@@ -849,7 +849,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          const std::string& data_name = node.input(0);
          const std::string& axes_name =
-             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceL1(ctx, node, data_name.c_str(),
                                          node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
@@ -858,7 +858,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          const std::string& data_name = node.input(0);
          const std::string& axes_name =
-             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceL2(ctx, node, data_name.c_str(),
                                          node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
@@ -867,7 +867,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          const std::string& data_name = node.input(0);
          const std::string& axes_name =
-             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceLogSum(
              ctx, node, data_name.c_str(),
              node.input_size() >= 2 ? axes_name.c_str() : nullptr);
@@ -877,7 +877,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          const std::string& data_name = node.input(0);
          const std::string& axes_name =
-             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceLogSumExp(
              ctx, node, data_name.c_str(),
              node.input_size() >= 2 ? axes_name.c_str() : nullptr);
@@ -887,7 +887,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          const std::string& data_name = node.input(0);
          const std::string& axes_name =
-             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceMax(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
@@ -896,7 +896,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          const std::string& data_name = node.input(0);
          const std::string& axes_name =
-             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceMean(ctx, node, data_name.c_str(),
                                            node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
@@ -905,7 +905,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          const std::string& data_name = node.input(0);
          const std::string& axes_name =
-             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceMin(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
@@ -914,7 +914,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          const std::string& data_name = node.input(0);
          const std::string& axes_name =
-             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+             node.input_size() >= 2 ? node.input(1) : utils::String::empty_string();
          reduction::ComputeShapeReduceProd(ctx, node, data_name.c_str(),
                                            node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
@@ -1142,7 +1142,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          const std::string& scores_name = node.input(0);
          const std::string& labels_name = node.input(1);
          const std::string& weights_name =
-             node.input_size() >= 3 ? node.input(2) : utils::String::default_empty();
+             node.input_size() >= 3 ? node.input(2) : utils::String::empty_string();
          math::ComputeShapeSoftmaxCrossEntropyLoss(
              ctx, node, scores_name.c_str(), labels_name.c_str(),
              weights_name.empty() ? nullptr : weights_name.c_str());
@@ -1153,7 +1153,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          const std::string& input_name = node.input(0);
          const std::string& target_name = node.input(1);
          const std::string& weight_name =
-             node.input_size() >= 3 ? node.input(2) : utils::String::default_empty();
+             node.input_size() >= 3 ? node.input(2) : utils::String::empty_string();
          math::ComputeShapeNegativeLogLikelihoodLoss(
              ctx, node, input_name.c_str(), target_name.c_str(),
              weight_name.empty() ? nullptr : weight_name.c_str());

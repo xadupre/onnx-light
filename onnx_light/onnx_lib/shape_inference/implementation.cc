@@ -633,8 +633,7 @@ public:
           input_data_by_name[func_proto.input().Get(i)] = ctx.getInputData(i);
         } else if (type->value_case() == TypeProto::kSparseTensorType &&
                    ctx.getInputSparseData(i) != nullptr) {
-          input_sparse_data_by_name[func_proto.input().Get(i)] =
-              ctx.getInputSparseData(i);
+          input_sparse_data_by_name[func_proto.input().Get(i)] = ctx.getInputSparseData(i);
         }
       }
     }

@@ -635,11 +635,10 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
         written += to_write;
       }
     }
-    EXT_ENFORCE(expected_offset ==
-                    stream.weights_size_for_location(*(external_location)),
+    EXT_ENFORCE(expected_offset == stream.weights_size_for_location(*(external_location)),
                 "Offset mismatch ", expected_offset,
-                " != ", stream.weights_size_for_location(*(external_location)),
-                " name='", ref_name(), "'");
+                " != ", stream.weights_size_for_location(*(external_location)), " name='",
+                ref_name(), "'");
     // TODO Checks sparse initializer as well.
     write_external_raw_data = true;
   }

@@ -193,6 +193,12 @@ public:
   inline int64_t toint64() const { return RefString(data(), size()).toint64(); }
   /** Implicit conversion to a standard string (empty when unset). */
   inline operator std::string() const { return value_or(std::string()); }
+  /** Compares two OptionalString values for equality (disambiguation for C++20 heterogeneous
+   * optional overloads). */
+  inline bool operator==(const OptionalString &other) const {
+    return static_cast<const base &>(*this) == static_cast<const base &>(other);
+  }
+  inline bool operator!=(const OptionalString &other) const { return !(*this == other); }
 };
 
 /** Assigns a non-owning view from an owning string. */

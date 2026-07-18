@@ -60,6 +60,12 @@ using detail::RequireOutputCount;
 using detail::SetOutput;
 using detail::SetOutputSequence;
 
+const Tensor kEmptyTensor = [] {
+  Tensor empty;
+  empty.shape.push_back(0);
+  return empty;
+}();
+
 // ---------------------------------------------------------------------------
 // Trampoline factories. Each helper returns a NodeKernelFn that:
 //   * validates the node's input/output count,
@@ -338,11 +344,15 @@ inline Tensor GetRequiredAttributeTensor(const NodeProto &node, const std::strin
 
 // Same as :func:`GetRequiredAttributeTensor` but returns an empty (zero-
 // element) tensor of ``fallback_dtype`` when the attribute is absent.
+inline Tensor MakeEmptyTensor(int32_t data_type) {
+  return Tensor("", data_type, kEmptyTensor.shape, kEmptyTensor.data);
+}
+
 inline Tensor GetAttributeTensorOrEmpty(const NodeProto &node, const std::string &name,
                                         int32_t fallback_dtype) {
   const AttributeProto *attr = FindAttribute(node, name);
   if (attr == nullptr) {
-    return Tensor("", fallback_dtype, std::vector<int64_t>{0}, std::vector<uint8_t>{});
+    return MakeEmptyTensor(fallback_dtype);
   }
   EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::TENSOR),
                       "RunNode: attribute '", name, "' of op '", node.op_type(),

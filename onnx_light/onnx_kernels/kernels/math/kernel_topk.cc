@@ -82,8 +82,7 @@ void TopKCompute(const Tensor &x, int64_t k, int64_t axis, bool largest, bool so
       };
 
       // Partition the top-k indices to the front of ``idx``. ``nth_element``
-      // gives O(N) average partitioning; ``sort`` then orders the prefix
-      // when ``sorted`` is true.
+      // gives O(N) average partitioning.
       std::nth_element(idx.begin(), idx.begin() + k, idx.end(), less);
       // Always sort the prefix so that output ordering is deterministic.
       // (The ONNX schema does not mandate any ordering when ``sorted`` is 0,

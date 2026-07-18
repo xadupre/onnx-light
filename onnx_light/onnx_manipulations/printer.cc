@@ -27,6 +27,8 @@ template <typename T> void PrintNumber(std::ostream &os, T value) {
       return;
     }
   }
+  // 32 bytes comfortably covers every supported integer/float textual form
+  // emitted by std::to_chars, including signs, exponent markers, and digits.
   std::array<char, 32> buf{};
   const auto res = std::to_chars(buf.data(), buf.data() + buf.size(), value);
   os.write(buf.data(), res.ptr - buf.data());

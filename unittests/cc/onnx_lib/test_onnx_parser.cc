@@ -828,12 +828,13 @@ TEST(onnx_defs, Printer_FloatRoundTripExact) {
   std::ostringstream oss;
   oss << model;
 
-  ModelProto roundtrip;
-  ParseIt(roundtrip, oss.str());
-  ASSERT_EQ(roundtrip.ref_graph().ref_node().size(), 1u);
-  ASSERT_EQ(roundtrip.ref_graph().ref_node()[0].ref_attribute().size(), 1u);
-  EXPECT_EQ(std::bit_cast<uint32_t>(roundtrip.ref_graph().ref_node()[0].ref_attribute()[0].ref_f()),
-            std::bit_cast<uint32_t>(attr->ref_f()));
+  ModelProto reparsed_model;
+  ParseIt(reparsed_model, oss.str());
+  ASSERT_EQ(reparsed_model.ref_graph().ref_node().size(), 1u);
+  ASSERT_EQ(reparsed_model.ref_graph().ref_node()[0].ref_attribute().size(), 1u);
+  EXPECT_EQ(
+      std::bit_cast<uint32_t>(reparsed_model.ref_graph().ref_node()[0].ref_attribute()[0].ref_f()),
+      std::bit_cast<uint32_t>(attr->ref_f()));
 }
 
 TEST(onnx_defs, Parser_NonNulTerminatedStringView) {

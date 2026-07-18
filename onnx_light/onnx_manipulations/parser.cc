@@ -260,10 +260,7 @@ bool ParserBase::NextIsValidFloatString() {
     // Reset parser location before continuing.
     pos_ = from;
 
-    std::transform(candidate.begin(), candidate.end(), candidate.begin(), [](char c) {
-      // ASCII-only lowercasing; std::tolower is locale-dependent.
-      return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
-    });
+    std::transform(candidate.begin(), candidate.end(), candidate.begin(), ToLowerAscii);
     if (candidate == std::string_view("inf") || candidate == std::string_view("infinity") ||
         candidate == std::string_view("nan")) {
       return true;

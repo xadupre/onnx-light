@@ -244,6 +244,10 @@ constexpr bool IsDigit(int c) { return c >= '0' && c <= '9'; }
 
 constexpr bool IsAlnum(int c) { return IsAlpha(c) || IsDigit(c); }
 
+constexpr char ToLowerAscii(char c) {
+  return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+}
+
 /**
  * @brief Cursor-based tokenizer that drives parsing of ONNX text format.
  *

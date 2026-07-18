@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "onnx_kernels/kernel_dispatch_table.h"
 #include "onnx_kernels/runtime_context.h"
 #include "onnx_kernels/simple_tensor.h"
 #include "onnx_proto/onnx.h"

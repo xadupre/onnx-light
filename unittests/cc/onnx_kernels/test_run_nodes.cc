@@ -10,6 +10,7 @@
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/node_helpers.h"
+#include "onnx_kernels/kernel_dispatch_table.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/simple_sequence.h"
 #include "onnx_kernels/simple_tensor.h"

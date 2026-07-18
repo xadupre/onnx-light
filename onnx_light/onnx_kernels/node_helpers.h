@@ -32,17 +32,6 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace detail {
 
-// Canonical name of the default ONNX domain. The empty string used by
-// ``NodeProto::domain()`` for the default ONNX domain is normalised to
-// this value before dispatch-table lookups.
-inline constexpr const char *kDefaultOnnxDomain = "ai.onnx";
-
-inline std::string NormaliseDispatchDomain(const NodeProto &node) {
-  if (node.domain().empty())
-    return kDefaultOnnxDomain;
-  return std::string(node.domain());
-}
-
 inline const Tensor &GetInput(const NodeProto &node, int index, const TensorMap &tensors) {
   const std::string &name = node.input(index);
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type(), "' input #", index,

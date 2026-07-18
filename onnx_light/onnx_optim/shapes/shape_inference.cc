@@ -785,11 +785,11 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   CheckOnnxDomain(node);
   ctx.CheckInputsAvailable(node);
   ctx.CheckOutputsNotAvailable(node);
-  const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
+  const std::string key = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node) + ":" + op_type;
   const auto &table = DispatchTable();
   auto it = table.find(key);
   EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '", op_type,
-                      "' in domain '", NormaliseDispatchDomain(node), "'.");
+                      "' in domain '", ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node), "'.");
   it->second(ctx, node);
 }
 
@@ -900,7 +900,8 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
     for (int i = 0; i < node.input_size(); ++i) {
       inputs.push_back(node.input(i));
     }
-    AppendComputeNodeEvent(NormaliseDispatchDomain(node), node.op_type(), std::move(inputs));
+    AppendComputeNodeEvent(ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node), node.op_type(),
+                           std::move(inputs));
   }
 }
 

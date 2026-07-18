@@ -4,14 +4,12 @@
 
 #include "onnx_kernels/run_nodes.h"
 
-#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <limits>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -19,9 +17,9 @@
 
 #include "onnx_kernels/kernel_dispatch_table.h"
 #include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
-#include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_kernels/node_helpers.h"
+#include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -34,8 +32,6 @@ using detail::GetAttributeIntsOrDefault;
 using detail::GetInput;
 using detail::GetInputSequence;
 using detail::GetRequiredGraphAttribute;
-using detail::kDefaultOnnxDomain;
-using detail::NormaliseDispatchDomain;
 using detail::RequireInputCount;
 using detail::RequireOutputCount;
 using detail::SetOutput;
@@ -905,8 +901,8 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
 } // namespace
 
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
-  const std::string op_type = node.op_type();
-  const std::string domain = NormaliseDispatchDomain(node);
+  auto domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
+  const std::string& op_type = node.op_type().value();
   PrintNodeProgress(rt, node, domain, op_type);
 
   // Only capture timing and input names when event logging is active.

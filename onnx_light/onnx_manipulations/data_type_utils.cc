@@ -5,7 +5,6 @@
 #include "data_type_utils.h"
 
 #include <cassert>
-#include <cctype>
 #include <cstring>
 #include <string>
 #include <unordered_map>
@@ -15,6 +14,10 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace Utils {
 namespace {
+
+constexpr bool IsAsciiSpace(char c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
+}
 
 // Singleton wrapper around allowed data types.
 // This implements construct on first use which is needed to ensure
@@ -242,7 +245,7 @@ bool StringRange::EndsWith(const StringRange &str) const {
 bool StringRange::LStrip() {
   size_t count = 0;
   const char *ptr = data_;
-  while (count < size_ && std::isspace(static_cast<unsigned char>(*ptr))) {
+  while (count < size_ && IsAsciiSpace(*ptr)) {
     count++;
     ptr++;
   }
@@ -271,7 +274,7 @@ bool StringRange::LStrip(StringRange str) {
 bool StringRange::RStrip() {
   size_t count = 0;
   const char *ptr = data_ + size_ - 1;
-  while (count < size_ && std::isspace(static_cast<unsigned char>(*ptr))) {
+  while (count < size_ && IsAsciiSpace(*ptr)) {
     ++count;
     --ptr;
   }

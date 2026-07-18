@@ -4,8 +4,13 @@
 
 #include "onnx_manipulations/printer.h"
 
+#include <array>
+#include <charconv>
+#include <cmath>
 #include <iomanip>
+#include <limits>
 #include <string>
+#include <type_traits>
 
 #include "onnx_manipulations/tensor_util.h"
 
@@ -14,16 +19,38 @@ namespace {
 
 using StringStringEntryProtos = utils::RepeatedField<StringStringEntryProto>;
 
+static_assert(32 >= std::numeric_limits<uint64_t>::digits10 + 1,
+              "PrintNumber buffer must hold uint64_t decimal text");
+static_assert(32 >= std::numeric_limits<double>::max_digits10 + 8,
+              "PrintNumber buffer must hold double shortest-roundtrip text");
+
+template <typename T> void PrintNumber(std::ostream &os, T value) {
+  if constexpr (std::is_floating_point_v<T>) {
+    // Normalize NaN for cross-platform consistency: MSVC's to_chars emits
+    // payload forms like "nan(ind)", while the parser accepts only canonical
+    // "nan"/"-nan" spellings.
+    if (std::isnan(value)) {
+      os << (std::signbit(value) ? "-nan" : "nan");
+      return;
+    }
+  }
+  // 32 bytes comfortably covers every currently supported textual form; the
+  // static_asserts above document the concrete bounds we rely on today.
+  std::array<char, 32> buf{};
+  const auto res = std::to_chars(buf.data(), buf.data() + buf.size(), value);
+  os.write(buf.data(), res.ptr - buf.data());
+}
+
 bool IsValidIdentifier(const std::string &str) {
   // Check if str is a valid identifier
   const char *next_ = str.c_str();
   const char *end_ = next_ + str.size();
   if (next_ == end_)
     return false; // empty string is not a valid identifier
-  if (!isalpha(*next_) && (*next_ != '_'))
+  if (!IsAlpha(*next_) && (*next_ != '_'))
     return false; // first character must be a letter or '_'
   ++next_;
-  while ((next_ < end_) && (isalnum(*next_) || (*next_ == '_')))
+  while ((next_ < end_) && (IsAlnum(*next_) || (*next_ == '_')))
     ++next_;
   return next_ == end_;
 }
@@ -93,7 +120,13 @@ private:
   }
   void printId(const utils::RefString &str) { printId(std::string(str)); }
 
-  template <typename T> void print(const T &prim) { output_ << prim; }
+  template <typename T> void print(const T &prim) {
+    if constexpr (std::is_arithmetic_v<T>) {
+      PrintNumber(output_, prim);
+    } else {
+      output_ << prim;
+    }
+  }
 
   void printQuoted(const std::string &str) {
     output_ << "\"";
@@ -157,7 +190,7 @@ private:
 
 void ProtoPrinter::print(const TensorShapeProto_Dimension &dim) {
   if (dim.has_dim_value()) {
-    output_ << dim.dim_value();
+    print(dim.dim_value());
   } else if (dim.has_dim_param()) {
     if (IsValidIdentifier(dim.dim_param()))
       output_ << dim.dim_param();
@@ -316,13 +349,13 @@ void ProtoPrinter::print(const AttributeProto &attr) {
   output_ << attr.name() << ": " << AttributeTypeNameMap::ToString(attr.type()) << " = ";
   switch (attr.type()) {
   case AttributeProto_AttributeType_INT:
-    output_ << attr.i();
+    print(attr.i());
     break;
   case AttributeProto_AttributeType_INTS:
     printSet("[", ", ", "]", attr.ints());
     break;
   case AttributeProto_AttributeType_FLOAT:
-    output_ << attr.f();
+    print(attr.f());
     break;
   case AttributeProto_AttributeType_FLOATS:
     printSet("[", ", ", "]", attr.floats());
@@ -453,7 +486,8 @@ void ProtoPrinter::print(const ModelProto &model) {
 
 void ProtoPrinter::print(const OperatorSetIdProto &opset) {
   printQuoted(opset.domain());
-  output_ << " : " << opset.version();
+  output_ << " : ";
+  print(opset.version());
 }
 
 void ProtoPrinter::print(const OpsetIdList &opsets) { printSet("[", ", ", "]", opsets); }

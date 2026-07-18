@@ -804,6 +804,12 @@ TEST(onnx_defs, Parser_FloatAttributePreservesNegativeZero) {
   EXPECT_EQ(attr_with_extra_zeros.ref_type(), AttributeProto::AttributeType::FLOAT);
   EXPECT_TRUE(std::signbit(attr_with_extra_zeros.ref_f()));
   EXPECT_EQ(std::bit_cast<uint32_t>(attr_with_extra_zeros.ref_f()), std::bit_cast<uint32_t>(-0.0f));
+
+  AttributeProto positive_zero_attr;
+  ParseIt(positive_zero_attr, "x : float = 0");
+  EXPECT_EQ(positive_zero_attr.ref_type(), AttributeProto::AttributeType::FLOAT);
+  EXPECT_FALSE(std::signbit(positive_zero_attr.ref_f()));
+  EXPECT_EQ(std::bit_cast<uint32_t>(positive_zero_attr.ref_f()), std::bit_cast<uint32_t>(0.0f));
 }
 
 TEST(onnx_defs, Printer_FloatRoundTripExact) {

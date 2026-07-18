@@ -105,7 +105,7 @@ double StrtodC(const std::string &s) {
   return val;
 }
 
-static bool IsNegativeIntegerZeroLiteral(const std::string &s) {
+static bool IsNegativeZeroIntegerLiteral(const std::string &s) {
   if (s.size() < 2 || s[0] != '-') {
     return false;
   }
@@ -744,7 +744,7 @@ Common::Status OnnxParser::ParseSingleAttributeValue(AttributeProto &attr,
         // as FLOAT_LITERAL earlier, while INT_LITERAL spellings like "-00"
         // still need sign-bit preservation here.
         attr.set_type(AttributeProto::AttributeType::FLOAT);
-        attr.set_f(IsNegativeIntegerZeroLiteral(literal.value)
+        attr.set_f(IsNegativeZeroIntegerLiteral(literal.value)
                        ? LocaleIndependentStof(literal.value)
                        : static_cast<float>(std::stol(literal.value)));
       } else {

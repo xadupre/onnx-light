@@ -57,7 +57,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   // get the domain version for function schema
   int domain_version = -1;
   for (const auto &opset_import : func.ref_opset_import()) {
-    if (std::string(opset_import.ref_domain()) == std::string(node.ref_domain())) {
+    if (opset_import.ref_domain() == node.ref_domain()) {
       domain_version = static_cast<int>(opset_import.ref_version());
     }
   }

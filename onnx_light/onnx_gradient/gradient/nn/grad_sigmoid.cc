@@ -14,7 +14,7 @@ bool GradSigmoid(const NodeProto &node, const std::string &output_grad,
   const auto &inputs = node.input();
   if (inputs.size() < 1 || inputs[0].empty() || inputs[0].empty())
     return true;
-  const std::string A = inputs[0];
+  const std::string& A = inputs[0];
   if (node.output().empty() || node.output()[0].empty() || node.output()[0].empty())
     return true;
   const std::string C = node.output()[0];

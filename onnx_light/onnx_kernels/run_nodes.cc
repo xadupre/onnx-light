@@ -373,7 +373,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
 
   // Stack scan outputs along a new leading axis and propagate to caller.
   for (std::size_t j = 0; j < k; ++j) {
-    const std::string caller_name = std::string(node.output(static_cast<int>(n + j)));
+    const std::string& caller_name = node.output(static_cast<int>(n + j));
     if (caller_name.empty()) {
       continue;
     }

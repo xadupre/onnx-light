@@ -418,8 +418,8 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   // Use the first scan input in the node (after the sequence_lens slot) as the
   // anchor for the symbolic name — this avoids accessing node.output(0), which
   // could be out-of-bounds if the node has no outputs.
-  const std::string scan8_anchor =
-      is_scan8 ? std::string(node.input(scan8_offset < node.input_size() ? scan8_offset : 0)) : "";
+  const std::string& scan8_anchor =
+      is_scan8 ? node.input(scan8_offset < node.input_size() ? scan8_offset : 0) : utils::String::default_empty();
   OptimDim batch_dim(std::string("Scan8_") + scan8_anchor + "_batch");
 
   for (int i = 0; i < n_state; ++i) {

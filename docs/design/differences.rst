@@ -188,8 +188,13 @@ defined in ``stream_class.h``:
 * ``BEGIN_PROTO(cls, doc)`` / ``END_PROTO()`` — open/close a message class.
 * ``FIELD(type, name, order, doc)`` — declare a scalar field with typed
   accessors ``ref_<name>()``, ``has_<name>()``, ``set_<name>()``.
-* ``FIELD_STR(name, order, doc)`` — shorthand for :cpp:class:`~onnx_light::utils::String` fields
-  that also accepts ``std::string``.
+* ``FIELD_STR(name, order, doc)`` — shorthand for
+  :cpp:class:`~onnx_light::utils::OptionalString` fields (a nullable string that
+  distinguishes "unset" from "empty"); also accepts ``std::string``,
+  ``const char *``, and :cpp:class:`~onnx_light::utils::RefString`.
+* ``FIELD_REPEATED_STR(type, name, order, doc)`` — declare a repeated string
+  field backed by :cpp:class:`~onnx_light::utils::RepeatedStringField`
+  (a list of :cpp:class:`~onnx_light::utils::String` values).
 * ``FIELD_REPEATED(type, name, order, doc)`` — declare a repeated (list)
   field.
 * ``SERIALIZATION_METHOD()`` — inject :meth:`ParseFromString`,
@@ -199,6 +204,56 @@ defined in ``stream_class.h``:
 The resulting classes in ``onnx.h`` closely mirror the protobuf-generated
 classes so that code originally written for ``onnx`` can be adapted with
 minimal changes.
+
+----
+
+String types in proto messages
+---------------------------------
+
+Proto string fields in ``onnx_light`` use one of three C++ types, each with a
+distinct role:
+
+:cpp:class:`~onnx_light::utils::RefString`
+    A **non-owning view** into existing bytes (a pointer + length pair).  The
+    parser uses it to point at substrings inside the parse buffer without
+    copying.  ``RefString`` is valid only as long as the source buffer lives;
+    it is produced by the zero-copy parser path and consumed immediately to
+    populate an owning field.
+
+:cpp:class:`~onnx_light::utils::String`
+    A thin ``std::string`` subclass used for **repeated string fields** (for
+    example ``NodeProto::input``, ``NodeProto::output``).  It behaves like
+    ``std::string`` in all respects and is always either empty or non-empty —
+    there is no additional "null" state.
+
+:cpp:class:`~onnx_light::utils::OptionalString`
+    A thin ``std::optional<std::string>`` subclass used for **singular
+    (optional) string fields** (for example ``NodeProto::name``,
+    ``NodeProto::doc_string``).  It adds a ``null()`` predicate that returns
+    ``true`` when the field is absent (``std::nullopt``), which is distinct
+    from the field being present but empty.  The serializer emits a string
+    field only when ``!field.null()``, reproducing the proto3 rule that
+    default-valued fields are omitted from the wire format.
+
+The mapping between C++ types and proto field categories is:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 20 50
+
+   * - Proto field kind
+     - C++ type
+     - Notes
+   * - Singular ``string`` (``FIELD_STR``)
+     - ``OptionalString``
+     - Absent (null) vs. present-but-empty are distinguished; absent
+       fields are not written to the wire.
+   * - Repeated ``string`` (``FIELD_REPEATED_STR``)
+     - ``RepeatedStringField`` of ``String``
+     - Ordinary list; each element is always a valid, owned string.
+   * - Parser temporary / zero-copy view
+     - ``RefString``
+     - Points into the parse buffer; ownership does not transfer.
 
 ----
 

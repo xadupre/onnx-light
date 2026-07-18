@@ -257,6 +257,8 @@ public:
       values_.push_back(std::make_shared<T>(src[i]));
     }
   }
+  /** Copies elements from a vector into a RepeatedProtoField. */
+  inline RepeatedProtoField(const std::vector<T> &src) { extend(src); }
   /** Reserves storage for at least n elements. */
   inline void reserve(size_t n) { values_.reserve(n); }
   /** Reserves storage for at least n elements (protobuf compat). */

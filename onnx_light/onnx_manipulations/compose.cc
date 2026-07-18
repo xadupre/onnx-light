@@ -89,9 +89,9 @@ void DfsSearchReachableNodes(const std::string &node_output_name,
 
 /// Returns, in topological order, the nodes of *graph* that are needed to
 /// compute *output_names* given that *input_names* are already available.
-std::vector<NodeProto> CollectReachableNodes(const GraphProto &graph,
-                                             const std::vector<std::string> &input_names,
-                                             const std::vector<std::string> &output_names) {
+utils::RepeatedProtoField<NodeProto>
+CollectReachableNodes(const GraphProto &graph, const std::vector<std::string> &input_names,
+                      const std::vector<std::string> &output_names) {
   const std::unordered_map<std::string, size_t> outmap = BuildOutputDict(graph);
   const std::unordered_set<std::string> input_set(input_names.begin(), input_names.end());
 
@@ -104,7 +104,7 @@ std::vector<NodeProto> CollectReachableNodes(const GraphProto &graph,
   std::vector<size_t> sorted_indices(reachable.begin(), reachable.end());
   std::sort(sorted_indices.begin(), sorted_indices.end());
 
-  std::vector<NodeProto> result;
+  utils::RepeatedProtoField<NodeProto> result;
   result.reserve(sorted_indices.size());
   for (size_t idx : sorted_indices) {
     result.push_back(graph.node()[idx]);
@@ -113,9 +113,10 @@ std::vector<NodeProto> CollectReachableNodes(const GraphProto &graph,
 }
 
 /// Collects the initializers and value-infos referenced by *nodes*.
-void CollectReachableTensors(const GraphProto &graph, const std::vector<NodeProto> &nodes,
-                             std::vector<TensorProto> &initializers,
-                             std::vector<ValueInfoProto> &value_infos) {
+void CollectReachableTensors(const GraphProto &graph,
+                             const utils::RepeatedProtoField<NodeProto> &nodes,
+                             utils::RepeatedProtoField<TensorProto> &initializers,
+                             utils::RepeatedProtoField<ValueInfoProto> &value_infos) {
   // Build name→TensorProto / name→ValueInfoProto maps from the graph.
   std::unordered_map<std::string, const TensorProto *> init_map;
   for (size_t i = 0; i < graph.initializer().size(); ++i) {
@@ -187,10 +188,11 @@ GraphProto ExtractGraph(const GraphProto &graph, const std::vector<std::string> 
     EXT_ENFORCE_INVALID(vi_map.count(n), "The following name was not found in value_infos: ", n);
   }
 
-  std::vector<NodeProto> nodes = CollectReachableNodes(graph, input_names, output_names);
+  utils::RepeatedProtoField<NodeProto> nodes =
+      CollectReachableNodes(graph, input_names, output_names);
 
-  std::vector<TensorProto> initializers;
-  std::vector<ValueInfoProto> value_infos_collected;
+  utils::RepeatedProtoField<TensorProto> initializers;
+  utils::RepeatedProtoField<ValueInfoProto> value_infos_collected;
   CollectReachableTensors(graph, nodes, initializers, value_infos_collected);
 
   GraphProto g;

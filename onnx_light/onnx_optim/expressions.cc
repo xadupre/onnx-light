@@ -284,7 +284,7 @@ NodePtr parse(const std::string &expr) {
 namespace {
 
 // Python precedence values (higher == tighter binding)
-int binop_prec(BinOpKind op) {
+constexpr int binop_prec(BinOpKind op) {
   switch (op) {
   case BinOpKind::BitXor:
     return 1;
@@ -307,7 +307,7 @@ bool binop_commutative(BinOpKind op) {
          op == BinOpKind::BitAnd;
 }
 
-const char *binop_sym(BinOpKind op) {
+constexpr const char *binop_sym(BinOpKind op) {
   switch (op) {
   case BinOpKind::Add:
     return "+";

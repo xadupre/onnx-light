@@ -669,7 +669,14 @@ public:
 
   ONNX_API bool HasFunction() const { return !opset_version_to_function_body_.empty(); }
 
+  ONNX_API OpSchema &FunctionBody(const utils::RepeatedProtoField<NodeProto> &func_nodes,
+                                  int opset_version = kUninitializedSinceVersion);
+
   ONNX_API OpSchema &FunctionBody(const std::vector<NodeProto> &func_nodes,
+                                  int opset_version = kUninitializedSinceVersion);
+
+  ONNX_API OpSchema &FunctionBody(const utils::RepeatedProtoField<NodeProto> &func_nodes,
+                                  const utils::RepeatedProtoField<OperatorSetIdProto> &opsets,
                                   int opset_version = kUninitializedSinceVersion);
 
   ONNX_API OpSchema &FunctionBody(const std::vector<NodeProto> &func_nodes,

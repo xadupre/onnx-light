@@ -84,7 +84,21 @@ enum class ShapeEventAction : int32_t {
  * ``"replace"``, ``"compute_node"``). Useful for human-readable
  * rendering of the event log.
  */
-const char *ShapeEventActionName(ShapeEventAction action) noexcept;
+inline constexpr const char *ShapeEventActionName(ShapeEventAction action) noexcept {
+  switch (action) {
+  case ShapeEventAction::kAdd:
+    return "add";
+  case ShapeEventAction::kReplace:
+    return "replace";
+  case ShapeEventAction::kComputeNode:
+    return "compute_node";
+  case ShapeEventAction::kConstraint:
+    return "constraint";
+  case ShapeEventAction::kConstraintMax:
+    return "constraint_max";
+  }
+  return "unknown";
+}
 
 /**
  * Single entry of the :cpp:class:`ShapesContext` event log.

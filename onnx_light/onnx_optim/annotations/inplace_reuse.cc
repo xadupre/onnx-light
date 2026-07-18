@@ -170,7 +170,7 @@ bool SameStorage(const OptimTensor &a, const OptimTensor &b) {
 // types whose byte size is not a fixed scalar (strings, sequences, maps,
 // optionals and the undefined type), for which no buffer-size comparison is
 // attempted.
-int ElementBitWidth(TensorType t) {
+constexpr int ElementBitWidth(TensorType t) {
   switch (t) {
   case TensorType::kBool:
   case TensorType::kUint8:

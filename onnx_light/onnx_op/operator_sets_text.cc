@@ -46,6 +46,19 @@ LightOpSchema MakeStringSplitSchema(int since_version) {
           {"T1", {TensorType::kString}, "The input must be a UTF-8 string tensor"},
           {"T2", {TensorType::kString}, "Tensor of substrings."},
           {"T3", {TensorType::kInt64}, "The number of substrings generated."},
+      },
+      {
+          {"delimiter",
+           "Delimiter to split on. If left unset or set to the empty string (\"\"), the input "
+           "is split on consecutive whitespace.",
+           AttributeType::STRING, /*required=*/false, std::monostate{}},
+          {"maxsplit",
+           "Maximum number of splits (from left to right). If left unset (or if the number of "
+           "possible splits are less than maxsplit), it will make as many splits as possible. "
+           "Note that the maximum possible number of substrings returned with `maxsplit` "
+           "specified is `maxsplit+1` since the remaining suffix after the `maxsplit`th split "
+           "is included in the output.",
+           AttributeType::INT, /*required=*/false, std::monostate{}},
       });
 }
 
@@ -66,19 +79,42 @@ LightOpSchema MakeRegexFullMatchSchema(int since_version) {
           {"T2",
            {TensorType::kBool},
            "Outputs are bools and are True where there is a full regex match and False otherwise."},
+      },
+      {
+          {"pattern", "Regex pattern to match on. This must be valid RE2 syntax.",
+           AttributeType::STRING, /*required=*/false, std::monostate{}},
       });
 }
 
 LightOpSchema MakeStringNormalizerSchema(int since_version) {
-  return LightOpSchema("StringNormalizer", kOnnxDomain, since_version,
-                       MakeStringNormalizerDoc(since_version),
-                       {
-                           {"X", "UTF-8 strings to normalize", "tensor(string)"},
-                       },
-                       {
-                           {"Y", "UTF-8 Normalized strings", "tensor(string)"},
-                       },
-                       {});
+  return LightOpSchema(
+      "StringNormalizer", kOnnxDomain, since_version, MakeStringNormalizerDoc(since_version),
+      {
+          {"X", "UTF-8 strings to normalize", "tensor(string)"},
+      },
+      {
+          {"Y", "UTF-8 Normalized strings", "tensor(string)"},
+      },
+      {},
+      {
+          {"case_change_action",
+           "string enum that cases output to be lowercased/uppercases/unchanged."
+           " Valid values are \"LOWER\", \"UPPER\", \"NONE\". Default is "
+           "\"NONE\"",
+           AttributeType::STRING, /*required=*/false, std::string("NONE")},
+          {"is_case_sensitive",
+           "Boolean. Whether the identification of stop words in X is "
+           "case-sensitive. Default is false",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+          {"stopwords", "List of stop words. If not set, no word would be removed from X.",
+           AttributeType::STRINGS, /*required=*/false, std::monostate{}},
+          {"locale",
+           "Environment dependent string that denotes the locale according to "
+           "which output strings needs to be upper/lowercased."
+           "Default en_US or platform specific equivalent as decided by the "
+           "implementation.",
+           AttributeType::STRING, /*required=*/false, std::monostate{}},
+      });
 }
 
 LightOpSchema MakeTfIdfVectorizerSchema(int since_version) {

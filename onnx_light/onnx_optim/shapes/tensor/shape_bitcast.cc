@@ -23,7 +23,7 @@ namespace {
 // Returns 0 for STRING and any unsupported value. Mirrors the table in
 // ``onnx_lib/defs/tensor/defs.cc`` (BitCast shape inference) and
 // ``onnx_kernels/kernels/tensor/kernel_bitcast.cc``.
-int BitCastBitSize(TensorProto::DataType dtype) {
+constexpr int BitCastBitSize(TensorProto::DataType dtype) {
   switch (dtype) {
   case TensorProto::FLOAT:
   case TensorProto::INT32:

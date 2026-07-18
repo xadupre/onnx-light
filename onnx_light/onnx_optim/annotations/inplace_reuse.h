@@ -308,6 +308,13 @@ public:
    * arbitrary node list.
    */
   std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+  ComputeValueAndNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes);
+
+  /**
+   * Same as :cpp:func:`ComputeValueAndNodeTags(const utils::RepeatedProtoField<NodeProto>&)`
+   * but for callers that still materialize node vectors.
+   */
+  std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
   ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes);
 
   /// Read-only access to the last value-tag map computed through

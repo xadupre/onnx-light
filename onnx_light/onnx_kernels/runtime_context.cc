@@ -77,21 +77,30 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
   tensor.SetAllocation(allocator, allocated);
 }
 
-void DetachAllocatorBackedTensorCopy(Tensor &tensor) {
-  if (!tensor.has_allocation()) {
+void EnsureAllocatorOwnedTensorCopy(Tensor &tensor, RawBufferAllocator *allocator) {
+  // STRING tensors keep payload in string_data and are not allocator-backed.
+  if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return;
   }
+  if (!tensor.has_allocation()) {
+    EnsureAllocatorBacked(tensor, allocator);
+    return;
+  }
+
   const size_t n_bytes = tensor.size_bytes();
-  RawBuffer copied(n_bytes);
+  RawBuffer *allocated = allocator->Allocate(n_bytes);
+  EXT_ENFORCE(allocated != nullptr,
+              "RuntimeContext::MakeSubgraphContext: allocator returned a null RawBuffer "
+              "allocation.");
   if (n_bytes > 0) {
     const uint8_t *src = tensor.bytes();
     EXT_ENFORCE(src != nullptr,
                 "RuntimeContext::MakeSubgraphContext: allocator-backed tensor has a null data "
                 "pointer.");
-    std::memcpy(copied.data(), src, n_bytes);
+    std::memcpy(allocated->data(), src, n_bytes);
   }
-  tensor.data = std::move(copied);
   tensor.ClearAllocation();
+  tensor.SetAllocation(allocator, allocated);
 }
 
 int64_t NowNanos() noexcept {
@@ -487,13 +496,11 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.set_allocator(allocator_);
   child.functions() = functions_;
   child.tensors() = tensors_;
-  // Tensor holds raw allocator pointers. Copying allocator-backed tensors
-  // into a child context must therefore detach the storage from allocator
-  // ownership to avoid the child destructor releasing buffers still owned by
-  // the parent context. Specific callers may still override the child
-  // allocator for fallback execution paths.
+  // Tensor stores allocator ownership via raw pointers. A copied tensor map
+  // therefore needs allocator-owned deep copies to prevent parent/child
+  // contexts from aliasing the same RawBuffer.
   for (auto &kv : child.tensors()) {
-    DetachAllocatorBackedTensorCopy(kv.second);
+    EnsureAllocatorOwnedTensorCopy(kv.second, allocator_);
   }
   child.sequences() = sequences_;
   child.set_verbose(verbose_);

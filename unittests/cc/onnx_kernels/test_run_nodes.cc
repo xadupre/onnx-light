@@ -2672,7 +2672,7 @@ TEST(RunModel, IfNodeKeepsAllocatorBackedCapturedTensorVisibleInParent) {
   else_add->add_output("z");
   else_g->add_output()->set_name("z");
 
-  constexpr size_t kAllocatorSlotCapacity = 4;
+  constexpr size_t kAllocatorSlotCapacity = 16;
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
@@ -2787,19 +2787,21 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
 
   // The allocator now backs both subgraph-internal kernel outputs and final
   // loop outputs, so keep enough capacity for transient body allocations.
-  constexpr size_t kAllocatorSlotCapacity = 8;
+  constexpr size_t kAllocatorSlotCapacity = 32;
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_allocator(&alloc);
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
-  rt.set_allocator(&alloc);
 
   RunModel(model, rt);
 
   ASSERT_TRUE(rt.Has("s_final"));
   ASSERT_TRUE(rt.Has("scan"));
+  EXPECT_TRUE(rt.Get("s_final").has_allocation());
+  EXPECT_TRUE(rt.Get("scan").has_allocation());
   EXPECT_FLOAT_EQ(rt.Get("s_final").AsFloat()[0], 3.0f);
   ASSERT_EQ(rt.Get("scan").shape, (std::vector<int64_t>{3}));
   const float *scan = rt.Get("scan").AsFloat();
@@ -2880,39 +2882,39 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
 }
 
 // Same as MixedTensorSequenceAndScanOutputs but with a SimpleRawBufferAllocator
-// attached to the RuntimeContext. The sequence-state fallback keeps child
-// tensors inline to avoid allocator aliasing through Sequence elements, while
-// final loop outputs are still backed by the parent allocator.
+// attached to the RuntimeContext.
 TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
-  // The allocator now backs both subgraph-internal kernel outputs and final
-  // loop outputs, so keep enough capacity for transient body allocations.
-  // Input tensors are set before attaching the allocator so they stay inline.
-  constexpr size_t kAllocatorSlotCapacity = 8;
+  // The allocator backs both subgraph-internal kernel outputs and final loop
+  // outputs, so keep enough capacity for transient body allocations.
+  constexpr size_t kAllocatorSlotCapacity = 32;
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.set_allocator(&alloc);
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
   rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
-  rt.set_allocator(&alloc);
 
   RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},
                        BuildMixedSequenceLoopBody()),
           rt);
 
   ASSERT_TRUE(rt.Has("acc_final"));
+  EXPECT_TRUE(rt.Get("acc_final").has_allocation());
   EXPECT_FLOAT_EQ(rt.Get("acc_final").AsFloat()[0], 3.0f);
 
   ASSERT_TRUE(rt.HasSequence("seq_final"));
   const Sequence &seq = rt.GetSequence("seq_final");
   ASSERT_EQ(seq.size(), 3u);
   for (std::size_t i = 0; i < seq.size(); ++i) {
+    EXPECT_TRUE(seq.at(i).has_allocation());
     EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(i));
   }
 
   ASSERT_TRUE(rt.Has("scan"));
   const Tensor &scan = rt.Get("scan");
+  EXPECT_TRUE(scan.has_allocation());
   ASSERT_EQ(scan.shape, (std::vector<int64_t>{3}));
   const float *scan_data = scan.AsFloat();
   EXPECT_FLOAT_EQ(scan_data[0], 1.0f);

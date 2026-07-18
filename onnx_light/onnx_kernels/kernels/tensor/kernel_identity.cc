@@ -13,11 +13,18 @@ namespace onnx_kernels {
 namespace kernel {
 
 Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
-  Tensor output;
-  output.data_type = input.data_type;
-  output.shape = input.shape;
-  output.data = input.data;
-  output.string_data = input.string_data;
+  if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
+    return Tensor::MakeString("", input.shape, input.string_data);
+  }
+  RawBufferAllocator *allocator = rt != nullptr ? rt->allocator() : nullptr;
+  const size_t n_bytes = input.size_bytes();
+  Tensor output = MakeOutputTensor(input.data_type, input.shape, n_bytes, allocator);
+  if (n_bytes > 0) {
+    const uint8_t *src = input.bytes();
+    EXT_ENFORCE(src != nullptr,
+                "kernel::Identity: input has non-zero byte size with a null data pointer.");
+    std::memcpy(output.mutable_bytes(), src, n_bytes);
+  }
   return output;
 }
 

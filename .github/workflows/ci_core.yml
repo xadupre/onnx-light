@@ -186,8 +186,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    env:
-      SCCACHE_GHA_ENABLED: ${{ (matrix.os == 'windows-latest' || matrix.os == 'macos-latest') && 'true' || 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -228,11 +226,13 @@ jobs:
       - name: Build and Install package (Windows)
         if: runner.os == 'Windows'
         env:
-          CMAKE_GENERATOR: Ninja
+          SCCACHE_GHA_ENABLED: "true"
         run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: Build and Install package (macOS)
         if: runner.os == 'macOS'
+        env:
+          SCCACHE_GHA_ENABLED: "true"
         run: pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: Install ONNX weekly

@@ -15,23 +15,17 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
         self.assertIn("windows_x86_build:", self.content)
         self.assertIn("name: core (windows-latest, x86 build)", self.content)
 
-    def test_windows_64_build_uses_ninja_and_sccache(self):
-        """Verifies that the 64-bit Windows build uses Ninja with sccache enabled."""
-        self.assertIn(
-            (
-                "SCCACHE_GHA_ENABLED: ${{ (matrix.os == 'windows-latest' || "
-                "matrix.os == 'macos-latest') && 'true' || 'false' }}"
-            ),
-            self.content,
-        )
+    def test_windows_64_build_uses_sccache_without_ninja_override(self):
+        """Verifies that the 64-bit Windows build uses sccache without forcing Ninja."""
         self.assertRegex(
             self.content,
             (
                 r"(?s)- name: Build and Install package \(Windows\)\s+"
-                r"if: runner\.os == 'Windows'\s+env:\s+CMAKE_GENERATOR: Ninja\s+"
+                r"if: runner\.os == 'Windows'\s+env:\s+SCCACHE_GHA_ENABLED: \"true\"\s+"
                 r"run: pip install "
             ),
         )
+        self.assertNotIn("CMAKE_GENERATOR: Ninja", self.content)
         self.assertIn("cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache", self.content)
         self.assertIn("cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache", self.content)
 

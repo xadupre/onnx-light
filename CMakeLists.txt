@@ -46,20 +46,15 @@ See cmake/Hardening.cmake and \
 https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html"
     OFF)
 
-# The C++ unit-test executable links lib_onnx_kernels / lib_onnx_backend_test;
-# refuse incoherent option combinations early instead of failing deep inside
-# add_library. The Python extensions are tolerant of ONNX_LIGHT_BUILD_KERNELS=OFF:
+# When ONNX_LIGHT_BUILD_KERNELS=OFF and ONNX_LIGHT_BUILD_TESTS=ON the test
+# executable is built in "reduced" mode: only the proto / schema / shape-
+# inference / optimisation tests are compiled (unittests/cc/onnx_proto,
+# onnx_lib, onnx_op, onnx_optim).  Kernel, backend-test, and gradient test
+# sources are excluded because the libraries they depend on are not built.
+# The Python extensions are tolerant of ONNX_LIGHT_BUILD_KERNELS=OFF:
 # in that "reduced" build the _onnxpykernels and _onnxpybackend extensions are
 # simply not produced (the surrounding Python package raises an explicit error
 # when the reference runtime or backend-test helpers are requested).
-if(NOT ONNX_LIGHT_BUILD_KERNELS)
-  if(ONNX_LIGHT_BUILD_TESTS)
-    message(FATAL_ERROR
-        "ONNX_LIGHT_BUILD_KERNELS=OFF is incompatible with "
-        "ONNX_LIGHT_BUILD_TESTS=ON: the test_onnx_light executable "
-        "links lib_onnx_kernels and lib_onnx_backend_test.")
-  endif()
-endif()
 
 # Enable parallel compilation (file-level) on MSVC when using MSBuild. Without
 # /MP, cl.exe compiles source files within a single MSBuild project sequentially
@@ -667,10 +662,14 @@ if(ONNX_LIGHT_BUILD_TESTS)
       ${ONNX_CPP_LIB_TEST_SOURCES}
       ${ONNX_CPP_OP_TEST_SOURCES}
       ${ONNX_CPP_OPTIM_TEST_SOURCES}
-      ${ONNX_CPP_KERNELS_TEST_SOURCES}
-      ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES}
-      ${ONNX_CPP_GRADIENT_TEST_SOURCES}
   )
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    list(APPEND ONNX_CPP_TEST_SOURCES
+        ${ONNX_CPP_KERNELS_TEST_SOURCES}
+        ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES}
+        ${ONNX_CPP_GRADIENT_TEST_SOURCES}
+    )
+  endif()
   set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES} ${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST})
 
   enable_testing()
@@ -703,7 +702,11 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_PROTO_PATH}"
     "${ONNX_COMMON_PATH}"
   )
-  target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient GTest::gtest_main)
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient GTest::gtest_main)
+  else()
+    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim GTest::gtest_main)
+  endif()
   # Precompile the heaviest headers shared across virtually every translation
   # unit in unittests/cc. ``<gtest/gtest.h>`` is by far the dominant cost
   # (~109/110 test files pull it in) and the standard headers below are
@@ -745,10 +748,14 @@ if(ONNX_LIGHT_BUILD_TESTS)
                FILES ${ONNX_CPP_OP_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_optim" PREFIX "Source Files/cc/onnx_optim"
                FILES ${ONNX_CPP_OPTIM_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels" PREFIX "Source Files/cc/onnx_kernels"
-               FILES ${ONNX_CPP_KERNELS_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test" PREFIX "Source Files/cc/onnx_backend_test"
-               FILES ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES})
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels" PREFIX "Source Files/cc/onnx_kernels"
+                 FILES ${ONNX_CPP_KERNELS_TEST_SOURCES})
+    source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test" PREFIX "Source Files/cc/onnx_backend_test"
+                 FILES ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES})
+    source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_gradient" PREFIX "Source Files/cc/onnx_gradient"
+                 FILES ${ONNX_CPP_GRADIENT_TEST_SOURCES})
+  endif()
 endif()
 
 # Each benchmark is an individual project placed in the "Benchmarks" VS solution folder.

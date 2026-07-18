@@ -83,10 +83,13 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
 
       - name: Build and Install package without kernels/backend
-        run: pip install -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -e .[dev] -v
+        run: pip install -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
 
       - name: pip freeze
         run: pip freeze
+
+      - name: Run reduced C++ unit tests (Linux)
+        run: ctest --test-dir build --output-on-failure
 
       - name: Run tests (kernel/backend tests skip themselves)
         run: |

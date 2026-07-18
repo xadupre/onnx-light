@@ -61,7 +61,7 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
 
   ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion,
-            {opset, OpsetId(std::string(kLocalDomain), static_cast<int64_t>(1))});
+            {opset, OpsetId(kLocalDomain, static_cast<int64_t>(1))});
 
   // Declare the model-local function ``local:func_add`` whose body is a
   // single ``Add`` on two same-shape inputs.

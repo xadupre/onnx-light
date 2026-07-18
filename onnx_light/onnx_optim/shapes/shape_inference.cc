@@ -168,13 +168,6 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   }
 }
 
-// Normalises the empty default ONNX domain to ``kOnnxDomain`` so that
-// dispatch-table lookups always use a canonical key.
-std::string NormaliseDispatchDomain(const NodeProto &node) {
-  const std::string domain = node.domain();
-  return domain.empty() ? std::string(kOnnxDomain) : domain;
-}
-
 using AnchorMap = std::unordered_map<std::string, OptimTensor>;
 
 // Records ``a == b`` (a constraint between two symbolic expressions) and,

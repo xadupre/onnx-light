@@ -88,8 +88,9 @@ namespace {
 // ``NodeProto::domain``) is normalised to ``ai.onnx``.
 std::string FunctionLookupKey(const std::string &domain, const std::string &op_type,
                               const std::string &overload) {
-  const std::string d = domain.empty() ? std::string(kDefaultOnnxDomain) : domain;
-  return d + ":" + op_type + ":" + overload;
+  if (domain.empty())
+      return std::string(":") + op_type + ":" + overload;
+  return domain + ":" + op_type + ":" + overload;
 }
 
 template <class NameCollection> std::string FormatNameList(const NameCollection &names) {
@@ -357,7 +358,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
 
   // Propagate loop-carried outputs (sequence- or tensor-typed) to caller.
   for (std::size_t i = 0; i < n; ++i) {
-    const std::string caller_name = std::string(node.output(static_cast<int>(i)));
+    const std::string& caller_name = node.output(static_cast<int>(i));
     if (caller_name.empty()) {
       continue;
     }

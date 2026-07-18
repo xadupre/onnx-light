@@ -631,14 +631,14 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
       static const uint8_t zeros[CHUNK] = {};
       for (int64_t written = 0; written < padding;) {
         const int64_t to_write = std::min(padding - written, static_cast<int64_t>(CHUNK));
-        stream.write_raw_bytes_in_second_stream(zeros, to_write, std::string(*(external_location)));
+        stream.write_raw_bytes_in_second_stream(zeros, to_write, *(external_location));
         written += to_write;
       }
     }
     EXT_ENFORCE(expected_offset ==
-                    stream.weights_size_for_location(std::string(*(external_location))),
+                    stream.weights_size_for_location(*(external_location)),
                 "Offset mismatch ", expected_offset,
-                " != ", stream.weights_size_for_location(std::string(*(external_location))),
+                " != ", stream.weights_size_for_location(*(external_location)),
                 " name='", ref_name(), "'");
     // TODO Checks sparse initializer as well.
     write_external_raw_data = true;

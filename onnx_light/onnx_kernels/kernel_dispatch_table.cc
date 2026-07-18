@@ -2775,7 +2775,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            std::vector<std::string> vocab;
            vocab.reserve(str_vocab->strings_size());
            for (size_t i = 0; i < str_vocab->strings_size(); ++i) {
-             vocab.emplace_back(std::string(str_vocab->strings(i)));
+             vocab.emplace_back(str_vocab->strings(i));
            }
            switch (x_values.data_type) {
            case static_cast<int32_t>(DataType::INT64): {
@@ -3228,7 +3228,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          } else if (keys_strings != nullptr) {
            key_kind = KeyKind::String;
            for (const auto &v : keys_strings->strings()) {
-             keys_str.push_back(std::string(v));
+             keys_str.push_back(v);
            }
          } else {
            keys_tensor_holder = TensorFromProto(keys_tensor->t());

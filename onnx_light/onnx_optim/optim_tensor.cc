@@ -598,7 +598,7 @@ OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
     if (d.has_dim_value()) {
       shape.PushBack(OptimDim(static_cast<int64_t>(d.dim_value())));
     } else if (d.has_dim_param()) {
-      shape.PushBack(OptimDim(std::string(d.dim_param().data(), d.dim_param().size())));
+      shape.PushBack(OptimDim(d.dim_param()));
     } else {
       shape.PushBack(OptimDim(std::string()));
     }
@@ -610,7 +610,7 @@ OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
 // or -1 when none is present.
 int FindMetadataIndex(const ValueInfoProto &vi, const char *key) {
   for (int i = 0; i < vi.metadata_props().size(); ++i) {
-    if (std::string(vi.metadata_props()[i].key()) == key) {
+    if (vi.metadata_props()[i].key() == key) {
       return i;
     }
   }
@@ -691,7 +691,7 @@ bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
   out = OptimTensor(nullptr, dtype, std::move(shape));
   const int idx = FindDeviceMetadataIndex(vi);
   if (idx >= 0) {
-    const Device device = DeviceFromName(std::string(vi.metadata_props()[idx].value()));
+    const Device device = DeviceFromNamestd::string(vi.metadata_props()[idx].value());
     if (device != Device::kUndefined) {
       out.SetDevice(device);
     }

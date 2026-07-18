@@ -95,7 +95,7 @@ public:
   OptimDim(std::string expr) : value_(std::move(expr)) {}
 
   /// Convenience overload for C string literals.
-  OptimDim(const char *expr) : value_(std::string(expr)) {}
+  OptimDim(const std::string& expr) : value_(expr) {}
 
   /// Returns ``true`` when the dimension holds a concrete integer value.
   bool IsInt() const noexcept { return std::holds_alternative<int64_t>(value_); }

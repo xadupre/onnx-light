@@ -741,7 +741,7 @@ private:
    * @return std::string The prefix string.
    */
   std::string VerifyFailPrefix(std::string_view node_name) const;
-  std::string VerifyFailPrefix(const utils::String &node_name) const {
+  std::string VerifyFailPrefix(const utils::OptionalString &node_name) const {
     return VerifyFailPrefix(node_name.sv());
   }
 

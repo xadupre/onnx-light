@@ -28,7 +28,6 @@ bool IsValidIdentifier(const std::string &str) {
   return next_ == end_;
 }
 
-bool IsValidIdentifier(const utils::String &str) { return IsValidIdentifier(std::string(str)); }
 bool IsValidIdentifier(const utils::RefString &str) { return IsValidIdentifier(std::string(str)); }
 
 class ProtoPrinter {
@@ -92,7 +91,6 @@ private:
     else
       printQuoted(str);
   }
-  void printId(const utils::String &str) { printId(std::string(str)); }
   void printId(const utils::RefString &str) { printId(std::string(str)); }
 
   template <typename T> void print(const T &prim) { output_ << prim; }
@@ -107,7 +105,6 @@ private:
     output_ << "\"";
   }
 
-  inline void printQuoted(const utils::String &str) { printQuoted(std::string(str)); }
   inline void printQuoted(const utils::RefString &str) { printQuoted(std::string(str)); }
 
   template <typename T>

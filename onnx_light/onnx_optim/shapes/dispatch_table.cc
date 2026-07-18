@@ -108,11 +108,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Attention",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         const std::string q_name = node.input(0);
-         const std::string k_name = node.input(1);
-         const std::string v_name = node.input(2);
-         const std::string past_k_name = node.input_size() > 4 ? std::string(node.input(4)) : "";
-         const std::string past_v_name = node.input_size() > 5 ? std::string(node.input(5)) : "";
+         const std::string& q_name = node.input(0);
+         const std::string& k_name = node.input(1);
+         const std::string& v_name = node.input(2);
+         const std::string& past_k_name = node.input_size() > 4 ? node.input(4) : utils::String::default_empty();
+         const std::string& past_v_name = node.input_size() > 5 ? node.input(5) : utils::String::default_empty();
          nn::ComputeShapeAttention(ctx, node, q_name.c_str(), k_name.c_str(), v_name.c_str(),
                                    past_k_name.empty() ? nullptr : past_k_name.c_str(),
                                    past_v_name.empty() ? nullptr : past_v_name.c_str());
@@ -133,11 +133,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Dropout",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 1);
-        const std::string data_name = node.input(0);
-        const std::string ratio_name =
-            node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
-        const std::string training_mode_name =
-            node.input_size() >= 3 ? std::string(node.input(2)) : std::string();
+        const std::string& data_name = node.input(0);
+        const std::string& ratio_name =
+            node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
+        const std::string& training_mode_name =
+            node.input_size() >= 3 ? node.input(2) : utils::String::default_empty();
         nn::ComputeShapeDropout(ctx, node, data_name.c_str(),
                                 ratio_name.empty() ? nullptr : ratio_name.c_str(),
                                 training_mode_name.empty() ? nullptr : training_mode_name.c_str());
@@ -175,11 +175,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:LinearAttention",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);
-         const std::string q_name = node.input(0);
-         const std::string k_name = node.input(1);
-         const std::string v_name = node.input(2);
-         const std::string past_state_name =
-             node.input_size() > 3 ? std::string(node.input(3)) : "";
+         const std::string& q_name = node.input(0);
+         const std::string& k_name = node.input(1);
+         const std::string& v_name = node.input(2);
+         const std::string& past_state_name =
+             node.input_size() > 3 ? node.input(3) : utils::String::default_empty();
          nn::ComputeShapeLinearAttention(
              ctx, node, q_name.c_str(), k_name.c_str(), v_name.c_str(),
              past_state_name.empty() ? nullptr : past_state_name.c_str());
@@ -795,51 +795,51 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:QuantizeLinear",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         const std::string x_name = node.input(0);
-         const std::string zp_name =
-             node.input_size() >= 3 ? std::string(node.input(2)) : std::string();
+         const std::string& x_name = node.input(0);
+         const std::string& zp_name =
+             node.input_size() >= 3 ? node.input(2) : utils::String::default_empty()
          quantization::ComputeShapeQuantizeLinear(ctx, node, x_name.c_str(),
                                                   zp_name.empty() ? nullptr : zp_name.c_str());
        }},
       {"ai.onnx:DynamicQuantizeLinear",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string x_name = node.input(0);
+         const std::string& x_name = node.input(0);
          quantization::ComputeShapeDynamicQuantizeLinear(ctx, node, x_name.c_str());
        }},
       {"ai.onnx:QLinearConv",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 8);
-         const std::string x_name = node.input(0);
-         const std::string w_name = node.input(3);
-         const std::string yzp_name = node.input(7);
+         const std::string& x_name = node.input(0);
+         const std::string& w_name = node.input(3);
+         const std::string& yzp_name = node.input(7);
          quantization::ComputeShapeQLinearConv(ctx, node, x_name.c_str(), w_name.c_str(),
                                                yzp_name.c_str());
        }},
       {"ai.onnx:QLinearMatMul",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 8);
-         const std::string a_name = node.input(0);
-         const std::string b_name = node.input(3);
-         const std::string yzp_name = node.input(7);
+         const std::string& a_name = node.input(0);
+         const std::string& b_name = node.input(3);
+         const std::string& yzp_name = node.input(7);
          quantization::ComputeShapeQLinearMatMul(ctx, node, a_name.c_str(), b_name.c_str(),
                                                  yzp_name.c_str());
        }},
       {"ai.onnx:ReduceSum",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0);
-         const std::string axes_name =
-             node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
          reduction::ComputeShapeReduceSum(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceSumSquare",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0);
-         const std::string axes_name =
-             node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
          reduction::ComputeShapeReduceSumSquare(
              ctx, node, data_name.c_str(),
              node.input_size() >= 2 ? axes_name.c_str() : nullptr);
@@ -847,27 +847,27 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:ReduceL1",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0);
-         const std::string axes_name =
-             node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
          reduction::ComputeShapeReduceL1(ctx, node, data_name.c_str(),
                                          node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceL2",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0);
-         const std::string axes_name =
-             node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
          reduction::ComputeShapeReduceL2(ctx, node, data_name.c_str(),
                                          node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceLogSum",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0);
-         const std::string axes_name =
-             node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
          reduction::ComputeShapeReduceLogSum(
              ctx, node, data_name.c_str(),
              node.input_size() >= 2 ? axes_name.c_str() : nullptr);
@@ -875,9 +875,9 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:ReduceLogSumExp",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0);
-         const std::string axes_name =
-             node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
          reduction::ComputeShapeReduceLogSumExp(
              ctx, node, data_name.c_str(),
              node.input_size() >= 2 ? axes_name.c_str() : nullptr);
@@ -885,36 +885,36 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:ReduceMax",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0);
-         const std::string axes_name =
-             node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
          reduction::ComputeShapeReduceMax(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceMean",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0);
-         const std::string axes_name =
-             node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
          reduction::ComputeShapeReduceMean(ctx, node, data_name.c_str(),
                                            node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceMin",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0);
-         const std::string axes_name =
-             node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
          reduction::ComputeShapeReduceMin(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceProd",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         const std::string data_name = node.input(0);
-         const std::string axes_name =
-             node.input_size() >= 2 ? std::string(node.input(1)) : std::string();
+         const std::string& data_name = node.input(0);
+         const std::string& axes_name =
+             node.input_size() >= 2 ? node.input(1) : utils::String::default_empty();
          reduction::ComputeShapeReduceProd(ctx, node, data_name.c_str(),
                                            node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
@@ -1139,10 +1139,10 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:SoftmaxCrossEntropyLoss",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         const std::string scores_name = node.input(0);
-         const std::string labels_name = node.input(1);
-         const std::string weights_name =
-             node.input_size() >= 3 ? std::string(node.input(2)) : std::string();
+         const std::string& scores_name = node.input(0);
+         const std::string& labels_name = node.input(1);
+         const std::string& weights_name =
+             node.input_size() >= 3 ? node.input(2) : utils::String::default_empty();
          math::ComputeShapeSoftmaxCrossEntropyLoss(
              ctx, node, scores_name.c_str(), labels_name.c_str(),
              weights_name.empty() ? nullptr : weights_name.c_str());
@@ -1150,10 +1150,10 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:NegativeLogLikelihoodLoss",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         const std::string input_name = node.input(0);
-         const std::string target_name = node.input(1);
-         const std::string weight_name =
-             node.input_size() >= 3 ? std::string(node.input(2)) : std::string();
+         const std::string& input_name = node.input(0);
+         const std::string& target_name = node.input(1);
+         const std::string& weight_name =
+             node.input_size() >= 3 ? node.input(2) : utils::String::default_empty();
          math::ComputeShapeNegativeLogLikelihoodLoss(
              ctx, node, input_name.c_str(), target_name.c_str(),
              weight_name.empty() ? nullptr : weight_name.c_str());

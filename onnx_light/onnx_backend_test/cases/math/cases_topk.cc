@@ -101,6 +101,21 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
     });
   }
 
+  // test_cc_top_k_not_sorted — sorted=0 remains valid; the implementation
+  // returns a deterministic top-k set even though the schema leaves the order
+  // undefined.
+  {
+    NodeProto node = MakeTopKNode(/*axis=*/1, /*largest=*/1, /*sorted_attr=*/0,
+                                  /*include_largest=*/false, /*include_sorted=*/true);
+    Expect(registry, std::move(node), "test_cc_top_k_not_sorted", {opset}, [=]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {3, 4},
+                                   {0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f});
+      Tensor k = Tensor::FromInt64("", {1}, {3});
+      auto [values, indices] = topk_kernel(x, 3, /*axis=*/1, /*largest=*/true, /*sorted=*/false);
+      return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
+    });
+  }
+
   // test_cc_top_k_same_values — 1-D input with duplicates, k=3, default attrs.
   // Tiebreak uses the smaller original index.
   {

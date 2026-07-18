@@ -1869,6 +1869,21 @@ TEST(KernelClass, TopKSmallestPicksMinima) {
   EXPECT_EQ(indices.AsInt64()[1], 3);
 }
 
+TEST(KernelClass, TopKAcceptsSortedFalse) {
+  const KernelContext ctx{DefaultOpset(11)};
+  TopK topk_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {1, 5}, {5.0f, 1.0f, 4.0f, 2.0f, 3.0f});
+  auto [values, indices] = topk_kernel(x, /*k=*/3, /*axis=*/-1, /*largest=*/true, /*sorted=*/false);
+  ASSERT_EQ(values.shape, (std::vector<int64_t>{1, 3}));
+  EXPECT_FLOAT_EQ(values.AsFloat()[0], 5.0f);
+  EXPECT_FLOAT_EQ(values.AsFloat()[1], 4.0f);
+  EXPECT_FLOAT_EQ(values.AsFloat()[2], 3.0f);
+  EXPECT_EQ(indices.AsInt64()[0], 0);
+  EXPECT_EQ(indices.AsInt64()[1], 2);
+  EXPECT_EQ(indices.AsInt64()[2], 4);
+}
+
 TEST(KernelClass, TopKTieBreaksOnLowerIndex) {
   const KernelContext ctx{DefaultOpset(11)};
   TopK topk_kernel{ctx};

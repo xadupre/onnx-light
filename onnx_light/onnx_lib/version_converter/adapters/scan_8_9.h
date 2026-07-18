@@ -21,8 +21,8 @@ struct Scan_8_9 final : public Adapter {
     const std::vector<Value *> inputs(node->inputs().vec());
     const std::vector<Value *> outputs(node->outputs().vec());
 
-    ONNX_ASSERTM(!inputs.empty(), "Scan node in opset 8 must have at least 1 input")
-    ONNX_ASSERTM(inputs[0]->uniqueName().empty(), "Unsupported conversion to opset 9")
+    ONNX_ASSERTM(!inputs.empty(), "Scan node in opset 8 must have at least 1 input.")
+    ONNX_ASSERTM(inputs[0]->uniqueName().empty(), "Unsupported conversion to opset 9.")
 
     // Handling Attribute Changes
 

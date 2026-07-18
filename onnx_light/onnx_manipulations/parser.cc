@@ -750,6 +750,8 @@ Common::Status OnnxParser::ParseSingleAttributeValue(AttributeProto &attr,
       break;
     }
   }
+  // The only implicit scalar cast we support is INT->FLOAT, handled above when
+  // the expected type is known so that "-0" can preserve its sign bit.
   if ((expected != AttributeProto::AttributeType::UNDEFINED) && (expected != attr.ref_type())) {
     return ParseError("Mismatch between expected attribute type and specified value type.");
   }

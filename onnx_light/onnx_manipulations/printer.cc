@@ -20,8 +20,9 @@ using StringStringEntryProtos = utils::RepeatedField<StringStringEntryProto>;
 
 template <typename T> void PrintNumber(std::ostream &os, T value) {
   if constexpr (std::is_floating_point_v<T>) {
-    // Normalize NaN: MSVC's to_chars emits payload forms like "nan(ind)"
-    // that the parser does not accept.
+    // Normalize NaN for cross-platform consistency: MSVC's to_chars emits
+    // payload forms like "nan(ind)", while the parser accepts only canonical
+    // "nan"/"-nan" spellings.
     if (std::isnan(value)) {
       os << (std::signbit(value) ? "-nan" : "nan");
       return;

@@ -5,7 +5,6 @@
 #include "onnx_optim/shapes/shape_broadcast.h"
 
 #include <algorithm>
-#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>

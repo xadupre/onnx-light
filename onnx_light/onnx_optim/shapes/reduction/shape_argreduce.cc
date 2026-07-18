@@ -5,7 +5,6 @@
 #include "onnx_optim/shapes/reduction/shape_reduction.h"
 
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 
 #include "onnx_optim/shapes/shape_check.h"

@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx.h"
-#include <cctype>
+#include "onnx_manipulations/parser.h"
 #include <gtest/gtest.h>
 #include <string>
 
@@ -28,11 +28,11 @@ static bool IsValidIdentifier(const std::string &name) {
   if (name.empty()) {
     return false;
   }
-  if (!isalpha(static_cast<unsigned char>(name[0])) && name[0] != '_') {
+  if (!IsAlpha(name[0]) && name[0] != '_') {
     return false;
   }
   for (size_t i = 1; i < name.size(); ++i) {
-    if (!isalnum(static_cast<unsigned char>(name[i])) && name[i] != '_') {
+    if (!IsAlnum(name[i]) && name[i] != '_') {
       return false;
     }
   }

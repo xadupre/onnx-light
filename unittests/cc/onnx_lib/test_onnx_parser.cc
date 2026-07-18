@@ -1,9 +1,13 @@
 #include "onnx.h"
 #include "onnx_manipulations/parser.h"
+#include "onnx_manipulations/printer.h"
+#include <bit>
 #include <clocale>
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <limits>
+#include <sstream>
 #include <string_view>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -12,17 +16,18 @@ namespace {
 
 class LocaleGuard {
 public:
-  LocaleGuard() {
-    const char *loc = std::setlocale(LC_NUMERIC, nullptr);
+  explicit LocaleGuard(int category = LC_NUMERIC) : category_(category) {
+    const char *loc = std::setlocale(category_, nullptr);
     saved_ = loc ? loc : "C";
   }
 
-  ~LocaleGuard() { std::setlocale(LC_NUMERIC, saved_.c_str()); }
+  ~LocaleGuard() { std::setlocale(category_, saved_.c_str()); }
 
   LocaleGuard(const LocaleGuard &) = delete;
   LocaleGuard &operator=(const LocaleGuard &) = delete;
 
 private:
+  int category_;
   std::string saved_;
 };
 
@@ -751,6 +756,84 @@ TEST(onnx_defs, Parser_LocaleIndependentFloatParsing) {
   EXPECT_EQ(node.attribute(0).name(), "alpha");
   const float alpha = node.attribute(0).f();
   EXPECT_NEAR(alpha, 0.123f, 1e-6f);
+}
+
+TEST(onnx_defs, Parser_LocaleIndependentSpecialFloatParsing) {
+  LocaleGuard locale_guard(LC_CTYPE);
+
+  const char *locale_candidates[] = {
+      "tr_TR.UTF-8",
+      "Turkish_Turkey.1254",
+  };
+
+  bool locale_set = false;
+  for (const auto *candidate : locale_candidates) {
+    if (std::setlocale(LC_CTYPE, candidate) != nullptr) {
+      locale_set = true;
+      break;
+    }
+  }
+
+  if (!locale_set) {
+    GTEST_SKIP() << "No Turkish locale available on this system";
+  }
+
+  AttributeProto attr;
+  ParseIt(attr, "x = INF");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::FLOAT);
+  EXPECT_TRUE(std::isinf(attr.ref_f()));
+  EXPECT_GT(attr.ref_f(), 0.0f);
+}
+
+TEST(onnx_defs, Parser_FloatUnderflowAccepted) {
+  AttributeProto attr;
+  ParseIt(attr, "x = 1e-45");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::FLOAT);
+  EXPECT_EQ(attr.ref_f(), std::numeric_limits<float>::denorm_min());
+}
+
+TEST(onnx_defs, Parser_FloatAttributePreservesNegativeZero) {
+  AttributeProto attr;
+  ParseIt(attr, "x : float = -0");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::FLOAT);
+  EXPECT_TRUE(std::signbit(attr.ref_f()));
+  EXPECT_EQ(std::bit_cast<uint32_t>(attr.ref_f()), std::bit_cast<uint32_t>(-0.0f));
+}
+
+TEST(onnx_defs, Printer_FloatRoundTripExact) {
+  ModelProto model;
+  model.set_ir_version(7);
+  auto *opset = model.ref_opset_import().Add();
+  opset->set_domain("");
+  opset->set_version(13);
+  auto &graph = model.ref_graph();
+  graph.set_name("agraph");
+  auto *input = graph.ref_input().Add();
+  input->set_name("X");
+  auto &input_type = input->ref_type();
+  input_type.ref_tensor_type().set_elem_type(static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  auto *output = graph.ref_output().Add();
+  output->set_name("Y");
+  auto &output_type = output->ref_type();
+  output_type.ref_tensor_type().set_elem_type(static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  auto *node = graph.ref_node().Add();
+  node->set_op_type("LeakyRelu");
+  node->ref_input().push_back("X");
+  node->ref_output().push_back("Y");
+  auto *attr = node->ref_attribute().Add();
+  attr->set_name("alpha");
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(0.12345679f);
+
+  std::ostringstream oss;
+  oss << model;
+
+  ModelProto roundtrip;
+  ParseIt(roundtrip, oss.str());
+  ASSERT_EQ(roundtrip.ref_graph().ref_node().size(), 1u);
+  ASSERT_EQ(roundtrip.ref_graph().ref_node()[0].ref_attribute().size(), 1u);
+  EXPECT_EQ(std::bit_cast<uint32_t>(roundtrip.ref_graph().ref_node()[0].ref_attribute()[0].ref_f()),
+            std::bit_cast<uint32_t>(attr->ref_f()));
 }
 
 TEST(onnx_defs, Parser_NonNulTerminatedStringView) {

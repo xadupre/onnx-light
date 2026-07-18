@@ -64,7 +64,7 @@ void DefaultVersionConverter::convert_graph(const std::shared_ptr<Graph> &g,
       break;
     }
   }
-  ONNX_ASSERTM(domain_index >= 0, "Graph has no default-domain (\"\" or \"ai.onnx\") opset entry.")
+  ONNX_ASSERTM(domain_index >= 0, "Graph has no default-domain (\"\" or \"ai.onnx\") opset entry.");
   while (curr_version != target_version.version()) {
     debug("curr_version: " + ONNX_LIGHT_NAMESPACE::to_string(curr_version) +
           ", next_version: " + ONNX_LIGHT_NAMESPACE::to_string(curr_version + step));

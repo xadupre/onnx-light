@@ -4,8 +4,6 @@
 
 #include "onnx_optim/shapes/nn/shape_nn.h"
 
-#include <stdexcept>
-
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

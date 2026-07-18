@@ -4,8 +4,6 @@
 
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
 
-#include <stdexcept>
-#include <string>
 #include <utility>
 #include <vector>
 

@@ -4,7 +4,6 @@
 
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
 
-#include <cstdint>
 #include <vector>
 
 #include "onnx_optim/optim_sequence.h"

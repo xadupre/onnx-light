@@ -4,7 +4,6 @@
 
 #include "onnx_optim/shapes/preview/shape_preview.h"
 
-#include <stdexcept>
 #include <string>
 
 #include "onnx_optim/shapes/shape_check.h"

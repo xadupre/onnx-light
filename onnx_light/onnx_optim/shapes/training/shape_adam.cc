@@ -4,7 +4,6 @@
 
 #include "onnx_optim/shapes/training/shape_training.h"
 
-#include <stdexcept>
 #include <string>
 
 #include "onnx_optim/optim_tensor.h"

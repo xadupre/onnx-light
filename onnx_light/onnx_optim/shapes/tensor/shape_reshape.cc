@@ -4,10 +4,8 @@
 
 #include "onnx_optim/shapes/tensor/shape_tensor.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <variant>

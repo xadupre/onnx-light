@@ -5,7 +5,6 @@
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
 
 #include <limits>
-#include <string>
 
 #include "onnx_optim/optim_sequence.h"
 #include "onnx_optim/optim_tensor.h"

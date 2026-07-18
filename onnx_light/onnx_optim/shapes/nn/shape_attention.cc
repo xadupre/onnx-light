@@ -4,7 +4,6 @@
 
 #include "onnx_optim/shapes/nn/shape_nn.h"
 
-#include <stdexcept>
 #include <string>
 #include <utility>
 

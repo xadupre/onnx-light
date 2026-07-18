@@ -1,8 +1,6 @@
 #include "onnx_optim/shapes/nn/shape_nn.h"
 
-#include <algorithm>
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>

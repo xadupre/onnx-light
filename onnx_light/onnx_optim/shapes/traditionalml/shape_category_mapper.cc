@@ -4,8 +4,6 @@
 
 #include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
 
-#include <stdexcept>
-
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

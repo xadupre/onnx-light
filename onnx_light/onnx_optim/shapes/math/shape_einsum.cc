@@ -5,9 +5,6 @@
 #include "onnx_optim/shapes/math/shape_math.h"
 
 #include <algorithm>
-#include <cstdint>
-#include <set>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>

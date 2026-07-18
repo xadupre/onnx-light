@@ -1,8 +1,6 @@
 #include "onnx_optim/shapes/quantization/shape_quantization.h"
 
-#include <algorithm>
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 #include <vector>
 

@@ -5,7 +5,6 @@
 #include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
 
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 
 #include "onnx_optim/shapes/shape_check.h"

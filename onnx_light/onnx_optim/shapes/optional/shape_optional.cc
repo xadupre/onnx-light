@@ -4,7 +4,6 @@
 
 #include "onnx_optim/shapes/optional/shape_optional.h"
 
-#include <stdexcept>
 #include <string>
 
 #include "onnx_optim/optim_sequence.h"

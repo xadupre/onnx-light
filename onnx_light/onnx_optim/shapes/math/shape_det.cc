@@ -6,7 +6,6 @@
 
 #include "onnx_optim/shapes/shape_check.h"
 
-#include <stdexcept>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {

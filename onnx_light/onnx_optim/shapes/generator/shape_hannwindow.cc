@@ -5,7 +5,6 @@
 #include "onnx_optim/shapes/generator/shape_generator.h"
 
 #include <cstdint>
-#include <stdexcept>
 #include <utility>
 
 #include "onnx_optim/optim_tensor.h"

@@ -5,9 +5,7 @@
 #include "onnx_optim/shapes/generator/shape_generator.h"
 #include "onnx_proto/onnx_helper.h"
 
-#include <algorithm>
 #include <cstring>
-#include <stdexcept>
 #include <string>
 #include <vector>
 

@@ -138,6 +138,7 @@ set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
 set(ONNX_MANIPULATIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_manipulations")
 set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
+set(ONNX_ORT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_ort")
 set(ONNX_OPTIM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_optim")
 set(ONNX_BACKEND_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_backend_test")
 set(ONNX_KERNELS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_kernels")
@@ -169,8 +170,8 @@ set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_on
 
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 set(ONNX_ORT_SOURCES
-    "${ONNX_OP_PATH}/operator_sets_microsoft.cc"
-    "${ONNX_OP_PATH}/operator_sets_microsoft_doc.cc"
+    "${ONNX_ORT_PATH}/operator_sets_microsoft.cc"
+    "${ONNX_ORT_PATH}/operator_sets_microsoft_doc.cc"
 )
 list(REMOVE_ITEM ONNX_OP_SOURCES ${ONNX_ORT_SOURCES})
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")

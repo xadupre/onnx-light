@@ -15,7 +15,7 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
         self.assertIn("windows_x86_build:", self.content)
         self.assertIn("name: core (windows-latest, x86 build)", self.content)
 
-    def test_windows_64_build_uses_sccache_without_ninja_override(self):
+    def test_windows_64_build_sccache_no_ninja(self):
         """Verifies that the 64-bit Windows build uses sccache without forcing Ninja."""
         self.assertRegex(
             self.content,

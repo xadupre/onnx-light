@@ -12,10 +12,10 @@ bool GradTanh(const NodeProto &node, const std::string &output_grad,
               std::unordered_map<std::string, std::string> &grad_accum, int &counter,
               FunctionProto &func) {
   const auto &inputs = node.input();
-  if (inputs.size() < 1 || inputs[0].empty() || inputs[0].empty())
+  if (inputs.size() < 1 || inputs[0].empty())
     return true;
-  const std::string& A = inputs[0];
-  if (node.output().empty() || node.output()[0].empty() || node.output()[0].empty())
+  const std::string &A = inputs[0];
+  if (node.output().empty() || node.output()[0].empty())
     return true;
   const std::string C = node.output()[0];
 

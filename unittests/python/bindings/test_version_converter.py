@@ -1202,6 +1202,86 @@ class TestVersionConverter(ExtTestCase):
         assert converted_model.graph.node[0].op_type == "Scan"
         assert converted_model.opset_import[0].version == to_opset
 
+    def test_scan_8_9_rejects_no_inputs(self) -> None:
+        def test() -> None:
+            nodes = [
+                oh.make_node(
+                    "Scan", inputs=[], outputs=["y"], body=oh.make_graph([], "body", [], [])
+                )
+            ]
+            graph = oh.make_graph(
+                nodes,
+                "test_scan_no_inputs",
+                [],
+                [oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, None)],
+            )
+            model = oh.make_model(graph, opset_imports=[oh.make_operatorsetid("", 8)])
+            version_converter.convert_version(model, 9)
+
+        self.assertRaises(RuntimeError, test)
+
+    def test_scan_9_8_with_valid_node(self) -> None:
+        data_type = onnxl.TensorProto.FLOAT
+        node1 = oh.make_node("Add", inputs=["sum_in", "next"], outputs=["sum_out"])
+        node2 = oh.make_node("Identity", inputs=["sum_out"], outputs=["scan_out"])
+        body = oh.make_graph(
+            [node1, node2],
+            "scan_body",
+            [
+                oh.make_tensor_value_info("sum_in", data_type, [2]),
+                oh.make_tensor_value_info("next", data_type, [2]),
+            ],
+            [
+                oh.make_tensor_value_info("sum_out", data_type, [2]),
+                oh.make_tensor_value_info("scan_out", data_type, [2]),
+            ],
+        )
+        nodes = [
+            oh.make_node(
+                "Scan", inputs=["initial", "x"], outputs=["y", "z"], body=body, num_scan_inputs=1
+            )
+        ]
+        graph = oh.make_graph(
+            nodes,
+            "test_scan_9_8",
+            [
+                oh.make_tensor_value_info("initial", data_type, [2]),
+                oh.make_tensor_value_info("x", data_type, [3, 2]),
+            ],
+            [
+                oh.make_tensor_value_info("y", data_type, [2]),
+                oh.make_tensor_value_info("z", data_type, [3, 2]),
+            ],
+        )
+        converted_model = self._converted(graph, oh.make_operatorsetid("", 9), 8)
+        assert converted_model.graph.node[0].op_type == "Scan"
+        assert converted_model.opset_import[0].version == 8
+
+    def test_convert_version_ai_onnx_domain_spelling_preserves_custom_domain(self) -> None:
+        node = oh.make_node("Add", inputs=["X", "Y"], outputs=["Z"])
+        graph = oh.make_graph(
+            [node],
+            "test_default_domain_ai_onnx_spelling",
+            [
+                oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1]),
+                oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1]),
+            ],
+            [oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, [1])],
+        )
+        model = oh.make_model(
+            graph,
+            opset_imports=[
+                oh.make_operatorsetid("ai.onnx", 9),
+                oh.make_operatorsetid("custom.domain", 1),
+            ],
+        )
+        converted_model = version_converter.convert_version(model, 8)
+        checker.check_model(converted_model)
+
+        opset_by_domain = {opset.domain: opset.version for opset in converted_model.opset_import}
+        assert opset_by_domain["ai.onnx"] == 8
+        assert opset_by_domain["custom.domain"] == 1
+
     # Test Cast Adapter: 8 -> 9
     def test_cast_8_9(self) -> None:
         from_opset = 8

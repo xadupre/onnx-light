@@ -613,7 +613,13 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
   const auto &opset_imports = ctx.get_opset_imports();
   auto dit = opset_imports.find(node.domain());
   if (dit == opset_imports.end()) {
-    fail_check("No opset import for domain '", node.domain(), "'");
+    // Both "" (ONNX_DOMAIN) and "ai.onnx" refer to the default ONNX domain.
+    if (node.domain().sv() == ONNX_DOMAIN) {
+      dit = opset_imports.find("ai.onnx");
+    }
+    if (dit == opset_imports.end()) {
+      fail_check("No opset import for domain '", node.domain(), "'");
+    }
   }
   auto domain_version = dit->second;
 

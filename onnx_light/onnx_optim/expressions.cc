@@ -12,7 +12,6 @@
 #include <map>
 #include <numeric>
 #include <optional>
-#include <sstream>
 #include <stdexcept>
 
 namespace onnx_light {

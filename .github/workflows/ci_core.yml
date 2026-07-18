@@ -187,7 +187,7 @@ jobs:
       contents: read
       id-token: write
     env:
-      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_GHA_ENABLED: ${{ (matrix.os == 'windows-latest' || matrix.os == 'macos-latest') && 'true' || 'false' }}
     strategy:
       fail-fast: false
       matrix:

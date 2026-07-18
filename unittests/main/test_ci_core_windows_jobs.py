@@ -10,7 +10,7 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
             encoding="utf-8"
         )
 
-    def test_windows_x86_build_job_is_kept(self):
+    def test_windows_x86_build_job_exists(self):
         self.assertIn("windows_x86_build:", self.content)
         self.assertIn("name: core (windows-latest, x86 build)", self.content)
 
@@ -19,7 +19,9 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
             self.content,
             (
                 r"(?s)name: core \(\$\{\{ matrix\.os \}\}, py\$\{\{ matrix\.python-version \}\}\)"
-                r".*?env:\s+SCCACHE_GHA_ENABLED: \"true\""
+                r".*?env:\s+SCCACHE_GHA_ENABLED: \${\{ "
+                r".*?matrix\.os == 'windows-latest'"
+                r".*?matrix\.os == 'macos-latest'.*? \}\}"
                 r".*?- name: Build and Install package \(Windows\)\s+"
                 r"if: runner\.os == 'Windows'\s+env:\s+CMAKE_GENERATOR: Ninja\s+"
                 r"run: pip install .*?cmake\.define\.CMAKE_C_COMPILER_LAUNCHER=sccache"
@@ -27,7 +29,7 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
             ),
         )
 
-    def test_windows_cpp_tests_remain_enabled(self):
+    def test_windows_cpp_tests_are_enabled(self):
         self.assertRegex(
             self.content,
             (

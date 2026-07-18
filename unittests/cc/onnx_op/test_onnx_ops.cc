@@ -58,6 +58,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   const std::vector<onnx_op::LightOpSchema> all_schemas = onnx_op::GetAllOnnxOpSchemasWithHistory();
   const std::vector<onnx_op::LightOpSchema> math_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
+  const std::vector<onnx_op::microsoft::LightOpSchema> microsoft_schemas =
+      onnx_op::microsoft::GetAllOnnxOpMicrosoftSchemasWithHistory();
   const std::vector<onnx_op::controlflow::LightOpSchema> controlflow_schemas =
       onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory();
   const std::vector<onnx_op::generator::LightOpSchema> generator_schemas =
@@ -93,7 +95,7 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
 
   const size_t expected_total =
       controlflow_schemas.size() + generator_schemas.size() + image_schemas.size() +
-      math_schemas.size() + logical_schemas.size() + nn_schemas.size() +
+      math_schemas.size() + microsoft_schemas.size() + logical_schemas.size() + nn_schemas.size() +
       object_detection_schemas.size() + optional_schemas.size() + preview_schemas.size() +
       quantization_schemas.size() + reduction_schemas.size() + rt_schemas.size() +
       sequence_schemas.size() + tensor_schemas.size() + text_schemas.size() +
@@ -114,7 +116,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   }
 
   std::vector<onnx_op::LightOpSchema> parity_schemas;
-  parity_schemas.reserve(all_schemas.size() - reduction_schemas.size());
+  parity_schemas.reserve(all_schemas.size() - reduction_schemas.size() - microsoft_schemas.size() -
+                         rt_schemas.size());
   parity_schemas.insert(parity_schemas.end(), math_schemas.begin(), math_schemas.end());
   parity_schemas.insert(parity_schemas.end(), controlflow_schemas.begin(),
                         controlflow_schemas.end());

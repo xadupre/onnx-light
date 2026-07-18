@@ -236,7 +236,7 @@ TEST(FunctionContextStandaloneTest, FunctionBodyAcceptsRepeatedProtoField) {
   const FunctionProto *function = schema.GetFunction(2, false);
   ASSERT_NE(function, nullptr);
   ASSERT_EQ(function->node().size(), 1);
-  EXPECT_EQ(function->node(0).op_type().as_string(), "Sub");
+  EXPECT_EQ(function->node(0).op_type(), "Sub");
 }
 
 // ---------------------------------------------------------------------------

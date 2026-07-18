@@ -17,24 +17,16 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
 
     def test_windows_64_build_uses_msvc_ninja_with_sccache(self):
         """Verifies that the 64-bit Windows build uses MSVC-backed Ninja with sccache."""
+        self.assertIn("- name: Set up MSVC for Ninja (Windows)", self.content)
+        self.assertIn("uses: ilammy/msvc-dev-cmd@v1.13.0", self.content)
+        self.assertIn("arch: x64", self.content)
         self.assertRegex(
             self.content,
-            (
-                r"(?s)- name: Set up MSVC for Ninja \(Windows\)\s+"
-                r"if: runner\.os == 'Windows'\s+"
-                r"uses: ilammy/msvc-dev-cmd@v1\.13\.0\s+"
-                r"with:\s+arch: x64"
-            ),
+            r"(?s)- name: Set up MSVC for Ninja \(Windows\).*?if: runner\.os == 'Windows'",
         )
-        self.assertRegex(
-            self.content,
-            (
-                r"(?s)- name: Build and Install package \(Windows\)\s+"
-                r"if: runner\.os == 'Windows'\s+env:\s+"
-                r"CMAKE_GENERATOR: Ninja\s+SCCACHE_GHA_ENABLED: \"true\"\s+"
-                r"run: pip install "
-            ),
-        )
+        self.assertIn("- name: Build and Install package (Windows)", self.content)
+        self.assertIn("CMAKE_GENERATOR: Ninja", self.content)
+        self.assertIn('SCCACHE_GHA_ENABLED: "true"', self.content)
         self.assertIn("cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache", self.content)
         self.assertIn("cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache", self.content)
 

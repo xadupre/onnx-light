@@ -11,12 +11,12 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
         )
 
     def test_windows_x86_build_job_exists(self):
-        """Verifies that the dedicated Windows x86 build job remains present."""
+        """Tests that the dedicated Windows x86 build job remains present."""
         self.assertIn("windows_x86_build:", self.content)
         self.assertIn("name: core (windows-latest, x86 build)", self.content)
 
     def test_windows_64_build_sccache_no_ninja(self):
-        """Verifies that the 64-bit Windows build uses sccache without forcing Ninja."""
+        """Tests that the 64-bit Windows build uses sccache without forcing Ninja."""
         self.assertRegex(
             self.content,
             (
@@ -30,7 +30,7 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
         self.assertIn("cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache", self.content)
 
     def test_windows_cpp_tests_are_enabled(self):
-        """Verifies that the 64-bit Windows job still enables and runs C++ tests."""
+        """Tests that the 64-bit Windows job still enables and runs C++ tests."""
         self.assertRegex(
             self.content,
             (

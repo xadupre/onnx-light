@@ -5,7 +5,6 @@
 #include "onnx_optim/shapes/nn/shape_nn.h"
 
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 
 #include "onnx_optim/optim_tensor.h"

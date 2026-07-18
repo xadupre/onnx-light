@@ -4,8 +4,6 @@
 
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
 
-#include <string>
-
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 

@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <stdexcept>
 #include <utility>
 #include <variant>
 

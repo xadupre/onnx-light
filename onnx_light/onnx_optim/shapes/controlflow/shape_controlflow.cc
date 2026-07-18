@@ -5,7 +5,6 @@
 #include "onnx_optim/shapes/controlflow/shape_controlflow.h"
 
 #include <cstddef>
-#include <stdexcept>
 #include <string>
 #include <utility>
 

@@ -5,7 +5,6 @@
 #include "onnx_optim/shapes/math/shape_math.h"
 
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 #include <utility>
 

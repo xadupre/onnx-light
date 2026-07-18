@@ -5,9 +5,7 @@
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_optim/shapes/text/shape_text.h"
 
-#include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {

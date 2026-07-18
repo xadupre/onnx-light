@@ -4,7 +4,6 @@
 
 #include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
 
-#include <stdexcept>
 #include <string>
 #include <vector>
 

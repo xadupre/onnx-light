@@ -4,9 +4,6 @@
 
 #include "onnx_optim/shapes/shape_check.h"
 
-#include <stdexcept>
-#include <string>
-
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {

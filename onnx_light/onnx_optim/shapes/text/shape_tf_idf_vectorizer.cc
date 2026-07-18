@@ -7,7 +7,6 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <algorithm>
-#include <stdexcept>
 #include <string>
 #include <vector>
 

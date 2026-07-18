@@ -105,6 +105,13 @@ double StrtodC(const std::string &s) {
   return val;
 }
 
+static bool IsNegativeIntegerZeroLiteral(const std::string &s) {
+  if (s.size() < 2 || s[0] != '-') {
+    return false;
+  }
+  return std::all_of(s.begin() + 1, s.end(), [](char c) { return c == '0'; });
+}
+
 #if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
 
 float LocaleIndependentStof(const std::string &s) {
@@ -139,6 +146,8 @@ double LocaleIndependentStod(const std::string &s) {
 
 #else
 
+// No floating-point from_chars support: keep the original explicit-C-locale
+// implementation for all floating-point parsing.
 float LocaleIndependentStof(const std::string &s) { return StrtofC(s); }
 
 double LocaleIndependentStod(const std::string &s) { return StrtodC(s); }
@@ -732,11 +741,12 @@ Common::Status OnnxParser::ParseSingleAttributeValue(AttributeProto &attr,
       if (expected == AttributeProto::AttributeType::FLOAT) {
         // Implicit INT->FLOAT cast. Only "-0" needs the float parser to
         // preserve its sign bit. Spellings like "-0.0" or "-0e0" are parsed
-        // as FLOAT_LITERAL earlier, so this INT_LITERAL branch only needs to
-        // detect the exact integer token "-0".
+        // as FLOAT_LITERAL earlier, while INT_LITERAL spellings like "-00"
+        // still need sign-bit preservation here.
         attr.set_type(AttributeProto::AttributeType::FLOAT);
-        attr.set_f(literal.value == "-0" ? LocaleIndependentStof(literal.value)
-                                         : static_cast<float>(std::stol(literal.value)));
+        attr.set_f(IsNegativeIntegerZeroLiteral(literal.value)
+                       ? LocaleIndependentStof(literal.value)
+                       : static_cast<float>(std::stol(literal.value)));
       } else {
         attr.set_type(AttributeProto::AttributeType::INT);
         attr.set_i(std::stol(literal.value));

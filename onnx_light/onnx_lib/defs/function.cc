@@ -62,8 +62,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
     }
   }
   if (domain_version == -1) {
-    ONNX_THROW("No opset import registered for domain '" + std::string(node.ref_domain()) +
-               "' in function proto");
+    ONNX_THROW("No opset import registered for domain '", node.ref_domain(), "' in function proto");
   }
 
   const OpSchemaRegistry *schema_registry = OpSchemaRegistry::Instance();

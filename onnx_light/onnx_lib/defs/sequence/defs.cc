@@ -527,7 +527,7 @@ static bool BuildSequenceMapBodyFunc(const FunctionBodyBuildContext &ctx, const 
     for (int outputIndex = 0; outputIndex < noutputs; outputIndex++) {
       const auto &body_out_i = body.output(outputIndex);
       assert(body_out_i.type().has_tensor_type());
-      std::string prefix = loopbody_graph_name + "_" + std::string(body_out_i.name());
+      std::string prefix = MakeString(loopbody_graph_name, "_", body_out_i.name());
       std::string loopbody_in_name = prefix + "_in";
 
       ValueInfoProto tmp;

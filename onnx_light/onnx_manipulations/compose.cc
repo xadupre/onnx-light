@@ -839,8 +839,8 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
   } else {
     const std::string n1 = g1.has_name() ? g1.name().value() : "";
     const std::string n2 = g2.has_name() ? g2.name().value() : "";
-    const std::string ds1 = g1.has_doc_string() ? std::string(g1.doc_string()) : "";
-    const std::string ds2 = g2.has_doc_string() ? std::string(g2.doc_string()) : "";
+    const std::string ds1 = g1.has_doc_string() ? g1.doc_string().value() : "";
+    const std::string ds2 = g2.has_doc_string() ? g2.doc_string().value() : "";
     g.set_doc_string("Graph combining " + n1 + " and " + n2 + "\n" + n1 + "\n\n" + ds1 + "\n\n" +
                      n2 + "\n\n" + ds2);
   }

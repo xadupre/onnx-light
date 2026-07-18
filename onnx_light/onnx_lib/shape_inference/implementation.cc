@@ -268,9 +268,9 @@ static std::string GetFunctionIdentifier(const FunctionProto &function) {
   // However, that will be mapped to an empty identifier.
   const std::string &overload = function.overload();
   if (overload.empty()) {
-    return std::string(function.domain()) + ":" + std::string(function.name());
+    return MakeString(function.domain(), ":", function.name());
   }
-  return std::string(function.domain()) + ":" + std::string(function.name()) + ":" + overload;
+  return MakeString(function.domain(), ":", function.name(), ":", overload);
 }
 
 static std::string GetFunctionIdentifier(const NodeProto &node) {
@@ -278,9 +278,9 @@ static std::string GetFunctionIdentifier(const NodeProto &node) {
   // However, that will be mapped to an empty identifier.
   const std::string &overload = node.overload();
   if (overload.empty()) {
-    return std::string(node.domain()) + ":" + std::string(node.op_type());
+    return MakeString(node.domain(), ":", node.op_type());
   }
-  return std::string(node.domain()) + ":" + std::string(node.op_type()) + ":" + overload;
+  return MakeString(node.domain(), ":", node.op_type(), ":", overload);
 }
 
 namespace {
@@ -1055,8 +1055,8 @@ GraphInferencerImpl::doInferencing(const std::vector<const TypeProto *> &input_t
 }
 
 std::string GetErrorWithNodeInfo(const NodeProto &n, const std::runtime_error &err) {
-  std::string op_name = n.has_name() ? (", node name: " + std::string(n.name())) : "";
-  return "(op_type:" + std::string(n.op_type()) + op_name + "): " + err.what();
+  std::string op_name = n.has_name() ? MakeString(", node name: ", n.name()) : "";
+  return MakeString("(op_type:", n.op_type(), op_name, "): ", err.what());
 }
 
 void TraverseGraphsToAddExistingSymbols(const GraphProto &g, SymbolTable &symbol_table) {

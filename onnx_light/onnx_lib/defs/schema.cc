@@ -274,7 +274,7 @@ void OpSchema::Verify(const NodeProto &node) const {
   for (const auto &attr_proto : node.attribute()) {
     const auto &name = attr_proto.name();
 
-    if (!seen_attr_names.insert(std::string(name)).second) {
+    if (!seen_attr_names.insert(name).second) {
       fail_check("Attribute '", name, "' appeared multiple times.");
     }
 

@@ -587,7 +587,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
           auto parent = normalized.parent_path();
           EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
                       "External data location must be a filename with no folder, name='",
-                      std::string(ref_name()), "', location='", entry.ref_value(), "'");
+                      ref_name(), "', location='", entry.ref_value(), "'");
         }
         external_location = &entry.ref_value();
         has_location = true;
@@ -596,7 +596,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
         if (size != static_cast<int64_t>(raw_data_.size())) {
           if (raw_data_.size() == 0) {
             EXT_THROW(
-                "Tensor '", std::string(ref_name()),
+                "Tensor '", ref_name(),
                 "' is marked EXTERNAL but its raw_data is empty while serializing external data. "
                 "This usually means the model was loaded with load_external_data=False. "
                 "Reload it with load_external_data=True, call load_external_data_for_model(), "
@@ -604,7 +604,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                 "file.");
           }
           EXT_THROW("Size mismatch ", size, " != ", static_cast<int64_t>(raw_data_.size()),
-                    " name='", std::string(ref_name()), "'");
+                    " name='", ref_name(), "'");
         }
         has_size = true;
       } else if (entry.ref_key() == "offset") {
@@ -615,7 +615,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
     EXT_ENFORCE(has_location && has_size && has_offset,
                 "External data is not fully specified. 'location', 'size', and 'offset' "
                 "must be present in external_data, name='",
-                std::string(ref_name()), "'");
+                ref_name(), "'");
     const int64_t current_offset =
         stream.weights_size_for_location(std::string(*(external_location)));
     // Write alignment padding before the tensor data if the expected offset is ahead of the
@@ -639,7 +639,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                     stream.weights_size_for_location(std::string(*(external_location))),
                 "Offset mismatch ", expected_offset,
                 " != ", stream.weights_size_for_location(std::string(*(external_location))),
-                " name='", std::string(ref_name()), "'");
+                " name='", ref_name(), "'");
     // TODO Checks sparse initializer as well.
     write_external_raw_data = true;
   }
@@ -705,9 +705,8 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
         auto normalized = loc_path.lexically_normal();
         auto parent = normalized.parent_path();
         EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
-                    "External data location must be a filename with no folder, name='",
-                    std::string(ref_name()), "', location='",
-                    std::string(external_data[0].ref_value()), "'");
+                    "External data location must be a filename with no folder, name='", ref_name(),
+                    "', location='", std::string(external_data[0].ref_value()), "'");
       }
       location = std::string(external_data[0].ref_value());
       const StringStringEntryProto &entry1 = external_data[1];
@@ -734,7 +733,7 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
             auto parent = normalized.parent_path();
             EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
                         "External data location must be a filename with no folder, name='",
-                        std::string(ref_name()), "', location='", entry.ref_value(), "'");
+                        ref_name(), "', location='", entry.ref_value(), "'");
           }
           location = entry.ref_value();
           // Should check the value with the location of the second stream?
@@ -746,11 +745,11 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       }
     }
     EXT_ENFORCE(offset >= 0 && size > 0, "External data offset and size must be specified, name='",
-                std::string(ref_name()), "'");
+                ref_name(), "'");
     if (options.max_tensor_size_bytes > 0 &&
         static_cast<int64_t>(size) > options.max_tensor_size_bytes) {
-      EXT_THROW("TensorProto::ParseFromStream (external data): tensor '", std::string(ref_name()),
-                "' requests ", size, " bytes which exceeds ParseOptions::max_tensor_size_bytes=",
+      EXT_THROW("TensorProto::ParseFromStream (external data): tensor '", ref_name(), "' requests ",
+                size, " bytes which exceeds ParseOptions::max_tensor_size_bytes=",
                 options.max_tensor_size_bytes,
                 ". Increase max_tensor_size_bytes or set it to 0 to disable the limit.");
     }
@@ -824,7 +823,7 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
 void TensorProto::LoadExternalData(const std::string &base_dir) {
   EXT_ENFORCE(has_data_location() && ref_data_location() == DataLocation::EXTERNAL,
               "TensorProto::LoadExternalData requires data_location == EXTERNAL, name='",
-              std::string(ref_name()), "'.");
+              ref_name(), "'.");
   std::string location;
   int64_t offset = 0;
   int64_t length = -1;
@@ -840,7 +839,7 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
   }
   EXT_ENFORCE(!location.empty(),
               "TensorProto::LoadExternalData missing 'location' entry in external_data, name='",
-              std::string(ref_name()), "'.");
+              ref_name(), "'.");
   // Validate that location does not escape the base directory (path traversal).
   std::filesystem::path loc_path(location);
   std::filesystem::path loc_normal = loc_path.lexically_normal();
@@ -853,8 +852,7 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
   // link, otherwise a malicious model could read arbitrary files on disk.
   EXT_ENFORCE(!std::filesystem::is_symlink(data_path),
               "TensorProto::LoadExternalData: external data file '", data_path.string(),
-              "' is a symbolic link, which is not allowed, for tensor '", std::string(ref_name()),
-              "'.");
+              "' is a symbolic link, which is not allowed, for tensor '", ref_name(), "'.");
   // Verify canonical containment to catch symlinks in any parent component
   // that would resolve outside the base directory.
   if (!base_dir.empty()) {
@@ -872,8 +870,8 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
     }
     EXT_ENFORCE(canonical_data.native().find(base_str) == 0 || canonical_data == canonical_base,
                 "TensorProto::LoadExternalData: external data '", data_path.string(),
-                "' resolves outside the base directory '", base_dir, "' for tensor '",
-                std::string(ref_name()), "'.");
+                "' resolves outside the base directory '", base_dir, "' for tensor '", ref_name(),
+                "'.");
   }
   // Reject hardlinks: a hardlink to a sensitive file placed inside the model
   // directory would pass the path-traversal and symlink checks above, but
@@ -885,11 +883,11 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
                 data_path.string(), "': ", ec_hc.message());
     EXT_ENFORCE(hc <= 1, "TensorProto::LoadExternalData: external data file '", data_path.string(),
                 "' has multiple hard links (", static_cast<int64_t>(hc),
-                "), which is not allowed for tensor '", std::string(ref_name()), "'.");
+                "), which is not allowed for tensor '", ref_name(), "'.");
   }
   std::ifstream file(data_path, std::ios::binary);
   EXT_ENFORCE(file.is_open(), "TensorProto::LoadExternalData unable to open external data file '",
-              data_path.string(), "' for tensor '", std::string(ref_name()), "'.");
+              data_path.string(), "' for tensor '", ref_name(), "'.");
   if (offset > 0) {
     file.seekg(offset, std::ios::beg);
     EXT_ENFORCE(file.good(), "TensorProto::LoadExternalData unable to seek to offset ", offset,

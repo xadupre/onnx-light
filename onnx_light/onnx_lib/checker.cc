@@ -613,7 +613,7 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
   const auto &opset_imports = ctx.get_opset_imports();
   auto dit = opset_imports.find(node.domain());
   if (dit == opset_imports.end()) {
-    fail_check("No opset import for domain '" + std::string(node.domain()) + "'");
+    fail_check("No opset import for domain '", node.domain(), "'");
   }
   auto domain_version = dit->second;
 
@@ -641,12 +641,11 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
         ctx.check_custom_domain()) {
       // fail the checker if op is in built-in domains or if it has no schema when
       // `check_custom_domain` is true
-      fail_check("No Op registered for " + std::string(node.op_type()) +
-                 " with domain_version of " + ONNX_LIGHT_NAMESPACE::to_string(domain_version));
+      fail_check("No Op registered for ", node.op_type(), " with domain_version of ",
+                 ONNX_LIGHT_NAMESPACE::to_string(domain_version));
     }
   } else if (schema->Deprecated()) {
-    fail_check("Op registered for " + std::string(node.op_type()) +
-               " is deprecated in domain_version of " +
+    fail_check("Op registered for ", node.op_type(), " is deprecated in domain_version of ",
                ONNX_LIGHT_NAMESPACE::to_string(domain_version));
   } else {
     schema->Verify(node);
@@ -747,8 +746,8 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
     ONNX_TRY { check_node(node, ctx, lex_ctx); }
     ONNX_CATCH(ValidationError & ex) {
       ONNX_HANDLE_EXCEPTION([&]() {
-        ex.AppendContext("Bad node spec for node. Name: " + std::string(node.name()) +
-                         " OpType: " + std::string(node.op_type()));
+        ex.AppendContext(
+            MakeString("Bad node spec for node. Name: ", node.name(), " OpType: ", node.op_type()));
         // Rethrow without copying to avoid triggering
         // bugprone-exception-copy-constructor-throws.
         // The in-place AppendContext modification is preserved because
@@ -798,7 +797,7 @@ void check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
   auto model_opset_version = get_version_for_domain(node.domain(), model_opset_imports);
 
   if (func_opset_version == -1) {
-    fail_check("No Opset registered for domain " + std::string(node.domain()));
+    fail_check("No Opset registered for domain ", node.domain());
   }
 
   if (model_opset_version == -1) {
@@ -827,11 +826,10 @@ void check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
   // an error
   if (!schema_for_model_import || !schema_for_function_import ||
       schema_for_function_import->since_version() != schema_for_model_import->since_version()) {
-    fail_check("Opset import for domain " + std::string(node.domain()) + " in function op " +
-               std::string(node.op_type()) +
-               "is not compatible with the version imported by model. FunctionOp imports version " +
-               ONNX_LIGHT_NAMESPACE::to_string(func_opset_version) +
-               " whereas model imports version " +
+    fail_check("Opset import for domain ", node.domain(), " in function op ", node.op_type(),
+               "is not compatible with the version imported by model. FunctionOp imports version ",
+               ONNX_LIGHT_NAMESPACE::to_string(func_opset_version),
+               " whereas model imports version ",
                ONNX_LIGHT_NAMESPACE::to_string(model_opset_version));
   }
 }
@@ -1412,14 +1410,14 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
   ScopedFd guard(fd);
 
   // Post-open checks (fail closed).
-  struct stat fd_stat {};
+  struct stat fd_stat{};
   if (fstat(fd, &fd_stat) != 0) {
     fail_check("Tensor ", tensor_name, " external data: fstat failed.");
   }
   if (!kernel_verified) {
     // Verify containment via canonical path + inode comparison.
     auto canonical_data = verify_path_containment(data_path, base_dir, tensor_name);
-    struct stat path_stat {};
+    struct stat path_stat{};
     if (stat(canonical_data.c_str(), &path_stat) != 0) {
       fail_check("Tensor ", tensor_name, " external data: cannot stat canonical path.");
     }

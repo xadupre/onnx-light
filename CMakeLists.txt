@@ -170,8 +170,8 @@ set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_on
 
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 set(ONNX_ORT_SOURCES
-    "${ONNX_ORT_PATH}/operator_sets_microsoft.cc"
-    "${ONNX_ORT_PATH}/operator_sets_microsoft_doc.cc"
+    "${ONNX_ORT_PATH}/schema/operator_sets_microsoft.cc"
+    "${ONNX_ORT_PATH}/schema/operator_sets_microsoft_doc.cc"
 )
 list(REMOVE_ITEM ONNX_OP_SOURCES ${ONNX_ORT_SOURCES})
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")

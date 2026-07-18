@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_ort/operator_sets_microsoft.h"
+#include "onnx_ort/schema/operator_sets_microsoft.h"
 
 #include <gtest/gtest.h>
 

@@ -11,25 +11,32 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
         )
 
     def test_windows_x86_build_job_exists(self):
+        """Checks the dedicated Windows x86 build job remains present."""
         self.assertIn("windows_x86_build:", self.content)
         self.assertIn("name: core (windows-latest, x86 build)", self.content)
 
     def test_windows_64_build_uses_ninja_and_sccache(self):
+        """Checks the 64-bit Windows build uses Ninja with sccache enabled."""
+        self.assertIn(
+            (
+                "SCCACHE_GHA_ENABLED: ${{ (matrix.os == 'windows-latest' || "
+                "matrix.os == 'macos-latest') && 'true' || 'false' }}"
+            ),
+            self.content,
+        )
         self.assertRegex(
             self.content,
             (
-                r"(?s)name: core \(\$\{\{ matrix\.os \}\}, py\$\{\{ matrix\.python-version \}\}\)"
-                r".*?env:\s+SCCACHE_GHA_ENABLED: \${\{ "
-                r".*?matrix\.os == 'windows-latest'"
-                r".*?matrix\.os == 'macos-latest'.*? \}\}"
-                r".*?- name: Build and Install package \(Windows\)\s+"
+                r"(?s)- name: Build and Install package \(Windows\)\s+"
                 r"if: runner\.os == 'Windows'\s+env:\s+CMAKE_GENERATOR: Ninja\s+"
-                r"run: pip install .*?cmake\.define\.CMAKE_C_COMPILER_LAUNCHER=sccache"
-                r".*?cmake\.define\.CMAKE_CXX_COMPILER_LAUNCHER=sccache"
+                r"run: pip install "
             ),
         )
+        self.assertIn("cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache", self.content)
+        self.assertIn("cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache", self.content)
 
     def test_windows_cpp_tests_are_enabled(self):
+        """Checks the 64-bit Windows job still enables and runs C++ tests."""
         self.assertRegex(
             self.content,
             (

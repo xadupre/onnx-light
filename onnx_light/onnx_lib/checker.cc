@@ -762,11 +762,11 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
         continue;
       }
 
-      if (lex_ctx.this_or_ancestor_graph_has(std::string(output))) {
+      if (lex_ctx.this_or_ancestor_graph_has(output)) {
         fail_check("Graph must be in single static assignment (SSA) form, however '", output,
                    "' has been used as output names multiple times.");
       }
-      lex_ctx.add(std::string(output));
+      lex_ctx.add(output);
     }
   }
   for (const auto &value_info : graph.output()) {
@@ -1050,11 +1050,11 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
       if (output.empty()) {
         continue;
       }
-      if (lex_ctx.this_or_ancestor_graph_has(std::string(output))) {
+      if (lex_ctx.this_or_ancestor_graph_has(output)) {
         fail_check("Function must be in single static assignment (SSA) form, however '", output,
                    "' has been used as output names multiple times.");
       }
-      lex_ctx.add(std::string(output));
+      lex_ctx.add(output);
     }
   }
   print_warning_if_has_experimental(used_experimental_ops);

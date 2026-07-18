@@ -619,9 +619,9 @@ public:
         // Use a temporary copy of original type.
         // TODO(ONNX): investigate whether we can eliminate use of temporary copy
         types_cache[i] = *type_ptr;
-        value_types_by_name[std::string(parameter_name)] = &types_cache[i];
+        value_types_by_name[parameter_name] = &types_cache[i];
       } else {
-        value_types_by_name[std::string(parameter_name)] = nullptr;
+        value_types_by_name[parameter_name] = nullptr;
       }
     }
 
@@ -630,10 +630,10 @@ public:
       const TypeProto *type = ctx.getInputType(i);
       if (type != nullptr) {
         if (type->value_case() == TypeProto::kTensorType && ctx.getInputData(i) != nullptr) {
-          input_data_by_name[std::string(func_proto.input().Get(i))] = ctx.getInputData(i);
+          input_data_by_name[func_proto.input().Get(i)] = ctx.getInputData(i);
         } else if (type->value_case() == TypeProto::kSparseTensorType &&
                    ctx.getInputSparseData(i) != nullptr) {
-          input_sparse_data_by_name[std::string(func_proto.input().Get(i))] =
+          input_sparse_data_by_name[func_proto.input().Get(i)] =
               ctx.getInputSparseData(i);
         }
       }
@@ -641,8 +641,8 @@ public:
 
     std::unordered_map<std::string, const AttributeProto *> attr_map;
     for (const auto &attr : func_proto.attribute()) {
-      if (ctx.getAttribute(std::string(attr)) != nullptr) {
-        attr_map[std::string(attr)] = ctx.getAttribute(std::string(attr));
+      if (ctx.getAttribute(attr) != nullptr) {
+        attr_map[attr] = ctx.getAttribute(attr);
       }
     }
 

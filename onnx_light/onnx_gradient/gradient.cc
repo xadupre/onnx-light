@@ -27,7 +27,7 @@ std::unordered_map<std::string, size_t> BuildOutputToNodeIndex(NodeIt nodes_begi
   size_t i = 0;
   for (auto it = nodes_begin; it != nodes_end; ++it, ++i) {
     for (const auto &output : it->output()) {
-      output_map[std::string(output)] = i;
+      output_map[output] = i;
     }
   }
   return output_map;

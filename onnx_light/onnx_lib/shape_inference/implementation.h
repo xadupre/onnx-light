@@ -335,7 +335,7 @@ struct DataPropagationContextImpl : public DataPropagationContext {
 
     size_t output_idx = 0;
     for (const auto &output : n.output()) {
-      outputIndexToNameMap_.insert({output_idx++, std::string(output)});
+      outputIndexToNameMap_.insert({output_idx++, output});
     }
 
     allOutputTypes_.resize(n.output_size());

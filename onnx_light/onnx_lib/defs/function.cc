@@ -95,10 +95,10 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
       }
     }
     for (const auto &output : function_node.ref_output()) {
-      if (io_names_map.count(std::string(output))) {
-        *new_node->add_output() = io_names_map[std::string(output)];
+      if (io_names_map.count(output)) {
+        *new_node->add_output() = io_names_map[output];
       } else {
-        *new_node->add_output() = InternalTensorNameGenerator(node_name, std::string(output));
+        *new_node->add_output() = InternalTensorNameGenerator(node_name, output);
       }
     }
     for (const auto &attr : function_node.ref_attribute()) {

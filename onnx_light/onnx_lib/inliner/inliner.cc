@@ -130,9 +130,9 @@ public:
 
   bool ProcessFunction(const FunctionProto &function) override {
     for (const auto &x : function.input())
-      Add(std::string(x));
+      Add(x);
     for (const auto &x : function.output())
-      Add(std::string(x));
+      Add(x);
     return true;
   }
 
@@ -140,10 +140,10 @@ public:
     // We use a single name-space for node names and variable names, to keep name-generation simple.
     Add(node.name());
     for (const auto &name : node.input()) {
-      Add(std::string(name));
+      Add(name);
     }
     for (const auto &name : node.output()) {
-      Add(std::string(name));
+      Add(name);
     }
     return true;
   }
@@ -223,15 +223,15 @@ public:
       std::string rename_as = actuals[i];
       if (isOutput)
         if (rename_as.empty())
-          rename_as = MakeUnique(std::string(formal));
-      current_scope[std::string(formal)] = rename_as;
+          rename_as = MakeUnique(formal);
+      current_scope[formal] = rename_as;
       if (!rename_as.empty())
         formal = rename_as;
     }
     for (; i < formals.size(); ++i) {
       utils::String &formal = formals[i];
-      std::string rename_as = isOutput ? MakeUnique(std::string(formal)) : std::string();
-      current_scope[std::string(formal)] = rename_as;
+      std::string rename_as = isOutput ? MakeUnique(formal) : std::string();
+      current_scope[formal] = rename_as;
       if (!rename_as.empty())
         formal = rename_as;
     }

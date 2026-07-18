@@ -168,6 +168,11 @@ set(ONNX_PY_BACKEND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onn
 set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_gradient.cc")
 
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
+set(ONNX_ORT_SOURCES
+    "${ONNX_OP_PATH}/operator_sets_microsoft.cc"
+    "${ONNX_OP_PATH}/operator_sets_microsoft_doc.cc"
+)
+list(REMOVE_ITEM ONNX_OP_SOURCES ${ONNX_ORT_SOURCES})
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")
 # Kernel sources (operator implementations) and the small runtime
 # infrastructure they rely on (``TestCase``, ``Tensor``, ``RunNodes``,
@@ -200,7 +205,8 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
 )
 
 # Build the core C++ libraries (lib_onnx_proto / lib_onnx_lib / lib_onnx_op /
-# lib_onnx_optim / lib_onnx_kernels / lib_onnx_backend_test) as SHARED when
+# lib_onnx_ort / lib_onnx_optim / lib_onnx_kernels / lib_onnx_backend_test) as
+# SHARED when
 # ONNX_LIGHT_BUILD_PYTHON=ON so that all Python extensions (_onnxpyprotoop,
 # _onnxpyprotolib, _onnxpyoptim, _onnxpykernels and _onnxpybackend) share a
 # single copy of every library's compiled code (vtables, typeid, out-of-line
@@ -322,6 +328,25 @@ target_include_directories(lib_onnx_op PUBLIC
 set_property(TARGET lib_onnx_op PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_op PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_op PUBLIC lib_onnx_proto)
+
+# Builds onnx_ort library.
+add_library(lib_onnx_ort ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_ORT_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_ort PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_ORT_SOURCES})
+target_include_directories(lib_onnx_ort PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+set_property(TARGET lib_onnx_ort PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_ort PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_ort PUBLIC lib_onnx_op)
+if(NOT TARGET onnx_ort)
+  add_library(onnx_ort ALIAS lib_onnx_ort)
+endif()
 
 # Builds onnx_optim library.
 add_library(lib_onnx_optim ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_OPTIM_SOURCES})
@@ -628,7 +653,12 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
-    list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_manipulations lib_onnx_op lib_onnx_optim)
+    list(APPEND _onnxpy_rpath_targets
+        lib_onnx_lib
+        lib_onnx_manipulations
+        lib_onnx_op
+        lib_onnx_ort
+        lib_onnx_optim)
     if(ONNX_LIGHT_BUILD_KERNELS)
       list(APPEND _onnxpy_rpath_targets lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient)
     endif()
@@ -703,9 +733,9 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_COMMON_PATH}"
   )
   if(ONNX_LIGHT_BUILD_KERNELS)
-    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient GTest::gtest_main)
+    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_ort lib_onnx_optim lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient GTest::gtest_main)
   else()
-    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim GTest::gtest_main)
+    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_ort lib_onnx_optim GTest::gtest_main)
   endif()
   # Precompile the heaviest headers shared across virtually every translation
   # unit in unittests/cc. ``<gtest/gtest.h>`` is by far the dominant cost
@@ -929,7 +959,7 @@ if(ONNX_LIGHT_INSTALL)
   # Splitting into two install(TARGETS) calls keeps the same exported
   # ``onnx_lightTargets`` set when ONNX_LIGHT_BUILD_KERNELS=OFF while
   # avoiding references to targets that were never created.
-  install(TARGETS lib_onnx_proto lib_onnx_manipulations lib_onnx_lib lib_onnx_op lib_onnx_optim
+  install(TARGETS lib_onnx_proto lib_onnx_manipulations lib_onnx_lib lib_onnx_op lib_onnx_ort lib_onnx_optim
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -1079,6 +1109,7 @@ set(_onnx_light_hardening_targets
     lib_onnx_proto
     lib_onnx_lib
     lib_onnx_op
+    lib_onnx_ort
     lib_onnx_optim
 )
 if(ONNX_LIGHT_BUILD_KERNELS)

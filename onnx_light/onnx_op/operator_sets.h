@@ -13,7 +13,6 @@
 #include "onnx_op/operator_sets_image.h"
 #include "onnx_op/operator_sets_logical.h"
 #include "onnx_op/operator_sets_math.h"
-#include "onnx_op/operator_sets_microsoft.h"
 #include "onnx_op/operator_sets_nn.h"
 #include "onnx_op/operator_sets_object_detection.h"
 #include "onnx_op/operator_sets_optional.h"
@@ -34,10 +33,9 @@ namespace onnx_op {
  * operator domains.
  *
  * Combines schemas from the controlflow, generator, image, logical, math, nn,
- * microsoft, object_detection, optional, preview, quantization, reduction,
- * sequence, tensor, text, traditionalml, and training sub-namespaces into a
- * single flat list ordered by domain, operator name, and descending opset
- * version.
+ * object_detection, optional, preview, quantization, reduction, sequence,
+ * tensor, text, traditionalml, and training sub-namespaces into a single flat
+ * list ordered by domain, operator name, and descending opset version.
  *
  * @param op_type If non-empty, only schemas whose ``name()`` equals
  *        ``op_type`` are returned. When empty (default), schemas for every

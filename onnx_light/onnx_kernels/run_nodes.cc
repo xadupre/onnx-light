@@ -78,58 +78,6 @@ int64_t Product(const std::vector<int64_t> &shape, size_t begin, size_t end,
 
 namespace {
 
-// Returns a value copy suitable for insertion into ``target`` runtime context.
-// Returns non-string tensors copied into a fresh allocation from
-// ``target_allocator`` when provided (keeping ownership local to the receiving
-// context), or allocator-backed source tensors detached to inline bytes when
-// ``target_allocator`` is null (keeping copies valid after source context
-// destruction).
-Tensor CopyTensorWithAllocator(const Tensor &tensor, RawBufferAllocator *target_allocator) {
-  if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
-    return tensor;
-  }
-  if (target_allocator != nullptr) {
-    const size_t n_bytes = tensor.size_bytes();
-    Tensor out = MakeOutputTensor(tensor.data_type, tensor.shape, n_bytes, target_allocator);
-    out.name = tensor.name;
-    if (n_bytes > 0) {
-      const uint8_t *src = tensor.bytes();
-      EXT_ENFORCE(src != nullptr,
-                  "RunNode: tensor has non-zero size with a null data pointer while copying "
-                  "subgraph outputs.");
-      std::memcpy(out.mutable_bytes(), src, n_bytes);
-    }
-    return out;
-  }
-
-  Tensor out = tensor;
-  if (!out.has_allocation()) {
-    return out;
-  }
-  const size_t n_bytes = out.size_bytes();
-  RawBuffer copied(n_bytes);
-  if (n_bytes > 0) {
-    const uint8_t *src = out.bytes();
-    EXT_ENFORCE(src != nullptr,
-                "RunNode: allocator-backed tensor has a null data pointer while copying subgraph "
-                "outputs.");
-    std::memcpy(copied.data(), src, n_bytes);
-  }
-  out.data = std::move(copied);
-  out.ClearAllocation();
-  return out;
-}
-
-// Returns a sequence copy where tensor elements follow
-// CopyTensorWithAllocator() ownership semantics.
-Sequence CopySequenceWithAllocator(const Sequence &sequence, RawBufferAllocator *target_allocator) {
-  Sequence out = sequence;
-  for (Tensor &t : out.values) {
-    t = CopyTensorWithAllocator(t, target_allocator);
-  }
-  return out;
-}
-
 // Builds the canonical "<domain>:<op_type>:<overload>" key used to
 // look up model-local FunctionProto definitions in
 // ``RuntimeContext::functions``. The default ONNX domain (empty
@@ -232,8 +180,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
                                 RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child = rt.MakeSubgraphContext(attr_name);
   for (const auto &kv : bindings) {
-    child.Put(kv.first, CopyTensorWithAllocator(kv.second, child.allocator()),
-              RuntimeEventKind::kInput);
+    child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
   }
   RunGraph(graph, child);
 
@@ -251,7 +198,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
-    outputs.push_back(CopyTensorWithAllocator(it->second, rt.allocator()));
+    outputs.push_back(it->second);
   }
   return outputs;
 }
@@ -311,13 +258,12 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
       continue;
     }
     if (child.HasSequence(out_name)) {
-      rt.PutSequence(caller_name,
-                     CopySequenceWithAllocator(child.GetSequence(out_name), rt.allocator()));
+      rt.PutSequence(caller_name, child.GetSequence(out_name));
     } else {
       auto it = child.tensors().find(out_name);
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
                           "' was not produced by the selected branch.");
-      Tensor t = CopyTensorWithAllocator(it->second, rt.allocator());
+      Tensor t = std::move(it->second);
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -351,6 +297,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
   int64_t trip_count = 0;
   for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
     RuntimeContext child = rt.MakeSubgraphContext("body");
+
     const std::string &iter_name = body.input(0).name();
     const std::string &cond_name = body.input(1).name();
     child.Put(iter_name, MakeInt64Scalar(iter_name, iter), RuntimeEventKind::kInput);
@@ -358,9 +305,9 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     for (std::size_t i = 0; i < n; ++i) {
       const std::string &bname = body.input(static_cast<int>(2 + i)).name();
       if (is_seq_state[i]) {
-        child.PutSequence(bname, CopySequenceWithAllocator(sequence_state[i], child.allocator()));
+        child.PutSequence(bname, sequence_state[i]);
       } else {
-        Tensor t = CopyTensorWithAllocator(tensor_state[i], child.allocator());
+        Tensor t = tensor_state[i];
         t.name = bname;
         child.Put(bname, std::move(t), RuntimeEventKind::kInput);
       }
@@ -386,13 +333,13 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         EXT_ENFORCE_INVALID(
             child.HasSequence(oname),
             "RunNode: Loop body did not produce sequence-typed loop-carried output '", oname, "'.");
-        sequence_state[i] = CopySequenceWithAllocator(child.GetSequence(oname), rt.allocator());
+        sequence_state[i] = child.GetSequence(oname);
       } else {
         auto it = child.tensors().find(oname);
         EXT_ENFORCE_INVALID(it != child.tensors().end(),
                             "RunNode: Loop body did not produce tensor-typed loop-carried output '",
                             oname, "'.");
-        tensor_state[i] = CopyTensorWithAllocator(it->second, rt.allocator());
+        tensor_state[i] = it->second;
       }
     }
     for (std::size_t j = 0; j < k; ++j) {
@@ -400,7 +347,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       auto it = child.tensors().find(oname);
       EXT_ENFORCE_INVALID(it != child.tensors().end(),
                           "RunNode: Loop body did not produce scan output '", oname, "'.");
-      scan_values[j].push_back(CopyTensorWithAllocator(it->second, rt.allocator()));
+      scan_values[j].push_back(it->second);
     }
     ++trip_count;
   }

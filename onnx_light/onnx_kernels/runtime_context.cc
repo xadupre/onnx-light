@@ -25,34 +25,6 @@ void ReleaseTensorAllocation(Tensor &tensor) {
   tensor.ClearAllocation();
 }
 
-bool IsAllocationSharedByOtherTensors(const std::unordered_map<std::string, Tensor> &tensors,
-                                      const std::string &name, RawBuffer *allocation) {
-  for (const auto &kv : tensors) {
-    if (kv.first == name || !kv.second.has_allocation()) {
-      continue;
-    }
-    if (kv.second.allocation() == allocation) {
-      return true;
-    }
-  }
-  return false;
-}
-
-void DetachOrFreeTensorAllocation(const std::unordered_map<std::string, Tensor> &tensors,
-                                  const std::string &name, Tensor &tensor) {
-  if (!tensor.has_allocation()) {
-    return;
-  }
-  RawBuffer *allocation = tensor.allocation();
-  if (IsAllocationSharedByOtherTensors(tensors, name, allocation)) {
-    tensor.ClearAllocation();
-    return;
-  }
-  RawBufferAllocator *owner = tensor.allocation_owner();
-  owner->Free(allocation);
-  tensor.ClearAllocation();
-}
-
 void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
   // STRING tensors store their payload in string_data instead of raw bytes.
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
@@ -74,31 +46,6 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
               "RuntimeContext: allocator returned a null RawBuffer allocation.");
   EXT_ENFORCE(src != nullptr, "RuntimeContext: tensor has non-zero size with a null data pointer.");
   std::memcpy(allocated->data(), src, n_bytes);
-  tensor.SetAllocation(allocator, allocated);
-}
-
-void MakeAllocatorOwnedTensorCopy(Tensor &tensor, RawBufferAllocator *allocator) {
-  // STRING tensors keep payload in string_data and are not allocator-backed.
-  // A null allocator keeps the tensor unchanged.
-  if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
-    return;
-  }
-  if (!tensor.has_allocation()) {
-    EnsureAllocatorBacked(tensor, allocator);
-    return;
-  }
-
-  const size_t n_bytes = tensor.size_bytes();
-  RawBuffer *allocated = allocator->Allocate(n_bytes);
-  EXT_ENFORCE(allocated != nullptr,
-              "MakeAllocatorOwnedTensorCopy: allocator returned a null RawBuffer allocation.");
-  if (n_bytes > 0) {
-    const uint8_t *src = tensor.bytes();
-    EXT_ENFORCE(src != nullptr,
-                "MakeAllocatorOwnedTensorCopy: allocator-backed tensor has a null data pointer.");
-    std::memcpy(allocated->data(), src, n_bytes);
-  }
-  tensor.ClearAllocation();
   tensor.SetAllocation(allocator, allocated);
 }
 
@@ -257,18 +204,8 @@ RuntimeEvent MakeRemoveEvent(RuntimeEventKind kind, const std::string &name,
 } // namespace
 
 RuntimeContext::~RuntimeContext() {
-  std::unordered_set<RawBuffer *> released;
   for (auto &it : tensors_) {
-    Tensor &tensor = it.second;
-    if (!tensor.has_allocation()) {
-      continue;
-    }
-    RawBuffer *allocation = tensor.allocation();
-    if (released.insert(allocation).second) {
-      RawBufferAllocator *owner = tensor.allocation_owner();
-      owner->Free(allocation);
-    }
-    tensor.ClearAllocation();
+    ReleaseTensorAllocation(it.second);
   }
 }
 
@@ -294,7 +231,7 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
   }
   auto it = tensors_.find(name);
   if (it != tensors_.end()) {
-    DetachOrFreeTensorAllocation(tensors_, name, it->second);
+    ReleaseTensorAllocation(it->second);
   }
   tensors_[name] = std::move(tensor);
 }
@@ -304,7 +241,7 @@ bool RuntimeContext::Remove(const std::string &name) {
   if (it == tensors_.end()) {
     return false;
   }
-  DetachOrFreeTensorAllocation(tensors_, name, it->second);
+  ReleaseTensorAllocation(it->second);
   tensors_.erase(it);
   if (events_enabled_) {
     events_.push_back(MakeRemoveEvent(RuntimeEventKind::kUnknown, name,
@@ -492,15 +429,15 @@ void RuntimeContext::ClearExecutionPlans() noexcept { execution_plans_.clear(); 
 
 RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
   RuntimeContext child(kernel_ctx_);
-  child.set_allocator(allocator_);
+  // Subgraph contexts do not inherit the parent allocator. Body kernels use
+  // inline tensor storage, and the parent's EnsureAllocatorBacked (called in
+  // Put/Set) migrates final outputs to the parent allocator when results are
+  // propagated back. This avoids double-free: if the child inherited the
+  // allocator, tensors produced by the body would be freed when the child
+  // context is destroyed, leaving any copies held by the caller with stale
+  // allocation pointers.
   child.functions() = functions_;
   child.tensors() = tensors_;
-  // Tensor stores allocator ownership via raw pointers. A copied tensor map
-  // therefore needs allocator-owned deep copies to prevent parent/child
-  // contexts from aliasing the same RawBuffer.
-  for (auto &kv : child.tensors()) {
-    MakeAllocatorOwnedTensorCopy(kv.second, allocator_);
-  }
   child.sequences() = sequences_;
   child.set_verbose(verbose_);
   child.set_events_enabled(events_enabled_);

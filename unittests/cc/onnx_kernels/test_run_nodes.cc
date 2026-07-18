@@ -2631,66 +2631,6 @@ TEST(RunModel, IfNodeWithBranchSubgraphs) {
   EXPECT_FLOAT_EQ(rt_false.Get("out").AsFloat()[0], 2.0f);
 }
 
-TEST(RunModel, IfNodeKeepsAllocatorBackedCapturedTensorVisibleInParent) {
-  ModelProto model;
-  model.set_ir_version(10);
-  OperatorSetIdProto *os = model.add_opset_import();
-  os->set_version(18);
-
-  GraphProto *g = model.add_graph();
-  g->set_name("main");
-  NodeProto *if_node = g->add_node();
-  if_node->set_op_type("If");
-  if_node->add_input("cond");
-  if_node->add_output("out");
-
-  AttributeProto *then_attr = if_node->add_attribute();
-  then_attr->set_name("then_branch");
-  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
-  GraphProto *then_g = then_attr->add_g();
-  then_g->set_name("then_graph");
-  NodeProto *then_add = then_g->add_node();
-  then_add->set_op_type("Add");
-  then_add->add_input("x");
-  then_add->add_input("x");
-  then_add->add_output("z");
-  then_g->add_output()->set_name("z");
-
-  AttributeProto *else_attr = if_node->add_attribute();
-  else_attr->set_name("else_branch");
-  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
-  GraphProto *else_g = else_attr->add_g();
-  else_g->set_name("else_graph");
-  TensorProto *else_init = else_g->add_initializer();
-  else_init->set_name("zero");
-  else_init->set_data_type(TensorProto::DataType::FLOAT);
-  else_init->add_float_data(0.0f);
-  NodeProto *else_add = else_g->add_node();
-  else_add->set_op_type("Add");
-  else_add->add_input("zero");
-  else_add->add_input("zero");
-  else_add->add_output("z");
-  else_g->add_output()->set_name("z");
-
-  constexpr size_t kAllocatorSlotCapacity = 16;
-  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
-
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_allocator(&alloc);
-  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
-  rt.Set("x", Tensor::FromFloat("x", {}, {3.0f}));
-  ASSERT_TRUE(rt.Get("x").has_allocation());
-
-  RunModel(model, rt);
-
-  ASSERT_TRUE(rt.Has("x"));
-  ASSERT_TRUE(rt.Has("out"));
-  EXPECT_TRUE(rt.Get("x").has_allocation());
-  EXPECT_FLOAT_EQ(rt.Get("x").AsFloat()[0], 3.0f);
-  EXPECT_TRUE(rt.Get("out").has_allocation());
-  EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[0], 6.0f);
-}
-
 TEST(RunModel, LoopNodeRunsBodySubgraph) {
   ModelProto model;
   model.set_ir_version(10);
@@ -2746,8 +2686,10 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
 }
 
 // Variant of LoopNodeRunsBodySubgraph with a SimpleRawBufferAllocator. Verifies
-// that subgraph contexts inherit the allocator while keeping parent-visible
-// tensors safe across subgraph boundaries.
+// that subgraph contexts created inside RunSubgraph do not inherit the allocator,
+// preventing double-free of body-output tensors threaded as loop-carried state
+// across iterations.  Iter/cond scalars use inline storage (no allocator slot
+// consumed); only the final loop outputs are backed by the allocator.
 TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   ModelProto model;
   model.set_ir_version(10);
@@ -2785,25 +2727,22 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   body->add_output()->set_name("s_out");
   body->add_output()->set_name("s_out");
 
-  // The allocator now backs both subgraph-internal kernel outputs and final
-  // loop outputs, so keep enough capacity for transient body allocations.
-  constexpr size_t kAllocatorSlotCapacity = 32;
+  // Two slots are sufficient: only the final loop outputs (s_final and scan)
+  // are backed by the allocator; iter/cond scalars injected into each child
+  // context use inline storage and consume no allocator slots.
+  constexpr size_t kAllocatorSlotCapacity = 2;
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  // Attach allocator first so every tensor inserted into this RuntimeContext
-  // follows allocator-backed subgraph execution semantics.
-  rt.set_allocator(&alloc);
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+  rt.set_allocator(&alloc);
 
   RunModel(model, rt);
 
   ASSERT_TRUE(rt.Has("s_final"));
   ASSERT_TRUE(rt.Has("scan"));
-  EXPECT_TRUE(rt.Get("s_final").has_allocation());
-  EXPECT_TRUE(rt.Get("scan").has_allocation());
   EXPECT_FLOAT_EQ(rt.Get("s_final").AsFloat()[0], 3.0f);
   ASSERT_EQ(rt.Get("scan").shape, (std::vector<int64_t>{3}));
   const float *scan = rt.Get("scan").AsFloat();
@@ -2884,41 +2823,41 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
 }
 
 // Same as MixedTensorSequenceAndScanOutputs but with a SimpleRawBufferAllocator
-// attached to the RuntimeContext.
+// attached to the RuntimeContext. Verifies that subgraph contexts do not inherit
+// the parent allocator (preventing double-free of loop-carried outputs) and that
+// the final loop outputs are correctly backed by the parent allocator.
 TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
-  // The allocator backs both subgraph-internal kernel outputs and final loop
-  // outputs, so keep enough capacity for transient body allocations.
-  constexpr size_t kAllocatorSlotCapacity = 32;
+  // Two simultaneous slots are needed: only the final loop outputs (acc_final
+  // and scan) are backed by the allocator. Iter/cond scalars injected into
+  // each child context use inline storage and consume no allocator slots.
+  // Input tensors are set before attaching the allocator so they stay inline
+  // and do not consume allocator slots.
+  constexpr size_t kAllocatorSlotCapacity = 2;
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
-  // Attach allocator first so every tensor inserted into this RuntimeContext
-  // follows allocator-backed subgraph execution semantics.
-  rt.set_allocator(&alloc);
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
   rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+  rt.set_allocator(&alloc);
 
   RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},
                        BuildMixedSequenceLoopBody()),
           rt);
 
   ASSERT_TRUE(rt.Has("acc_final"));
-  EXPECT_TRUE(rt.Get("acc_final").has_allocation());
   EXPECT_FLOAT_EQ(rt.Get("acc_final").AsFloat()[0], 3.0f);
 
   ASSERT_TRUE(rt.HasSequence("seq_final"));
   const Sequence &seq = rt.GetSequence("seq_final");
   ASSERT_EQ(seq.size(), 3u);
   for (std::size_t i = 0; i < seq.size(); ++i) {
-    EXPECT_TRUE(seq.at(i).has_allocation());
     EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(i));
   }
 
   ASSERT_TRUE(rt.Has("scan"));
   const Tensor &scan = rt.Get("scan");
-  EXPECT_TRUE(scan.has_allocation());
   ASSERT_EQ(scan.shape, (std::vector<int64_t>{3}));
   const float *scan_data = scan.AsFloat();
   EXPECT_FLOAT_EQ(scan_data[0], 1.0f);

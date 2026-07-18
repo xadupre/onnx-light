@@ -13,7 +13,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 // this value before dispatch-table lookups.
 inline const std::string kDefaultOnnxDomain = "ai.onnx";
 
-inline const std::string& NormaliseDispatchDomain(const NodeProto &node) {
+inline const std::string &NormaliseDispatchDomain(const NodeProto &node) {
   if (node.domain().empty())
     return kDefaultOnnxDomain;
   return node.domain().value();

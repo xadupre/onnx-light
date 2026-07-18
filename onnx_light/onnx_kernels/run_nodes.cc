@@ -902,7 +902,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
 
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
   auto domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
-  const std::string& op_type = node.op_type().value();
+  const std::string &op_type = node.op_type().value();
   PrintNodeProgress(rt, node, domain, op_type);
 
   // Only capture timing and input names when event logging is active.

@@ -691,7 +691,7 @@ bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
   out = OptimTensor(nullptr, dtype, std::move(shape));
   const int idx = FindDeviceMetadataIndex(vi);
   if (idx >= 0) {
-    const Device device = DeviceFromNamestd::string(vi.metadata_props()[idx].value());
+    const Device device = DeviceFromName(vi.metadata_props()[idx].value());
     if (device != Device::kUndefined) {
       out.SetDevice(device);
     }

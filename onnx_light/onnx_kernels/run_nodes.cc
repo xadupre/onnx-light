@@ -163,9 +163,12 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
                                       std::numeric_limits<size_t>::max() / elem_bytes),
       "RunNode: op '", op_name, "' exceeds addressable buffer size.");
   const size_t out_n_bytes = static_cast<size_t>(elements_per_slice) * elem_bytes;
-  Tensor out = t.has_allocation()
-                   ? MakeOutputTensor(t.data_type, out_shape, out_n_bytes, t.allocation_owner())
-                   : Tensor("", t.data_type, out_shape, std::vector<uint8_t>(out_n_bytes));
+  Tensor out;
+  if (t.has_allocation()) {
+    out = MakeOutputTensor(t.data_type, out_shape, out_n_bytes, t.allocation_owner());
+  } else {
+    out = Tensor("", t.data_type, out_shape, std::vector<uint8_t>(out_n_bytes));
+  }
 
   for (int64_t o = 0; o < outer; ++o) {
     const size_t src_offset = static_cast<size_t>((o * dim + index) * inner) * elem_bytes;

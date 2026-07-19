@@ -227,7 +227,7 @@ TEST(GradientOfFunction, BasicLinearRegression) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BackendTestCasesWithGradient: for each operator in DefaultGradRegistry,
-// collect its backend test cases and verify GradientOfNodes succeeds.
+// collects its backend test cases and verifies GradientOfNodes succeeds.
 // ═══════════════════════════════════════════════════════════════════════════
 TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
   const auto &registry = onnx_gradient::DefaultGradRegistry();

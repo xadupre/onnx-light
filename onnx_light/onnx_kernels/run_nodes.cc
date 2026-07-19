@@ -65,15 +65,6 @@ int64_t CheckedMulInt64(int64_t a, int64_t b, const std::string &where) {
   return a * b;
 }
 
-int64_t Product(const std::vector<int64_t> &shape, size_t begin, size_t end,
-                const std::string &where) {
-  int64_t p = 1;
-  for (size_t i = begin; i < end; ++i) {
-    p = CheckedMulInt64(p, shape[i], where);
-  }
-  return p;
-}
-
 } // namespace
 
 namespace {
@@ -150,8 +141,8 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
     }
   }
 
-  const int64_t outer = Product(t.shape, 0, static_cast<size_t>(axis), op_name);
-  const int64_t inner = Product(t.shape, static_cast<size_t>(axis) + 1, t.shape.size(), op_name);
+  const int64_t outer = t.shape.product(0, static_cast<size_t>(axis), op_name);
+  const int64_t inner = t.shape.product(static_cast<size_t>(axis) + 1, t.shape.size(), op_name);
   const size_t elem_bytes = t.element_size();
   const int64_t elements_per_slice = CheckedMulInt64(outer, inner, op_name);
   EXT_ENFORCE_INVALID(!(inner > 0 && static_cast<uint64_t>(inner) >

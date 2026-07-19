@@ -2873,7 +2873,7 @@ TEST(RunNodes, SliceTensorAlongAxisKeepsInputAllocator) {
   ASSERT_TRUE(input.has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);
 
-  const Tensor slice = SliceTensorAlongAxis(input, 0, 1, "Scan");
+  const Tensor slice = SliceTensorAlongAxis(input, 0, 1, "SliceTensorAlongAxis");
 
   EXPECT_TRUE(slice.has_allocation());
   EXPECT_EQ(slice.allocation_owner(), input.allocation_owner());

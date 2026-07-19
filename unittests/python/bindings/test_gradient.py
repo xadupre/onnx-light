@@ -19,20 +19,21 @@ from onnx_light.onnx_proto._helper import make_node
 def _import_gradient():
     """Imports the gradient module; skips if not available (reduced build)."""
     try:
-        from onnx_light.onnx_gradient import gradient_of_function, gradient_of_nodes
+        from onnx_light.onnx_gradient import GradRegistry, gradient_of_function, gradient_of_nodes
 
-        return gradient_of_nodes, gradient_of_function
+        return gradient_of_nodes, gradient_of_function, GradRegistry
     except ImportError:
-        return None, None
+        return None, None, None
 
 
 class TestGradientBindings(ExtTestCase):
     def setUp(self):
-        gon, gof = _import_gradient()
+        gon, gof, gr = _import_gradient()
         if gon is None:
             self.skipTest("onnx_gradient bindings not available (reduced build)")
         self.gradient_of_nodes = gon
         self.gradient_of_function = gof
+        self.GradRegistry = gr
 
     # ------------------------------------------------------------------ #
     # gradient_of_nodes: single MatMul                                    #
@@ -175,26 +176,8 @@ class TestGradientBindings(ExtTestCase):
             self.skipTest("backend_test bindings not available")
         from onnx_light.onnx_py._onnxpybackend import backend_test as _C
 
-        # Operators registered in DefaultGradRegistry (default ONNX domain).
-        # Hardcoded because GradRegistry does not expose Python iteration; keep
-        # in sync with onnx_light/onnx_gradient/gradient/grad_dispatcher.cc.
-        grad_op_types = [
-            "Add",
-            "Div",
-            "Gemm",
-            "Identity",
-            "MatMul",
-            "Mul",
-            "Neg",
-            "ReduceMean",
-            "ReduceSum",
-            "Relu",
-            "Reshape",
-            "Sigmoid",
-            "Sub",
-            "Tanh",
-            "Transpose",
-        ]
+        # Retrieve op_types from the registry directly to stay in sync automatically.
+        grad_op_types = self.GradRegistry.default().op_types()
 
         for op_type in grad_op_types:
             cases = _C.collect_test_cases(op_type)

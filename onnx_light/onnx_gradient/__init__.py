@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 
 try:
     from ..onnx_py._onnxpygradient import (  # type: ignore[import]
+        GradRegistry,
         gradient_of_function,
         gradient_of_nodes,
     )
@@ -63,4 +64,4 @@ except ImportError as exc:
         "Install the full onnx-light wheel with: pip install onnx-light"
     ) from exc
 
-__all__ = ["gradient_of_function", "gradient_of_nodes"]
+__all__ = ["GradRegistry", "gradient_of_function", "gradient_of_nodes"]

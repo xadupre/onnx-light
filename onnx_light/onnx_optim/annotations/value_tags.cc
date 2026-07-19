@@ -276,10 +276,14 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           inherited_tag = it->second;
         }
       }
-      const std::string node_tag =
-          !node_tags[n].empty()
-              ? node_tags[n]
-              : (explicit_output_tag.empty() ? inherited_tag : explicit_output_tag);
+      std::string node_tag;
+      if (!node_tags[n].empty()) {
+        node_tag = node_tags[n];
+      } else if (!explicit_output_tag.empty()) {
+        node_tag = explicit_output_tag;
+      } else {
+        node_tag = inherited_tag;
+      }
       if (node_tags[n] != node_tag) {
         node_tags[n] = node_tag;
         changed = true;

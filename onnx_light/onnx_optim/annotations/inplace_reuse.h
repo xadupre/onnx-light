@@ -338,9 +338,14 @@ public:
   const std::string &NodeTag(std::size_t node_index) const { return node_tags_.at(node_index); }
 
   /// Sets or updates a value tag and returns ``true`` when the internal map changed.
+  /// Returns ``false`` when ``name`` is empty, when ``tag`` is invalid/empty,
+  /// or when setting it would not change the map.
   bool TrySetValueTag(const std::string &name, const std::string &tag);
 
   /// Sets or updates a per-node tag and returns ``true`` when the internal list changed.
+  /// Returns ``false`` when ``tag`` is invalid/empty or does not change the
+  /// current value.
+  /// @throws std::out_of_range when ``node_index`` is out of bounds.
   bool SetNodeTag(std::size_t node_index, const std::string &tag);
 
   /// Registers or replaces a custom value-tag callback for ``(domain, op_type)``.

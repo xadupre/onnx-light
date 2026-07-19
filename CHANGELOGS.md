@@ -64,6 +64,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Use `PackedByteSize` consistently in `Range` kernel buffer sizing ([#3456](https://github.com/xadupre/onnx-light/pull/3456))
 - Unify `MatMul` and `MatMulInteger` runtime output-shape computation ([#3454](https://github.com/xadupre/onnx-light/pull/3454))
 - Normalize `MatMul` helper signatures to use `Shape` in `QLinearMatMul` ([#3455](https://github.com/xadupre/onnx-light/pull/3455))
+- Remove unused `<sstream>` include from `onnx_optim/expressions.cc` ([#3548](https://github.com/xadupre/onnx-light/pull/3548))
 
 ### Fixes
 

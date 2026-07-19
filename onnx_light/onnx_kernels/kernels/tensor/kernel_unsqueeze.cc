@@ -7,6 +7,7 @@
 #include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -57,9 +58,14 @@ onnx_kernels::Shape ComputeUnsqueezedShape(const Tensor &data, const std::vector
 Tensor Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
                              RuntimeContext *rt) const {
   const onnx_kernels::Shape out_shape = ComputeUnsqueezedShape(data, axes);
-  Tensor output = data;
+  Tensor output = MakeOutputTensor(data.data_type, out_shape, data.size_bytes(),
+                                   rt ? rt->allocator() : nullptr);
   output.name.clear();
-  output.shape = out_shape;
+  if (data.data_type == static_cast<int32_t>(DataType::STRING)) {
+    output.string_data = data.string_data;
+  } else if (data.size_bytes() != 0) {
+    std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
+  }
   return output;
 }
 

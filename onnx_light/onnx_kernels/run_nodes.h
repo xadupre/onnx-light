@@ -238,7 +238,7 @@ void RunModel(const ModelProto &model, RuntimeContext &rt);
  *         is not produced by the body.
  */
 std::vector<Tensor> RunSubgraph(const GraphProto &graph,
-                                const std::vector<std::pair<std::string, Tensor>> &bindings,
+                                std::vector<std::pair<std::string, Tensor>> bindings,
                                 RuntimeContext &rt, const std::string &attr_name = "");
 
 /**

@@ -7,17 +7,21 @@
 #include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
 Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
-  Tensor output;
-  output.data_type = input.data_type;
-  output.shape = input.shape;
-  output.data = input.data;
-  output.string_data = input.string_data;
+  Tensor output = MakeOutputTensor(input.data_type, input.shape, input.size_bytes(),
+                                   rt ? rt->allocator() : nullptr);
+  output.name = input.name;
+  if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
+    output.string_data = input.string_data;
+  } else if (input.size_bytes() != 0) {
+    std::memcpy(output.mutable_bytes(), input.bytes(), input.size_bytes());
+  }
   return output;
 }
 

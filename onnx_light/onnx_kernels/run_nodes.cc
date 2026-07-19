@@ -57,10 +57,16 @@ Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *alloc
   return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)}, allocator);
 }
 
-// Materializes an owned copy before a tensor leaves a child RuntimeContext.
-// This avoids dangling pointers when the child held allocator-backed or
-// borrowed storage, and it preserves duplicate subgraph outputs that name the
-// same tensor more than once.
+/**
+ * Creates an owned copy before a tensor leaves a child RuntimeContext.
+ *
+ * @param tensor  Tensor to clone.
+ * @return        Deep copy of ``tensor`` with owned storage.
+ *
+ * The copy avoids dangling pointers when the child held allocator-backed or
+ * borrowed storage, and it preserves duplicate subgraph outputs that name the
+ * same tensor more than once.
+ */
 Tensor CloneTensor(const Tensor &tensor) {
   if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return Tensor::MakeString(tensor.name, tensor.shape, tensor.string_data);

@@ -451,21 +451,20 @@ public:
   TensorMap &tensors() noexcept { return tensors_; }
   const TensorMap &tensors() const noexcept { return tensors_; }
 
-  /// Kernel construction context (opset).
-  kernel::KernelContext &kernel_ctx() noexcept {
-    // Keep the construction-time context in sync with the currently attached
-    // allocator so kernels built via ``rt.kernel_ctx()`` route their result
-    // storage through it.
-    kernel_ctx_.allocator = allocator_;
-    return kernel_ctx_;
-  }
+  /// Kernel construction context (opset + allocator).
+  kernel::KernelContext &kernel_ctx() noexcept { return kernel_ctx_; }
   const kernel::KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
 
   /// Optional allocator used by kernels to acquire and release
   /// :cpp:struct:`RawBuffer` instances. ``nullptr`` when no allocator has
   /// been attached (the default). The caller retains ownership; the lifetime
-  /// of the allocator must exceed the lifetime of this context.
-  void set_allocator(RawBufferAllocator *allocator) noexcept { allocator_ = allocator; }
+  /// of the allocator must exceed the lifetime of this context. Propagated
+  /// into :cpp:var:`kernel::KernelContext::allocator` so kernels built via
+  /// ``rt.kernel_ctx()`` route their result storage through it.
+  void set_allocator(RawBufferAllocator *allocator) noexcept {
+    allocator_ = allocator;
+    kernel_ctx_.allocator = allocator;
+  }
   RawBufferAllocator *allocator() noexcept { return allocator_; }
   const RawBufferAllocator *allocator() const noexcept { return allocator_; }
 

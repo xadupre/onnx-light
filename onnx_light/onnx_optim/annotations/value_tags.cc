@@ -214,11 +214,14 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
       if (ctx != nullptr) {
         const auto *custom = ctx->GetCustomValueTagFunction(node->domain(), op_type);
         if (custom != nullptr) {
+          // Snapshot before callback to detect whether this callback
+          // produced a node-tag override for this node.
           const std::string node_tag_before_callback = node_tags[n];
           ctx->ClearCustomValueTagChangedFlag();
           (*custom)(*ctx, *node, n);
-          // Only non-empty node tags are meaningful callback overrides.
-          // SetNodeTag already normalizes and rejects empty tags.
+          // Only non-empty node tags are treated as callback overrides.
+          // The non-empty check remains defensive for future callback-side
+          // mutation paths.
           custom_callback_set_node_tag =
               node_tags[n] != node_tag_before_callback && !node_tags[n].empty();
           if (ctx->ConsumeCustomValueTagChangedFlag()) {
@@ -282,8 +285,8 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           inherited_tag = it->second;
         }
       }
-      // Preserve the previously inferred tag when no callback override,
-      // explicit tag, or inherited tag is available.
+      // Start from the previously inferred tag and override it only when
+      // callback/explicit/inherited precedence provides a stronger source.
       std::string node_tag = node_tags[n];
       if (!custom_callback_set_node_tag) {
         // Without a callback override, built-in explicit/inherited inference

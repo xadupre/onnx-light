@@ -209,6 +209,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           changed |= TrySetValueTag(value_tags, node->input(4), "shape");
         }
       }
+      // Custom callbacks run for every node type.
       if (ctx != nullptr) {
         const auto *custom = ctx->GetCustomValueTagFunction(node->domain(), op_type);
         if (custom != nullptr) {

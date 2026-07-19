@@ -283,6 +283,9 @@ inline const TaggedMemory &NodeMemoryProfileBucket(const NodeMemoryProfile &prof
  */
 class ComputeContext {
 public:
+  /// Callback signature for custom value-tag behavior.
+  /// Receives ``(ctx, node, node_index)`` where ``ctx`` can be mutated through
+  /// :cpp:func:`TrySetValueTag` / :cpp:func:`SetNodeTag`.
   using CustomValueTagFn =
       std::function<void(ComputeContext &, const NodeProto &, std::size_t node_index)>;
   using CustomValueTagMap = std::unordered_map<std::string, CustomValueTagFn>;
@@ -353,7 +356,7 @@ public:
   void SetCustomValueTagFunction(const std::string &domain, const std::string &op_type,
                                  CustomValueTagFn fn) {
     EXT_ENFORCE_INVALID(!op_type.empty(), "SetCustomValueTagFunction: op_type must be non-empty.");
-    EXT_ENFORCE_INVALID(static_cast<bool>(fn), "SetCustomValueTagFunction: fn must be non-empty.");
+    EXT_ENFORCE_INVALID(static_cast<bool>(fn), "SetCustomValueTagFunction: fn must be valid.");
     custom_value_tags_[MakeCustomValueTagKey(domain, op_type)] = std::move(fn);
   }
 

@@ -218,7 +218,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           ctx->ClearCustomValueTagChangedFlag();
           (*custom)(*ctx, *node, n);
           // Only non-empty node tags are meaningful callback overrides.
-          // ``SetNodeTag`` already normalizes and rejects empty tags.
+          // SetNodeTag already normalizes and rejects empty tags.
           custom_callback_set_node_tag =
               node_tags[n] != node_tag_before_callback && !node_tags[n].empty();
           if (ctx->ConsumeCustomValueTagChangedFlag()) {

@@ -170,6 +170,94 @@ TEST(GradientOfNodes, MulGrad) {
   EXPECT_GE(mul_count, 2);
 }
 
+TEST(GradientOfNodes, BatchNormalizationGrad) {
+  NodeProto node = MakeTestNode("BatchNormalization", {"X", "scale", "B", "mean", "var"}, {"Y"});
+  FunctionProto grad = GradientOfNodes(
+      std::vector<NodeProto>{node}, std::vector<std::string>{"X", "scale", "B", "mean", "var"}, {},
+      std::vector<std::string>{"X", "scale", "B", "mean", "var"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 5);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Reshape") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Reciprocal") != types.end());
+}
+
+TEST(GradientOfNodes, GroupNormalizationGrad) {
+  NodeProto node = MakeTestNode("GroupNormalization", {"X", "scale", "bias"}, {"Y"});
+  AddAttribute(node, "num_groups", int64_t{2});
+  FunctionProto grad =
+      GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X", "scale", "bias"},
+                      {}, std::vector<std::string>{"X", "scale", "bias"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 3);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceMean") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Reshape") != types.end());
+}
+
+TEST(GradientOfNodes, InstanceNormalizationGrad) {
+  NodeProto node = MakeTestNode("InstanceNormalization", {"X", "scale", "B"}, {"Y"});
+  FunctionProto grad =
+      GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X", "scale", "B"}, {},
+                      std::vector<std::string>{"X", "scale", "B"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 3);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceMean") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end());
+}
+
+TEST(GradientOfNodes, LayerNormalizationGrad) {
+  NodeProto node = MakeTestNode("LayerNormalization", {"X", "scale", "B"}, {"Y"});
+  AddAttribute(node, "axis", int64_t{1});
+  FunctionProto grad =
+      GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X", "scale", "B"}, {},
+                      std::vector<std::string>{"X", "scale", "B"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 3);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Flatten") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceMean") != types.end());
+}
+
+TEST(GradientOfNodes, LpNormalizationGrad) {
+  NodeProto node = MakeTestNode("LpNormalization", {"X"}, {"Y"});
+  AddAttribute(node, "axis", int64_t{-1});
+  AddAttribute(node, "p", int64_t{2});
+  FunctionProto grad = GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X"},
+                                       {}, std::vector<std::string>{"X"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 1);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Sqrt") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end());
+}
+
+TEST(GradientOfNodes, MeanVarianceNormalizationGrad) {
+  NodeProto node = MakeTestNode("MeanVarianceNormalization", {"X"}, {"Y"});
+  FunctionProto grad = GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X"},
+                                       {}, std::vector<std::string>{"X"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 1);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceMean") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Sqrt") != types.end());
+}
+
+TEST(GradientOfNodes, RMSNormalizationGrad) {
+  NodeProto node = MakeTestNode("RMSNormalization", {"X", "scale"}, {"Y"});
+  AddAttribute(node, "axis", int64_t{-1});
+  FunctionProto grad =
+      GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X", "scale"}, {},
+                      std::vector<std::string>{"X", "scale"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 2);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Flatten") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceMean") != types.end());
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Error handling: y not produced by any node
 // ═══════════════════════════════════════════════════════════════════════════

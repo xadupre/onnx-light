@@ -169,8 +169,11 @@ class TestGradientBindings(ExtTestCase):
     # ------------------------------------------------------------------ #
 
     def test_backend_cases_with_gradient(self):
-        """Verifies that the gradient computes without error for every backend test
-        case of each op_type registered in DefaultGradRegistry."""
+        """Verifies gradient computation for every backend test case of each registered op.
+
+        Iterates over all op_types registered in DefaultGradRegistry, collects backend
+        test cases, and checks that GradientOfNodes returns at least one output.
+        """
         # Use find_spec to check module availability before importing.
         if importlib.util.find_spec("onnx_light.onnx_py._onnxpybackend") is None:
             self.skipTest("backend_test bindings not available")

@@ -252,8 +252,9 @@ TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
 
     for (const auto &tc : cases) {
       const auto &graph = tc.model().ref_graph();
-      if (graph.ref_node().empty())
+      if (graph.ref_node().empty()) {
         continue;
+      }
 
       // Use only the first node to test the gradient of the specific operator.
       const NodeProto &first_node = graph.ref_node()[0];
@@ -261,11 +262,13 @@ TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
       // Collect non-empty input names of the first node.
       std::vector<std::string> node_inputs;
       for (const auto &inp : first_node.input()) {
-        if (!inp.empty())
+        if (!inp.empty()) {
           node_inputs.emplace_back(std::string(inp));
+        }
       }
-      if (node_inputs.empty())
+      if (node_inputs.empty()) {
         continue;
+      }
 
       // Get the first non-empty output name of the first node.
       std::string y;
@@ -275,8 +278,9 @@ TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
           break;
         }
       }
-      if (y.empty())
+      if (y.empty()) {
         continue;
+      }
 
       // xs = {first input}, zs = remaining non-empty inputs.
       const std::vector<std::string> xs = {node_inputs[0]};
@@ -285,16 +289,12 @@ TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
       const std::vector<NodeProto> nodes = {first_node};
 
       FunctionProto grad;
-      bool grad_computed = false;
       EXPECT_NO_THROW({
         grad = GradientOfNodes(nodes, node_inputs, {}, xs, y, zs);
-        grad_computed = true;
-      }) << "GradientOfNodes threw for op_type="
-         << op_type << " test=" << tc.name;
-      if (grad_computed) {
         EXPECT_GE(grad.output_size(), 1)
             << "Empty gradient FunctionProto for op_type=" << op_type << " test=" << tc.name;
-      }
+      }) << "GradientOfNodes threw for op_type="
+         << op_type << " test=" << tc.name;
     }
   }
 }

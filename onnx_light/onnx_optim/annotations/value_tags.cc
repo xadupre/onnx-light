@@ -279,7 +279,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
       }
       std::string node_tag = node_tags[n];
-      if (!(has_custom_callback && !node_tag.empty())) {
+      if (!has_custom_callback || node_tag.empty()) {
         if (!explicit_output_tag.empty()) {
           node_tag = explicit_output_tag;
         } else if (!inherited_tag.empty()) {

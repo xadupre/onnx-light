@@ -221,3 +221,104 @@ TEST(GradientOfFunction, BasicLinearRegression) {
   EXPECT_TRUE(std::find(types.begin(), types.end(), "Transpose") != types.end());
   EXPECT_TRUE(std::find(types.begin(), types.end(), "MatMul") != types.end());
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Conv gradient
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Gradient of y = Conv(X, W) w.r.t. X (input).
+// Expected: ConvTranspose is used in the backward graph.
+TEST(GradientOfNodes, ConvGrad_dX) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeTestNode("Conv", {"X", "W"}, {"y"}));
+
+  FunctionProto grad =
+      GradientOfNodes(nodes, std::vector<std::string>{"X", "W"}, {}, std::vector<std::string>{"X"},
+                      "y", std::vector<std::string>{"W"});
+
+  // Output: grad_X
+  ASSERT_EQ(grad.output_size(), 1);
+  EXPECT_EQ(grad.output()[0], "grad_X");
+
+  // Backward graph must use ConvTranspose for dX.
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ConvTranspose") != types.end())
+      << "Expected a ConvTranspose node for the input gradient";
+}
+
+// Gradient of y = Conv(X, W) w.r.t. W (weights).
+// Expected: Transpose and Conv nodes are used in the backward graph.
+TEST(GradientOfNodes, ConvGrad_dW) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeTestNode("Conv", {"X", "W"}, {"y"}));
+
+  FunctionProto grad =
+      GradientOfNodes(nodes, std::vector<std::string>{"X", "W"}, {}, std::vector<std::string>{"W"},
+                      "y", std::vector<std::string>{"X"});
+
+  // Output: grad_W
+  ASSERT_EQ(grad.output_size(), 1);
+  EXPECT_EQ(grad.output()[0], "grad_W");
+
+  // Weight gradient uses Transpose + Conv.
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Transpose") != types.end())
+      << "Expected Transpose nodes for the weight gradient";
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Conv") != types.end())
+      << "Expected a Conv node for the weight gradient";
+}
+
+// Gradient of y = Conv(X, W) w.r.t. both X and W.
+TEST(GradientOfNodes, ConvGrad_dX_dW) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeTestNode("Conv", {"X", "W"}, {"y"}));
+
+  FunctionProto grad = GradientOfNodes(nodes, std::vector<std::string>{"X", "W"}, {},
+                                       std::vector<std::string>{"X", "W"}, "y", {});
+
+  ASSERT_EQ(grad.output_size(), 2);
+  EXPECT_EQ(grad.output()[0], "grad_X");
+  EXPECT_EQ(grad.output()[1], "grad_W");
+
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ConvTranspose") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Conv") != types.end());
+}
+
+// Gradient of y = Conv(X, W, B) w.r.t. B (bias).
+// Expected: ReduceSum is used in the backward graph.
+TEST(GradientOfNodes, ConvGrad_dB) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeTestNode("Conv", {"X", "W", "B"}, {"y"}));
+
+  FunctionProto grad =
+      GradientOfNodes(nodes, std::vector<std::string>{"X", "W", "B"}, {},
+                      std::vector<std::string>{"B"}, "y", std::vector<std::string>{"X", "W"});
+
+  // Output: grad_B
+  ASSERT_EQ(grad.output_size(), 1);
+  EXPECT_EQ(grad.output()[0], "grad_B");
+
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end())
+      << "Expected ReduceSum for bias gradient";
+}
+
+// Gradient of y = Conv(X, W, B) w.r.t. all three inputs.
+TEST(GradientOfNodes, ConvGrad_dX_dW_dB) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeTestNode("Conv", {"X", "W", "B"}, {"y"}));
+
+  FunctionProto grad = GradientOfNodes(nodes, std::vector<std::string>{"X", "W", "B"}, {},
+                                       std::vector<std::string>{"X", "W", "B"}, "y", {});
+
+  ASSERT_EQ(grad.output_size(), 3);
+  EXPECT_EQ(grad.output()[0], "grad_X");
+  EXPECT_EQ(grad.output()[1], "grad_W");
+  EXPECT_EQ(grad.output()[2], "grad_B");
+
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ConvTranspose") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Conv") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end());
+}

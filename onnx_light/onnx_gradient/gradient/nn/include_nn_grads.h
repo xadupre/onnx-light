@@ -12,6 +12,19 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_gradient {
 
 /**
+ * Applies the backward rule for the Conv operator.
+ *
+ * Y = Conv(X, W, B)  →
+ *   dX = ConvTranspose(dY, W, attrs),
+ *   dW = Transpose(Conv(Transpose(Pad(X, pads)), Transpose(dY),
+ *                       strides=dilations, dilations=strides)),
+ *   dB = ReduceSum(dY, axes=[0, spatial…], keepdims=0).
+ */
+bool GradConv(const NodeProto &node, const std::string &output_grad,
+              std::unordered_map<std::string, std::string> &grad_accum, int &counter,
+              FunctionProto &func);
+
+/**
  * Applies the backward rule for the Relu operator.
  *
  * C = relu(A)  →  dA = dC * relu(sign(A)).

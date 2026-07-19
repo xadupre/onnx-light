@@ -351,12 +351,23 @@ public:
   /// @throws std::out_of_range when ``node_index`` is out of bounds.
   bool SetNodeTag(std::size_t node_index, const std::string &tag);
 
+  /// Internal flag helpers used by value-tag inference around custom callbacks.
+  void ClearCustomValueTagChangedFlag() noexcept { custom_value_tags_changed_ = false; }
+  bool ConsumeCustomValueTagChangedFlag() noexcept {
+    const bool changed = custom_value_tags_changed_;
+    custom_value_tags_changed_ = false;
+    return changed;
+  }
+
   /// Registers or replaces a custom value-tag callback for ``(domain, op_type)``.
   /// ``domain == ""`` is normalized to ``ai.onnx``.
   void SetCustomValueTagFunction(const std::string &domain, const std::string &op_type,
                                  CustomValueTagFn fn) {
-    EXT_ENFORCE_INVALID(!op_type.empty(), "SetCustomValueTagFunction: op_type must be non-empty.");
-    EXT_ENFORCE_INVALID(static_cast<bool>(fn), "SetCustomValueTagFunction: fn must be valid.");
+    EXT_ENFORCE_INVALID(
+        !op_type.empty(),
+        "SetCustomValueTagFunction: op_type cannot be empty when registering a custom callback.");
+    EXT_ENFORCE_INVALID(static_cast<bool>(fn),
+                        "SetCustomValueTagFunction: callback function cannot be null.");
     custom_value_tags_[MakeCustomValueTagKey(domain, op_type)] = std::move(fn);
   }
 
@@ -539,6 +550,7 @@ private:
 
   std::unordered_map<std::string, std::string> value_tags_;
   std::vector<std::string> node_tags_;
+  bool custom_value_tags_changed_ = false;
   CustomValueTagMap custom_value_tags_;
   std::vector<std::vector<InPlaceReuse>> reuse_;
   std::vector<std::vector<std::string>> release_after_;

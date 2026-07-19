@@ -1270,10 +1270,12 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def("try_set_value_tag", &onnx_annotations::ComputeContext::TrySetValueTag, nb::arg("name"),
            nb::arg("tag"),
            "Sets a value tag in the current context and returns whether the map changed. "
-           "Returns ``true`` only when an insertion/update happened.")
+           "Returns ``false`` when ``name`` is empty, ``tag`` is invalid/empty, or the existing "
+           "value already carries that tag.")
       .def("set_node_tag", &onnx_annotations::ComputeContext::SetNodeTag, nb::arg("node_index"),
            nb::arg("tag"),
            "Sets a node tag in the current context and returns whether the list changed. "
+           "Returns ``false`` when ``tag`` is invalid/empty or the node already carries that tag. "
            "Raises ``IndexError`` when ``node_index`` is out of bounds.")
       .def(
           "set_custom_value_tag_function",

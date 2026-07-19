@@ -213,10 +213,9 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
       if (ctx != nullptr) {
         const auto *custom = ctx->GetCustomValueTagFunction(node->domain(), op_type);
         if (custom != nullptr) {
-          const auto before_value_tags = value_tags;
-          const auto before_node_tag = node_tags[n];
+          ctx->ClearCustomValueTagChangedFlag();
           (*custom)(*ctx, *node, n);
-          if (before_value_tags != value_tags || before_node_tag != node_tags[n]) {
+          if (ctx->ConsumeCustomValueTagChangedFlag()) {
             changed = true;
           }
         }
@@ -431,7 +430,12 @@ ComputeContext::ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes) {
 }
 
 bool ComputeContext::TrySetValueTag(const std::string &name, const std::string &tag) {
-  return ::ONNX_LIGHT_NAMESPACE::onnx_optim::annotations::TrySetValueTag(value_tags_, name, tag);
+  const bool changed =
+      ::ONNX_LIGHT_NAMESPACE::onnx_optim::annotations::TrySetValueTag(value_tags_, name, tag);
+  if (changed) {
+    custom_value_tags_changed_ = true;
+  }
+  return changed;
 }
 
 bool ComputeContext::SetNodeTag(std::size_t node_index, const std::string &tag) {
@@ -446,6 +450,7 @@ bool ComputeContext::SetNodeTag(std::size_t node_index, const std::string &tag) 
     return false;
   }
   node_tags_[node_index] = norm;
+  custom_value_tags_changed_ = true;
   return true;
 }
 

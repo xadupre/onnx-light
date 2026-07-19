@@ -940,7 +940,7 @@ Common::Status OnnxParser::Parse(GraphProto &graph) {
   return Parse(id, graph);
 }
 
-Common::Status OnnxParser::Parse(std::string name, GraphProto &graph) {
+Common::Status OnnxParser::Parse(const std::string &name, GraphProto &graph) {
   graph.set_name(name);
   graph.ref_initializer().clear();
 

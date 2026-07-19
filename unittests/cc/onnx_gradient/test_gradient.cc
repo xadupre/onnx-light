@@ -170,6 +170,94 @@ TEST(GradientOfNodes, MulGrad) {
   EXPECT_GE(mul_count, 2);
 }
 
+TEST(GradientOfNodes, BatchNormalizationGrad) {
+  NodeProto node = MakeTestNode("BatchNormalization", {"X", "scale", "B", "mean", "var"}, {"Y"});
+  FunctionProto grad = GradientOfNodes(
+      std::vector<NodeProto>{node}, std::vector<std::string>{"X", "scale", "B", "mean", "var"}, {},
+      std::vector<std::string>{"X", "scale", "B", "mean", "var"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 5);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Reshape") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Reciprocal") != types.end());
+}
+
+TEST(GradientOfNodes, GroupNormalizationGrad) {
+  NodeProto node = MakeTestNode("GroupNormalization", {"X", "scale", "bias"}, {"Y"});
+  AddAttribute(node, "num_groups", int64_t{2});
+  FunctionProto grad =
+      GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X", "scale", "bias"},
+                      {}, std::vector<std::string>{"X", "scale", "bias"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 3);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceMean") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Reshape") != types.end());
+}
+
+TEST(GradientOfNodes, InstanceNormalizationGrad) {
+  NodeProto node = MakeTestNode("InstanceNormalization", {"X", "scale", "B"}, {"Y"});
+  FunctionProto grad =
+      GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X", "scale", "B"}, {},
+                      std::vector<std::string>{"X", "scale", "B"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 3);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceMean") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end());
+}
+
+TEST(GradientOfNodes, LayerNormalizationGrad) {
+  NodeProto node = MakeTestNode("LayerNormalization", {"X", "scale", "B"}, {"Y"});
+  AddAttribute(node, "axis", int64_t{1});
+  FunctionProto grad =
+      GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X", "scale", "B"}, {},
+                      std::vector<std::string>{"X", "scale", "B"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 3);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Flatten") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceMean") != types.end());
+}
+
+TEST(GradientOfNodes, LpNormalizationGrad) {
+  NodeProto node = MakeTestNode("LpNormalization", {"X"}, {"Y"});
+  AddAttribute(node, "axis", int64_t{-1});
+  AddAttribute(node, "p", int64_t{2});
+  FunctionProto grad = GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X"},
+                                       {}, std::vector<std::string>{"X"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 1);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Sqrt") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end());
+}
+
+TEST(GradientOfNodes, MeanVarianceNormalizationGrad) {
+  NodeProto node = MakeTestNode("MeanVarianceNormalization", {"X"}, {"Y"});
+  FunctionProto grad = GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X"},
+                                       {}, std::vector<std::string>{"X"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 1);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceMean") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Sqrt") != types.end());
+}
+
+TEST(GradientOfNodes, RMSNormalizationGrad) {
+  NodeProto node = MakeTestNode("RMSNormalization", {"X", "scale"}, {"Y"});
+  AddAttribute(node, "axis", int64_t{-1});
+  FunctionProto grad =
+      GradientOfNodes(std::vector<NodeProto>{node}, std::vector<std::string>{"X", "scale"}, {},
+                      std::vector<std::string>{"X", "scale"}, "Y", {});
+
+  ASSERT_EQ(grad.output_size(), 2);
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Flatten") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceMean") != types.end());
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Error handling: y not produced by any node
 // ═══════════════════════════════════════════════════════════════════════════
@@ -220,4 +308,105 @@ TEST(GradientOfFunction, BasicLinearRegression) {
   auto types = NodeTypes(grad);
   EXPECT_TRUE(std::find(types.begin(), types.end(), "Transpose") != types.end());
   EXPECT_TRUE(std::find(types.begin(), types.end(), "MatMul") != types.end());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Conv gradient
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Gradient of y = Conv(X, W) w.r.t. X (input).
+// Expected: ConvTranspose is used in the backward graph.
+TEST(GradientOfNodes, ConvGrad_dX) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeTestNode("Conv", {"X", "W"}, {"y"}));
+
+  FunctionProto grad =
+      GradientOfNodes(nodes, std::vector<std::string>{"X", "W"}, {}, std::vector<std::string>{"X"},
+                      "y", std::vector<std::string>{"W"});
+
+  // Output: grad_X
+  ASSERT_EQ(grad.output_size(), 1);
+  EXPECT_EQ(grad.output()[0], "grad_X");
+
+  // Backward graph must use ConvTranspose for dX.
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ConvTranspose") != types.end())
+      << "Expected a ConvTranspose node for the input gradient";
+}
+
+// Gradient of y = Conv(X, W) w.r.t. W (weights).
+// Expected: Transpose and Conv nodes are used in the backward graph.
+TEST(GradientOfNodes, ConvGrad_dW) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeTestNode("Conv", {"X", "W"}, {"y"}));
+
+  FunctionProto grad =
+      GradientOfNodes(nodes, std::vector<std::string>{"X", "W"}, {}, std::vector<std::string>{"W"},
+                      "y", std::vector<std::string>{"X"});
+
+  // Output: grad_W
+  ASSERT_EQ(grad.output_size(), 1);
+  EXPECT_EQ(grad.output()[0], "grad_W");
+
+  // Weight gradient uses Transpose + Conv.
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Transpose") != types.end())
+      << "Expected Transpose nodes for the weight gradient";
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Conv") != types.end())
+      << "Expected a Conv node for the weight gradient";
+}
+
+// Gradient of y = Conv(X, W) w.r.t. both X and W.
+TEST(GradientOfNodes, ConvGrad_dX_dW) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeTestNode("Conv", {"X", "W"}, {"y"}));
+
+  FunctionProto grad = GradientOfNodes(nodes, std::vector<std::string>{"X", "W"}, {},
+                                       std::vector<std::string>{"X", "W"}, "y", {});
+
+  ASSERT_EQ(grad.output_size(), 2);
+  EXPECT_EQ(grad.output()[0], "grad_X");
+  EXPECT_EQ(grad.output()[1], "grad_W");
+
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ConvTranspose") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Conv") != types.end());
+}
+
+// Gradient of y = Conv(X, W, B) w.r.t. B (bias).
+// Expected: ReduceSum is used in the backward graph.
+TEST(GradientOfNodes, ConvGrad_dB) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeTestNode("Conv", {"X", "W", "B"}, {"y"}));
+
+  FunctionProto grad =
+      GradientOfNodes(nodes, std::vector<std::string>{"X", "W", "B"}, {},
+                      std::vector<std::string>{"B"}, "y", std::vector<std::string>{"X", "W"});
+
+  // Output: grad_B
+  ASSERT_EQ(grad.output_size(), 1);
+  EXPECT_EQ(grad.output()[0], "grad_B");
+
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end())
+      << "Expected ReduceSum for bias gradient";
+}
+
+// Gradient of y = Conv(X, W, B) w.r.t. all three inputs.
+TEST(GradientOfNodes, ConvGrad_dX_dW_dB) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeTestNode("Conv", {"X", "W", "B"}, {"y"}));
+
+  FunctionProto grad = GradientOfNodes(nodes, std::vector<std::string>{"X", "W", "B"}, {},
+                                       std::vector<std::string>{"X", "W", "B"}, "y", {});
+
+  ASSERT_EQ(grad.output_size(), 3);
+  EXPECT_EQ(grad.output()[0], "grad_X");
+  EXPECT_EQ(grad.output()[1], "grad_W");
+  EXPECT_EQ(grad.output()[2], "grad_B");
+
+  auto types = NodeTypes(grad);
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ConvTranspose") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "Conv") != types.end());
+  EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end());
 }

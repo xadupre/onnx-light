@@ -7,17 +7,29 @@
 #include "onnx_kernels/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
 Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
+<<<<<<< HEAD
   // Use Tensor's copy constructor rather than copying individual fields: it
   // correctly deep-copies allocator-backed storage (``data`` is left empty
   // for such tensors, with the real bytes living behind ``allocation_``).
   Tensor output = input;
   output.name.clear();
+=======
+  Tensor output = MakeOutputTensor(input.data_type, input.shape, input.size_bytes(),
+                                   rt ? rt->allocator() : nullptr);
+  output.name = input.name;
+  if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
+    output.string_data = input.string_data;
+  } else if (input.size_bytes() != 0) {
+    std::memcpy(output.mutable_bytes(), input.bytes(), input.size_bytes());
+  }
+>>>>>>> origin/main
   return output;
 }
 

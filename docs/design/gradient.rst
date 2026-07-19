@@ -61,7 +61,7 @@ Architecture
     │  onnx_gradient/gradient/{math,nn,tensor,        │
     │                           reduction}/           │
     │                                                 │
-    │  MatMul, Gemm, Add, Sub, Mul, Div, Neg,         │
+    │  Conv, MatMul, Gemm, Add, Sub, Mul, Div, Neg,   │
     │  Identity, Relu, Sigmoid, Tanh,                 │
     │  ReduceSum, ReduceMean, Reshape, Transpose      │
     └─────────────────────────────────────────────────┘

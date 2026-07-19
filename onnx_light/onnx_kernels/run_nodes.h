@@ -228,6 +228,9 @@ void RunModel(const ModelProto &model, RuntimeContext &rt);
  * can run their body subgraph without going through
  * :cpp:func:`RunNode` themselves.
  *
+ * ``bindings`` is taken by value so callers can move allocator-backed tensors
+ * into the subgraph without retaining dangling ownership in the caller.
+ *
  * @param attr_name  Attribute name identifying the subgraph within its
  *                   owning control-flow node (e.g. ``"body"``,
  *                   ``"then_branch"``, ``"else_branch"``). Stored in
@@ -238,7 +241,7 @@ void RunModel(const ModelProto &model, RuntimeContext &rt);
  *         is not produced by the body.
  */
 std::vector<Tensor> RunSubgraph(const GraphProto &graph,
-                                const std::vector<std::pair<std::string, Tensor>> &bindings,
+                                std::vector<std::pair<std::string, Tensor>> bindings,
                                 RuntimeContext &rt, const std::string &attr_name = "");
 
 /**

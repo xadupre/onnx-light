@@ -130,9 +130,10 @@ struct Shape {
    * Validates the requested range and checks for negative dimensions and INT64
    * overflow while multiplying.
    *
-   * @param begin  Start index of the dimension range (inclusive).
-   * @param end    End index of the dimension range (exclusive).
-   * @param where  Caller-provided context describing the multiplication site.
+   * Parameters:
+   *   begin: Start index of the dimension range (inclusive).
+   *   end: End index of the dimension range (exclusive).
+   *   where: Caller-provided context describing the multiplication site.
    * Returns:
    *   The product of the selected dimensions, or 1 for an empty range.
    */

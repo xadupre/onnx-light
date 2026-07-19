@@ -163,6 +163,83 @@ class TestGradientBindings(ExtTestCase):
         )
         self.assertGreater(len(list(grad.opset_import)), 0)
 
+    # ------------------------------------------------------------------ #
+    # gradient via backend test cases                                     #
+    # ------------------------------------------------------------------ #
+
+    def test_backend_cases_with_gradient(self):
+        """For each op_type with a registered gradient, check the gradient computes
+        without error for every corresponding backend test case."""
+        try:
+            from onnx_light.onnx_py._onnxpybackend import backend_test as _C
+        except ImportError:
+            self.skipTest("backend_test bindings not available")
+
+        # Operators registered in DefaultGradRegistry (default ONNX domain).
+        grad_op_types = [
+            "Add",
+            "Div",
+            "Gemm",
+            "Identity",
+            "MatMul",
+            "Mul",
+            "Neg",
+            "ReduceMean",
+            "ReduceSum",
+            "Relu",
+            "Reshape",
+            "Sigmoid",
+            "Sub",
+            "Tanh",
+            "Transpose",
+        ]
+
+        failures: list[str] = []
+        for op_type in grad_op_types:
+            cases = _C.collect_test_cases(op_type)
+            if not cases:
+                failures.append(f"No backend test cases found for op_type={op_type}")
+                continue
+
+            for tc in cases:
+                model = tc.model
+                nodes = list(model.graph.node)
+                if not nodes:
+                    continue
+
+                # Use only the first node to test the gradient of the specific operator.
+                first_node = nodes[0]
+
+                # Collect non-empty input names of the first node.
+                node_inputs = [str(inp) for inp in first_node.input if str(inp)]
+                if not node_inputs:
+                    continue
+
+                # Get the first non-empty output name of the first node.
+                node_outputs = [str(out) for out in first_node.output if str(out)]
+                if not node_outputs:
+                    continue
+
+                xs = [node_inputs[0]]
+                zs = node_inputs[1:]
+                y = node_outputs[0]
+
+                try:
+                    grad = self.gradient_of_nodes(
+                        nodes=[first_node], inputs=node_inputs, initializers=[], xs=xs, y=y, zs=zs
+                    )
+                    if len(list(grad.output)) < 1:
+                        failures.append(
+                            f"op_type={op_type} test={tc.name}: empty gradient output"
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    failures.append(f"op_type={op_type} test={tc.name}: {exc}")
+
+        if failures:
+            self.fail(
+                f"Gradient check failed for {len(failures)} case(s):\n" + "\n".join(failures)
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -171,7 +171,10 @@ class TestGradientBindings(ExtTestCase):
 def _make_backend_gradient_test(op_type):
     """Returns a test method that verifies gradient for all backend test cases of op_type."""
 
-    def test_method(self):
+    # Note: all backend test cases for this op_type run inside a single test method.
+    # A failure on one case stops iteration for that op_type, which is the intended
+    # behaviour (one method per op_type rather than one subTest per case).
+    def generated_test(self):
         if importlib.util.find_spec("onnx_light.onnx_py._onnxpybackend") is None:
             self.skipTest("backend_test bindings not available")
         from onnx_light.onnx_py._onnxpybackend import backend_test as _C
@@ -208,11 +211,11 @@ def _make_backend_gradient_test(op_type):
                 f"Empty gradient output for op_type={op_type} test={tc.name}",
             )
 
-    test_method.__name__ = f"test_backend_gradient_{op_type}"
-    test_method.__doc__ = (
+    generated_test.__name__ = f"test_backend_gradient_{op_type}"
+    generated_test.__doc__ = (
         f"Verifies gradient computation for all backend test cases of {op_type}."
     )
-    return test_method
+    return generated_test
 
 
 def _register_backend_gradient_tests(cls):

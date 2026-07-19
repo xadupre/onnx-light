@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -282,6 +283,10 @@ inline const TaggedMemory &NodeMemoryProfileBucket(const NodeMemoryProfile &prof
  */
 class ComputeContext {
 public:
+  using CustomValueTagFn =
+      std::function<void(ComputeContext &, const NodeProto &, std::size_t node_index)>;
+  using CustomValueTagMap = std::unordered_map<std::string, CustomValueTagFn>;
+
   ComputeContext() = default;
 
   /**
@@ -331,6 +336,40 @@ public:
   ///
   /// @throws std::out_of_range when ``node_index`` is out of bounds.
   const std::string &NodeTag(std::size_t node_index) const { return node_tags_.at(node_index); }
+
+  /// Sets or updates a value tag and returns ``true`` when the internal map changed.
+  bool TrySetValueTag(const std::string &name, const std::string &tag);
+
+  /// Sets or updates a per-node tag and returns ``true`` when the internal list changed.
+  bool SetNodeTag(std::size_t node_index, const std::string &tag);
+
+  /// Registers or replaces a custom value-tag callback for ``(domain, op_type)``.
+  /// ``domain == ""`` is normalized to ``ai.onnx``.
+  void SetCustomValueTagFunction(const std::string &domain, const std::string &op_type,
+                                 CustomValueTagFn fn) {
+    EXT_ENFORCE_INVALID(!op_type.empty(), "SetCustomValueTagFunction: op_type must not be empty.");
+    EXT_ENFORCE_INVALID(static_cast<bool>(fn), "SetCustomValueTagFunction: fn must not be empty.");
+    custom_value_tags_[MakeCustomValueTagKey(domain, op_type)] = std::move(fn);
+  }
+
+  /// Returns a pointer to the custom value-tag callback registered for
+  /// ``(domain, op_type)``, or ``nullptr`` if none is registered.
+  const CustomValueTagFn *GetCustomValueTagFunction(const std::string &domain,
+                                                    const std::string &op_type) const {
+    auto it = custom_value_tags_.find(MakeCustomValueTagKey(domain, op_type));
+    return it == custom_value_tags_.end() ? nullptr : &it->second;
+  }
+
+  /// Removes the custom value-tag callback registered for ``(domain, op_type)``.
+  bool RemoveCustomValueTagFunction(const std::string &domain, const std::string &op_type) {
+    return custom_value_tags_.erase(MakeCustomValueTagKey(domain, op_type)) > 0;
+  }
+
+  /// Removes every custom value-tag callback.
+  void ClearCustomValueTagFunctions() { custom_value_tags_.clear(); }
+
+  /// Read-only access to all registered custom value-tag callbacks.
+  const CustomValueTagMap &CustomValueTagFunctions() const noexcept { return custom_value_tags_; }
 
   /**
    * Guesses, for every node of ``graph``, which outputs may reuse which input
@@ -482,8 +521,17 @@ public:
   }
 
 private:
+  static std::string NormaliseDomain(const std::string &domain) {
+    return domain.empty() ? std::string(shapes::kOnnxDomain) : domain;
+  }
+
+  static std::string MakeCustomValueTagKey(const std::string &domain, const std::string &op_type) {
+    return NormaliseDomain(domain) + ":" + op_type;
+  }
+
   std::unordered_map<std::string, std::string> value_tags_;
   std::vector<std::string> node_tags_;
+  CustomValueTagMap custom_value_tags_;
   std::vector<std::vector<InPlaceReuse>> reuse_;
   std::vector<std::vector<std::string>> release_after_;
   std::vector<std::vector<std::string>> not_used_after_;

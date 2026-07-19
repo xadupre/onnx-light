@@ -5,6 +5,7 @@
 #include "onnx_optim/annotations/value_tags.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <string_view>
 #include <tuple>
 #include <unordered_set>
@@ -174,7 +175,7 @@ void CollectGraphSeedTags(const GraphProto &graph,
 
 void InferNodesTags(const std::vector<const NodeProto *> &nodes,
                     std::unordered_map<std::string, std::string> &value_tags,
-                    std::vector<std::string> &node_tags) {
+                    std::vector<std::string> &node_tags, ComputeContext *ctx = nullptr) {
   node_tags.assign(nodes.size(), std::string());
   bool changed = true;
   while (changed) {
@@ -206,6 +207,17 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
         if (node->input().size() > 4) {
           changed |= TrySetValueTag(value_tags, node->input(4), "shape");
+        }
+      }
+      if (ctx != nullptr) {
+        const auto *custom = ctx->GetCustomValueTagFunction(node->domain(), op_type);
+        if (custom != nullptr) {
+          const auto before_value_tags = value_tags;
+          const auto before_node_tag = node_tags[n];
+          (*custom)(*ctx, *node, n);
+          if (before_value_tags != value_tags || before_node_tag != node_tags[n]) {
+            changed = true;
+          }
         }
       }
 
@@ -265,7 +277,9 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
       }
       const std::string node_tag =
-          explicit_output_tag.empty() ? inherited_tag : explicit_output_tag;
+          !node_tags[n].empty()
+              ? node_tags[n]
+              : (explicit_output_tag.empty() ? inherited_tag : explicit_output_tag);
       if (node_tags[n] != node_tag) {
         node_tags[n] = node_tag;
         changed = true;
@@ -359,80 +373,75 @@ void RecurseSubgraphs(NodeProto &node) {
 } // namespace
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-ComputeTags(const GraphProto &graph) {
-  std::unordered_map<std::string, std::string> computed_value_tags;
-  std::vector<std::string> computed_node_tags;
-  CollectGraphSeedTags(graph, computed_value_tags);
+ComputeContext::ComputeValueAndNodeTags(const GraphProto &graph) {
+  value_tags_.clear();
+  node_tags_.clear();
+  CollectGraphSeedTags(graph, value_tags_);
   std::vector<const NodeProto *> nodes;
   nodes.reserve(graph.node().size());
   for (int i = 0; i < graph.node().size(); ++i) {
     nodes.push_back(&graph.node()[i]);
   }
-  InferNodesTags(nodes, computed_value_tags, computed_node_tags);
-  return {computed_value_tags, computed_node_tags};
-}
-
-std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-ComputeTags(const FunctionProto &function) {
-  std::unordered_map<std::string, std::string> computed_value_tags;
-  std::vector<std::string> computed_node_tags;
-  std::vector<const NodeProto *> nodes;
-  nodes.reserve(function.node().size());
-  for (int i = 0; i < function.node().size(); ++i) {
-    nodes.push_back(&function.node()[i]);
-  }
-  InferNodesTags(nodes, computed_value_tags, computed_node_tags);
-  return {computed_value_tags, computed_node_tags};
-}
-
-std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-ComputeTags(const utils::RepeatedProtoField<NodeProto> &nodes) {
-  std::unordered_map<std::string, std::string> computed_value_tags;
-  std::vector<std::string> computed_node_tags;
-  std::vector<const NodeProto *> ptrs;
-  ptrs.reserve(nodes.size());
-  for (const NodeProto &node : nodes) {
-    ptrs.push_back(&node);
-  }
-  InferNodesTags(ptrs, computed_value_tags, computed_node_tags);
-  return {computed_value_tags, computed_node_tags};
-}
-
-std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-ComputeTags(const std::vector<NodeProto> &nodes) {
-  std::unordered_map<std::string, std::string> computed_value_tags;
-  std::vector<std::string> computed_node_tags;
-  std::vector<const NodeProto *> ptrs;
-  ptrs.reserve(nodes.size());
-  for (const NodeProto &node : nodes) {
-    ptrs.push_back(&node);
-  }
-  InferNodesTags(ptrs, computed_value_tags, computed_node_tags);
-  return {computed_value_tags, computed_node_tags};
-}
-
-std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-ComputeContext::ComputeValueAndNodeTags(const GraphProto &graph) {
-  std::tie(value_tags_, node_tags_) = ComputeTags(graph);
+  InferNodesTags(nodes, value_tags_, node_tags_, this);
   return {value_tags_, node_tags_};
 }
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 ComputeContext::ComputeValueAndNodeTags(const FunctionProto &function) {
-  std::tie(value_tags_, node_tags_) = ComputeTags(function);
+  value_tags_.clear();
+  node_tags_.clear();
+  std::vector<const NodeProto *> nodes;
+  nodes.reserve(function.node().size());
+  for (int i = 0; i < function.node().size(); ++i) {
+    nodes.push_back(&function.node()[i]);
+  }
+  InferNodesTags(nodes, value_tags_, node_tags_, this);
   return {value_tags_, node_tags_};
 }
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 ComputeContext::ComputeValueAndNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes) {
-  std::tie(value_tags_, node_tags_) = ComputeTags(nodes);
+  value_tags_.clear();
+  node_tags_.clear();
+  std::vector<const NodeProto *> ptrs;
+  ptrs.reserve(nodes.size());
+  for (const NodeProto &node : nodes) {
+    ptrs.push_back(&node);
+  }
+  InferNodesTags(ptrs, value_tags_, node_tags_, this);
   return {value_tags_, node_tags_};
 }
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 ComputeContext::ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes) {
-  std::tie(value_tags_, node_tags_) = ComputeTags(nodes);
+  value_tags_.clear();
+  node_tags_.clear();
+  std::vector<const NodeProto *> ptrs;
+  ptrs.reserve(nodes.size());
+  for (const NodeProto &node : nodes) {
+    ptrs.push_back(&node);
+  }
+  InferNodesTags(ptrs, value_tags_, node_tags_, this);
   return {value_tags_, node_tags_};
+}
+
+bool ComputeContext::TrySetValueTag(const std::string &name, const std::string &tag) {
+  return ::ONNX_LIGHT_NAMESPACE::onnx_optim::annotations::TrySetValueTag(value_tags_, name, tag);
+}
+
+bool ComputeContext::SetNodeTag(std::size_t node_index, const std::string &tag) {
+  if (node_index >= node_tags_.size()) {
+    throw std::out_of_range("SetNodeTag: node_index out of bounds.");
+  }
+  const std::string norm = NormalizeValueTag(tag);
+  if (norm.empty()) {
+    return false;
+  }
+  if (node_tags_[node_index] == norm) {
+    return false;
+  }
+  node_tags_[node_index] = norm;
+  return true;
 }
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>

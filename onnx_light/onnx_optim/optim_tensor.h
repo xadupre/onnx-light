@@ -45,6 +45,8 @@ namespace onnx_optim {
  * The enumerator list intentionally matches ``onnx_op::TensorType`` so
  * shape inference can reason about the same ONNX type universe without
  * forcing every ``onnx_optim`` consumer to depend on ``onnx_op``.
+ * When ``onnx_op::TensorType`` changes, this local copy must be updated
+ * in lockstep; ``test_onnx_optim_dependency.py`` guards that contract.
  */
 enum class TensorType : uint8_t {
   kBool,

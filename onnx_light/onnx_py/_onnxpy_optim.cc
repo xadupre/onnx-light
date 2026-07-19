@@ -1269,12 +1269,11 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "when ``node_index`` is out of bounds.")
       .def("try_set_value_tag", &onnx_annotations::ComputeContext::TrySetValueTag, nb::arg("name"),
            nb::arg("tag"),
-           "Sets a value tag in the current context and returns ``True`` when the map changed. "
-           "Returns ``False`` when the tag is invalid, the name is empty, or the existing value "
-           "already matches.")
+           "Sets a value tag in the current context and returns whether the map changed. "
+           "Returns ``true`` only when an insertion/update happened.")
       .def("set_node_tag", &onnx_annotations::ComputeContext::SetNodeTag, nb::arg("node_index"),
            nb::arg("tag"),
-           "Sets a node tag in the current context and returns ``True`` when the list changed. "
+           "Sets a node tag in the current context and returns whether the list changed. "
            "Raises ``IndexError`` when ``node_index`` is out of bounds.")
       .def(
           "set_custom_value_tag_function",
@@ -1299,10 +1298,12 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return c.GetCustomValueTagFunction(domain, op_type) != nullptr;
           },
           nb::arg("domain"), nb::arg("op_type"),
-          "True when a custom callback is registered for ``(domain, op_type)``.")
+          "Returns whether a custom callback is registered for ``(domain, op_type)``.")
       .def("remove_custom_value_tag_function",
            &onnx_annotations::ComputeContext::RemoveCustomValueTagFunction, nb::arg("domain"),
-           nb::arg("op_type"), "Removes a custom callback for ``(domain, op_type)``.")
+           nb::arg("op_type"),
+           "Removes a custom callback for ``(domain, op_type)`` and returns whether one "
+           "was removed.")
       .def("clear_custom_value_tag_functions",
            &onnx_annotations::ComputeContext::ClearCustomValueTagFunctions,
            "Removes every registered custom callback.")

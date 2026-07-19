@@ -175,7 +175,7 @@ void CollectGraphSeedTags(const GraphProto &graph,
 
 void InferNodesTags(const std::vector<const NodeProto *> &nodes,
                     std::unordered_map<std::string, std::string> &value_tags,
-                    std::vector<std::string> &node_tags, ComputeContext *ctx = nullptr) {
+                    std::vector<std::string> &node_tags, ComputeContext *ctx) {
   node_tags.assign(nodes.size(), std::string());
   bool changed = true;
   while (changed) {

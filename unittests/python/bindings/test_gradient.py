@@ -327,7 +327,9 @@ def _make_gradient_backend_validator(gradient_of_nodes, registered_op_types=None
         if not nodes:
             return None
         candidates = (
-            [n for n in nodes if str(n.op_type) in _registered] if _registered is not None else nodes
+            [n for n in nodes if str(n.op_type) in _registered]
+            if _registered is not None
+            else nodes
         )
         if not candidates:
             return None
@@ -363,7 +365,8 @@ for _op in _grad_op_types:
     _grad_test_names.extend(_get_test_cases_for_op(_op, test_cases=_all_test_cases))
 _grad_include = [rf"^{name}$" for name in _grad_test_names]
 TestGradientBackendCases = _make_test_class(
-    _make_gradient_backend_validator(gradient_of_nodes, _grad_op_types), include_regex=_grad_include
+    _make_gradient_backend_validator(gradient_of_nodes, _grad_op_types),
+    include_regex=_grad_include,
 )
 
 

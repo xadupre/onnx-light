@@ -49,12 +49,48 @@ bool ParseBoolScalar(const Tensor &t, const std::string &where) {
   return t.AsBool()[0] != 0;
 }
 
-Tensor MakeInt64Scalar(const std::string &name, int64_t v) {
-  return Tensor::FromInt64(name, {}, {v});
+Tensor MakeInt64Scalar(const std::string &name, int64_t v, RawBufferAllocator *allocator) {
+  return Tensor::FromInt64(name, {}, {v}, allocator);
 }
 
-Tensor MakeBoolScalar(const std::string &name, bool v) {
-  return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)});
+Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *allocator) {
+  return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)}, allocator);
+}
+
+Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator = nullptr);
+
+/**
+ * Creates a deep copy of a tensor before it leaves a child RuntimeContext.
+ *
+ * @param tensor Tensor to clone.
+ * @param allocator Optional allocator for the cloned raw buffer.
+ *     Passing `nullptr` keeps the legacy inline `std::vector<uint8_t>`
+ *     storage for numeric tensors.
+ * @return A deep copy of `tensor` with owned storage.
+ *
+ * The copy avoids dangling pointers when the child held allocator-backed or
+ * borrowed storage, and it preserves duplicate subgraph outputs that name the
+ * same tensor more than once. When `allocator` is non-null, numeric
+ * tensors are materialized in allocator-backed storage immediately instead of
+ * waiting for a later `RuntimeContext::Put` migration.
+ */
+Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator) {
+  if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
+    return Tensor::MakeString(tensor.name, tensor.shape, tensor.string_data);
+  }
+  if (allocator == nullptr) {
+    std::vector<uint8_t> data(tensor.size_bytes());
+    if (tensor.size_bytes() > 0) {
+      std::memcpy(data.data(), tensor.bytes(), tensor.size_bytes());
+    }
+    return Tensor(tensor.name, tensor.data_type, tensor.shape, std::move(data));
+  }
+  Tensor clone = MakeOutputTensor(tensor.data_type, tensor.shape, tensor.size_bytes(), allocator);
+  clone.name = tensor.name;
+  if (tensor.size_bytes() > 0) {
+    std::memcpy(clone.mutable_bytes(), tensor.bytes(), tensor.size_bytes());
+  }
+  return clone;
 }
 
 int64_t CheckedMulInt64(int64_t a, int64_t b, const std::string &where) {
@@ -176,11 +212,11 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 }
 
 std::vector<Tensor> RunSubgraph(const GraphProto &graph,
-                                const std::vector<std::pair<std::string, Tensor>> &bindings,
+                                std::vector<std::pair<std::string, Tensor>> bindings,
                                 RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child = rt.MakeSubgraphContext(attr_name);
-  for (const auto &kv : bindings) {
-    child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
+  for (auto &kv : bindings) {
+    child.Put(kv.first, std::move(kv.second), RuntimeEventKind::kInput);
   }
   RunGraph(graph, child);
 
@@ -198,7 +234,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
-    outputs.push_back(it->second);
+    outputs.push_back(CloneTensor(it->second));
   }
   return outputs;
 }
@@ -263,7 +299,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
       auto it = child.tensors().find(out_name);
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
                           "' was not produced by the selected branch.");
-      Tensor t = std::move(it->second);
+      Tensor t = CloneTensor(it->second, rt.allocator());
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -300,8 +336,10 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
 
     const std::string &iter_name = body.input(0).name();
     const std::string &cond_name = body.input(1).name();
-    child.Put(iter_name, MakeInt64Scalar(iter_name, iter), RuntimeEventKind::kInput);
-    child.Put(cond_name, MakeBoolScalar(cond_name, cond_value), RuntimeEventKind::kInput);
+    child.Put(iter_name, MakeInt64Scalar(iter_name, iter, rt.allocator()),
+              RuntimeEventKind::kInput);
+    child.Put(cond_name, MakeBoolScalar(cond_name, cond_value, rt.allocator()),
+              RuntimeEventKind::kInput);
     for (std::size_t i = 0; i < n; ++i) {
       const std::string &bname = body.input(static_cast<int>(2 + i)).name();
       if (is_seq_state[i]) {
@@ -339,7 +377,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         EXT_ENFORCE_INVALID(it != child.tensors().end(),
                             "RunNode: Loop body did not produce tensor-typed loop-carried output '",
                             oname, "'.");
-        tensor_state[i] = it->second;
+        tensor_state[i] = CloneTensor(it->second);
       }
     }
     for (std::size_t j = 0; j < k; ++j) {
@@ -347,7 +385,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       auto it = child.tensors().find(oname);
       EXT_ENFORCE_INVALID(it != child.tensors().end(),
                           "RunNode: Loop body did not produce scan output '", oname, "'.");
-      scan_values[j].push_back(it->second);
+      scan_values[j].push_back(CloneTensor(it->second));
     }
     ++trip_count;
   }
@@ -484,14 +522,16 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
                       const std::vector<Tensor> &state) -> std::vector<Tensor> {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(2 + n);
-    bindings.emplace_back(body.input(0).name(), MakeInt64Scalar(body.input(0).name(), iter));
-    bindings.emplace_back(body.input(1).name(), MakeBoolScalar(body.input(1).name(), cond_in));
+    bindings.emplace_back(body.input(0).name(),
+                          MakeInt64Scalar(body.input(0).name(), iter, rt.allocator()));
+    bindings.emplace_back(body.input(1).name(),
+                          MakeBoolScalar(body.input(1).name(), cond_in, rt.allocator()));
     for (size_t i = 0; i < n; ++i) {
       Tensor t = state[i];
       t.name = body.input(2 + i).name();
       bindings.emplace_back(t.name, std::move(t));
     }
-    return RunSubgraph(body, bindings, rt, "body");
+    return RunSubgraph(body, std::move(bindings), rt, "body");
   };
 
   kernel::Loop loop_kernel(rt.kernel_ctx());
@@ -750,7 +790,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
       bindings.emplace_back(param_name, std::move(t));
     }
 
-    std::vector<Tensor> iter_outputs = RunSubgraph(body, bindings, rt, "body");
+    std::vector<Tensor> iter_outputs = RunSubgraph(body, std::move(bindings), rt, "body");
     EXT_ENFORCE_INVALID(iter_outputs.size() == m, "RunNode: SequenceMap body produced ",
                         iter_outputs.size(), " output(s) at iteration ", i, ", expected ", m, ".");
     for (std::size_t k = 0; k < m; ++k) {
@@ -892,7 +932,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: output '", param_name,
                         "' of model-local function '", op_type,
                         "' was not produced by the function body.");
-    Tensor result = std::move(it->second);
+    Tensor result = CloneTensor(it->second, rt.allocator());
     result.name = caller_name;
     rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
   }

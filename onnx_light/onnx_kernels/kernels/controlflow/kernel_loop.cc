@@ -16,6 +16,23 @@ namespace kernel {
 
 namespace {
 
+/**
+ * Releases allocator-backed storage for a temporary Loop body tensor.
+ *
+ * @param tensor Tensor whose allocator-backed storage is released.
+ *
+ * This function is safe to call only after all reads from the tensor are
+ * complete.
+ */
+void ReleaseTensorAllocation(Tensor &tensor) {
+  if (!tensor.has_allocation()) {
+    return;
+  }
+  RawBufferAllocator *owner = tensor.allocation_owner();
+  owner->Free(tensor.allocation());
+  tensor.ClearAllocation();
+}
+
 // Returns the effective trip count, applying ONNX's Loop termination rules:
 //   * cond, when present, must be a scalar BOOL; if false, the loop runs 0
 //     iterations regardless of M;
@@ -194,6 +211,7 @@ std::vector<Tensor> RunLoopBody(const Tensor &M, const Tensor &cond,
                             body_outputs[0].element_count() == 1,
                         "kernel::Loop: body output #0 ('cond_out') must be a BOOL scalar.");
     cond_value = body_outputs[0].bytes()[0] != 0;
+    ReleaseTensorAllocation(body_outputs[0]);
 
     std::vector<Tensor> next_state;
     next_state.reserve(n);

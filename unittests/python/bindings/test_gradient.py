@@ -317,29 +317,35 @@ class TestGradientBindings(ExtTestCase):
 # ------------------------------------------------------------------ #
 
 
-def _make_gradient_backend_validator(gradient_of_nodes):
-    """Returns a backend validator that checks gradient_of_nodes on the first node."""
+def _make_gradient_backend_validator(gradient_of_nodes, registered_op_types=None):
+    """Returns a backend validator that checks gradient_of_nodes on the first registered node."""
+    _registered = set(registered_op_types) if registered_op_types is not None else None
 
     def _gradient_backend_validator(model, *_inputs):
-        """Validates that gradient_of_nodes succeeds for the first node of model."""
+        """Validates that gradient_of_nodes succeeds for the first registered node of model."""
         nodes = list(model.graph.node)
         if not nodes:
             return None
-        first_node = nodes[0]
-        node_inputs = [str(inp) for inp in first_node.input if str(inp)]
+        candidates = (
+            [n for n in nodes if str(n.op_type) in _registered] if _registered is not None else nodes
+        )
+        if not candidates:
+            return None
+        target_node = candidates[0]
+        node_inputs = [str(inp) for inp in target_node.input if str(inp)]
         if not node_inputs:
             return None
-        node_outputs = [str(out) for out in first_node.output if str(out)]
+        node_outputs = [str(out) for out in target_node.output if str(out)]
         if not node_outputs:
             return None
         xs = [node_inputs[0]]
         zs = node_inputs[1:]
         y = node_outputs[0]
         grad = gradient_of_nodes(
-            nodes=[first_node], inputs=node_inputs, initializers=[], xs=xs, y=y, zs=zs
+            nodes=[target_node], inputs=node_inputs, initializers=[], xs=xs, y=y, zs=zs
         )
         if len(list(grad.output)) < 1:
-            raise AssertionError(f"Empty gradient output for op_type={first_node.op_type}")
+            raise AssertionError(f"Empty gradient output for op_type={target_node.op_type}")
         return None
 
     return _gradient_backend_validator
@@ -357,7 +363,7 @@ for _op in _grad_op_types:
     _grad_test_names.extend(_get_test_cases_for_op(_op, test_cases=_all_test_cases))
 _grad_include = [rf"^{name}$" for name in _grad_test_names]
 TestGradientBackendCases = _make_test_class(
-    _make_gradient_backend_validator(gradient_of_nodes), include_regex=_grad_include
+    _make_gradient_backend_validator(gradient_of_nodes, _grad_op_types), include_regex=_grad_include
 )
 
 

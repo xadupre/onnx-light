@@ -352,8 +352,8 @@ public:
   /// ``domain == ""`` is normalized to ``ai.onnx``.
   void SetCustomValueTagFunction(const std::string &domain, const std::string &op_type,
                                  CustomValueTagFn fn) {
-    EXT_ENFORCE_INVALID(!op_type.empty(), "SetCustomValueTagFunction: op_type must not be empty.");
-    EXT_ENFORCE_INVALID(static_cast<bool>(fn), "SetCustomValueTagFunction: fn must not be empty.");
+    EXT_ENFORCE_INVALID(!op_type.empty(), "SetCustomValueTagFunction: op_type must be non-empty.");
+    EXT_ENFORCE_INVALID(static_cast<bool>(fn), "SetCustomValueTagFunction: fn must be non-empty.");
     custom_value_tags_[MakeCustomValueTagKey(domain, op_type)] = std::move(fn);
   }
 

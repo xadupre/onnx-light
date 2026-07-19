@@ -222,8 +222,10 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           // Only non-empty node tags are treated as callback overrides.
           // The non-empty check remains defensive for future callback-side
           // mutation paths.
+          const bool callback_changed_node_tag = node_tags[n] != node_tag_before_callback;
+          const bool callback_set_non_empty_node_tag = !node_tags[n].empty();
           custom_callback_set_node_tag =
-              node_tags[n] != node_tag_before_callback && !node_tags[n].empty();
+              callback_changed_node_tag && callback_set_non_empty_node_tag;
           if (ctx->ConsumeCustomValueTagChangedFlag()) {
             changed = true;
           }
@@ -285,16 +287,18 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           inherited_tag = it->second;
         }
       }
-      // Start from the previously inferred tag and override it only when
-      // callback/explicit/inherited precedence provides a stronger source.
-      std::string node_tag = node_tags[n];
-      if (!custom_callback_set_node_tag) {
+      std::string node_tag;
+      if (custom_callback_set_node_tag) {
+        node_tag = node_tags[n];
+      } else {
         // Without a callback override, built-in explicit/inherited inference
-        // remains authoritative over previously inferred node_tags[n].
+        // remains authoritative over previously inferred tags.
         if (!explicit_output_tag.empty()) {
           node_tag = explicit_output_tag;
         } else if (!inherited_tag.empty()) {
           node_tag = inherited_tag;
+        } else {
+          node_tag = node_tags[n];
         }
       }
       if (node_tags[n] != node_tag) {

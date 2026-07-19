@@ -210,11 +210,11 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
       }
       // Custom callbacks run for every node type.
-      bool has_custom_callback = false;
+      bool has_custom_value_tag_callback = false;
       if (ctx != nullptr) {
         const auto *custom = ctx->GetCustomValueTagFunction(node->domain(), op_type);
         if (custom != nullptr) {
-          has_custom_callback = true;
+          has_custom_value_tag_callback = true;
           ctx->ClearCustomValueTagChangedFlag();
           (*custom)(*ctx, *node, n);
           if (ctx->ConsumeCustomValueTagChangedFlag()) {
@@ -279,15 +279,15 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
       }
       const std::string prior_node_tag = node_tags[n];
-      std::string node_tag;
-      if (has_custom_callback && !prior_node_tag.empty()) {
-        node_tag = prior_node_tag;
-      } else if (!explicit_output_tag.empty()) {
-        node_tag = explicit_output_tag;
-      } else if (!inherited_tag.empty()) {
-        node_tag = inherited_tag;
-      } else {
-        node_tag = prior_node_tag;
+      const bool custom_overrides_node_tag =
+          has_custom_value_tag_callback && !prior_node_tag.empty();
+      std::string node_tag = prior_node_tag;
+      if (!custom_overrides_node_tag) {
+        if (!explicit_output_tag.empty()) {
+          node_tag = explicit_output_tag;
+        } else if (!inherited_tag.empty()) {
+          node_tag = inherited_tag;
+        }
       }
       if (node_tags[n] != node_tag) {
         node_tags[n] = node_tag;

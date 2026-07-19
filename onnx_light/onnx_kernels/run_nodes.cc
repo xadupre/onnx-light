@@ -64,13 +64,13 @@ Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *alloc
  * @param allocator_or_null Optional allocator for the cloned raw buffer.
  *     Passing ``nullptr`` keeps the legacy inline ``std::vector<uint8_t>``
  *     storage for numeric tensors.
- * @return Deep copy of ``tensor`` with owned storage.
+ * @return Returns a deep copy of ``tensor`` with owned storage.
  *
  * The copy avoids dangling pointers when the child held allocator-backed or
  * borrowed storage, and it preserves duplicate subgraph outputs that name the
- * same tensor more than once. When ``allocator`` is non-null, numeric tensors
- * are materialized in allocator-backed storage immediately instead of waiting
- * for a later ``RuntimeContext::Put`` migration.
+ * same tensor more than once. When ``allocator_or_null`` is non-null, numeric
+ * tensors are materialized in allocator-backed storage immediately instead of
+ * waiting for a later ``RuntimeContext::Put`` migration.
  */
 Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator_or_null) {
   if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {

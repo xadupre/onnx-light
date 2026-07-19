@@ -9,10 +9,10 @@ FunctionProtos with the correct structure for simple ONNX graphs.
 The tests do not import onnx directly (ci_no_onnx compatibility).
 """
 
-import importlib.util
+import re
 import unittest
 
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx_proto._helper import make_node
 
 
@@ -165,73 +165,57 @@ class TestGradientBindings(ExtTestCase):
         )
         self.assertGreater(len(list(grad.opset_import)), 0)
 
-    # Methods test_backend_gradient_<OpType> are added dynamically below.
+
+# ------------------------------------------------------------------ #
+# Backend gradient tests via make_test_class                         #
+# ------------------------------------------------------------------ #
 
 
-def _make_backend_gradient_test(op_type):
-    """Returns a test method that verifies gradient for all backend test cases of op_type."""
+def _camel_to_snake(name):
+    """Converts CamelCase to snake_case (e.g. ReduceMean -> reduce_mean)."""
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
-    # Note: all backend test cases for this op_type run inside a single test method.
-    # A failure on one case stops iteration for that op_type, which is the intended
-    # behaviour (one method per op_type rather than one subTest per case).
-    def generated_test(self):
-        if importlib.util.find_spec("onnx_light.onnx_py._onnxpybackend") is None:
-            self.skipTest("backend_test bindings not available")
-        from onnx_light.onnx_py._onnxpybackend import backend_test as _C
 
-        cases = _C.collect_test_cases(op_type)
-        self.assertGreater(len(cases), 0, f"No backend test cases for {op_type}")
+def _make_gradient_backend_validator(gradient_of_nodes):
+    """Returns a backend validator that checks gradient_of_nodes on the first node."""
 
-        for tc in cases:
-            model = tc.model
-            nodes = list(model.graph.node)
-            if not nodes:
-                continue
+    def _gradient_backend_validator(model, *_inputs):
+        """Validates that gradient_of_nodes succeeds for the first node of model."""
+        nodes = list(model.graph.node)
+        if not nodes:
+            return None
+        first_node = nodes[0]
+        node_inputs = [str(inp) for inp in first_node.input if str(inp)]
+        if not node_inputs:
+            return None
+        node_outputs = [str(out) for out in first_node.output if str(out)]
+        if not node_outputs:
+            return None
+        xs = [node_inputs[0]]
+        zs = node_inputs[1:]
+        y = node_outputs[0]
+        grad = gradient_of_nodes(
+            nodes=[first_node], inputs=node_inputs, initializers=[], xs=xs, y=y, zs=zs
+        )
+        assert (
+            len(list(grad.output)) >= 1
+        ), f"Empty gradient output for op_type={first_node.op_type}"
+        return None
 
-            first_node = nodes[0]
+    return _gradient_backend_validator
 
-            node_inputs = [str(inp) for inp in first_node.input if str(inp)]
-            if not node_inputs:
-                continue
 
-            node_outputs = [str(out) for out in first_node.output if str(out)]
-            if not node_outputs:
-                continue
-
-            xs = [node_inputs[0]]
-            zs = node_inputs[1:]
-            y = node_outputs[0]
-
-            grad = self.gradient_of_nodes(
-                nodes=[first_node], inputs=node_inputs, initializers=[], xs=xs, y=y, zs=zs
-            )
-            self.assertGreaterEqual(
-                len(list(grad.output)),
-                1,
-                f"Empty gradient output for op_type={op_type} test={tc.name}",
-            )
-
-    generated_test.__name__ = f"test_backend_gradient_{op_type}"
-    generated_test.__doc__ = (
-        f"Verifies gradient computation for all backend test cases of {op_type}."
+try:
+    _make_test_class = import_or_skip("onnx_light.onnx_lib.backend.test.case", "make_test_class")
+    _gradient_mod = import_or_skip("onnx_light.onnx_gradient")
+    _grad_op_types = _gradient_mod.GradRegistry.default().op_types()
+    _grad_include = [rf"test_{_camel_to_snake(op)}" for op in _grad_op_types]
+    TestGradientBackendCases = _make_test_class(
+        _make_gradient_backend_validator(_gradient_mod.gradient_of_nodes),
+        include_regex=_grad_include,
     )
-    return generated_test
-
-
-def _register_backend_gradient_tests(cls):
-    """Adds per-op-type gradient test methods to cls."""
-    try:
-        from onnx_light.onnx_gradient import GradRegistry
-
-        op_types = GradRegistry.default().op_types()
-    except ImportError:
-        return
-    for op_type in op_types:
-        method = _make_backend_gradient_test(op_type)
-        setattr(cls, method.__name__, method)
-
-
-_register_backend_gradient_tests(TestGradientBindings)
+except (ImportError, unittest.SkipTest):
+    pass
 
 
 if __name__ == "__main__":

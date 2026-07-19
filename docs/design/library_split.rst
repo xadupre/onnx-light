@@ -28,20 +28,22 @@ base dependency)::
     lib_onnx_proto
         └── lib_onnx_core
                 ├── lib_onnx_op
-                │       └── lib_onnx_optim
                 └── lib_onnx_manipulations
-                        ├── lib_onnx_lib
-                        └── lib_onnx_kernels
-                                └── lib_onnx_backend_test
+                │       ├── lib_onnx_lib
+                │       └── lib_onnx_kernels
+                │               └── lib_onnx_backend_test
+                └── lib_onnx_optim
 
-``lib_onnx_core`` is a lightweight intermediate interface library that sits
-between ``lib_onnx_proto`` and the higher-level libraries.  It is currently
-empty (no compiled sources) but provides the correct dependency anchor so
-that future shared utilities can be added here without requiring every
-consumer to update their link lines.  Both ``lib_onnx_op`` and
-``lib_onnx_manipulations`` are siblings that each depend on ``lib_onnx_core``
-(and transitively on ``lib_onnx_proto``).  ``lib_onnx_optim`` depends on
-``lib_onnx_op`` only (it does **not** pull in ``lib_onnx_lib``).
+``lib_onnx_core`` is a lightweight intermediate library that sits
+between ``lib_onnx_proto`` and the higher-level libraries.  It owns the
+``TensorType`` enumeration and the ``ToTypeString`` converter used across
+the stack, so that both ``lib_onnx_op`` (operator schemas) and
+``lib_onnx_optim`` (shape inference) can share these types without either
+library depending on the other.  Both ``lib_onnx_op``,
+``lib_onnx_manipulations``, and ``lib_onnx_optim`` are siblings that each
+depend on ``lib_onnx_core`` (and transitively on ``lib_onnx_proto``).
+``lib_onnx_optim`` depends on ``lib_onnx_core`` only (it does **not** pull
+in ``lib_onnx_op`` or ``lib_onnx_lib``).
 ``lib_onnx_manipulations`` gathers the schema-independent
 ``ModelProto`` manipulation helpers (text parser / printer, attribute and
 tensor proto helpers, data-type name utilities and the graph-manipulation
@@ -77,12 +79,12 @@ Summary of each library
         for pure C++ consumers.
     * - ``onnx_light::lib_onnx_core``:
         ``onnx_light/onnx_core/``
-      - Intermediate interface library (currently empty — no compiled
-        sources) that sits between ``lib_onnx_proto`` and the higher-level
-        manipulation / operator libraries.  Provides the correct
-        dependency anchor so that future shared utilities can be added
-        without requiring every consumer to update their link lines.
-        Depends publicly on ``lib_onnx_proto``.
+      - Intermediate library that sits between ``lib_onnx_proto`` and the
+        higher-level manipulation / operator libraries.  Owns the
+        ``TensorType`` enumeration and the ``ToTypeString`` converter so
+        that both ``lib_onnx_op`` and ``lib_onnx_optim`` can share them
+        without depending on each other.  Depends publicly on
+        ``lib_onnx_proto``.
     * - ``onnx_light::lib_onnx_op``:``onnx_light/onnx_op/``
       - Lightweight ``LightOpSchema`` registrations for ONNX operator
         domains (math, logical, tensor, sequence, traditional ML, ...).
@@ -119,7 +121,9 @@ Summary of each library
         ``onnx_light/onnx_optim/``
       - Shape-inference dispatch table, expression engine for small
         tensor / backward-propagation shape inference, and graph
-        optimization helpers.  Depends publicly on ``lib_onnx_op``.
+        optimization helpers.  Depends publicly on ``lib_onnx_core``
+        (and transitively on ``lib_onnx_proto``).  Does **not** depend
+        on ``lib_onnx_op``.
     * - ``onnx_light::lib_onnx_kernels`` (in-tree target ``lib_onnx_kernels``):
         ``onnx_light/onnx_kernels/``
       - C++ **reference implementation** of the ONNX operators used to

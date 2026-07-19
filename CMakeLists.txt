@@ -168,6 +168,7 @@ set(ONNX_PY_KERNELS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onn
 set(ONNX_PY_BACKEND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc")
 set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_gradient.cc")
 
+file(GLOB_RECURSE ONNX_CORE_SOURCES CONFIGURE_DEPENDS "${ONNX_CORE_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")
 # Kernel sources (operator implementations) and the small runtime
@@ -257,20 +258,24 @@ if(OpenSSL_FOUND)
 endif()
 
 # Builds onnx_core library.
-# This is an intermediate interface library that sits between lib_onnx_proto
-# and the higher-level manipulation / operator libraries (lib_onnx_manipulations
-# and lib_onnx_op).  It is currently empty (no compiled sources) but provides
-# the correct dependency anchor so that future shared utilities can be added
-# here without requiring every consumer to update their link lines.
-add_library(lib_onnx_core INTERFACE)
-target_include_directories(lib_onnx_core INTERFACE
+# This intermediate library sits between lib_onnx_proto and the higher-level
+# manipulation / operator libraries (lib_onnx_manipulations and lib_onnx_op).
+# It owns the TensorType enumeration and the ToTypeString converter so that
+# both lib_onnx_op and lib_onnx_optim can use them without either library
+# depending on the other.
+add_library(lib_onnx_core ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_CORE_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+target_include_directories(lib_onnx_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
     $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
     $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
 )
-target_compile_features(lib_onnx_core INTERFACE cxx_std_20)
-target_link_libraries(lib_onnx_core INTERFACE lib_onnx_proto)
+set_property(TARGET lib_onnx_core PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_core PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_core PUBLIC lib_onnx_proto)
 
 # Builds onnx_manipulations library.
 # This library bundles the lightweight ModelProto/GraphProto manipulation
@@ -355,7 +360,7 @@ target_include_directories(lib_onnx_optim PUBLIC
 )
 set_property(TARGET lib_onnx_optim PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_optim PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
+target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_core)
 
 # Builds onnx_kernels library.
 # This library is the runtime/operator-kernel layer extracted from the
@@ -923,6 +928,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
     install(TARGETS
+        lib_onnx_core
         lib_onnx_manipulations
         lib_onnx_lib
         lib_onnx_op

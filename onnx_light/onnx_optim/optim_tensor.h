@@ -11,8 +11,8 @@
 #include <variant>
 #include <vector>
 
+#include "onnx_core/tensor_type.h"
 #include "onnx_light_helpers.h"
-#include "onnx_op/light_op_schema.h"
 #include "onnx_proto/onnx.h"
 
 /**
@@ -40,9 +40,9 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 
-/// Reuse the TensorType enumeration defined by ``onnx_op`` so that
+/// Reuse the TensorType enumeration defined by ``onnx_core`` so that
 /// ``onnx_optim`` is fully aligned with the rest of the operator stack.
-using TensorType = ONNX_LIGHT_NAMESPACE::onnx_op::TensorType;
+using TensorType = ONNX_LIGHT_NAMESPACE::onnx_core::TensorType;
 
 /**
  * Maps a ``TensorProto::DataType`` to the matching :cpp:type:`TensorType`

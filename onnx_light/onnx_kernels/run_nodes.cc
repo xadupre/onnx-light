@@ -241,7 +241,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
 
 namespace {
 
-void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &outputs,
+void PropagateOutputsToCaller(const NodeProto &node, std::vector<Tensor> &&outputs,
                               RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(outputs.size() == node.output_size(), "RunNode: op '", node.op_type(),
                       "' produced ", outputs.size(), " output(s), node declares ",
@@ -251,7 +251,7 @@ void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &
     if (caller_name.empty()) {
       continue;
     }
-    Tensor t = outputs[i];
+    Tensor t = std::move(outputs[i]);
     t.name = caller_name;
     rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
   }
@@ -565,7 +565,7 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
     t.shape.assign(1, 0);
     t.shape.insert(t.shape.end(), per_iter_shape.begin(), per_iter_shape.end());
   }
-  PropagateOutputsToCaller(node, outputs, rt);
+  PropagateOutputsToCaller(node, std::move(outputs), rt);
 }
 
 void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
@@ -651,7 +651,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
     std::vector<Tensor> outputs =
         scan_kernel(rt, body, initial_state, scan_inputs, scan_input_axes, scan_input_directions,
                     scan_output_axes, scan_output_directions);
-    PropagateOutputsToCaller(node, outputs, rt);
+    PropagateOutputsToCaller(node, std::move(outputs), rt);
     return;
   }
 
@@ -712,7 +712,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   std::vector<Tensor> outputs = scan_kernel(rt, batch, /*initial_state=*/{}, /*final_state=*/{},
                                             per_output, /*scan_output_axes=*/{},
                                             /*scan_output_directions=*/{});
-  PropagateOutputsToCaller(node, outputs, rt);
+  PropagateOutputsToCaller(node, std::move(outputs), rt);
 }
 
 void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {

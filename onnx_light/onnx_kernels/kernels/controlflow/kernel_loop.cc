@@ -19,6 +19,8 @@ namespace {
 /**
  * Releases allocator-backed storage for a temporary Loop body tensor.
  *
+ * @param tensor Tensor whose allocator-backed storage is released.
+ *
  * This function is safe to call only after all reads from the tensor are
  * complete.
  */

@@ -521,12 +521,12 @@ public:
   }
 
 private:
-  static std::string NormaliseDomain(const std::string &domain) {
+  static std::string NormalizeDomain(const std::string &domain) {
     return domain.empty() ? std::string(shapes::kOnnxDomain) : domain;
   }
 
   static std::string MakeCustomValueTagKey(const std::string &domain, const std::string &op_type) {
-    return NormaliseDomain(domain) + ":" + op_type;
+    return NormalizeDomain(domain) + ":" + op_type;
   }
 
   std::unordered_map<std::string, std::string> value_tags_;

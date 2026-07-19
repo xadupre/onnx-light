@@ -162,17 +162,20 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
       !(elements_per_slice > 0 && static_cast<uint64_t>(elements_per_slice) >
                                       std::numeric_limits<size_t>::max() / elem_bytes),
       "RunNode: op '", op_name, "' exceeds addressable buffer size.");
-  std::vector<uint8_t> out_data(static_cast<size_t>(elements_per_slice) * elem_bytes);
+  const size_t out_n_bytes = static_cast<size_t>(elements_per_slice) * elem_bytes;
+  Tensor out = t.has_allocation()
+                   ? MakeOutputTensor(t.data_type, out_shape, out_n_bytes, t.allocation_owner())
+                   : Tensor("", t.data_type, out_shape, std::vector<uint8_t>(out_n_bytes));
 
   for (int64_t o = 0; o < outer; ++o) {
     const size_t src_offset = static_cast<size_t>((o * dim + index) * inner) * elem_bytes;
     const size_t dst_offset = static_cast<size_t>(o * inner) * elem_bytes;
     if (inner_bytes > 0) {
-      std::memcpy(out_data.data() + dst_offset, t.bytes() + src_offset, inner_bytes);
+      std::memcpy(out.mutable_bytes() + dst_offset, t.bytes() + src_offset, inner_bytes);
     }
   }
 
-  return Tensor("", t.data_type, std::move(out_shape), std::move(out_data));
+  return out;
 }
 
 std::vector<Tensor> RunSubgraph(const GraphProto &graph,

@@ -40,6 +40,7 @@ using onnx_kernels::RunNode;
 using onnx_kernels::RunNodes;
 using onnx_kernels::RuntimeContext;
 using onnx_kernels::Sequence;
+using onnx_kernels::SliceTensorAlongAxis;
 using onnx_kernels::Tensor;
 using onnx_kernels::TensorFromProto;
 using onnx_kernels::TensorMap;
@@ -2863,6 +2864,25 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
   EXPECT_FLOAT_EQ(scan_data[0], 1.0f);
   EXPECT_FLOAT_EQ(scan_data[1], 2.0f);
   EXPECT_FLOAT_EQ(scan_data[2], 3.0f);
+}
+
+TEST(RunNodes, SliceTensorAlongAxisKeepsInputAllocator) {
+  onnx_kernels::SimpleRawBufferAllocator alloc(2);
+  const Tensor input = Tensor::FromFloat("x", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, &alloc);
+
+  ASSERT_TRUE(input.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+
+  const Tensor slice = SliceTensorAlongAxis(input, 0, 1, "Scan");
+
+  EXPECT_TRUE(slice.has_allocation());
+  EXPECT_EQ(slice.allocation_owner(), input.allocation_owner());
+  EXPECT_EQ(alloc.allocated_count(), 2u);
+  ASSERT_EQ(slice.shape, (std::vector<int64_t>{3}));
+  const float *values = slice.AsFloat();
+  EXPECT_FLOAT_EQ(values[0], 4.0f);
+  EXPECT_FLOAT_EQ(values[1], 5.0f);
+  EXPECT_FLOAT_EQ(values[2], 6.0f);
 }
 
 TEST(RunModel, ScanNodeRunsBodySubgraph) {

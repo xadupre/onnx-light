@@ -286,6 +286,8 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
       // explicit tag, or inherited tag is available.
       std::string node_tag = node_tags[n];
       if (!custom_callback_set_node_tag) {
+        // Without a callback override, built-in explicit/inherited inference
+        // remains authoritative over previously inferred node_tags[n].
         if (!explicit_output_tag.empty()) {
           node_tag = explicit_output_tag;
         } else if (!inherited_tag.empty()) {

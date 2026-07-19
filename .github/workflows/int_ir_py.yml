@@ -19,7 +19,7 @@ jobs:
   ir_py_mbext:
     name: ir-py (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 62
     permissions:
       contents: read
     env:

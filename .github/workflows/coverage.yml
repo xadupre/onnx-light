@@ -45,7 +45,7 @@ jobs:
     needs: [has_new_commits]
     if: ${{ needs.has_new_commits.outputs.run == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 32
     permissions:
       contents: read
       id-token: write

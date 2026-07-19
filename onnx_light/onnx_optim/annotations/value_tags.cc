@@ -228,7 +228,9 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           if (callback_changed_node_tag && callback_set_non_empty_node_tag) {
             custom_node_tag_overrides[n] = true;
           }
-          custom_callback_set_node_tag = custom_node_tag_overrides[n];
+          custom_callback_set_node_tag =
+              custom_node_tag_overrides[n] ||
+              (callback_changed_node_tag && callback_set_non_empty_node_tag);
           if (ctx->ConsumeCustomValueTagChangedFlag()) {
             changed = true;
           }

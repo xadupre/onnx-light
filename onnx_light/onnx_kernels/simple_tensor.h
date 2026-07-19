@@ -143,9 +143,9 @@ struct Shape {
     int64_t n = 1;
     for (size_t i = begin; i < end; ++i) {
       EXT_ENFORCE_INVALID(!(n < 0 || dims_[i] < 0), "Shape::product: ", where,
-                          " encountered a negative dimension (", n, ", ", dims_[i], ").");
+                          " encounters a negative dimension (", n, ", ", dims_[i], ").");
       EXT_ENFORCE_INVALID(!(n != 0 && dims_[i] > std::numeric_limits<int64_t>::max() / n),
-                          "Shape::product: ", where, " overflows INT64 shape arithmetic.");
+                          "Shape::product: ", where, " would overflow INT64 shape arithmetic.");
       n *= dims_[i];
     }
     return n;

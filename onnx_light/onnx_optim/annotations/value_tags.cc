@@ -281,6 +281,8 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
       const std::string prior_node_tag = node_tags[n];
       const bool custom_overrides_node_tag =
           has_custom_value_tag_callback && !prior_node_tag.empty();
+      // Preserve the previously inferred tag when no callback override,
+      // explicit tag, or inherited tag is available.
       std::string node_tag = prior_node_tag;
       if (!custom_overrides_node_tag) {
         if (!explicit_output_tag.empty()) {

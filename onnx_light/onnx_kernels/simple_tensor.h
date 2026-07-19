@@ -337,6 +337,30 @@ struct Tensor {
   Tensor() = default;
   Tensor(std::string n, int32_t dt, Shape s, std::vector<uint8_t> d)
       : name(std::move(n)), data_type(dt), shape(std::move(s)), data(std::move(d)) {}
+
+  /// Releases the allocator-backed allocation, if any (no-op for inline or
+  /// borrowed storage). Makes ``Tensor`` self-owning so callers no longer
+  /// need to manually free the allocation before a ``Tensor`` is destroyed
+  /// or overwritten.
+  ~Tensor();
+
+  /// Deep-copies ``other``. When ``other`` is allocator-backed
+  /// (``has_allocation()``), a fresh buffer is acquired from the *same*
+  /// allocator and the bytes are duplicated, so the copy never aliases
+  /// ``other``'s allocation — the two tensors can be freed independently
+  /// without a double free. Borrowed (non-owning) views are copied by
+  /// reference, as before.
+  Tensor(const Tensor &other);
+  Tensor &operator=(const Tensor &other);
+
+  /// Transfers ownership of any allocator-backed allocation from ``other``
+  /// to ``*this`` and resets ``other`` to a non-owning empty state, so
+  /// ``other`` can be safely destroyed or overwritten afterwards (e.g. left
+  /// behind in a map after ``std::move(it->second)``) without triggering a
+  /// double free.
+  Tensor(Tensor &&other) noexcept;
+  Tensor &operator=(Tensor &&other) noexcept;
+
   /// Constructs a ``STRING`` tensor whose elements live in ``string_data``.
   /// Distinct from the bytes-based constructor so brace-enclosed
   /// ``{ ... }`` initializer lists at call sites are unambiguous.

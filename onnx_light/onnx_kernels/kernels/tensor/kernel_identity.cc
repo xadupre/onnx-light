@@ -13,11 +13,11 @@ namespace onnx_kernels {
 namespace kernel {
 
 Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
-  Tensor output;
-  output.data_type = input.data_type;
-  output.shape = input.shape;
-  output.data = input.data;
-  output.string_data = input.string_data;
+  // Use Tensor's copy constructor rather than copying individual fields: it
+  // correctly deep-copies allocator-backed storage (``data`` is left empty
+  // for such tensors, with the real bytes living behind ``allocation_``).
+  Tensor output = input;
+  output.name.clear();
   return output;
 }
 

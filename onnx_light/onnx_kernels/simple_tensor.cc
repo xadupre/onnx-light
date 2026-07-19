@@ -12,6 +12,92 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 
+Tensor::~Tensor() {
+  if (allocation_ != nullptr) {
+    allocation_owner_->Free(allocation_);
+  }
+}
+
+Tensor::Tensor(const Tensor &other)
+    : name(other.name), data_type(other.data_type), shape(other.shape), data(other.data),
+      string_data(other.string_data), borrow_ptr_(other.borrow_ptr_),
+      borrow_size_(other.borrow_size_), borrow_string_data_(other.borrow_string_data_) {
+  if (other.allocation_ != nullptr) {
+    RawBuffer *allocated = other.allocation_owner_->Allocate(other.allocation_->size());
+    EXT_ENFORCE(allocated != nullptr,
+                "Tensor: allocator returned a null RawBuffer allocation while copying a tensor.");
+    std::memcpy(allocated->data(), other.allocation_->data(), other.allocation_->size());
+    allocation_owner_ = other.allocation_owner_;
+    allocation_ = allocated;
+  }
+}
+
+Tensor &Tensor::operator=(const Tensor &other) {
+  if (this == &other) {
+    return *this;
+  }
+  if (allocation_ != nullptr) {
+    allocation_owner_->Free(allocation_);
+    allocation_ = nullptr;
+    allocation_owner_ = nullptr;
+  }
+  name = other.name;
+  data_type = other.data_type;
+  shape = other.shape;
+  data = other.data;
+  string_data = other.string_data;
+  borrow_ptr_ = other.borrow_ptr_;
+  borrow_size_ = other.borrow_size_;
+  borrow_string_data_ = other.borrow_string_data_;
+  if (other.allocation_ != nullptr) {
+    RawBuffer *allocated = other.allocation_owner_->Allocate(other.allocation_->size());
+    EXT_ENFORCE(allocated != nullptr,
+                "Tensor: allocator returned a null RawBuffer allocation while copying a tensor.");
+    std::memcpy(allocated->data(), other.allocation_->data(), other.allocation_->size());
+    allocation_owner_ = other.allocation_owner_;
+    allocation_ = allocated;
+  }
+  return *this;
+}
+
+Tensor::Tensor(Tensor &&other) noexcept
+    : name(std::move(other.name)), data_type(other.data_type), shape(std::move(other.shape)),
+      data(std::move(other.data)), string_data(std::move(other.string_data)),
+      allocation_(other.allocation_), allocation_owner_(other.allocation_owner_),
+      borrow_ptr_(other.borrow_ptr_), borrow_size_(other.borrow_size_),
+      borrow_string_data_(other.borrow_string_data_) {
+  other.allocation_ = nullptr;
+  other.allocation_owner_ = nullptr;
+  other.borrow_ptr_ = nullptr;
+  other.borrow_size_ = 0;
+  other.borrow_string_data_ = nullptr;
+}
+
+Tensor &Tensor::operator=(Tensor &&other) noexcept {
+  if (this == &other) {
+    return *this;
+  }
+  if (allocation_ != nullptr) {
+    allocation_owner_->Free(allocation_);
+  }
+  name = std::move(other.name);
+  data_type = other.data_type;
+  shape = std::move(other.shape);
+  data = std::move(other.data);
+  string_data = std::move(other.string_data);
+  allocation_ = other.allocation_;
+  allocation_owner_ = other.allocation_owner_;
+  borrow_ptr_ = other.borrow_ptr_;
+  borrow_size_ = other.borrow_size_;
+  borrow_string_data_ = other.borrow_string_data_;
+  other.allocation_ = nullptr;
+  other.allocation_owner_ = nullptr;
+  other.borrow_ptr_ = nullptr;
+  other.borrow_size_ = 0;
+  other.borrow_string_data_ = nullptr;
+  return *this;
+}
+
 size_t ElementSize(int32_t dtype) {
   switch (dtype) {
   case DataType::FLOAT:

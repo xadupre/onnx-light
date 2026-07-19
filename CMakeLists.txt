@@ -337,7 +337,7 @@ target_include_directories(lib_onnx_optim PUBLIC
 )
 set_property(TARGET lib_onnx_optim PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_optim PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
+target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_proto)
 
 # Builds onnx_kernels library.
 # This library is the runtime/operator-kernel layer extracted from the

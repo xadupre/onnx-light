@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "onnx_light_helpers.h"
-#include "onnx_op/light_op_schema.h"
 #include "onnx_proto/onnx.h"
 
 /**
@@ -40,9 +39,95 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 
-/// Reuse the TensorType enumeration defined by ``onnx_op`` so that
-/// ``onnx_optim`` is fully aligned with the rest of the operator stack.
-using TensorType = ONNX_LIGHT_NAMESPACE::onnx_op::TensorType;
+/**
+ * Element/sequence/optional tensor types understood by ``onnx_optim``.
+ *
+ * The enumerator list intentionally matches ``onnx_op::TensorType`` so
+ * shape inference can reason about the same ONNX type universe without
+ * forcing every ``onnx_optim`` consumer to depend on ``onnx_op``.
+ */
+enum class TensorType : uint8_t {
+  kBool,
+  kString,
+  kUint8,
+  kUint16,
+  kUint32,
+  kUint64,
+  kInt8,
+  kInt16,
+  kInt32,
+  kInt64,
+  kFloat16,
+  kFloat,
+  kDouble,
+  kBfloat16,
+  kFloat8e4m3fn,
+  kFloat8e4m3fnuz,
+  kFloat8e5m2,
+  kFloat8e5m2fnuz,
+  kFloat8e8m0,
+  kFloat4e2m1,
+  kUint4,
+  kInt4,
+  kUint2,
+  kInt2,
+  kComplex64,
+  kComplex128,
+  kSeqBool,
+  kSeqString,
+  kSeqUint8,
+  kSeqUint16,
+  kSeqUint32,
+  kSeqUint64,
+  kSeqInt8,
+  kSeqInt16,
+  kSeqInt32,
+  kSeqInt64,
+  kSeqFloat16,
+  kSeqFloat,
+  kSeqDouble,
+  kSeqComplex64,
+  kSeqComplex128,
+  kSeqMapStringFloat,
+  kSeqMapInt64Float,
+  kMapStringInt64,
+  kMapInt64String,
+  kMapInt64Float,
+  kMapInt64Double,
+  kMapStringFloat,
+  kMapStringDouble,
+  kOptSeqBool,
+  kOptSeqString,
+  kOptSeqUint8,
+  kOptSeqUint16,
+  kOptSeqUint32,
+  kOptSeqUint64,
+  kOptSeqInt8,
+  kOptSeqInt16,
+  kOptSeqInt32,
+  kOptSeqInt64,
+  kOptSeqFloat16,
+  kOptSeqFloat,
+  kOptSeqDouble,
+  kOptSeqComplex64,
+  kOptSeqComplex128,
+  kOptBool,
+  kOptString,
+  kOptUint8,
+  kOptUint16,
+  kOptUint32,
+  kOptUint64,
+  kOptInt8,
+  kOptInt16,
+  kOptInt32,
+  kOptInt64,
+  kOptFloat16,
+  kOptFloat,
+  kOptDouble,
+  kOptComplex64,
+  kOptComplex128,
+  kUndefined,
+};
 
 /**
  * Maps a ``TensorProto::DataType`` to the matching :cpp:type:`TensorType`

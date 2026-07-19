@@ -72,9 +72,7 @@ Tensor CloneTensor(const Tensor &tensor) {
     return Tensor::MakeString(tensor.name, tensor.shape, tensor.string_data);
   }
   std::vector<uint8_t> data(tensor.size_bytes());
-  if (!data.empty()) {
-    std::memcpy(data.data(), tensor.bytes(), tensor.size_bytes());
-  }
+  std::memcpy(data.data(), tensor.bytes(), tensor.size_bytes());
   return Tensor(tensor.name, tensor.data_type, tensor.shape, std::move(data));
 }
 

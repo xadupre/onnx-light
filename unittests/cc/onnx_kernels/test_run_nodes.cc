@@ -2825,6 +2825,9 @@ TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {
 
     RunModel(model, rt);
 
+    // 3 iterations x 2 transient scalar inputs (iter, cond_in) + 2 final loop
+    // outputs (s_final, scan) = 8 allocations total. Only the 2 final outputs
+    // remain live inside the parent RuntimeContext at this point.
     EXPECT_EQ(alloc.allocate_calls(), 8u);
     EXPECT_EQ(alloc.free_calls(), 6u);
     EXPECT_EQ(alloc.allocated_count(), 2u);
@@ -2863,6 +2866,9 @@ TEST(RunLoopWithSequenceState, SequenceOnlyStateAllocatorBacksIterAndCondScalars
 
     RunNode(MakeLoopNode({"M", "cond", "seq_init"}, {"seq_out"}, BuildSequenceLoopBody()), rt);
 
+    // 3 iterations x 2 transient scalar inputs (iter, cond_in) = 6
+    // allocations total, and the sequence-only loop carries no allocator-backed
+    // tensor outputs, so every slot has already been freed.
     EXPECT_EQ(alloc.allocate_calls(), 6u);
     EXPECT_EQ(alloc.free_calls(), 6u);
     EXPECT_EQ(alloc.allocated_count(), 0u);

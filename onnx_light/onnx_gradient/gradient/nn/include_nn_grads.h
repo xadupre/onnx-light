@@ -38,5 +38,54 @@ bool GradTanh(const NodeProto &node, const std::string &output_grad,
               std::unordered_map<std::string, std::string> &grad_accum, int &counter,
               FunctionProto &func);
 
+/**
+ * Applies the backward rule for the BatchNormalization operator.
+ */
+bool GradBatchNormalization(const NodeProto &node, const std::string &output_grad,
+                            std::unordered_map<std::string, std::string> &grad_accum, int &counter,
+                            FunctionProto &func);
+
+/**
+ * Applies the backward rule for the GroupNormalization operator.
+ */
+bool GradGroupNormalization(const NodeProto &node, const std::string &output_grad,
+                            std::unordered_map<std::string, std::string> &grad_accum, int &counter,
+                            FunctionProto &func);
+
+/**
+ * Applies the backward rule for the InstanceNormalization operator.
+ */
+bool GradInstanceNormalization(const NodeProto &node, const std::string &output_grad,
+                               std::unordered_map<std::string, std::string> &grad_accum,
+                               int &counter, FunctionProto &func);
+
+/**
+ * Applies the backward rule for the LayerNormalization operator.
+ */
+bool GradLayerNormalization(const NodeProto &node, const std::string &output_grad,
+                            std::unordered_map<std::string, std::string> &grad_accum, int &counter,
+                            FunctionProto &func);
+
+/**
+ * Applies the backward rule for the LpNormalization operator.
+ */
+bool GradLpNormalization(const NodeProto &node, const std::string &output_grad,
+                         std::unordered_map<std::string, std::string> &grad_accum, int &counter,
+                         FunctionProto &func);
+
+/**
+ * Applies the backward rule for the MeanVarianceNormalization operator.
+ */
+bool GradMeanVarianceNormalization(const NodeProto &node, const std::string &output_grad,
+                                   std::unordered_map<std::string, std::string> &grad_accum,
+                                   int &counter, FunctionProto &func);
+
+/**
+ * Applies the backward rule for the RMSNormalization operator.
+ */
+bool GradRMSNormalization(const NodeProto &node, const std::string &output_grad,
+                          std::unordered_map<std::string, std::string> &grad_accum, int &counter,
+                          FunctionProto &func);
+
 } // namespace onnx_gradient
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -107,6 +107,105 @@ class TestGradientBindings(ExtTestCase):
         # At least two Mul nodes: dA = dC * B, dB = dC * A
         self.assertGreaterEqual(op_types.count("Mul"), 2)
 
+    def test_batch_normalization_grad(self):
+        """Gradient of BatchNormalization produces all requested outputs."""
+        nodes = [make_node("BatchNormalization", ["X", "scale", "B", "mean", "var"], ["Y"])]
+        grad = self.gradient_of_nodes(
+            nodes=nodes,
+            inputs=["X", "scale", "B", "mean", "var"],
+            initializers=[],
+            xs=["X", "scale", "B", "mean", "var"],
+            y="Y",
+            zs=[],
+        )
+        self.assertEqual(
+            list(grad.output), ["grad_X", "grad_scale", "grad_B", "grad_mean", "grad_var"]
+        )
+        op_types = [str(n.op_type) for n in grad.node]
+        self.assertIn("ReduceSum", op_types)
+        self.assertIn("Reshape", op_types)
+
+    def test_group_normalization_grad(self):
+        """Gradient of GroupNormalization uses reshape/reduction nodes."""
+        nodes = [make_node("GroupNormalization", ["X", "scale", "bias"], ["Y"], num_groups=2)]
+        grad = self.gradient_of_nodes(
+            nodes=nodes,
+            inputs=["X", "scale", "bias"],
+            initializers=[],
+            xs=["X", "scale", "bias"],
+            y="Y",
+            zs=[],
+        )
+        self.assertEqual(list(grad.output), ["grad_X", "grad_scale", "grad_bias"])
+        op_types = [str(n.op_type) for n in grad.node]
+        self.assertIn("ReduceMean", op_types)
+        self.assertIn("Reshape", op_types)
+
+    def test_instance_normalization_grad(self):
+        """Gradient of InstanceNormalization uses reduction nodes."""
+        nodes = [make_node("InstanceNormalization", ["X", "scale", "B"], ["Y"])]
+        grad = self.gradient_of_nodes(
+            nodes=nodes,
+            inputs=["X", "scale", "B"],
+            initializers=[],
+            xs=["X", "scale", "B"],
+            y="Y",
+            zs=[],
+        )
+        self.assertEqual(list(grad.output), ["grad_X", "grad_scale", "grad_B"])
+        op_types = [str(n.op_type) for n in grad.node]
+        self.assertIn("ReduceMean", op_types)
+        self.assertIn("ReduceSum", op_types)
+
+    def test_layer_normalization_grad(self):
+        """Gradient of LayerNormalization uses flattened normalization."""
+        nodes = [make_node("LayerNormalization", ["X", "scale", "B"], ["Y"], axis=1)]
+        grad = self.gradient_of_nodes(
+            nodes=nodes,
+            inputs=["X", "scale", "B"],
+            initializers=[],
+            xs=["X", "scale", "B"],
+            y="Y",
+            zs=[],
+        )
+        self.assertEqual(list(grad.output), ["grad_X", "grad_scale", "grad_B"])
+        op_types = [str(n.op_type) for n in grad.node]
+        self.assertIn("Flatten", op_types)
+        self.assertIn("ReduceMean", op_types)
+
+    def test_lp_normalization_grad(self):
+        """Gradient of LpNormalization uses norm reductions."""
+        nodes = [make_node("LpNormalization", ["X"], ["Y"], axis=-1, p=2)]
+        grad = self.gradient_of_nodes(
+            nodes=nodes, inputs=["X"], initializers=[], xs=["X"], y="Y", zs=[]
+        )
+        self.assertEqual(list(grad.output), ["grad_X"])
+        op_types = [str(n.op_type) for n in grad.node]
+        self.assertIn("ReduceSum", op_types)
+        self.assertIn("Sqrt", op_types)
+
+    def test_mean_variance_normalization_grad(self):
+        """Gradient of MeanVarianceNormalization uses mean/variance nodes."""
+        nodes = [make_node("MeanVarianceNormalization", ["X"], ["Y"])]
+        grad = self.gradient_of_nodes(
+            nodes=nodes, inputs=["X"], initializers=[], xs=["X"], y="Y", zs=[]
+        )
+        self.assertEqual(list(grad.output), ["grad_X"])
+        op_types = [str(n.op_type) for n in grad.node]
+        self.assertIn("ReduceMean", op_types)
+        self.assertIn("Sqrt", op_types)
+
+    def test_rms_normalization_grad(self):
+        """Gradient of RMSNormalization uses RMS reductions."""
+        nodes = [make_node("RMSNormalization", ["X", "scale"], ["Y"], axis=-1)]
+        grad = self.gradient_of_nodes(
+            nodes=nodes, inputs=["X", "scale"], initializers=[], xs=["X", "scale"], y="Y", zs=[]
+        )
+        self.assertEqual(list(grad.output), ["grad_X", "grad_scale"])
+        op_types = [str(n.op_type) for n in grad.node]
+        self.assertIn("Flatten", op_types)
+        self.assertIn("ReduceMean", op_types)
+
     # ------------------------------------------------------------------ #
     # gradient_of_nodes: error cases                                      #
     # ------------------------------------------------------------------ #

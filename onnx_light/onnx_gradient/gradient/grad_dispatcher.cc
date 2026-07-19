@@ -16,6 +16,7 @@ const GradRegistry &DefaultGradRegistry() {
   static const GradRegistry kRegistry = [] {
     GradRegistry r;
     r[{"", "Add"}] = GradAdd;
+    r[{"", "Conv"}] = GradConv;
     r[{"", "Div"}] = GradDiv;
     r[{"", "Gemm"}] = GradGemm;
     r[{"", "Identity"}] = GradIdentity;

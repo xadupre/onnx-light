@@ -210,13 +210,15 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
       }
       // Custom callbacks run for every node type.
-      bool has_custom_value_tag_callback = false;
+      bool custom_callback_set_node_tag = false;
       if (ctx != nullptr) {
         const auto *custom = ctx->GetCustomValueTagFunction(node->domain(), op_type);
         if (custom != nullptr) {
-          has_custom_value_tag_callback = true;
+          const std::string node_tag_before_callback = node_tags[n];
           ctx->ClearCustomValueTagChangedFlag();
           (*custom)(*ctx, *node, n);
+          custom_callback_set_node_tag =
+              node_tags[n] != node_tag_before_callback && !node_tags[n].empty();
           if (ctx->ConsumeCustomValueTagChangedFlag()) {
             changed = true;
           }
@@ -279,12 +281,10 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
       }
       const std::string prior_node_tag = node_tags[n];
-      const bool custom_overrides_node_tag =
-          has_custom_value_tag_callback && !prior_node_tag.empty();
       // Preserve the previously inferred tag when no callback override,
       // explicit tag, or inherited tag is available.
       std::string node_tag = prior_node_tag;
-      if (!custom_overrides_node_tag) {
+      if (!custom_callback_set_node_tag) {
         if (!explicit_output_tag.empty()) {
           node_tag = explicit_output_tag;
         } else if (!inherited_tag.empty()) {

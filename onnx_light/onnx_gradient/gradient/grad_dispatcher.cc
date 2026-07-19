@@ -16,16 +16,24 @@ const GradRegistry &DefaultGradRegistry() {
   static const GradRegistry kRegistry = [] {
     GradRegistry r;
     r[{"", "Add"}] = GradAdd;
+    r[{"", "Conv"}] = GradConv;
     r[{"", "Div"}] = GradDiv;
+    r[{"", "BatchNormalization"}] = GradBatchNormalization;
     r[{"", "Gemm"}] = GradGemm;
+    r[{"", "GroupNormalization"}] = GradGroupNormalization;
     r[{"", "Identity"}] = GradIdentity;
+    r[{"", "InstanceNormalization"}] = GradInstanceNormalization;
+    r[{"", "LayerNormalization"}] = GradLayerNormalization;
+    r[{"", "LpNormalization"}] = GradLpNormalization;
     r[{"", "MatMul"}] = GradMatMul;
+    r[{"", "MeanVarianceNormalization"}] = GradMeanVarianceNormalization;
     r[{"", "Mul"}] = GradMul;
     r[{"", "Neg"}] = GradNeg;
     r[{"", "ReduceMean"}] = GradReduceMean;
     r[{"", "ReduceSum"}] = GradReduceSum;
     r[{"", "Relu"}] = GradRelu;
     r[{"", "Reshape"}] = GradReshape;
+    r[{"", "RMSNormalization"}] = GradRMSNormalization;
     r[{"", "Sigmoid"}] = GradSigmoid;
     r[{"", "Sub"}] = GradSub;
     r[{"", "Tanh"}] = GradTanh;

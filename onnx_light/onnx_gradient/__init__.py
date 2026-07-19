@@ -17,7 +17,7 @@ The returned FunctionProto has:
 
 Supported forward operators
 ---------------------------
-MatMul, Gemm, Add, Sub, Mul, Div, Neg, Identity, Relu, Sigmoid, Tanh,
+Conv, MatMul, Gemm, Add, Sub, Mul, Div, Neg, Identity, Relu, Sigmoid, Tanh,
 ReduceSum, ReduceMean, Reshape, Transpose.
 
 Example: linear regression gradient

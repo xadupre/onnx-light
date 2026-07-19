@@ -596,7 +596,7 @@ public:
   }
 
 private:
-  Common::Status Parse(std::string name, GraphProto &graph);
+  Common::Status Parse(const std::string &name, GraphProto &graph);
 
   Common::Status Parse(IdList &idlist);
 

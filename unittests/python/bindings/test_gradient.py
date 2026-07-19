@@ -197,9 +197,8 @@ def _make_gradient_backend_validator(gradient_of_nodes):
         grad = gradient_of_nodes(
             nodes=[first_node], inputs=node_inputs, initializers=[], xs=xs, y=y, zs=zs
         )
-        assert (
-            len(list(grad.output)) >= 1
-        ), f"Empty gradient output for op_type={first_node.op_type}"
+        if len(list(grad.output)) < 1:
+            raise AssertionError(f"Empty gradient output for op_type={first_node.op_type}")
         return None
 
     return _gradient_backend_validator

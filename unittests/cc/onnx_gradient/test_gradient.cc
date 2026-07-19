@@ -445,8 +445,18 @@ TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
         continue;
       }
 
-      // Use only the first node to test the gradient of the specific operator.
-      const NodeProto &first_node = graph.ref_node()[0];
+      // Find the first node whose op_type matches the registered op.
+      const NodeProto *target_node_ptr = nullptr;
+      for (const auto &node : graph.ref_node()) {
+        if (std::string(node.op_type()) == op_type) {
+          target_node_ptr = &node;
+          break;
+        }
+      }
+      if (target_node_ptr == nullptr) {
+        continue;
+      }
+      const NodeProto &first_node = *target_node_ptr;
 
       // Collect non-empty input names of the first node.
       std::vector<std::string> node_inputs;

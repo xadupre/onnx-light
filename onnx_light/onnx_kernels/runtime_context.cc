@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_kernels/runtime_context.h"
-#include "onnx_manipulations/graph_manipulations.h"
+#include "onnx_core/graph_manipulations.h"
 
 #include <algorithm>
 #include <chrono>

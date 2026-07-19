@@ -28,31 +28,35 @@ base dependency)::
     lib_onnx_proto
         └── lib_onnx_core
                 ├── lib_onnx_op
+                ├── lib_onnx_optim
+                ├── lib_onnx_kernels
+                │       └── lib_onnx_backend_test
                 └── lib_onnx_manipulations
-                │       ├── lib_onnx_lib
-                │       └── lib_onnx_kernels
-                │               └── lib_onnx_backend_test
-                └── lib_onnx_optim
+                        └── lib_onnx_lib
 
 ``lib_onnx_core`` is a lightweight intermediate library that sits
-between ``lib_onnx_proto`` and the higher-level libraries.  It owns the
-``TensorType`` enumeration and the ``ToTypeString`` converter used across
-the stack, so that ``lib_onnx_op`` (operator schemas),
-``lib_onnx_manipulations``, and ``lib_onnx_optim`` (shape inference) can
-share these types without any of them depending on each other.
-``lib_onnx_op``, ``lib_onnx_manipulations``, and ``lib_onnx_optim`` are
-siblings that each depend on ``lib_onnx_core`` (and transitively on
-``lib_onnx_proto``).  ``lib_onnx_optim`` depends on ``lib_onnx_core`` only
-(it does **not** pull in ``lib_onnx_op`` or ``lib_onnx_lib``).
+between ``lib_onnx_proto`` and all higher-level libraries.  It owns the
+``TensorType`` enumeration, the ``ToTypeString`` converter, and the
+graph-node input helpers (``CollectExternalInputs``, ``CollectNodeInputs``,
+``CollectRemainingInputs``) so that ``lib_onnx_op`` (operator schemas),
+``lib_onnx_manipulations``, ``lib_onnx_optim`` (shape inference), and
+``lib_onnx_kernels`` (reference kernels) can share them without any of
+them depending on each other.
+``lib_onnx_op``, ``lib_onnx_manipulations``, ``lib_onnx_optim``, and
+``lib_onnx_kernels`` are siblings that each depend on ``lib_onnx_core``
+(and transitively on ``lib_onnx_proto``).  ``lib_onnx_optim`` depends on
+``lib_onnx_core`` only (it does **not** pull in ``lib_onnx_op`` or
+``lib_onnx_lib``).  ``lib_onnx_kernels`` depends on ``lib_onnx_core``
+only (it does **not** pull in ``lib_onnx_manipulations``).
 ``lib_onnx_manipulations`` gathers the schema-independent
 ``ModelProto`` manipulation helpers (text parser / printer, attribute and
-tensor proto helpers, data-type name utilities and the graph-manipulation
-helpers); both ``lib_onnx_lib`` (full schemas, checker, shape inference,
-version converter) and ``lib_onnx_kernels`` depend publicly on it.
+tensor proto helpers, data-type name utilities); ``lib_onnx_lib`` (full
+schemas, checker, shape inference, version converter) depends publicly
+on it.
 ``lib_onnx_backend_test`` depends publicly on ``lib_onnx_kernels`` (and
-transitively on ``lib_onnx_manipulations`` / ``lib_onnx_core`` /
-``lib_onnx_proto``) because every registered test case computes its expected
-outputs by invoking the bundled C++ reference kernels.
+transitively on ``lib_onnx_core`` / ``lib_onnx_proto``) because every
+registered test case computes its expected outputs by invoking the
+bundled C++ reference kernels.
 
 When installed (``cmake --install``) all libraries are exported under the
 ``onnx_light::`` namespace and can be consumed individually through
@@ -79,12 +83,14 @@ Summary of each library
         for pure C++ consumers.
     * - ``onnx_light::lib_onnx_core``:
         ``onnx_light/onnx_core/``
-      - Intermediate library that sits between ``lib_onnx_proto`` and the
-        higher-level manipulation / operator libraries.  Owns the
-        ``TensorType`` enumeration and the ``ToTypeString`` converter so
-        that both ``lib_onnx_op`` and ``lib_onnx_optim`` can share them
-        without depending on each other.  Depends publicly on
-        ``lib_onnx_proto``.
+      - Intermediate library that sits between ``lib_onnx_proto`` and all
+        higher-level libraries.  Owns the ``TensorType`` enumeration, the
+        ``ToTypeString`` converter, and the graph-node input helpers
+        (``CollectExternalInputs``, ``CollectNodeInputs``,
+        ``CollectRemainingInputs``) so that ``lib_onnx_op``,
+        ``lib_onnx_manipulations``, ``lib_onnx_optim``, and
+        ``lib_onnx_kernels`` can share them without depending on each
+        other.  Depends publicly on ``lib_onnx_proto``.
     * - ``onnx_light::lib_onnx_op``:``onnx_light/onnx_op/``
       - Lightweight ``LightOpSchema`` registrations for ONNX operator
         domains (math, logical, tensor, sequence, traditional ML, ...).
@@ -101,11 +107,10 @@ Summary of each library
         ``GraphProto`` manipulation helpers: the ONNX text-format parser
         (``parser``) and printer (``printer``), attribute and tensor proto
         construction helpers (``attr_proto_util``, ``tensor_proto_util``,
-        ``tensor_util``), the data-type name utilities (``data_type_utils``)
-        and the graph manipulation helpers (``graph_manipulations``, formerly
-        ``onnx_proto/common_functions``).  Depends publicly on
-        ``lib_onnx_core`` (and transitively on ``lib_onnx_proto``).  Both
-        ``lib_onnx_lib`` and ``lib_onnx_kernels`` depend on it.
+        ``tensor_util``), the data-type name utilities (``data_type_utils``),
+        and the compose helpers.  Depends publicly on ``lib_onnx_core``
+        (and transitively on ``lib_onnx_proto``).  ``lib_onnx_lib`` depends
+        on it.
     * - ``onnx_light::lib_onnx_lib`` (in-tree target ``lib_onnx_lib``):
         ``onnx_light/onnx_lib/defs/``,
         ``onnx_light/onnx_lib/checker.cc``,
@@ -136,9 +141,9 @@ Summary of each library
         ``SplitMix64``-based deterministic pseudo-random helpers it
         provides everything required to run a node or a full model
         without depending on any third-party runtime.  Intentionally
-        **independent** from ``lib_onnx_lib`` / ``lib_onnx_op``;
-        depends publicly on ``lib_onnx_manipulations`` (for the graph
-        manipulation helpers) and transitively on ``lib_onnx_proto``.
+        **independent** from ``lib_onnx_lib`` / ``lib_onnx_op`` /
+        ``lib_onnx_manipulations``; depends publicly on ``lib_onnx_core``
+        (and transitively on ``lib_onnx_proto``).
     * - ``onnx_light::lib_onnx_backend_test`` (in-tree target
         ``lib_onnx_backend_test``):
         ``onnx_light/onnx_backend_test/``
@@ -148,8 +153,8 @@ Summary of each library
         single-node models and compute their expected outputs by
         invoking the reference kernels from ``lib_onnx_kernels``.
         Depends publicly on ``lib_onnx_kernels`` (and transitively on
-        ``lib_onnx_proto``); intentionally **independent** from
-        ``lib_onnx_lib`` / ``lib_onnx_op``.
+        ``lib_onnx_core`` / ``lib_onnx_proto``); intentionally **independent**
+        from ``lib_onnx_lib`` / ``lib_onnx_op`` / ``lib_onnx_manipulations``.
 
 What to link for a given use case
 ---------------------------------

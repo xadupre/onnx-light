@@ -1,9 +1,9 @@
 #include "_onnxpyprotoop.h"
 #include "onnx.h"
+#include "onnx_core/graph_manipulations.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
 #include "onnx_lib/onnx-data.pb.h"
-#include "onnx_manipulations/graph_manipulations.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>

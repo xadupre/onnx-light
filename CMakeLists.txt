@@ -259,10 +259,12 @@ endif()
 
 # Builds onnx_core library.
 # This intermediate library sits between lib_onnx_proto and the higher-level
-# manipulation / operator libraries (lib_onnx_manipulations and lib_onnx_op).
-# It owns the TensorType enumeration and the ToTypeString converter so that
-# both lib_onnx_op and lib_onnx_optim can use them without either library
-# depending on the other.
+# manipulation / operator / kernel libraries. It owns the TensorType
+# enumeration and the ToTypeString converter so that lib_onnx_op, lib_onnx_optim,
+# and lib_onnx_manipulations can use them without depending on each other. It
+# also provides the graph-node helpers (CollectExternalInputs, CollectNodeInputs,
+# CollectRemainingInputs) so that lib_onnx_kernels depends on lib_onnx_core
+# directly instead of lib_onnx_manipulations.
 add_library(lib_onnx_core ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_CORE_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -281,11 +283,9 @@ target_link_libraries(lib_onnx_core PUBLIC lib_onnx_proto)
 # This library bundles the lightweight ModelProto/GraphProto manipulation
 # helpers that are independent from the ONNX operator schemas: the textual
 # parser / printer, the attribute / tensor proto helpers, the data-type name
-# utilities and the graph-manipulation helpers (``graph_manipulations``,
-# formerly ``common_functions``). ``lib_onnx_lib`` (schemas, checker, shape
-# inference, version converter) depends publicly on it, and the kernels layer
-# reuses its graph-manipulation helpers. It depends on ``lib_onnx_core``
-# (and transitively on ``lib_onnx_proto``).
+# utilities, and the compose helpers. ``lib_onnx_lib`` (schemas, checker, shape
+# inference, version converter) depends publicly on it. It depends on
+# ``lib_onnx_core`` (and transitively on ``lib_onnx_proto``).
 add_library(lib_onnx_manipulations ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} "${ONNX_COMMON_PATH}/status.cc" "${ONNX_COMMON_PATH}/assertions.cc" ${ONNX_MANIPULATIONS_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_manipulations PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -370,7 +370,9 @@ target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_core)
 # ``RuntimeContext`` and deterministic pseudo-random helpers) and is
 # exposed to Python through ``_onnxpykernels`` (and re-exported via
 # ``_onnxpybackend`` transitively through ``lib_onnx_backend_test``). It
-# only depends on ``lib_onnx_proto`` for proto types.
+# depends on ``lib_onnx_core`` (which brings in ``lib_onnx_proto``) for the
+# graph-manipulation helpers (``CollectExternalInputs``, ``CollectNodeInputs``)
+# and proto types.
 #
 # Guarded by ``ONNX_LIGHT_BUILD_KERNELS`` so consumers that only need the
 # schema/checker/shape-inference/version-converter libraries (for example
@@ -390,7 +392,7 @@ target_include_directories(lib_onnx_kernels PUBLIC
 )
 set_property(TARGET lib_onnx_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_kernels PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_proto lib_onnx_manipulations)
+target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_core)
 # Optional heavier image decoders (TIFF, WebP, JPEG2000). When
 # ONNX_LIGHT_BUILD_IMAGE_CODECS=OFF these formats are compiled out of the
 # ImageDecoder kernel and fall back to the empty-matrix path. The definition

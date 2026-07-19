@@ -171,7 +171,7 @@ smallest set** that covers its needs.  The most common scenarios are:
   shape inference, version conversion) — link ``onnx_light::lib_onnx_lib``.
 * **Shape inference and graph optimization passes** — link
   ``onnx_light::lib_onnx_optim`` (which transitively pulls
-  ``lib_onnx_op``, ``lib_onnx_core`` and ``lib_onnx_proto``).
+  ``lib_onnx_core`` and ``lib_onnx_proto``).
 * **Evaluate ONNX nodes / graphs / models in C++** using the bundled
   reference kernels (runtime ``struct Tensor``, ``RunGraph`` /
   ``RunFunction`` / ``RunModel``, ``SplitMix64`` RNG, ...) without

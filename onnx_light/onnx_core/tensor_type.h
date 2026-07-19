@@ -20,6 +20,8 @@
 
 #include <cstdint>
 
+#include "onnx_light_helpers.h"
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_core {
 

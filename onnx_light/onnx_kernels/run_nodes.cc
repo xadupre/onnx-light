@@ -58,7 +58,7 @@ Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *alloc
 }
 
 /**
- * Creates an owned copy before a tensor leaves a child RuntimeContext.
+ * Clones a tensor before it leaves a child RuntimeContext.
  *
  * @param tensor  Tensor to clone.
  * @return        Deep copy of ``tensor`` with owned storage.

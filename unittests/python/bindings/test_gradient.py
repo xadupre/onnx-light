@@ -108,7 +108,7 @@ class TestGradientBindings(ExtTestCase):
         self.assertGreaterEqual(op_types.count("Mul"), 2)
 
     def test_batch_normalization_grad(self):
-        """Gradient of BatchNormalization produces all requested outputs."""
+        """Verifies the BatchNormalization gradient outputs."""
         nodes = [make_node("BatchNormalization", ["X", "scale", "B", "mean", "var"], ["Y"])]
         grad = self.gradient_of_nodes(
             nodes=nodes,
@@ -126,7 +126,7 @@ class TestGradientBindings(ExtTestCase):
         self.assertIn("Reshape", op_types)
 
     def test_group_normalization_grad(self):
-        """Gradient of GroupNormalization uses reshape/reduction nodes."""
+        """Verifies the GroupNormalization gradient structure."""
         nodes = [make_node("GroupNormalization", ["X", "scale", "bias"], ["Y"], num_groups=2)]
         grad = self.gradient_of_nodes(
             nodes=nodes,
@@ -142,7 +142,7 @@ class TestGradientBindings(ExtTestCase):
         self.assertIn("Reshape", op_types)
 
     def test_instance_normalization_grad(self):
-        """Gradient of InstanceNormalization uses reduction nodes."""
+        """Verifies the InstanceNormalization gradient structure."""
         nodes = [make_node("InstanceNormalization", ["X", "scale", "B"], ["Y"])]
         grad = self.gradient_of_nodes(
             nodes=nodes,
@@ -158,7 +158,7 @@ class TestGradientBindings(ExtTestCase):
         self.assertIn("ReduceSum", op_types)
 
     def test_layer_normalization_grad(self):
-        """Gradient of LayerNormalization uses flattened normalization."""
+        """Verifies the LayerNormalization gradient structure."""
         nodes = [make_node("LayerNormalization", ["X", "scale", "B"], ["Y"], axis=1)]
         grad = self.gradient_of_nodes(
             nodes=nodes,
@@ -174,7 +174,7 @@ class TestGradientBindings(ExtTestCase):
         self.assertIn("ReduceMean", op_types)
 
     def test_lp_normalization_grad(self):
-        """Gradient of LpNormalization uses norm reductions."""
+        """Verifies the LpNormalization gradient structure."""
         nodes = [make_node("LpNormalization", ["X"], ["Y"], axis=-1, p=2)]
         grad = self.gradient_of_nodes(
             nodes=nodes, inputs=["X"], initializers=[], xs=["X"], y="Y", zs=[]
@@ -185,7 +185,7 @@ class TestGradientBindings(ExtTestCase):
         self.assertIn("Sqrt", op_types)
 
     def test_mean_variance_normalization_grad(self):
-        """Gradient of MeanVarianceNormalization uses mean/variance nodes."""
+        """Verifies the MeanVarianceNormalization gradient structure."""
         nodes = [make_node("MeanVarianceNormalization", ["X"], ["Y"])]
         grad = self.gradient_of_nodes(
             nodes=nodes, inputs=["X"], initializers=[], xs=["X"], y="Y", zs=[]
@@ -196,7 +196,7 @@ class TestGradientBindings(ExtTestCase):
         self.assertIn("Sqrt", op_types)
 
     def test_rms_normalization_grad(self):
-        """Gradient of RMSNormalization uses RMS reductions."""
+        """Verifies the RMSNormalization gradient structure."""
         nodes = [make_node("RMSNormalization", ["X", "scale"], ["Y"], axis=-1)]
         grad = self.gradient_of_nodes(
             nodes=nodes, inputs=["X", "scale"], initializers=[], xs=["X", "scale"], y="Y", zs=[]

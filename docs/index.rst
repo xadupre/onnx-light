@@ -137,5 +137,4 @@ on the kernels to produce the expected outputs.
     api/index
     operators/index
     examples
-    changelogs
     misc/index

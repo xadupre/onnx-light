@@ -61,19 +61,25 @@ Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *alloc
  * Creates a deep copy of a tensor before it leaves a child RuntimeContext.
  *
  * @param tensor Tensor to clone.
+ * @param allocator Optional allocator for the cloned raw buffer.
  * @return Deep copy of ``tensor`` with owned storage.
  *
  * The copy avoids dangling pointers when the child held allocator-backed or
  * borrowed storage, and it preserves duplicate subgraph outputs that name the
- * same tensor more than once.
+ * same tensor more than once. When ``allocator`` is non-null, numeric tensors
+ * are materialized in allocator-backed storage immediately instead of waiting
+ * for a later ``RuntimeContext::Put`` migration.
  */
-Tensor CloneTensor(const Tensor &tensor) {
+Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator = nullptr) {
   if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return Tensor::MakeString(tensor.name, tensor.shape, tensor.string_data);
   }
-  std::vector<uint8_t> data(tensor.size_bytes());
-  std::memcpy(data.data(), tensor.bytes(), tensor.size_bytes());
-  return Tensor(tensor.name, tensor.data_type, tensor.shape, std::move(data));
+  Tensor clone = MakeOutputTensor(tensor.data_type, tensor.shape, tensor.size_bytes(), allocator);
+  clone.name = tensor.name;
+  if (tensor.size_bytes() > 0) {
+    std::memcpy(clone.mutable_bytes(), tensor.bytes(), tensor.size_bytes());
+  }
+  return clone;
 }
 
 int64_t CheckedMulInt64(int64_t a, int64_t b, const std::string &where) {
@@ -282,7 +288,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
       auto it = child.tensors().find(out_name);
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
                           "' was not produced by the selected branch.");
-      Tensor t = CloneTensor(it->second);
+      Tensor t = CloneTensor(it->second, rt.allocator());
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -915,7 +921,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: output '", param_name,
                         "' of model-local function '", op_type,
                         "' was not produced by the function body.");
-    Tensor result = CloneTensor(it->second);
+    Tensor result = CloneTensor(it->second, rt.allocator());
     result.name = caller_name;
     rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
   }

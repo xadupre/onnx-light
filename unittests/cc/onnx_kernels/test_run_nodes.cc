@@ -2885,6 +2885,23 @@ TEST(RunNodes, SliceTensorAlongAxisKeepsInputAllocator) {
   EXPECT_FLOAT_EQ(values[2], 6.0f);
 }
 
+TEST(RunNodes, SliceTensorAlongAxisUsesInlineStorageWithoutAllocator) {
+  const Tensor input = Tensor::FromFloat("x", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+
+  ASSERT_FALSE(input.has_allocation());
+
+  const Tensor slice = SliceTensorAlongAxis(input, 0, 0, "slice_row");
+
+  EXPECT_FALSE(slice.has_allocation());
+  EXPECT_EQ(slice.name, "x_slice");
+  ASSERT_EQ(slice.shape, (std::vector<int64_t>{3}));
+  EXPECT_EQ(slice.data.size(), 3u * sizeof(float));
+  const float *values = slice.AsFloat();
+  EXPECT_FLOAT_EQ(values[0], 1.0f);
+  EXPECT_FLOAT_EQ(values[1], 2.0f);
+  EXPECT_FLOAT_EQ(values[2], 3.0f);
+}
+
 TEST(RunModel, ScanNodeRunsBodySubgraph) {
   ModelProto model;
   model.set_ir_version(10);

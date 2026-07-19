@@ -169,7 +169,9 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
   } else {
     out = Tensor("", t.data_type, out_shape, std::vector<uint8_t>(out_n_bytes));
   }
-  out.name = t.name;
+  if (!t.name.empty()) {
+    out.name = t.name + "_slice";
+  }
 
   for (int64_t o = 0; o < outer; ++o) {
     const size_t src_offset = static_cast<size_t>((o * dim + index) * inner) * elem_bytes;

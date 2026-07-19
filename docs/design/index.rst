@@ -29,6 +29,7 @@ a smooth replacement.
     :caption: Kernels and Backend Tests
     :maxdepth: 1
 
+    contexts
     kernels
     backend_tests
     test_coverage

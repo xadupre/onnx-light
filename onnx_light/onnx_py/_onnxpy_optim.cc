@@ -1267,6 +1267,57 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           nb::arg("node_index"),
           "Returns the last tag computed for the node at ``node_index``. Raises ``IndexError`` "
           "when ``node_index`` is out of bounds.")
+      .def("try_set_value_tag", &onnx_annotations::ComputeContext::TrySetValueTag, nb::arg("name"),
+           nb::arg("tag"),
+           "Sets a value tag in the current context and returns whether the map changed. "
+           "Returns ``false`` when ``name`` is empty, ``tag`` is invalid/empty, or the existing "
+           "value already carries that tag.")
+      .def("set_node_tag", &onnx_annotations::ComputeContext::SetNodeTag, nb::arg("node_index"),
+           nb::arg("tag"),
+           "Sets a node tag in the current context and returns whether the list changed. "
+           "Returns ``false`` when ``tag`` is invalid/empty or the node already carries that tag. "
+           "Raises ``IndexError`` when ``node_index`` is out of bounds.")
+      .def(
+          "set_custom_value_tag_function",
+          [](onnx_annotations::ComputeContext &c, const std::string &domain,
+             const std::string &op_type, nb::callable fn) {
+            c.SetCustomValueTagFunction(
+                domain, op_type,
+                [py_fn = std::move(fn)](onnx_annotations::ComputeContext &ctx,
+                                        const NodeProto &node, std::size_t node_index) {
+                  nb::gil_scoped_acquire lock;
+                  py_fn(nb::cast(&ctx, nb::rv_policy::reference),
+                        nb::cast(&node, nb::rv_policy::reference), node_index);
+                });
+          },
+          nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"),
+          "Registers a Python callback for ``(domain, op_type)``. The callback receives "
+          "``(ctx, node, node_index)`` and can set custom shape tags through ``ctx``.")
+      .def(
+          "has_custom_value_tag_function",
+          [](const onnx_annotations::ComputeContext &c, const std::string &domain,
+             const std::string &op_type) {
+            return c.GetCustomValueTagFunction(domain, op_type) != nullptr;
+          },
+          nb::arg("domain"), nb::arg("op_type"),
+          "Returns whether a custom callback is registered for ``(domain, op_type)``.")
+      .def("remove_custom_value_tag_function",
+           &onnx_annotations::ComputeContext::RemoveCustomValueTagFunction, nb::arg("domain"),
+           nb::arg("op_type"),
+           "Removes a custom callback for ``(domain, op_type)`` and returns whether one "
+           "was removed.")
+      .def("clear_custom_value_tag_functions",
+           &onnx_annotations::ComputeContext::ClearCustomValueTagFunctions,
+           "Removes every registered custom callback.")
+      .def(
+          "custom_value_tag_keys",
+          [](const onnx_annotations::ComputeContext &c) -> nb::list {
+            nb::list out;
+            for (const auto &kv : c.CustomValueTagFunctions())
+              out.append(kv.first);
+            return out;
+          },
+          "Returns registered custom callback keys as ``\"<domain>:<op_type>\"``.")
       .def(
           "compute_inplace_reuse_graph",
           [](onnx_annotations::ComputeContext &self, const GraphProto &graph,

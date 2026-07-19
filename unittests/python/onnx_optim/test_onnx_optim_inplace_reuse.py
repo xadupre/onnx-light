@@ -669,6 +669,40 @@ class TestInPlaceReuse(ExtTestCase):
         with self.assertRaises(IndexError):
             compute.node_tag(2)
 
+    def test_custom_value_tag_function_for_custom_op(self):
+        nodes = [oh.make_node("CustomIdentity", ["X"], ["Y"], domain="com.acme")]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.INT64, [2])
+        model = self._build_model(nodes, [x], [y])
+
+        compute = si.ComputeContext()
+        value_tags, node_tags = compute.compute_value_and_node_tags(model.graph)
+        self.assertEqual(value_tags["Y"], "weight")
+        self.assertEqual(node_tags[0], "weight")
+
+        calls = []
+
+        def _custom_shape_tag(ctx, node, node_index):
+            calls.append((str(node.domain), str(node.op_type), int(node_index)))
+            ctx.set_node_tag(node_index, "shape")
+            ctx.try_set_value_tag(str(node.output[0]), "shape")
+
+        self.assertFalse(compute.has_custom_value_tag_function("com.acme", "CustomIdentity"))
+        compute.set_custom_value_tag_function("com.acme", "CustomIdentity", _custom_shape_tag)
+        self.assertTrue(compute.has_custom_value_tag_function("com.acme", "CustomIdentity"))
+        self.assertIn("com.acme:CustomIdentity", list(compute.custom_value_tag_keys()))
+
+        value_tags, node_tags = compute.compute_value_and_node_tags(model.graph)
+        self.assertEqual(value_tags["Y"], "shape")
+        self.assertEqual(node_tags[0], "shape")
+        self.assertGreaterEqual(len(calls), 1)
+        self.assertEqual(calls[0], ("com.acme", "CustomIdentity", 0))
+
+        self.assertTrue(compute.remove_custom_value_tag_function("com.acme", "CustomIdentity"))
+        self.assertFalse(compute.remove_custom_value_tag_function("com.acme", "CustomIdentity"))
+        compute.clear_custom_value_tag_functions()
+        self.assertEqual(list(compute.custom_value_tag_keys()), [])
+
     def test_compute_context_accepts_verbose_parameter(self):
         nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])]
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])

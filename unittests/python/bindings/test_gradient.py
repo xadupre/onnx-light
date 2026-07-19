@@ -353,7 +353,7 @@ def _make_gradient_backend_validator(gradient_of_nodes):
 
 _make_test_class = import_or_skip("onnx_light.onnx_lib.backend.test.case", "make_test_class")
 _grad_op_types = GradRegistry.default().op_types()
-_grad_include = [rf"test_{_camel_to_snake(op)}" for op in _grad_op_types]
+_grad_include = [rf"^test_{_camel_to_snake(op)}_" for op in _grad_op_types]
 TestGradientBackendCases = _make_test_class(
     _make_gradient_backend_validator(gradient_of_nodes), include_regex=_grad_include
 )

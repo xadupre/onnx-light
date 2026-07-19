@@ -124,16 +124,27 @@ struct Shape {
     return n;
   }
 
-  /// Computes and returns the product of dimensions in ``[begin, end)``.
+  /**
+   * Computes the product of dimensions in [begin, end).
+   *
+   * Validates the requested range and checks for negative dimensions and INT64
+   * overflow while multiplying.
+   *
+   * @param begin  Start index of the dimension range (inclusive).
+   * @param end    End index of the dimension range (exclusive).
+   * @param where  Caller-provided context describing the multiplication site.
+   * Returns:
+   *   The product of the selected dimensions, or 1 for an empty range.
+   */
   int64_t product(size_t begin, size_t end, const std::string &where) const {
     EXT_ENFORCE_INVALID(begin <= end && end <= size_, "Shape::product: invalid range [", begin,
                         ", ", end, ") for rank ", size_, ".");
     int64_t n = 1;
     for (size_t i = begin; i < end; ++i) {
-      EXT_ENFORCE_INVALID(!(n < 0 || dims_[i] < 0), "RunNode: ", where,
+      EXT_ENFORCE_INVALID(!(n < 0 || dims_[i] < 0), "Shape::product: ", where,
                           " encountered a negative dimension (", n, ", ", dims_[i], ").");
       EXT_ENFORCE_INVALID(!(n != 0 && dims_[i] > std::numeric_limits<int64_t>::max() / n),
-                          "RunNode: ", where, " overflows INT64 shape arithmetic.");
+                          "Shape::product: ", where, " overflows INT64 shape arithmetic.");
       n *= dims_[i];
     }
     return n;

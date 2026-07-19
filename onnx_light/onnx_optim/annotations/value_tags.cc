@@ -5,6 +5,7 @@
 #include "onnx_optim/annotations/value_tags.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <stdexcept>
 #include <string_view>
 #include <tuple>
@@ -177,7 +178,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
                     std::unordered_map<std::string, std::string> &value_tags,
                     std::vector<std::string> &node_tags, ComputeContext *ctx) {
   node_tags.assign(nodes.size(), std::string());
-  std::vector<bool> custom_node_tag_overrides(nodes.size(), false);
+  std::vector<uint8_t> has_custom_node_tag_override(nodes.size(), 0);
   bool changed = true;
   while (changed) {
     changed = false;
@@ -226,10 +227,10 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           const bool callback_changed_node_tag = node_tags[n] != node_tag_before_callback;
           const bool callback_set_non_empty_node_tag = !node_tags[n].empty();
           if (callback_changed_node_tag && callback_set_non_empty_node_tag) {
-            custom_node_tag_overrides[n] = true;
+            has_custom_node_tag_override[n] = 1;
           }
           custom_callback_set_node_tag =
-              custom_node_tag_overrides[n] ||
+              has_custom_node_tag_override[n] != 0 ||
               (callback_changed_node_tag && callback_set_non_empty_node_tag);
           if (ctx->ConsumeCustomValueTagChangedFlag()) {
             changed = true;

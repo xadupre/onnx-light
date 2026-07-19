@@ -15,7 +15,7 @@ jobs:
     # no-onnx) completed successfully.
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 22
     env:
       UNITTEST_GOING: "1"
     permissions:

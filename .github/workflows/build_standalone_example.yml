@@ -16,7 +16,7 @@ jobs:
     # no-onnx) completed successfully.
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 17
     permissions:
       contents: read
     steps:

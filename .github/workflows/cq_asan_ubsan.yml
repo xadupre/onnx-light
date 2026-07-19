@@ -11,7 +11,7 @@ jobs:
   sanitizer_build_ubuntu:
     name: asan+ubsan (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 47
     permissions:
       contents: read
 

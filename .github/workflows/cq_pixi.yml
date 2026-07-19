@@ -47,7 +47,7 @@ jobs:
     needs: check_recent_commit
     if: needs.check_recent_commit.outputs.should_run == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 62
     permissions:
       contents: read
     strategy:

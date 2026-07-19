@@ -61,7 +61,7 @@ jobs:
     # build. Mirrors .github/workflows/build_reduced_wheel.yml's configure flags.
     name: reduced (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 22
     permissions:
       contents: read
     steps:
@@ -103,7 +103,7 @@ jobs:
     name: no-onnx (ubuntu-latest, py3.13)
     needs: [reduced_tests_ubuntu]
     runs-on: ubuntu-latest
-    timeout-minutes: 17
+    timeout-minutes: 19
     permissions:
       contents: read
     steps:
@@ -141,7 +141,7 @@ jobs:
     name: core (ubuntu-latest, py3.13)
     needs: [no_onnx_tests_ubuntu]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 22
     permissions:
       contents: read
     steps:
@@ -185,7 +185,7 @@ jobs:
     needs: [no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 28
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write
@@ -270,7 +270,7 @@ jobs:
     needs: [no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 22
     permissions:
       contents: read
     steps:

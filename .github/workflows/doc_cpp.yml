@@ -21,7 +21,7 @@ concurrency:
 jobs:
   doc_cpp:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:

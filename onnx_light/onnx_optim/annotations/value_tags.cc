@@ -210,9 +210,11 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
       }
       // Custom callbacks run for every node type.
+      bool has_custom_callback = false;
       if (ctx != nullptr) {
         const auto *custom = ctx->GetCustomValueTagFunction(node->domain(), op_type);
         if (custom != nullptr) {
+          has_custom_callback = true;
           ctx->ClearCustomValueTagChangedFlag();
           (*custom)(*ctx, *node, n);
           if (ctx->ConsumeCustomValueTagChangedFlag()) {
@@ -277,12 +279,14 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
       }
       std::string node_tag;
-      if (!node_tags[n].empty()) {
+      if (has_custom_callback && !node_tags[n].empty()) {
         node_tag = node_tags[n];
       } else if (!explicit_output_tag.empty()) {
         node_tag = explicit_output_tag;
-      } else {
+      } else if (!inherited_tag.empty()) {
         node_tag = inherited_tag;
+      } else {
+        node_tag = node_tags[n];
       }
       if (node_tags[n] != node_tag) {
         node_tags[n] = node_tag;

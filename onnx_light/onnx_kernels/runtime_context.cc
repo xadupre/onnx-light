@@ -435,7 +435,11 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   // propagated back. This avoids double-free: if the child inherited the
   // allocator, tensors produced by the body would be freed when the child
   // context is destroyed, leaving any copies held by the caller with stale
-  // allocation pointers.
+  // allocation pointers. ``kernel_ctx_`` may already carry the parent's
+  // allocator (it is set in the constructor now instead of lazily), so it
+  // must be cleared explicitly on the child rather than relying on it never
+  // having been synced.
+  child.set_allocator(nullptr);
   child.functions() = functions_;
   child.tensors() = tensors_;
   child.sequences() = sequences_;

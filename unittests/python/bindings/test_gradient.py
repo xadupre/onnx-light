@@ -168,7 +168,7 @@ class TestGradientBindings(ExtTestCase):
     # ------------------------------------------------------------------ #
 
     def test_backend_cases_with_gradient(self):
-        """For each op_type with a registered gradient, check the gradient computes
+        """For each op_type with a registered gradient, checks the gradient computes
         without error for every corresponding backend test case."""
         try:
             from onnx_light.onnx_py._onnxpybackend import backend_test as _C
@@ -232,7 +232,7 @@ class TestGradientBindings(ExtTestCase):
                         failures.append(
                             f"op_type={op_type} test={tc.name}: empty gradient output"
                         )
-                except Exception as exc:  # noqa: BLE001
+                except (RuntimeError, ValueError) as exc:
                     failures.append(f"op_type={op_type} test={tc.name}: {exc}")
 
         if failures:

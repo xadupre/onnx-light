@@ -570,6 +570,14 @@ class TestOnnxLightHelper(ExtTestCase):
         ]
         self.assertEqual(onnxl.collect_external_inputs(nodes), ["x", "y", "z"])
 
+    def test_collect_node_inputs_binding(self) -> None:
+        node = oh.make_node("Add", ["x", "y"], ["out"])
+        self.assertEqual(onnxl.collect_node_inputs(node), ["x", "y"])
+
+    def test_collect_node_inputs_skips_empty(self) -> None:
+        node = oh.make_node("Add", ["x", ""], ["out"])
+        self.assertEqual(onnxl.collect_node_inputs(node), ["x"])
+
     def test_collect_remaining_inputs_binding(self) -> None:
         nodes = [
             oh.make_node("Mul", ["x", "y"], ["t"]),

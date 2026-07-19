@@ -1,3 +1,4 @@
+#include "onnx_core/tensor_type.h"
 #include "onnx_optim/annotations/inplace_reuse.h"
 #include "onnx_optim/annotations/value_tags.h"
 #include "onnx_optim/expressions.h"
@@ -360,11 +361,11 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   namespace onnx_annotations = ::onnx_light::onnx_optim::annotations;
   namespace expr = ::onnx_light::onnx_optim::expressions;
   namespace onnx_shapes = ::onnx_light::onnx_optim::shapes;
+  using ::onnx_light::onnx_core::TensorType;
   using ::onnx_light::onnx_optim::DataTypeToTensorType;
   using ::onnx_light::onnx_optim::OptimDim;
   using ::onnx_light::onnx_optim::OptimShape;
   using ::onnx_light::onnx_optim::OptimTensor;
-  using ::onnx_light::onnx_optim::TensorType;
   using ::onnx_light::onnx_optim::TensorTypeToDataType;
 
   auto shape_mod = m.def_submodule("shape_inference");

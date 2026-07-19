@@ -930,6 +930,14 @@ void AddOnnxPyProto(nb::module_ &m) {
       "it skips empty input names.");
 
   m.def(
+      "collect_node_inputs", [](const NodeProto &node) { return CollectNodeInputs(node); },
+      nb::arg("node"),
+      "Returns the full list of tensor / sequence names that a single ``node`` depends on "
+      "at runtime. Includes names referenced by ``node.input()`` and external inputs "
+      "captured by subgraph attributes (``GRAPH`` / ``GRAPHS``), preserves "
+      "first-seen order without duplicates, and skips empty input names.");
+
+  m.def(
       "collect_remaining_inputs",
       [](const std::vector<NodeProto> &nodes, const std::vector<std::string> &outputs) {
         return CollectRemainingInputs(nodes, outputs);

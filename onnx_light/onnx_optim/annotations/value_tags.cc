@@ -278,15 +278,13 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           inherited_tag = it->second;
         }
       }
-      std::string node_tag;
-      if (has_custom_callback && !node_tags[n].empty()) {
-        node_tag = node_tags[n];
-      } else if (!explicit_output_tag.empty()) {
-        node_tag = explicit_output_tag;
-      } else if (!inherited_tag.empty()) {
-        node_tag = inherited_tag;
-      } else {
-        node_tag = node_tags[n];
+      std::string node_tag = node_tags[n];
+      if (!(has_custom_callback && !node_tag.empty())) {
+        if (!explicit_output_tag.empty()) {
+          node_tag = explicit_output_tag;
+        } else if (!inherited_tag.empty()) {
+          node_tag = inherited_tag;
+        }
       }
       if (node_tags[n] != node_tag) {
         node_tags[n] = node_tag;

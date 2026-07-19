@@ -70,7 +70,7 @@ Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *alloc
  * are materialized in allocator-backed storage immediately instead of waiting
  * for a later ``RuntimeContext::Put`` migration.
  */
-Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator = nullptr) {
+Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator) {
   if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return Tensor::MakeString(tensor.name, tensor.shape, tensor.string_data);
   }
@@ -223,7 +223,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
-    outputs.push_back(CloneTensor(it->second));
+    outputs.push_back(CloneTensor(it->second, nullptr));
   }
   return outputs;
 }
@@ -366,7 +366,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         EXT_ENFORCE_INVALID(it != child.tensors().end(),
                             "RunNode: Loop body did not produce tensor-typed loop-carried output '",
                             oname, "'.");
-        tensor_state[i] = CloneTensor(it->second);
+        tensor_state[i] = CloneTensor(it->second, nullptr);
       }
     }
     for (std::size_t j = 0; j < k; ++j) {
@@ -374,7 +374,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       auto it = child.tensors().find(oname);
       EXT_ENFORCE_INVALID(it != child.tensors().end(),
                           "RunNode: Loop body did not produce scan output '", oname, "'.");
-      scan_values[j].push_back(CloneTensor(it->second));
+      scan_values[j].push_back(CloneTensor(it->second, nullptr));
     }
     ++trip_count;
   }

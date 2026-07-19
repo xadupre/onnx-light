@@ -40,7 +40,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 
 /**
- * Element/sequence/optional tensor types understood by ``onnx_optim``.
+ * Element/sequence/optional tensor types that ``onnx_optim`` understands.
  *
  * The enumerator list intentionally matches ``onnx_op::TensorType`` so
  * shape inference can reason about the same ONNX type universe without

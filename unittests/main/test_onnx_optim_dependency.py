@@ -6,14 +6,16 @@ import re
 class TestOnnxOptimDependency(unittest.TestCase):
     def test_optim_tensor_tensor_type_matches_onnx_op(self):
         root = Path(__file__).resolve().parents[2]
-        optim = (root / "onnx_light" / "onnx_optim" / "optim_tensor.h").read_text(
+        optim_content = (root / "onnx_light" / "onnx_optim" / "optim_tensor.h").read_text(
             encoding="utf-8"
         )
-        op = (root / "onnx_light" / "onnx_op" / "light_op_schema.h").read_text(encoding="utf-8")
+        op_content = (root / "onnx_light" / "onnx_op" / "light_op_schema.h").read_text(
+            encoding="utf-8"
+        )
 
         pattern = r"enum class TensorType : uint8_t \{(?P<body>.*?)\n\};"
-        optim_match = re.search(pattern, optim, re.DOTALL)
-        op_match = re.search(pattern, op, re.DOTALL)
+        optim_match = re.search(pattern, optim_content, re.DOTALL)
+        op_match = re.search(pattern, op_content, re.DOTALL)
         self.assertIsNotNone(optim_match)
         self.assertIsNotNone(op_match)
         self.assertEqual(optim_match.group("body"), op_match.group("body"))

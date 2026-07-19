@@ -9,7 +9,6 @@ FunctionProtos with the correct structure for simple ONNX graphs.
 The tests do not import onnx directly (ci_no_onnx compatibility).
 """
 
-import re
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
@@ -318,11 +317,6 @@ class TestGradientBindings(ExtTestCase):
 # ------------------------------------------------------------------ #
 
 
-def _camel_to_snake(name):
-    """Converts CamelCase to snake_case (e.g. ReduceMean -> reduce_mean)."""
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
-
-
 def _make_gradient_backend_validator(gradient_of_nodes):
     """Returns a backend validator that checks gradient_of_nodes on the first node."""
 
@@ -352,8 +346,16 @@ def _make_gradient_backend_validator(gradient_of_nodes):
 
 
 _make_test_class = import_or_skip("onnx_light.onnx_lib.backend.test.case", "make_test_class")
+_collect_test_case = import_or_skip("onnx_light.onnx_lib.backend.test.case", "collect_test_case")
+_get_test_cases_for_op = import_or_skip(
+    "onnx_light.onnx_lib.backend.test.case", "get_test_cases_for_op"
+)
 _grad_op_types = GradRegistry.default().op_types()
-_grad_include = [rf"^test_{_camel_to_snake(op)}_" for op in _grad_op_types]
+_all_test_cases = _collect_test_case()
+_grad_test_names: list[str] = []
+for _op in _grad_op_types:
+    _grad_test_names.extend(_get_test_cases_for_op(_op, test_cases=_all_test_cases))
+_grad_include = [rf"^{name}$" for name in _grad_test_names]
 TestGradientBackendCases = _make_test_class(
     _make_gradient_backend_validator(gradient_of_nodes), include_regex=_grad_include
 )

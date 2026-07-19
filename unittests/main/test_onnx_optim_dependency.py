@@ -4,7 +4,7 @@ import re
 
 
 class TestOnnxOptimDependency(unittest.TestCase):
-    def test_optim_tensor_tensor_type_matches_onnx_op(self):
+    def test_optim_tensor_type_matches_onnx_op(self):
         root = Path(__file__).resolve().parents[2]
         optim_content = (root / "onnx_light" / "onnx_optim" / "optim_tensor.h").read_text(
             encoding="utf-8"

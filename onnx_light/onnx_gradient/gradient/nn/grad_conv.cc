@@ -15,15 +15,15 @@ namespace {
 std::string MakeInt64Constant(const std::vector<int64_t> &values, int &counter,
                               FunctionProto &func) {
   std::string name = NewGradName("const_i64", counter);
-  NodeProto &cst = func.add_node("Constant", {}, {name});
-  AttributeProto *attr = cst.add_attribute();
+  NodeProto &const_node = func.add_node("Constant", {}, {name});
+  AttributeProto *attr = const_node.add_attribute();
   attr->set_name("value");
   attr->set_type(AttributeProto::AttributeType::TENSOR);
-  TensorProto &t = attr->ref_t();
-  t.set_data_type(static_cast<int32_t>(TensorProto::DataType::INT64));
-  t.ref_dims().push_back(static_cast<int64_t>(values.size()));
+  TensorProto &tensor = attr->ref_t();
+  tensor.set_data_type(static_cast<int32_t>(TensorProto::DataType::INT64));
+  tensor.ref_dims().push_back(static_cast<int64_t>(values.size()));
   for (int64_t v : values)
-    t.ref_int64_data().push_back(v);
+    tensor.ref_int64_data().push_back(v);
   return name;
 }
 

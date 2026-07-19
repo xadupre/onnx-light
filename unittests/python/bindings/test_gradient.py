@@ -168,8 +168,8 @@ class TestGradientBindings(ExtTestCase):
     # ------------------------------------------------------------------ #
 
     def test_backend_cases_with_gradient(self):
-        """Checks that the gradient computes without error for every backend test case
-        of each op_type registered in DefaultGradRegistry."""
+        """Verifies that the gradient computes without error for every backend test
+        case of each op_type registered in DefaultGradRegistry."""
         try:
             from onnx_light.onnx_py._onnxpybackend import backend_test as _C
         except ImportError:
@@ -196,12 +196,10 @@ class TestGradientBindings(ExtTestCase):
             "Transpose",
         ]
 
-        failures: list[str] = []
         for op_type in grad_op_types:
             cases = _C.collect_test_cases(op_type)
-            if not cases:
-                failures.append(f"No backend test cases found for op_type={op_type}")
-                continue
+            with self.subTest(op_type=op_type, check="has_cases"):
+                self.assertGreater(len(cases), 0, f"No backend test cases for {op_type}")
 
             for tc in cases:
                 model = tc.model
@@ -226,21 +224,15 @@ class TestGradientBindings(ExtTestCase):
                 zs = node_inputs[1:]
                 y = node_outputs[0]
 
-                try:
+                with self.subTest(op_type=op_type, test=tc.name):
                     grad = self.gradient_of_nodes(
                         nodes=[first_node], inputs=node_inputs, initializers=[], xs=xs, y=y, zs=zs
                     )
-                    if len(list(grad.output)) < 1:
-                        failures.append(
-                            f"op_type={op_type} test={tc.name}: empty gradient output"
-                        )
-                except (RuntimeError, ValueError) as exc:
-                    failures.append(f"op_type={op_type} test={tc.name}: {exc}")
-
-        if failures:
-            self.fail(
-                f"Gradient check failed for {len(failures)} case(s):\n" + "\n".join(failures)
-            )
+                    self.assertGreaterEqual(
+                        len(list(grad.output)),
+                        1,
+                        f"Empty gradient output for op_type={op_type} test={tc.name}",
+                    )
 
 
 if __name__ == "__main__":

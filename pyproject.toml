@@ -54,6 +54,7 @@ docs = [
     "sphinx-design",
     "sphinx-gallery",
     "sphinx-issues",
+    "myst-parser",
     "sphinx-runpython",
     "sphinxcontrib-mermaid",
 ]

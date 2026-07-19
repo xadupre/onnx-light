@@ -11,6 +11,7 @@ release = onnx_light.__version__
 
 extensions = [
     "breathe",
+    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.coverage",

@@ -48,6 +48,7 @@ sphinx-copybutton = "*"
 sphinx-design = "*"
 sphinx-gallery = "*"
 sphinx-issues = "*"
+myst-parser = "*"
 sphinxcontrib-mermaid = "*"
 
 [environments]

@@ -225,8 +225,8 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
           // mutation paths.
           const bool callback_changed_node_tag = node_tags[n] != node_tag_before_callback;
           const bool callback_set_non_empty_node_tag = !node_tags[n].empty();
-          if (callback_changed_node_tag) {
-            custom_node_tag_overrides[n] = callback_set_non_empty_node_tag;
+          if (callback_changed_node_tag && callback_set_non_empty_node_tag) {
+            custom_node_tag_overrides[n] = true;
           }
           custom_callback_set_node_tag = custom_node_tag_overrides[n];
           if (ctx->ConsumeCustomValueTagChangedFlag()) {

@@ -9,6 +9,7 @@ FunctionProtos with the correct structure for simple ONNX graphs.
 The tests do not import onnx directly (ci_no_onnx compatibility).
 """
 
+import importlib.util
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
@@ -170,10 +171,10 @@ class TestGradientBindings(ExtTestCase):
     def test_backend_cases_with_gradient(self):
         """Verifies that the gradient computes without error for every backend test
         case of each op_type registered in DefaultGradRegistry."""
-        try:
-            from onnx_light.onnx_py._onnxpybackend import backend_test as _C
-        except ImportError:
+        # Use find_spec to check module availability before importing.
+        if importlib.util.find_spec("onnx_light.onnx_py._onnxpybackend") is None:
             self.skipTest("backend_test bindings not available")
+        from onnx_light.onnx_py._onnxpybackend import backend_test as _C
 
         # Operators registered in DefaultGradRegistry (default ONNX domain).
         # This list is hardcoded because GradRegistry does not expose Python

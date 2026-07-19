@@ -285,15 +285,16 @@ TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
       const std::vector<NodeProto> nodes = {first_node};
 
       FunctionProto grad;
-      try {
+      bool grad_computed = false;
+      EXPECT_NO_THROW({
         grad = GradientOfNodes(nodes, node_inputs, {}, xs, y, zs);
-      } catch (const std::exception &e) {
-        ADD_FAILURE() << "GradientOfNodes threw for op_type=" << op_type << " test=" << tc.name
-                      << ": " << e.what();
-        continue;
+        grad_computed = true;
+      }) << "GradientOfNodes threw for op_type="
+         << op_type << " test=" << tc.name;
+      if (grad_computed) {
+        EXPECT_GE(grad.output_size(), 1)
+            << "Empty gradient FunctionProto for op_type=" << op_type << " test=" << tc.name;
       }
-      EXPECT_GE(grad.output_size(), 1)
-          << "Empty gradient FunctionProto for op_type=" << op_type << " test=" << tc.name;
     }
   }
 }

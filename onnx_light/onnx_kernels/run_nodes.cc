@@ -49,12 +49,11 @@ bool ParseBoolScalar(const Tensor &t, const std::string &where) {
   return t.AsBool()[0] != 0;
 }
 
-Tensor MakeInt64Scalar(const std::string &name, int64_t v,
-                       RawBufferAllocator *allocator = nullptr) {
+Tensor MakeInt64Scalar(const std::string &name, int64_t v, RawBufferAllocator *allocator) {
   return Tensor::FromInt64(name, {}, {v}, allocator);
 }
 
-Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *allocator = nullptr) {
+Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *allocator) {
   return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)}, allocator);
 }
 

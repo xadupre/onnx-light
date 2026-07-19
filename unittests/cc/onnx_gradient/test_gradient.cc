@@ -289,12 +289,10 @@ TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
       const std::vector<NodeProto> nodes = {first_node};
 
       FunctionProto grad;
-      EXPECT_NO_THROW({
-        grad = GradientOfNodes(nodes, node_inputs, {}, xs, y, zs);
-        EXPECT_GE(grad.output_size(), 1)
-            << "Empty gradient FunctionProto for op_type=" << op_type << " test=" << tc.name;
-      }) << "GradientOfNodes threw for op_type="
-         << op_type << " test=" << tc.name;
+      EXPECT_NO_THROW(grad = GradientOfNodes(nodes, node_inputs, {}, xs, y, zs))
+          << "GradientOfNodes threw for op_type=" << op_type << " test=" << tc.name;
+      EXPECT_GE(grad.output_size(), 1)
+          << "Empty gradient FunctionProto for op_type=" << op_type << " test=" << tc.name;
     }
   }
 }

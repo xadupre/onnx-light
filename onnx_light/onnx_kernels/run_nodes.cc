@@ -61,9 +61,9 @@ Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *alloc
  * Creates a deep copy of a tensor before it leaves a child RuntimeContext.
  *
  * @param tensor Tensor to clone.
- * @param allocator Optional allocator for the cloned raw buffer. Passing
- *     ``nullptr`` keeps the legacy inline ``std::vector<uint8_t>`` storage
- *     for numeric tensors.
+ * @param allocator_or_null Optional allocator for the cloned raw buffer.
+ *     Passing ``nullptr`` keeps the legacy inline ``std::vector<uint8_t>``
+ *     storage for numeric tensors.
  * @return Deep copy of ``tensor`` with owned storage.
  *
  * The copy avoids dangling pointers when the child held allocator-backed or
@@ -72,11 +72,19 @@ Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *alloc
  * are materialized in allocator-backed storage immediately instead of waiting
  * for a later ``RuntimeContext::Put`` migration.
  */
-Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator) {
+Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator_or_null) {
   if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return Tensor::MakeString(tensor.name, tensor.shape, tensor.string_data);
   }
-  Tensor clone = MakeOutputTensor(tensor.data_type, tensor.shape, tensor.size_bytes(), allocator);
+  if (allocator_or_null == nullptr) {
+    std::vector<uint8_t> data(tensor.size_bytes());
+    if (tensor.size_bytes() > 0) {
+      std::memcpy(data.data(), tensor.bytes(), tensor.size_bytes());
+    }
+    return Tensor(tensor.name, tensor.data_type, tensor.shape, std::move(data));
+  }
+  Tensor clone =
+      MakeOutputTensor(tensor.data_type, tensor.shape, tensor.size_bytes(), allocator_or_null);
   clone.name = tensor.name;
   if (tensor.size_bytes() > 0) {
     std::memcpy(clone.mutable_bytes(), tensor.bytes(), tensor.size_bytes());

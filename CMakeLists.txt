@@ -136,6 +136,7 @@ set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/inclu
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
+set(ONNX_CORE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_core")
 set(ONNX_MANIPULATIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_manipulations")
 set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
 set(ONNX_OPTIM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_optim")
@@ -255,6 +256,22 @@ if(OpenSSL_FOUND)
   target_link_libraries(lib_onnx_proto PUBLIC OpenSSL::Crypto)
 endif()
 
+# Builds onnx_core library.
+# This is an intermediate interface library that sits between lib_onnx_proto
+# and the higher-level manipulation / operator libraries (lib_onnx_manipulations
+# and lib_onnx_op).  It is currently empty (no compiled sources) but provides
+# the correct dependency anchor so that future shared utilities can be added
+# here without requiring every consumer to update their link lines.
+add_library(lib_onnx_core INTERFACE)
+target_include_directories(lib_onnx_core INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+target_compile_features(lib_onnx_core INTERFACE cxx_std_20)
+target_link_libraries(lib_onnx_core INTERFACE lib_onnx_proto)
+
 # Builds onnx_manipulations library.
 # This library bundles the lightweight ModelProto/GraphProto manipulation
 # helpers that are independent from the ONNX operator schemas: the textual
@@ -262,7 +279,8 @@ endif()
 # utilities and the graph-manipulation helpers (``graph_manipulations``,
 # formerly ``common_functions``). ``lib_onnx_lib`` (schemas, checker, shape
 # inference, version converter) depends publicly on it, and the kernels layer
-# reuses its graph-manipulation helpers. It only depends on ``lib_onnx_proto``.
+# reuses its graph-manipulation helpers. It depends on ``lib_onnx_core``
+# (and transitively on ``lib_onnx_proto``).
 add_library(lib_onnx_manipulations ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} "${ONNX_COMMON_PATH}/status.cc" "${ONNX_COMMON_PATH}/assertions.cc" ${ONNX_MANIPULATIONS_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_manipulations PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -276,7 +294,7 @@ target_include_directories(lib_onnx_manipulations PUBLIC
 )
 set_property(TARGET lib_onnx_manipulations PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_manipulations PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_manipulations PUBLIC lib_onnx_proto)
+target_link_libraries(lib_onnx_manipulations PUBLIC lib_onnx_core)
 
 # Builds onnx_lib library.
 add_library(lib_onnx_lib ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_LIB_ALL_SOURCES})
@@ -321,7 +339,7 @@ target_include_directories(lib_onnx_op PUBLIC
 )
 set_property(TARGET lib_onnx_op PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_op PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_op PUBLIC lib_onnx_proto)
+target_link_libraries(lib_onnx_op PUBLIC lib_onnx_core)
 
 # Builds onnx_optim library.
 add_library(lib_onnx_optim ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_OPTIM_SOURCES})
@@ -929,7 +947,7 @@ if(ONNX_LIGHT_INSTALL)
   # Splitting into two install(TARGETS) calls keeps the same exported
   # ``onnx_lightTargets`` set when ONNX_LIGHT_BUILD_KERNELS=OFF while
   # avoiding references to targets that were never created.
-  install(TARGETS lib_onnx_proto lib_onnx_manipulations lib_onnx_lib lib_onnx_op lib_onnx_optim
+  install(TARGETS lib_onnx_proto lib_onnx_core lib_onnx_manipulations lib_onnx_lib lib_onnx_op lib_onnx_optim
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"

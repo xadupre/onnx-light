@@ -101,15 +101,6 @@ int64_t CheckedMulInt64(int64_t a, int64_t b, const std::string &where) {
   return a * b;
 }
 
-int64_t Product(const std::vector<int64_t> &shape, size_t begin, size_t end,
-                const std::string &where) {
-  int64_t p = 1;
-  for (size_t i = begin; i < end; ++i) {
-    p = CheckedMulInt64(p, shape[i], where);
-  }
-  return p;
-}
-
 } // namespace
 
 namespace {
@@ -186,8 +177,8 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
     }
   }
 
-  const int64_t outer = Product(t.shape, 0, static_cast<size_t>(axis), op_name);
-  const int64_t inner = Product(t.shape, static_cast<size_t>(axis) + 1, t.shape.size(), op_name);
+  const int64_t outer = t.shape.product(0, static_cast<size_t>(axis), op_name);
+  const int64_t inner = t.shape.product(static_cast<size_t>(axis) + 1, t.shape.size(), op_name);
   const size_t elem_bytes = t.element_size();
   const int64_t elements_per_slice = CheckedMulInt64(outer, inner, op_name);
   EXT_ENFORCE_INVALID(!(inner > 0 && static_cast<uint64_t>(inner) >
@@ -198,17 +189,26 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
       !(elements_per_slice > 0 && static_cast<uint64_t>(elements_per_slice) >
                                       std::numeric_limits<size_t>::max() / elem_bytes),
       "RunNode: op '", op_name, "' exceeds addressable buffer size.");
-  std::vector<uint8_t> out_data(static_cast<size_t>(elements_per_slice) * elem_bytes);
+  const size_t out_n_bytes = static_cast<size_t>(elements_per_slice) * elem_bytes;
+  Tensor out;
+  if (t.has_allocation()) {
+    out = MakeOutputTensor(t.data_type, out_shape, out_n_bytes, t.allocation_owner());
+  } else {
+    out = Tensor("", t.data_type, out_shape, std::vector<uint8_t>(out_n_bytes));
+  }
+  if (!t.name.empty()) {
+    out.name = t.name + "_slice";
+  }
 
   for (int64_t o = 0; o < outer; ++o) {
     const size_t src_offset = static_cast<size_t>((o * dim + index) * inner) * elem_bytes;
     const size_t dst_offset = static_cast<size_t>(o * inner) * elem_bytes;
     if (inner_bytes > 0) {
-      std::memcpy(out_data.data() + dst_offset, t.bytes() + src_offset, inner_bytes);
+      std::memcpy(out.mutable_bytes() + dst_offset, t.bytes() + src_offset, inner_bytes);
     }
   }
 
-  return Tensor("", t.data_type, std::move(out_shape), std::move(out_data));
+  return out;
 }
 
 std::vector<Tensor> RunSubgraph(const GraphProto &graph,

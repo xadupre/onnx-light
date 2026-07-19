@@ -5,7 +5,6 @@
 #include "onnx_optim/annotations/value_tags.h"
 
 #include <algorithm>
-#include <cstdint>
 #include <stdexcept>
 #include <string_view>
 #include <tuple>
@@ -178,7 +177,7 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
                     std::unordered_map<std::string, std::string> &value_tags,
                     std::vector<std::string> &node_tags, ComputeContext *ctx) {
   node_tags.assign(nodes.size(), std::string());
-  std::vector<uint8_t> has_custom_node_tag_override(nodes.size(), 0);
+  std::vector<char> has_custom_node_tag_override(nodes.size(), 0);
   bool changed = true;
   while (changed) {
     changed = false;

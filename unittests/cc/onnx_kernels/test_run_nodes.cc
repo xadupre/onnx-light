@@ -2714,20 +2714,11 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
 }
 
 // Variant of LoopNodeRunsBodySubgraph with a SimpleRawBufferAllocator. Verifies
-<<<<<<< HEAD
-// that subgraph contexts created inside RunSubgraph share the parent allocator
-// and that Tensor's deep-copy semantics prevent double-freeing body-output
-// tensors threaded as loop-carried state across iterations. Since the child
-// context now shares the allocator, iter/cond scalars and every intermediate
-// body tensor also become allocator-backed, so the pool must be sized
-// generously enough for the transient tensors live at any one time.
-=======
 // that subgraph contexts created inside RunSubgraph do not inherit the allocator,
 // preventing double-free of body-output tensors threaded as loop-carried state
 // across iterations. Iter/cond scalars are now allocated transiently via the
 // parent allocator, but those slots are released before the final loop outputs
 // are materialized, so the peak slot usage remains two.
->>>>>>> origin/main
 TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   ModelProto model;
   model.set_ir_version(10);
@@ -2765,16 +2756,9 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   body->add_output()->set_name("s_out");
   body->add_output()->set_name("s_out");
 
-<<<<<<< HEAD
-  // Sized generously: the child context now shares the parent allocator, so
-  // iter/cond scalars, every intermediate body tensor, and the accumulated
-  // scan-output history all consume slots concurrently.
-  constexpr size_t kAllocatorSlotCapacity = 16;
-=======
   // Two slots are sufficient: the transient iter/cond scalar allocations are
   // freed at the end of each iteration before the final outputs are stored.
   constexpr size_t kAllocatorSlotCapacity = 2;
->>>>>>> origin/main
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
@@ -2949,18 +2933,6 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
 }
 
 // Same as MixedTensorSequenceAndScanOutputs but with a SimpleRawBufferAllocator
-<<<<<<< HEAD
-// attached to the RuntimeContext. Verifies that subgraph contexts share the
-// parent allocator and that Tensor's deep-copy semantics prevent double-freeing
-// loop-carried outputs, while the final loop outputs remain correctly backed by
-// the parent allocator.
-TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
-  // Sized generously: the child context now shares the parent allocator, so
-  // iter/cond scalars, every intermediate body tensor (including the
-  // SequenceInsert-produced per-iteration value), and the accumulated
-  // scan-output history all consume slots concurrently.
-  constexpr size_t kAllocatorSlotCapacity = 32;
-=======
 // attached to the RuntimeContext. Verifies that subgraph contexts do not inherit
 // the parent allocator (preventing double-free of loop-carried outputs), while
 // the transient iter/cond scalar bindings and the final loop outputs are backed
@@ -2971,7 +2943,6 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
   // attaching the allocator so they stay inline and do not consume allocator
   // slots.
   constexpr size_t kAllocatorSlotCapacity = 2;
->>>>>>> origin/main
   onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(13)));

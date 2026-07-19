@@ -429,13 +429,13 @@ void RuntimeContext::ClearExecutionPlans() noexcept { execution_plans_.clear(); 
 
 RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
   RuntimeContext child(kernel_ctx_);
-  // Subgraph contexts now inherit the parent allocator: kernel_ctx_ already
-  // carries it (kept in sync by set_allocator), and Tensor's copy
-  // constructor deep-copies allocator-backed bytes into an independent
-  // allocation (rather than aliasing the source's RawBuffer), so tensors
-  // bound into the child, produced by the body, and propagated back to the
-  // caller can each be freed independently without a double free.
-  child.set_allocator(allocator_);
+  // Subgraph contexts do not inherit the parent allocator. Body kernels use
+  // inline tensor storage, and the parent's EnsureAllocatorBacked (called in
+  // Put/Set) migrates final outputs to the parent allocator when results are
+  // propagated back. This avoids double-free: if the child inherited the
+  // allocator, tensors produced by the body would be freed when the child
+  // context is destroyed, leaving any copies held by the caller with stale
+  // allocation pointers.
   child.functions() = functions_;
   child.tensors() = tensors_;
   child.sequences() = sequences_;

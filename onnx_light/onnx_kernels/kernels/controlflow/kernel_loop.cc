@@ -16,6 +16,9 @@ namespace kernel {
 
 namespace {
 
+// Releases allocator-backed storage once a temporary Loop body tensor is no
+// longer needed. Safe to call only after all reads from the tensor are
+// complete.
 void ReleaseTensorAllocation(Tensor &tensor) {
   if (!tensor.has_allocation()) {
     return;

@@ -57,20 +57,22 @@ Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *alloc
   return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)}, allocator);
 }
 
+Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator = nullptr);
+
 /**
  * Creates a deep copy of a tensor before it leaves a child RuntimeContext.
  *
  * @param tensor Tensor to clone.
  * @param allocator Optional allocator for the cloned raw buffer.
- *     Passing ``nullptr`` keeps the legacy inline ``std::vector<uint8_t>``
+ *     Passing `nullptr` keeps the legacy inline `std::vector<uint8_t>`
  *     storage for numeric tensors.
- * @return A deep copy of ``tensor`` with owned storage.
+ * @return A deep copy of `tensor` with owned storage.
  *
  * The copy avoids dangling pointers when the child held allocator-backed or
  * borrowed storage, and it preserves duplicate subgraph outputs that name the
- * same tensor more than once. When ``allocator`` is non-null, numeric
+ * same tensor more than once. When `allocator` is non-null, numeric
  * tensors are materialized in allocator-backed storage immediately instead of
- * waiting for a later ``RuntimeContext::Put`` migration.
+ * waiting for a later `RuntimeContext::Put` migration.
  */
 Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator) {
   if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
@@ -232,7 +234,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
-    outputs.push_back(CloneTensor(it->second, nullptr));
+    outputs.push_back(CloneTensor(it->second));
   }
   return outputs;
 }
@@ -375,7 +377,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         EXT_ENFORCE_INVALID(it != child.tensors().end(),
                             "RunNode: Loop body did not produce tensor-typed loop-carried output '",
                             oname, "'.");
-        tensor_state[i] = CloneTensor(it->second, nullptr);
+        tensor_state[i] = CloneTensor(it->second);
       }
     }
     for (std::size_t j = 0; j < k; ++j) {
@@ -383,7 +385,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       auto it = child.tensors().find(oname);
       EXT_ENFORCE_INVALID(it != child.tensors().end(),
                           "RunNode: Loop body did not produce scan output '", oname, "'.");
-      scan_values[j].push_back(CloneTensor(it->second, nullptr));
+      scan_values[j].push_back(CloneTensor(it->second));
     }
     ++trip_count;
   }

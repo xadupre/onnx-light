@@ -1302,10 +1302,14 @@ LightOpSchema MakeTransposeSchema(int since_version, const std::vector<TensorTyp
       },
       {
           {"perm",
-           since_version >= 21
-               ? "A list of integers. By default, reverse the dimensions, otherwise permute the "
+           since_version >= 25
+               ? "A list of integers. By default, reverse the dimensions; otherwise permute the "
                  "axes according to the values given. Its length must be equal to the rank of "
-                 "the input."
+                 "the input, and each value must be in the range `[0, rank-1]`."
+           : since_version >= 21
+               ? "A list of integers. By default, reverse the dimensions, otherwise permute "
+                 "the axes according to the values given. Its length must be equal to the "
+                 "rank of the input."
                : "A list of integers. By default, reverse the dimensions, otherwise permute the "
                  "axes according to the values given.",
            AttributeType::INTS, /*required=*/false},

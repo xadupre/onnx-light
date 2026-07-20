@@ -16,7 +16,7 @@ fillshape
 ---------
 
 Fills a model's ``graph.value_info`` and ``graph.output`` with the shapes
-inferred by the ``onnx_optim`` shape-inference engine, then writes the result
+inferred by the ``onnx_shapes`` shape-inference engine, then writes the result
 back to disk.
 
 .. code-block:: bash
@@ -179,7 +179,7 @@ When a model stores its weight tensors in a separate ``.data`` file,
 See also
 ^^^^^^^^
 
-* :func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model` — the
+* :func:`~onnx_light.onnx_shapes.shape_inference.infer_shapes_model` — the
   Python function used under the hood.
 * :ref:`l-howto-use-custom-shape-inference` — how to plug in a callback for
   custom operators before running shape inference.

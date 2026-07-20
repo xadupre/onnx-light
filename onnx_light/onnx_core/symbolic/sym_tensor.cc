@@ -6,7 +6,7 @@
  * @file sym_tensor.cc
  * @brief Out-of-line implementation of :cpp:class:`SymShape`.
  *
- * Most of the ``onnx_optim`` public API is small enough to be defined
+ * Most of the ``onnx_shapes`` public API is small enough to be defined
  * inline in ``sym_tensor.h``. Only the few :cpp:class:`SymShape`
  * members that perform bounds checking, iteration over the stored
  * dimensions, or arithmetic on integer dimensions live here so that

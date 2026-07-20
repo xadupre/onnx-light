@@ -13,7 +13,7 @@ and rewritten directly against the onnx-light C++ API.
 | `fuzz_model_loader.cc`            | `ModelProto::ParseFromString` + graph walk + `checker::check_model`      | Raw bytes → protobuf parser         |
 | `fuzz_parser.cc`                  | `OnnxParser::Parse<ModelProto>`                                          | UTF-8 text (ONNX text format)       |
 | `fuzz_shape_inference.cc`         | `shape_inference::InferShapes`                                           | Raw bytes → protobuf parser         |
-| `fuzz_optim_shape_inference.cc`   | `onnx_optim::shapes::InferShapesModel`                                   | Raw bytes → protobuf parser         |
+| `fuzz_optim_shape_inference.cc`   | `onnx_shapes::shapes::InferShapesModel`                                   | Raw bytes → protobuf parser         |
 | `fuzz_version_converter.cc`       | `version_conversion::ConvertVersion`                                     | Raw bytes → protobuf parser         |
 | `fuzz_compose.cc`                 | `MergeModels` / `MergeGraphs` / `AddPrefix` / `CheckOverlappingNames` / `ExpandOutDim` | Length-prefixed bytes → two protobuf models |
 | `fuzz_ort_flatbuffers.cc`         | `ModelProto::ParseFromString` with `SerializeFormat::kOrtFlatbuffers`    | Raw bytes → ORT flatbuffer parser   |

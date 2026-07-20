@@ -9,7 +9,7 @@ a self-contained
 CMake project that demonstrates linking with *onnx-light* and running
 :cpp:func:`onnx::checker::check_model` from C++. The same program also
 demonstrates calling :cpp:func:`core::shapes::InferShapesModel` —
-the onnx_optim shape-inference entry point — on the loaded model.
+the onnx_shapes shape-inference entry point — on the loaded model.
 
 Step 1 – Install the C++ library
 ---------------------------------
@@ -74,8 +74,8 @@ CMakeLists.txt
 --------------
 
 The example uses ``find_package`` and links against the exported
-``onnx_light::lib_onnx_lib`` target. ``onnx_light::lib_onnx_optim`` is also
-linked so the program can call onnx_optim shape inference:
+``onnx_light::lib_onnx_lib`` target. ``onnx_light::lib_onnx_shape`` is also
+linked so the program can call onnx_shapes shape inference:
 
 .. code-block:: cmake
 
@@ -89,7 +89,7 @@ linked so the program can call onnx_optim shape inference:
 
     add_executable(check_onnx_light_model main.cc)
     target_link_libraries(check_onnx_light_model
-      PRIVATE onnx_light::lib_onnx_lib onnx_light::lib_onnx_optim)
+      PRIVATE onnx_light::lib_onnx_lib onnx_light::lib_onnx_shape)
 
 main.cc
 --------
@@ -97,10 +97,10 @@ main.cc
 The program calls the path-based checker API and handles validation failures
 using :cpp:class:`onnx::checker::ValidationError`. When ``infer_shapes=1`` it
 also loads the model with :cpp:func:`LoadProtoFromPath`, calls
-:cpp:func:`onnx_light::onnx_optim::RegisterShapeFunctions` to populate
-``core::shapes``'s dispatch table with the built-in ``onnx_optim`` shape
+:cpp:func:`onnx_light::onnx_shapes::RegisterShapeFunctions` to populate
+``core::shapes``'s dispatch table with the built-in ``onnx_shapes`` shape
 functions (``onnx_core`` starts with an empty table since it must not depend
-on ``onnx_optim``), and then runs
+on ``onnx_shapes``), and then runs
 :cpp:func:`core::shapes::InferShapesModel` on the resulting
 ``ModelProto``.
 

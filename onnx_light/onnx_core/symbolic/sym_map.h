@@ -9,9 +9,9 @@
 /**
  * @file sym_map.h
  * @brief Lightweight description of an ONNX ``map(K,V)`` value used by
- *        ``onnx_optim`` shape-inference passes.
+ *        ``onnx_shapes`` shape-inference passes.
  *
- * The ``onnx_optim`` stack already exposes :cpp:class:`SymTensor` and
+ * The ``onnx_shapes`` stack already exposes :cpp:class:`SymTensor` and
  * :cpp:class:`SymSequence` to describe tensor- and sequence-typed
  * values flowing through a graph. Operators such as ``ZipMap``,
  * ``CastMap`` or ``DictVectorizer`` (from the ``ai.onnx.ml`` domain)

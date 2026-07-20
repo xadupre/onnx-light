@@ -9,8 +9,8 @@
 // ``onnx_light/fuzz/fuzz_optim_shape_inference.py``.
 
 #include "onnx_core/shapes/shape_inference.h"
-#include "onnx_optim/dispatch_table.h"
 #include "onnx_proto/onnx.h"
+#include "onnx_shapes/dispatch_table.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -18,12 +18,12 @@
 
 using ONNX_LIGHT_NAMESPACE::ModelProto;
 namespace core_shapes = ONNX_LIGHT_NAMESPACE::core::shapes;
-namespace onnx_optim = ONNX_LIGHT_NAMESPACE::onnx_optim;
+namespace onnx_shapes = ONNX_LIGHT_NAMESPACE::onnx_shapes;
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   // `core::shapes::DispatchTable()` starts out empty; register the built-in
-  // `onnx_optim` shape functions once so `InferShapesModel` can resolve ops.
-  onnx_optim::RegisterShapeFunctions();
+  // `onnx_shapes` shape functions once so `InferShapesModel` can resolve ops.
+  onnx_shapes::RegisterShapeFunctions();
   ModelProto model;
   try {
     model.ParseFromString(std::string(reinterpret_cast<const char *>(data), size));

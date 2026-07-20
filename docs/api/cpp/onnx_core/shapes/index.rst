@@ -8,12 +8,12 @@ traversal (``ComputeShapeNode``, ``ComputeShapeGraph``,
 the dispatch table that maps an operator (domain, op_type) pair to the
 function that computes its output shapes.
 
-``onnx_core`` never depends on ``onnx_optim``, so the dispatch table starts
+``onnx_core`` never depends on ``onnx_shapes``, so the dispatch table starts
 out empty: it is a mutable registry
-(:cpp:func:`RegisterComputeShapeFn`) that ``onnx_optim`` populates with its
+(:cpp:func:`RegisterComputeShapeFn`) that ``onnx_shapes`` populates with its
 per-operator ``ComputeShape*`` functions (see
-:doc:`../../onnx_optim/dispatch_table`) via
-:cpp:func:`onnx_light::onnx_optim::RegisterShapeFunctions`. Any consumer of
+:doc:`../../onnx_shapes/dispatch_table`) via
+:cpp:func:`onnx_light::onnx_shapes::RegisterShapeFunctions`. Any consumer of
 the shape-inference engine (Python bindings, tests, examples, ...) must call
 that function once before using :cpp:func:`InferShapesModel` or
 :cpp:class:`ShapesContext`.

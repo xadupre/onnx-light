@@ -23,7 +23,7 @@ fully determined by the symbolic shape of ``x``.  If shape inference could
 track those values, the output shape of ``Reshape`` would be known
 exactly.
 
-The ``value_as_shape`` annotation is ``onnx_optim``'s mechanism to do exactly
+The ``value_as_shape`` annotation is ``onnx_shapes``'s mechanism to do exactly
 that: it is an optional secondary shape stored on an
 :cpp:class:`SymTensor` that records the **symbolic content** of the
 tensor as an :cpp:class:`SymShape`.  When a consumer like ``Reshape``
@@ -202,7 +202,7 @@ shape ``[N, 1]`` (``N`` symbolic); the goal is to ``Expand`` it to
     from onnx_light.onnx.helper import (
         make_model, make_node, make_graph, make_tensor_value_info, make_opsetid,
     )
-    from onnx_light.onnx_optim.shape_inference import ShapesContext
+    from onnx_light.onnx_shapes.shape_inference import ShapesContext
 
     # Inputs and output
     x_vi = make_tensor_value_info("x", TensorProto.FLOAT, ["N", 1])
@@ -294,6 +294,6 @@ API reference
   :cpp:func:`PropagateValueAsShapeArithmetic`
   (:doc:`/api/cpp/onnx_core/shapes/shape_broadcast`).
 * **Python API**: :class:`SymTensor`
-  (:doc:`/api/python/onnx_optim/shape_inference`).
+  (:doc:`/api/python/onnx_shapes/shape_inference`).
 * **Expression library**: :ref:`l-design-expressions`.
 * **Constraint mechanism**: :ref:`l-design-shape-constraints`.

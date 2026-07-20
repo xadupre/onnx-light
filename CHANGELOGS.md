@@ -68,7 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Updated onnxruntime integration and mirrored an upstream nanobind cross-compile CMake fix (onnx/onnx#8157).
 - Improved shape inference: Python `//` floor-division semantics, symbolic `Reshape`/`Slice` expressions, empty-axis broadcasting, half-precision `RMSNormalization`.
 - Propagated and reused shape-tag metadata through `Reshape` and `fillshape` writing paths.
-- Reorganized in-place reuse and value-tag helpers into `onnx_optim.annotations`.
+- Reorganized in-place reuse and value-tag helpers into `onnx_shapes.annotations`.
 - Miscellaneous: improved `to_svg` layout, `RepeatedField` iterable support, `ByteSpan`/`TensorProto` deleter implementation, tiny external-tensor inlining moved into `ParseOptions`.
 
 ## [0.1.1] – 2026-06-22
@@ -85,7 +85,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Brought `infer_shapes` to parity with onnx (`check_type`, `strict_mode`, `data_prop`) and validated `ConvTranspose` group divisibility.
 - Registered repeated-field containers as `collections.abc.Sequence` with list/`String` comparison support.
-- Guessed in-place input reuse from `onnx_optim` shape inference and reduced Windows/macOS wheel size.
+- Guessed in-place input reuse from `onnx_shapes` shape inference and reduced Windows/macOS wheel size.
 - Bumped mirrored ONNX to 1.23.0, enabled the ONNX backend optional-sequence loop case, and extended `Where` backend coverage across dtypes.
 - Replaced ad-hoc exception throws with `EXT_ENFORCE_INVALID`/`EXT_THROW_INVALID`, fixed serialization/IOBinding gaps (`TensorProto.segment`, sub-byte `Cast`, low-precision ORT backend tests), and passed non-null pointer params by reference (onnx#8105).
 

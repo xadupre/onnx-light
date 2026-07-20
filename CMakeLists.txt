@@ -49,7 +49,7 @@ https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Gu
 # When ONNX_LIGHT_BUILD_KERNELS=OFF and ONNX_LIGHT_BUILD_TESTS=ON the test
 # executable is built in "reduced" mode: only the proto / schema / shape-
 # inference / optimisation tests are compiled (unittests/cc/onnx_proto,
-# onnx_lib, onnx_op, onnx_optim).  Kernel, backend-test, and gradient test
+# onnx_lib, onnx_op, onnx_shapes).  Kernel, backend-test, and gradient test
 # sources are excluded because the libraries they depend on are not built.
 # The Python extensions are tolerant of ONNX_LIGHT_BUILD_KERNELS=OFF:
 # in that "reduced" build the _onnxpykernels and _onnxpybackend extensions are
@@ -139,7 +139,7 @@ set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
 set(ONNX_CORE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_core")
 set(ONNX_MANIPULATIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_manipulations")
 set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
-set(ONNX_OPTIM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_optim")
+set(ONNX_SHAPE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_shapes")
 set(ONNX_BACKEND_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_backend_test")
 set(ONNX_KERNELS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_kernels")
 set(ONNX_GRADIENT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_gradient")
@@ -170,7 +170,7 @@ set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_on
 
 file(GLOB_RECURSE ONNX_CORE_SOURCES CONFIGURE_DEPENDS "${ONNX_CORE_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
-file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")
+file(GLOB_RECURSE ONNX_SHAPE_SOURCES CONFIGURE_DEPENDS "${ONNX_SHAPE_PATH}/*.cc")
 # Kernel sources (operator implementations) and the small runtime
 # infrastructure they rely on (``TestCase``, ``Tensor``, ``RunNodes``,
 # pseudo-random helpers, ...) live in their own ``onnx_light/onnx_kernels``
@@ -202,7 +202,7 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
 )
 
 # Build the core C++ libraries (lib_onnx_proto / lib_onnx_lib / lib_onnx_op /
-# lib_onnx_optim / lib_onnx_kernels / lib_onnx_backend_test) as SHARED when
+# lib_onnx_shape / lib_onnx_kernels / lib_onnx_backend_test) as SHARED when
 # ONNX_LIGHT_BUILD_PYTHON=ON so that all Python extensions (_onnxpyprotoop,
 # _onnxpyprotolib, _onnxpyoptim, _onnxpykernels and _onnxpybackend) share a
 # single copy of every library's compiled code (vtables, typeid, out-of-line
@@ -260,7 +260,7 @@ endif()
 # Builds onnx_core library.
 # This intermediate library sits between lib_onnx_proto and the higher-level
 # manipulation / operator / kernel libraries. It owns the TensorType
-# enumeration and the ToTypeString converter so that lib_onnx_op, lib_onnx_optim,
+# enumeration and the ToTypeString converter so that lib_onnx_op, lib_onnx_shape,
 # and lib_onnx_manipulations can use them without depending on each other. It
 # also provides the graph-node helpers (CollectExternalInputs, CollectNodeInputs,
 # CollectRemainingInputs) so that lib_onnx_kernels depends on lib_onnx_core
@@ -346,21 +346,21 @@ set_property(TARGET lib_onnx_op PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_op PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_op PUBLIC lib_onnx_core)
 
-# Builds onnx_optim library.
-add_library(lib_onnx_optim ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_OPTIM_SOURCES})
+# Builds onnx_shapes library.
+add_library(lib_onnx_shape ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_SHAPE_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
-  set_target_properties(lib_onnx_optim PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+  set_target_properties(lib_onnx_shape PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_OPTIM_SOURCES})
-target_include_directories(lib_onnx_optim PUBLIC
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_SHAPE_SOURCES})
+target_include_directories(lib_onnx_shape PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
     $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
     $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
 )
-set_property(TARGET lib_onnx_optim PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_compile_features(lib_onnx_optim PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_core)
+set_property(TARGET lib_onnx_shape PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_shape PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_shape PUBLIC lib_onnx_core)
 
 # Builds onnx_kernels library.
 # This library is the runtime/operator-kernel layer extracted from the
@@ -501,7 +501,7 @@ endif() # ONNX_LIGHT_BUILD_KERNELS (gradient)
 #   plus parser / serializer).
 # - `onnx` is an INTERFACE aggregate that pulls in the ONNX C++ API
 #   (lib_onnx_lib), the operator schemas (lib_onnx_op), shape inference
-#   (lib_onnx_optim) and the graph manipulation helpers (lib_onnx_manipulations).
+#   (lib_onnx_shape) and the graph manipulation helpers (lib_onnx_manipulations).
 #   When ONNX_LIGHT_BUILD_KERNELS=ON the reference kernels and backend-test
 #   registry are added as well so downstream backend tests can be implemented
 #   with onnx-light.
@@ -518,7 +518,7 @@ if(ONNX_LIGHT_PROVIDE_ONNX_TARGETS)
     target_link_libraries(onnx_compat INTERFACE
         lib_onnx_lib
         lib_onnx_op
-        lib_onnx_optim
+        lib_onnx_shape
         lib_onnx_manipulations
         lib_onnx_proto)
     if(ONNX_LIGHT_BUILD_KERNELS)
@@ -596,7 +596,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # bindings live in distinct extensions.
   nanobind_add_module(_onnxpyoptim STABLE_ABI ${ONNX_PY_OPTIM_SOURCES})
   target_include_directories(_onnxpyoptim PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxpyoptim PRIVATE lib_onnx_optim)
+  target_link_libraries(_onnxpyoptim PRIVATE lib_onnx_shape)
 
   # _onnxpykernels: kernel helpers (deterministic pseudo-random helpers backing
   # ``onnx_backend_test``). Links lib_onnx_kernels only and does not depend on
@@ -653,7 +653,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
-    list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_manipulations lib_onnx_op lib_onnx_optim)
+    list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_manipulations lib_onnx_op lib_onnx_shape)
     if(ONNX_LIGHT_BUILD_KERNELS)
       list(APPEND _onnxpy_rpath_targets lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient)
     endif()
@@ -675,7 +675,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_lib/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op/test_*.cc")
-  file(GLOB_RECURSE ONNX_CPP_OPTIM_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_optim/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_SHAPE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_shapes/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_GRADIENT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_gradient/test_*.cc")
@@ -686,7 +686,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
       ${ONNX_CPP_PROTO_TEST_SOURCES}
       ${ONNX_CPP_LIB_TEST_SOURCES}
       ${ONNX_CPP_OP_TEST_SOURCES}
-      ${ONNX_CPP_OPTIM_TEST_SOURCES}
+      ${ONNX_CPP_SHAPE_TEST_SOURCES}
   )
   if(ONNX_LIGHT_BUILD_KERNELS)
     list(APPEND ONNX_CPP_TEST_SOURCES
@@ -728,9 +728,9 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_COMMON_PATH}"
   )
   if(ONNX_LIGHT_BUILD_KERNELS)
-    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient GTest::gtest_main)
+    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_shape lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient GTest::gtest_main)
   else()
-    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim GTest::gtest_main)
+    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_shape GTest::gtest_main)
   endif()
   # Precompile the heaviest headers shared across virtually every translation
   # unit in unittests/cc. ``<gtest/gtest.h>`` is by far the dominant cost
@@ -771,8 +771,8 @@ if(ONNX_LIGHT_BUILD_TESTS)
                FILES ${ONNX_CPP_LIB_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op" PREFIX "Source Files/cc/onnx_op"
                FILES ${ONNX_CPP_OP_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_optim" PREFIX "Source Files/cc/onnx_optim"
-               FILES ${ONNX_CPP_OPTIM_TEST_SOURCES})
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_shapes" PREFIX "Source Files/cc/onnx_shapes"
+               FILES ${ONNX_CPP_SHAPE_TEST_SOURCES})
   if(ONNX_LIGHT_BUILD_KERNELS)
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels" PREFIX "Source Files/cc/onnx_kernels"
                  FILES ${ONNX_CPP_KERNELS_TEST_SOURCES})
@@ -893,7 +893,7 @@ if(ONNX_LIGHT_BUILD_FUZZERS)
         "${ROOT_INCLUDE_PATH}"
         "${ONNX_PROTO_PATH}"
     )
-    target_link_libraries(${fuzz_target} PRIVATE lib_onnx_lib lib_onnx_optim)
+    target_link_libraries(${fuzz_target} PRIVATE lib_onnx_lib lib_onnx_shape)
     target_compile_options(${fuzz_target} PRIVATE
         "-fsanitize=fuzzer-no-link,${ONNX_LIGHT_FUZZER_SANITIZERS}")
     target_link_options(${fuzz_target} PRIVATE
@@ -934,7 +934,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
         lib_onnx_manipulations
         lib_onnx_lib
         lib_onnx_op
-        lib_onnx_optim
+        lib_onnx_shape
         LIBRARY DESTINATION onnx_light/onnx_py
         RUNTIME DESTINATION onnx_light/onnx_py)
     if(ONNX_LIGHT_BUILD_KERNELS)
@@ -955,7 +955,7 @@ if(ONNX_LIGHT_INSTALL)
   # Splitting into two install(TARGETS) calls keeps the same exported
   # ``onnx_lightTargets`` set when ONNX_LIGHT_BUILD_KERNELS=OFF while
   # avoiding references to targets that were never created.
-  install(TARGETS lib_onnx_proto lib_onnx_core lib_onnx_manipulations lib_onnx_lib lib_onnx_op lib_onnx_optim
+  install(TARGETS lib_onnx_proto lib_onnx_core lib_onnx_manipulations lib_onnx_lib lib_onnx_op lib_onnx_shape
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -1033,9 +1033,9 @@ if(ONNX_LIGHT_INSTALL)
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
-  # Install public headers from onnx_light/onnx_optim
-  install(DIRECTORY "${ONNX_OPTIM_PATH}/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_optim"
+  # Install public headers from onnx_light/onnx_shapes
+  install(DIRECTORY "${ONNX_SHAPE_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_shapes"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
@@ -1111,7 +1111,7 @@ set(_onnx_light_hardening_targets
     lib_onnx_proto
     lib_onnx_lib
     lib_onnx_op
-    lib_onnx_optim
+    lib_onnx_shape
 )
 if(ONNX_LIGHT_BUILD_KERNELS)
   list(APPEND _onnx_light_hardening_targets lib_onnx_kernels lib_onnx_backend_test)

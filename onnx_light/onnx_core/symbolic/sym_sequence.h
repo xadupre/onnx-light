@@ -14,9 +14,9 @@
 /**
  * @file sym_sequence.h
  * @brief Lightweight description of an ONNX tensor sequence value used
- *        by ``onnx_optim`` shape-inference passes.
+ *        by ``onnx_shapes`` shape-inference passes.
  *
- * The ``onnx_optim`` stack already exposes :cpp:class:`SymTensor` to
+ * The ``onnx_shapes`` stack already exposes :cpp:class:`SymTensor` to
  * describe tensor-typed values flowing through a graph. Operators such
  * as ``SequenceConstruct``, ``SequenceInsert``, ``SplitToSequence`` or
  * ``SequenceEmpty`` produce *sequence* values rather than tensors, so a

@@ -97,7 +97,7 @@ projects can link only what they need:
   ``lib_onnx_proto``.
 - ``onnx_light::lib_onnx_lib`` – full ONNX-compatible schemas (with
   history), checker, inliner, shape inference and version converter.
-- ``onnx_light::lib_onnx_optim`` – shape-inference dispatch table,
+- ``onnx_light::lib_onnx_shape`` – shape-inference dispatch table,
   expression engine and graph optimization helpers.
 - ``onnx_light::lib_onnx_kernels`` – C++ kernels, a C++ reference implementation,
   it is used to generate the expected outputs for the backend test.

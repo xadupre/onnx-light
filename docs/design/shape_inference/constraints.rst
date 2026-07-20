@@ -3,7 +3,7 @@
 Symbolic-dimension constraint mechanism
 =======================================
 
-This page describes how ``onnx_optim`` shape inference records and
+This page describes how ``onnx_shapes`` shape inference records and
 resolves *constraints* between symbolic tensor dimensions. The
 constraint store lives on :cpp:class:`ShapesContext` (see
 ``onnx_light/onnx_core/shapes/shapes_context.h``) and is consumed by the

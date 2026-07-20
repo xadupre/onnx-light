@@ -4,7 +4,7 @@
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/dispatch_table.h"
+#include "onnx_shapes/dispatch_table.h"
 #include <algorithm>
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
@@ -359,11 +359,11 @@ void AddOnnxPyExpressions(nb::module_ &m) {
 
 void AddOnnxPyShapeInference(nb::module_ &m) {
   // `core::shapes::DispatchTable()` starts out empty (`onnx_core` must not
-  // depend on `onnx_optim`), so the built-in `onnx_optim` shape functions
+  // depend on `onnx_shapes`), so the built-in `onnx_shapes` shape functions
   // have to be registered explicitly before any of the bindings below can
   // resolve an operator. Idempotent and cheap if this module init function
   // ever ran more than once.
-  ::onnx_light::onnx_optim::RegisterShapeFunctions();
+  ::onnx_light::onnx_shapes::RegisterShapeFunctions();
 
   namespace onnx_annotations = ::onnx_light::core::annotations;
   namespace expr = ::onnx_light::core::expressions;
@@ -376,11 +376,12 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   using ::onnx_light::onnx_proto::TensorType;
 
   auto shape_mod = m.def_submodule("shape_inference");
-  shape_mod.doc() = "Shape-inference bindings backed by ``onnx_optim``: exposes ``ShapesContext``, "
-                    "``ComputeShapeNode`` and the related ``ComputeShape{Graph,Model}`` / "
-                    "``ApplyInferredShapesTo{Graph,Model}`` helpers, together with the value "
-                    "types (``SymDim``, ``SymShape``, ``SymTensor``) used to describe "
-                    "tensor descriptors stored in the context.";
+  shape_mod.doc() =
+      "Shape-inference bindings backed by ``onnx_shapes``: exposes ``ShapesContext``, "
+      "``ComputeShapeNode`` and the related ``ComputeShape{Graph,Model}`` / "
+      "``ApplyInferredShapesTo{Graph,Model}`` helpers, together with the value "
+      "types (``SymDim``, ``SymShape``, ``SymTensor``) used to describe "
+      "tensor descriptors stored in the context.";
 
   // Convert an SymDim to a Python object (int when concrete, str otherwise).
   auto dim_to_object = [](const SymDim &d) -> nb::object {

@@ -44,7 +44,7 @@ constexpr const char *kFuncRangeName = "func_range";
 //        local:func_add(X, Y)  ──► Z  (batch, d_model)
 //
 // where ``local:func_add(a, b) -> c { c = Add(a, b) }`` is declared as a
-// model-local function. ``onnx_optim`` shape inference must register the
+// model-local function. ``onnx_shapes`` shape inference must register the
 // :cpp:class:`FunctionProto` in :cpp:class:`ShapesContext` and recursively
 // run shape inference on the function body with the function's input/output
 // names rebound to the caller's names.
@@ -133,7 +133,7 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
 // The function body produces a 1-D INT64 sequence by calling
 // ``Range(start_c, lim, delta_c)`` where:
 //   * ``start_c`` = 0 and ``delta_c`` = 1 are ``Constant`` nodes defined
-//     inside the function body, so ``onnx_optim`` shape inference assigns
+//     inside the function body, so ``onnx_shapes`` shape inference assigns
 //     them concrete ``ValueAsShape`` annotations right away.
 //   * ``lim`` is the function's **input parameter**, bound at the call site
 //     to the graph initializer ``limit_val: int64[] = 5``.
@@ -208,7 +208,7 @@ void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &regist
   graph->set_name(name);
 
   // Graph initializer: ``limit_val : int64[] = 5``.
-  // ``onnx_optim`` seeds this with ``ValueAsShape = [5]``.  When the local
+  // ``onnx_shapes`` seeds this with ``ValueAsShape = [5]``.  When the local
   // function is called, ``ExpandLocalFunctionCall`` copies the full
   // ``SymTensor`` (including ``ValueAsShape``) to the sub-context as
   // ``lim``, allowing ``ComputeShapeRange`` to resolve the output length.

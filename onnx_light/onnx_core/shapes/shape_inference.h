@@ -10,10 +10,10 @@
 /**
  * @file shape_inference.h
  * @brief Top-level shape-inference helpers that dispatch to the
- *        per-operator ``ComputeShape*`` functions of ``onnx_optim``.
+ *        per-operator ``ComputeShape*`` functions of ``onnx_shapes``.
  *
  * The per-operator functions (for example
- * :cpp:func:`onnx_optim::shapes::math::ComputeShapeAbs`) each take
+ * :cpp:func:`onnx_shapes::shapes::math::ComputeShapeAbs`) each take
  * their inputs by name. The methods of :cpp:class:`ShapesContext`
  * (declared in ``shapes_context.h`` and defined in
  * ``shape_inference.cc``) walk a single ``NodeProto`` or a

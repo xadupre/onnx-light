@@ -1,6 +1,6 @@
 .. _l-design-inference-coverage:
 
-Shape-inference coverage (onnx_optim)
+Shape-inference coverage (onnx_shapes)
 =====================================
 
 .. role:: green
@@ -8,7 +8,7 @@ Shape-inference coverage (onnx_optim)
 
 This page reports, for every backend test case **tagged**
 ``"inference"`` (see :attr:`onnx_light.onnx.backend.TestCase.tag`),
-the outcome of running the ``onnx_optim`` shape-inference pipeline against
+the outcome of running the ``onnx_shapes`` shape-inference pipeline against
 the *expected* intermediate and output shapes recorded by the test author.
 
 For every collected case, the report:
@@ -18,7 +18,7 @@ For every collected case, the report:
    :func:`~onnx_light.tools.pretty_onnx`;
 #. clones the model and **strips its ``graph.value_info``** so shape
    inference cannot just reuse the recorded intermediate shapes;
-#. runs :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`
+#. runs :func:`onnx_light.onnx_shapes.shape_inference.infer_shapes_model`
    on the stripped clone;
 #. emits a side-by-side table contrasting the *expected* and the
    *computed* shape of every input, intermediate and output value, with
@@ -66,5 +66,5 @@ See also
 
 * :ref:`l-design-backend-tests`
 * :ref:`l-design-runtime-coverage`
-* :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`
+* :func:`onnx_light.onnx_shapes.shape_inference.infer_shapes_model`
 * :func:`onnx_light.tools.pretty_onnx`

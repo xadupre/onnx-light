@@ -12,7 +12,7 @@ and speed up this first step (see :ref:`l-how-to` section).
 
 `onnx-light` is intentionally split into several small C++ libraries
 (``lib_onnx_proto``, ``lib_onnx_op``, ``lib_onnx_lib``,
-``lib_onnx_optim``, ``lib_onnx_kernels``, ``lib_onnx_backend_test``)
+``lib_onnx_shape``, ``lib_onnx_kernels``, ``lib_onnx_backend_test``)
 so that any downstream
 project can link **only** the assembly it actually needs — from a bare
 proto parser up to the full schema / shape-inference / runtime stack.

@@ -1626,7 +1626,7 @@ def compute_inference_coverage() -> InferenceCoverageReport:
     """Computes the shape-inference report for every ``"inference"`` case.
 
     For every case, the model is deep-cloned, its ``graph.value_info`` is
-    cleared, and :func:`infer_shapes_model` (from ``onnx_optim``) is run on
+    cleared, and :func:`infer_shapes_model` (from ``onnx_shapes``) is run on
     the clone. The report contrasts the *expected* shapes from the original
     model with the *computed* shapes from the inferred clone.
     """
@@ -1744,7 +1744,7 @@ def render_rst_summary(report: InferenceCoverageReport) -> str:
         "      - Passed",
         "      - Total",
         "      - Pass rate",
-        "    * - onnx_optim shape inference",
+        "    * - onnx_shapes shape inference",
         f"      - {report.passed}",
         f"      - {report.total}",
         f"      - {(100.0 * report.passed / report.total if report.total else 0.0):.1f}%",

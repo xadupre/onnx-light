@@ -1,0 +1,928 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
+#include "onnx_core/symbolic/sym_map.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_proto/onnx.h"
+
+/**
+ * @file shape_tensor.h
+ * @brief Shape-inference functions for ONNX operators in the
+ *        ``tensor`` family.
+ */
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_shapes {
+namespace shapes {
+
+// The generic shape-inference engine (ShapesContext, dispatch table,
+// domain constants, ...) lives in ``onnx_core`` so it never depends on
+// any particular set of operator implementations; the symbolic value
+// descriptors (SymDim, SymShape, SymTensor, ...) live in
+// ``onnx_core::symbolic`` for the same reason. Bring them into
+// ``onnx_shapes::shapes`` so shape functions can keep referring to them
+// unqualified, exactly as before those types moved to ``onnx_core``.
+using ::onnx_light::core::shapes::BroadcastDimOp;
+using ::onnx_light::core::shapes::BroadcastShapes;
+using ::onnx_light::core::shapes::CheckNodeOpAndOutput;
+using ::onnx_light::core::shapes::ComputeShapeBinaryBroadcast;
+using ::onnx_light::core::shapes::InferShapesModel;
+using ::onnx_light::core::shapes::kOnnxDomain;
+using ::onnx_light::core::shapes::kUnknownOpsetVersion;
+using ::onnx_light::core::shapes::PropagateValueAsShapeArithmetic;
+using ::onnx_light::core::shapes::ShapeEvent;
+using ::onnx_light::core::shapes::ShapeEventAction;
+using ::onnx_light::core::shapes::ShapeEventActionName;
+using ::onnx_light::core::shapes::ShapesContext;
+
+using ::onnx_light::core::symbolic::DataTypeToTensorType;
+using ::onnx_light::core::symbolic::Device;
+using ::onnx_light::core::symbolic::GPUIndex;
+using ::onnx_light::core::symbolic::IsGPU;
+using ::onnx_light::core::symbolic::IsIntegerTensorType;
+using ::onnx_light::core::symbolic::kMaxGPUIndex;
+using ::onnx_light::core::symbolic::kMaxOptimRank;
+using ::onnx_light::core::symbolic::kOptimValueAsShapeMaxElements;
+using ::onnx_light::core::symbolic::kValueInfoDeviceMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMaxMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMinMetadataKey;
+using ::onnx_light::core::symbolic::ShapeFromTensorProtoDims;
+using ::onnx_light::core::symbolic::SymCmpResult;
+using ::onnx_light::core::symbolic::SymDim;
+using ::onnx_light::core::symbolic::SymMap;
+using ::onnx_light::core::symbolic::SymSequence;
+using ::onnx_light::core::symbolic::SymShape;
+using ::onnx_light::core::symbolic::SymTensor;
+using ::onnx_light::core::symbolic::TensorType;
+using ::onnx_light::core::symbolic::TensorTypeToDataType;
+
+namespace tensor {
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Concat`` node
+ * and stores it in ``ctx``.
+ *
+ * ``Concat`` concatenates a variadic list of input tensors along the
+ * axis specified by the ``axis`` attribute. All inputs must share the
+ * same rank and the same dimension sizes on every axis other than the
+ * concatenation axis. The output dtype always matches the dtype of
+ * the first input (type constraint ``T``); the output shape is:
+ *
+ *   - on the concatenation axis: the sum of all input dimensions when
+ *     every input dimension on that axis is a concrete integer;
+ *     otherwise a fresh symbolic dimension;
+ *   - on every other axis: the merged dimension between all inputs
+ *     (concrete dimensions must match across inputs, otherwise an
+ *     exception is thrown; a concrete value overrides a symbolic
+ *     one).
+ *
+ * The ``axis`` attribute can be negative, in which case it is
+ * interpreted as ``axis + rank``. When the attribute is missing the
+ * default of ``1`` (the opset 1 default) is used.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              every name in ``node.input``. On return it also
+ *              contains an entry for ``node.output(0)``.
+ * @param node  The ``Concat`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Concat"``,
+ *              ``node`` must declare at least one input and at least
+ *              one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Concat"``, if ``node`` has no input or output, if the
+ *         inputs have different ranks, if their non-concat dimensions
+ *         disagree, if the resolved axis is out of range, or if the
+ *         input dtypes differ.
+ * @throws std::out_of_range     if any input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Cast`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Cast`` produces an output whose shape is identical to the shape of
+ * its single input and whose element type is given by the required
+ * integer attribute ``to`` (a ``TensorProto::DataType`` value). The
+ * other optional attributes (``saturate``, ``round_mode``) do not
+ * affect the output shape or dtype and are therefore not inspected by
+ * this function.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Cast`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Cast"``,
+ *              ``node`` must declare at least one input and at least
+ *              one output and must carry the required ``to``
+ *              attribute.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Cast"``, if ``node`` has no input or output, if the
+ *         ``to`` attribute is missing, or if its value does not map to
+ *         a supported :cpp:enum:`TensorType`.
+ * @throws std::out_of_range     if the input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeCast(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``BitCast`` node
+ * (opset 26) and stores it in ``ctx``.
+ *
+ * ``BitCast`` reinterprets the bit pattern of its input as the data type
+ * specified by the required ``to`` attribute. The output shape always
+ * matches the input shape; the output dtype is taken from ``to``. The
+ * target dtype must have the same per-element bit-width as the input dtype
+ * (the upstream ONNX schema enforces this rule); if the widths differ this
+ * function throws ``std::invalid_argument``.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``BitCast`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"BitCast"`` and
+ *              ``node`` must declare at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"BitCast"``,
+ *         if ``node`` has no output, if the ``to`` attribute is missing,
+ *         if its value does not map to a supported (non-string)
+ *         :cpp:enum:`TensorType`, or if the input and output element
+ *         bit-widths differ.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeBitCast(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``CastLike`` node and
+ * stores it in ``ctx``.
+ *
+ * ``CastLike`` produces an output whose shape is identical to the shape of
+ * its first input (``input``) and whose element type is taken from the
+ * second input (``target_type``); the values of ``target_type`` are
+ * ignored. The optional attributes (``saturate``, ``round_mode``) do not
+ * affect the output shape or dtype and are therefore not inspected by this
+ * function.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` and ``node.input(1)``. On return it also
+ *              contains an entry for ``node.output(0)``.
+ * @param node  The ``CastLike`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"CastLike"``,
+ *              ``node`` must declare two inputs and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"CastLike"``,
+ *         if ``node`` has fewer than two inputs or no output, or if the
+ *         dtype of ``target_type`` is :cpp:enum:`TensorType::kUndefined`.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeCastLike(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Reshape`` node
+ * and stores it in ``ctx``.
+ *
+ * ``Reshape`` takes a ``data`` tensor and a 1-D int64 ``shape`` tensor
+ * whose values describe the desired output shape. The output dtype is
+ * the dtype of ``data`` (type constraint ``T``). The output shape is
+ * derived element-by-element from the target shape:
+ *
+ *   - a positive value is used verbatim;
+ *   - ``0`` means "copy from the input ``data`` shape at the same
+ *     index", unless the ``allowzero`` attribute is set to ``1`` (in
+ *     which case ``0`` is honoured literally);
+ *   - exactly one ``-1`` is allowed; the corresponding dimension is
+ *     inferred so that the total number of elements is preserved
+ *     (when ``data`` is fully known and the other dims are concrete);
+ *   - symbolic target dims are forwarded as symbolic output dims.
+ *
+ * Shape values are read from the ``shape`` input's
+ * :cpp:func:`SymTensor::ValueAsShape` annotation (populated for
+ * small constants, e.g. by :cpp:func:`ComputeShapeConstant`). When
+ * that annotation is missing the output rank is taken from the static
+ * shape of the ``shape`` input (its single dimension, when concrete)
+ * and every output dim is left symbolic. When the rank itself is
+ * unknown the output is left as a fully-symbolic rank-1 tensor.
+ *
+ * @param ctx   In/out context. Must contain entries for
+ *              ``node.input(0)`` (``data``) and ``node.input(1)``
+ *              (``shape``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Reshape`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Reshape"``,
+ *              ``node`` must declare two inputs and at least one
+ *              output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Reshape"``, if ``node`` has fewer than two inputs or no
+ *         output, if the target shape contains more than one ``-1``,
+ *         contains a value strictly less than ``-1``, if a ``0`` entry
+ *         (with ``allowzero == 0``) refers to a position outside the
+ *         input rank, or if a ``-1`` cannot be reconciled with the
+ *         input's element count.
+ * @throws std::out_of_range     if any input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Slice`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Slice`` preserves input rank and dtype. When ``starts``/``ends`` (and
+ * optional ``axes``/``steps``) values are known through
+ * :cpp:func:`SymTensor::ValueAsShape`, concrete output lengths are inferred
+ * per sliced axis; otherwise sliced axes are left symbolic.
+ */
+void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of an ``Expand`` node
+ * and stores it in ``ctx``.
+ *
+ * ``Expand`` broadcasts its first input (``input``) to the shape
+ * described by its second input (``shape``), following the ONNX
+ * numpy-style broadcasting rules. The output dtype matches the dtype
+ * of ``input`` (type constraint ``T``).
+ *
+ * Shape values are read from the ``shape`` input's
+ * :cpp:func:`SymTensor::ValueAsShape` annotation (populated for
+ * small constants). When that annotation is present the output shape
+ * is computed as ``BroadcastShapes(input.shape, target)``. When it is
+ * absent the output rank is taken from the static shape of the
+ * ``shape`` input (its single dimension, when concrete) and every
+ * output dim is left symbolic.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (``input``) and ``node.input(1)``
+ *              (``shape``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Expand`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Expand"``,
+ *              ``node`` must declare two inputs and at least one
+ *              output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Expand"``, if ``node`` has fewer than two inputs or no
+ *         output, or if the two shapes are not broadcast-compatible.
+ * @throws std::out_of_range     if any input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeExpand(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Squeeze`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Squeeze`` removes dimensions of size 1 from the input shape. When the
+ * optional ``axes`` input is provided and its values are known, only those
+ * axes are removed (and each selected axis must be 1 when concrete). When
+ * ``axes`` is omitted, every concrete unit dimension is removed.
+ */
+void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of an ``Unsqueeze`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Unsqueeze`` inserts dimensions of size 1 at the indices given by the
+ * required ``axes`` input.
+ */
+void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Transpose`` node
+ * and stores it in ``ctx``.
+ *
+ * ``Transpose`` permutes the axes of its input tensor according to the
+ * optional ``perm`` attribute. When ``perm`` is absent, axes are reversed.
+ * The output dtype matches the input dtype.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Transpose`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Transpose"``,
+ *              ``node`` must declare one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Transpose"``,
+ *         if ``node`` has no input or output, if ``perm`` length differs from
+ *         input rank, if ``perm`` contains an out-of-range value, or if it
+ *         contains duplicates.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Tile`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Tile`` constructs a tensor by repeating its first input (``input``)
+ * a number of times along each axis given by the 1-D INT64 ``repeats``
+ * tensor. The output has the same rank and dtype as ``input`` (type
+ * constraint ``T``); its dimension ``i`` is ``input.shape[i] * repeats[i]``.
+ *
+ * Repeats values are read from the ``repeats`` input's
+ * :cpp:func:`SymTensor::ValueAsShape` annotation (populated for small
+ * constants). When that annotation is present each output dim is computed
+ * as ``input.shape[i] * repeats[i]`` (the multiplication is performed
+ * symbolically when ``input.shape[i]`` is not a concrete integer; when
+ * ``repeats[i]`` is symbolic the output dim is left symbolic). When the
+ * annotation is absent the output rank is taken from the static rank of
+ * ``input`` and every output dim is left symbolic.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (``input``) and ``node.input(1)``
+ *              (``repeats``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Tile`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Tile"``, ``node``
+ *              must declare two inputs and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Tile"``,
+ *         if ``node`` has fewer than two inputs or no output, or if a
+ *         known ``repeats`` input has a length different from the rank
+ *         of ``input``.
+ * @throws std::out_of_range     if any input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Pad`` node and stores
+ * it in ``ctx``. Supports the full Pad history (opsets 1, 2, 11, 13, 18,
+ * 19, 21, 23, 24, 25):
+ *
+ * - opsets 1 and 2 read the padding values from the ``paddings`` / ``pads``
+ *   INTS attribute and apply them on every input axis.
+ * - opsets >= 11 read the padding values from the 1-D INT64 ``pads`` input
+ *   (when statically known via data-propagation).
+ * - opsets >= 18 additionally accept an optional ``axes`` input that
+ *   restricts the padding to a subset of the input axes (negative values
+ *   count from the back).
+ *
+ * The output dtype always matches the dtype of ``data``. The output shape
+ * is rank-preserving; on every axis the output dim becomes
+ * ``input_dim + pad_begin + pad_end`` when both the input dim and the
+ * relevant pad values are statically known, otherwise a fresh symbolic
+ * dimension is produced.
+ *
+ * @param ctx   In/out context. Must already contain an entry for every
+ *              name in ``node.input``. On return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Pad`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Pad"``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Pad"``, if
+ *         ``node`` has no input or output, or if a known ``pads`` /
+ *         ``axes`` initializer has an inconsistent shape.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapePad(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of an ``Upsample`` node and
+ * stores it in ``ctx``. Supports Upsample opsets 1, 7, 9 and 10:
+ *
+ * - v1: the per-spatial-axis ``width_scale`` and ``height_scale`` FLOAT
+ *   attributes give the scales of the two trailing axes of a 4-D NCHW
+ *   input. Output dim ``k`` is ``floor(input_dim[k] * scale[k])``.
+ * - v7: the ``scales`` FLOATS attribute carries one scale per input axis.
+ * - v9/v10: the ``scales`` input tensor (1-D FLOAT) carries one scale per
+ *   input axis. Because the data-propagation lattice only tracks integer
+ *   shape values, the float scales cannot be recovered here in general;
+ *   the output rank is preserved and every output dim is left symbolic.
+ *
+ * The output dtype always matches the input dtype (type constraint ``T``)
+ * and the output rank equals the input rank.
+ */
+void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Resize`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Resize`` (since opset 10 in the ``ai.onnx`` domain) accepts a runtime
+ * ``scales`` or ``sizes`` input that selects the output shape. Three schema
+ * layouts are supported:
+ *
+ * - v10: inputs ``(X, scales)`` -- ``scales`` is a 1-D FLOAT tensor (one
+ *   entry per input axis).
+ * - v11 / v13: inputs ``(X, roi, scales, sizes)`` -- ``roi`` and either
+ *   ``scales`` or ``sizes`` can be omitted via empty-string input names.
+ * - v18 / v19: same as v11/v13 but with optional ``axes`` /
+ *   ``keep_aspect_ratio_policy`` attributes.
+ *
+ * The output dtype always matches the input dtype (type constraint ``T1``)
+ * and the output rank equals the input rank. Per-axis output dims are
+ * computed concretely when both the corresponding input dim and the
+ * ``sizes`` constant are statically known (data-propagation lattice only
+ * carries integer shape values, so ``scales`` -- a FLOAT input -- always
+ * leaves dims symbolic).
+ */
+void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node);
+
+void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``DepthToSpace`` node and
+ * stores it in ``ctx``.
+ *
+ * ``DepthToSpace`` requires a rank-4 input of shape ``(N, C, H, W)`` and a
+ * required positive integer attribute ``blocksize``. The output dtype matches
+ * the input dtype (type constraint ``T``) and the output shape is
+ * ``(N, C/(blocksize*blocksize), H*blocksize, W*blocksize)`` (each axis is
+ * computed symbolically when the corresponding input dim is symbolic).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``DepthToSpace`` ``NodeProto`` whose output should be
+ *              described.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"DepthToSpace"``, if ``node`` has no input or output, if the input
+ *         rank is known and is not 4, if ``blocksize`` is missing or
+ *         non-positive, or if the input channel dim is concrete and not
+ *         divisible by ``blocksize * blocksize``.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeDepthToSpace(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``SpaceToDepth`` node and
+ * stores it in ``ctx``.
+ *
+ * ``SpaceToDepth`` requires a rank-4 input of shape ``(N, C, H, W)`` and a
+ * required positive integer attribute ``blocksize``. The output dtype matches
+ * the input dtype (type constraint ``T``) and the output shape is
+ * ``(N, C*blocksize*blocksize, H/blocksize, W/blocksize)`` (each axis is
+ * computed symbolically when the corresponding input dim is symbolic).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``SpaceToDepth`` ``NodeProto`` whose output should be
+ *              described.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"SpaceToDepth"``, if ``node`` has no input or output, if the input
+ *         rank is known and is not 4, if ``blocksize`` is missing or
+ *         non-positive, or if the input H or W dim is concrete and not
+ *         divisible by ``blocksize``.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeSpaceToDepth(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of an ``AffineGrid`` node
+ * and stores it in ``ctx``.
+ *
+ * ``AffineGrid`` produces a flow field of sampling coordinates from a
+ * batch of affine matrices ``theta`` and a target ``size``. The output
+ * dtype matches ``theta``'s dtype (type constraint ``T1``).
+ *
+ * The output shape is derived as follows:
+ *
+ *   - If ``size`` exposes a value via :cpp:func:`SymTensor::ValueAsShape`
+ *     (typically because it is a Constant), the spatial output dims
+ *     ``(H, W)`` for 2-D / ``(D, H, W)`` for 3-D are taken verbatim from
+ *     ``size`` and the rank of the output is fully known. ``size`` must
+ *     have 4 (2-D) or 5 (3-D) entries.
+ *   - Otherwise the rank of ``theta`` determines whether the output is
+ *     2-D (``theta`` shape ``(N, 2, 3)``) or 3-D (``theta`` shape
+ *     ``(N, 3, 4)``), and the spatial dims are left symbolic.
+ *
+ * The leading batch dim ``N`` is taken from ``theta[0]``; the final
+ * inner dim is the constant ``2`` (2-D) or ``3`` (3-D).
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``theta`` and ``size``. On return it also contains an
+ *              entry for ``node.output(0)``.
+ * @param node  The ``AffineGrid`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"AffineGrid"``,
+ *              ``node`` must declare two inputs and at least one
+ *              output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"AffineGrid"``, if ``node`` has fewer than two inputs or no
+ *         output, if ``theta`` is not rank 3, if its inner dims are
+ *         neither ``(2, 3)`` nor ``(3, 4)``, or if a known ``size``
+ *         input has a length other than 4 or 5.
+ * @throws std::out_of_range     if any input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``GridSample`` node and
+ * stores it in ``ctx``.
+ *
+ * ``GridSample`` samples an input tensor ``X`` of rank ``r+2`` and shape
+ * ``(N, C, D1, D2, ..., Dr)`` at the normalised locations given by a flow
+ * field ``grid`` of rank ``r+2`` and shape
+ * ``(N, D1_out, D2_out, ..., Dr_out, r)``, producing an output of rank
+ * ``r+2`` and shape ``(N, C, D1_out, D2_out, ..., Dr_out)``. The output
+ * dtype matches ``X``'s dtype (type constraint ``T1``).
+ *
+ * The output shape is derived as follows (each dim independently):
+ *
+ *   - ``output[0]``: merged dim between ``X[0]`` and ``grid[0]``.
+ *   - ``output[1]``: ``X[1]`` (the channel dim).
+ *   - ``output[2 .. r+1]``: the spatial dims taken from ``grid[1 .. r]``.
+ *
+ * @param ctx   In/out context. Must already contain entries for ``X`` and
+ *              ``grid``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``GridSample`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"GridSample"``,
+ *              ``node`` must declare two inputs and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"GridSample"``, if ``node`` has fewer than two inputs or no
+ *         output, if ``X`` and ``grid`` have known ranks that disagree, or
+ *         if either rank is below 3.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``NonZero`` node and
+ * stores it in ``ctx``.
+ *
+ * ``NonZero`` returns the indices of the non-zero elements of its single input
+ * tensor (in row-major order). The output is always an :cpp:enum:`TensorType::kInt64`
+ * 2-D tensor of shape ``(rank, nnz)`` where ``rank`` is the rank of the input
+ * and ``nnz`` is the number of non-zero elements. For scalar input
+ * (``rank == 0``) the upstream spec dictates an output shape of ``(0, nnz)``,
+ * which differs from NumPy's behaviour.
+ *
+ * Because the number of non-zero elements is a runtime value, the second
+ * output dimension is left symbolic. The first output dimension is concrete
+ * when the input rank is known and otherwise symbolic.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``NonZero`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"NonZero"``,
+ *              ``node`` must declare one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"NonZero"``,
+ *         or if ``node`` has no input or output.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeNonZero(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``OneHot`` node and
+ * stores it in ``ctx``.
+ *
+ * ``OneHot`` (since opset 9 in the ``ai.onnx`` domain) produces a tensor of
+ * rank ``rank(indices) + 1``, inserting a new dimension at position ``axis``
+ * (default ``-1``). The dtype of the output matches ``values`` (the third
+ * input). When the value of the ``depth`` input is known via
+ * data-propagation the inserted dimension is concrete; otherwise it is a
+ * symbolic dimension.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (indices), ``node.input(1)`` (depth) and
+ *              ``node.input(2)`` (values). On return it also contains an
+ *              entry for ``node.output(0)``.
+ * @param node  The ``OneHot`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"OneHot"`` and
+ *              ``node`` must declare three inputs and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"OneHot"``,
+ *         if ``node`` has fewer than three inputs or no output, or if
+ *         ``axis`` is out of range.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeOneHot(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` entries of a ``Unique`` node
+ * and stores them in ``ctx``.
+ *
+ * ``Unique`` (opset 11) returns up to four outputs (``Y``, ``indices``,
+ * ``inverse_indices``, ``counts``). All optional outputs are 1-D
+ * :cpp:enum:`TensorType::kInt64` tensors of an unknown length. ``Y`` matches
+ * the dtype of the input:
+ *
+ * - when the ``axis`` attribute is not provided the input is flattened and
+ *   ``Y`` is 1-D with an unknown length;
+ * - when ``axis`` is provided ``Y`` has the same rank and shape as the input
+ *   except along ``axis``, whose dimension is symbolic.
+ *
+ * Optional outputs declared as the empty string in ``node.output`` are
+ * skipped.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains entries for
+ *              every non-empty entry in ``node.output``.
+ * @param node  The ``Unique`` ``NodeProto`` whose outputs should be
+ *              described. ``node.op_type()`` must be ``"Unique"``,
+ *              ``node`` must declare one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Unique"``,
+ *         if ``node`` has no input or output, or if ``axis`` is out of range.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Shape`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Shape`` returns a 1-D :cpp:enum:`TensorType::kInt64` tensor whose entries
+ * are the dimensions of its input. Optional ``start`` and ``end`` attributes
+ * (since opset 15) bound the slice ``input.shape[start:end]``: negative
+ * values count from the back and out-of-range values are clamped to
+ * ``[0, r]`` where ``r`` is the input rank. When ``start > end`` (after
+ * normalisation) the output is empty.
+ *
+ * The output dimension is concrete when the input rank is known (which is
+ * always the case when an :cpp:class:`SymTensor` is available in
+ * ``ctx``). The data buffer of the input is never inspected.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Shape`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Shape"``; ``node`` must
+ *              declare one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Shape"``,
+ *         or if ``node`` has no input or output.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeShape(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Size`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Size`` returns a 0-D (scalar) INT64 tensor whose single value is the
+ * total number of elements of the input tensor (the product of its
+ * dimensions). The output shape is therefore always known (the empty
+ * shape); the scalar value is also recorded as a single-element
+ * ``ValueAsShape`` when every input dimension is a concrete (non-symbolic)
+ * value, so that downstream operators can propagate it.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Size`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Size"``; ``node`` must declare
+ *              one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Size"``,
+ *         or if ``node`` has no input or output.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeSize(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of an ``Identity`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Identity`` copies its single input verbatim, so the output has the same
+ * dtype and shape as the input.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Identity"``,
+ *         or if ``node`` has no input or output.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeIdentity(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Gather`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Gather`` indexes the ``data`` tensor along ``axis`` using the integer
+ * ``indices`` tensor. The output has rank ``q + (r - 1)`` where
+ * ``r = rank(data)`` and ``q = rank(indices)``; concretely the output shape is
+ * ``data.shape[:axis] + indices.shape + data.shape[axis+1:]``. The output
+ * dtype matches the dtype of ``data`` (type constraint ``T``).
+ */
+void ComputeShapeGather(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``GatherElements`` node
+ * and stores it in ``ctx``.
+ *
+ * The output has the same shape as ``indices`` and the same dtype as ``data``.
+ */
+void ComputeShapeGatherElements(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``GatherND`` node and
+ * stores it in ``ctx``.
+ *
+ * The output has rank ``q + r - indices_shape[-1] - 1 - b`` where ``b`` is
+ * the ``batch_dims`` attribute (defaulting to ``0``); concretely the output
+ * shape is ``indices.shape[:-1] + data.shape[b + indices.shape[-1]:]``.
+ */
+void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``ScatterElements`` node
+ * and stores it in ``ctx``.
+ *
+ * The output has the same shape and dtype as ``data``.
+ */
+void ComputeShapeScatterElements(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a deprecated ``Scatter``
+ * node and stores it in ``ctx``.
+ *
+ * The output has the same shape and dtype as ``data``.
+ */
+void ComputeShapeScatter(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``ScatterND`` node and
+ * stores it in ``ctx``.
+ *
+ * The output has the same shape and dtype as ``data``.
+ */
+void ComputeShapeScatterND(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``TensorScatter`` node
+ * and stores it in ``ctx``.
+ *
+ * ``TensorScatter`` writes slices of ``update`` into a copy of
+ * ``past_cache`` along the sequence ``axis`` and produces an output with the
+ * same dtype and the same shape as ``past_cache``. The dimensions of
+ * ``update`` must match ``past_cache`` on every axis other than ``axis`` and
+ * be ``<=`` the corresponding ``past_cache`` dimension on ``axis``; the
+ * optional ``write_indices`` input must be a rank-1 tensor of length
+ * ``batch_size``.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (``past_cache``) and ``node.input(1)``
+ *              (``update``); ``node.input(2)`` (``write_indices``) is
+ *              optional. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``TensorScatter`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"TensorScatter"``,
+ *              ``node`` must declare at least two inputs and at least one
+ *              output, and the inputs must have the same rank ``>= 2``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"TensorScatter"``, if ``node`` has fewer than two inputs or no
+ *         output, if the input ranks differ, or if the resolved ``axis`` is
+ *         not a valid non-batch dimension.
+ * @throws std::out_of_range     if an input name is missing from ``ctx``.
+ */
+void ComputeShapeTensorScatter(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Trilu`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Trilu`` returns the upper (``upper`` attribute = 1, the default) or lower
+ * (``upper`` = 0) triangular part of the input tensor; the optional ``k``
+ * input shifts the diagonal. The output has the same dtype and the same shape
+ * as ``node.input(0)``; the optional ``k`` input is not consulted for shape
+ * inference (its value only affects element values, not the result shape).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Trilu`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Trilu"``, ``node`` must declare
+ *              at least one input and at least one output, and the rank of
+ *              the input must be ``>= 2``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Trilu"``,
+ *         if ``node`` has no input or output, or if the input rank is < 2.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``CenterCropPad`` node
+ * (since opset 18) and stores it in ``ctx``.
+ *
+ * The output has the same dtype as ``node.input(0)`` and the same rank as
+ * the input. The output dimensions are taken from the ``shape`` input
+ * (input(1)) for axes listed in the optional ``axes`` attribute (or all
+ * axes when ``axes`` is absent); other axes keep the input dimension. When
+ * ``shape`` is not available as a known value, the affected output
+ * dimensions become symbolic.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (``input_data``) and ``node.input(1)``
+ *              (``shape``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``CenterCropPad`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"CenterCropPad"``,
+ *              ``node`` must declare two inputs and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"CenterCropPad"``, if ``node`` has fewer than two inputs or no
+ *         output, or if the axes attribute references an out-of-range axis.
+ * @throws std::out_of_range     if an input name is missing from ``ctx``.
+ */
+void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``ReverseSequence`` node
+ * and stores it in ``ctx``.
+ *
+ * ``ReverseSequence`` reverses the first ``sequence_lens[i]`` elements of
+ * each slice along the time axis. The output has the same dtype and the same
+ * shape as ``node.input(0)``; the ``sequence_lens`` input only affects
+ * element values, not the result shape.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (input) and ``node.input(1)``
+ *              (``sequence_lens``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``ReverseSequence`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"ReverseSequence"``,
+ *              ``node`` must declare two inputs and at least one output, and
+ *              the rank of the first input must be ``>= 2`` while the rank of
+ *              ``sequence_lens`` must be exactly 1.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"ReverseSequence"``, if ``node`` has fewer than two inputs or no
+ *         output, or if the input ranks are invalid.
+ * @throws std::out_of_range     if an input name is missing from ``ctx``.
+ */
+void ComputeShapeReverseSequence(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Compress`` node and
+ * stores it in ``ctx``.
+ *
+ * When the ``axis`` attribute is present the output has the same rank and
+ * dtype as ``node.input(0)`` but with the axis dimension replaced by a
+ * symbolic dimension (the number of ``true`` entries in ``condition`` is a
+ * runtime value). When ``axis`` is absent the input is conceptually flattened
+ * and the output is a 1-D tensor of symbolic length.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (input) and ``node.input(1)`` (condition).
+ *              On return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``Compress`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Compress"`` and
+ *              ``node`` must declare at least two inputs and one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Compress"``
+ *         or if the node has fewer than two inputs / no output.
+ * @throws std::out_of_range     if an input name is missing from ``ctx``.
+ */
+void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the per-output :cpp:class:`SymTensor` of a ``Split`` node and
+ * stores them in ``ctx``.
+ *
+ * ``Split`` divides ``input`` along ``axis`` into ``node.output_size()``
+ * tensors. The split sizes are taken from (in order of priority):
+ *
+ *   - the ``split`` input (opset 13 and above) when present and known as an
+ *     initializer value;
+ *   - the ``split`` attribute (opset 1, 2 and 11) when present;
+ *   - the ``num_outputs`` attribute (opset 18+) when present;
+ *   - otherwise the input dimension is divided evenly into
+ *     ``node.output_size()`` chunks (with the last chunk taking the
+ *     remainder).
+ *
+ * Each output has the same rank, dtype, and dimensions as ``input``, except
+ * along ``axis`` where the dimension equals the resolved split size when
+ * known. When the split sizes are unknown (for example because the
+ * ``split`` input is dynamic) the per-output ``axis`` dimension is set to a
+ * fresh symbolic dimension.
+ *
+ * @param ctx   In/out context. Must already contain entries for every name
+ *              in ``node.input``. On return it also contains entries for
+ *              every named output.
+ * @param node  The ``Split`` ``NodeProto`` whose outputs should be
+ *              described. ``node.op_type()`` must be ``"Split"`` and
+ *              ``node`` must declare at least one input and one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Split"``,
+ *         if ``node`` has no input or no output, if the resolved axis is
+ *         out of range, or if the resolved split sizes do not sum to the
+ *         input dimension on ``axis``.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node);
+
+} // namespace tensor
+} // namespace shapes
+} // namespace onnx_shapes
+} // namespace ONNX_LIGHT_NAMESPACE

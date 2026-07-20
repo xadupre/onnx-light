@@ -3,7 +3,7 @@
 Shape inference
 ===============
 
-This section gathers the design documentation of the ``onnx_optim``
+This section gathers the design documentation of the ``onnx_shapes``
 shape-inference engine: the overall algorithm, the symbolic
 dimension-expression library it relies on, the constraint mechanism that
 reconciles inferred and user-declared dimensions, and the coverage report
@@ -26,8 +26,8 @@ Overview
 Shape inference computes, for every value in an ONNX graph, the element
 type and (possibly symbolic) shape of the tensor it carries, without
 running the model. ``onnx-light`` implements it in C++ under
-``onnx_light/onnx_optim/shapes/`` and exposes it through the Python entry
-point :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`.
+``onnx_light/onnx_shapes/shapes/`` and exposes it through the Python entry
+point :func:`onnx_light.onnx_shapes.shape_inference.infer_shapes_model`.
 
 The engine keeps its working state in a :cpp:class:`ShapesContext`: a
 ``name → SymTensor`` map describing every known value, plus the opset
@@ -125,7 +125,7 @@ so the full result is accessible programmatically:
 
 .. code-block:: python
 
-    from onnx_light.onnx_optim.shape_inference import ShapesContext
+    from onnx_light.onnx_shapes.shape_inference import ShapesContext
 
     ctx = ShapesContext()
     ctx.compute_shape_model(model)
@@ -133,9 +133,9 @@ so the full result is accessible programmatically:
         tensor = ctx.get(name)  # SymTensor: element type + shape
     # ctx.apply_inferred_shapes_to_model(model)  # optional value_info write-back
 
-This basically implements function :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`
+This basically implements function :func:`onnx_light.onnx_shapes.shape_inference.infer_shapes_model`
 which does not return a context but populates missing ``value_info`` in the original model.
-Class :class:`~onnx_light.onnx_optim.shape_inference` provides accessors to access the shapes
+Class :class:`~onnx_light.onnx_shapes.shape_inference` provides accessors to access the shapes
 without modifying the original model.
 
 Symbolic dimensions
@@ -198,5 +198,5 @@ whether the computed shape matches the expected one.
 API reference
 -------------
 
-* **Python API**: :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`.
-* **C++ API**: :doc:`/api/cpp/onnx_optim/shapes/index`.
+* **Python API**: :func:`onnx_light.onnx_shapes.shape_inference.infer_shapes_model`.
+* **C++ API**: :doc:`/api/cpp/onnx_shapes/shapes/index`.

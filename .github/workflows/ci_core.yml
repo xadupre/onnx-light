@@ -53,9 +53,9 @@ jobs:
 
   reduced_tests_ubuntu:
     # Fastest preflight: builds onnx-light without the operator-kernel runtime
-    # and backend-test registries (ONNX_LIGHT_BUILD_KERNELS=OFF). Must pass
-    # before the no-onnx preflight (and therefore the heavier compilation jobs)
-    # start. Kernel/backend tests skip themselves via
+    # and backend-test registries (ONNX_LIGHT_BUILD_KERNELS=OFF). Runs in
+    # parallel with the no-onnx preflight; both must pass before the heavier
+    # compilation jobs start. Kernel/backend tests skip themselves via
     # onnx_light.ext_test_case.import_or_skip, so the suite exercises the proto /
     # schema / shape-inference / manipulation layers that ship in the reduced
     # build. Mirrors .github/workflows/build_reduced_wheel.yml's configure flags.
@@ -97,11 +97,11 @@ jobs:
 
   no_onnx_tests_ubuntu:
     # Fast preflight: must pass before the heavier compilation jobs start.
-    # Gated on the reduced (no kernels/backend) build so the smallest variant is
-    # validated first. Mirrors .github/workflows/ci_no_onnx.yml but lives inside
-    # ci-1-core so the gate is observable as a required PR status check.
+    # Runs in parallel with the reduced (no kernels/backend) build; both
+    # preflights gate the downstream compilation jobs. Mirrors
+    # .github/workflows/ci_no_onnx.yml but lives inside ci-1-core so the gate is
+    # observable as a required PR status check.
     name: no-onnx (ubuntu-latest, py3.13)
-    needs: [reduced_tests_ubuntu]
     runs-on: ubuntu-latest
     timeout-minutes: 19
     permissions:
@@ -139,7 +139,7 @@ jobs:
 
   core_tests_ubuntu:
     name: core (ubuntu-latest, py3.13)
-    needs: [no_onnx_tests_ubuntu]
+    needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu]
     runs-on: ubuntu-latest
     timeout-minutes: 22
     permissions:
@@ -179,10 +179,11 @@ jobs:
 
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
-    # Gated only on the fast no-onnx preflight so the slow Windows/macOS builds
-    # run in parallel with core_tests_ubuntu instead of waiting for it. This
-    # avoids serializing the long Windows job behind the Ubuntu core build.
-    needs: [no_onnx_tests_ubuntu, changes]
+    # Gated on both fast preflights (reduced + no-onnx) so the slow
+    # Windows/macOS builds run in parallel with core_tests_ubuntu instead of
+    # waiting for it. This avoids serializing the long Windows job behind the
+    # Ubuntu core build.
+    needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -267,7 +268,7 @@ jobs:
 
   windows_x86_build:
     name: core (windows-latest, x86 build)
-    needs: [no_onnx_tests_ubuntu, changes]
+    needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
     timeout-minutes: 22

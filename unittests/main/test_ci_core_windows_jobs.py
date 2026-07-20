@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -42,6 +43,30 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
                 r"run: ctest --test-dir build --output-on-failure -C Release --timeout 120"
             ),
         )
+
+    def _job_needs(self, job_name):
+        """Returns the list of job names in the ``needs`` clause of ``job_name``."""
+        match = re.search(
+            rf"(?m)^  {re.escape(job_name)}:\s*$(.*?)(?=^  \w+:\s*$|\Z)", self.content, re.DOTALL
+        )
+        self.assertIsNotNone(match, job_name)
+        needs_match = re.search(r"(?m)^    needs:\s*(.+)$", match.group(1))
+        if needs_match is None:
+            return None
+        return re.findall(r"\w+", needs_match.group(1))
+
+    def test_reduced_and_no_onnx_preflights_run_in_parallel(self):
+        """Verifies that the reduced and no-onnx preflights have no interdependency."""
+        self.assertIsNone(self._job_needs("reduced_tests_ubuntu"))
+        self.assertIsNone(self._job_needs("no_onnx_tests_ubuntu"))
+
+    def test_downstream_jobs_gate_on_both_preflights(self):
+        """Verifies that every downstream build job waits on both preflights."""
+        for job_name in ("core_tests_ubuntu", "core_tests", "windows_x86_build"):
+            needs = self._job_needs(job_name)
+            self.assertIsNotNone(needs, job_name)
+            self.assertIn("reduced_tests_ubuntu", needs, job_name)
+            self.assertIn("no_onnx_tests_ubuntu", needs, job_name)
 
 
 if __name__ == "__main__":

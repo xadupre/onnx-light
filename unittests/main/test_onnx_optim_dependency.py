@@ -88,9 +88,7 @@ class TestOnnxOptimDependency(unittest.TestCase):
         )
 
     def test_onnx_core_light_op_schema_re_exports_tensor_type(self):
-        header = (
-            self.root / "onnx_light" / "onnx_core" / "light_op_schema" / "light_op_schema.h"
-        )
+        header = self.root / "onnx_light" / "onnx_core" / "light_op_schema" / "light_op_schema.h"
         self.assertTrue(header.exists(), "onnx_core/light_op_schema/light_op_schema.h must exist")
         content = header.read_text(encoding="utf-8")
         self.assertIn(

@@ -14,6 +14,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::utils;
+using namespace ONNX_LIGHT_NAMESPACE::core::graph;
 
 TEST(onnx_helper, IteratorTensorProto) {
   ModelProto model;

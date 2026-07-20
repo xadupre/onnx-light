@@ -10,34 +10,34 @@ integer such as ``128``, a dimension carries a name like ``"batch"`` or
 necessary to compare, simplify, evaluate, and rename those symbolic
 expressions.
 
-:mod:`onnx_light.onnx_optim.expressions` exposes a pure-Python API backed
+:mod:`onnx_light.onnx_core.expressions` exposes a pure-Python API backed
 by a fast C++ AST engine.  This example walks through the main entry points:
 
-* :func:`~onnx_light.onnx_optim.expressions.simplify_expression` — fold
+* :func:`~onnx_light.onnx_core.expressions.simplify_expression` — fold
   constants and cancel common symbolic factors.
-* :func:`~onnx_light.onnx_optim.expressions.simplify_two_expressions` —
+* :func:`~onnx_light.onnx_core.expressions.simplify_two_expressions` —
   compare two expressions by computing their difference.
-* :func:`~onnx_light.onnx_optim.expressions.compare_expressions` — tell
+* :func:`~onnx_light.onnx_core.expressions.compare_expressions` — tell
   whether one expression is greater, equal, smaller or unknown relative to
   another (assuming all tokens are positive or null).
-* :func:`~onnx_light.onnx_optim.expressions.evaluate_expression` — evaluate
+* :func:`~onnx_light.onnx_core.expressions.evaluate_expression` — evaluate
   a symbolic expression given a concrete variable assignment.
-* :func:`~onnx_light.onnx_optim.expressions.parse_expression_tokens` —
+* :func:`~onnx_light.onnx_core.expressions.parse_expression_tokens` —
   extract the set of variable names used in an expression.
-* :func:`~onnx_light.onnx_optim.expressions.rename_expression` and
-  :func:`~onnx_light.onnx_optim.expressions.rename_dynamic_expression` —
+* :func:`~onnx_light.onnx_core.expressions.rename_expression` and
+  :func:`~onnx_light.onnx_core.expressions.rename_dynamic_expression` —
   substitute variable names.
 * ``dim_add``, ``dim_sub``, ``dim_mul``, ``dim_div``, ``dim_mod``,
   ``dim_max``, ``dim_min`` — arithmetic on dimensions that may be either
   concrete integers or symbolic strings.
-* :func:`~onnx_light.onnx_optim.expressions.dim_ranges_from_expressions` —
+* :func:`~onnx_light.onnx_core.expressions.dim_ranges_from_expressions` —
   infer tight ``[lower, upper]`` ranges for each dimension variable from a
   set of equality constraints.
 """
 
 from __future__ import annotations
 
-from onnx_light.onnx_optim.expressions import (
+from onnx_light.onnx_core.expressions import (
     INFINITY,
     DimRange,
     compare_expressions,
@@ -108,12 +108,12 @@ print("equal expressions:", simplify_two_expressions("e*2", "e+e"))
 #####################################
 # :func:`compare_expressions` goes one step further: assuming every token is
 # positive or null, it reports whether the first expression is
-# :attr:`~onnx_light.onnx_optim.expressions.CompareResult.Greater`,
-# :attr:`~onnx_light.onnx_optim.expressions.CompareResult.Equal`,
-# :attr:`~onnx_light.onnx_optim.expressions.CompareResult.Smaller` or
-# :attr:`~onnx_light.onnx_optim.expressions.CompareResult.Unknown` compared to
+# :attr:`~onnx_light.onnx_core.expressions.CompareResult.Greater`,
+# :attr:`~onnx_light.onnx_core.expressions.CompareResult.Equal`,
+# :attr:`~onnx_light.onnx_core.expressions.CompareResult.Smaller` or
+# :attr:`~onnx_light.onnx_core.expressions.CompareResult.Unknown` compared to
 # the second. The returned
-# :class:`~onnx_light.onnx_optim.expressions.ExpressionComparison` exposes the
+# :class:`~onnx_light.onnx_core.expressions.ExpressionComparison` exposes the
 # ``result`` and the simplified ``difference`` ``expr2 - expr1``.
 
 cmp = compare_expressions("a+1", "a")

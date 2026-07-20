@@ -143,7 +143,7 @@ Symbolic dimensions
 
 Dynamic dimensions are represented as symbolic expression strings such as
 ``"2*batch"`` or ``"cache_length + seq_length"``. The
-:mod:`onnx_light.onnx_optim.expressions` library parses, simplifies,
+:mod:`onnx_light.onnx_core.expressions` library parses, simplifies,
 evaluates and renames these expressions so that symbolic arithmetic stays
 canonical throughout inference. It is described in
 :ref:`l-design-expressions`.

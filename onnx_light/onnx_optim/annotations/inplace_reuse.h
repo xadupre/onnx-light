@@ -12,7 +12,7 @@
 #include <variant>
 #include <vector>
 
-#include "onnx_optim/expressions.h"
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
@@ -64,6 +64,10 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
+
+// Alias to the symbolic dimension-expression library, which lives in
+// ``onnx_core`` so both ``onnx_op`` and ``onnx_optim`` can share it.
+namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
 namespace annotations {
 
 using ::onnx_light::onnx_optim::shapes::ShapesContext;
@@ -205,14 +209,14 @@ using ComputeEventLog = std::vector<ComputeEvent>;
  *   - ``"intermediates"``
  *   - ``"outputs"``
  *
- * The first three keys map to scalar :cpp:type:`onnx_optim::expressions::DimType`
+ * The first three keys map to scalar :cpp:type:`core::expressions::DimType`
  * values. The other four keys map to ``std::map<ShapeTag, DimType>`` buckets
  * split by value tag (``"shape"``, ``"axes"``, ``"weight"``, or the empty string
  * for untagged values). ``"already_allocated_bytes"`` is the sum of the
  * ``"inputs"``, ``"initializers"`` and ``"intermediates"`` maps;
  * ``"output_allocation_bytes"`` is the sum of ``"outputs"``; and
  * ``"total_bytes"`` is the sum of those two scalar entries. Every amount is
- * represented as a :cpp:type:`onnx_optim::expressions::DimType`, so symbolic
+ * represented as a :cpp:type:`core::expressions::DimType`, so symbolic
  * shapes retain their expression form instead of being dropped. The ``"outputs"``
  * map only counts the extra allocations performed at this node; outputs that
  * reuse an existing input buffer in place contribute no additional bytes there.

@@ -48,7 +48,7 @@
 #include <variant>
 #include <vector>
 
-#include "onnx_core/tensor_type.h"
+#include "onnx_proto/type_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
@@ -179,9 +179,9 @@ struct AttributeParam {
   AttributeDefault default_value;
 };
 
-/// Re-exports ``onnx_core::TensorType`` so that existing consumers of
+/// Re-exports ``onnx_proto::TensorType`` so that existing consumers of
 /// ``onnx_op::TensorType`` continue to compile without change.
-using TensorType = onnx_core::TensorType;
+using TensorType = onnx_proto::TensorType;
 
 /// Specifies which tensor types are permitted for a named type parameter.
 struct TypeConstraintParam {
@@ -196,14 +196,14 @@ struct TypeConstraintParam {
 /**
  * Returns the ONNX type-string representation of a TensorType value.
  *
- * Forwards to ``onnx_core::ToTypeString``; kept here so that existing
+ * Forwards to ``onnx_proto::ToTypeString``; kept here so that existing
  * callers of ``onnx_op::ToTypeString`` continue to compile unchanged.
  *
  * @param type Tensor type enumerator to convert.
  * @return Null-terminated string such as `"tensor(float)"` or
  *         `"seq(tensor(int64))"`.
  */
-inline const char *ToTypeString(TensorType type) { return onnx_core::ToTypeString(type); }
+inline const char *ToTypeString(TensorType type) { return onnx_proto::ToTypeString(type); }
 
 /// Thrown when a LightOpSchema is constructed with invalid arguments.
 class SchemaError final : public std::runtime_error {

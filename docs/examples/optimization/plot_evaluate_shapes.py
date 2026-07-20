@@ -20,7 +20,7 @@ This example shows how to:
    symbolic shapes.
 3. Evaluate every inferred dimension to a concrete integer for several
    assignments of the input tokens, using
-   :func:`~onnx_light.onnx_optim.expressions.evaluate_expression`.
+   :func:`~onnx_light.onnx_core.expressions.evaluate_expression`.
 
 The same approach is useful in profiling and capacity-planning workflows
 where one wants to know the concrete tensor sizes a model produces for a
@@ -33,7 +33,7 @@ from __future__ import annotations
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx_optim.expressions import evaluate_expression
+from onnx_light.onnx_core.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
 
 # Built-in operator schemas must be registered before shape inference
@@ -126,7 +126,7 @@ for name, shape in symbolic_shapes.items():
 # * String dims that match an input token are looked up directly.
 # * String dims that are arithmetic expressions (e.g. ``"2*d_model"``)
 #   are reduced with
-#   :func:`~onnx_light.onnx_optim.expressions.evaluate_expression`,
+#   :func:`~onnx_light.onnx_core.expressions.evaluate_expression`,
 #   which accepts the mapping from token names to integer values.
 
 

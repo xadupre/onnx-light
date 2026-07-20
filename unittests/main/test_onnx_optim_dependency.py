@@ -12,9 +12,9 @@ class TestOnnxOptimDependency(unittest.TestCase):
         header = self.root / "onnx_light" / "onnx_optim" / "optim_tensor.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
-            "onnx_core/tensor_type.h",
+            "onnx_proto/type_helper.h",
             content,
-            "optim_tensor.h must include onnx_core/tensor_type.h",
+            "optim_tensor.h must include onnx_proto/type_helper.h",
         )
         self.assertNotIn(
             "onnx_op/light_op_schema.h",
@@ -26,9 +26,9 @@ class TestOnnxOptimDependency(unittest.TestCase):
         header = self.root / "onnx_light" / "onnx_optim" / "optim_tensor.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
-            "onnx_core::TensorType",
+            "onnx_proto::TensorType",
             content,
-            "TensorType alias in optim_tensor.h must reference onnx_core::TensorType",
+            "TensorType alias in optim_tensor.h must reference onnx_proto::TensorType",
         )
         self.assertNotIn(
             "onnx_op::TensorType",
@@ -54,29 +54,29 @@ class TestOnnxOptimDependency(unittest.TestCase):
             "lib_onnx_optim must not directly link against lib_onnx_op",
         )
 
-    def test_tensor_type_header_in_onnx_core(self):
-        header = self.root / "onnx_light" / "onnx_core" / "tensor_type.h"
-        self.assertTrue(header.exists(), "onnx_core/tensor_type.h must exist")
+    def test_tensor_type_header_in_onnx_proto(self):
+        header = self.root / "onnx_light" / "onnx_proto" / "type_helper.h"
+        self.assertTrue(header.exists(), "onnx_proto/type_helper.h must exist")
         content = header.read_text(encoding="utf-8")
         self.assertIn(
-            "enum class TensorType", content, "tensor_type.h must define the TensorType enum"
+            "enum class TensorType", content, "type_helper.h must define the TensorType enum"
         )
         self.assertIn(
-            "const char *ToTypeString", content, "tensor_type.h must declare ToTypeString"
+            "const char *ToTypeString", content, "type_helper.h must declare ToTypeString"
         )
 
     def test_light_op_schema_re_exports_tensor_type(self):
         header = self.root / "onnx_light" / "onnx_op" / "light_op_schema.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
-            "onnx_core/tensor_type.h",
+            "onnx_proto/type_helper.h",
             content,
-            "light_op_schema.h must include onnx_core/tensor_type.h",
+            "light_op_schema.h must include onnx_proto/type_helper.h",
         )
         self.assertIn(
-            "using TensorType = onnx_core::TensorType",
+            "using TensorType = onnx_proto::TensorType",
             content,
-            "light_op_schema.h must re-export TensorType from onnx_core",
+            "light_op_schema.h must re-export TensorType from onnx_proto",
         )
 
 

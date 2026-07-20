@@ -1,6 +1,6 @@
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_optim/annotations/inplace_reuse.h"
 #include "onnx_optim/annotations/value_tags.h"
-#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
@@ -60,7 +60,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
   // Symbolic dimension-expression utilities (simplify, evaluate, rename).
   // -----------------------------------------------------------------------
   {
-    namespace expr = ::onnx_light::onnx_optim::expressions;
+    namespace expr = ::onnx_light::core::expressions;
 
     auto expressions_mod = m.def_submodule("expressions");
     expressions_mod.doc() =
@@ -212,7 +212,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         "value (an equality constraint with no slack).  In that case there is no\n"
         "separate upper bound beyond the equality itself.\n\n"
         "When no finite upper bound can be derived, ``upper`` is set to\n"
-        ":data:`~onnx_light.onnx_optim.expressions.INFINITY` (the string ``'+inf'``),\n"
+        ":data:`~onnx_light.onnx_core.expressions.INFINITY` (the string ``'+inf'``),\n"
         "the reserved infinity sentinel.  Test for it with ``dr.upper == INFINITY``.\n"
         "No valid dimension-variable name may equal ``'+inf'``.\n\n"
         "Returned by :func:`dim_ranges_from_expressions`.")
@@ -228,7 +228,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
             "equality (e.g. ``var == value``).  When ``upper`` differs from ``lower``\n"
             "(floor-division chain with divisor product > 1), it is a true finite upper\n"
             "bound.  When no finite upper bound is known, ``upper`` equals\n"
-            ":data:`~onnx_light.onnx_optim.expressions.INFINITY` (``'+inf'``).")
+            ":data:`~onnx_light.onnx_core.expressions.INFINITY` (``'+inf'``).")
         .def("__repr__",
              [from_dim](const expr::DimRange &r) {
                auto lo = from_dim(r.lower);
@@ -358,14 +358,14 @@ void AddOnnxPyExpressions(nb::module_ &m) {
 
 void AddOnnxPyShapeInference(nb::module_ &m) {
   namespace onnx_annotations = ::onnx_light::onnx_optim::annotations;
-  namespace expr = ::onnx_light::onnx_optim::expressions;
+  namespace expr = ::onnx_light::core::expressions;
   namespace onnx_shapes = ::onnx_light::onnx_optim::shapes;
-  using ::onnx_light::onnx_core::TensorType;
   using ::onnx_light::onnx_optim::DataTypeToTensorType;
   using ::onnx_light::onnx_optim::OptimDim;
   using ::onnx_light::onnx_optim::OptimShape;
   using ::onnx_light::onnx_optim::OptimTensor;
   using ::onnx_light::onnx_optim::TensorTypeToDataType;
+  using ::onnx_light::onnx_proto::TensorType;
 
   auto shape_mod = m.def_submodule("shape_inference");
   shape_mod.doc() = "Shape-inference bindings backed by ``onnx_optim``: exposes ``ShapesContext``, "

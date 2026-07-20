@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @file tensor_type.h
+ * @file type_helper.h
  * @brief Declares the ``TensorType`` enumeration and the ``ToTypeString``
  *        converter used across the onnx-light library stack.
  */
@@ -129,5 +129,5 @@ enum class TensorType : uint8_t {
  */
 const char *ToTypeString(TensorType type);
 
-} // namespace onnx_core
+} // namespace onnx_proto
 } // namespace ONNX_LIGHT_NAMESPACE

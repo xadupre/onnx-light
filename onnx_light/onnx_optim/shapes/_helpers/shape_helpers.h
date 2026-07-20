@@ -4,11 +4,15 @@
 
 #pragma once
 
-#include "onnx_optim/expressions.h"
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_optim/optim_tensor.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
+
+// Alias to the symbolic dimension-expression library, which lives in
+// ``onnx_core`` so both ``onnx_op`` and ``onnx_optim`` can share it.
+namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
 namespace shapes {
 
 /// Converts an OptimDim into the expressions::DimType variant used by the

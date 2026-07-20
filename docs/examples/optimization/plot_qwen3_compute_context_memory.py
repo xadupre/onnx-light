@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import pandas
 from onnx_light.onnx import load as ol_load, save as ol_save, inliner
 from onnx_light.onnx.backend import collect_test_cases_by_name
-from onnx_light.onnx_optim.expressions import evaluate_expression
+from onnx_light.onnx_core.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
     ComputeContext,
     NODE_MEMORY_INITIALIZERS_KEY,

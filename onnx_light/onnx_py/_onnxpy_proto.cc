@@ -1,6 +1,6 @@
 #include "_onnxpyprotoop.h"
 #include "onnx.h"
-#include "onnx_core/graph_manipulations.h"
+#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
 #include "onnx_lib/onnx-data.pb.h"
@@ -296,7 +296,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
 
 #define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
   def_prop_rw(                                                                                     \
-      #name, [](cls & self) -> cls::name##_t * {                                                   \
+      #name, [](cls & self)->cls::name##_t * {                                                     \
         if (!self.name##_.has_value()) {                                                           \
           if (self.has_oneof_##name())                                                             \
             return nullptr;                                                                        \
@@ -316,7 +316,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
       nb::rv_policy::reference_internal, cls::DOC_##name, nb::for_setter(nb::arg("value").none())) \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
-          "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
+          "add_" #name, [](cls & self)->cls::name##_t & {                                          \
             self.name##_.set_empty_value();                                                        \
             return *self.name##_;                                                                  \
           },                                                                                       \
@@ -920,7 +920,7 @@ void AddOnnxPyProto(nb::module_ &m) {
 
   m.def(
       "collect_external_inputs",
-      [](const std::vector<NodeProto> &nodes) { return CollectExternalInputs(nodes); },
+      [](const std::vector<NodeProto> &nodes) { return core::graph::CollectExternalInputs(nodes); },
       nb::arg("nodes"),
       "Returns the list of input names referenced by ``nodes`` that are not "
       "produced as outputs by any node in the same list. The function "
@@ -930,8 +930,8 @@ void AddOnnxPyProto(nb::module_ &m) {
       "it skips empty input names.");
 
   m.def(
-      "collect_node_inputs", [](const NodeProto &node) { return CollectNodeInputs(node); },
-      nb::arg("node"),
+      "collect_node_inputs",
+      [](const NodeProto &node) { return core::graph::CollectNodeInputs(node); }, nb::arg("node"),
       "Returns the full list of tensor / sequence names that a single ``node`` depends on "
       "at runtime. Includes names referenced by ``node.input()`` and external inputs "
       "captured by subgraph attributes (``GRAPH`` / ``GRAPHS``), preserves "
@@ -940,7 +940,7 @@ void AddOnnxPyProto(nb::module_ &m) {
   m.def(
       "collect_remaining_inputs",
       [](const std::vector<NodeProto> &nodes, const std::vector<std::string> &outputs) {
-        return CollectRemainingInputs(nodes, outputs);
+        return core::graph::CollectRemainingInputs(nodes, outputs);
       },
       nb::arg("nodes"), nb::arg("outputs"),
       "Returns, for every node in ``nodes``, the list of input names that must "

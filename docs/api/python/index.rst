@@ -5,6 +5,7 @@ Python API
     :maxdepth: 1
 
     onnx/index
+    onnx_core/index
     onnx_op/index
     onnx_optim/index
     onnx_gradient/index

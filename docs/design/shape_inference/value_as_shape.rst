@@ -104,8 +104,8 @@ Concatenation and splitting
 
 Element-wise arithmetic (``Add``, ``Sub``)
     :cpp:func:`PropagateValueAsShapeArithmetic` applies
-    :func:`~onnx_light.onnx_optim.expressions.dim_add` or
-    :func:`~onnx_light.onnx_optim.expressions.dim_sub` element-wise to
+    :func:`~onnx_light.onnx_core.expressions.dim_add` or
+    :func:`~onnx_light.onnx_core.expressions.dim_sub` element-wise to
     the two operands' ``value_as_shape`` annotations.  Symbolic arithmetic
     is preserved: adding ``["N", 1]`` and ``[1, 1]`` yields
     ``["1+N", 2]``.  When either operand lacks a ``value_as_shape``, the
@@ -272,8 +272,8 @@ concrete integer *or* a symbolic expression string such as ``"N"`` or
 
 When arithmetic propagation (``Add``, ``Sub``) produces a new
 ``value_as_shape`` entry, it calls
-:func:`~onnx_light.onnx_optim.expressions.dim_add` or
-:func:`~onnx_light.onnx_optim.expressions.dim_sub`, which in turn invokes
+:func:`~onnx_light.onnx_core.expressions.dim_add` or
+:func:`~onnx_light.onnx_core.expressions.dim_sub`, which in turn invokes
 the expression simplifier.  This keeps the entries canonical: ``N + 1 - 1``
 simplifies back to ``N`` rather than accumulating noise.
 

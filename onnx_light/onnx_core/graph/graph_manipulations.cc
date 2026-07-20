@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/graph_manipulations.h"
+#include "onnx_core/graph/graph_manipulations.h"
 
 #include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-namespace expressions {
+namespace graph {
 
 namespace {
 
@@ -227,6 +227,6 @@ std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
   return out;
 }
 
-}
-}
+} // namespace graph
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

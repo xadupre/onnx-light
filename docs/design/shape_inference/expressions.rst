@@ -1,11 +1,11 @@
 .. _l-design-expressions:
 
-Symbolic expression library (``onnx_light.onnx_optim.expressions``)
+Symbolic expression library (``onnx_light.onnx_core.expressions``)
 ====================================================================
 
 This page describes the design of the symbolic dimension-expression library
 introduced in ``onnx_light/onnx_optim/`` and exposed as the
-Python module :mod:`onnx_light.onnx_optim.expressions`.
+Python module :mod:`onnx_light.onnx_core.expressions`.
 
 The library was ported from
 `yobx/xexpressions <https://github.com/xadupre/yet-another-onnx-builder/tree/main/yobx/xexpressions>`_
@@ -117,7 +117,7 @@ method for deep copying.
 Simplification pipeline
 -----------------------
 
-:func:`~onnx_light.onnx_optim.expressions.simplify_expression` applies a fixed
+:func:`~onnx_light.onnx_core.expressions.simplify_expression` applies a fixed
 sequence of AST transformers, then runs the sequence a second time to allow
 multi-step cancellations to converge.
 
@@ -221,7 +221,7 @@ factor appears on the multiplicative spine *outside* the division:
 
 .. code-block:: python
 
-    from onnx_light.onnx_optim.expressions import simplify_expression
+    from onnx_light.onnx_core.expressions import simplify_expression
 
     simplify_expression("2*(H//2)")   # "2*(H//2)"  — NOT simplified (not exact)
     simplify_expression("2*(H/:2)")   # "H"         — simplified (exact division)
@@ -245,7 +245,7 @@ simplifier produce cleaner symbolic shapes, e.g. for a reshape of
 Unparser
 --------
 
-:func:`~onnx_light.onnx_optim.expressions.simplify_expression` (and all other
+:func:`~onnx_light.onnx_core.expressions.simplify_expression` (and all other
 functions that produce an expression string) use ``unparse()`` to convert
 an AST back to a string.  The unparser inserts parentheses exactly where
 required by the precedence rules above, so the output round-trips through
@@ -256,7 +256,7 @@ For example:
 .. runpython::
     :showcode:
 
-    from onnx_light.onnx_optim.expressions import simplify_expression
+    from onnx_light.onnx_core.expressions import simplify_expression
 
     print(simplify_expression("(a + b) * c"))   # "(a+b)*c"  — parens kept (needed)
     print(simplify_expression("a * b + c"))     # "a*b+c"   — no parens (not needed)
@@ -268,20 +268,20 @@ Dimension operations
 
 The ``DimType`` type represents a tensor
 dimension as either a concrete ``int`` or a symbolic ``str``.  The dimension
-operation functions (:func:`~onnx_light.onnx_optim.expressions.dim_add`,
-:func:`~onnx_light.onnx_optim.expressions.dim_sub`,
-:func:`~onnx_light.onnx_optim.expressions.dim_mul`,
-:func:`~onnx_light.onnx_optim.expressions.dim_div`,
-:func:`~onnx_light.onnx_optim.expressions.dim_exact_div`,
-:func:`~onnx_light.onnx_optim.expressions.dim_mod`,
-:func:`~onnx_light.onnx_optim.expressions.dim_max`,
-:func:`~onnx_light.onnx_optim.expressions.dim_min`,
-:func:`~onnx_light.onnx_optim.expressions.dim_multi_mul`) share a common pattern:
+operation functions (:func:`~onnx_light.onnx_core.expressions.dim_add`,
+:func:`~onnx_light.onnx_core.expressions.dim_sub`,
+:func:`~onnx_light.onnx_core.expressions.dim_mul`,
+:func:`~onnx_light.onnx_core.expressions.dim_div`,
+:func:`~onnx_light.onnx_core.expressions.dim_exact_div`,
+:func:`~onnx_light.onnx_core.expressions.dim_mod`,
+:func:`~onnx_light.onnx_core.expressions.dim_max`,
+:func:`~onnx_light.onnx_core.expressions.dim_min`,
+:func:`~onnx_light.onnx_core.expressions.dim_multi_mul`) share a common pattern:
 
 1. If both operands are integers, compute the result exactly and return an
    integer.
 2. Otherwise, build an expression string ``"(a) op (b)"``, call
-   :func:`~onnx_light.onnx_optim.expressions.simplify_expression`, and return the
+   :func:`~onnx_light.onnx_core.expressions.simplify_expression`, and return the
    result (still an integer if the simplifier reduces it fully, otherwise a
    string).
 
@@ -291,7 +291,7 @@ intermediate expressions:
 .. runpython::
     :showcode:
 
-    from onnx_light.onnx_optim.expressions import dim_add, dim_mul, dim_div, dim_exact_div
+    from onnx_light.onnx_core.expressions import dim_add, dim_mul, dim_div, dim_exact_div
 
     print(dim_add("batch", 1))               # "1+batch"
     print(dim_mul(2, "seq_length"))          # "2*seq_length"
@@ -307,14 +307,14 @@ Renaming
 
 Two renaming functions cover different use cases:
 
-:func:`~onnx_light.onnx_optim.expressions.rename_expression`
+:func:`~onnx_light.onnx_core.expressions.rename_expression`
     Renames variable names according to a mapping, also converting
     ``Max(a, b)`` to ``a^b`` beforehand.  Raises ``RuntimeError`` on
     parse failure.  Intended for deterministic, one-shot renames where a
     parse error is truly unexpected.
 
-:func:`~onnx_light.onnx_optim.expressions.rename_dynamic_expression`
-    Like :func:`~onnx_light.onnx_optim.expressions.rename_expression`, but also applies a lightweight
+:func:`~onnx_light.onnx_core.expressions.rename_dynamic_expression`
+    Like :func:`~onnx_light.onnx_core.expressions.rename_expression`, but also applies a lightweight
     simplification pass and silently returns the original string on parse
     failure.  Intended for best-effort renaming during shape inference
     where the expression may occasionally be a raw ONNX node name rather
@@ -343,12 +343,12 @@ The C++ header and implementation files live in:
 
 .. code-block:: text
 
-    onnx_light/onnx_optim/
+    onnx_light/onnx_core/expressions/
     ├── expressions.h    ← public API (AST types + all free functions)
     └── expressions.cc  ← full implementation (tokenizer, parser,
                              transformers, evaluator, unparser)
 
-The Python module ``onnx_light.onnx_optim.expressions`` wraps the C++ functions
+The Python module ``onnx_light.onnx_core.expressions`` wraps the C++ functions
 exposed via the ``_onnxpy.expressions`` nanobind submodule (defined in
 ``onnx_light/onnx_py/_onnxpy_submodules.cc``).
 
@@ -356,12 +356,12 @@ Python wrapper:
 
 .. code-block:: text
 
-    onnx_light/onnx_optim/expressions.py  ← documented Python wrappers
+    onnx_light/onnx_core/expressions.py  ← documented Python wrappers
 
 ----
 
 API reference
 -------------
 
-* **C++ API**: :doc:`/api/cpp/onnx_optim/expressions`
-* **Python API**: :doc:`/api/python/onnx_optim/expressions`
+* **C++ API**: :doc:`/api/cpp/onnx_core/expressions`
+* **Python API**: :doc:`/api/python/onnx_core/expressions`

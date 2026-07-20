@@ -333,7 +333,7 @@ TEST(OnnxOptimShapeBuilder, CheckShapeComputesExpectedRankTypesAndConcreteDims) 
 //
 // In C++ the ``-1`` dimension is resolved by feeding the symbolic factors
 // of ``data_shape`` through
-// :cpp:func:`onnx_optim::expressions::simplify_expression`, yielding clean
+// :cpp:func:`core::expressions::simplify_expression`, yielding clean
 // symbolic expressions (``xr`` ends up with ``c/:2`` in the last dim — exact
 // division — and ``xrr`` simplifies back to ``c`` because the common factors
 // cancel cleanly with exact division ``/:``). The assertions below only check

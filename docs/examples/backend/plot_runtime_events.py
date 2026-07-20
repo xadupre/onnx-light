@@ -22,7 +22,7 @@ This example:
 * runs :func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model`
   on it so the expected shape of each intermediate tensor is
   recorded in ``graph.value_info``,
-* uses :func:`~onnx_light.onnx_optim.expressions.evaluate_expression`
+* uses :func:`~onnx_light.onnx_core.expressions.evaluate_expression`
   to resolve each symbolic dimension to a concrete integer given
   the actual batch size at runtime,
 * drives the runtime through
@@ -46,7 +46,7 @@ from __future__ import annotations
 import numpy as np
 
 from onnx_light.onnx_lib import parser
-from onnx_light.onnx_optim.expressions import evaluate_expression
+from onnx_light.onnx_core.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
 from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.tools import pretty_onnx
@@ -115,7 +115,7 @@ for name, shape in inferred_shapes.items():
 # Once the actual input shape is known, we can resolve every
 # symbolic dimension by binding the input parameters to integers
 # and feeding the resulting context to
-# :func:`~onnx_light.onnx_optim.expressions.evaluate_expression`.
+# :func:`~onnx_light.onnx_core.expressions.evaluate_expression`.
 # It supports the arithmetic expressions produced by shape
 # inference (``+``, ``-``, ``*``, ``//``, ``%``, ``CeilToInt`` …)
 # as well as plain integer literals and variable references.

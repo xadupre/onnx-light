@@ -20,7 +20,7 @@
  * The typical workflow is:
  *
  * @code{.cpp}
- * using namespace onnx_light::onnx_optim::expressions;
+ * using namespace onnx_light::core::expressions;
  *
  * // Simplify a string expression.
  * SimplifyResult r = simplify_expression("2*batch//batch");
@@ -862,5 +862,5 @@ dim_ranges_from_expressions(const std::vector<std::pair<std::string, std::string
                             const std::vector<std::string> &tokens = {});
 
 } // namespace expressions
-} // namespace onnx_optim
+} // namespace core
 } // namespace onnx_light

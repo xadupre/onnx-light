@@ -11,7 +11,7 @@ Expressions are strings containing integer constants, symbolic variable names
 
 Typical usage::
 
-    from onnx_light.core.expressions import (
+    from onnx_light.onnx_core.expressions import (
         simplify_expression,
         evaluate_expression,
         rename_expression,
@@ -37,7 +37,7 @@ Typical usage::
     d = dim_add("batch", 1)
     # d is "1+batch"
 
-The module is exposed as ``onnx_light.core.expressions``.
+The module is exposed as ``onnx_light.onnx_core.expressions``.
 """
 
 from __future__ import annotations

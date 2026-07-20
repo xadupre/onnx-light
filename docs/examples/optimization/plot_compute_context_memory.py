@@ -25,7 +25,7 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as helper
 from onnx_light.tools import pretty_onnx
-from onnx_light.onnx_optim.expressions import evaluate_expression
+from onnx_light.onnx_core.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
     ComputeContext,
     NODE_MEMORY_ALREADY_ALLOCATED_BYTES_KEY,

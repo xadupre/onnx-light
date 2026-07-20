@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/tensor_type.h"
+#include "onnx_proto/type_helper.h"
 
 #include <stdexcept>
 
@@ -175,5 +175,5 @@ const char *ToTypeString(TensorType type) {
   throw std::logic_error("Unknown TensorType.");
 }
 
-} // namespace onnx_core
+} // namespace onnx_proto
 } // namespace ONNX_LIGHT_NAMESPACE

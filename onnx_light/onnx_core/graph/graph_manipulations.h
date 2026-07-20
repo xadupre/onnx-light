@@ -67,6 +67,6 @@ CollectRemainingInputs(const std::vector<NodeProto> &nodes,
  */
 std::vector<std::string> CollectNodeInputs(const NodeProto &node);
 
-}
-}
+} // namespace graph
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

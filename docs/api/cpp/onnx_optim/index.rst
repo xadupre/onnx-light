@@ -20,6 +20,5 @@ etc.) and only needs to be referenced.
 
     optim_tensor
     optim_sequence
-    expressions
     annotations/index
     shapes/index

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_kernels/runtime_context.h"
-#include "onnx_core/graph_manipulations.h"
+#include "onnx_core/graph/graph_manipulations.h"
 
 #include <algorithm>
 #include <chrono>
@@ -287,16 +287,16 @@ void RuntimeContext::AppendRunNodeEvent(const std::string &op_domain, const std:
 
 std::vector<std::string>
 RuntimeContext::CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes) {
-  return ::ONNX_LIGHT_NAMESPACE::CollectExternalInputs(nodes);
+  return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
 }
 
 std::vector<std::string>
 RuntimeContext::CollectExternalInputs(const std::vector<NodeProto> &nodes) {
-  return ::ONNX_LIGHT_NAMESPACE::CollectExternalInputs(nodes);
+  return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
 }
 
 std::vector<std::string> RuntimeContext::CollectNodeInputs(const NodeProto &node) {
-  return ::ONNX_LIGHT_NAMESPACE::CollectNodeInputs(node);
+  return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
 }
 
 namespace {

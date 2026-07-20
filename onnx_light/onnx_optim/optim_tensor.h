@@ -18,8 +18,8 @@
 // block. tensor_type.h intentionally does not include onnx_light_helpers.h
 // itself (see onnx_op/test_onnx_op_*.cc for the #undef trick that relies on
 // this).
-#include "onnx_core/tensor_type.h"
 #include "onnx_proto/onnx.h"
+#include "onnx_proto/type_helper.h"
 
 /**
  * @file optim_tensor.h
@@ -48,7 +48,7 @@ namespace onnx_optim {
 
 /// Reuse the TensorType enumeration defined by ``onnx_core`` so that
 /// ``onnx_optim`` is fully aligned with the rest of the operator stack.
-using TensorType = ONNX_LIGHT_NAMESPACE::onnx_core::TensorType;
+using TensorType = ONNX_LIGHT_NAMESPACE::onnx_proto::TensorType;
 
 /**
  * Maps a ``TensorProto::DataType`` to the matching :cpp:type:`TensorType`

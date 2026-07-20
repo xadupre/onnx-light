@@ -24,7 +24,7 @@ Architecture
 .. code-block:: text
 
     ┌─────────────────────────────────────────────────┐
-    │          Public API  (gradient.h)               │
+    │  Public API  (onnx_gradient/gradient.h)         │
     │                                                 │
     │  GradientOfNodes(nodes, inputs, initializers,   │
     │                  xs, y, zs, registry)           │
@@ -32,10 +32,10 @@ Architecture
     │  GradientOfFunction(function, xs, y, zs,        │
     │                     registry)                   │
     └──────────────┬──────────────────────────────────┘
-                   │
+                   │  delegates to
                    ▼
     ┌─────────────────────────────────────────────────┐
-    │         Reverse traversal  (gradient.cc)        │
+    │  Core algorithm  (onnx_core/gradient/)          │
     │                                                 │
     │  1. Build a value→producer node map.            │
     │  2. Walk backward from y using DFS.             │
@@ -48,32 +48,36 @@ Architecture
                    │
                    ▼
     ┌─────────────────────────────────────────────────┐
-    │         Gradient registry  (grad_dispatcher)    │
+    │  Registration mechanism  (onnx_core/gradient/   │
+    │                           grad_dispatcher)      │
     │                                                 │
-    │  DefaultGradRegistry() returns a static map     │
-    │  keyed by (domain, op_type) → GradFn.           │
-    │  RegisterGradientFunction() inserts custom ops. │
+    │  RegisterGradientFunction() inserts a GradFn.   │
+    │  ApplyBackward() dispatches to the registered   │
+    │  function for the current operator.             │
     └──────────────┬──────────────────────────────────┘
-                   │
+                   │  populated by
                    ▼
     ┌─────────────────────────────────────────────────┐
     │  Per-operator gradient rules                    │
     │  onnx_gradient/gradient/{math,nn,tensor,        │
     │                           reduction}/           │
     │                                                 │
-    │  Conv, MatMul, Gemm, Add, Sub, Mul, Div, Neg,   │
-    │  Identity, Relu, Sigmoid, Tanh,                 │
-    │  ReduceSum, ReduceMean, Reshape, Transpose      │
+    │  DefaultGradRegistry() registers all standard   │
+    │  operators: Conv, MatMul, Gemm, Add, Sub, Mul,  │
+    │  Div, Neg, Identity, Relu, Sigmoid, Tanh,       │
+    │  ReduceSum, ReduceMean, Reshape, Transpose, …   │
     └─────────────────────────────────────────────────┘
 
 Key data structures
 -------------------
 
 ``GradRegistry``
-    An ``std::unordered_map<std::string, GradFn>`` mapping
-    ``"domain::op_type"`` keys to gradient functions.  The default
-    registry is built once at program startup and can be copied and
-    extended by callers.
+    An ``std::unordered_map<std::pair<std::string, std::string>, GradFn,
+    PairStringHash>`` mapping ``(domain, op_type)`` pairs to gradient
+    functions.  The empty string ``""`` denotes the default ONNX operator
+    domain.  The default registry is built once at program startup by
+    ``onnx_gradient::DefaultGradRegistry()`` and can be copied and
+    extended by callers via ``RegisterGradientFunction``.
 
 ``GradFn``
     A ``std::function`` with signature::

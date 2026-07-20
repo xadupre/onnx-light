@@ -7,6 +7,8 @@
 #include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE {
+namespace core {
+namespace expressions {
 
 namespace {
 
@@ -225,4 +227,6 @@ std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
   return out;
 }
 
+}
+}
 } // namespace ONNX_LIGHT_NAMESPACE

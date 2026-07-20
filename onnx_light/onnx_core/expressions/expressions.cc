@@ -15,7 +15,7 @@
 #include <stdexcept>
 
 namespace onnx_light {
-namespace onnx_optim {
+namespace core {
 namespace expressions {
 
 // ═══════════════════════════════════════════════════════════════════════════

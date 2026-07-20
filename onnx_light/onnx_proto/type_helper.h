@@ -6,14 +6,6 @@
  * @file tensor_type.h
  * @brief Declares the ``TensorType`` enumeration and the ``ToTypeString``
  *        converter used across the onnx-light library stack.
- *
- * ``TensorType`` lives in ``onnx_core`` so that both ``onnx_op`` (which
- * builds operator schemas) and ``onnx_optim`` (which runs shape inference)
- * can use it without either library depending on the other.
- *
- * ``onnx_op`` re-exports ``TensorType`` via a ``using`` declaration so that
- * existing code that references ``onnx_op::TensorType`` or
- * ``onnx_op::ToTypeString`` continues to compile unchanged.
  */
 
 #pragma once
@@ -21,7 +13,7 @@
 #include <cstdint>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_core {
+namespace onnx_proto {
 
 /**
  * Identifies an element or sequence tensor type supported by onnx-light.

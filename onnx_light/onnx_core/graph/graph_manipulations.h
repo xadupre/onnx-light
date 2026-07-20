@@ -10,6 +10,8 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
+namespace core {
+namespace graph {
 
 /**
  * Returns the list of input names referenced by ``nodes`` that are not produced
@@ -65,4 +67,6 @@ CollectRemainingInputs(const std::vector<NodeProto> &nodes,
  */
 std::vector<std::string> CollectNodeInputs(const NodeProto &node);
 
+}
+}
 } // namespace ONNX_LIGHT_NAMESPACE

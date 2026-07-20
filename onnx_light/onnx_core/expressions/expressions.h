@@ -53,7 +53,7 @@
 #include <vector>
 
 namespace onnx_light {
-namespace onnx_optim {
+namespace core {
 namespace expressions {
 
 // ─────────────────────────── operator kinds ───────────────────────────

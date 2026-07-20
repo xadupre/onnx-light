@@ -7,7 +7,7 @@
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_core {
+namespace onnx_proto {
 
 const char *ToTypeString(TensorType type) {
   switch (type) {

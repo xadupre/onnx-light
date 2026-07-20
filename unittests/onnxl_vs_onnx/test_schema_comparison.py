@@ -148,11 +148,11 @@ class TestSchemaComparison(ExtTestCase):
         ops_in_source = set(
             re.findall(r'\{"([A-Za-z][A-Za-z0-9_.]*):([A-Za-z][A-Za-z0-9_]*)",\s*\[\]', source)
         )
-        ops_in_module = set(sc.ONNX_OPTIM_SHAPE_INFERENCE_OPS)
+        ops_in_module = set(sc.ONNX_SHAPES_SHAPE_INFERENCE_OPS)
         self.assertEqual(
             ops_in_source,
             ops_in_module,
-            "ONNX_OPTIM_SHAPE_INFERENCE_OPS in onnx_light.tools.schema_comparison must be kept "
+            "ONNX_SHAPES_SHAPE_INFERENCE_OPS in onnx_light.tools.schema_comparison must be kept "
             "in sync with the dispatch table in dispatch_table.cc",
         )
 

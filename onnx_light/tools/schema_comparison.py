@@ -38,7 +38,7 @@ from typing import Any, Iterable
 # ``onnx_light/onnx_shapes/shapes/dispatch_table.cc``). The list is small on
 # purpose: ``onnx_shapes`` only implements a handful of operators today. Keep
 # this set in sync with the dispatch table in ``dispatch_table.cc``.
-ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
+ONNX_SHAPES_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
     {
         ("ai.onnx", "Abs"),
         ("ai.onnx", "Acos"),
@@ -579,7 +579,7 @@ def compute_schema_comparison() -> SchemaComparison:
                 in_onnx=key in onnx_all,
                 in_onnx_light=key in light_schemas,
                 onnx_shape_inference=key in onnx_with_shape,
-                onnx_light_shape_inference=key in ONNX_OPTIM_SHAPE_INFERENCE_OPS,
+                onnx_light_shape_inference=key in ONNX_SHAPES_SHAPE_INFERENCE_OPS,
                 onnx_backend_tests=int(onnx_tests.get(key, 0)),
                 onnx_light_backend_tests=int(light_tests.get(key, 0)),
             )

@@ -557,6 +557,20 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           nb::arg("fd"), nb::arg("options") = nb::none(),
           "Serializes this instance into an open file descriptor without closing it.")
       .def(
+          "SerializeToOstream",
+          [](cls &self, nb::object output) {
+            std::string out;
+            SerializeOptions opts;
+            bool ok = self.SerializeToString(out, opts);
+            if (!ok) {
+              throw std::runtime_error("SerializeToOstream: output exceeded "
+                                       "SerializeOptions.max_serialized_size_bytes.");
+            }
+            output.attr("write")(nb::bytes(out.data(), out.size()));
+          },
+          nb::arg("output"),
+          "Serializes this instance to a Python file-like object that has a write() method.")
+      .def(
           "__str__",
           [](cls &self) -> std::string {
             utils::PrintOptions opts;

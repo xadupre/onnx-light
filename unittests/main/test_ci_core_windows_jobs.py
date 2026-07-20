@@ -1,6 +1,8 @@
 import unittest
 from pathlib import Path
 
+import yaml
+
 
 class TestCiCoreWindowsJobs(unittest.TestCase):
     @classmethod
@@ -42,6 +44,20 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
                 r"run: ctest --test-dir build --output-on-failure -C Release --timeout 120"
             ),
         )
+
+    def test_reduced_and_no_onnx_preflights_run_in_parallel(self):
+        """Verifies that the reduced and no-onnx preflights have no interdependency."""
+        jobs = yaml.safe_load(self.content)["jobs"]
+        self.assertIsNone(jobs["reduced_tests_ubuntu"].get("needs"))
+        self.assertIsNone(jobs["no_onnx_tests_ubuntu"].get("needs"))
+
+    def test_downstream_jobs_gate_on_both_preflights(self):
+        """Verifies that every downstream build job waits on both preflights."""
+        jobs = yaml.safe_load(self.content)["jobs"]
+        for job_name in ("core_tests_ubuntu", "core_tests", "windows_x86_build"):
+            needs = jobs[job_name].get("needs")
+            self.assertIn("reduced_tests_ubuntu", needs, job_name)
+            self.assertIn("no_onnx_tests_ubuntu", needs, job_name)
 
 
 if __name__ == "__main__":

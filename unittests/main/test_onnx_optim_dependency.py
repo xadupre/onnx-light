@@ -1,4 +1,3 @@
-import re
 import unittest
 from pathlib import Path
 
@@ -57,19 +56,13 @@ class TestOnnxOptimDependency(unittest.TestCase):
 
     def test_tensor_type_header_in_onnx_core(self):
         header = self.root / "onnx_light" / "onnx_core" / "tensor_type.h"
-        self.assertTrue(
-            header.exists(), "onnx_core/tensor_type.h must exist"
-        )
+        self.assertTrue(header.exists(), "onnx_core/tensor_type.h must exist")
         content = header.read_text(encoding="utf-8")
         self.assertIn(
-            "enum class TensorType",
-            content,
-            "tensor_type.h must define the TensorType enum",
+            "enum class TensorType", content, "tensor_type.h must define the TensorType enum"
         )
         self.assertIn(
-            "const char *ToTypeString",
-            content,
-            "tensor_type.h must declare ToTypeString",
+            "const char *ToTypeString", content, "tensor_type.h must declare ToTypeString"
         )
 
     def test_light_op_schema_re_exports_tensor_type(self):

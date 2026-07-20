@@ -11,8 +11,14 @@
 #include <variant>
 #include <vector>
 
-#include "onnx_core/tensor_type.h"
 #include "onnx_light_helpers.h"
+
+// IMPORTANT: onnx_light_helpers.h must be included first so that
+// ONNX_LIGHT_NAMESPACE is defined before tensor_type.h declares its namespace
+// block. tensor_type.h intentionally does not include onnx_light_helpers.h
+// itself (see onnx_op/test_onnx_op_*.cc for the #undef trick that relies on
+// this).
+#include "onnx_core/tensor_type.h"
 #include "onnx_proto/onnx.h"
 
 /**

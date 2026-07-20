@@ -1,4 +1,3 @@
-#include "onnx_core/tensor_type.h"
 #include "onnx_optim/annotations/inplace_reuse.h"
 #include "onnx_optim/annotations/value_tags.h"
 #include "onnx_optim/expressions.h"

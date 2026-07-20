@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import IO, Any, Callable, Optional
+from typing import IO, Any, Callable, Optional, cast
 from ..onnx_py._onnxpyprotoop import (  # type: ignore
     FileLoadMode,
     ModelProto,
@@ -173,7 +173,7 @@ def save(
             from ._text_format import serialize_to_textproto
 
             text = serialize_to_textproto(proto)
-            f.write(text.encode("utf-8"))  # type: ignore[union-attr]
+            cast(IO[bytes], f).write(text.encode("utf-8"))
             return
         proto.SerializeToOstream(f)
         return

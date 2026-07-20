@@ -1,6 +1,7 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/basic_test.py
 from __future__ import annotations
 
+import io
 import os
 import pathlib
 import tempfile
@@ -100,8 +101,6 @@ class TestIOModel(ExtTestCase):
     def test_serialize_to_ostream_and_load(self) -> None:
         """Tests that SerializeToOstream() writes valid bytes to a file-like object."""
         proto = _simple_model()
-        import io
-
         buf = io.BytesIO()
         proto.SerializeToOstream(buf)
         loaded_proto = onnxl.load(buf.getvalue())
@@ -110,8 +109,6 @@ class TestIOModel(ExtTestCase):
     def test_save_model_file_like_with_external_data_raises(self) -> None:
         """Tests that save() raises when a file-like object is used with external data."""
         proto = _simple_model()
-        import io
-
         buf = io.BytesIO()
         with self.assertRaises(ValueError) as ctx:
             onnxl.save(proto, buf, save_as_external_data=True)

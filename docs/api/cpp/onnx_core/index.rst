@@ -10,4 +10,5 @@ libraries depending on the other.
     :maxdepth: 1
 
     expressions
+    graph_manipulations
     light_op_schema

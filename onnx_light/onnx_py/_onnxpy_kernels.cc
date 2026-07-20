@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_kernels/kernel_dispatch_table.h"
 
 #include <cstdint>
 #include <nanobind/nanobind.h>
@@ -68,6 +69,11 @@ NB_MODULE(_onnxpykernels, m) {
 
   AddOnnxPyKernels(m);
   AddOnnxPyRuntime(m);
+
+  // Register all built-in onnx_kernels operator trampolines with the
+  // core::runtime dispatch table so that RunNode/RunGraph/RunModel work as
+  // soon as the module is imported.
+  onnx_kernels::RegisterKernelFunctions();
 }
 
 void AddOnnxPyKernels(nb::module_ &m) {

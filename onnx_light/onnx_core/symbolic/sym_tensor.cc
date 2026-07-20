@@ -23,8 +23,10 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
+namespace symbolic {
 
 Device MakeGPUDevice(int index) {
   if (index < 0 || index > kMaxGPUIndex) {
@@ -675,5 +677,6 @@ bool OptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi) {
   return true;
 }
 
-} // namespace onnx_optim
+} // namespace symbolic
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

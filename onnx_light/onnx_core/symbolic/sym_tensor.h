@@ -44,7 +44,8 @@
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
+namespace symbolic {
 
 /// Reuse the TensorType enumeration defined by ``onnx_core`` so that
 /// ``onnx_optim`` is fully aligned with the rest of the operator stack.
@@ -702,5 +703,6 @@ bool OptimTensorFromTensorProto(const TensorProto &tp, OptimTensor &out);
  */
 bool OptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi);
 
-} // namespace onnx_optim
+} // namespace symbolic
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

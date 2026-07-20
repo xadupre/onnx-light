@@ -12,7 +12,7 @@
 #include "onnx_proto/onnx.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
 namespace annotations {
 
 constexpr const char *kValueTagMetadataKey = "onnx_light.value_tag";
@@ -36,5 +36,5 @@ void WriteValueAndNodeTagsToMetadata(FunctionProto &function);
 void WriteValueAndNodeTagsToMetadata(ModelProto &model);
 
 } // namespace annotations
-} // namespace onnx_optim
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

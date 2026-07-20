@@ -13,7 +13,7 @@
 #include "onnx_optim/annotations/inplace_reuse.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
 namespace annotations {
 
 namespace {
@@ -573,5 +573,5 @@ void WriteValueAndNodeTagsToMetadata(ModelProto &model) {
 }
 
 } // namespace annotations
-} // namespace onnx_optim
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -38,7 +38,8 @@
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
+namespace symbolic {
 
 /**
  * Descriptor for an ONNX tensor-sequence value. A sequence carries a
@@ -149,5 +150,6 @@ private:
   bool has_elem_shapes_ = false;
 };
 
-} // namespace onnx_optim
+} // namespace symbolic
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

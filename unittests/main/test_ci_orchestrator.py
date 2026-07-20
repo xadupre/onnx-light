@@ -59,9 +59,7 @@ class TestCiOrchestrator(unittest.TestCase):
         }
         for job, expected_uses in expected.items():
             self.assertEqual(
-                jobs[job]["uses"],
-                expected_uses,
-                f"Job '{job}' must use '{expected_uses}'",
+                jobs[job]["uses"], expected_uses, f"Job '{job}' must use '{expected_uses}'"
             )
 
     def test_fast_phase_jobs_have_no_needs(self):
@@ -74,11 +72,7 @@ class TestCiOrchestrator(unittest.TestCase):
             "fast_spelling",
             "fast_codeql",
         ):
-            self.assertNotIn(
-                "needs",
-                jobs[job],
-                f"Fast-phase job '{job}' must not have 'needs'",
-            )
+            self.assertNotIn("needs", jobs[job], f"Fast-phase job '{job}' must not have 'needs'")
 
     def test_codeql_grants_security_events_write(self):
         """Verifies that the fast_codeql job grants security-events: write permission."""
@@ -172,11 +166,7 @@ class TestCiOrchestrator(unittest.TestCase):
             data = yaml.safe_load((wf_dir / fname).read_text(encoding="utf-8"))
             # PyYAML parses bare 'on' as True
             on = data.get(True, data.get("on", {}))
-            self.assertIn(
-                "workflow_call",
-                on,
-                f"{fname} must declare 'workflow_call:' trigger",
-            )
+            self.assertIn("workflow_call", on, f"{fname} must declare 'workflow_call:' trigger")
 
     # ── Downstream workflows updated ──────────────────────────────────────────
 

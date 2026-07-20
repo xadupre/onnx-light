@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import IO, Any, Callable, Optional, cast
 from ..onnx_py._onnxpyprotoop import (  # type: ignore
     FileLoadMode,
     ModelProto,
@@ -84,7 +84,7 @@ def _find_external_location(model_path: str) -> str:
 
 def save(
     proto: ModelProto,
-    f: str | Path,
+    f: str | Path | IO[bytes],
     format: str | None = None,
     *,
     save_as_external_data: bool = False,
@@ -151,7 +151,32 @@ def save(
         the bytes and update tensor metadata before serialization.
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
-    assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."
+    assert isinstance(f, (str, Path)) or hasattr(
+        f, "write"
+    ), f"Expected str, Path, or file-like object with write() method, got {type(f)}."
+    if hasattr(f, "write"):
+        # File-like object path: external data is not supported.
+        if save_as_external_data or location:
+            raise ValueError(
+                "save_as_external_data and location are not supported when f is a "
+                "file-like object. Pass a file path instead."
+            )
+        resolved_format = format if format is not None else "protobuf"
+        if resolved_format not in _SUPPORTED_FORMATS:
+            raise ValueError(
+                f"Unsupported format={resolved_format!r}; onnx-light only supports "
+                f"{sorted(_SUPPORTED_FORMATS)!r}."
+            )
+        if resolved_format == "textproto":
+            if raw_data_callback is not None:
+                raise ValueError("raw_data_callback is not supported for the 'textproto' format.")
+            from ._text_format import serialize_to_textproto
+
+            text = serialize_to_textproto(proto)
+            cast(IO[bytes], f).write(text.encode("utf-8"))
+            return
+        proto.SerializeToOstream(f)
+        return
     if format is None:
         format = _infer_format(f)
     if format not in _SUPPORTED_FORMATS:
@@ -202,6 +227,37 @@ def save(
         proto.SerializeToFile(str(f), opts)
     else:
         proto.SerializeToFile(str(f))
+
+
+def save_to_file_descriptor(
+    proto: ModelProto, fd: int, *, num_threads: int = 1, min_block_size: int = 0
+) -> None:
+    """Saves the ModelProto to an open file descriptor without closing it.
+
+    Writes the serialized protobuf bytes directly into the open file descriptor
+    *fd*. The descriptor is not closed after writing; the caller is responsible
+    for closing it.
+
+    :param proto: should be an in-memory ModelProto.
+    :param fd: open writable file descriptor (integer). Must be a valid file
+        descriptor opened for writing.
+    :param num_threads: number of threads to use for serialization.
+        ``1`` (default) disables parallelization, ``> 1`` uses exactly that
+        many worker threads. Negative values are not supported for file
+        descriptor writes and are treated as ``1``.
+    :param min_block_size: minimum raw-data block size in bytes to write in
+        parallel when ``num_threads != 1``; tensor blocks smaller than this
+        threshold are written on the calling thread to avoid thread-pool
+        overhead. A value of 0 (default) parallelizes all blocks.
+    """
+    assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
+    if num_threads != 1 or min_block_size != 0:
+        opts = SerializeOptions()
+        opts.num_threads = num_threads
+        opts.min_parallel_block_size = min_block_size
+        proto.SerializeToFileDescriptor(fd, opts)
+    else:
+        proto.SerializeToFileDescriptor(fd)
 
 
 def load(

@@ -1,6 +1,7 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/basic_test.py
 from __future__ import annotations
 
+import io
 import os
 import pathlib
 import tempfile
@@ -70,6 +71,56 @@ class TestIOModel(ExtTestCase):
                 os.close(fd)
             loaded_proto = onnxl.load(model_path)
             self.assertEqual(proto, loaded_proto)
+
+    def test_save_to_file_descriptor_and_load(self) -> None:
+        """Tests that save_to_file_descriptor() writes a valid model."""
+        proto = _simple_model()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = os.path.join(temp_dir, "model_fd2.onnx")
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            if hasattr(os, "O_BINARY"):
+                flags |= os.O_BINARY
+            fd = os.open(model_path, flags, 0o666)
+            try:
+                onnxl.save_to_file_descriptor(proto, fd)
+            finally:
+                os.close(fd)
+            loaded_proto = onnxl.load(model_path)
+            self.assertEqual(proto, loaded_proto)
+
+    def test_save_model_when_input_is_file_like_object(self) -> None:
+        """Tests that save() accepts a file-like object with a write() method."""
+        proto = _simple_model()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = os.path.join(temp_dir, "model_stream.onnx")
+            with open(model_path, "wb") as handle:
+                onnxl.save(proto, handle)
+            loaded_proto = onnxl.load(model_path)
+            self.assertEqual(proto, loaded_proto)
+
+    def test_serialize_to_ostream_and_load(self) -> None:
+        """Tests that SerializeToOstream() writes valid bytes to a file-like object."""
+        proto = _simple_model()
+        buf = io.BytesIO()
+        proto.SerializeToOstream(buf)
+        loaded_proto = onnxl.load(buf.getvalue())
+        self.assertEqual(proto, loaded_proto)
+
+    def test_serialize_to_ostream_capital_s_and_load(self) -> None:
+        """Tests that SerializeToOStream() (capital S) works as an alias."""
+        proto = _simple_model()
+        buf = io.BytesIO()
+        proto.SerializeToOStream(buf)
+        loaded_proto = onnxl.load(buf.getvalue())
+        self.assertEqual(proto, loaded_proto)
+
+    def test_save_model_file_like_with_external_data_raises(self) -> None:
+        """Tests that save() raises when a file-like object is used with external data."""
+        proto = _simple_model()
+        buf = io.BytesIO()
+        with self.assertRaises(ValueError) as ctx:
+            onnxl.save(proto, buf, save_as_external_data=True)
+        self.assertIn("file-like object", str(ctx.exception))
 
     def test_load_model_with_format_protobuf(self) -> None:
         """Tests that load() accepts format='protobuf' parameter."""

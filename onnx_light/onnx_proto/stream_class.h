@@ -25,10 +25,13 @@
   std::string SerializeAsString() const;                                                           \
   bool SerializeToArray(void *data, int size) const;                                               \
   bool SerializeToOstream(std::ostream *output) const;                                             \
+  bool SerializeToOStream(std::ostream *output) const;                                             \
   bool SerializeToString(std::string &out) const;                                                  \
   bool SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
   bool SerializeToFileDescriptor(int fd) const;                                                    \
   bool SerializeToFileDescriptor(int fd, SerializeOptions &opts) const;                            \
+  bool SaveToFileDescriptor(int fd) const;                                                         \
+  bool SaveToFileDescriptor(int fd, SerializeOptions &opts) const;                                 \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
       const;                                                                                       \
   bool ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \

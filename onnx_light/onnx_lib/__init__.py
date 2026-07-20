@@ -45,5 +45,6 @@ from ..onnx_proto._io_helper import (
     save,
     save_encrypted,
     save_encrypted_string,
+    save_to_file_descriptor,
 )
 from . import defs, external_data_helper, parser, shape_inference

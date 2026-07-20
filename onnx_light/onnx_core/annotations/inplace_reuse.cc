@@ -16,10 +16,6 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-
-// Alias to the symbolic dimension-expression library, which lives in
-// ``onnx_core`` so both ``onnx_op`` and ``onnx_optim`` can share it.
-namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
 namespace annotations {
 
 namespace {

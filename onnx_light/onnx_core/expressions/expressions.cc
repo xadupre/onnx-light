@@ -2166,5 +2166,5 @@ dim_ranges_from_expressions(const std::vector<std::pair<std::string, std::string
 }
 
 } // namespace expressions
-} // namespace onnx_optim
+} // namespace core
 } // namespace onnx_light

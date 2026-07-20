@@ -14,11 +14,11 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::Tensor;
 using onnx_backend_test::CollectTestCases;
 using onnx_backend_test::DataSet;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::TestCase;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::Split;
 
@@ -40,7 +40,7 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
 }
 
 std::vector<int64_t> ToInt64Vector(const Tensor &t) {
-  EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(t.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   std::vector<int64_t> values;
   values.reserve(static_cast<size_t>(t.element_count()));
   const int64_t *p = t.AsInt64();

@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
 #include <cstdint>
@@ -17,8 +17,8 @@ namespace onnx_backend_test {
 namespace {
 
 // IEEE-754 binary16 / bfloat16 encoders are provided by
-// ``onnx_kernels/kernels/_helpers/cast_helper.h``; the scalar tensor builders
-// ``kernel::MakeFloat16Scalar`` / ``kernel::MakeBfloat16Scalar`` are used
+// ``onnx_core/runtime/cast_helper.h``; the scalar tensor builders
+// ``MakeFloat16Scalar`` / ``MakeBfloat16Scalar`` are used
 // directly by the case registrations below.
 
 } // namespace
@@ -102,9 +102,9 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("output");
     Expect(registry, std::move(node), "test_range_float16_type_positive_delta", {opset_v27},
            [=]() -> IoData {
-             const Tensor start = kernel::MakeFloat16Scalar("start", 1.0f);
-             const Tensor limit = kernel::MakeFloat16Scalar("limit", 5.0f);
-             const Tensor delta = kernel::MakeFloat16Scalar("delta", 2.0f);
+             const Tensor start = MakeFloat16Scalar("start", 1.0f);
+             const Tensor limit = MakeFloat16Scalar("limit", 5.0f);
+             const Tensor delta = MakeFloat16Scalar("delta", 2.0f);
              const Tensor output = kernel::Range(ctx_v27)(start, limit, delta);
              return IoData{{std::move(start), std::move(limit), std::move(delta)},
                            {std::move(output)}};
@@ -122,9 +122,9 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("output");
     Expect(registry, std::move(node), "test_range_bfloat16_type_positive_delta", {opset_v27},
            [=]() -> IoData {
-             const Tensor start = kernel::MakeBfloat16Scalar("start", 1.0f);
-             const Tensor limit = kernel::MakeBfloat16Scalar("limit", 5.0f);
-             const Tensor delta = kernel::MakeBfloat16Scalar("delta", 2.0f);
+             const Tensor start = MakeBfloat16Scalar("start", 1.0f);
+             const Tensor limit = MakeBfloat16Scalar("limit", 5.0f);
+             const Tensor delta = MakeBfloat16Scalar("delta", 2.0f);
              const Tensor output = kernel::Range(ctx_v27)(start, limit, delta);
              return IoData{{std::move(start), std::move(limit), std::move(delta)},
                            {std::move(output)}};

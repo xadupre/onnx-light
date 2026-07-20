@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>

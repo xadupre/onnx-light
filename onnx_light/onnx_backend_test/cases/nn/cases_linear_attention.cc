@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -449,14 +449,14 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
   // outputs back to FLOAT16, so the reference outputs are computed from the
   // FP16-rounded inputs in float32 and rounded back to FLOAT16.
   {
-    Tensor q16 = kernel::RoundToFloat16(query);
-    Tensor k16 = kernel::RoundToFloat16(key);
-    Tensor v16 = kernel::RoundToFloat16(value);
+    Tensor q16 = RoundToFloat16(query);
+    Tensor k16 = RoundToFloat16(key);
+    Tensor v16 = RoundToFloat16(value);
     Tensor decay32 = Tensor::FromFloat("", {1, 2, 4},
                                        {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
     Tensor beta32 = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
-    Tensor decay16 = kernel::RoundToFloat16(decay32);
-    Tensor beta16 = kernel::RoundToFloat16(beta32);
+    Tensor decay16 = RoundToFloat16(decay32);
+    Tensor beta16 = RoundToFloat16(beta32);
     kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
@@ -468,13 +468,12 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_fp16", {opset}, [=]() -> IoData {
-      return IoData{{std::move(kernel::FloatToFloat16Tensor("", q16)),
-                     std::move(kernel::FloatToFloat16Tensor("", k16)),
-                     std::move(kernel::FloatToFloat16Tensor("", v16)),
-                     std::move(kernel::FloatToFloat16Tensor("", decay16)),
-                     std::move(kernel::FloatToFloat16Tensor("", beta16))},
-                    {std::move(kernel::FloatToFloat16Tensor("", result.output)),
-                     std::move(kernel::FloatToFloat16Tensor("", result.present_state))}};
+      return IoData{
+          {std::move(FloatToFloat16Tensor("", q16)), std::move(FloatToFloat16Tensor("", k16)),
+           std::move(FloatToFloat16Tensor("", v16)), std::move(FloatToFloat16Tensor("", decay16)),
+           std::move(FloatToFloat16Tensor("", beta16))},
+          {std::move(FloatToFloat16Tensor("", result.output)),
+           std::move(FloatToFloat16Tensor("", result.present_state))}};
     });
     registry.back().atol = 5e-3;
     registry.back().rtol = 5e-3;

@@ -14,8 +14,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::Tensor;
 using onnx_backend_test::OpsetId;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Adagrad;
 using onnx_kernels::kernel::Adam;
 using onnx_kernels::kernel::KernelContext;
@@ -195,7 +195,7 @@ TEST(KernelClass, AdamRejectsInvalidInputs) {
   EXPECT_THROW(adam(R, T, {X}, {G, G}, {V}, {H}), std::invalid_argument);
 
   // Non-FLOAT 'R' is rejected.
-  Tensor bad_R("", onnx_kernels::DataType::INT64, {}, std::vector<uint8_t>(sizeof(int64_t)));
+  Tensor bad_R("", core::runtime::DataType::INT64, {}, std::vector<uint8_t>(sizeof(int64_t)));
   EXPECT_THROW(adam(bad_R, T, {X}, {G}, {V}, {H}), std::invalid_argument);
 
   // Non-INT64 'T' is rejected.
@@ -347,7 +347,7 @@ TEST(KernelClass, AdagradRejectsInvalidInputs) {
   EXPECT_THROW(adagrad(R, T, {X}, {G, G}, {H}), std::invalid_argument);
 
   // Non-FLOAT 'R' is rejected.
-  Tensor bad_R("", onnx_kernels::DataType::INT64, {}, std::vector<uint8_t>(sizeof(int64_t)));
+  Tensor bad_R("", core::runtime::DataType::INT64, {}, std::vector<uint8_t>(sizeof(int64_t)));
   EXPECT_THROW(adagrad(bad_R, T, {X}, {G}, {H}), std::invalid_argument);
 
   // Non-INT64 'T' is rejected.
@@ -523,7 +523,7 @@ TEST(KernelClass, MomentumRejectsInvalidInputs) {
   EXPECT_THROW(momentum(R, T, {}, {}, {}, 0.9f, 0.1f, 0.0f), std::invalid_argument);
   EXPECT_THROW(momentum(R, T, {X}, {G, G}, {V}, 0.9f, 0.1f, 0.0f), std::invalid_argument);
 
-  Tensor bad_R("", onnx_kernels::DataType::INT64, {}, std::vector<uint8_t>(sizeof(int64_t)));
+  Tensor bad_R("", core::runtime::DataType::INT64, {}, std::vector<uint8_t>(sizeof(int64_t)));
   EXPECT_THROW(momentum(bad_R, T, {X}, {G}, {V}, 0.9f, 0.1f, 0.0f), std::invalid_argument);
 
   const Tensor bad_T = Tensor::FromFloat("", {}, {0.0f});

@@ -20,7 +20,7 @@ kernels, inferring shapes, and computing graph-level annotations.
       - :class:`onnx_light.onnx.reference.KernelContext`
     * - ``RuntimeContext``
       - Holds runtime values and executes custom kernels.
-      - :cpp:class:`onnx::onnx_kernels::RuntimeContext`
+      - :cpp:class:`onnx_light::core::runtime::RuntimeContext`
       - :class:`onnx_light.onnx.reference.RuntimeContext`
     * - ``ShapesContext`` (shape context)
       - Tracks symbolic tensor shapes and types during shape inference.

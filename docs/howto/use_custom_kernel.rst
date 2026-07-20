@@ -7,7 +7,7 @@ How to use a custom kernel
 
 :class:`~onnx_light.onnx.reference.ReferenceEvaluator` dispatches every
 :class:`~onnx_light.onnx_lib.NodeProto` against the static C++
-:cpp:func:`onnx::onnx_kernels::KernelDispatchTable`. An operator that is not
+:cpp:func:`onnx_light::core::runtime::KernelDispatchTable`. An operator that is not
 built in — typically an operator from a user-defined domain, an experimental
 op, or a stand-in for one that is not yet implemented — would otherwise fail
 with ``unsupported op_type``.
@@ -15,7 +15,7 @@ with ``unsupported op_type``.
 This page shows how to plug a custom kernel into the runtime so such a
 graph runs, in Python and in C++. The hook is exposed at three layers; pick
 the one that matches your use case.  All three share the single C++ entry
-point :cpp:func:`onnx::onnx_kernels::RuntimeContext::RegisterCustomKernel`.
+point :cpp:func:`onnx_light::core::runtime::RuntimeContext::RegisterCustomKernel`.
 
 Register a numpy kernel (recommended)
 -------------------------------------
@@ -27,9 +27,9 @@ wrapper is the easiest entry point. The callable is invoked as
 :class:`numpy.ndarray` or a tuple/list of arrays for multi-output ops. It
 receives the :class:`~onnx_light.onnx_lib.NodeProto` first, so it can read
 attributes.  The C++ counterpart registers a
-:cpp:type:`onnx::onnx_kernels::CustomKernelFn` that reads its inputs from
-the :cpp:class:`onnx::onnx_kernels::RuntimeContext` and writes the outputs
-back through :cpp:func:`onnx::onnx_kernels::RuntimeContext::Put`.
+:cpp:type:`onnx_light::core::runtime::CustomKernelFn` that reads its inputs from
+the :cpp:class:`onnx_light::core::runtime::RuntimeContext` and writes the outputs
+back through :cpp:func:`onnx_light::core::runtime::RuntimeContext::Put`.
 
 .. tab-set::
 
@@ -63,12 +63,12 @@ back through :cpp:func:`onnx::onnx_kernels::RuntimeContext::Put`.
 
       .. code-block:: cpp
 
-          #include "onnx_kernels/run_nodes.h"
-          #include "onnx_kernels/runtime_context.h"
+          #include "onnx_core/runtime/run_nodes.h"
+          #include "onnx_core/runtime/runtime_context.h"
 
           #include <vector>
 
-          using namespace onnx::onnx_kernels;
+          using namespace onnx_light::core::runtime;
 
           RuntimeContext rt(KernelContext(/*opset=*/18));
           rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
@@ -107,7 +107,7 @@ Override a built-in kernel
 
 The empty default ONNX domain is normalised to ``"ai.onnx"``, so
 registering a kernel under the default domain takes precedence over the
-entry that :cpp:func:`onnx::onnx_kernels::KernelDispatchTable` would
+entry that :cpp:func:`onnx_light::core::runtime::KernelDispatchTable` would
 otherwise dispatch. This is convenient to instrument or replace a specific
 kernel without patching the C++ runtime.
 
@@ -133,7 +133,7 @@ kernel without patching the C++ runtime.
 
       .. code-block:: cpp
 
-          using namespace onnx::onnx_kernels;
+          using namespace onnx_light::core::runtime;
 
           RuntimeContext rt(KernelContext(/*opset=*/18));
           rt.Set("x", Tensor::FromFloat("x", {3}, {-1.0f, -2.0f, -3.0f}));
@@ -161,7 +161,7 @@ to read sequences or to participate in the event log — use the low-level
 :class:`RuntimeContext` binding. The callback receives the raw
 :class:`NodeProto` and :class:`RuntimeContext` and is responsible for any
 tensor encoding/decoding.  This Python binding mirrors the C++
-:cpp:class:`onnx::onnx_kernels::RuntimeContext` one-to-one.
+:cpp:class:`onnx_light::core::runtime::RuntimeContext` one-to-one.
 
 .. tab-set::
 
@@ -188,10 +188,10 @@ tensor encoding/decoding.  This Python binding mirrors the C++
 
       .. code-block:: cpp
 
-          #include "onnx_kernels/run_nodes.h"
-          #include "onnx_kernels/runtime_context.h"
+          #include "onnx_core/runtime/run_nodes.h"
+          #include "onnx_core/runtime/runtime_context.h"
 
-          using namespace onnx::onnx_kernels;
+          using namespace onnx_light::core::runtime;
 
           RuntimeContext ctx(KernelContext(/*opset=*/18));
           ctx.Set("x", /* Tensor */ ...);
@@ -206,7 +206,7 @@ tensor encoding/decoding.  This Python binding mirrors the C++
           RunModel(model, ctx);
 
 The low-level binding and the C++ tab above are two faces of the same
-:cpp:func:`onnx::onnx_kernels::RuntimeContext::RegisterCustomKernel` entry
+:cpp:func:`onnx_light::core::runtime::RuntimeContext::RegisterCustomKernel` entry
 point, which is also how C++ extension modules ship additional kernels
 without rebuilding ``lib_onnx_kernels``.
 

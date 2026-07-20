@@ -5,7 +5,7 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/math/matmul_shape_utils.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>

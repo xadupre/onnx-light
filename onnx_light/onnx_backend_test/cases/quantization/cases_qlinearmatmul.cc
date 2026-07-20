@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -34,8 +34,8 @@ NodeProto MakeQLinearMatMulNode() {
 }
 
 // The IEEE-754 binary16 encoder and FLOAT16 scalar builder are provided by
-// ``onnx_kernels/kernels/_helpers/cast_helper.h`` as ``kernel::FloatToFloat16Bits``
-// and ``kernel::MakeFloat16Scalar``.
+// ``onnx_core/runtime/cast_helper.h`` as ``FloatToFloat16Bits``
+// and ``MakeFloat16Scalar``.
 
 // Builds an INT8/UINT8 scalar tensor (used for zero points). ``dtype`` must be
 // ``DataType::INT8`` or ``DataType::UINT8``; ``value`` is reinterpreted as the
@@ -131,9 +131,9 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor a_scale_f = Tensor::FromFloat("a_scale", {}, {0.0066f});
     Tensor b_scale_f = Tensor::FromFloat("b_scale", {}, {0.00705f});
     Tensor y_scale_f = Tensor::FromFloat("y_scale", {}, {0.0107f});
-    Tensor a_scale_h = kernel::MakeFloat16Scalar("a_scale", 0.0066f);
-    Tensor b_scale_h = kernel::MakeFloat16Scalar("b_scale", 0.00705f);
-    Tensor y_scale_h = kernel::MakeFloat16Scalar("y_scale", 0.0107f);
+    Tensor a_scale_h = MakeFloat16Scalar("a_scale", 0.0066f);
+    Tensor b_scale_h = MakeFloat16Scalar("b_scale", 0.00705f);
+    Tensor y_scale_h = MakeFloat16Scalar("y_scale", 0.0107f);
 
     Tensor a_zp = MakeQuantScalar("a_zero_point", dtype, a_zp_val);
     Tensor b_zp_2d = MakeQuantScalar("b_zero_point", dtype, b_zp_val_2d);

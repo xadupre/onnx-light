@@ -4,9 +4,9 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>

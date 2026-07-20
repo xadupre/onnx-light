@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/run_nodes.h"
+#include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_kernels/kernels/kernel_context.h"
-#include "onnx_kernels/run_nodes.h"
-#include "onnx_kernels/runtime_context.h"
-#include "onnx_kernels/simple_sequence.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
@@ -18,28 +18,28 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::If;
+using core::runtime::Loop;
+using core::runtime::RuntimeContext;
+using core::runtime::Scan;
+using core::runtime::Sequence;
+using core::runtime::Shape;
+using core::runtime::SimpleRawBufferAllocator;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
-using onnx_kernels::RuntimeContext;
-using onnx_kernels::Sequence;
-using onnx_kernels::Shape;
-using onnx_kernels::SimpleRawBufferAllocator;
-using onnx_kernels::Tensor;
-using onnx_kernels::kernel::If;
 using onnx_kernels::kernel::KernelContext;
-using onnx_kernels::kernel::Loop;
-using onnx_kernels::kernel::Scan;
 
 namespace Test {
 
 TEST(KernelClass, IfClassSelectsThenBranchWhenCondTrue) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  Tensor cond("", onnx_kernels::DataType::BOOL, {}, {1});
+  Tensor cond("", core::runtime::DataType::BOOL, {}, {1});
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
   Tensor out = if_kernel(cond, then_v, else_v);
   ASSERT_EQ(out.element_count(), 2);
-  EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   EXPECT_FLOAT_EQ(out.AsFloat()[0], 1.0f);
   EXPECT_FLOAT_EQ(out.AsFloat()[1], 2.0f);
 }
@@ -47,7 +47,7 @@ TEST(KernelClass, IfClassSelectsThenBranchWhenCondTrue) {
 TEST(KernelClass, IfClassSelectsElseBranchWhenCondFalse) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  Tensor cond("", onnx_kernels::DataType::BOOL, {}, {0});
+  Tensor cond("", core::runtime::DataType::BOOL, {}, {0});
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
   Tensor out = if_kernel(cond, then_v, else_v);
@@ -59,7 +59,7 @@ TEST(KernelClass, IfClassSelectsElseBranchWhenCondFalse) {
 TEST(KernelClass, IfClassRejectsInvalidInputs) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  Tensor cond_bool("", onnx_kernels::DataType::BOOL, {}, {1});
+  Tensor cond_bool("", core::runtime::DataType::BOOL, {}, {1});
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
 
@@ -68,7 +68,7 @@ TEST(KernelClass, IfClassRejectsInvalidInputs) {
   EXPECT_THROW((void)if_kernel(cond_float, then_v, else_v), std::invalid_argument);
 
   // Multi-element cond is rejected.
-  Tensor cond_vec("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
+  Tensor cond_vec("", core::runtime::DataType::BOOL, {2}, {1, 0});
   EXPECT_THROW((void)if_kernel(cond_vec, then_v, else_v), std::invalid_argument);
 
   // Mismatched branch types are rejected.
@@ -88,8 +88,8 @@ TEST(KernelClass, IfInPlaceWritesToPreallocatedOutput) {
 
   // cond = true → then-branch.
   {
-    Tensor cond("", onnx_kernels::DataType::BOOL, {}, {1});
-    Tensor out("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+    Tensor cond("", core::runtime::DataType::BOOL, {}, {1});
+    Tensor out("", core::runtime::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
     if_kernel(cond, then_v, else_v, out);
     EXPECT_FLOAT_EQ(out.AsFloat()[0], 1.0f);
     EXPECT_FLOAT_EQ(out.AsFloat()[1], 2.0f);
@@ -97,8 +97,8 @@ TEST(KernelClass, IfInPlaceWritesToPreallocatedOutput) {
 
   // cond = false → else-branch.
   {
-    Tensor cond("", onnx_kernels::DataType::BOOL, {}, {0});
-    Tensor out("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+    Tensor cond("", core::runtime::DataType::BOOL, {}, {0});
+    Tensor out("", core::runtime::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
     if_kernel(cond, then_v, else_v, out);
     EXPECT_FLOAT_EQ(out.AsFloat()[0], 3.0f);
     EXPECT_FLOAT_EQ(out.AsFloat()[1], 4.0f);
@@ -108,21 +108,23 @@ TEST(KernelClass, IfInPlaceWritesToPreallocatedOutput) {
 TEST(KernelClass, IfInPlaceRejectsBadOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  Tensor cond("", onnx_kernels::DataType::BOOL, {}, {1});
+  Tensor cond("", core::runtime::DataType::BOOL, {}, {1});
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
 
   // Wrong dtype.
-  Tensor bad_dtype("", onnx_kernels::DataType::INT32, {2},
+  Tensor bad_dtype("", core::runtime::DataType::INT32, {2},
                    std::vector<uint8_t>(2 * sizeof(int32_t)));
   EXPECT_THROW(if_kernel(cond, then_v, else_v, bad_dtype), std::invalid_argument);
 
   // Wrong shape.
-  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
+  Tensor bad_shape("", core::runtime::DataType::FLOAT, {3},
+                   std::vector<uint8_t>(3 * sizeof(float)));
   EXPECT_THROW(if_kernel(cond, then_v, else_v, bad_shape), std::invalid_argument);
 
   // Wrong buffer byte count.
-  Tensor bad_bytes("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(1 * sizeof(float)));
+  Tensor bad_bytes("", core::runtime::DataType::FLOAT, {2},
+                   std::vector<uint8_t>(1 * sizeof(float)));
   EXPECT_THROW(if_kernel(cond, then_v, else_v, bad_bytes), std::invalid_argument);
 }
 
@@ -137,7 +139,7 @@ void BuildDoubleInitBranchGraph(GraphProto &g, const std::string &graph_name,
   g.set_name(graph_name);
   TensorProto *init = g.add_initializer();
   init->set_name(init_name);
-  init->set_data_type(onnx_kernels::DataType::FLOAT);
+  init->set_data_type(core::runtime::DataType::FLOAT);
   init->add_dims(1);
   init->add_float_data(value);
   NodeProto *node = g.add_node();
@@ -148,7 +150,7 @@ void BuildDoubleInitBranchGraph(GraphProto &g, const std::string &graph_name,
   ValueInfoProto *vi = g.add_output();
   vi->set_name(output_name);
   TypeProto::Tensor *tt = vi->mutable_type()->mutable_tensor_type();
-  tt->set_elem_type(onnx_kernels::DataType::FLOAT);
+  tt->set_elem_type(core::runtime::DataType::FLOAT);
   tt->mutable_shape()->add_dim()->set_dim_value(1);
 }
 } // namespace
@@ -156,14 +158,14 @@ void BuildDoubleInitBranchGraph(GraphProto &g, const std::string &graph_name,
 TEST(KernelClass, IfBranchOverloadExecutesThenSubgraph) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  onnx_kernels::RuntimeContext rt(ctx);
+  core::runtime::RuntimeContext rt(ctx);
 
   GraphProto then_graph;
   GraphProto else_graph;
   BuildDoubleInitBranchGraph(then_graph, "then_g", "t", "out", 5.0f);
   BuildDoubleInitBranchGraph(else_graph, "else_g", "e", "out", -1.0f);
 
-  Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
+  Tensor cond_true("", core::runtime::DataType::BOOL, {}, {1});
   std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 1u);
   ASSERT_EQ(outs[0].element_count(), 1);
@@ -173,14 +175,14 @@ TEST(KernelClass, IfBranchOverloadExecutesThenSubgraph) {
 TEST(KernelClass, IfBranchOverloadExecutesElseSubgraph) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  onnx_kernels::RuntimeContext rt(ctx);
+  core::runtime::RuntimeContext rt(ctx);
 
   GraphProto then_graph;
   GraphProto else_graph;
   BuildDoubleInitBranchGraph(then_graph, "then_g", "t", "out", 5.0f);
   BuildDoubleInitBranchGraph(else_graph, "else_g", "e", "out", -1.0f);
 
-  Tensor cond_false("", onnx_kernels::DataType::BOOL, {}, {0});
+  Tensor cond_false("", core::runtime::DataType::BOOL, {}, {0});
   std::vector<Tensor> outs = if_kernel(rt, cond_false, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 1u);
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], -2.0f);
@@ -192,7 +194,7 @@ TEST(KernelClass, IfBranchOverloadInheritsOuterScope) {
   // operated on by ``Neg`` in the then-branch).
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  onnx_kernels::RuntimeContext rt(ctx);
+  core::runtime::RuntimeContext rt(ctx);
   Tensor x = Tensor::FromFloat("x", {3}, {1.0f, -2.0f, 3.0f});
   rt.Set("x", x);
 
@@ -207,7 +209,7 @@ TEST(KernelClass, IfBranchOverloadInheritsOuterScope) {
   ValueInfoProto *vi = then_graph.add_output();
   vi->set_name("y");
   TypeProto::Tensor *tt = vi->mutable_type()->mutable_tensor_type();
-  tt->set_elem_type(onnx_kernels::DataType::FLOAT);
+  tt->set_elem_type(core::runtime::DataType::FLOAT);
   tt->mutable_shape()->add_dim()->set_dim_value(3);
 
   GraphProto else_graph;
@@ -221,10 +223,10 @@ TEST(KernelClass, IfBranchOverloadInheritsOuterScope) {
   ValueInfoProto *vi2 = else_graph.add_output();
   vi2->set_name("y");
   TypeProto::Tensor *tt2 = vi2->mutable_type()->mutable_tensor_type();
-  tt2->set_elem_type(onnx_kernels::DataType::FLOAT);
+  tt2->set_elem_type(core::runtime::DataType::FLOAT);
   tt2->mutable_shape()->add_dim()->set_dim_value(3);
 
-  Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
+  Tensor cond_true("", core::runtime::DataType::BOOL, {}, {1});
   std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 1u);
   ASSERT_EQ(outs[0].element_count(), 3);
@@ -241,7 +243,7 @@ TEST(KernelClass, IfBranchOverloadReturnsAllOutputsInOrder) {
   // the order declared by ``branch.output()``.
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  onnx_kernels::RuntimeContext rt(ctx);
+  core::runtime::RuntimeContext rt(ctx);
 
   GraphProto then_graph;
   then_graph.set_name("two_outputs");
@@ -249,13 +251,13 @@ TEST(KernelClass, IfBranchOverloadReturnsAllOutputsInOrder) {
   {
     TensorProto *a = then_graph.add_initializer();
     a->set_name("a");
-    a->set_data_type(onnx_kernels::DataType::FLOAT);
+    a->set_data_type(core::runtime::DataType::FLOAT);
     a->add_dims(2);
     a->add_float_data(3.0f);
     a->add_float_data(4.0f);
     TensorProto *b = then_graph.add_initializer();
     b->set_name("b");
-    b->set_data_type(onnx_kernels::DataType::FLOAT);
+    b->set_data_type(core::runtime::DataType::FLOAT);
     b->add_dims(1);
     b->add_float_data(5.0f);
   }
@@ -271,7 +273,7 @@ TEST(KernelClass, IfBranchOverloadReturnsAllOutputsInOrder) {
     ValueInfoProto *vi = then_graph.add_output();
     vi->set_name(p.first);
     TypeProto::Tensor *tt = vi->mutable_type()->mutable_tensor_type();
-    tt->set_elem_type(onnx_kernels::DataType::FLOAT);
+    tt->set_elem_type(core::runtime::DataType::FLOAT);
     tt->mutable_shape()->add_dim()->set_dim_value(static_cast<uint64_t>(p.second));
   }
 
@@ -279,7 +281,7 @@ TEST(KernelClass, IfBranchOverloadReturnsAllOutputsInOrder) {
   // kernel) but their values are not reached when cond is true.
   GraphProto else_graph = then_graph;
 
-  Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
+  Tensor cond_true("", core::runtime::DataType::BOOL, {}, {1});
   std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 2u);
   ASSERT_EQ(outs[0].element_count(), 2);
@@ -292,21 +294,21 @@ TEST(KernelClass, IfBranchOverloadReturnsAllOutputsInOrder) {
 TEST(KernelClass, IfBranchOverloadRejectsMismatchedOutputCounts) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  onnx_kernels::RuntimeContext rt(ctx);
+  core::runtime::RuntimeContext rt(ctx);
   GraphProto then_graph;
   GraphProto else_graph;
   BuildDoubleInitBranchGraph(then_graph, "then_g", "t", "y", 1.0f);
   // else_graph has no outputs declared, so mismatched output count.
   else_graph.set_name("empty");
 
-  Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
+  Tensor cond_true("", core::runtime::DataType::BOOL, {}, {1});
   EXPECT_THROW((void)if_kernel(rt, cond_true, then_graph, else_graph), std::invalid_argument);
 }
 
 TEST(KernelClass, IfBranchOverloadRejectsNonBoolCond) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  onnx_kernels::RuntimeContext rt(ctx);
+  core::runtime::RuntimeContext rt(ctx);
   GraphProto then_graph;
   GraphProto else_graph;
   BuildDoubleInitBranchGraph(then_graph, "then_g", "t", "y", 1.0f);
@@ -315,7 +317,7 @@ TEST(KernelClass, IfBranchOverloadRejectsNonBoolCond) {
   Tensor cond_float = Tensor::FromFloat("", {}, {1.0f});
   EXPECT_THROW((void)if_kernel(rt, cond_float, then_graph, else_graph), std::invalid_argument);
 
-  Tensor cond_vec("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
+  Tensor cond_vec("", core::runtime::DataType::BOOL, {2}, {1, 0});
   EXPECT_THROW((void)if_kernel(rt, cond_vec, then_graph, else_graph), std::invalid_argument);
 }
 
@@ -326,10 +328,10 @@ TEST(KernelClass, IfBranchOverloadPropagatesOuterScopeSequence) {
   // outer sequence "outer_seq" (3 elements) and outputs its length as "len".
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
-  onnx_kernels::RuntimeContext rt(ctx);
+  core::runtime::RuntimeContext rt(ctx);
 
   // Seed an outer-scope sequence with 3 FLOAT tensors.
-  Sequence outer_seq("outer_seq", onnx_kernels::DataType::FLOAT,
+  Sequence outer_seq("outer_seq", core::runtime::DataType::FLOAT,
                      {Tensor::FromFloat("", {1}, {1.0f}), Tensor::FromFloat("", {1}, {2.0f}),
                       Tensor::FromFloat("", {1}, {3.0f})});
   rt.PutSequence("outer_seq", std::move(outer_seq));
@@ -344,14 +346,14 @@ TEST(KernelClass, IfBranchOverloadPropagatesOuterScopeSequence) {
   ValueInfoProto *vi = then_graph.add_output();
   vi->set_name("len");
   TypeProto::Tensor *tt = vi->mutable_type()->mutable_tensor_type();
-  tt->set_elem_type(onnx_kernels::DataType::INT64);
+  tt->set_elem_type(core::runtime::DataType::INT64);
   tt->mutable_shape();
 
   // Build the else-branch: must declare the same number of outputs.
   GraphProto else_graph = then_graph;
   else_graph.set_name("else_seq_len");
 
-  Tensor cond_true("", onnx_kernels::DataType::BOOL, {}, {1});
+  Tensor cond_true("", core::runtime::DataType::BOOL, {}, {1});
   std::vector<Tensor> outs = if_kernel(rt, cond_true, then_graph, else_graph);
   ASSERT_EQ(outs.size(), 1u);
   ASSERT_EQ(outs[0].element_count(), 1);
@@ -366,7 +368,7 @@ namespace {
 Tensor Int64Scalar(int64_t v) {
   std::vector<uint8_t> bytes(sizeof(int64_t));
   std::memcpy(bytes.data(), &v, sizeof(int64_t));
-  return Tensor("", onnx_kernels::DataType::INT64, {}, std::move(bytes));
+  return Tensor("", core::runtime::DataType::INT64, {}, std::move(bytes));
 }
 } // namespace
 
@@ -382,7 +384,7 @@ TEST(KernelClass, LoopStacksScanOutputsAcrossIterations) {
   std::vector<Tensor> out =
       loop_kernel(M, cond_undef, /*v_initial=*/{}, /*final_state=*/{}, {{s0, s1, s2}});
   ASSERT_EQ(out.size(), 1u);
-  EXPECT_EQ(out[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(out[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   ASSERT_EQ(out[0].shape.size(), 2u);
   EXPECT_EQ(out[0].shape[0], 3);
   EXPECT_EQ(out[0].shape[1], 2);
@@ -409,7 +411,7 @@ TEST(KernelClass, LoopHonorsCondFalseEvenWhenMIsLarge) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
   Tensor M = Int64Scalar(5);
-  Tensor cond_false("", onnx_kernels::DataType::BOOL, {}, {0});
+  Tensor cond_false("", core::runtime::DataType::BOOL, {}, {0});
   Tensor scan = Tensor::FromFloat("", {1}, {1.0f});
   std::vector<Tensor> out = loop_kernel(M, cond_false, /*v_initial=*/{}, /*final_state=*/{},
                                         {{scan, scan, scan, scan, scan}});
@@ -489,7 +491,7 @@ TEST(KernelClass, LoopRejectsScanRowsOfDifferentLengths) {
 // ---------------------------------------------------------------------------
 namespace {
 Tensor BoolScalar(bool v) {
-  return Tensor("", onnx_kernels::DataType::BOOL, {}, {static_cast<uint8_t>(v ? 1 : 0)});
+  return Tensor("", core::runtime::DataType::BOOL, {}, {static_cast<uint8_t>(v ? 1 : 0)});
 }
 } // namespace
 
@@ -608,7 +610,7 @@ TEST(KernelClass, ScanStacksPerIterAlongLeadingAxisByDefault) {
   std::vector<Tensor> out =
       scan_kernel(3, /*initial_state=*/{}, /*final_state=*/{}, {{s0, s1, s2}});
   ASSERT_EQ(out.size(), 1u);
-  EXPECT_EQ(out[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(out[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   ASSERT_EQ(out[0].shape, (Shape{3, 2}));
   ASSERT_EQ(out[0].element_count(), 6);
   EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 0.0f);

@@ -4,9 +4,9 @@
 
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
-#include "onnx_kernels/random.h"
 
 #include <cstdint>
 #include <string>
@@ -92,8 +92,8 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y");
     node.add_output("z");
     Expect(registry, std::move(node), "test_cc_less_or_equal_float16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeFloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
-      Tensor y = kernel::MakeFloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
+      Tensor x = MakeFloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor y = MakeFloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
       Tensor z = le_kernel(x, y);
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
@@ -108,8 +108,8 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y");
     node.add_output("z");
     Expect(registry, std::move(node), "test_cc_less_or_equal_bfloat16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeBfloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
-      Tensor y = kernel::MakeBfloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
+      Tensor x = MakeBfloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor y = MakeBfloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
       Tensor z = le_kernel(x, y);
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
@@ -217,8 +217,8 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     n16.add_input("y");
     n16.add_output("z");
     Expect(registry, std::move(n16), "test_cc_less_or_equal_float16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
-      Tensor y = kernel::MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
+      Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
+      Tensor y = MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
       Tensor z = le_kernel(x, y);
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -232,8 +232,8 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     nbf.add_input("y");
     nbf.add_output("z");
     Expect(registry, std::move(nbf), "test_cc_less_or_equal_bfloat16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
-      Tensor y = kernel::MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
+      Tensor x = MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
+      Tensor y = MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
       Tensor z = le_kernel(x, y);
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });

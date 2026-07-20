@@ -29,7 +29,7 @@ core:
   filtering, and NumPy-based comparisons).
 * C++ side: :epkg:`lib_onnx_backend_test` (test-case registry and model/data
   generation) and :epkg:`lib_onnx_kernels` (reference kernels + runtime
-  :cpp:struct:`onnx::onnx_kernels::Tensor` carrier).
+  :cpp:struct:`onnx_light::core::runtime::Tensor` carrier).
 
 In other words, the Python API depends on the C++ implementation for the
 canonical registry, and downstream runtimes only need to provide one
@@ -251,7 +251,7 @@ Python. It publicly links the :epkg:`lib_onnx_kernels` static library,
 which provides the runtime data model
 and reference kernel implementations. Together they expose:
 
-* a runtime :cpp:struct:`onnx::onnx_kernels::Tensor` (distinct from
+* a runtime :cpp:struct:`onnx_light::core::runtime::Tensor` (distinct from
   :cpp:class:`onnx::TensorProto`) that stores raw element bytes,
 * a :cpp:struct:`onnx::onnx_kernels::TestCase` bundle of
   :cpp:class:`onnx::ModelProto` and expected input/output data sets,

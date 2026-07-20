@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_core/runtime/raw_buffer_allocator.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include "onnx_kernels/kernels/image/include_image_kernels.h"
 #include "onnx_kernels/kernels/kernel_context.h"
-#include "onnx_kernels/raw_buffer_allocator.h"
-#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -17,11 +17,11 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::DataType;
+using core::runtime::RuntimeContext;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
-using onnx_kernels::DataType;
-using onnx_kernels::RuntimeContext;
 using onnx_kernels::SimpleRawBufferAllocator;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::ImageDecoder;
 using onnx_kernels::kernel::KernelContext;
 

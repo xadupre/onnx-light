@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -138,7 +138,7 @@ NodeProto MakeLoopNode(const std::string &m, const std::string &cond,
 //
 // The body subgraph is well-formed and now also numerically correct:
 // ``y_out = y_in + x[iter_count]`` with ``x = [1, 2, 3, 4, 5]`` as a body
-// Constant, and ``scan_out = y_out``. The ``kernel::Loop`` reference does
+// Constant, and ``scan_out = y_out``. The ``Loop`` reference does
 // not execute the body, but external backends (e.g. onnxruntime) do — so
 // the body must produce the same expected outputs registered below.
 // ---------------------------------------------------------------------------
@@ -261,7 +261,7 @@ static void RegisterLoop11Case(std::vector<TestCase> &registry) {
   // case can be located by substring against ONNX's test name.
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
-  const kernel::Loop loop_kernel{ctx};
+  const Loop loop_kernel{ctx};
 
   // Build the Loop node: 3 inputs (M, cond, y) and 2 outputs (res_y, res_scan).
   NodeProto node;
@@ -317,7 +317,7 @@ namespace {
 void RegisterTripCountVariants(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
-  const kernel::Loop loop_kernel{ctx};
+  const Loop loop_kernel{ctx};
 
   const Tensor per_iter_value("", DataType::INT64, {1}, Int64Bytes(42));
   const Tensor cond_undef; // omitted scalar BOOL cond.
@@ -447,7 +447,7 @@ GraphProto BuildMultiCarriedBody() {
 void RegisterMultiCarriedCase(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
-  const kernel::Loop loop_kernel{ctx};
+  const Loop loop_kernel{ctx};
 
   NodeProto node;
   node.set_op_type("Loop");
@@ -474,9 +474,8 @@ void RegisterMultiCarriedCase(std::vector<TestCase> &registry) {
            // Drive the body-runner overload so the registered expected outputs are
            // produced by the same code path that ``RunLoopNode`` exercises at
            // runtime.
-           kernel::Loop::BodyRunner runner =
-               [](int64_t /*iter*/, bool cond_in,
-                  const std::vector<Tensor> &state) -> std::vector<Tensor> {
+           Loop::BodyRunner runner = [](int64_t /*iter*/, bool cond_in,
+                                        const std::vector<Tensor> &state) -> std::vector<Tensor> {
              const float y_in = state[0].AsFloat()[0];
              const float w_in = state[1].AsFloat()[0];
              const float y_out = y_in + 1.0f;

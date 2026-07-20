@@ -4,6 +4,10 @@
 
 #include "onnx_kernels/kernel_dispatch_table.h"
 
+#include "onnx_core/runtime/kernel_dispatch_table.h"
+#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/run_nodes.h"
+#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 #include "onnx_kernels/kernels/image/include_image_kernels.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
@@ -20,9 +24,6 @@
 #include "onnx_kernels/kernels/text/include_text_kernels.h"
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
-#include "onnx_kernels/node_helpers.h"
-#include "onnx_kernels/run_nodes.h"
-#include "onnx_kernels/simple_tensor.h"
 
 #include <algorithm>
 #include <cmath>
@@ -39,26 +40,14 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 
-namespace {
+// The generic per-node helpers (``RequireInputCount``, ``GetInput``, ...)
+// and runtime types (``Tensor``, ``RuntimeContext``, ...) now live in
+// ``onnx_core::runtime`` (see ``onnx_core/runtime/node_helpers.h``); pull
+// them in unqualified so the trampolines below are unchanged from before
+// the move.
+using namespace ::onnx_light::core::runtime;
 
-using detail::FindAttribute;
-using detail::GetAttributeFloatOrDefault;
-using detail::GetAttributeFloatsOrDefault;
-using detail::GetAttributeIntOrDefault;
-using detail::GetAttributeIntsOrDefault;
-using detail::GetAttributeShapeOrDefault;
-using detail::GetAttributeStringOrDefault;
-using detail::GetAttributeStringsOrDefault;
-using detail::GetInput;
-using detail::GetInputSequence;
-using detail::GetOptionalInput;
-using detail::GetRequiredAttributeInt;
-using detail::GetRequiredAttributeString;
-using detail::RequireInputCount;
-using detail::RequireMinInputCount;
-using detail::RequireOutputCount;
-using detail::SetOutput;
-using detail::SetOutputSequence;
+namespace {
 
 const Tensor kEmptyTensor = [] {
   Tensor empty;
@@ -595,7 +584,13 @@ template <typename T> std::span<const T> TensorSpan(const Tensor &t) {
 
 } // namespace
 
-const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
+namespace {
+
+// Built-in table of every ``onnx_kernels`` operator kernel, keyed by
+// ``"<domain>:<op_type>"``. Only used to populate the shared
+// ``core::runtime`` dispatch table via :cpp:func:`RegisterKernelFunctions`;
+// never queried directly by :cpp:func:`core::runtime::RunNode`.
+const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
   static const std::unordered_map<std::string, NodeKernelFn> table = {
       {"ai.rt:DelayedInitializer",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -3496,6 +3491,36 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
   };
   return table;
+}
+
+} // namespace
+
+void RegisterKernelFunctions() {
+  // `lib_onnx_kernels` is a plain static archive: a translation unit with no
+  // symbol referenced from elsewhere would simply be dropped by the linker,
+  // so registration cannot rely on a file-scope static object running as a
+  // side effect of "just being linked in" (unlike, say,
+  // `OpSchemaRegistry::map()` in `onnx_lib`, which can call its registration
+  // functions lazily because both live in the same library). Callers must
+  // invoke this function explicitly before running a model; it is
+  // idempotent, so calling it more than once (or from multiple independent
+  // entry points) is safe and cheap after the first call.
+  static const bool kRegistered = [] {
+    for (const auto &entry : BuiltinKernelFunctions()) {
+      const std::string &key = entry.first;
+      const std::size_t sep = key.find(':');
+      ::onnx_light::core::runtime::RegisterKernelFn(key.substr(0, sep), key.substr(sep + 1),
+                                                    entry.second);
+    }
+    ::onnx_light::core::runtime::RegisterSequenceMapPackFn(
+        [](RuntimeContext &rt, const Sequence &input_sequence,
+           const std::vector<std::vector<Tensor>> &body_outputs_per_iter) {
+          kernel::SequenceMap seq_map_kernel(rt.kernel_ctx());
+          return seq_map_kernel(input_sequence, body_outputs_per_iter);
+        });
+    return true;
+  }();
+  (void)kRegistered;
 }
 
 } // namespace onnx_kernels

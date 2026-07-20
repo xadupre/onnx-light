@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+#include "onnx_core/runtime/float16_promote.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
-#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -16,10 +16,10 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::RuntimeContext;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
-using onnx_kernels::RuntimeContext;
 using onnx_kernels::SimpleRawBufferAllocator;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Attention;
 using onnx_kernels::kernel::AutoPad;
 using onnx_kernels::kernel::AveragePool;
@@ -40,7 +40,7 @@ TEST(KernelClass, AveragePool2DDefault) {
                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
                                 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
   Tensor y = pool(x, /*kernel_shape=*/{2, 2});
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {1, 1, 3, 3};
   EXPECT_EQ(y.shape, expected_shape);
   const float *py = y.AsFloat();
@@ -231,7 +231,7 @@ TEST(KernelClass, BatchNormalizationInferenceMatchesFormula) {
   Tensor mean = Tensor::FromFloat("", {2}, {0.0f, 3.0f});
   Tensor var = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
   Tensor y = bn(x, scale, bias, mean, var);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {1, 2, 1, 3};
   EXPECT_EQ(y.shape, expected_shape);
   const float *py = y.AsFloat();
@@ -380,7 +380,7 @@ TEST(KernelClass, DropoutInferenceModeCopiesInputAndOnesMask) {
   const KernelContext ctx{DefaultOpset(22)};
   Dropout dropout{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, -2.0f, 3.0f, -4.0f, 5.0f, -6.0f});
-  Tensor mask("", static_cast<int32_t>(onnx_kernels::DataType::BOOL), x.shape,
+  Tensor mask("", static_cast<int32_t>(core::runtime::DataType::BOOL), x.shape,
               std::vector<uint8_t>(6, 0));
   Tensor y = dropout(x, /*ratio=*/0.5f, /*training_mode=*/false, mask);
   ASSERT_EQ(y.shape, x.shape);
@@ -405,7 +405,7 @@ TEST(KernelClass, DropoutRejectsInvalidRatio) {
   const KernelContext ctx{DefaultOpset(22)};
   Dropout dropout{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
-  Tensor mask("", static_cast<int32_t>(onnx_kernels::DataType::BOOL), x.shape,
+  Tensor mask("", static_cast<int32_t>(core::runtime::DataType::BOOL), x.shape,
               std::vector<uint8_t>(2, 0));
   EXPECT_THROW(dropout(x, /*ratio=*/1.0f, /*training_mode=*/true, mask), std::invalid_argument);
 }
@@ -740,7 +740,7 @@ TEST(KernelClass, AttentionInPlaceOverloadWritesIntoOutput) {
   const KernelContext ctx = AttentionKernelContext();
   const Attention attention{ctx};
   const Tensor expected = attention(Q, K, V, 1.0f / std::sqrt(2.0f));
-  Tensor out("", onnx_kernels::DataType::FLOAT, {1, 1, 1, 2},
+  Tensor out("", core::runtime::DataType::FLOAT, {1, 1, 1, 2},
              std::vector<uint8_t>(2 * sizeof(float)));
   attention(Q, K, V, 1.0f / std::sqrt(2.0f), /*attn_mask=*/nullptr, out);
   for (int64_t i = 0; i < expected.element_count(); ++i) {
@@ -748,12 +748,12 @@ TEST(KernelClass, AttentionInPlaceOverloadWritesIntoOutput) {
   }
 
   // Mismatched output shape is rejected.
-  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {1, 1, 1, 1},
+  Tensor bad_shape("", core::runtime::DataType::FLOAT, {1, 1, 1, 1},
                    std::vector<uint8_t>(sizeof(float)));
   EXPECT_THROW(attention(Q, K, V, 1.0f / std::sqrt(2.0f), /*attn_mask=*/nullptr, bad_shape),
                std::invalid_argument);
   // Non-FLOAT output buffer is rejected.
-  Tensor bad_type("", onnx_kernels::DataType::INT32, {1, 1, 1, 2},
+  Tensor bad_type("", core::runtime::DataType::INT32, {1, 1, 1, 2},
                   std::vector<uint8_t>(2 * sizeof(int32_t)));
   EXPECT_THROW(attention(Q, K, V, 1.0f / std::sqrt(2.0f), /*attn_mask=*/nullptr, bad_type),
                std::invalid_argument);
@@ -781,7 +781,7 @@ TEST(KernelClass, AttentionRejectsInvalidInputs) {
   }
   // Non-FLOAT input is rejected.
   {
-    Tensor int_Q("", onnx_kernels::DataType::INT32, {1, 1, 1, 2},
+    Tensor int_Q("", core::runtime::DataType::INT32, {1, 1, 1, 2},
                  std::vector<uint8_t>(2 * sizeof(int32_t)));
     const Tensor K = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
     const Tensor V = Tensor::FromFloat("", {1, 1, 1, 1}, {1.0f});
@@ -892,7 +892,7 @@ TEST(KernelClass, MaxPoolWithIndices) {
   const std::vector<int64_t> expected_shape = {1, 1, 5, 5};
   EXPECT_EQ(y.shape, expected_shape);
   EXPECT_EQ(indices.shape, expected_shape);
-  ASSERT_EQ(indices.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  ASSERT_EQ(indices.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   const float *py = y.AsFloat();
   const int64_t *pi = indices.AsInt64();
   // Top-left: window contains 13, located at flat index 12.
@@ -918,7 +918,7 @@ TEST(KernelClass, MaxPoolWithIndicesColumnMajorStorageOrder) {
   const std::vector<int64_t> expected_shape = {1, 1, 2, 2};
   EXPECT_EQ(y.shape, expected_shape);
   EXPECT_EQ(indices.shape, expected_shape);
-  ASSERT_EQ(indices.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  ASSERT_EQ(indices.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   const float *py = y.AsFloat();
   const int64_t *pi = indices.AsInt64();
   const std::vector<float> expected_y = {7.0f, 9.0f, 17.0f, 19.0f};
@@ -1008,8 +1008,8 @@ TEST(KernelClass, AttentionHalfPrecisionMatchesFloatReference) {
   const Attention attention{ctx};
   const Tensor ref = attention(Q, K, V);
 
-  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
-                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+  for (int32_t target : {static_cast<int32_t>(core::runtime::DataType::FLOAT16),
+                         static_cast<int32_t>(core::runtime::DataType::BFLOAT16)}) {
     const Tensor Qh = DemoteToHalf(Q, target);
     const Tensor Kh = DemoteToHalf(K, target);
     const Tensor Vh = DemoteToHalf(V, target);
@@ -1018,7 +1018,7 @@ TEST(KernelClass, AttentionHalfPrecisionMatchesFloatReference) {
     ASSERT_EQ(Yh.shape, ref.shape);
     const std::vector<float> got = DecodeHalf(Yh);
     const float tol =
-        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+        target == static_cast<int32_t>(core::runtime::DataType::FLOAT16) ? 1e-2f : 5e-2f;
     for (int64_t i = 0; i < ref.element_count(); ++i) {
       EXPECT_NEAR(got[static_cast<size_t>(i)], ref.AsFloat()[i], tol) << "i=" << i;
     }
@@ -1041,8 +1041,8 @@ TEST(KernelClass, RotaryEmbeddingHalfPrecisionMatchesFloatReference) {
   const Tensor empty;
   const Tensor ref = rope(X, cos_cache, sin_cache, empty, attrs);
 
-  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
-                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+  for (int32_t target : {static_cast<int32_t>(core::runtime::DataType::FLOAT16),
+                         static_cast<int32_t>(core::runtime::DataType::BFLOAT16)}) {
     const Tensor Xh = DemoteToHalf(X, target);
     const Tensor cos_h = DemoteToHalf(cos_cache, target);
     const Tensor sin_h = DemoteToHalf(sin_cache, target);
@@ -1051,7 +1051,7 @@ TEST(KernelClass, RotaryEmbeddingHalfPrecisionMatchesFloatReference) {
     ASSERT_EQ(Yh.shape, ref.shape);
     const std::vector<float> got = DecodeHalf(Yh);
     const float tol =
-        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+        target == static_cast<int32_t>(core::runtime::DataType::FLOAT16) ? 1e-2f : 5e-2f;
     for (int64_t i = 0; i < ref.element_count(); ++i) {
       EXPECT_NEAR(got[static_cast<size_t>(i)], ref.AsFloat()[i], tol) << "i=" << i;
     }

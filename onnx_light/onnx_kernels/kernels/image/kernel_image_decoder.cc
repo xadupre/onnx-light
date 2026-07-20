@@ -4,8 +4,8 @@
 
 #include "onnx_kernels/kernels/image/include_image_kernels.h"
 
-#include "onnx_kernels/kernels/_helpers/temporary_buffer.h"
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 
 #include <algorithm>
 #include <array>

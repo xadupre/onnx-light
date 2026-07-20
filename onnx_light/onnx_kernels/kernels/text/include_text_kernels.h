@@ -4,8 +4,9 @@
 
 #pragma once
 
+#include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_kernels/kernels/kernel_context.h"
-#include "onnx_kernels/simple_tensor.h"
 
 #include <string>
 #include <utility>
@@ -13,8 +14,10 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
-// Forward declaration for allocator-aware operator() overloads.
-class RuntimeContext;
+// Re-exports the runtime types moved to ``onnx_core::runtime`` so
+// kernel implementations below can keep referring to them
+// unqualified, matching pre-move code.
+using namespace ::onnx_light::core::runtime;
 
 namespace kernel {
 

@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
 
 #include <cstdint>
 #include <cstring>
@@ -53,7 +53,7 @@ void AddGraphOutputTensor(GraphProto &g, const std::string &name, TensorProto::D
 //
 // The body has no state variables (N == 0) and produces one scan output
 // (K == 1). The body is now executed end-to-end by ``RunScanNode`` (which
-// delegates to ``kernel::Scan``'s body-aware overload); we still keep the
+// delegates to ``Scan``'s body-aware overload); we still keep the
 // pre-computed per-iteration outputs in the test registration so the
 // stacking-only overload can be exercised independently to derive the
 // expected output without depending on a runtime.
@@ -259,7 +259,7 @@ NodeProto MakeScanNodeWithBody(const std::vector<std::string> &inputs,
 void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const kernel::KernelContext ctx{opset};
-  const kernel::Scan scan_kernel{ctx};
+  const Scan scan_kernel{ctx};
 
   auto register_case = [&](const std::string &test_name, int64_t trip_count) {
     NodeProto node = MakeSimpleScanNode("X", "Y");
@@ -299,7 +299,7 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   //   - test_scan9_multi_state   (opset 9, two state variables)
   //   - test_scan9_scalar        (opset 9, scalar state and scan output)
   //
-  // ``kernel::Scan``'s body-aware overload now executes the body
+  // ``Scan``'s body-aware overload now executes the body
   // end-to-end inside the kernel, so the registered ``TestCase`` is a
   // well-formed model with deterministic expected outputs computed
   // externally for cross-checking.
@@ -376,7 +376,7 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   // -------------------------------------------------------------------------
   // Additional opset-9 cases exercising the optional Scan attributes that
   // upstream onnx does not cover in its node tests but are part of the
-  // operator's spec (and now end-to-end driven by ``kernel::Scan``'s
+  // operator's spec (and now end-to-end driven by ``Scan``'s
   // body-aware overload).
   // -------------------------------------------------------------------------
 

@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
-#include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
+#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -54,12 +54,12 @@ void Floor::operator()(const Tensor &x, Tensor &output) const {
     return;
   }
   case DataType::FLOAT16:
-    kernel::detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                         [](float v) { return std::floor(v); });
+    detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
+                                 [](float v) { return std::floor(v); });
     return;
   case DataType::BFLOAT16:
-    kernel::detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                         [](float v) { return std::floor(v); });
+    detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                                 [](float v) { return std::floor(v); });
     return;
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,

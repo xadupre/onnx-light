@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
@@ -25,6 +25,7 @@
 #include <string>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::If;
 using onnx_backend_test::DefaultOpset;
 using onnx_kernels::kernel::Abs;
 using onnx_kernels::kernel::Adagrad;
@@ -41,7 +42,6 @@ using onnx_kernels::kernel::Dropout;
 using onnx_kernels::kernel::FlexAttention;
 using onnx_kernels::kernel::HammingWindow;
 using onnx_kernels::kernel::HannWindow;
-using onnx_kernels::kernel::If;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::LabelEncoder;
 using onnx_kernels::kernel::LinearClassifier;

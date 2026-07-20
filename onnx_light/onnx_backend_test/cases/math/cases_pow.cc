@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <vector>
@@ -133,7 +133,7 @@ void RegisterPowCases(std::vector<TestCase> &registry, TestMode mode) {
   // FLOAT16 base with FLOAT exponent.
   {
     Expect(registry, node, "test_cc_pow_types_float16_float32", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeFloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
+      Tensor x = MakeFloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
       Tensor y = Tensor::FromFloat("", {3}, {2.0f, 3.0f, 4.0f});
       Tensor z = pow_kernel(x, y);
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
@@ -143,7 +143,7 @@ void RegisterPowCases(std::vector<TestCase> &registry, TestMode mode) {
   // BFLOAT16 base with FLOAT exponent.
   {
     Expect(registry, node, "test_cc_pow_types_bfloat16_float32", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeBfloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
+      Tensor x = MakeBfloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
       Tensor y = Tensor::FromFloat("", {3}, {2.0f, 3.0f, 4.0f});
       Tensor z = pow_kernel(x, y);
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};

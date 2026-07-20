@@ -13,8 +13,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Col2Im;
 using onnx_kernels::kernel::KernelContext;
 
@@ -115,7 +115,7 @@ TEST(KernelClass, Col2ImPadsDropOutOfBoundsContributions) {
 TEST(KernelClass, Col2ImRejectsNonFloatInput) {
   const KernelContext ctx{DefaultOpset(18)};
   const Col2Im op{ctx};
-  Tensor input("", static_cast<int32_t>(onnx_kernels::DataType::INT32),
+  Tensor input("", static_cast<int32_t>(core::runtime::DataType::INT32),
                std::vector<int64_t>{1, 5, 5}, std::vector<uint8_t>(25 * sizeof(int32_t)));
   Tensor image_shape = Tensor::FromInt64("", {2}, {5, 5});
   Tensor block_shape = Tensor::FromInt64("", {2}, {1, 5});

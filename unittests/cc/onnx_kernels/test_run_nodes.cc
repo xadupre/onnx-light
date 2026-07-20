@@ -3,6 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_core/runtime/kernel_dispatch_table.h"
+#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/raw_buffer_allocator.h"
+#include "onnx_core/runtime/run_nodes.h"
+#include "onnx_core/runtime/simple_sequence.h"
+#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_kernels/kernel_dispatch_table.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
@@ -10,11 +16,6 @@
 #include "onnx_kernels/kernels/rt/include_rt_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
-#include "onnx_kernels/node_helpers.h"
-#include "onnx_kernels/raw_buffer_allocator.h"
-#include "onnx_kernels/run_nodes.h"
-#include "onnx_kernels/simple_sequence.h"
-#include "onnx_kernels/simple_tensor.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
@@ -31,41 +32,41 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::DataType;
+using core::runtime::KernelDispatchTable;
+using core::runtime::RunFunction;
+using core::runtime::RunGraph;
+using core::runtime::RunModel;
+using core::runtime::RunNode;
+using core::runtime::RunNodes;
+using core::runtime::RuntimeContext;
+using core::runtime::Sequence;
+using core::runtime::SliceTensorAlongAxis;
+using core::runtime::Tensor;
+using core::runtime::TensorFromProto;
+using core::runtime::TensorMap;
 using onnx_backend_test::DefaultOpset;
-using onnx_kernels::DataType;
-using onnx_kernels::KernelDispatchTable;
-using onnx_kernels::RunFunction;
-using onnx_kernels::RunGraph;
-using onnx_kernels::RunModel;
-using onnx_kernels::RunNode;
-using onnx_kernels::RunNodes;
-using onnx_kernels::RuntimeContext;
-using onnx_kernels::Sequence;
-using onnx_kernels::SliceTensorAlongAxis;
-using onnx_kernels::Tensor;
-using onnx_kernels::TensorFromProto;
-using onnx_kernels::TensorMap;
 using onnx_kernels::kernel::KernelContext;
 
-static_assert(std::string_view(onnx_kernels::RuntimeEventActionName(
-                  onnx_kernels::RuntimeEventAction::kRunNode)) == "run_node");
-static_assert(std::string_view(onnx_kernels::RuntimeEventKindName(
-                  onnx_kernels::RuntimeEventKind::kOutput)) == "output");
+static_assert(std::string_view(core::runtime::RuntimeEventActionName(
+                  core::runtime::RuntimeEventAction::kRunNode)) == "run_node");
+static_assert(std::string_view(core::runtime::RuntimeEventKindName(
+                  core::runtime::RuntimeEventKind::kOutput)) == "output");
 
 namespace Test {
 
 namespace {
 
-class CountingAllocator : public onnx_kernels::RawBufferAllocator {
+class CountingAllocator : public core::runtime::RawBufferAllocator {
 public:
   explicit CountingAllocator(size_t capacity) : pool_(capacity) {}
 
-  onnx_kernels::RawBuffer *Allocate(size_t n_bytes) override {
+  core::runtime::RawBuffer *Allocate(size_t n_bytes) override {
     ++allocate_calls_;
     return pool_.Allocate(n_bytes);
   }
 
-  void Free(onnx_kernels::RawBuffer *buf) override {
+  void Free(core::runtime::RawBuffer *buf) override {
     ++free_calls_;
     pool_.Free(buf);
   }
@@ -77,7 +78,7 @@ public:
   size_t free_calls() const noexcept { return free_calls_; }
 
 private:
-  onnx_kernels::SimpleRawBufferAllocator pool_;
+  core::runtime::SimpleRawBufferAllocator pool_;
   size_t allocate_calls_ = 0;
   size_t free_calls_ = 0;
 };
@@ -548,7 +549,7 @@ TEST(RunNodes, RunNodeQuantizeLinearFromDispatchTable) {
   RunNode(node, rt);
 
   const Tensor &y = rt.tensors().at("y");
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::UINT8));
   EXPECT_EQ(y.shape, std::vector<int64_t>({4}));
   ASSERT_EQ(y.element_count(), 4);
   const std::uint8_t *py = reinterpret_cast<const std::uint8_t *>(y.bytes());
@@ -587,9 +588,9 @@ TEST(RunNodes, RunNodeDynamicQuantizeLinearFromDispatchTable) {
   const Tensor &y_scale = rt.tensors().at("y_scale");
   const Tensor &y_zp = rt.tensors().at("y_zero_point");
   EXPECT_EQ(y.shape, std::vector<int64_t>({4}));
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
-  EXPECT_EQ(y_scale.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-  EXPECT_EQ(y_zp.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::UINT8));
+  EXPECT_EQ(y_scale.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  EXPECT_EQ(y_zp.data_type, static_cast<int32_t>(core::runtime::DataType::UINT8));
   EXPECT_TRUE(y_scale.shape.empty());
   EXPECT_TRUE(y_zp.shape.empty());
 }
@@ -788,7 +789,7 @@ TEST(RunNodes, RunNodeImageDecoderFromDispatchTable) {
   RunNode(node, rt);
 
   const Tensor &image = rt.tensors()["image"];
-  EXPECT_EQ(image.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+  EXPECT_EQ(image.data_type, static_cast<int32_t>(core::runtime::DataType::UINT8));
   EXPECT_EQ(image.shape, (std::vector<int64_t>{0, 0, 1}));
   EXPECT_EQ(image.element_count(), 0);
   EXPECT_TRUE(image.data.empty());
@@ -871,7 +872,7 @@ TEST(RunNodes, RunNodeResizeScalesFromDispatchTable) {
 
   const Tensor &y = rt.tensors().at("Y");
   EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 6}));
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 
   // Compare against the kernel's direct output to validate dispatch-time
   // wiring of inputs, attributes and outputs.
@@ -900,7 +901,7 @@ TEST(RunNodes, RunNodeResizeSizesFromDispatchTable) {
 
   const Tensor &y = rt.tensors().at("Y");
   EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 6}));
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
 TEST(RunNodes, RunNodeRegexFullMatchFromDispatchTable) {
@@ -1384,8 +1385,8 @@ TEST(RunNodes, RuntimeContextRemove) {
 }
 
 TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
-  using onnx_kernels::RuntimeEventAction;
-  using onnx_kernels::RuntimeEventKind;
+  using core::runtime::RuntimeEventAction;
+  using core::runtime::RuntimeEventKind;
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.set_events_enabled(true);
   EXPECT_TRUE(rt.events().empty());
@@ -1465,8 +1466,8 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   // Smoke test: running a small chain of nodes through the dispatcher
   // populates the event log via SetOutput / Put on every produced tensor
   // and also appends one ``kRunNode`` event per dispatched node.
-  using onnx_kernels::RuntimeEventAction;
-  using onnx_kernels::RuntimeEventKind;
+  using core::runtime::RuntimeEventAction;
+  using core::runtime::RuntimeEventKind;
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.set_events_enabled(true);
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
@@ -1509,22 +1510,22 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
 // ---------------------------------------------------------------------------
 
 TEST(ShapeProduct, EmptyShapeIsScalarWithProduct1) {
-  const onnx_kernels::Shape s{};
+  const core::runtime::Shape s{};
   EXPECT_EQ(s.product(), 1);
 }
 
 TEST(ShapeProduct, SingleDimensionEqualsItself) {
-  const onnx_kernels::Shape s{7};
+  const core::runtime::Shape s{7};
   EXPECT_EQ(s.product(), 7);
 }
 
 TEST(ShapeProduct, MultipleDimensionsMultipliedTogether) {
-  const onnx_kernels::Shape s{2, 3, 4};
+  const core::runtime::Shape s{2, 3, 4};
   EXPECT_EQ(s.product(), 24);
 }
 
 TEST(ShapeProduct, ZeroDimensionProducesZero) {
-  const onnx_kernels::Shape s{4, 0, 3};
+  const core::runtime::Shape s{4, 0, 3};
   EXPECT_EQ(s.product(), 0);
 }
 
@@ -1824,7 +1825,7 @@ TEST(RunModel, DelayedInitializerUsesAllocatorWhenProvided) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   // SimpleRawBufferAllocator capacity counts buffer slots, not bytes.
   constexpr size_t kAllocatorSlotCapacity = 1;
-  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
   rt.set_allocator(&alloc);
 
   Tensor y = delayed(&rt);
@@ -1853,7 +1854,7 @@ TEST(RunModel, DelayedInitializerCpuLoadUsesConstructionAllocator) {
 
   // SimpleRawBufferAllocator capacity counts buffer slots, not bytes.
   constexpr size_t kAllocatorSlotCapacity = 1;
-  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   KernelContext ctx(DefaultOpset(18));
   ctx.allocator = &alloc;
@@ -1899,7 +1900,7 @@ TEST(RunModel, DelayedInitializerCpuLoadWithBothAllocators) {
   // Allocator for the construction-time loaded_bytes_ buffer.
   // SimpleRawBufferAllocator capacity counts buffer slots, not bytes.
   constexpr size_t kConstructionAllocatorSlots = 1;
-  onnx_kernels::SimpleRawBufferAllocator construction_alloc(kConstructionAllocatorSlots);
+  core::runtime::SimpleRawBufferAllocator construction_alloc(kConstructionAllocatorSlots);
 
   KernelContext ctx(DefaultOpset(18));
   ctx.allocator = &construction_alloc;
@@ -1916,7 +1917,7 @@ TEST(RunModel, DelayedInitializerCpuLoadWithBothAllocators) {
   // Call operator() with a separate runtime allocator: the output must be
   // backed by the runtime allocator, not the construction-time allocator.
   constexpr size_t kRuntimeAllocatorSlots = 1;
-  onnx_kernels::SimpleRawBufferAllocator runtime_alloc(kRuntimeAllocatorSlots);
+  core::runtime::SimpleRawBufferAllocator runtime_alloc(kRuntimeAllocatorSlots);
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.set_allocator(&runtime_alloc);
 
@@ -2759,7 +2760,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   // Two slots are sufficient: the transient iter/cond scalar allocations are
   // freed at the end of each iteration before the final outputs are stored.
   constexpr size_t kAllocatorSlotCapacity = 2;
-  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
@@ -2943,7 +2944,7 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
   // attaching the allocator so they stay inline and do not consume allocator
   // slots.
   constexpr size_t kAllocatorSlotCapacity = 2;
-  onnx_kernels::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
@@ -2976,7 +2977,7 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
 }
 
 TEST(RunNodes, SliceTensorAlongAxisKeepsInputAllocator) {
-  onnx_kernels::SimpleRawBufferAllocator alloc(2);
+  core::runtime::SimpleRawBufferAllocator alloc(2);
   const Tensor input = Tensor::FromFloat("x", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, &alloc);
 
   ASSERT_TRUE(input.has_allocation());
@@ -3178,7 +3179,7 @@ TEST(RunNodes, RunNodeFlexAttentionFromDispatchTable) {
 
   const Tensor &Y = rt.tensors().at("Y");
   EXPECT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
-  EXPECT_EQ(Y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(Y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
 TEST(RunNodes, RunNodeGRUFromDispatchTable) {
@@ -3213,7 +3214,7 @@ TEST(RunNodes, RunNodeGRUFromDispatchTable) {
 
   const Tensor &y_h = rt.tensors().at("Y_h");
   EXPECT_EQ(y_h.shape, (std::vector<int64_t>{1, kBatch, kHidden}));
-  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 
   // Compare against the kernel's direct output to validate dispatch-time
   // wiring of inputs, attributes and outputs.
@@ -3271,7 +3272,7 @@ TEST(RunNodes, RunNodeLSTMFromDispatchTableUniformSequenceLens) {
 
   const Tensor &y_h = rt.tensors().at("Y_h");
   EXPECT_EQ(y_h.shape, (std::vector<int64_t>{1, kBatch, kHidden}));
-  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 
   // Non-uniform ``sequence_lens`` is still rejected.
   rt.tensors()["sequence_lens"] =
@@ -3311,7 +3312,7 @@ TEST(RunNodes, RunNodeLSTMFromDispatchTable) {
 
   const Tensor &y_h = rt.tensors().at("Y_h");
   EXPECT_EQ(y_h.shape, (std::vector<int64_t>{1, kBatch, kHidden}));
-  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 
   // Compare against the kernel's direct output to validate dispatch-time
   // wiring of inputs, attributes and outputs.
@@ -3339,11 +3340,11 @@ TEST(RunNodes, RunNodeSequenceConstructAndQueriesFromDispatchTable) {
   RunNode(MakeNode("SequenceConstruct", {"a", "b", "c"}, {"seq"}), rt);
   ASSERT_TRUE(rt.HasSequence("seq"));
   EXPECT_EQ(rt.GetSequence("seq").size(), 3u);
-  EXPECT_EQ(rt.GetSequence("seq").elem_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(rt.GetSequence("seq").elem_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 
   RunNode(MakeNode("SequenceLength", {"seq"}, {"n"}), rt);
   const Tensor &n = rt.tensors().at("n");
-  EXPECT_EQ(n.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(n.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   ASSERT_EQ(n.element_count(), 1);
   EXPECT_EQ(n.AsInt64()[0], 3);
 
@@ -3376,7 +3377,7 @@ TEST(RunNodes, RunNodeSequenceEmptyInsertEraseFromDispatchTable) {
   AttributeProto *dtype = empty.add_attribute();
   dtype->set_name("dtype");
   dtype->set_type(AttributeProto::INT);
-  dtype->set_i(static_cast<int64_t>(onnx_kernels::DataType::FLOAT));
+  dtype->set_i(static_cast<int64_t>(core::runtime::DataType::FLOAT));
   RunNode(empty, rt);
   ASSERT_TRUE(rt.HasSequence("seq0"));
   EXPECT_TRUE(rt.GetSequence("seq0").empty());
@@ -3954,7 +3955,7 @@ TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   // y = Add(Abs(x), z) — after running, "t" (the intermediate) must be gone
   // from the context, "y" (declared output) must remain, and "x" / "z"
   // (graph inputs already in the context) must also remain.
-  using onnx_kernels::RuntimeEventAction;
+  using core::runtime::RuntimeEventAction;
 
   GraphProto graph;
   ValueInfoProto vi_x;
@@ -4018,8 +4019,8 @@ TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.set_release_intermediates(true);
-  const onnx_kernels::ExecutionPlan &plan1 = rt.GetExecutionPlan(graph);
-  const onnx_kernels::ExecutionPlan &plan2 = rt.GetExecutionPlan(graph);
+  const core::runtime::ExecutionPlan &plan1 = rt.GetExecutionPlan(graph);
+  const core::runtime::ExecutionPlan &plan2 = rt.GetExecutionPlan(graph);
   EXPECT_EQ(&plan1, &plan2);
   EXPECT_EQ(plan1.num_nodes(), 2u);
   // "t" is releasable after node 1, "x" / "y" are in keep (input/output).
@@ -4071,7 +4072,7 @@ static void FillLoopBody(GraphProto &body) {
 }
 
 TEST(SubgraphEventGraphName, LoopSubgraphEventsCarryBodyGraphName) {
-  using onnx_kernels::RuntimeEventAction;
+  using core::runtime::RuntimeEventAction;
 
   ModelProto model;
   model.set_ir_version(10);
@@ -4124,7 +4125,7 @@ TEST(SubgraphEventGraphName, LoopSubgraphEventsCarryBodyGraphName) {
 }
 
 TEST(SubgraphEventGraphName, IfSubgraphEventsCarryBranchGraphName) {
-  using onnx_kernels::RuntimeEventAction;
+  using core::runtime::RuntimeEventAction;
 
   // Build a trivial If model: cond -> If(then_branch, else_branch).
   ModelProto model;
@@ -4183,7 +4184,7 @@ TEST(SubgraphEventGraphName, IfSubgraphEventsCarryBranchGraphName) {
 }
 
 TEST(SubgraphEventGraphName, ScanSubgraphEventsCarryBodyGraphName) {
-  using onnx_kernels::RuntimeEventAction;
+  using core::runtime::RuntimeEventAction;
 
   ModelProto model;
   model.set_ir_version(10);
@@ -4239,7 +4240,7 @@ TEST(SubgraphEventGraphName, ScanSubgraphEventsCarryBodyGraphName) {
 TEST(SubgraphEventGraphName, TopLevelEventsHaveEmptyGraphName) {
   // A plain two-node graph (no subgraphs) must produce only events
   // with an empty subgraph_attr_name.
-  using onnx_kernels::RuntimeEventAction;
+  using core::runtime::RuntimeEventAction;
 
   ModelProto model;
   model.set_ir_version(10);
@@ -4273,8 +4274,8 @@ TEST(NodeHelpers, GetAttributeShapeOrDefaultReturnsShape) {
   attr->add_ints(3);
   attr->add_ints(3);
 
-  const onnx_kernels::Shape result =
-      onnx_kernels::detail::GetAttributeShapeOrDefault(node, "kernel_shape", onnx_kernels::Shape{});
+  const core::runtime::Shape result =
+      core::runtime::GetAttributeShapeOrDefault(node, "kernel_shape", core::runtime::Shape{});
   ASSERT_EQ(result.size(), static_cast<size_t>(2));
   EXPECT_EQ(result[0], 3);
   EXPECT_EQ(result[1], 3);
@@ -4284,9 +4285,9 @@ TEST(NodeHelpers, GetAttributeShapeOrDefaultReturnsFallback) {
   NodeProto node;
   node.set_op_type("Pool");
 
-  const onnx_kernels::Shape fallback{1, 1};
-  const onnx_kernels::Shape result =
-      onnx_kernels::detail::GetAttributeShapeOrDefault(node, "kernel_shape", fallback);
+  const core::runtime::Shape fallback{1, 1};
+  const core::runtime::Shape result =
+      core::runtime::GetAttributeShapeOrDefault(node, "kernel_shape", fallback);
   ASSERT_EQ(result.size(), static_cast<size_t>(2));
   EXPECT_EQ(result[0], 1);
   EXPECT_EQ(result[1], 1);

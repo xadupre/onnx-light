@@ -687,7 +687,7 @@ public:
 
   // ── Event logging ───────────────────────────────────────────────────
   //
-  // Mirrors the opt-in event log of :cpp:class:`onnx_kernels::RuntimeContext`.
+  // Mirrors the opt-in event log of :cpp:class:`core::runtime::RuntimeContext`.
   // When disabled (the default), :cpp:func:`Set`,
   // :cpp:func:`ComputeShapeNode`, :cpp:func:`AddConstraint` and
   // :cpp:func:`AddLessEqualConstraint` skip all event construction,

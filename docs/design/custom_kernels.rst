@@ -3,8 +3,11 @@
 Custom kernels for ReferenceEvaluator
 =====================================
 
-The C++ runtime in ``onnx_light/onnx_kernels`` dispatches every
-:class:`~onnx_light.onnx_lib.NodeProto` against a static :cpp:func:`onnx::onnx_kernels::KernelDispatchTable`.
+The C++ runtime in ``onnx_light/onnx_core/runtime`` dispatches every
+:class:`~onnx_light.onnx_lib.NodeProto` against a mutable
+:cpp:func:`onnx_light::core::runtime::KernelDispatchTable`, populated with
+every built-in operator kernel from ``onnx_light/onnx_kernels`` via
+:cpp:func:`onnx_light::onnx_kernels::RegisterKernelFunctions`.
 Any operator that is not built in — typically an operator from a
 user-defined domain, an experimental op, or a stand-in for one not yet
 implemented — would otherwise fail with ``unsupported op_type``.
@@ -13,13 +16,13 @@ The custom-kernel hook documented here lets callers extend (or override)
 the runtime without modifying the built-in dispatch table. It is exposed
 at three layers:
 
-* C++: :cpp:func:`onnx::onnx_kernels::RuntimeContext::RegisterCustomKernel`,
+* C++: :cpp:func:`onnx_light::core::runtime::RuntimeContext::RegisterCustomKernel`,
 * low-level Python: ``RuntimeContext.register_custom_kernel(domain, op_type, fn)``,
 * high-level Python: :py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.register_custom_kernel`.
 
 All three share the same model: a name-keyed
-:cpp:type:`onnx::onnx_kernels::CustomKernelMap` stored on the active
-:cpp:class:`~onnx::onnx_kernels::RuntimeContext`. ``RunNode`` consults
+:cpp:type:`onnx_light::core::runtime::CustomKernelMap` stored on the active
+:cpp:class:`~onnx_light::core::runtime::RuntimeContext`. ``RunNode`` consults
 this map *before* the built-in dispatch table; model-local
 :cpp:class:`FunctionProto` definitions and the dedicated control-flow
 paths (``If``, ``Loop``, ``Scan``, ``SequenceMap``) still take
@@ -44,7 +47,7 @@ C++ usage
 ---------
 
 A custom kernel is any callable compatible with
-:cpp:type:`onnx::onnx_kernels::CustomKernelFn`, i.e.
+:cpp:type:`onnx_light::core::runtime::CustomKernelFn`, i.e.
 ``std::function<void(const NodeProto &, RuntimeContext &)>``. The
 callback is in charge of reading its inputs from the context's tensor
 map and writing its outputs back through
@@ -52,10 +55,10 @@ map and writing its outputs back through
 
 .. code-block:: cpp
 
-  #include "onnx_kernels/run_nodes.h"
-  #include "onnx_kernels/runtime_context.h"
+  #include "onnx_core/runtime/run_nodes.h"
+  #include "onnx_core/runtime/runtime_context.h"
 
-  using namespace onnx::onnx_kernels;
+  using namespace onnx_light::core::runtime;
 
   RuntimeContext rt(KernelContext(/*opset=*/18));
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));

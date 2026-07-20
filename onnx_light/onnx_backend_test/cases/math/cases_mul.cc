@@ -4,9 +4,9 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
-#include "onnx_kernels/random.h"
 
 #include <cstdint>
 #include <string>
@@ -194,8 +194,8 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
     n16.add_input("y");
     n16.add_output("z");
     Expect(registry, std::move(n16), "test_cc_mul_float16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-      Tensor y = kernel::MakeFloat16Tensor("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
+      Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+      Tensor y = MakeFloat16Tensor("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
       Tensor z = mul_kernel(x, y);
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -215,8 +215,8 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
       auto *dx = reinterpret_cast<uint16_t *>(rx.data());
       auto *dy = reinterpret_cast<uint16_t *>(ry.data());
       for (size_t i = 0; i < vx.size(); ++i) {
-        dx[i] = kernel::FloatToBfloat16Bits(vx[i]);
-        dy[i] = kernel::FloatToBfloat16Bits(vy[i]);
+        dx[i] = FloatToBfloat16Bits(vx[i]);
+        dy[i] = FloatToBfloat16Bits(vy[i]);
       }
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(rx));
       Tensor y("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(ry));

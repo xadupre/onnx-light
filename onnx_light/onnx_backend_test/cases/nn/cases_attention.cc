@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
 #include <cmath>
@@ -56,8 +56,8 @@ NodeProto MakeAttentionNode(const std::vector<std::string> &inputs,
 
 // IEEE-754 binary16 ↔ binary32 conversions and the ``FloatToFloat16Tensor``
 // / ``RoundToFloat16`` helpers are provided by
-// ``onnx_kernels/kernels/_helpers/cast_helper.h`` as
-// ``kernel::FloatToFloat16Tensor`` / ``kernel::RoundToFloat16``.
+// ``onnx_core/runtime/cast_helper.h`` as
+// ``FloatToFloat16Tensor`` / ``RoundToFloat16``.
 
 // Builds a small deterministic FLOAT tensor of the requested shape. Values
 // are derived from a simple LCG seeded by ``seed`` and then mapped into
@@ -1910,14 +1910,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q32 = MakeDeterministicFloatTensor({2, 3, 4, 8}, 0x1234u, 0.0f, 1.0f);
     Tensor K32 = MakeDeterministicFloatTensor({2, 3, 6, 8}, 0x5678u, 0.0f, 1.0f);
     Tensor V32 = MakeDeterministicFloatTensor({2, 3, 6, 8}, 0x9abcu, 0.0f, 1.0f);
-    Tensor Q_in = kernel::RoundToFloat16(Q32);
-    Tensor K_in = kernel::RoundToFloat16(K32);
-    Tensor V_in = kernel::RoundToFloat16(V32);
+    Tensor Q_in = RoundToFloat16(Q32);
+    Tensor K_in = RoundToFloat16(K32);
+    Tensor V_in = RoundToFloat16(V32);
     Tensor Y32 = attention(Q_in, K_in, V_in);
-    Tensor Q = kernel::FloatToFloat16Tensor("", Q_in);
-    Tensor K = kernel::FloatToFloat16Tensor("", K_in);
-    Tensor V = kernel::FloatToFloat16Tensor("", V_in);
-    Tensor Y = kernel::FloatToFloat16Tensor("", Y32);
+    Tensor Q = FloatToFloat16Tensor("", Q_in);
+    Tensor K = FloatToFloat16Tensor("", K_in);
+    Tensor V = FloatToFloat16Tensor("", V_in);
+    Tensor Y = FloatToFloat16Tensor("", Y32);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     Expect(registry, std::move(node), "test_cc_attention_4d_fp16", {opset}, [=]() -> IoData {
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
@@ -1933,23 +1933,23 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor mask32 = MakeDeterministicFloatTensor({4, 18}, 0xcafeu, 0.0f, 1.0f);
     Tensor pk32 = MakeDeterministicFloatTensor({2, 3, 12, 8}, 0xface, 0.0f, 1.0f);
     Tensor pv32 = MakeDeterministicFloatTensor({2, 3, 12, 8}, 0xb16bu, 0.0f, 1.0f);
-    Tensor Q_in = kernel::RoundToFloat16(Q32);
-    Tensor K_in = kernel::RoundToFloat16(K32);
-    Tensor V_in = kernel::RoundToFloat16(V32);
-    Tensor mask_in = kernel::RoundToFloat16(mask32);
-    Tensor pk_in = kernel::RoundToFloat16(pk32);
-    Tensor pv_in = kernel::RoundToFloat16(pv32);
+    Tensor Q_in = RoundToFloat16(Q32);
+    Tensor K_in = RoundToFloat16(K32);
+    Tensor V_in = RoundToFloat16(V32);
+    Tensor mask_in = RoundToFloat16(mask32);
+    Tensor pk_in = RoundToFloat16(pk32);
+    Tensor pv_in = RoundToFloat16(pv32);
     kernel::Attention::Attributes attrs;
     auto r = attention(Q_in, K_in, V_in, attrs, &mask_in, &pk_in, &pv_in);
-    Tensor Q = kernel::FloatToFloat16Tensor("", Q_in);
-    Tensor K = kernel::FloatToFloat16Tensor("", K_in);
-    Tensor V = kernel::FloatToFloat16Tensor("", V_in);
-    Tensor mask = kernel::FloatToFloat16Tensor("", mask_in);
-    Tensor pk = kernel::FloatToFloat16Tensor("", pk_in);
-    Tensor pv = kernel::FloatToFloat16Tensor("", pv_in);
-    Tensor Y = kernel::FloatToFloat16Tensor("", r.Y);
-    Tensor present_key = kernel::FloatToFloat16Tensor("", r.present_key);
-    Tensor present_value = kernel::FloatToFloat16Tensor("", r.present_value);
+    Tensor Q = FloatToFloat16Tensor("", Q_in);
+    Tensor K = FloatToFloat16Tensor("", K_in);
+    Tensor V = FloatToFloat16Tensor("", V_in);
+    Tensor mask = FloatToFloat16Tensor("", mask_in);
+    Tensor pk = FloatToFloat16Tensor("", pk_in);
+    Tensor pv = FloatToFloat16Tensor("", pv_in);
+    Tensor Y = FloatToFloat16Tensor("", r.Y);
+    Tensor present_key = FloatToFloat16Tensor("", r.present_key);
+    Tensor present_value = FloatToFloat16Tensor("", r.present_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     Expect(registry, std::move(node), "test_cc_attention_4d_gqa_with_past_and_present_fp16",
@@ -1968,7 +1968,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         attention(Q_in, K_in, V_in, decode_attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
                   /*past_value=*/nullptr, &nonpad_kv_seqlen)
             .Y;
-    Tensor decode_Y = kernel::FloatToFloat16Tensor("", decode_y);
+    Tensor decode_Y = FloatToFloat16Tensor("", decode_y);
     NodeProto decode_node =
         MakeAttentionNode({"Q", "K", "V", "", "", "", "nonpad_kv_seqlen"}, {"Y"});
     AddInt(decode_node, "is_causal", 1);

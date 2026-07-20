@@ -5,7 +5,7 @@
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_light_helpers.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>

@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
 #include <string>

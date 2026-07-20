@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
-#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/float16_promote.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
-#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -19,10 +19,10 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::RuntimeContext;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
-using onnx_kernels::RuntimeContext;
 using onnx_kernels::SimpleRawBufferAllocator;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Abs;
 using onnx_kernels::kernel::Acos;
 using onnx_kernels::kernel::Acosh;
@@ -116,7 +116,7 @@ TEST(KernelClass, NegInPlaceWritesToPreallocatedOutput) {
   Neg neg_kernel{ctx};
 
   Tensor x = Tensor::FromFloat("", {2}, {-4.0f, 2.0f});
-  Tensor y("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+  Tensor y("", core::runtime::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
   neg_kernel(x, y);
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 4.0f);
@@ -496,9 +496,9 @@ TEST(KernelClass, SoftmaxClassSupportsFloat16) {
   // result must match the FLOAT softmax reference within half-precision rounding.
   Tensor x32 = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
   Tensor x16 =
-      onnx_kernels::DemoteFromFloat32(x32, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+      onnx_kernels::DemoteFromFloat32(x32, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
   Tensor y16 = softmax_kernel(x16, 1);
-  ASSERT_EQ(y16.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  ASSERT_EQ(y16.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
   ASSERT_EQ(y16.element_count(), 6);
   Tensor y = onnx_kernels::PromoteToFloat32(y16);
   const float *py = y.AsFloat();
@@ -513,7 +513,7 @@ TEST(KernelClass, SoftmaxClassSupportsFloat16) {
 TEST(KernelClass, Float16PromoteUsesAllocatorWhenRuntimeContextHasOne) {
   Tensor x32 = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
   Tensor x16 =
-      onnx_kernels::DemoteFromFloat32(x32, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+      onnx_kernels::DemoteFromFloat32(x32, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
   SimpleRawBufferAllocator alloc(1);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
@@ -524,7 +524,7 @@ TEST(KernelClass, Float16PromoteUsesAllocatorWhenRuntimeContextHasOne) {
   EXPECT_EQ(alloc.allocated_count(), 1u);
   EXPECT_EQ(y.data.size(), 0u);
   ASSERT_EQ(y.shape, x32.shape);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   const float *py = y.AsFloat();
   for (int64_t i = 0; i < x32.element_count(); ++i) {
     EXPECT_FLOAT_EQ(py[i], x32.AsFloat()[i]);
@@ -538,13 +538,13 @@ TEST(KernelClass, Float16DemoteUsesAllocatorWhenRuntimeContextHasOne) {
   rt.set_allocator(&alloc);
 
   Tensor y = onnx_kernels::DemoteFromFloat32(
-      x32, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), &rt);
+      x32, static_cast<int32_t>(core::runtime::DataType::FLOAT16), &rt);
 
   EXPECT_TRUE(y.has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);
   EXPECT_EQ(y.data.size(), 0u);
   ASSERT_EQ(y.shape, x32.shape);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
   const Tensor roundtrip = onnx_kernels::PromoteToFloat32(y);
   const float *py = roundtrip.AsFloat();
   for (int64_t i = 0; i < x32.element_count(); ++i) {
@@ -774,7 +774,7 @@ TEST(KernelClass, AddClassMatchesReferenceInt32) {
   Tensor y = Tensor::FromInt32("", {4}, {3, 0, 2, -1});
   Tensor z = add_kernel(x, y);
   ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
   const int32_t *pz = z.AsInt32();
   EXPECT_EQ(pz[0], 13);
   EXPECT_EQ(pz[1], 0);
@@ -789,7 +789,7 @@ TEST(KernelClass, AddClassMatchesReferenceInt64) {
   Tensor y = Tensor::FromInt64("", {4}, {3, 0, 2, -1});
   Tensor z = add_kernel(x, y);
   ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   const int64_t *pz = z.AsInt64();
   EXPECT_EQ(pz[0], 13);
   EXPECT_EQ(pz[1], 0);
@@ -811,7 +811,7 @@ TEST(KernelClass, AbsInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   Abs abs_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
-  Tensor y("out", onnx_kernels::DataType::FLOAT, {3},
+  Tensor y("out", core::runtime::DataType::FLOAT, {3},
            std::vector<uint8_t>(3 * sizeof(float), 0xFF));
   abs_kernel(x, y);
   EXPECT_EQ(y.name, "out");
@@ -827,7 +827,7 @@ TEST(KernelClass, AddInPlaceWritesToPreallocatedOutput) {
   Add add_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {0.5f});
-  Tensor z("", onnx_kernels::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor z("", core::runtime::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   add_kernel(x, y, z);
   ASSERT_EQ(z.element_count(), 4);
   const float *pz = z.AsFloat();
@@ -841,7 +841,7 @@ TEST(KernelClass, BlackmanWindowInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(17)};
   BlackmanWindow blackman_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
-  Tensor y("", onnx_kernels::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
+  Tensor y("", core::runtime::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
   blackman_kernel(size, /*periodic=*/true, y);
   EXPECT_EQ(y.element_count(), 8);
   EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
@@ -861,7 +861,7 @@ TEST(KernelClass, HannWindowInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(17)};
   HannWindow hann_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
-  Tensor y("", onnx_kernels::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
+  Tensor y("", core::runtime::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
   hann_kernel(size, /*periodic=*/true, y);
   EXPECT_EQ(y.element_count(), 8);
   EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
@@ -881,7 +881,7 @@ TEST(KernelClass, HammingWindowInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(17)};
   HammingWindow hamming_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
-  Tensor y("", onnx_kernels::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
+  Tensor y("", core::runtime::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
   hamming_kernel(size, /*periodic=*/true, y);
   EXPECT_EQ(y.element_count(), 8);
   EXPECT_NEAR(y.AsFloat()[0], static_cast<float>(4.0 / 46.0), 1e-6f);
@@ -893,16 +893,18 @@ TEST(KernelClass, InPlaceRejectsMismatchedShapeOrType) {
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
 
   // Wrong dtype.
-  Tensor bad_dtype("", onnx_kernels::DataType::INT32, {3},
+  Tensor bad_dtype("", core::runtime::DataType::INT32, {3},
                    std::vector<uint8_t>(3 * sizeof(int32_t)));
   EXPECT_THROW(abs_kernel(x, bad_dtype), std::invalid_argument);
 
   // Wrong shape.
-  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+  Tensor bad_shape("", core::runtime::DataType::FLOAT, {2},
+                   std::vector<uint8_t>(2 * sizeof(float)));
   EXPECT_THROW(abs_kernel(x, bad_shape), std::invalid_argument);
 
   // Wrong buffer byte count.
-  Tensor bad_bytes("", onnx_kernels::DataType::FLOAT, {3}, std::vector<uint8_t>(1 * sizeof(float)));
+  Tensor bad_bytes("", core::runtime::DataType::FLOAT, {3},
+                   std::vector<uint8_t>(1 * sizeof(float)));
   EXPECT_THROW(abs_kernel(x, bad_bytes), std::invalid_argument);
 }
 
@@ -953,7 +955,7 @@ TEST(KernelClass, SubInPlaceWritesToPreallocatedOutput) {
   Sub sub_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {0.5f});
-  Tensor z("", onnx_kernels::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor z("", core::runtime::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   sub_kernel(x, y, z);
   ASSERT_EQ(z.element_count(), 4);
   const float *pz = z.AsFloat();
@@ -970,7 +972,7 @@ TEST(KernelClass, SubClassMatchesReferenceInt8) {
   Tensor y = Tensor::FromInt8("", {4}, {3, 0, 2, -1});
   Tensor z = sub_kernel(x, y);
   ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT8));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::INT8));
   const int8_t *pz = z.AsInt8();
   EXPECT_EQ(pz[0], 7);
   EXPECT_EQ(pz[1], 0);
@@ -985,7 +987,7 @@ TEST(KernelClass, SubClassMatchesReferenceUint32) {
   Tensor y = Tensor::FromUint32("", {4}, {3u, 5u, 1u, 50u});
   Tensor z = sub_kernel(x, y);
   ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT32));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::UINT32));
   const uint32_t *pz = reinterpret_cast<const uint32_t *>(z.data.data());
   EXPECT_EQ(pz[0], 7u);
   EXPECT_EQ(pz[1], 0u);
@@ -1002,7 +1004,7 @@ TEST(KernelClass, SubClassMatchesReferenceInt64) {
   Tensor y = Tensor::FromInt64("", {4}, {3, 0, 2, -1});
   Tensor z = sub_kernel(x, y);
   ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   const int64_t *pz = z.AsInt64();
   EXPECT_EQ(pz[0], 7);
   EXPECT_EQ(pz[1], 0);
@@ -1015,8 +1017,8 @@ TEST(KernelClass, SubRejectsUnsupportedDtype) {
   // INT64/UINT8/UINT16/UINT32/UINT64) so the kernel must reject them.
   const KernelContext ctx{DefaultOpset(14)};
   Sub sub_kernel{ctx};
-  Tensor x("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
-  Tensor y("", onnx_kernels::DataType::BOOL, {2}, {0, 1});
+  Tensor x("", core::runtime::DataType::BOOL, {2}, {1, 0});
+  Tensor y("", core::runtime::DataType::BOOL, {2}, {0, 1});
   EXPECT_THROW((void)sub_kernel(x, y), std::invalid_argument);
 }
 
@@ -1052,7 +1054,7 @@ TEST(KernelClass, MulInPlaceWritesToPreallocatedOutput) {
   Mul mul_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {3.0f});
-  Tensor z("", onnx_kernels::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor z("", core::runtime::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   mul_kernel(x, y, z);
   ASSERT_EQ(z.element_count(), 4);
   const float *pz = z.AsFloat();
@@ -1069,7 +1071,7 @@ TEST(KernelClass, MulClassMatchesReferenceInt32) {
   Tensor y = Tensor::FromInt32("", {3}, {4, 5, -6});
   Tensor z = mul_kernel(x, y);
   ASSERT_EQ(z.element_count(), 3);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
   const int32_t *pz = z.AsInt32();
   EXPECT_EQ(pz[0], 4);
   EXPECT_EQ(pz[1], -10);
@@ -1083,7 +1085,7 @@ TEST(KernelClass, MulClassMatchesReferenceInt64) {
   Tensor y = Tensor::FromInt64("", {3}, {4, 5, -6});
   Tensor z = mul_kernel(x, y);
   ASSERT_EQ(z.element_count(), 3);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   const int64_t *pz = z.AsInt64();
   EXPECT_EQ(pz[0], 4);
   EXPECT_EQ(pz[1], -10);
@@ -1124,7 +1126,7 @@ TEST(KernelClass, DivClassBroadcastsScalarOverEmptyAxis) {
   // iteration read past the empty input buffer and crashed.
   const KernelContext ctx{DefaultOpset(14)};
   Div div_kernel{ctx};
-  Tensor x("", onnx_kernels::DataType::FLOAT, {1, 512, 0}, std::vector<uint8_t>(0));
+  Tensor x("", core::runtime::DataType::FLOAT, {1, 512, 0}, std::vector<uint8_t>(0));
   Tensor y = Tensor::FromFloat("", {}, {2.0f});
   Tensor z = div_kernel(x, y);
   EXPECT_EQ(z.element_count(), 0);
@@ -1137,7 +1139,7 @@ TEST(KernelClass, DivInPlaceWritesToPreallocatedOutput) {
   Div div_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 4.0f, 6.0f, 8.0f});
   Tensor y = Tensor::FromFloat("", {}, {2.0f});
-  Tensor z("", onnx_kernels::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor z("", core::runtime::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   div_kernel(x, y, z);
   ASSERT_EQ(z.element_count(), 4);
   const float *pz = z.AsFloat();
@@ -1294,8 +1296,8 @@ TEST(KernelClass, ModClassMatchesPythonAndCSemantics) {
   // ``numpy.fmod`` on the IEEE-754 binary16 inputs (upstream
   // ``test_mod_mixed_sign_float16`` reference).
   {
-    Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {6}, {});
-    Tensor y("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {6}, {});
+    Tensor x("", static_cast<int32_t>(core::runtime::DataType::FLOAT16), {6}, {});
+    Tensor y("", static_cast<int32_t>(core::runtime::DataType::FLOAT16), {6}, {});
     // Bit patterns of float16(-4.3, 7.2, 5.0, 4.3, -7.2, 8.0) and
     // float16(2.1, -3.4, 8.0, -2.1, 3.4, 5.0).
     const std::vector<uint16_t> xb = {0xc44dU, 0x4733U, 0x4500U, 0x444dU, 0xc733U, 0x4800U};
@@ -1305,7 +1307,7 @@ TEST(KernelClass, ModClassMatchesPythonAndCSemantics) {
     y.data.assign(reinterpret_cast<const uint8_t *>(yb.data()),
                   reinterpret_cast<const uint8_t *>(yb.data() + yb.size()));
     Tensor z = mod_kernel(x, y, /*fmod=*/1);
-    ASSERT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+    ASSERT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
     const uint16_t *pz = reinterpret_cast<const uint16_t *>(z.data.data());
     EXPECT_EQ(pz[0], 0xae80U); // -0.1015625
     EXPECT_EQ(pz[1], 0x3660U); //  0.3984375
@@ -1317,9 +1319,9 @@ TEST(KernelClass, ModClassMatchesPythonAndCSemantics) {
 
   // FLOAT16 with fmod=0 must throw (matches FLOAT/DOUBLE behaviour).
   {
-    Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {1},
+    Tensor x("", static_cast<int32_t>(core::runtime::DataType::FLOAT16), {1},
              std::vector<uint8_t>(sizeof(uint16_t), 0));
-    Tensor y("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {1},
+    Tensor y("", static_cast<int32_t>(core::runtime::DataType::FLOAT16), {1},
              std::vector<uint8_t>(sizeof(uint16_t), 0));
     EXPECT_THROW(mod_kernel(x, y), std::invalid_argument);
   }
@@ -1388,7 +1390,7 @@ TEST(KernelClass, MatMulInPlaceWritesToPreallocatedOutput) {
   MatMul matmul_kernel{ctx};
   Tensor a = Tensor::FromUint32("", {2, 3}, {1u, 2u, 3u, 4u, 5u, 6u});
   Tensor b = Tensor::FromUint32("", {3, 2}, {1u, 2u, 3u, 4u, 5u, 6u});
-  Tensor y("", onnx_kernels::DataType::UINT32, {2, 2}, std::vector<uint8_t>(4 * sizeof(uint32_t)));
+  Tensor y("", core::runtime::DataType::UINT32, {2, 2}, std::vector<uint8_t>(4 * sizeof(uint32_t)));
   matmul_kernel(a, b, y);
   const uint32_t *py = y.AsUint32();
   EXPECT_EQ(py[0], 22u);
@@ -1404,8 +1406,8 @@ TEST(KernelClass, MatMulIntegerUint8MatchesONNXReference) {
   MatMulInteger mmi{ctx};
   Tensor a = Tensor::FromUint8("", {4, 3}, {11, 7, 3, 10, 6, 2, 9, 5, 1, 8, 4, 0});
   Tensor b = Tensor::FromUint8("", {3, 2}, {1, 4, 2, 5, 3, 6});
-  Tensor a_zp("", onnx_kernels::DataType::UINT8, {1}, std::vector<uint8_t>{12});
-  Tensor b_zp("", onnx_kernels::DataType::UINT8, {1}, std::vector<uint8_t>{0});
+  Tensor a_zp("", core::runtime::DataType::UINT8, {1}, std::vector<uint8_t>{12});
+  Tensor b_zp("", core::runtime::DataType::UINT8, {1}, std::vector<uint8_t>{0});
   Tensor y = mmi(a, b, a_zp, b_zp);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4, 2}));
   const int32_t *py = y.AsInt32();
@@ -1441,9 +1443,9 @@ TEST(KernelClass, MatMulIntegerInt8WithScalarZeroPoints) {
   MatMulInteger mmi{ctx};
   Tensor a = Tensor::FromInt8("", {2, 3}, {1, -2, 3, -4, 5, -6});
   Tensor b = Tensor::FromInt8("", {3, 2}, {1, 2, -3, 4, 5, -6});
-  Tensor a_zp("", onnx_kernels::DataType::INT8, {},
+  Tensor a_zp("", core::runtime::DataType::INT8, {},
               std::vector<uint8_t>{static_cast<uint8_t>(static_cast<int8_t>(1))});
-  Tensor b_zp("", onnx_kernels::DataType::INT8, {},
+  Tensor b_zp("", core::runtime::DataType::INT8, {},
               std::vector<uint8_t>{static_cast<uint8_t>(static_cast<int8_t>(-1))});
   Tensor y = mmi(a, b, a_zp, b_zp);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
@@ -1465,7 +1467,7 @@ TEST(KernelClass, MatMulIntegerInPlaceWritesToPreallocatedOutput) {
   Tensor b = Tensor::FromUint8("", {3, 2}, {7, 8, 9, 10, 11, 12});
   Tensor a_zp;
   Tensor b_zp;
-  Tensor y("", onnx_kernels::DataType::INT32, {2, 2}, std::vector<uint8_t>(4 * sizeof(int32_t)));
+  Tensor y("", core::runtime::DataType::INT32, {2, 2}, std::vector<uint8_t>(4 * sizeof(int32_t)));
   mmi(a, b, a_zp, b_zp, y);
   const int32_t *py = y.AsInt32();
   EXPECT_EQ(py[0], 58);
@@ -1533,7 +1535,7 @@ TEST(KernelClass, MatMulIntegerWithPerColumnBZeroPoint) {
   Tensor a = Tensor::FromUint8("", {2, 3}, {11, 7, 3, 10, 6, 2});
   Tensor b = Tensor::FromUint8("", {3, 2}, {1, 4, 2, 5, 3, 6});
   Tensor a_zp;
-  Tensor b_zp("", onnx_kernels::DataType::UINT8, {2}, std::vector<uint8_t>{1, 2});
+  Tensor b_zp("", core::runtime::DataType::UINT8, {2}, std::vector<uint8_t>{1, 2});
   Tensor y = mmi(a, b, a_zp, b_zp);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
   const int32_t *py = y.AsInt32();
@@ -1555,7 +1557,7 @@ TEST(KernelClass, MatMulIntegerWithPerRowAZeroPoint) {
   MatMulInteger mmi{ctx};
   Tensor a = Tensor::FromUint8("", {2, 3}, {11, 7, 3, 10, 6, 2});
   Tensor b = Tensor::FromUint8("", {3, 2}, {1, 4, 2, 5, 3, 6});
-  Tensor a_zp("", onnx_kernels::DataType::UINT8, {2}, std::vector<uint8_t>{1, 2});
+  Tensor a_zp("", core::runtime::DataType::UINT8, {2}, std::vector<uint8_t>{1, 2});
   Tensor b_zp;
   Tensor y = mmi(a, b, a_zp, b_zp);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
@@ -1975,7 +1977,7 @@ TEST(KernelClass, PReluInPlaceWritesToPreallocatedOutput) {
   PRelu prelu_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {-1.0f, -2.0f, 3.0f, -4.0f});
   Tensor slope = Tensor::FromFloat("", {}, {0.5f});
-  Tensor y("", onnx_kernels::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor y("", core::runtime::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   prelu_kernel(x, slope, y);
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], -0.5f);
@@ -2002,7 +2004,7 @@ TEST(KernelClass, LeakyReluClassMatchesReference) {
   Tensor x = Tensor::FromFloat("", {6}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
   Tensor y = leakyrelu_kernel(x, 0.1f);
   ASSERT_EQ(y.element_count(), 6);
-  ASSERT_EQ(y.data_type, onnx_kernels::DataType::FLOAT);
+  ASSERT_EQ(y.data_type, core::runtime::DataType::FLOAT);
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], -0.3f);
   EXPECT_FLOAT_EQ(py[1], -0.1f);
@@ -2027,13 +2029,13 @@ TEST(KernelClass, LeakyReluClassDefaultAlpha) {
 TEST(KernelClass, LeakyReluClassSupportsDouble) {
   const KernelContext ctx{DefaultOpset(16)};
   LeakyRelu leakyrelu_kernel{ctx};
-  Tensor x("", onnx_kernels::DataType::DOUBLE, {3}, std::vector<uint8_t>(3 * sizeof(double)));
+  Tensor x("", core::runtime::DataType::DOUBLE, {3}, std::vector<uint8_t>(3 * sizeof(double)));
   double *px = reinterpret_cast<double *>(x.data.data());
   px[0] = -4.0;
   px[1] = 0.0;
   px[2] = 7.0;
   Tensor y = leakyrelu_kernel(x, 0.25f);
-  ASSERT_EQ(y.data_type, onnx_kernels::DataType::DOUBLE);
+  ASSERT_EQ(y.data_type, core::runtime::DataType::DOUBLE);
   const double *py = reinterpret_cast<const double *>(y.data.data());
   EXPECT_DOUBLE_EQ(py[0], -1.0);
   EXPECT_DOUBLE_EQ(py[1], 0.0);
@@ -2044,7 +2046,7 @@ TEST(KernelClass, LeakyReluInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(16)};
   LeakyRelu leakyrelu_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {-1.0f, -2.0f, 3.0f, -4.0f});
-  Tensor y("", onnx_kernels::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor y("", core::runtime::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   leakyrelu_kernel(x, 0.5f, y);
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], -0.5f);
@@ -2068,7 +2070,7 @@ TEST(KernelClass, PowClassMatchesReferenceFloat) {
   Tensor y = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
   Tensor z = pow_kernel(x, y);
   ASSERT_EQ(z.element_count(), 3);
-  ASSERT_EQ(z.data_type, onnx_kernels::DataType::FLOAT);
+  ASSERT_EQ(z.data_type, core::runtime::DataType::FLOAT);
   const float *pz = z.AsFloat();
   EXPECT_FLOAT_EQ(pz[0], 1.0f);
   EXPECT_FLOAT_EQ(pz[1], 32.0f);
@@ -2117,7 +2119,7 @@ TEST(KernelClass, PowClassSupportsMixedBaseExponentDtypes) {
     Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
     Tensor y = Tensor::FromInt64("", {3}, {4, 5, 6});
     Tensor z = pow_kernel(x, y);
-    ASSERT_EQ(z.data_type, onnx_kernels::DataType::FLOAT);
+    ASSERT_EQ(z.data_type, core::runtime::DataType::FLOAT);
     const float *pz = z.AsFloat();
     EXPECT_FLOAT_EQ(pz[0], 1.0f);
     EXPECT_FLOAT_EQ(pz[1], 32.0f);
@@ -2128,7 +2130,7 @@ TEST(KernelClass, PowClassSupportsMixedBaseExponentDtypes) {
     Tensor x = Tensor::FromInt64("", {3}, {1, 2, 3});
     Tensor y = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
     Tensor z = pow_kernel(x, y);
-    ASSERT_EQ(z.data_type, onnx_kernels::DataType::INT64);
+    ASSERT_EQ(z.data_type, core::runtime::DataType::INT64);
     const int64_t *pz = z.AsInt64();
     EXPECT_EQ(pz[0], 1);
     EXPECT_EQ(pz[1], 32);
@@ -2139,7 +2141,7 @@ TEST(KernelClass, PowClassSupportsMixedBaseExponentDtypes) {
     Tensor x = Tensor::FromInt32("", {3}, {1, 2, 3});
     Tensor y = Tensor::FromInt32("", {3}, {4, 5, 6});
     Tensor z = pow_kernel(x, y);
-    ASSERT_EQ(z.data_type, onnx_kernels::DataType::INT32);
+    ASSERT_EQ(z.data_type, core::runtime::DataType::INT32);
     const int32_t *pz = z.AsInt32();
     EXPECT_EQ(pz[0], 1);
     EXPECT_EQ(pz[1], 32);
@@ -2150,7 +2152,7 @@ TEST(KernelClass, PowClassSupportsMixedBaseExponentDtypes) {
     Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
     Tensor y = Tensor::FromUint64("", {3}, {4, 5, 6});
     Tensor z = pow_kernel(x, y);
-    ASSERT_EQ(z.data_type, onnx_kernels::DataType::FLOAT);
+    ASSERT_EQ(z.data_type, core::runtime::DataType::FLOAT);
     const float *pz = z.AsFloat();
     EXPECT_FLOAT_EQ(pz[0], 1.0f);
     EXPECT_FLOAT_EQ(pz[1], 32.0f);
@@ -2163,7 +2165,7 @@ TEST(KernelClass, PowInPlaceWritesToPreallocatedOutput) {
   Pow pow_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 3.0f, 2.0f, 3.0f});
-  Tensor z("", onnx_kernels::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor z("", core::runtime::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   pow_kernel(x, y, z);
   const float *pz = z.AsFloat();
   EXPECT_FLOAT_EQ(pz[0], 1.0f);
@@ -2226,7 +2228,7 @@ TEST(KernelClass, ShrinkClassDoubleDtype) {
   std::vector<double> values{-2.0, -1.0, 0.0, 1.0, 2.0};
   std::vector<uint8_t> bytes(values.size() * sizeof(double));
   std::memcpy(bytes.data(), values.data(), bytes.size());
-  Tensor x("", onnx_kernels::DataType::DOUBLE, {static_cast<int64_t>(values.size())}, bytes);
+  Tensor x("", core::runtime::DataType::DOUBLE, {static_cast<int64_t>(values.size())}, bytes);
   Tensor y = shrink_kernel(x, /*bias=*/1.5f, /*lambd=*/1.5f);
   const double *py = reinterpret_cast<const double *>(y.data.data());
   EXPECT_DOUBLE_EQ(py[0], -0.5);
@@ -2280,8 +2282,8 @@ TEST(KernelClass, GemmHalfPrecisionMatchesFloatReference) {
   const Tensor ref = gemm_kernel(a_f, b_f, &c_f, alpha, beta, 0, 0);
   ASSERT_EQ(ref.shape, (std::vector<int64_t>{2, 2}));
 
-  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
-                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+  for (int32_t target : {static_cast<int32_t>(core::runtime::DataType::FLOAT16),
+                         static_cast<int32_t>(core::runtime::DataType::BFLOAT16)}) {
     const Tensor a_h = MakeHalfTensor(target, {2, 3}, a_vals);
     const Tensor b_h = MakeHalfTensor(target, {3, 2}, b_vals);
     const Tensor c_h = MakeHalfTensor(target, {2}, c_vals);
@@ -2297,7 +2299,7 @@ TEST(KernelClass, GemmHalfPrecisionMatchesFloatReference) {
     const std::vector<float> exp = DecodeHalfTensor(expected);
     ASSERT_EQ(got.size(), exp.size());
     const float tol =
-        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+        target == static_cast<int32_t>(core::runtime::DataType::FLOAT16) ? 1e-2f : 5e-2f;
     for (std::size_t i = 0; i < got.size(); ++i) {
       EXPECT_NEAR(got[i], exp[i], tol) << "i=" << i;
     }
@@ -2305,13 +2307,13 @@ TEST(KernelClass, GemmHalfPrecisionMatchesFloatReference) {
 
   // In-place overload preserves the half-precision dtype of the output.
   const Tensor a_h =
-      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {2, 3}, a_vals);
+      MakeHalfTensor(static_cast<int32_t>(core::runtime::DataType::FLOAT16), {2, 3}, a_vals);
   const Tensor b_h =
-      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {3, 2}, b_vals);
-  Tensor y_h("", onnx_kernels::DataType::FLOAT16, {2, 2},
+      MakeHalfTensor(static_cast<int32_t>(core::runtime::DataType::FLOAT16), {3, 2}, b_vals);
+  Tensor y_h("", core::runtime::DataType::FLOAT16, {2, 2},
              std::vector<uint8_t>(4 * sizeof(uint16_t)));
   gemm_kernel(a_h, b_h, /*c=*/nullptr, 1.0f, 0.0f, 0, 0, y_h);
-  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
 }
 
 // Verifies that ``kernel::MatMul`` produces FLOAT16 / BFLOAT16 outputs that
@@ -2325,8 +2327,8 @@ TEST(KernelClass, MatMulHalfPrecisionMatchesFloatReference) {
   const Tensor b_f = Tensor::FromFloat("", {3, 2}, b_vals);
   const Tensor ref = matmul_kernel(a_f, b_f);
 
-  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
-                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+  for (int32_t target : {static_cast<int32_t>(core::runtime::DataType::FLOAT16),
+                         static_cast<int32_t>(core::runtime::DataType::BFLOAT16)}) {
     const Tensor a_h = MakeHalfTensor(target, {2, 3}, a_vals);
     const Tensor b_h = MakeHalfTensor(target, {3, 2}, b_vals);
     const Tensor y_h = matmul_kernel(a_h, b_h);
@@ -2336,7 +2338,8 @@ TEST(KernelClass, MatMulHalfPrecisionMatchesFloatReference) {
     const std::vector<float> exp = DecodeHalfTensor(
         onnx_kernels::DemoteFromFloat32(onnx_kernels::PromoteToFloat32(ref), target));
     ASSERT_EQ(got.size(), exp.size());
-    const float tol = target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1.0f : 4.0f;
+    const float tol =
+        target == static_cast<int32_t>(core::runtime::DataType::FLOAT16) ? 1.0f : 4.0f;
     for (std::size_t i = 0; i < got.size(); ++i) {
       EXPECT_NEAR(got[i], exp[i], tol) << "i=" << i;
     }
@@ -2344,13 +2347,13 @@ TEST(KernelClass, MatMulHalfPrecisionMatchesFloatReference) {
 
   // In-place overload preserves the half-precision dtype.
   const Tensor a_h =
-      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16), {2, 3}, a_vals);
+      MakeHalfTensor(static_cast<int32_t>(core::runtime::DataType::BFLOAT16), {2, 3}, a_vals);
   const Tensor b_h =
-      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16), {3, 2}, b_vals);
-  Tensor y_h("", onnx_kernels::DataType::BFLOAT16, {2, 2},
+      MakeHalfTensor(static_cast<int32_t>(core::runtime::DataType::BFLOAT16), {3, 2}, b_vals);
+  Tensor y_h("", core::runtime::DataType::BFLOAT16, {2, 2},
              std::vector<uint8_t>(4 * sizeof(uint16_t)));
   matmul_kernel(a_h, b_h, y_h);
-  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(core::runtime::DataType::BFLOAT16));
 }
 
 TEST(KernelClass, MelWeightMatrixUsesAllocatorWhenRuntimeContextHasOne) {
@@ -2368,7 +2371,7 @@ TEST(KernelClass, MelWeightMatrixUsesAllocatorWhenRuntimeContextHasOne) {
   rt.set_allocator(&alloc);
 
   Tensor y = kernel(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz,
-                    onnx_kernels::DataType::FLOAT, &rt);
+                    core::runtime::DataType::FLOAT, &rt);
   EXPECT_TRUE(y.has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);
   EXPECT_EQ(y.data.size(), 0u);

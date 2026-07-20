@@ -69,7 +69,7 @@ class TestInferenceCoverage(ExtTestCase):
     def test_render_rst_summary(self):
         text = render_rst_summary(self.report)
         self.assertIn("list-table", text)
-        self.assertIn("onnx_optim shape inference", text)
+        self.assertIn("onnx_shapes shape inference", text)
         self.assertIn(str(self.report.total), text)
 
     def test_render_rst_case(self):

@@ -614,10 +614,10 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
 }
 
 // ---------------------------------------------------------------------------
-// onnx_optim shape inference + nested model-local function call
+// onnx_shapes shape inference + nested model-local function call
 // ---------------------------------------------------------------------------
 //
-// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
+// Verifies that the ``onnx_shapes`` shape-inference pipeline correctly handles
 // a node whose ``op_type`` references a model-local :cpp:class:`FunctionProto`
 // **whose body itself calls another model-local function**. The model is
 // built by :cpp:func:`RegisterNestedLocalFunctionAddShapeInferenceCases`:
@@ -667,10 +667,10 @@ TEST(BackendTestCaseShapeInference, OnnxOptimSupportsNestedLocalFunctionCall) {
 }
 
 // ---------------------------------------------------------------------------
-// onnx_optim shape inference + local function with Range node
+// onnx_shapes shape inference + local function with Range node
 // ---------------------------------------------------------------------------
 //
-// Verifies that ``onnx_optim`` shape inference propagates the initializer's
+// Verifies that ``onnx_shapes`` shape inference propagates the initializer's
 // ``ValueAsShape`` annotation through a local-function call boundary when the
 // function body contains a ``Range`` node that uses the function's own input
 // as its ``limit``.
@@ -727,10 +727,10 @@ TEST(BackendTestCaseShapeInference, OnnxOptimPropagatesValueAsShapeInLocalFuncti
 }
 
 // ---------------------------------------------------------------------------
-// onnx_optim shape inference + Loop subgraph
+// onnx_shapes shape inference + Loop subgraph
 // ---------------------------------------------------------------------------
 //
-// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
+// Verifies that the ``onnx_shapes`` shape-inference pipeline correctly handles
 // ``test_cc_loop_basic_trip_count``: no loop-carried states (N=0) and one
 // scan output (K=1). The body is a two-node sub-graph that produces a
 // constant INT64 ``[42]`` tensor of shape ``[1]`` each iteration.
@@ -1062,7 +1062,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTopKPairwiseDistance) {
           << "Y row dim must stay symbolic for a symbolic [N, D] input";
     }
 
-    // Second engine: the symbolic ``onnx_optim`` shape-inference pipeline must
+    // Second engine: the symbolic ``onnx_shapes`` shape-inference pipeline must
     // reach the same conclusion — a symbolic TopK axis that ``ReduceMean``
     // collapses to a rank-1 ``Y``.
     ModelProto optim_copy;
@@ -1108,11 +1108,11 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTopKPairwiseDistance) {
 }
 
 // ---------------------------------------------------------------------------
-// onnx_optim shape inference + Loop pairwise-distance / TopK(k=input) /
+// onnx_shapes shape inference + Loop pairwise-distance / TopK(k=input) /
 // ReduceMean
 // ---------------------------------------------------------------------------
 //
-// Verifies that the symbolic ``onnx_optim`` shape-inference pipeline keeps a
+// Verifies that the symbolic ``onnx_shapes`` shape-inference pipeline keeps a
 // **symbolic** TopK output axis when the pairwise distance matrix is produced
 // by a ``Loop`` body (``test_cc_shape_inference_loop_topk_pairwise_distance``).
 // The Loop trip count is a runtime ``Shape(X)[0]`` value, so the stacked
@@ -1179,11 +1179,11 @@ TEST(BackendTestCaseShapeInference, DISABLED_OnnxOptimInfersShapeLoopTopKPairwis
 }
 
 // ---------------------------------------------------------------------------
-// onnx_optim shape inference + Scan pairwise-distance / TopK(k=input) /
+// onnx_shapes shape inference + Scan pairwise-distance / TopK(k=input) /
 // ReduceMean
 // ---------------------------------------------------------------------------
 //
-// Verifies that the symbolic ``onnx_optim`` shape-inference pipeline keeps a
+// Verifies that the symbolic ``onnx_shapes`` shape-inference pipeline keeps a
 // **symbolic** TopK output axis when the pairwise distance matrix is produced
 // by a ``Scan`` body (``test_cc_shape_inference_scan_topk_pairwise_distance``).
 // The Scan trip count comes from ``X``'s scan axis (symbolic ``N``), so the
@@ -1250,11 +1250,11 @@ TEST(BackendTestCaseShapeInference, DISABLED_OnnxOptimInfersShapeScanTopKPairwis
 }
 
 // ---------------------------------------------------------------------------
-// onnx + onnx_optim shape inference: two sequential TopK nodes sharing
+// onnx + onnx_shapes shape inference: two sequential TopK nodes sharing
 // the same runtime K input, followed by ReduceMean
 // ---------------------------------------------------------------------------
 //
-// Verifies that both the standard ONNX and the ``onnx_optim`` shape-inference
+// Verifies that both the standard ONNX and the ``onnx_shapes`` shape-inference
 // pipelines keep **symbolic** TopK output axes when two consecutive TopK nodes
 // share the same runtime ``K`` model input
 // (``test_cc_shape_inference_two_topk_same_k``). Because K is unknown at
@@ -1335,7 +1335,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKSameK) {
       ASSERT_EQ(ott->ref_shape().ref_dim().size(), 1u);
     }
 
-    // onnx_optim pass must reach the same rank conclusions.
+    // onnx_shapes pass must reach the same rank conclusions.
     ModelProto optim_copy;
     optim_copy.ParseFromString(serialized);
     auto &optim_outputs = optim_copy.mutable_graph()->ref_output();
@@ -1389,11 +1389,11 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKSameK) {
 }
 
 // ---------------------------------------------------------------------------
-// onnx + onnx_optim shape inference: two sequential TopK nodes with
+// onnx + onnx_shapes shape inference: two sequential TopK nodes with
 // different runtime K inputs, followed by ReduceMean
 // ---------------------------------------------------------------------------
 //
-// Verifies that both the standard ONNX and the ``onnx_optim`` shape-inference
+// Verifies that both the standard ONNX and the ``onnx_shapes`` shape-inference
 // pipelines keep **symbolic** TopK output axes when two consecutive TopK nodes
 // use different runtime K inputs K1 and K2 (K1 > K2)
 // (``test_cc_shape_inference_two_topk_different_k``). Each TopK node emits a
@@ -1474,7 +1474,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKDifferentK) {
       ASSERT_EQ(ott->ref_shape().ref_dim().size(), 1u);
     }
 
-    // onnx_optim pass must reach the same rank conclusions.
+    // onnx_shapes pass must reach the same rank conclusions.
     ModelProto optim_copy;
     optim_copy.ParseFromString(serialized);
     auto &optim_outputs = optim_copy.mutable_graph()->ref_output();
@@ -1528,10 +1528,10 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKDifferentK) {
 }
 
 // ---------------------------------------------------------------------------
-// onnx_optim shape inference + Gather value-as-shape propagation
+// onnx_shapes shape inference + Gather value-as-shape propagation
 // ---------------------------------------------------------------------------
 //
-// Verifies that the ``onnx_optim`` shape-inference pipeline correctly propagates
+// Verifies that the ``onnx_shapes`` shape-inference pipeline correctly propagates
 // the *value-as-shape* annotation through a ``Gather`` node. The model is built
 // by :cpp:func:`RegisterGatherValueAsShapeShapeInferenceCases`:
 //   Shape(x[N,D]) -> shape_x [2]
@@ -1554,7 +1554,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimPropagatesGatherValueAsShape) {
     std::string serialized;
     tc.model().SerializeToString(serialized);
 
-    // --- onnx_optim pass ---
+    // --- onnx_shapes pass ---
     ModelProto optim_copy;
     optim_copy.ParseFromString(serialized);
     auto &optim_outputs = optim_copy.mutable_graph()->ref_output();

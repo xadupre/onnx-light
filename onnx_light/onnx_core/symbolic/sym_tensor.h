@@ -27,7 +27,7 @@
  *        graph optimisation passes.
  *
  * The ``core::symbolic`` namespace exposes three small value types,
- * consumed by the ``onnx_optim`` shape-inference library:
+ * consumed by the ``onnx_shapes`` shape-inference library:
  *
  *   - :cpp:class:`SymDim` — a single shape dimension, either a
  *     concrete ``int64_t`` or a symbolic string expression.
@@ -49,14 +49,14 @@ namespace core {
 namespace symbolic {
 
 /// Reuse the TensorType enumeration defined by ``onnx_core`` so that
-/// ``onnx_optim`` is fully aligned with the rest of the operator stack.
+/// ``onnx_shapes`` is fully aligned with the rest of the operator stack.
 using TensorType = ONNX_LIGHT_NAMESPACE::onnx_proto::TensorType;
 
 /**
  * Maps a ``TensorProto::DataType`` to the matching :cpp:type:`TensorType`
  * enumerator used by :cpp:class:`SymTensor`. Returns
  * :cpp:enumerator:`TensorType::kUndefined` for any data type that is not
- * representable in the ``onnx_optim`` stack (e.g. ``UNDEFINED``).
+ * representable in the ``onnx_shapes`` stack (e.g. ``UNDEFINED``).
  */
 constexpr TensorType DataTypeToTensorType(TensorProto::DataType dtype) {
   switch (dtype) {
@@ -615,7 +615,7 @@ inline constexpr const char *kValueInfoMaxMetadataKey = "max";
 
 /// Well-known key used to round-trip :cpp:enum:`Device` through the
 /// ``ValueInfoProto::metadata_props`` field. Exposed so that callers
-/// outside ``onnx_optim`` can inspect or remove the entry.
+/// outside ``onnx_shapes`` can inspect or remove the entry.
 inline constexpr const char *kValueInfoDeviceMetadataKey = "device";
 
 /**

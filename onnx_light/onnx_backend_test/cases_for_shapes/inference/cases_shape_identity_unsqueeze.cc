@@ -50,8 +50,8 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
   // overrun in ``Graph::SaveShapeValuesFromDataPropagation`` that triggers
   // for any rank > 0; the exact rank is not load-bearing for the
   // regression. We cap at 15 here so the ``Unsqueeze`` output (rank
-  // ``kAxisCount + 1 = 16``) still fits inside ``onnx_optim``'s
-  // :cpp:var:`onnx_optim::kMaxOptimRank` (``= 16``) bound. With
+  // ``kAxisCount + 1 = 16``) still fits inside ``onnx_shapes``'s
+  // :cpp:var:`onnx_shapes::kMaxOptimRank` (``= 16``) bound. With
   // ``axis_count = 16`` the output rank would be 17, which would cause
   // :cpp:func:`core::shapes::InferShapesModel` to throw
   // ``std::length_error("SymShape exceeds maximum rank")`` and fail

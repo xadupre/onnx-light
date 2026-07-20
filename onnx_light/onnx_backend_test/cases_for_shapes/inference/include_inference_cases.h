@@ -60,7 +60,7 @@ RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registr
 /// Registers a single-node case whose op is a call to a **model-local
 /// function** (declared in ``ModelProto::functions``). The function body
 /// is a one-node ``Add`` of two same-shape inputs. Exercises the
-/// FunctionProto-expansion path of ``onnx_optim`` shape inference.
+/// FunctionProto-expansion path of ``onnx_shapes`` shape inference.
 ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry,
                                             TestMode mode = TestMode::TEST);
@@ -80,7 +80,7 @@ RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &registry,
 /// function whose body itself calls another model-local function**. The
 /// outer function is ``local:func_outer_add(a, b) -> c`` whose body is a
 /// single call into ``local:func_inner_add(a, b) -> c { c = Add(a, b) }``.
-/// Exercises the recursive FunctionProto-expansion path of ``onnx_optim``
+/// Exercises the recursive FunctionProto-expansion path of ``onnx_shapes``
 /// shape inference, including the forwarding of the local-function map
 /// into nested sub-contexts so nested calls are dispatched too.
 ONNX_LIGHT_BACKEND_TEST_LOCAL void
@@ -186,7 +186,7 @@ RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry,
 /// INT64 ``[1]`` tensor with VAS ``[N]``. ``Expand`` consumes it as the
 /// target shape so shape inference must recover the precise output
 /// shape ``float[N]``. Directly exercises the VAS-propagation logic in
-/// :cpp:func:`onnx_optim::shapes::tensor::ComputeShapeGather`.
+/// :cpp:func:`onnx_shapes::shapes::tensor::ComputeShapeGather`.
 ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry,
                                               TestMode mode = TestMode::TEST);
@@ -195,7 +195,7 @@ RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry,
 /// ``else_branch`` each produce **two** outputs of the same rank but with
 /// *different* symbolic shapes (the leading axis differs, every trailing
 /// axis matches). Exercises the branch-merging path of
-/// :cpp:func:`onnx_optim::shapes::controlflow::ComputeShapeIf`, which must
+/// :cpp:func:`onnx_shapes::shapes::controlflow::ComputeShapeIf`, which must
 /// keep matching axes and synthesize a fresh ``If_<out>_d<i>`` symbolic
 /// dim for the differing one.
 ONNX_LIGHT_BACKEND_TEST_LOCAL void
@@ -319,7 +319,7 @@ RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registry,
 /// ``Unsqueeze``, concatenated into a 2-element ``new_shape`` tensor, and
 /// consumed by ``Reshape`` applied to ``x: float[D1, D2]``. Directly
 /// exercises the VAS-forwarding fix in
-/// :cpp:func:`onnx_optim::shapes::tensor::ComputeShapeUnsqueeze`: without
+/// :cpp:func:`onnx_shapes::shapes::tensor::ComputeShapeUnsqueeze`: without
 /// VAS propagation through ``Unsqueeze``, ``Concat`` never sees the
 /// per-element symbolic values and ``Reshape`` falls back to inventing
 /// undefined placeholder names instead of the real dims ``D1``/``D2``.

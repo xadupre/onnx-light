@@ -69,7 +69,7 @@ void AddBodyOutputTyped(GraphProto &g, const char *name, TensorProto::DataType d
 // for ``ReduceSum``) are declared as initializers in the outer graph and
 // referenced from the body via outer-scope lookup, which keeps the body
 // minimal and exercises the outer-scope propagation in
-// :cpp:func:`onnx_optim::shapes::ComputeShapeLoop`.
+// :cpp:func:`onnx_shapes::shapes::ComputeShapeLoop`.
 GraphProto BuildPairwiseDistanceBody() {
   GraphProto g;
   g.set_name("pairwise_distance_body");
@@ -114,7 +114,7 @@ GraphProto BuildPairwiseDistanceBody() {
 // The case exercises the shape-inference path through a non-trivial
 // ``Loop`` body — including outer-scope reference to the main-graph input
 // ``X`` from inside the body — and ensures that
-// :cpp:func:`onnx_optim::shapes::ComputeShapeLoop` recovers the rank-2
+// :cpp:func:`onnx_shapes::shapes::ComputeShapeLoop` recovers the rank-2
 // stacked scan-output shape with the per-iteration trailing dim ``N``
 // propagated from the body's ``ReduceSum`` output.
 //

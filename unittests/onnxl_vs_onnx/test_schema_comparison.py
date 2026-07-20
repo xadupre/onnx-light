@@ -23,7 +23,7 @@ class TestSchemaComparison(ExtTestCase):
     def test_known_operators_present(self):
         comparison = sc.compute_schema_comparison()
         by_key = {(r.domain, r.name): r for r in comparison.rows}
-        # Abs, Add and And are exposed by LightOpSchema and have onnx_optim
+        # Abs, Add and And are exposed by LightOpSchema and have onnx_shapes
         # shape inference.
         for name in ("Abs", "Add", "And"):
             row = by_key.get(("ai.onnx", name))
@@ -130,13 +130,18 @@ class TestSchemaComparison(ExtTestCase):
         # No known op matches -> None (caller falls back to first-node op_type).
         self.assertIsNone(_attribute_test_name("test_unknown_op", idx))
 
-    def test_onnx_optim_shape_inference_list_matches_source(self):
-        """Hardcoded list of onnx_optim shape inference ops must match the
+    def test_onnx_shapes_shape_inference_list_matches_source(self):
+        """Hardcoded list of onnx_shapes shape inference ops must match the
         dispatch table declared in ``dispatch_table.cc`` (when reachable)."""
         # Locate the C++ dispatch source file inside the source tree.
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         cc_path = os.path.join(
-            repo_root, "onnx_light", "onnx_optim", "shapes", "dispatch_table.cc"
+            repo_root,
+            "onnx_light",
+            "onnx_extensions",
+            "onnx_shapes",
+            "shapes",
+            "dispatch_table.cc",
         )
         if not os.path.exists(cc_path):
             self.skipTest("dispatch_table.cc not available in this install")
@@ -148,11 +153,11 @@ class TestSchemaComparison(ExtTestCase):
         ops_in_source = set(
             re.findall(r'\{"([A-Za-z][A-Za-z0-9_.]*):([A-Za-z][A-Za-z0-9_]*)",\s*\[\]', source)
         )
-        ops_in_module = set(sc.ONNX_OPTIM_SHAPE_INFERENCE_OPS)
+        ops_in_module = set(sc.ONNX_SHAPES_SHAPE_INFERENCE_OPS)
         self.assertEqual(
             ops_in_source,
             ops_in_module,
-            "ONNX_OPTIM_SHAPE_INFERENCE_OPS in onnx_light.tools.schema_comparison must be kept "
+            "ONNX_SHAPES_SHAPE_INFERENCE_OPS in onnx_light.tools.schema_comparison must be kept "
             "in sync with the dispatch table in dispatch_table.cc",
         )
 

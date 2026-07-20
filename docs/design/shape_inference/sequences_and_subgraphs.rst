@@ -4,7 +4,7 @@ Sequences, maps and subgraphs
 =============================
 
 The :ref:`algorithm overview <l-design-shape-inference>` describes how
-``onnx_optim`` infers the element type and shape of every *tensor* value
+``onnx_shapes`` infers the element type and shape of every *tensor* value
 in a graph. ONNX also carries **sequence** and **map** values, and nests
 graphs inside ``If`` / ``Loop`` / ``Scan`` nodes and
 model-local functions. This page describes how those richer values and
@@ -69,7 +69,7 @@ Control-flow operators embed graphs in their attributes: ``then_branch``
 / ``else_branch`` for ``If``, ``body`` for ``Loop`` and
 ``Scan``. Each subgraph is inferred in a **child**
 :cpp:class:`ShapesContext` derived from the parent (see
-``onnx_light/onnx_optim/shapes/controlflow/shape_controlflow.cc``):
+``onnx_light/onnx_extensions/onnx_shapes/shapes/controlflow/shape_controlflow.cc``):
 
 #. The child context is **copied from the parent** so the subgraph can
    read outer-scope values it captures by name, then seeded with the

@@ -4,7 +4,7 @@ Symbolic expression library (``onnx_light.onnx_core.expressions``)
 ====================================================================
 
 This page describes the design of the symbolic dimension-expression library
-introduced in ``onnx_light/onnx_optim/`` and exposed as the
+introduced in ``onnx_light/onnx_extensions/onnx_shapes/`` and exposed as the
 Python module :mod:`onnx_light.onnx_core.expressions`.
 
 The library was ported from
@@ -333,8 +333,8 @@ Two renaming functions cover different use cases:
 Build layout
 ------------
 
-The expressions library is compiled as part of the ``onnx_optim`` CMake
-``STATIC`` target (``lib_onnx_optim``).  ``lib_onnx_optim`` depends on
+The expressions library is compiled as part of the ``onnx_shapes`` CMake
+``STATIC`` target (``lib_onnx_shape``).  ``lib_onnx_shape`` depends on
 ``lib_onnx_op`` and is linked into the Python extension so that the
 expressions code is available to all callers that consume the optimisation
 library.

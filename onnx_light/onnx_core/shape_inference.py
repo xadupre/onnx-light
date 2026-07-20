@@ -1,6 +1,6 @@
 """Top-level shape-inference helpers backed by a C++ library.
 
-This module exposes the ``onnx_optim`` shape-inference pipeline at the
+This module exposes the ``onnx_shapes`` shape-inference pipeline at the
 ``ModelProto`` level. It mirrors the C++ helpers
 :cpp:func:`ComputeShapeModel` and :cpp:func:`ApplyInferredShapesToModel`
 combined into a single :func:`infer_shapes_model` entry point.

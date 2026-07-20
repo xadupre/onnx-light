@@ -41,7 +41,7 @@ find_package(onnx_light REQUIRED)
 
 add_executable(check_onnx_light_model main.cc)
 # onnx_light::lib_onnx_lib is the exported CMake name of the lib_onnx_lib
-# target. ``lib_onnx_optim`` is also linked because the example optionally
-# runs onnx_optim shape inference on the loaded model.
+# target. ``lib_onnx_shape`` is also linked because the example optionally
+# runs onnx_shapes shape inference on the loaded model.
 target_link_libraries(check_onnx_light_model
-  PRIVATE onnx_light::lib_onnx_lib onnx_light::lib_onnx_optim)
+  PRIVATE onnx_light::lib_onnx_lib onnx_light::lib_onnx_shape)

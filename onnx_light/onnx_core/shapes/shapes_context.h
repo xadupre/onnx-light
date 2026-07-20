@@ -23,7 +23,7 @@
 /**
  * @file shapes_context.h
  * @brief Name → :cpp:class:`SymTensor` map shared by all
- *        ``onnx_optim`` shape-inference functions.
+ *        ``onnx_shapes`` shape-inference functions.
  *
  * ``ShapesContext`` is the in/out parameter consumed and produced by
  * the per-operator ``ComputeShape*`` functions (for example
@@ -41,7 +41,7 @@ namespace shapes {
 
 // The symbolic value descriptors (SymDim, SymShape, SymTensor, SymSequence,
 // TensorType, ...) live in ``onnx_core::symbolic`` so both ``onnx_op`` and
-// ``onnx_optim`` can share them. Bring them into ``onnx_optim::shapes`` so
+// ``onnx_shapes`` can share them. Bring them into ``onnx_shapes::shapes`` so
 // the whole shape-inference stack can keep referring to them unqualified.
 using ::onnx_light::core::symbolic::DataTypeToTensorType;
 using ::onnx_light::core::symbolic::Device;
@@ -75,7 +75,7 @@ inline constexpr const char *kOnnxDomain = "ai.onnx";
 
 /// Canonical domain string for the traditional ML operator set
 /// (``ai.onnx.ml``), shared by :cpp:class:`ShapesContext` domain
-/// validation and the ``onnx_optim::shapes::traditionalml`` shape
+/// validation and the ``onnx_shapes::shapes::traditionalml`` shape
 /// functions, which alias this constant instead of redefining it.
 inline constexpr const char *kOnnxMlDomain = "ai.onnx.ml";
 
@@ -444,7 +444,7 @@ public:
 
   // ── Model-local functions ──────────────────────────────────────────
   //
-  // ``onnx_optim`` shape inference dispatches node-level inference via
+  // ``onnx_shapes`` shape inference dispatches node-level inference via
   // the registered op schemas (see ``DispatchTable``). A node whose
   // ``op_type`` is not registered may still be valid if it calls a
   // model-local :cpp:class:`FunctionProto` declared in
@@ -649,7 +649,7 @@ public:
   // The methods below run shape inference on a single ``NodeProto``, a
   // sequence of nodes, a ``GraphProto`` or an entire ``ModelProto``,
   // writing the inferred descriptors back into this context. See
-  // ``onnx_optim/shapes/shape_inference.h`` for the full per-method
+  // ``onnx_extensions/onnx_shapes/shapes/shape_inference.h`` for the full per-method
   // documentation.
 
   /// Dispatches a single ``NodeProto`` to the matching per-operator

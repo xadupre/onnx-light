@@ -23,7 +23,7 @@ the `GitHub Releases page
 
 * all public C++ headers under ``include/onnx_light/``,
 * static libraries under ``lib/`` (``lib_onnx_proto``, ``lib_onnx_lib``,
-  ``lib_onnx_op``, ``lib_onnx_optim``, ``lib_onnx_kernels`` and
+  ``lib_onnx_op``, ``lib_onnx_shape``, ``lib_onnx_kernels`` and
   ``lib_onnx_backend_test``), and
 * CMake package files under ``lib/cmake/onnx_light/`` so that
   ``find_package(onnx_light)`` works out of the box.
@@ -90,7 +90,7 @@ After extraction the directory looks like this::
         ├── liblib_onnx_proto.a
         ├── liblib_onnx_lib.a
         ├── liblib_onnx_op.a
-        ├── liblib_onnx_optim.a
+        ├── liblib_onnx_shape.a
         ├── liblib_onnx_kernels.a
         ├── liblib_onnx_backend_test.a
         └── cmake/
@@ -192,7 +192,7 @@ short.
     * - ``onnx_light::lib_onnx_lib``
       - Full ONNX-compatible schemas with history, checker, inliner, shape
         inference and version converter.  Transitively links ``lib_onnx_proto``.
-    * - ``onnx_light::lib_onnx_optim``
+    * - ``onnx_light::lib_onnx_shape``
       - Shape-inference dispatch table, expression engine and graph
         optimization helpers.  Transitively links ``lib_onnx_op``.
     * - ``onnx_light::lib_onnx_kernels``

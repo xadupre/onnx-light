@@ -9,7 +9,8 @@
 #include <unordered_map>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_gradient {
+namespace core {
+namespace gradient {
 
 /**
  * Accumulates @p contrib_name into @p acc_name inside @p func.
@@ -27,5 +28,6 @@ void AccumulateGrad(const std::string &contrib_name, std::string &acc_name, int 
  */
 std::string NewGradName(const std::string &prefix, int &counter);
 
+}
 } // namespace onnx_gradient
 } // namespace ONNX_LIGHT_NAMESPACE

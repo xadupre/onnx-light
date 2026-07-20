@@ -5,10 +5,11 @@ digraph library_split {
     node [shape=box, style="rounded,filled", fillcolor="#EAF2F8", fontname="Helvetica", fontsize=12, color="#1F618D"];
     edge [fontname="Helvetica", fontsize=10, color="#566573"];
 
-    lib_onnx_op -> lib_onnx_proto;
-    lib_onnx_optim -> lib_onnx_op;
-    lib_onnx_manipulations -> lib_onnx_proto;
+    lib_onnx_core -> lib_onnx_proto;
+    lib_onnx_op -> lib_onnx_core;
+    lib_onnx_optim -> lib_onnx_core;
+    lib_onnx_manipulations -> lib_onnx_core;
+    lib_onnx_kernels -> lib_onnx_core;
     lib_onnx_lib -> lib_onnx_manipulations;
-    lib_onnx_kernels -> lib_onnx_manipulations;
     lib_onnx_backend_test -> lib_onnx_kernels;
 }

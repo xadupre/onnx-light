@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "graph_manipulations.h"
+#include "onnx_core/graph_manipulations.h"
 
 #include <unordered_set>
 

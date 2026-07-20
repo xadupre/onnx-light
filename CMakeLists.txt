@@ -136,6 +136,7 @@ set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/inclu
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
+set(ONNX_CORE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_core")
 set(ONNX_MANIPULATIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_manipulations")
 set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
 set(ONNX_OPTIM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_optim")
@@ -167,6 +168,7 @@ set(ONNX_PY_KERNELS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onn
 set(ONNX_PY_BACKEND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc")
 set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_gradient.cc")
 
+file(GLOB_RECURSE ONNX_CORE_SOURCES CONFIGURE_DEPENDS "${ONNX_CORE_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")
 # Kernel sources (operator implementations) and the small runtime
@@ -255,14 +257,35 @@ if(OpenSSL_FOUND)
   target_link_libraries(lib_onnx_proto PUBLIC OpenSSL::Crypto)
 endif()
 
+# Builds onnx_core library.
+# This intermediate library sits between lib_onnx_proto and the higher-level
+# manipulation / operator / kernel libraries. It owns the TensorType
+# enumeration and the ToTypeString converter so that lib_onnx_op, lib_onnx_optim,
+# and lib_onnx_manipulations can use them without depending on each other. It
+# also provides the graph-node helpers (CollectExternalInputs, CollectNodeInputs,
+# CollectRemainingInputs) so that lib_onnx_kernels depends on lib_onnx_core
+# directly instead of lib_onnx_manipulations.
+add_library(lib_onnx_core ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_CORE_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+target_include_directories(lib_onnx_core PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+set_property(TARGET lib_onnx_core PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_core PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_core PUBLIC lib_onnx_proto)
+
 # Builds onnx_manipulations library.
 # This library bundles the lightweight ModelProto/GraphProto manipulation
 # helpers that are independent from the ONNX operator schemas: the textual
 # parser / printer, the attribute / tensor proto helpers, the data-type name
-# utilities and the graph-manipulation helpers (``graph_manipulations``,
-# formerly ``common_functions``). ``lib_onnx_lib`` (schemas, checker, shape
-# inference, version converter) depends publicly on it, and the kernels layer
-# reuses its graph-manipulation helpers. It only depends on ``lib_onnx_proto``.
+# utilities, and the compose helpers. ``lib_onnx_lib`` (schemas, checker, shape
+# inference, version converter) depends publicly on it. It depends on
+# ``lib_onnx_core`` (and transitively on ``lib_onnx_proto``).
 add_library(lib_onnx_manipulations ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} "${ONNX_COMMON_PATH}/status.cc" "${ONNX_COMMON_PATH}/assertions.cc" ${ONNX_MANIPULATIONS_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_manipulations PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -276,7 +299,7 @@ target_include_directories(lib_onnx_manipulations PUBLIC
 )
 set_property(TARGET lib_onnx_manipulations PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_manipulations PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_manipulations PUBLIC lib_onnx_proto)
+target_link_libraries(lib_onnx_manipulations PUBLIC lib_onnx_core)
 
 # Builds onnx_lib library.
 add_library(lib_onnx_lib ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_LIB_ALL_SOURCES})
@@ -321,7 +344,7 @@ target_include_directories(lib_onnx_op PUBLIC
 )
 set_property(TARGET lib_onnx_op PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_op PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_op PUBLIC lib_onnx_proto)
+target_link_libraries(lib_onnx_op PUBLIC lib_onnx_core)
 
 # Builds onnx_optim library.
 add_library(lib_onnx_optim ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_OPTIM_SOURCES})
@@ -337,7 +360,7 @@ target_include_directories(lib_onnx_optim PUBLIC
 )
 set_property(TARGET lib_onnx_optim PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_optim PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
+target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_core)
 
 # Builds onnx_kernels library.
 # This library is the runtime/operator-kernel layer extracted from the
@@ -347,7 +370,9 @@ target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
 # ``RuntimeContext`` and deterministic pseudo-random helpers) and is
 # exposed to Python through ``_onnxpykernels`` (and re-exported via
 # ``_onnxpybackend`` transitively through ``lib_onnx_backend_test``). It
-# only depends on ``lib_onnx_proto`` for proto types.
+# depends on ``lib_onnx_core`` (which brings in ``lib_onnx_proto``) for the
+# graph-manipulation helpers (``CollectExternalInputs``, ``CollectNodeInputs``)
+# and proto types.
 #
 # Guarded by ``ONNX_LIGHT_BUILD_KERNELS`` so consumers that only need the
 # schema/checker/shape-inference/version-converter libraries (for example
@@ -367,7 +392,7 @@ target_include_directories(lib_onnx_kernels PUBLIC
 )
 set_property(TARGET lib_onnx_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_kernels PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_proto lib_onnx_manipulations)
+target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_core)
 # Optional heavier image decoders (TIFF, WebP, JPEG2000). When
 # ONNX_LIGHT_BUILD_IMAGE_CODECS=OFF these formats are compiled out of the
 # ImageDecoder kernel and fall back to the empty-matrix path. The definition
@@ -905,6 +930,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
     install(TARGETS
+        lib_onnx_core
         lib_onnx_manipulations
         lib_onnx_lib
         lib_onnx_op
@@ -929,7 +955,7 @@ if(ONNX_LIGHT_INSTALL)
   # Splitting into two install(TARGETS) calls keeps the same exported
   # ``onnx_lightTargets`` set when ONNX_LIGHT_BUILD_KERNELS=OFF while
   # avoiding references to targets that were never created.
-  install(TARGETS lib_onnx_proto lib_onnx_manipulations lib_onnx_lib lib_onnx_op lib_onnx_optim
+  install(TARGETS lib_onnx_proto lib_onnx_core lib_onnx_manipulations lib_onnx_lib lib_onnx_op lib_onnx_optim
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"

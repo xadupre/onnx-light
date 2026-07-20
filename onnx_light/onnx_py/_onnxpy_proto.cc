@@ -1,9 +1,9 @@
 #include "_onnxpyprotoop.h"
 #include "onnx.h"
+#include "onnx_core/graph_manipulations.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
 #include "onnx_lib/onnx-data.pb.h"
-#include "onnx_manipulations/graph_manipulations.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -928,6 +928,14 @@ void AddOnnxPyProto(nb::module_ &m) {
       "(``GRAPH`` / ``GRAPHS``). "
       "The returned list preserves first-seen order and contains no duplicates; "
       "it skips empty input names.");
+
+  m.def(
+      "collect_node_inputs", [](const NodeProto &node) { return CollectNodeInputs(node); },
+      nb::arg("node"),
+      "Returns the full list of tensor / sequence names that a single ``node`` depends on "
+      "at runtime. Includes names referenced by ``node.input()`` and external inputs "
+      "captured by subgraph attributes (``GRAPH`` / ``GRAPHS``), preserves "
+      "first-seen order without duplicates, and skips empty input names.");
 
   m.def(
       "collect_remaining_inputs",

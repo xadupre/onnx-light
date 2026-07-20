@@ -2,7 +2,7 @@ name: Standalone example
 
 on:
   workflow_run:
-    workflows: ["ci-1-core"]
+    workflows: ["ci-orchestrator"]
     types: [completed]
 
 concurrency:

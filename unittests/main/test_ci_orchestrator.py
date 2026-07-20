@@ -19,20 +19,24 @@ class TestCiOrchestrator(unittest.TestCase):
         self.assertTrue(self.path.exists())
 
     def test_workflow_name(self):
+        """Verifies that the workflow is named ci-orchestrator."""
         self.assertEqual(self.data["name"], "ci-orchestrator")
 
-    def test_triggers(self):
-        """Verifies push/pull_request triggers on main."""
-        # PyYAML parses the bare 'on' key as the boolean True.
+    def test_triggers_on_push_and_pull_request(self):
+        """Verifies push/pull_request triggers on main.
+
+        PyYAML parses the bare 'on' YAML key as the boolean True.
+        """
         on = self.data[True]
         self.assertIn("push", on)
         self.assertIn("pull_request", on)
         self.assertIn("main", on["push"]["branches"])
         self.assertIn("main", on["pull_request"]["branches"])
 
-    # ── Phase 1: fast checks ─────────────────────────────────────────────────
+    # ── Phase 1: fast checks call existing reusable workflows ────────────────
 
     def test_fast_phase_jobs_exist(self):
+        """Verifies that all fast-phase jobs are present in the orchestrator."""
         jobs = self.data["jobs"]
         for job in (
             "fast_clang_format",
@@ -43,8 +47,25 @@ class TestCiOrchestrator(unittest.TestCase):
         ):
             self.assertIn(job, jobs, f"Fast-phase job '{job}' is missing")
 
+    def test_fast_phase_jobs_use_existing_workflows(self):
+        """Verifies that fast-phase jobs call existing reusable workflows via uses:."""
+        jobs = self.data["jobs"]
+        expected = {
+            "fast_clang_format": "./.github/workflows/clang_format.yml",
+            "fast_style": "./.github/workflows/style.yml",
+            "fast_typing": "./.github/workflows/typing.yml",
+            "fast_spelling": "./.github/workflows/spelling.yml",
+            "fast_codeql": "./.github/workflows/codeql.yml",
+        }
+        for job, expected_uses in expected.items():
+            self.assertEqual(
+                jobs[job]["uses"],
+                expected_uses,
+                f"Job '{job}' must use '{expected_uses}'",
+            )
+
     def test_fast_phase_jobs_have_no_needs(self):
-        """Fast phase jobs must not depend on any other job (run first)."""
+        """Verifies that fast-phase jobs have no dependencies so they run first."""
         jobs = self.data["jobs"]
         for job in (
             "fast_clang_format",
@@ -59,22 +80,19 @@ class TestCiOrchestrator(unittest.TestCase):
                 f"Fast-phase job '{job}' must not have 'needs'",
             )
 
-    def test_fast_codeql_uses_codeql_action(self):
-        steps = self.data["jobs"]["fast_codeql"]["steps"]
-        action_names = [
-            s.get("uses", "")
-            for s in steps
-            if s.get("uses", "").startswith("github/codeql-action/")
-        ]
-        self.assertTrue(
-            len(action_names) >= 2,
-            "fast_codeql must use at least github/codeql-action/init and "
-            "github/codeql-action/analyze",
+    def test_codeql_grants_security_events_write(self):
+        """Verifies that the fast_codeql job grants security-events: write permission."""
+        perms = self.data["jobs"]["fast_codeql"].get("permissions", {})
+        self.assertEqual(
+            perms.get("security-events"),
+            "write",
+            "fast_codeql must grant 'security-events: write'",
         )
 
     # ── Gate 1 ───────────────────────────────────────────────────────────────
 
     def test_fast_gate_needs_all_fast_jobs(self):
+        """Verifies that fast_gate depends on all five fast-phase jobs."""
         gate = self.data["jobs"]["fast_gate"]
         needs = gate["needs"]
         for job in (
@@ -86,71 +104,41 @@ class TestCiOrchestrator(unittest.TestCase):
         ):
             self.assertIn(job, needs, f"fast_gate must need '{job}'")
 
-    # ── Phase 2: preflight ────────────────────────────────────────────────────
+    # ── Phase 2+3: ci-1-core called as reusable workflow ─────────────────────
 
-    def test_reduced_tests_needs_fast_gate(self):
-        needs = self.data["jobs"]["reduced_tests_ubuntu"]["needs"]
+    def test_call_ci_core_job_exists(self):
+        """Verifies that the orchestrator has a job that calls ci-1-core."""
+        self.assertIn("call_ci_core", self.data["jobs"])
+
+    def test_call_ci_core_uses_ci_core_workflow(self):
+        """Verifies that call_ci_core calls ci_core.yml via uses:."""
+        job = self.data["jobs"]["call_ci_core"]
+        self.assertEqual(job["uses"], "./.github/workflows/ci_core.yml")
+
+    def test_call_ci_core_needs_fast_gate(self):
+        """Verifies that call_ci_core is blocked by the fast gate."""
+        needs = self.data["jobs"]["call_ci_core"]["needs"]
         self.assertIn("fast_gate", needs)
-
-    def test_no_onnx_needs_reduced(self):
-        needs = self.data["jobs"]["no_onnx_tests_ubuntu"]["needs"]
-        self.assertIn("reduced_tests_ubuntu", needs)
-
-    # ── Gate 2 ────────────────────────────────────────────────────────────────
-
-    def test_preflight_gate_needs_no_onnx(self):
-        needs = self.data["jobs"]["preflight_gate"]["needs"]
-        self.assertIn("no_onnx_tests_ubuntu", needs)
-
-    # ── Phase 3: heavy builds ─────────────────────────────────────────────────
-
-    def test_heavy_builds_need_preflight_gate(self):
-        jobs = self.data["jobs"]
-        for job in ("core_tests_ubuntu", "core_tests", "windows_x86_build"):
-            needs = jobs[job]["needs"]
-            self.assertIn(
-                "preflight_gate",
-                needs,
-                f"Phase-3 job '{job}' must need 'preflight_gate'",
-            )
-
-    def test_core_tests_matrix_includes_windows_and_macos(self):
-        matrix = self.data["jobs"]["core_tests"]["strategy"]["matrix"]
-        self.assertIn("windows-latest", matrix["os"])
-        self.assertIn("macos-latest", matrix["os"])
-
-    def test_windows_build_uses_msvc_ninja_with_sccache(self):
-        """Verifies 64-bit Windows build in Phase 3 uses MSVC-backed Ninja with sccache."""
-        self.assertIn("- name: Set up MSVC for Ninja (Windows)", self.content)
-        self.assertIn("uses: ilammy/msvc-dev-cmd@v1.13.0", self.content)
-        self.assertIn("arch: x64", self.content)
-        self.assertIn("- name: Build and Install package (Windows)", self.content)
-        self.assertIn("CMAKE_GENERATOR: Ninja", self.content)
-        self.assertIn('SCCACHE_GHA_ENABLED: "true"', self.content)
-        self.assertIn("cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache", self.content)
-        self.assertIn("cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache", self.content)
-
-    def test_windows_x86_build_job_exists(self):
-        """Verifies that the dedicated Windows x86 build job is present."""
-        self.assertIn("windows_x86_build:", self.content)
-        self.assertIn("name: core (windows-latest, x86 build)", self.content)
 
     # ── Final job ─────────────────────────────────────────────────────────────
 
     def test_ci_pass_job_exists(self):
+        """Verifies that the ci_pass final gate job exists."""
         self.assertIn("ci_pass", self.data["jobs"])
 
-    def test_ci_pass_needs_all_phase3_jobs(self):
+    def test_ci_pass_needs_call_ci_core(self):
+        """Verifies that ci_pass depends on the ci-1-core call."""
         needs = self.data["jobs"]["ci_pass"]["needs"]
-        for job in ("core_tests_ubuntu", "core_tests", "windows_x86_build"):
-            self.assertIn(job, needs, f"ci_pass must need '{job}'")
+        self.assertIn("call_ci_core", needs)
 
     def test_ci_pass_runs_if_always(self):
-        """ci_pass must use if: always() so it reports failure even when others fail."""
+        """Verifies that ci_pass uses if: always() so it always reports a result."""
         self.assertEqual(self.data["jobs"]["ci_pass"].get("if"), "always()")
 
+    # ── Pipeline order ────────────────────────────────────────────────────────
+
     def test_pipeline_order_is_enforced(self):
-        """Smoke-check that the dependency chain fast→preflight→heavy→pass is intact."""
+        """Verifies the full dependency chain: fast → gate → core → ci_pass."""
         jobs = self.data["jobs"]
 
         def needs(job):
@@ -158,16 +146,54 @@ class TestCiOrchestrator(unittest.TestCase):
 
         # Gate 1 needs all fast jobs
         self.assertIn("fast_clang_format", needs("fast_gate"))
-        # Reduced needs gate 1
-        self.assertIn("fast_gate", needs("reduced_tests_ubuntu"))
-        # no-onnx needs reduced
-        self.assertIn("reduced_tests_ubuntu", needs("no_onnx_tests_ubuntu"))
-        # Gate 2 needs no-onnx
-        self.assertIn("no_onnx_tests_ubuntu", needs("preflight_gate"))
-        # Phase 3 needs gate 2
-        self.assertIn("preflight_gate", needs("core_tests_ubuntu"))
-        # ci_pass needs phase 3
-        self.assertIn("core_tests_ubuntu", needs("ci_pass"))
+        self.assertIn("fast_style", needs("fast_gate"))
+        self.assertIn("fast_typing", needs("fast_gate"))
+        self.assertIn("fast_spelling", needs("fast_gate"))
+        self.assertIn("fast_codeql", needs("fast_gate"))
+        # call_ci_core needs gate 1
+        self.assertIn("fast_gate", needs("call_ci_core"))
+        # ci_pass needs call_ci_core
+        self.assertIn("call_ci_core", needs("ci_pass"))
+
+    # ── Reusable workflows exist ──────────────────────────────────────────────
+
+    def test_reusable_workflows_have_workflow_call_trigger(self):
+        """Verifies that every called workflow file supports workflow_call:."""
+        wf_dir = self.root / ".github" / "workflows"
+        called = [
+            "clang_format.yml",
+            "style.yml",
+            "typing.yml",
+            "spelling.yml",
+            "codeql.yml",
+            "ci_core.yml",
+        ]
+        for fname in called:
+            data = yaml.safe_load((wf_dir / fname).read_text(encoding="utf-8"))
+            # PyYAML parses bare 'on' as True
+            on = data.get(True, data.get("on", {}))
+            self.assertIn(
+                "workflow_call",
+                on,
+                f"{fname} must declare 'workflow_call:' trigger",
+            )
+
+    # ── Downstream workflows updated ──────────────────────────────────────────
+
+    def test_downstream_workflows_listen_to_ci_orchestrator(self):
+        """Verifies that workflows downstream of ci-1-core now listen to ci-orchestrator."""
+        wf_dir = self.root / ".github" / "workflows"
+        downstream = ["docs.yml", "ci_debug.yml", "build_standalone_example.yml"]
+        for fname in downstream:
+            data = yaml.safe_load((wf_dir / fname).read_text(encoding="utf-8"))
+            on = data.get(True, data.get("on", {}))
+            wr = on.get("workflow_run", {})
+            workflows = wr.get("workflows", [])
+            self.assertIn(
+                "ci-orchestrator",
+                workflows,
+                f"{fname} must listen to 'ci-orchestrator' instead of 'ci-1-core'",
+            )
 
 
 if __name__ == "__main__":

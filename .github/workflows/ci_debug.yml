@@ -2,7 +2,7 @@ name: ci-debug-ubuntu
 
 on:
   workflow_run:
-    workflows: ["ci-1-core"]
+    workflows: ["ci-orchestrator"]
     types: [completed]
 
 concurrency:

@@ -169,6 +169,11 @@ set(ONNX_PY_BACKEND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onn
 set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_gradient.cc")
 
 file(GLOB_RECURSE ONNX_CORE_SOURCES CONFIGURE_DEPENDS "${ONNX_CORE_PATH}/*.cc")
+# ``onnx_core/backend_test/test_case.cc`` lives under onnx_core/ for
+# namespace/organisational reasons (it is in ``core::backend_test``) but it
+# includes the ``onnx_backend_test/cases/`` headers and therefore must be
+# compiled as part of ``lib_onnx_backend_test``, not ``lib_onnx_core``.
+list(FILTER ONNX_CORE_SOURCES EXCLUDE REGEX "/onnx_core/backend_test/")
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_SHAPE_SOURCES CONFIGURE_DEPENDS "${ONNX_SHAPE_PATH}/*.cc")
 # Kernel sources (operator implementations) and the small runtime
@@ -179,11 +184,13 @@ file(GLOB_RECURSE ONNX_SHAPE_SOURCES CONFIGURE_DEPENDS "${ONNX_SHAPE_PATH}/*.cc"
 # of the surrounding backend-test cases.
 file(GLOB_RECURSE ONNX_KERNELS_SOURCES CONFIGURE_DEPENDS "${ONNX_KERNELS_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_GRADIENT_SOURCES CONFIGURE_DEPENDS "${ONNX_GRADIENT_PATH}/*.cc")
-# ``lib_onnx_backend_test`` only contains the test-case registries
-# (``cases/``, ``cases_for_shapes/``, ``cases_numerical/``) and depends
-# publicly on ``lib_onnx_kernels`` for ``TestCase`` / ``Tensor`` / kernel
-# headers.
+# ``lib_onnx_backend_test`` contains the test-case registries
+# (``cases/``, ``cases_for_shapes/``, ``cases_numerical/``) and the
+# ``TestCase`` registration driver from ``onnx_core/backend_test/``.
+# It depends publicly on ``lib_onnx_kernels`` for ``TestCase`` / ``Tensor`` /
+# kernel headers.
 file(GLOB_RECURSE ONNX_BACKEND_TEST_SOURCES CONFIGURE_DEPENDS "${ONNX_BACKEND_TEST_PATH}/*.cc")
+list(APPEND ONNX_BACKEND_TEST_SOURCES "${ONNX_CORE_PATH}/backend_test/test_case.cc")
 set(ONNX_INLINER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/inliner/inliner.cc")
 file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/*.cc")
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/*.cc")

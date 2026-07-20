@@ -18,3 +18,4 @@ libraries depending on the other.
     shapes/index
     runtime/index
     annotations/index
+    backend_test/index

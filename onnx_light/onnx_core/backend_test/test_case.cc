@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
@@ -34,6 +34,11 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace backend_test {
+
+// The per-category Collect* functions are defined in
+// ``onnx_backend_test`` (they are registered there by the case files).
+// Bring them into scope so CollectTestCases can call them unqualified.
+using namespace ::onnx_light::onnx_backend_test; // NOLINT(google-build-using-namespace)
 
 namespace {
 
@@ -450,6 +455,6 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex, bool
   return filtered;
 }
 
-}
-} // namespace onnx_backend_test
+} // namespace backend_test
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

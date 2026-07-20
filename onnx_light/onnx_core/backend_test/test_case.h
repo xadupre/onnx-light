@@ -618,6 +618,6 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
                                              bool include_big = false,
                                              TestMode mode = TestMode::TEST);
 
-}
-} // namespace onnx_backend_test
+} // namespace backend_test
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

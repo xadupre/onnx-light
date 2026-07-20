@@ -32,7 +32,8 @@
 #include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace core {
+namespace backend_test {
 
 namespace {
 
@@ -449,5 +450,6 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex, bool
   return filtered;
 }
 
+}
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -33,7 +33,8 @@
 #endif
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace core {
+namespace backend_test {
 
 using namespace onnx_kernels;
 using namespace ::onnx_light::core::runtime;
@@ -617,5 +618,6 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
                                              bool include_big = false,
                                              TestMode mode = TestMode::TEST);
 
+}
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

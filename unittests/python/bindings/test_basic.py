@@ -106,6 +106,14 @@ class TestIOModel(ExtTestCase):
         loaded_proto = onnxl.load(buf.getvalue())
         self.assertEqual(proto, loaded_proto)
 
+    def test_serialize_to_ostream_capital_s_and_load(self) -> None:
+        """Tests that SerializeToOStream() (capital S) works as an alias."""
+        proto = _simple_model()
+        buf = io.BytesIO()
+        proto.SerializeToOStream(buf)
+        loaded_proto = onnxl.load(buf.getvalue())
+        self.assertEqual(proto, loaded_proto)
+
     def test_save_model_file_like_with_external_data_raises(self) -> None:
         """Tests that save() raises when a file-like object is used with external data."""
         proto = _simple_model()

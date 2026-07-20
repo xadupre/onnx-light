@@ -570,6 +570,20 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           nb::arg("output"),
           "Serializes this instance to a Python file-like object that has a write() method.")
       .def(
+          "SerializeToOStream",
+          [](cls &self, nb::object output) {
+            std::string out;
+            SerializeOptions opts;
+            bool ok = self.SerializeToString(out, opts);
+            if (!ok) {
+              throw std::runtime_error("SerializeToOStream: serialization failed.");
+            }
+            output.attr("write")(nb::bytes(out.data(), out.size()));
+          },
+          nb::arg("output"),
+          "Serializes this instance to a Python file-like object that has a write() method. "
+          "Alias for SerializeToOstream (capital S) for protobuf API compatibility.")
+      .def(
           "__str__",
           [](cls &self) -> std::string {
             utils::PrintOptions opts;

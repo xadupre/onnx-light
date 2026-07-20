@@ -22,9 +22,9 @@
  * :cpp:func:`InferShapesModel`, ...) lives in ``onnx_core`` so it has no
  * dependency on any particular set of operator implementations. The
  * concrete ``ComputeShape*`` functions ("shape functions") for every
- * standard ONNX operator remain in ``onnx_optim`` and register themselves
+ * standard ONNX operator remain in ``onnx_shapes`` and register themselves
  * here via :cpp:func:`RegisterComputeShapeFn` instead of being hard-coded
- * in this table, which keeps the ``onnx_core`` -> ``onnx_optim``
+ * in this table, which keeps the ``onnx_core`` -> ``onnx_shapes``
  * dependency direction from ever being introduced.
  */
 
@@ -43,7 +43,7 @@ using ComputeShapeFn = std::function<void(ShapesContext &, const NodeProto &)>;
 /**
  * Returns the ``(normalised_domain, op_type) -> ComputeShape*``
  * dispatch table. Empty until shape-function libraries (e.g.
- * ``onnx_optim``) populate it via :cpp:func:`RegisterComputeShapeFn`.
+ * ``onnx_shapes``) populate it via :cpp:func:`RegisterComputeShapeFn`.
  */
 const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable();
 
@@ -54,8 +54,8 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable();
  * Use an empty string for @p domain to denote the default ONNX domain
  * (normalised to :cpp:var:`kOnnxDomain`). Intended to be called once per
  * operator during static initialization by shape-function libraries
- * that must not be linked into ``onnx_core`` (e.g. ``onnx_optim``);
- * see ``onnx_optim::RegisterShapeFunctions``.
+ * that must not be linked into ``onnx_core`` (e.g. ``onnx_shapes``);
+ * see ``onnx_shapes::RegisterShapeFunctions``.
  *
  * @param domain  The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
  * @param op_type The ONNX operator type name (e.g. ``"Abs"``).

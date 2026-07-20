@@ -2,7 +2,7 @@
 
 This module mirrors the C++ ``onnx_core`` namespace at the Python level,
 providing the shared types and graph-manipulation helpers that sit below both
-``onnx_op`` and ``onnx_optim`` in the dependency hierarchy.
+``onnx_op`` and ``onnx_shapes`` in the dependency hierarchy.
 
 The ``TensorType`` enum and ``ToTypeString`` helper are the canonical Python
 spelling for the element / sequence type descriptor defined in

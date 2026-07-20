@@ -58,11 +58,11 @@ void AppendIdentityOutput(GraphProto &g, const std::string &input_name,
 // ``If`` with two outputs whose branches produce tensors of the same rank
 // but **different symbolic shapes** — exercises the branch-merging path of
 // the ``If`` shape inference in
-// :cpp:func:`onnx_optim::shapes::controlflow::ComputeShapeIf`. The merge
+// :cpp:func:`onnx_shapes::shapes::controlflow::ComputeShapeIf`. The merge
 // keeps an axis only when *both* branches agree on it; any differing axis
 // is replaced by a fresh symbolic dim named ``If_<out>_d<i>`` (see
 // ``MergeBranchOutputs`` in
-// ``onnx_optim/shapes/controlflow/shape_controlflow.cc``).
+// ``onnx_extensions/onnx_shapes/shapes/controlflow/shape_controlflow.cc``).
 //
 // The ``else_branch`` deliberately includes a data-dependent ``Compress``
 // node so the differing leading axis of ``out_a`` originates from

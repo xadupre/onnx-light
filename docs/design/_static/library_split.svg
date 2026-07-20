@@ -39,15 +39,15 @@
 <path fill="none" stroke="#566573" d="M86.25,-172.1C120.47,-158.73 168.41,-140 204.95,-125.73"/>
 <polygon fill="#566573" stroke="#566573" points="206.41,-128.91 214.45,-122.01 203.86,-122.39 206.41,-128.91"/>
 </g>
-<!-- lib_onnx_optim -->
+<!-- lib_onnx_shape -->
 <g id="node4" class="node">
-<title>lib_onnx_optim</title>
+<title>lib_onnx_shape</title>
 <path fill="#eaf2f8" stroke="#1f618d" d="M216,-208C216,-208 134,-208 134,-208 128,-208 122,-202 122,-196 122,-196 122,-184 122,-184 122,-178 128,-172 134,-172 134,-172 216,-172 216,-172 222,-172 228,-178 228,-184 228,-184 228,-196 228,-196 228,-202 222,-208 216,-208"/>
-<text text-anchor="middle" x="175" y="-186.9" font-family="Helvetica,sans-Serif" font-size="12.00">lib_onnx_optim</text>
+<text text-anchor="middle" x="175" y="-186.9" font-family="Helvetica,sans-Serif" font-size="12.00">lib_onnx_shape</text>
 </g>
-<!-- lib_onnx_optim&#45;&gt;lib_onnx_core -->
+<!-- lib_onnx_shape&#45;&gt;lib_onnx_core -->
 <g id="edge3" class="edge">
-<title>lib_onnx_optim&#45;&gt;lib_onnx_core</title>
+<title>lib_onnx_shape&#45;&gt;lib_onnx_core</title>
 <path fill="none" stroke="#566573" d="M192.2,-171.6C204.3,-159.35 220.65,-142.8 234.03,-129.26"/>
 <polygon fill="#566573" stroke="#566573" points="236.57,-131.67 241.11,-122.1 231.59,-126.75 236.57,-131.67"/>
 </g>

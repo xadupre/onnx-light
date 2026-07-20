@@ -12,7 +12,7 @@ For every operator known to either side it reports:
 * whether a shape-inference function is registered on the ``onnx`` side
   (``OpSchema.has_type_and_shape_inference_function``);
 * whether a shape-inference function is registered on the ``onnx_light`` side
-  (in the ``onnx_optim`` C++ library, see
+  (in the ``onnx_shapes`` C++ library, see
   :cpp:func:`ComputeShapeNode`);
 * how many backend test cases exercise the operator in each package (a
   test case is attributed to the operator whose lowercased or
@@ -34,11 +34,11 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-# Operators whose output shapes can be inferred by ``onnx_optim`` (see
-# ``onnx_light/onnx_optim/shapes/dispatch_table.cc``). The list is small on
-# purpose: ``onnx_optim`` only implements a handful of operators today. Keep
+# Operators whose output shapes can be inferred by ``onnx_shapes`` (see
+# ``onnx_light/onnx_extensions/onnx_shapes/shapes/dispatch_table.cc``). The list is small on
+# purpose: ``onnx_shapes`` only implements a handful of operators today. Keep
 # this set in sync with the dispatch table in ``dispatch_table.cc``.
-ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
+ONNX_SHAPES_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
     {
         ("ai.onnx", "Abs"),
         ("ai.onnx", "Acos"),
@@ -282,7 +282,7 @@ class SchemaComparisonRow:
         in the ``onnx_op`` C++ extension.
     :param onnx_shape_inference: ``True`` when ``onnx`` registers a type and
         shape inference function for the operator.
-    :param onnx_light_shape_inference: ``True`` when ``onnx_optim`` registers
+    :param onnx_light_shape_inference: ``True`` when ``onnx_shapes`` registers
         a shape-inference dispatch entry for the operator.
     :param onnx_backend_tests: Number of node backend tests in :mod:`onnx`
         attributed to the operator (one count per
@@ -336,7 +336,7 @@ class SchemaComparison:
 
     @property
     def total_onnx_light_shape_inference(self) -> int:
-        """Operators with shape inference on the ``onnx_light`` (``onnx_optim``) side."""
+        """Operators with shape inference on the ``onnx_light`` (``onnx_shapes``) side."""
         return sum(1 for r in self.rows if r.onnx_light_shape_inference)
 
     @property
@@ -579,7 +579,7 @@ def compute_schema_comparison() -> SchemaComparison:
                 in_onnx=key in onnx_all,
                 in_onnx_light=key in light_schemas,
                 onnx_shape_inference=key in onnx_with_shape,
-                onnx_light_shape_inference=key in ONNX_OPTIM_SHAPE_INFERENCE_OPS,
+                onnx_light_shape_inference=key in ONNX_SHAPES_SHAPE_INFERENCE_OPS,
                 onnx_backend_tests=int(onnx_tests.get(key, 0)),
                 onnx_light_backend_tests=int(light_tests.get(key, 0)),
             )
@@ -633,7 +633,7 @@ def render_rst_table(
             "      - ``onnx``\n"
             "      - ``onnx_light``\n"
             "      - ``onnx`` shape inference\n"
-            "      - ``onnx_light`` shape inference (``onnx_optim``)\n"
+            "      - ``onnx_light`` shape inference (``onnx_shapes``)\n"
             "      - ``onnx`` backend tests\n"
             "      - ``onnx_light`` backend tests\n"
         )

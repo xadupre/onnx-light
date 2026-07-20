@@ -30,7 +30,7 @@ constexpr const char *kFuncOuterName = "func_outer_add";
 // ---------------------------------------------------------------------------
 // Single graph node calling a model-local function that **itself calls
 // another model-local function**. Exercises the recursive
-// FunctionProto-expansion path of ``onnx_optim`` shape inference, including
+// FunctionProto-expansion path of ``onnx_shapes`` shape inference, including
 // the forwarding of the local-function map into the sub-context built by
 // :cpp:func:`ExpandLocalFunctionCall` so nested calls are dispatched too.
 //

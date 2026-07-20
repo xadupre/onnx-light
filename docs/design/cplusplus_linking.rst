@@ -137,7 +137,7 @@ configure time to skip building and installing them:
 
 The exported CMake package then provides only the kernel-free targets —
 ``onnx_light::lib_onnx_lib``, ``onnx_light::lib_onnx_manipulations``,
-``onnx_light::lib_onnx_op``, ``onnx_light::lib_onnx_optim`` and
+``onnx_light::lib_onnx_op``, ``onnx_light::lib_onnx_shape`` and
 ``onnx_light::lib_onnx_proto``.  ``onnx_light::lib_onnx_kernels`` and
 ``onnx_light::lib_onnx_backend_test`` are not built and not part of the package.
 
@@ -162,7 +162,7 @@ From the repository root, install the C++ library with CMake:
 When downstream code only needs the schema / checker / shape-inference /
 version-converter / proto layer (``onnx_light::lib_onnx_lib``,
 ``onnx_light::lib_onnx_manipulations``, ``onnx_light::lib_onnx_op``,
-``onnx_light::lib_onnx_optim``, ``onnx_light::lib_onnx_proto``), pass
+``onnx_light::lib_onnx_shape``, ``onnx_light::lib_onnx_proto``), pass
 ``-DONNX_LIGHT_BUILD_KERNELS=OFF`` at configure time to skip building and
 installing the much larger ``lib_onnx_kernels`` (operator-kernel runtime)
 and ``lib_onnx_backend_test`` (backend-test case registry) libraries.
@@ -217,7 +217,7 @@ converter), link the optim target instead, which transitively pulls in
 .. code-block:: cmake
 
     find_package(onnx_light REQUIRED)
-    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_optim)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_shape)
 
 To evaluate ONNX nodes / graphs / models in-process using the bundled C++
 **reference implementation** of the ONNX operators (runtime
@@ -270,7 +270,7 @@ For monorepos or local development, a downstream CMake project can also include
 
 Use the in-tree ``lib_onnx_proto`` target instead when only proto
 parsing/serialization is needed, or ``lib_onnx_op``, ``lib_onnx_manipulations``,
-``lib_onnx_optim``, ``lib_onnx_kernels`` or ``lib_onnx_backend_test`` for the
+``lib_onnx_shape``, ``lib_onnx_kernels`` or ``lib_onnx_backend_test`` for the
 corresponding feature subset.  This uses the
 in-tree build targets directly instead of ``find_package``.
 
@@ -303,7 +303,7 @@ When ``ONNX_LIGHT_BUILD_PYTHON=ON``, ``CMakeLists.txt`` builds
 ``.dylib`` / ``.dll``) instead of a static archive.  All five
 extensions link against that single shared
 object (directly or transitively through ``lib_onnx_lib`` /
-``lib_onnx_op`` / ``lib_onnx_optim`` / ``lib_onnx_kernels`` /
+``lib_onnx_op`` / ``lib_onnx_shape`` / ``lib_onnx_kernels`` /
 ``lib_onnx_backend_test``), and
 the build installs every file side by side under
 ``onnx_light/onnx_py/``.  The extensions are linked with an ``$ORIGIN``

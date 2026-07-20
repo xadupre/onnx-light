@@ -4,7 +4,7 @@ Supported subcommands
 ---------------------
 fillshape
     Fills a model's ``graph.value_info`` and ``graph.output`` with the shapes
-    inferred by ``onnx_optim`` shape inference.
+    inferred by ``onnx_shapes`` shape inference.
 
     Usage::
 
@@ -698,7 +698,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "fillshape",
         help="Fill a model with optimized shape-inference information.",
         description=(
-            "Runs onnx_optim shape inference on a model and writes the inferred "
+            "Runs onnx_shapes shape inference on a model and writes the inferred "
             "shapes back into graph.value_info and graph.output."
         ),
     )

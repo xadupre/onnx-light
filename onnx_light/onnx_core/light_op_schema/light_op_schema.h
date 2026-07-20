@@ -31,7 +31,7 @@
  * The schemas produced by the helpers in the sibling ``operator_sets_*.h``
  * headers are aggregated by ``operator_sets.h`` via
  * ``GetAllOnnxOpSchemasWithHistory()`` and consumed by both documentation
- * generators and the ``onnx_optim`` shape inference library.
+ * generators and the ``onnx_shapes`` shape inference library.
  *
  * Constructing a schema with invalid arguments throws a
  * ::ONNX_LIGHT_NAMESPACE::core::schema::SchemaError.

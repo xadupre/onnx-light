@@ -28,7 +28,7 @@ base dependency)::
     lib_onnx_proto
         └── lib_onnx_core
                 ├── lib_onnx_op
-                ├── lib_onnx_optim
+                ├── lib_onnx_shape
                 ├── lib_onnx_kernels
                 │       └── lib_onnx_backend_test
                 └── lib_onnx_manipulations
@@ -41,15 +41,15 @@ graph-node input helpers (``CollectExternalInputs``, ``CollectNodeInputs``,
 (``onnx_core/expressions/expressions.h``), and the ``LightOpSchema``
 operator-schema data structures (``onnx_core/light_op_schema/light_op_schema.h``)
 so that ``lib_onnx_op`` (operator schemas),
-``lib_onnx_manipulations``, ``lib_onnx_optim`` (shape inference), and
+``lib_onnx_manipulations``, ``lib_onnx_shape`` (shape inference), and
 ``lib_onnx_kernels`` (reference kernels) can share them without any of
 them depending on each other.  The ``TensorType`` enumeration and the
 ``ToTypeString`` converter live one level lower, in ``lib_onnx_proto``
 (``onnx_proto/type_helper.h``), so that ``lib_onnx_core`` itself can use
 them.
-``lib_onnx_op``, ``lib_onnx_manipulations``, ``lib_onnx_optim``, and
+``lib_onnx_op``, ``lib_onnx_manipulations``, ``lib_onnx_shape``, and
 ``lib_onnx_kernels`` are siblings that each depend on ``lib_onnx_core``
-(and transitively on ``lib_onnx_proto``).  ``lib_onnx_optim`` depends on
+(and transitively on ``lib_onnx_proto``).  ``lib_onnx_shape`` depends on
 ``lib_onnx_core`` only (it does **not** pull in ``lib_onnx_op`` or
 ``lib_onnx_lib``).  ``lib_onnx_kernels`` depends on ``lib_onnx_core``
 only (it does **not** pull in ``lib_onnx_manipulations``).
@@ -94,7 +94,7 @@ Summary of each library
         ``CollectRemainingInputs``), the symbolic dimension-expression
         library, and the ``LightOpSchema`` operator-schema data structures
         so that ``lib_onnx_op``, ``lib_onnx_manipulations``,
-        ``lib_onnx_optim``, and ``lib_onnx_kernels`` can share them without
+        ``lib_onnx_shape``, and ``lib_onnx_kernels`` can share them without
         depending on each other.  Depends publicly on ``lib_onnx_proto``
         (which owns the ``TensorType`` enumeration and ``ToTypeString``
         converter).
@@ -131,8 +131,8 @@ Summary of each library
         target to link for the *complete* ONNX-light experience.
         Depends publicly on ``lib_onnx_manipulations`` (and transitively
         on ``lib_onnx_proto``).
-    * - ``lib_onnx_optim`` (exported as ``onnx_light::lib_onnx_optim``):
-        ``onnx_light/onnx_optim/``
+    * - ``lib_onnx_shape`` (exported as ``onnx_light::lib_onnx_shape``):
+        ``onnx_light/onnx_extensions/onnx_shapes/``
       - Shape-inference dispatch table, expression engine for small
         tensor / backward-propagation shape inference, and graph
         optimization helpers.  Depends publicly on ``lib_onnx_core``
@@ -184,7 +184,7 @@ smallest set** that covers its needs.  The most common scenarios are:
 * **Full ONNX feature set** (schemas with history, checker, inliner,
   shape inference, version conversion) — link ``onnx_light::lib_onnx_lib``.
 * **Shape inference and graph optimization passes** — link
-  ``onnx_light::lib_onnx_optim`` (which transitively pulls
+  ``onnx_light::lib_onnx_shape`` (which transitively pulls
   ``lib_onnx_core`` and ``lib_onnx_proto``).
 * **Evaluate ONNX nodes / graphs / models in C++** using the bundled
   reference kernels (runtime ``struct Tensor``, ``RunGraph`` /

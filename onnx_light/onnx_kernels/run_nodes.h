@@ -19,7 +19,7 @@
  *        iterator), mirroring the per-operator
  *        :cpp:func:`core::shapes::ShapesContext::ComputeShapeNode` /
  *        :cpp:func:`core::shapes::ShapesContext::ComputeShapes` pair used
- *        by ``onnx_optim`` for shape inference.
+ *        by ``onnx_shapes`` for shape inference.
  *
  * Inputs and outputs are exchanged through a name-keyed
  * :cpp:type:`TensorMap` (owned by :cpp:class:`RuntimeContext`) so a

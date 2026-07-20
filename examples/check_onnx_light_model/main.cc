@@ -1,6 +1,6 @@
 /**
  * main.cc — Standalone example: validate an ONNX model with the onnx_light
- * checker API and optionally run onnx_optim shape inference on it.
+ * checker API and optionally run onnx_shapes shape inference on it.
  *
  * Usage:
  *   ./check_onnx_light_model <model.onnx> [full_check] [infer_shapes]
@@ -15,9 +15,9 @@
  */
 
 #include "onnx_core/shapes/shape_inference.h"
+#include "onnx_extensions/onnx_shapes/dispatch_table.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/common/file_utils.h"
-#include "onnx_optim/dispatch_table.h"
 #include "onnx_proto/onnx.h"
 
 #include <charconv>
@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
   if (argc < 2 || argc > 4) {
     std::cerr << "Usage: " << argv[0] << " <model.onnx> [full_check] [infer_shapes]\n";
     std::cerr << "  full_check:   0 (default) or 1\n";
-    std::cerr << "  infer_shapes: 0 (default) or 1 — runs onnx_optim shape inference\n";
+    std::cerr << "  infer_shapes: 0 (default) or 1 — runs onnx_shapes shape inference\n";
     return 1;
   }
 
@@ -76,9 +76,9 @@ int main(int argc, char *argv[]) {
       ONNX_LIGHT_NAMESPACE::LoadProtoFromPath(argv[1], model);
       // `core::shapes::InferShapesModel` looks up shape functions in
       // `core::shapes::DispatchTable()`, which `onnx_core` leaves empty; the
-      // built-in `onnx_optim` shape functions must be registered explicitly
+      // built-in `onnx_shapes` shape functions must be registered explicitly
       // before it can resolve any operator.
-      ONNX_LIGHT_NAMESPACE::onnx_optim::RegisterShapeFunctions();
+      ONNX_LIGHT_NAMESPACE::onnx_shapes::RegisterShapeFunctions();
       ONNX_LIGHT_NAMESPACE::core::shapes::InferShapesModel(model);
       std::cout << "  shape inference: ok\n";
       std::cout << "    graph.value_info entries: " << model.graph().value_info_size() << "\n";

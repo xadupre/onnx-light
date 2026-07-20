@@ -1,0 +1,452 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
+#include "onnx_core/symbolic/sym_map.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_proto/onnx.h"
+
+/**
+ * @file shape_logical.h
+ * @brief Shape-inference functions for ONNX operators in the
+ *        ``logical`` family.
+ */
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_shapes {
+namespace shapes {
+
+// The generic shape-inference engine (ShapesContext, dispatch table,
+// domain constants, ...) lives in ``onnx_core`` so it never depends on
+// any particular set of operator implementations; the symbolic value
+// descriptors (SymDim, SymShape, SymTensor, ...) live in
+// ``onnx_core::symbolic`` for the same reason. Bring them into
+// ``onnx_shapes::shapes`` so shape functions can keep referring to them
+// unqualified, exactly as before those types moved to ``onnx_core``.
+using ::onnx_light::core::shapes::BroadcastDimOp;
+using ::onnx_light::core::shapes::BroadcastShapes;
+using ::onnx_light::core::shapes::CheckNodeOpAndOutput;
+using ::onnx_light::core::shapes::ComputeShapeBinaryBroadcast;
+using ::onnx_light::core::shapes::InferShapesModel;
+using ::onnx_light::core::shapes::kOnnxDomain;
+using ::onnx_light::core::shapes::kUnknownOpsetVersion;
+using ::onnx_light::core::shapes::PropagateValueAsShapeArithmetic;
+using ::onnx_light::core::shapes::ShapeEvent;
+using ::onnx_light::core::shapes::ShapeEventAction;
+using ::onnx_light::core::shapes::ShapeEventActionName;
+using ::onnx_light::core::shapes::ShapesContext;
+
+using ::onnx_light::core::symbolic::DataTypeToTensorType;
+using ::onnx_light::core::symbolic::Device;
+using ::onnx_light::core::symbolic::GPUIndex;
+using ::onnx_light::core::symbolic::IsGPU;
+using ::onnx_light::core::symbolic::IsIntegerTensorType;
+using ::onnx_light::core::symbolic::kMaxGPUIndex;
+using ::onnx_light::core::symbolic::kMaxOptimRank;
+using ::onnx_light::core::symbolic::kOptimValueAsShapeMaxElements;
+using ::onnx_light::core::symbolic::kValueInfoDeviceMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMaxMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMinMetadataKey;
+using ::onnx_light::core::symbolic::ShapeFromTensorProtoDims;
+using ::onnx_light::core::symbolic::SymCmpResult;
+using ::onnx_light::core::symbolic::SymDim;
+using ::onnx_light::core::symbolic::SymMap;
+using ::onnx_light::core::symbolic::SymSequence;
+using ::onnx_light::core::symbolic::SymShape;
+using ::onnx_light::core::symbolic::SymTensor;
+using ::onnx_light::core::symbolic::TensorType;
+using ::onnx_light::core::symbolic::TensorTypeToDataType;
+
+namespace logical {
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of an ``And`` node and
+ * stores it in ``ctx``.
+ *
+ * ``And`` is the logical, element-wise AND of two boolean operands
+ * with numpy-style multidirectional broadcasting (since opset 7;
+ * earlier revisions used an explicit ``broadcast`` attribute but the
+ * shape propagation rules are identical when broadcasting is enabled,
+ * which onnx-light assumes). The output dtype is always
+ * :cpp:enumerator:`TensorType::kBool` and the output shape is the
+ * broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``And`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"And"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"And"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeAnd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of an ``Or`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Or`` is the logical, element-wise OR of two boolean operands with
+ * numpy-style multidirectional broadcasting (since opset 7). The output
+ * dtype is always :cpp:enumerator:`TensorType::kBool` and the output
+ * shape is the broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Or`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Or"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Or"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeOr(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Xor`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Xor`` is the logical, element-wise XOR of two boolean operands with
+ * numpy-style multidirectional broadcasting (since opset 7). The output
+ * dtype is always :cpp:enumerator:`TensorType::kBool` and the output
+ * shape is the broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Xor`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Xor"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Xor"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeXor(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Greater`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Greater`` is the element-wise ``A > B`` comparison of two numeric
+ * operands with numpy-style multidirectional broadcasting (since
+ * opset 7; opset 1 only supported broadcasting via an explicit
+ * ``broadcast`` attribute but the shape propagation rules are
+ * identical when broadcasting is enabled, which onnx-light assumes).
+ * The output dtype is always :cpp:enumerator:`TensorType::kBool` and
+ * the output shape is the broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Greater`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Greater"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Greater"``, if ``node`` has no output, or if the two
+ *         input shapes are not broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeGreater(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Less`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Less`` is the element-wise ``A < B`` comparison of two numeric
+ * operands with numpy-style multidirectional broadcasting (since
+ * opset 7; opset 1 only supported broadcasting via an explicit
+ * ``broadcast`` attribute but the shape propagation rules are
+ * identical when broadcasting is enabled, which onnx-light assumes).
+ * The output dtype is always :cpp:enumerator:`TensorType::kBool` and
+ * the output shape is the broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Less`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Less"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Less"``, if ``node`` has no output, or if the two input
+ *         shapes are not broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeLess(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``GreaterOrEqual`` node
+ * and stores it in ``ctx``.
+ *
+ * ``GreaterOrEqual`` is the element-wise ``A >= B`` comparison of two
+ * numeric operands with numpy-style multidirectional broadcasting (since
+ * opset 12). The output dtype is always
+ * :cpp:enumerator:`TensorType::kBool` and the output shape is the
+ * broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``GreaterOrEqual`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"GreaterOrEqual"`` and ``node`` must declare at least
+ *              one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"GreaterOrEqual"``, if ``node`` has no output, or if the
+ *         two input shapes are not broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeGreaterOrEqual(ShapesContext &ctx, const NodeProto &node, const char *a,
+                                const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``LessOrEqual`` node
+ * and stores it in ``ctx``.
+ *
+ * ``LessOrEqual`` is the element-wise ``A <= B`` comparison of two
+ * numeric operands with numpy-style multidirectional broadcasting (since
+ * opset 12). The output dtype is always
+ * :cpp:enumerator:`TensorType::kBool` and the output shape is the
+ * broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``LessOrEqual`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"LessOrEqual"`` and ``node`` must declare at least
+ *              one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"LessOrEqual"``, if ``node`` has no output, or if the
+ *         two input shapes are not broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeLessOrEqual(ShapesContext &ctx, const NodeProto &node, const char *a,
+                             const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of an ``Equal`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Equal`` is the element-wise ``A == B`` comparison of two operands
+ * with numpy-style multidirectional broadcasting (since opset 7;
+ * opset 1 only supported broadcasting via an explicit ``broadcast``
+ * attribute but the shape propagation rules are identical when
+ * broadcasting is enabled, which onnx-light assumes). The output
+ * dtype is always :cpp:enumerator:`TensorType::kBool` and the output
+ * shape is the broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Equal`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Equal"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Equal"``, if ``node`` has no output, or if the two
+ *         input shapes are not broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeEqual(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Where`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Where`` returns elements from ``x`` or ``y`` depending on ``condition``.
+ * The output dtype is the dtype of ``x``/``y`` and the output shape is the
+ * multidirectional broadcast of ``condition``, ``x`` and ``y``.
+ */
+void ComputeShapeWhere(ShapesContext &ctx, const NodeProto &node, const char *condition,
+                       const char *x, const char *y);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseAnd`` node
+ * (opset 18) and stores it in ``ctx``.
+ *
+ * ``BitwiseAnd`` is element-wise with numpy-style multidirectional
+ * broadcasting; both inputs must share the same integer dtype and the
+ * output dtype equals that input dtype.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``BitwiseAnd`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"BitwiseAnd"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"BitwiseAnd"``, if ``node`` has no output, or if the two
+ *         input shapes are not broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeBitwiseAnd(ShapesContext &ctx, const NodeProto &node, const char *a,
+                            const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseOr`` node
+ * (opset 18) and stores it in ``ctx``. Shape/type semantics match
+ * :cpp:func:`ComputeShapeBitwiseAnd`.
+ */
+void ComputeShapeBitwiseOr(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseXor`` node
+ * (opset 18) and stores it in ``ctx``. Shape/type semantics match
+ * :cpp:func:`ComputeShapeBitwiseAnd`.
+ */
+void ComputeShapeBitwiseXor(ShapesContext &ctx, const NodeProto &node, const char *a,
+                            const char *b);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseNot`` node
+ * (opset 18) and stores it in ``ctx``.
+ *
+ * ``BitwiseNot`` is element-wise and unary: the output dtype and shape
+ * match the input.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``BitwiseNot`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"BitwiseNot"``
+ *              and ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"BitwiseNot"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is missing from ``ctx``.
+ */
+void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``Not`` node
+ * (opset 1) and stores it in ``ctx``.
+ *
+ * ``Not`` is the element-wise logical NOT of a boolean tensor: the
+ * output dtype is always :cpp:enumerator:`TensorType::kBool` (matching
+ * the input) and the output shape matches the input shape.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Not`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Not"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Not"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is missing from ``ctx``.
+ */
+void ComputeShapeNot(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of an ``IsNaN`` node and
+ * stores it in ``ctx``.
+ *
+ * ``IsNaN`` is element-wise on a floating-point tensor: the output dtype
+ * is always :cpp:enumerator:`TensorType::kBool` and the output shape
+ * matches the input shape.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``IsNaN`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"IsNaN"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"IsNaN"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is missing from ``ctx``.
+ */
+void ComputeShapeIsNaN(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of an ``IsInf`` node and
+ * stores it in ``ctx``.
+ *
+ * ``IsInf`` is element-wise on a floating-point tensor: the output dtype
+ * is always :cpp:enumerator:`TensorType::kBool` and the output shape
+ * matches the input shape. The ``detect_positive`` and ``detect_negative``
+ * attributes do not affect the output type or shape and are therefore not
+ * inspected by this function.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``IsInf`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"IsInf"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"IsInf"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is missing from ``ctx``.
+ */
+void ComputeShapeIsInf(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`SymTensor` of a ``BitShift`` node
+ * (opset 11) and stores it in ``ctx``.
+ *
+ * ``BitShift`` is element-wise with numpy-style multidirectional
+ * broadcasting; both inputs must share the same unsigned-integer dtype and
+ * the output dtype equals that input dtype. The required ``direction``
+ * attribute does not affect the output type or shape and is therefore not
+ * inspected by this function.
+ */
+void ComputeShapeBitShift(ShapesContext &ctx, const NodeProto &node, const char *x, const char *y);
+
+} // namespace logical
+} // namespace shapes
+} // namespace onnx_shapes
+} // namespace ONNX_LIGHT_NAMESPACE

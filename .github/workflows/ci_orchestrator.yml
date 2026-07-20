@@ -1,0 +1,434 @@
+name: ci-orchestrator
+
+# Single-file CI pipeline that enforces a phased execution order:
+#
+#   Phase 1 – fast checks (clang-format, style, typing, spelling, CodeQL)
+#              all run in parallel; any failure stops the pipeline.
+#   Gate 1  – a lightweight job that blocks Phase 2 until Phase 1 is green.
+#   Phase 2 – preflight core tests: reduced build → no-onnx tests (sequential).
+#   Gate 2  – blocks Phase 3 until both preflight jobs are green.
+#   Phase 3 – all remaining builds (ubuntu full, windows, macOS, x86) in
+#              parallel.
+#   ci_pass – final job that succeeds only when every prior job succeeds;
+#              use this job as the single required PR status check.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ── Phase 1: fast checks ──────────────────────────────────────────────────────
+
+jobs:
+  fast_clang_format:
+    name: fast / clang-format
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check C++ formatting
+        run: |
+          find . \( -name "*.cc" -o -name "*.h" -o -name "*.hpp" \) \
+            | grep -v ".git" \
+            | xargs clang-format --dry-run --Werror
+
+  fast_style:
+    name: fast / style
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install style tools
+        run: pip install black==26.5.1 ruff==0.15.20
+      - name: Check style
+        run: black --check . && ruff check .
+
+  fast_typing:
+    name: fast / typing
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install typing tools
+        run: pip install numpy ml-dtypes onnx mypy==2.1.0 pyrefly==1.1.1
+      - name: Run mypy
+        run: mypy onnx_light
+      - name: Run pyrefly
+        run: pyrefly check
+
+  fast_spelling:
+    name: fast / spelling
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install codespell
+        run: pip install codespell==2.4.2
+      - name: Check spelling
+        run: codespell .
+
+  fast_codeql:
+    name: fast / codeql
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          # Python analysis does not require a compiled build and is fast.
+          languages: python
+          queries: security-and-quality
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  # ── Gate 1: all fast checks must pass ────────────────────────────────────────
+
+  fast_gate:
+    name: fast gate
+    needs: [fast_clang_format, fast_style, fast_typing, fast_spelling, fast_codeql]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo "All fast checks passed."
+
+  # ── Phase 2: preflight core tests ────────────────────────────────────────────
+
+  changes:
+    name: detect changes
+    needs: [fast_gate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.filter.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect doc-only changes
+        id: filter
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ -n "${BASE_REF}" ]; then
+            base_sha="${BASE_REF}"
+          else
+            base_sha="$(git rev-parse "${HEAD_REF}^" 2>/dev/null || echo '')"
+          fi
+          if [ -z "${base_sha}" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "${base_sha}" "${HEAD_REF}")"
+          echo "Changed files:"
+          echo "${changed}"
+          docs_only=true
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              docs/*|*.md|*.rst) ;;
+              *) docs_only=false ;;
+            esac
+          done <<< "${changed}"
+          echo "docs_only=${docs_only}" >> "$GITHUB_OUTPUT"
+
+  reduced_tests_ubuntu:
+    # Fastest preflight: builds onnx-light without the operator-kernel runtime
+    # and backend-test registries (ONNX_LIGHT_BUILD_KERNELS=OFF). Must pass
+    # before the no-onnx preflight (and therefore the heavier compilation jobs)
+    # start. Kernel/backend tests skip themselves via
+    # onnx_light.ext_test_case.import_or_skip, so the suite exercises the proto /
+    # schema / shape-inference / manipulation layers that ship in the reduced
+    # build. Mirrors .github/workflows/build_reduced_wheel.yml's configure flags.
+    name: preflight / reduced (ubuntu-latest, py3.13)
+    needs: [fast_gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Build and Install package without kernels/backend
+        run: pip install -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run reduced C++ unit tests (Linux)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run tests (kernel/backend tests skip themselves)
+        run: |
+          UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort
+
+  no_onnx_tests_ubuntu:
+    # Fast preflight: must pass before the heavier compilation jobs start.
+    # Gated on the reduced (no kernels/backend) build so the smallest variant is
+    # validated first. Mirrors .github/workflows/ci_no_onnx.yml but lives inside
+    # ci-orchestrator so the gate is observable as a required PR status check.
+    name: preflight / no-onnx (ubuntu-latest, py3.13)
+    needs: [reduced_tests_ubuntu]
+    runs-on: ubuntu-latest
+    timeout-minutes: 19
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Build and Install package
+        run: pip install -Cbuild-dir=build -e .[dev] -v
+
+      - name: uninstall onnx
+        run: pip uninstall -y onnx
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run tests (excluding onnxl_vs_onnx and onnxl_vs_ort)
+        run: |
+          UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort
+
+  # ── Gate 2: preflight must pass ───────────────────────────────────────────────
+
+  preflight_gate:
+    name: preflight gate
+    needs: [no_onnx_tests_ubuntu]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo "Preflight checks passed."
+
+  # ── Phase 3: all remaining builds ─────────────────────────────────────────────
+
+  core_tests_ubuntu:
+    name: core (ubuntu-latest, py3.13)
+    needs: [preflight_gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Build and Install package (Linux)
+        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
+
+      - name: Install ONNX weekly
+        run: pip install --upgrade onnx-weekly
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run C++ unit tests (Linux)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run tests
+        run: |
+          UNITTEST_GOING=1 pytest --durations=10 unittests
+
+  core_tests:
+    name: core (${{ matrix.os }}, py${{ matrix.python-version }})
+    needs: [preflight_gate, changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["windows-latest", "macos-latest"]
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
+      - name: Install OpenSSL (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install openssl@3 || true
+          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+
+      - name: Disable OpenSSL on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: echo "CMAKE_ARGS=-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON" >> "$env:GITHUB_ENV"
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Set up MSVC for Ninja (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: x64
+
+      # sccache (set up above) caches compiled objects in GitHub Actions cache so
+      # that repeated runs that do not touch C++ source are near-instant on both
+      # Windows and macOS. This is especially effective for Windows where each
+      # cold compilation takes ~24 minutes.
+      - name: Build and Install package (Windows)
+        if: runner.os == 'Windows'
+        env:
+          CMAKE_GENERATOR: Ninja
+          SCCACHE_GHA_ENABLED: "true"
+        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+
+      - name: Build and Install package (macOS)
+        if: runner.os == 'macOS'
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+        run: pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+
+      - name: Install ONNX weekly
+        run: pip install --upgrade onnx-weekly
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run C++ unit tests (Windows)
+        if: runner.os == 'Windows'
+        run: ctest --test-dir build --output-on-failure -C Release --timeout 120
+
+      - name: Run C++ unit tests (macOS)
+        if: runner.os == 'macOS'
+        run: ctest --test-dir build --output-on-failure -C Debug --timeout 120
+
+      - name: Run tests
+        env:
+          UNITTEST_GOING: "1"
+        run: |
+          pytest --durations=10 unittests
+
+  windows_x86_build:
+    name: core (windows-latest, x86 build)
+    needs: [preflight_gate, changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 22
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure 32-bit CMake build
+        run: |
+          cmake -S . -B build-win32 -A Win32 -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+
+      - name: Build 32-bit CMake build
+        run: |
+          cmake --build build-win32 --config Release --parallel
+
+  # ── Final job: the single required PR status check ────────────────────────────
+  #
+  # ci_pass succeeds only when every job in all three phases completes
+  # successfully.  Configure branch protection to require this job name as the
+  # mandatory status check so that merging is gated on the entire pipeline.
+
+  ci_pass:
+    name: ci pass
+    needs: [core_tests_ubuntu, core_tests, windows_x86_build]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Check all jobs succeeded
+        env:
+          CORE_UBUNTU: ${{ needs.core_tests_ubuntu.result }}
+          CORE_MATRIX: ${{ needs.core_tests.result }}
+          WIN_X86: ${{ needs.windows_x86_build.result }}
+        run: |
+          failed=0
+          for result in "${CORE_UBUNTU}" "${CORE_MATRIX}" "${WIN_X86}"; do
+            if [ "${result}" != "success" ] && [ "${result}" != "skipped" ]; then
+              echo "Job failed or was cancelled: ${result}"
+              failed=1
+            fi
+          done
+          if [ "${failed}" -eq 1 ]; then
+            echo "One or more jobs did not succeed."
+            exit 1
+          fi
+          echo "All jobs succeeded. CI pipeline passed."

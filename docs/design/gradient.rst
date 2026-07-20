@@ -162,6 +162,6 @@ of the default registry, then pass that registry to
 References
 ----------
 
-* Python API: :doc:`/api/python/onnx_gradient/index`
-* C++ API: :doc:`/api/cpp/onnx_gradient/index`
+* Python API: :doc:`/api/python/onnx_extensions/onnx_gradient/index`
+* C++ API: :doc:`/api/cpp/onnx_extensions/onnx_gradient/index`
 * Gallery example: :ref:`l-example-gradient-linear-regression`

@@ -2,16 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_gradient/gradient/grad_common.h"
-#include "onnx_gradient/gradient/math/include_math_grads.h"
-#include "onnx_proto/onnx_helper.h"
+#include "onnx_extensions/onnx_gradient/gradient/grad_common.h"
+#include "onnx_extensions/onnx_gradient/gradient/math/include_math_grads.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_gradient {
 
-bool GradGemm(const NodeProto &node, const std::string &output_grad,
-              std::unordered_map<std::string, std::string> &grad_accum, int &counter,
-              FunctionProto &func) {
+bool GradMatMul(const NodeProto &node, const std::string &output_grad,
+                std::unordered_map<std::string, std::string> &grad_accum, int &counter,
+                FunctionProto &func) {
   const auto &inputs = node.input();
   const std::string &A =
       (inputs.size() >= 1 && !inputs[0].empty()) ? inputs[0] : utils::String::empty_string();
@@ -33,16 +32,6 @@ bool GradGemm(const NodeProto &node, const std::string &output_grad,
   std::string dB = NewGradName("dB", counter);
   func.add_node("MatMul", {A_T, output_grad}, {dB});
   AccumulateGrad(dB, grad_accum[B], counter, func);
-
-  // Gradient for optional bias: sum over the batch axis.
-  if (inputs.size() >= 3 && !inputs[2].empty()) {
-    std::string bias = inputs[2];
-    std::string dBias = NewGradName("dC_init", counter);
-    NodeProto &rs = func.add_node("ReduceSum", {output_grad}, {dBias});
-    AddAttribute(rs, "axes", std::vector<int64_t>{0}); // 0 = batch axis
-    AddAttribute(rs, "keepdims", int64_t{0});
-    AccumulateGrad(dBias, grad_accum[bias], counter, func);
-  }
 
   return true;
 }

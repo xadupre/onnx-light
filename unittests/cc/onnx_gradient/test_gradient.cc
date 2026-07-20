@@ -7,8 +7,11 @@
 
 #include "onnx_gradient/gradient.h"
 
+#include "onnx_backend_test/test_case.h"
+#include "onnx_gradient/gradient/grad_dispatcher.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/onnx_helper.h"
+#include <algorithm>
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include <string>
@@ -409,4 +412,86 @@ TEST(GradientOfNodes, ConvGrad_dX_dW_dB) {
   EXPECT_TRUE(std::find(types.begin(), types.end(), "ConvTranspose") != types.end());
   EXPECT_TRUE(std::find(types.begin(), types.end(), "Conv") != types.end());
   EXPECT_TRUE(std::find(types.begin(), types.end(), "ReduceSum") != types.end());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BackendTestCasesWithGradient: for each operator in DefaultGradRegistry,
+// collects its backend test cases and verifies GradientOfNodes succeeds.
+// ═══════════════════════════════════════════════════════════════════════════
+TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
+  const auto &registry = onnx_gradient::DefaultGradRegistry();
+
+  // Collect op_types for the default ONNX domain (empty domain string).
+  std::vector<std::string> grad_op_types;
+  grad_op_types.reserve(registry.size());
+  for (const auto &entry : registry) {
+    if (entry.first.first.empty()) {
+      grad_op_types.push_back(entry.first.second);
+    }
+  }
+  std::sort(grad_op_types.begin(), grad_op_types.end());
+  ASSERT_FALSE(grad_op_types.empty()) << "DefaultGradRegistry is empty";
+
+  for (const std::string &op_type : grad_op_types) {
+    // Collect all standard backend test cases for this operator.
+    const auto cases = onnx_backend_test::CollectTestCases(op_type);
+
+    // Every operator with a gradient should have at least one backend test case.
+    EXPECT_FALSE(cases.empty()) << "No backend test cases found for op_type=" << op_type;
+
+    for (const auto &tc : cases) {
+      const auto &graph = tc.model().ref_graph();
+      if (graph.ref_node().empty()) {
+        continue;
+      }
+
+      // Find the first node whose op_type matches the registered op.
+      const NodeProto *target_node_ptr = nullptr;
+      for (const auto &node : graph.ref_node()) {
+        if (std::string(node.op_type()) == op_type) {
+          target_node_ptr = &node;
+          break;
+        }
+      }
+      if (target_node_ptr == nullptr) {
+        continue;
+      }
+      const NodeProto &first_node = *target_node_ptr;
+
+      // Collect non-empty input names of the first node.
+      std::vector<std::string> node_inputs;
+      for (const auto &inp : first_node.input()) {
+        if (!inp.empty()) {
+          node_inputs.emplace_back(std::string(inp));
+        }
+      }
+      if (node_inputs.empty()) {
+        continue;
+      }
+
+      // Get the first non-empty output name of the first node.
+      std::string y;
+      for (const auto &out : first_node.output()) {
+        if (!out.empty()) {
+          y = std::string(out);
+          break;
+        }
+      }
+      if (y.empty()) {
+        continue;
+      }
+
+      // xs = {first input}, zs = remaining non-empty inputs.
+      const std::vector<std::string> xs = {node_inputs[0]};
+      const std::vector<std::string> zs(node_inputs.begin() + 1, node_inputs.end());
+      // Pass only the first node so we test the gradient of the operator itself.
+      const std::vector<NodeProto> nodes = {first_node};
+
+      FunctionProto grad;
+      EXPECT_NO_THROW(grad = GradientOfNodes(nodes, node_inputs, {}, xs, y, zs))
+          << "GradientOfNodes threw for op_type=" << op_type << " test=" << tc.name;
+      EXPECT_GE(grad.output_size(), 1)
+          << "Empty gradient FunctionProto for op_type=" << op_type << " test=" << tc.name;
+    }
+  }
 }

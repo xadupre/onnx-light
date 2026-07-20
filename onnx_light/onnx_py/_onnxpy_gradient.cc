@@ -5,6 +5,7 @@
 #include "onnx_gradient/gradient.h"
 #include "onnx_gradient/gradient/grad_dispatcher.h"
 #include "onnx_proto/onnx.h"
+#include <algorithm>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
@@ -32,7 +33,34 @@ void AddOnnxPyGradient(nb::module_ &m) {
           // that can be customised without affecting the C++ static default.
           []() -> onnx_gradient::GradRegistry { return onnx_gradient::DefaultGradRegistry(); },
           "Returns a new independent copy of the built-in gradient registry.  "
-          "Modifications to the returned registry do not affect the built-in defaults.");
+          "Modifications to the returned registry do not affect the built-in defaults.")
+      .def(
+          "op_types",
+          [](const onnx_gradient::GradRegistry &self,
+             const std::string &domain) -> std::vector<std::string> {
+            std::vector<std::string> result;
+            for (const auto &entry : self) {
+              if (entry.first.first == domain) {
+                result.push_back(entry.first.second);
+              }
+            }
+            std::sort(result.begin(), result.end());
+            return result;
+          },
+          nb::arg("domain") = "",
+          R"doc(
+Returns a sorted list of op_type names registered for *domain*.
+
+Parameters
+----------
+domain : str
+    Operator domain (default: ``""`` for standard ONNX ops).
+
+Returns
+-------
+list[str]
+    Sorted op_type names registered for *domain*.
+)doc");
 
   m.def(
       "register_gradient_function",

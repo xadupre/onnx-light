@@ -978,9 +978,10 @@ ONNX_OPERATOR_SET_SCHEMA(
     OpSchema()
         .SetDoc(Transpose_doc)
         .Attr("perm",
-              "A list of integers. By default, reverse the dimensions, "
+              "A list of integers. By default, reverse the dimensions; "
               "otherwise permute the axes according to the values given. "
-              "Its length must be equal to the rank of the input.",
+              "Its length must be equal to the rank of the input, and each "
+              "value must be in the range `[0, rank-1]`.",
               AttributeProto::INTS, OPTIONAL_VALUE)
         .Input(0, "data", "An input tensor.", "T", OpSchema::Single, true, 1,
                OpSchema::Differentiable)

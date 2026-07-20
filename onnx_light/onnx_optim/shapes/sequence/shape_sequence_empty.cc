@@ -6,9 +6,9 @@
 
 #include <vector>
 
-#include "onnx_optim/optim_sequence.h"
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -32,7 +32,7 @@ void ComputeShapeSequenceEmpty(ShapesContext &ctx, const NodeProto &node) {
 
   // Output is a sequence of length 0 with the resolved element dtype
   // and an empty per-element shapes vector.
-  ctx.SetSequence(node.output(0), OptimSequence(elem_dtype, std::vector<OptimShape>{}));
+  ctx.SetSequence(node.output(0), SymSequence(elem_dtype, std::vector<SymShape>{}));
 }
 
 } // namespace sequence

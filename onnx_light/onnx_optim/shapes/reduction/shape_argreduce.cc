@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <string>
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -37,8 +37,8 @@ void ComputeShapeArgReduce(ShapesContext &ctx, const NodeProto &node, const char
   EXT_ENFORCE_INVALID(node.output_size() >= 1,
                       "ComputeShapeArgReduce: node must declare at least one output.");
 
-  const OptimTensor &input = ctx.Get(data);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(data);
+  const SymShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
   EXT_ENFORCE_INVALID(rank > 0, "ComputeShapeArgReduce: input '", data,
                       "' must have at least one dimension.");
@@ -47,11 +47,11 @@ void ComputeShapeArgReduce(ShapesContext &ctx, const NodeProto &node, const char
   const int64_t axis = ResolveAxis(axis_attr, rank);
   const bool keepdims = GetAttributeOr<int64_t>(node, "keepdims", 1) != 0;
 
-  OptimShape out_shape;
+  SymShape out_shape;
   for (std::size_t d = 0; d < in_shape.Rank(); ++d) {
     if (static_cast<int64_t>(d) == axis) {
       if (keepdims) {
-        out_shape.PushBack(OptimDim(static_cast<int64_t>(1)));
+        out_shape.PushBack(SymDim(static_cast<int64_t>(1)));
       }
     } else {
       out_shape.PushBack(in_shape[d]);
@@ -59,7 +59,7 @@ void ComputeShapeArgReduce(ShapesContext &ctx, const NodeProto &node, const char
   }
 
   // Output dtype is always int64, regardless of the input dtype.
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kInt64, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kInt64, std::move(out_shape)));
 }
 
 } // namespace reduction

@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -15,11 +15,11 @@ namespace traditionalml {
 
 namespace {
 
-OptimDim BatchDimFromInput(const OptimTensor &input) {
+SymDim BatchDimFromInput(const SymTensor &input) {
   EXT_ENFORCE_INVALID(!(input.Shape().Empty()),
                       "ComputeShapeSVMRegressor: input rank must be 1 or 2 when known.");
   if (input.Shape().Rank() == 1) {
-    return OptimDim(1);
+    return SymDim(1);
   }
   if (input.Shape().Rank() == 2) {
     return input.Shape()[0];
@@ -32,11 +32,11 @@ OptimDim BatchDimFromInput(const OptimTensor &input) {
 void ComputeShapeSVMRegressor(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "SVMRegressor", "ComputeShapeSVMRegressor");
 
-  const OptimTensor &input = ctx.Get(x);
-  OptimShape output_shape;
+  const SymTensor &input = ctx.Get(x);
+  SymShape output_shape;
   output_shape.PushBack(BatchDimFromInput(input));
-  output_shape.PushBack(OptimDim(1));
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kFloat, std::move(output_shape)));
+  output_shape.PushBack(SymDim(1));
+  ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kFloat, std::move(output_shape)));
 }
 
 } // namespace traditionalml

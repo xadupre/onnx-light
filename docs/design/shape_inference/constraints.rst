@@ -6,9 +6,9 @@ Symbolic-dimension constraint mechanism
 This page describes how ``onnx_optim`` shape inference records and
 resolves *constraints* between symbolic tensor dimensions. The
 constraint store lives on :cpp:class:`ShapesContext` (see
-``onnx_light/onnx_optim/shapes/shapes_context.h``) and is consumed by the
+``onnx_light/onnx_core/shapes/shapes_context.h``) and is consumed by the
 anchor-propagation pass in
-``onnx_light/onnx_optim/shapes/shape_inference.cc``.
+``onnx_light/onnx_core/shapes/shape_inference.cc``.
 
 Motivation
 ----------
@@ -73,7 +73,7 @@ Renaming only the compound expression would leave bare occurrences of
 
 ``AddSymbolicConstraintWithLeafDerivation`` (in ``shape_inference.cc``)
 handles this. It records the original equality and then asks
-:func:`~onnx_light.onnx_optim.expressions.simplify_two_expressions` for
+:func:`~onnx_light.onnx_core.expressions.simplify_two_expressions` for
 the algebraic difference of the two sides. When that difference reduces
 to a coefficient map with exactly two non-zero entries of equal
 magnitude and opposite sign (``c*x - c*y``), it additionally records the
@@ -93,7 +93,7 @@ constraints into a renaming of the context:
    renamed away.
 #. It builds an undirected adjacency map from the equality constraints
    and calls
-   :func:`~onnx_light.onnx_optim.expressions.rename_dynamic_dimensions`,
+   :func:`~onnx_light.onnx_core.expressions.rename_dynamic_dimensions`,
    which picks, for each equivalence class, a canonical preferred name
    and returns a ``{internal name → canonical name}`` mapping.
 #. Replacement entries whose key is a compound expression made
@@ -112,7 +112,7 @@ constraints into a renaming of the context:
    may itself need renaming on the next.
 
    When rewriting a dimension,
-   :func:`~onnx_light.onnx_optim.expressions.rename_dynamic_expression`
+   :func:`~onnx_light.onnx_core.expressions.rename_dynamic_expression`
    also substitutes whole compound *subexpressions* that match a
    replacement key — so ``past_seq+seq`` is replaced by ``total_seq`` even
    when it is nested inside a synthesized ``broadcast(past_seq+seq,
@@ -128,6 +128,6 @@ API reference
 -------------
 
 * **C++ API**: :cpp:class:`ShapesContext`
-  (:doc:`/api/cpp/onnx_optim/shapes/shapes_context`) and
-  :doc:`/api/cpp/onnx_optim/shapes/shape_inference`.
+  (:doc:`/api/cpp/onnx_core/shapes/shapes_context`) and
+  :doc:`/api/cpp/onnx_core/shapes/shape_inference`.
 * **Expression simplifier**: :ref:`l-design-expressions`.

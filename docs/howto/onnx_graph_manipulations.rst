@@ -37,7 +37,7 @@ All three helpers are available both from Python and C++:
 
       .. code-block:: cpp
 
-          #include "onnx_manipulations/graph_manipulations.h"
+          #include "onnx_core/graph/graph_manipulations.h"
 
           using namespace onnx_light;  // CollectExternalInputs, etc.
 
@@ -79,7 +79,7 @@ they are not produced inside the outer node list.
 
       .. code-block:: cpp
 
-          #include "onnx_manipulations/graph_manipulations.h"
+          #include "onnx_core/graph/graph_manipulations.h"
           #include "onnx_proto/onnx_helper.h"
 
           std::vector<NodeProto> nodes = {
@@ -135,7 +135,7 @@ runs.
 
       .. code-block:: cpp
 
-          #include "onnx_manipulations/graph_manipulations.h"
+          #include "onnx_core/graph/graph_manipulations.h"
           #include "onnx_proto/onnx_helper.h"
 
           std::vector<NodeProto> nodes = {
@@ -198,7 +198,7 @@ captured from the outer scope by ``GRAPH`` / ``GRAPHS`` subgraph attributes:
 
 .. code-block:: cpp
 
-    #include "onnx_manipulations/graph_manipulations.h"
+    #include "onnx_core/graph/graph_manipulations.h"
     #include "onnx_proto/onnx_helper.h"
 
     NodeProto node = MakeNode("Add", {"a", "b"}, {"c"});
@@ -221,7 +221,7 @@ single-element list is equivalent:
 See also
 --------
 
-* :doc:`/api/cpp/onnx_manipulations/graph_manipulations` — C++ API reference
+* :doc:`/api/cpp/onnx_core/graph_manipulations` — C++ API reference
   for :cpp:func:`onnx_light::CollectExternalInputs`,
   :cpp:func:`onnx_light::CollectRemainingInputs` and
   :cpp:func:`onnx_light::CollectNodeInputs`.

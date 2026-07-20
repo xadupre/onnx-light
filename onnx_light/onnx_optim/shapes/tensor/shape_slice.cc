@@ -11,24 +11,28 @@
 #include <variant>
 #include <vector>
 
-#include "onnx_optim/expressions.h"
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/_helpers/shape_helpers.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/expressions/expressions.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_core/symbolic/symbolic_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
+
+// Alias to the symbolic dimension-expression library, which lives in
+// ``onnx_core`` so both ``onnx_op`` and ``onnx_optim`` can share it.
+namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
 namespace shapes {
 namespace tensor {
 
 namespace {
 
-std::optional<std::vector<int64_t>> TryReadIntVector(const OptimTensor &t) {
+std::optional<std::vector<int64_t>> TryReadIntVector(const SymTensor &t) {
   if (!t.HasValueAsShape()) {
     return std::nullopt;
   }
   std::vector<int64_t> values;
-  const OptimShape &shape = t.ValueAsShape();
+  const SymShape &shape = t.ValueAsShape();
   values.reserve(shape.Rank());
   for (size_t i = 0; i < shape.Rank(); ++i) {
     if (!shape[i].IsInt()) {
@@ -74,11 +78,11 @@ int64_t SliceLength(int64_t start, int64_t end, int64_t step) {
   return 1 + (start - end - 1) / (-step);
 }
 
-OptimDim FromDimType(const expressions::DimType &d) {
+SymDim FromDimType(const expressions::DimType &d) {
   if (std::holds_alternative<int64_t>(d)) {
-    return OptimDim(std::get<int64_t>(d));
+    return SymDim(std::get<int64_t>(d));
   }
-  return OptimDim(std::get<std::string>(d));
+  return SymDim(std::get<std::string>(d));
 }
 
 expressions::DimType ResolveSliceIndex(const expressions::DimType &dim, int64_t index) {
@@ -88,7 +92,7 @@ expressions::DimType ResolveSliceIndex(const expressions::DimType &dim, int64_t 
   return expressions::dim_add(dim, expressions::DimType{index});
 }
 
-OptimDim SymbolicSliceLength(const OptimDim &dim, int64_t start, int64_t end, int64_t step) {
+SymDim SymbolicSliceLength(const SymDim &dim, int64_t start, int64_t end, int64_t step) {
   const expressions::DimType d = ToDimType(dim);
   const expressions::DimType start_expr = ResolveSliceIndex(d, start);
   const expressions::DimType end_expr = ResolveSliceIndex(d, end);
@@ -112,18 +116,18 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
       !(node.input_size() < 3),
       "ComputeShapeSlice: Slice requires at least three inputs (data, starts, ends).");
 
-  const OptimTensor &data = ctx.Get(node.input(0));
-  const OptimTensor &starts_t = ctx.Get(node.input(1));
-  const OptimTensor &ends_t = ctx.Get(node.input(2));
-  const OptimShape &data_shape = data.Shape();
+  const SymTensor &data = ctx.Get(node.input(0));
+  const SymTensor &starts_t = ctx.Get(node.input(1));
+  const SymTensor &ends_t = ctx.Get(node.input(2));
+  const SymShape &data_shape = data.Shape();
   const int64_t rank = static_cast<int64_t>(data_shape.Rank());
 
-  OptimShape out_shape = data_shape;
+  SymShape out_shape = data_shape;
 
   const std::optional<std::vector<int64_t>> starts_opt = TryReadIntVector(starts_t);
   const std::optional<std::vector<int64_t>> ends_opt = TryReadIntVector(ends_t);
   if (!starts_opt.has_value() || !ends_opt.has_value()) {
-    ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), std::move(out_shape)));
+    ctx.Set(node.output(0), SymTensor(nullptr, data.Dtype(), std::move(out_shape)));
     return;
   }
   const std::vector<int64_t> &starts = *starts_opt;
@@ -135,7 +139,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   if (node.input_size() >= 4 && !node.input(3).empty()) {
     const std::optional<std::vector<int64_t>> axes_opt = TryReadIntVector(ctx.Get(node.input(3)));
     if (!axes_opt.has_value()) {
-      ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), std::move(out_shape)));
+      ctx.Set(node.output(0), SymTensor(nullptr, data.Dtype(), std::move(out_shape)));
       return;
     }
     axes = *axes_opt;
@@ -152,7 +156,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   if (node.input_size() >= 5 && !node.input(4).empty()) {
     const std::optional<std::vector<int64_t>> steps_opt = TryReadIntVector(ctx.Get(node.input(4)));
     if (!steps_opt.has_value()) {
-      ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), std::move(out_shape)));
+      ctx.Set(node.output(0), SymTensor(nullptr, data.Dtype(), std::move(out_shape)));
       return;
     }
     steps = *steps_opt;
@@ -180,10 +184,10 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
     int64_t start = starts[i];
     int64_t end = ends[i];
     ProcessSliceInputs(data_shape[static_cast<size_t>(axis)].AsInt(), start, end, step);
-    out_shape[static_cast<size_t>(axis)] = OptimDim(SliceLength(start, end, step));
+    out_shape[static_cast<size_t>(axis)] = SymDim(SliceLength(start, end, step));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, data.Dtype(), std::move(out_shape)));
 }
 
 } // namespace tensor

@@ -19,13 +19,13 @@ initializer tensor named ``reshape_shape``.
 
 The three approaches compared here are:
 
-* **model-level** via :func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model` —
+* **model-level** via :func:`~onnx_light.onnx_core.shape_inference.infer_shapes_model` —
   internally reads initializer *values*, so ``Z`` is fully resolved.
 * **node-by-node (naïve)** — seeds the :class:`ShapesContext` with
   initializer *shapes* only; the ``[0, 0, -1]`` values are not
   propagated, so the Reshape output carries symbolic placeholders.
 * **node-by-node (with value propagation)** — additionally calls
-  :meth:`~onnx_light.onnx_optim.shape_inference.OptimTensor.set_value_as_shape`
+  :meth:`~onnx_light.onnx_core.shape_inference.SymTensor.set_value_as_shape`
   for each initializer, enabling full resolution of ``Z``.
 
 The final plot shows the last inferred dimension for each tensor under
@@ -37,7 +37,7 @@ Understanding value_info
 ONNX models store inferred shapes in ``model.graph.value_info``, which is a
 list of ``ValueInfoProto`` messages. Each entry associates a tensor name with
 its type and shape. When you call
-:func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model`, the
+:func:`~onnx_light.onnx_core.shape_inference.infer_shapes_model`, the
 function mutates the model in place and populates ``value_info`` with the
 inferred shapes for all intermediate tensors. Graph inputs and outputs store
 their shapes directly in ``model.graph.input`` and ``model.graph.output``.
@@ -53,9 +53,9 @@ import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx.backend import collect_test_cases
-from onnx_light.onnx_optim.shape_inference import (
+from onnx_light.onnx_core.shape_inference import (
     infer_shapes_model,
-    OptimTensor,
+    SymTensor,
     ShapeEventAction,
     ShapesContext,
 )
@@ -166,11 +166,11 @@ def run_node_by_node(model, propagate_values: bool) -> dict:
     for inp in model.graph.input:
         tt = inp.type.tensor_type
         dims = [d.dim_value if d.dim_value else d.dim_param for d in tt.shape.dim]
-        ctx.set(inp.name, OptimTensor(tt.elem_type, dims))
+        ctx.set(inp.name, SymTensor(tt.elem_type, dims))
 
     # Seed initializers, optionally propagating their values.
     for init in model.graph.initializer:
-        t = OptimTensor(init.data_type, list(init.dims))
+        t = SymTensor(init.data_type, list(init.dims))
         if propagate_values:
             values = [int(v) for v in onh.to_array(init).flat]
             t.set_value_as_shape(values)
@@ -198,7 +198,7 @@ for name in TRACKED:
 # Approach 3 — enhanced node-by-node (with value propagation)
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #
-# Calling :meth:`OptimTensor.set_value_as_shape` on ``reshape_shape``
+# Calling :meth:`SymTensor.set_value_as_shape` on ``reshape_shape``
 # mirrors what :func:`infer_shapes_model` does internally. The Reshape
 # shape function can now read ``[0, 0, -1]`` and derive
 # ``Z = ["batch", "seq", 16]``.

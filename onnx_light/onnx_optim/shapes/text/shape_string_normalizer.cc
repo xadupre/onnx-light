@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_optim/shapes/text/shape_text.h"
 
 #include <string>
@@ -14,8 +14,8 @@ namespace text {
 
 void ComputeShapeStringNormalizer(ShapesContext &ctx, const NodeProto &node, const char *a) {
   CheckNodeOpAndOutput(node, "StringNormalizer", "ComputeShapeStringNormalizer");
-  const OptimTensor &input = ctx.Get(a);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(a);
+  const SymShape &in_shape = input.Shape();
 
   // StringNormalizer only accepts [C] or [1, C] string tensors.
   const std::size_t rank = in_shape.Rank();
@@ -23,19 +23,19 @@ void ComputeShapeStringNormalizer(ShapesContext &ctx, const NodeProto &node, con
     // The output rank matches the input rank; the only dimension is
     // symbolic because we cannot know how many stopwords will be
     // dropped at runtime.
-    OptimShape out_shape{OptimDim("StringNormalizer(" + std::string(a) + ")")};
-    ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kString, std::move(out_shape)));
+    SymShape out_shape{SymDim("StringNormalizer(" + std::string(a) + ")")};
+    ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kString, std::move(out_shape)));
     return;
   }
   if (rank == 2) {
-    const OptimDim &b_dim = in_shape[0];
+    const SymDim &b_dim = in_shape[0];
     EXT_ENFORCE_INVALID(!(b_dim.IsInt() && b_dim.AsInt() != 1),
                         "ComputeShapeStringNormalizer: input shape must be [C] or [1, C]; "
                         "got a 2-D shape with leading dimension ",
                         b_dim.AsInt(), ".");
-    OptimShape out_shape{OptimDim(static_cast<int64_t>(1)),
-                         OptimDim("StringNormalizer(" + std::string(a) + ")")};
-    ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kString, std::move(out_shape)));
+    SymShape out_shape{SymDim(static_cast<int64_t>(1)),
+                       SymDim("StringNormalizer(" + std::string(a) + ")")};
+    ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kString, std::move(out_shape)));
     return;
   }
   EXT_THROW_INVALID("ComputeShapeStringNormalizer: input shape must be [C] or [1, C]; got rank ",

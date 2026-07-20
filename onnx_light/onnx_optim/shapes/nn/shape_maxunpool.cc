@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -22,8 +22,8 @@ void ComputeShapeMaxUnpool(ShapesContext &ctx, const NodeProto &node, const char
   CheckNodeOpAndOutput(node, "MaxUnpool", "ComputeShapeMaxUnpool");
   (void)I;
 
-  const OptimTensor &input = ctx.Get(x);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(x);
+  const SymShape &in_shape = input.Shape();
   EXT_ENFORCE_INVALID(in_shape.Rank() >= 2,
                       "ComputeShapeMaxUnpool: input must have rank >= 2 (N, C, D1, ...).");
   const size_t n_input_dims = in_shape.Rank() - 2;
@@ -55,15 +55,15 @@ void ComputeShapeMaxUnpool(ShapesContext &ctx, const NodeProto &node, const char
 
   // When ``output_shape`` is provided as a known initializer, take its
   // values directly; this overrides any computed shape (per the ONNX spec).
-  const OptimShape *explicit_out_shape = nullptr;
+  const SymShape *explicit_out_shape = nullptr;
   if (output_shape != nullptr) {
-    const OptimTensor &out_shape_tensor = ctx.Get(output_shape);
+    const SymTensor &out_shape_tensor = ctx.Get(output_shape);
     if (out_shape_tensor.HasValueAsShape()) {
       explicit_out_shape = &out_shape_tensor.ValueAsShape();
     }
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(in_shape[0]);
   out_shape.PushBack(in_shape[1]);
   for (size_t i = 0; i < n_input_dims; ++i) {
@@ -71,20 +71,20 @@ void ComputeShapeMaxUnpool(ShapesContext &ctx, const NodeProto &node, const char
       out_shape.PushBack((*explicit_out_shape)[i + 2]);
       continue;
     }
-    const OptimDim &d = in_shape[i + 2];
+    const SymDim &d = in_shape[i + 2];
     if (d.IsInt()) {
       const int64_t out_d =
           strides[i] * (d.AsInt() - 1) + kernel_shape[i] - pads[i] - pads[i + n_input_dims];
-      out_shape.PushBack(OptimDim(out_d));
+      out_shape.PushBack(SymDim(out_d));
     } else {
       std::string expr = "MaxUnpool(" + d.AsExpr() + ",k=" + std::to_string(kernel_shape[i]) +
                          ",s=" + std::to_string(strides[i]) + ",p=" + std::to_string(pads[i]) +
                          "+" + std::to_string(pads[i + n_input_dims]) + ")";
-      out_shape.PushBack(OptimDim(expr));
+      out_shape.PushBack(SymDim(expr));
     }
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
 }
 
 } // namespace nn

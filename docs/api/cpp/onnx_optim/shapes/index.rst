@@ -3,20 +3,20 @@ shapes
 
 The ``shapes`` sub-namespace of ``onnx_optim`` hosts the per-operator
 shape-inference functions (``ComputeShape*``). Each function consumes
-a :cpp:class:`ShapesContext` (a name → :cpp:class:`OptimTensor` map),
-a ``NodeProto`` and the names of the input values to read, and writes
-the descriptors of the node's outputs back into the context.
+a :cpp:class:`onnx_light::core::shapes::ShapesContext` (a name →
+:cpp:class:`SymTensor` map), a ``NodeProto`` and the names of the input
+values to read, and writes the descriptors of the node's outputs back into
+the context. ``ShapesContext`` itself, along with the generic
+node/graph-traversal engine and the dispatch table, lives in ``onnx_core``
+(see :doc:`../../onnx_core/shapes/index`); this module only defines the
+built-in operator implementations and registers them with that engine's
+dispatch table via :doc:`../dispatch_table`.
 
 Concrete functions are organized per operator domain.
 
 .. toctree::
     :maxdepth: 1
 
-    shapes_context
-    shape_broadcast
-    shape_check
-    shape_inference
-    dispatch_table
     controlflow/index
     generator/index
     image/index

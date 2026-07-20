@@ -19,8 +19,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -30,18 +30,18 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEncoderSchemas) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> array_feature_extractor_schemas =
+  const std::vector<core::schema::LightOpSchema> array_feature_extractor_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("ArrayFeatureExtractor");
-  const std::vector<onnx_op::LightOpSchema> binarizer_schemas =
+  const std::vector<core::schema::LightOpSchema> binarizer_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("Binarizer");
-  const std::vector<onnx_op::LightOpSchema> label_encoder_schemas =
+  const std::vector<core::schema::LightOpSchema> label_encoder_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LabelEncoder");
 
   EXPECT_EQ(schemas.size(), 23u);
 
-  const onnx_op::LightOpSchema *const array_feature_extractor_v1 =
+  const core::schema::LightOpSchema *const array_feature_extractor_v1 =
       FindByVersion(array_feature_extractor_schemas, 1);
   ASSERT_NE(nullptr, array_feature_extractor_v1);
   EXPECT_EQ(array_feature_extractor_v1->domain(), "ai.onnx.ml");
@@ -56,17 +56,17 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEn
   EXPECT_EQ(array_feature_extractor_v1->type_constraints().size(), 1u);
   EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs.size(), 5u);
   EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs[0],
-            onnx_op::TensorType::kFloat);
+            core::schema::TensorType::kFloat);
   EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs[1],
-            onnx_op::TensorType::kDouble);
+            core::schema::TensorType::kDouble);
   EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs[2],
-            onnx_op::TensorType::kInt64);
+            core::schema::TensorType::kInt64);
   EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs[3],
-            onnx_op::TensorType::kInt32);
+            core::schema::TensorType::kInt32);
   EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs[4],
-            onnx_op::TensorType::kString);
+            core::schema::TensorType::kString);
 
-  const onnx_op::LightOpSchema *const binarizer_v1 = FindByVersion(binarizer_schemas, 1);
+  const core::schema::LightOpSchema *const binarizer_v1 = FindByVersion(binarizer_schemas, 1);
   ASSERT_NE(nullptr, binarizer_v1);
   EXPECT_EQ(binarizer_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(binarizer_v1->inputs().size(), 1u);
@@ -78,12 +78,17 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEn
   EXPECT_EQ(binarizer_v1->type_constraints().size(), 1u);
   EXPECT_EQ(binarizer_v1->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat);
-  EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kDouble);
-  EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
-  EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
+  EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs[0],
+            core::schema::TensorType::kFloat);
+  EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs[1],
+            core::schema::TensorType::kDouble);
+  EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs[2],
+            core::schema::TensorType::kInt64);
+  EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs[3],
+            core::schema::TensorType::kInt32);
 
-  const onnx_op::LightOpSchema *const label_encoder_v4 = FindByVersion(label_encoder_schemas, 4);
+  const core::schema::LightOpSchema *const label_encoder_v4 =
+      FindByVersion(label_encoder_schemas, 4);
   ASSERT_NE(nullptr, label_encoder_v4);
   EXPECT_EQ(label_encoder_v4->domain(), "ai.onnx.ml");
   EXPECT_EQ(label_encoder_v4->inputs().size(), 1u);
@@ -93,28 +98,28 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEn
             label_encoder_v4->type_constraints()[1].allowed_type_strs);
   EXPECT_EQ(label_encoder_v4->type_constraints()[0].allowed_type_strs.size(), 6u);
   EXPECT_EQ(label_encoder_v4->type_constraints()[0].allowed_type_strs[0],
-            onnx_op::TensorType::kString);
+            core::schema::TensorType::kString);
   EXPECT_EQ(label_encoder_v4->type_constraints()[0].allowed_type_strs[1],
-            onnx_op::TensorType::kInt64);
+            core::schema::TensorType::kInt64);
   EXPECT_EQ(label_encoder_v4->type_constraints()[0].allowed_type_strs[2],
-            onnx_op::TensorType::kFloat);
+            core::schema::TensorType::kFloat);
   EXPECT_EQ(label_encoder_v4->type_constraints()[0].allowed_type_strs[3],
-            onnx_op::TensorType::kInt32);
+            core::schema::TensorType::kInt32);
   EXPECT_EQ(label_encoder_v4->type_constraints()[0].allowed_type_strs[4],
-            onnx_op::TensorType::kInt16);
+            core::schema::TensorType::kInt16);
   EXPECT_EQ(label_encoder_v4->type_constraints()[0].allowed_type_strs[5],
-            onnx_op::TensorType::kDouble);
+            core::schema::TensorType::kDouble);
   EXPECT_EQ(label_encoder_v4->inputs()[0].name, "X");
   EXPECT_EQ(label_encoder_v4->outputs()[0].name, "Y");
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsZipMapSchemaWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> zip_map_schemas =
+  const std::vector<core::schema::LightOpSchema> zip_map_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("ZipMap");
 
-  const onnx_op::LightOpSchema *const zipmap_v1 = FindByVersion(zip_map_schemas, 1);
+  const core::schema::LightOpSchema *const zipmap_v1 = FindByVersion(zip_map_schemas, 1);
   ASSERT_NE(nullptr, zipmap_v1);
   EXPECT_EQ(zipmap_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(zipmap_v1->inputs().size(), 1u);
@@ -126,22 +131,23 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsZipMapSchemaWithoutShapeInferen
   EXPECT_EQ(zipmap_v1->outputs()[0].type, "T");
   EXPECT_EQ(zipmap_v1->type_constraints()[0].allowed_type_strs.size(), 2u);
   EXPECT_EQ(zipmap_v1->type_constraints()[0].allowed_type_strs[0],
-            onnx_op::TensorType::kSeqMapStringFloat);
+            core::schema::TensorType::kSeqMapStringFloat);
   EXPECT_EQ(zipmap_v1->type_constraints()[0].allowed_type_strs[1],
-            onnx_op::TensorType::kSeqMapInt64Float);
-  EXPECT_STREQ(onnx_op::ToTypeString(zipmap_v1->type_constraints()[0].allowed_type_strs[0]),
+            core::schema::TensorType::kSeqMapInt64Float);
+  EXPECT_STREQ(core::schema::ToTypeString(zipmap_v1->type_constraints()[0].allowed_type_strs[0]),
                "seq(map(string, float))");
-  EXPECT_STREQ(onnx_op::ToTypeString(zipmap_v1->type_constraints()[0].allowed_type_strs[1]),
+  EXPECT_STREQ(core::schema::ToTypeString(zipmap_v1->type_constraints()[0].allowed_type_strs[1]),
                "seq(map(int64, float))");
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleSchema) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> tree_ensemble_schemas =
+  const std::vector<core::schema::LightOpSchema> tree_ensemble_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("TreeEnsemble");
 
-  const onnx_op::LightOpSchema *const tree_ensemble_v5 = FindByVersion(tree_ensemble_schemas, 5);
+  const core::schema::LightOpSchema *const tree_ensemble_v5 =
+      FindByVersion(tree_ensemble_schemas, 5);
   ASSERT_NE(nullptr, tree_ensemble_v5);
   EXPECT_EQ(tree_ensemble_v5->domain(), "ai.onnx.ml");
   EXPECT_EQ(tree_ensemble_v5->inputs().size(), 1u);
@@ -153,21 +159,21 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleSchema) {
   EXPECT_EQ(tree_ensemble_v5->outputs()[0].type, "T");
   EXPECT_EQ(tree_ensemble_v5->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(tree_ensemble_v5->type_constraints()[0].allowed_type_strs[0],
-            onnx_op::TensorType::kFloat);
+            core::schema::TensorType::kFloat);
   EXPECT_EQ(tree_ensemble_v5->type_constraints()[0].allowed_type_strs[1],
-            onnx_op::TensorType::kDouble);
+            core::schema::TensorType::kDouble);
   EXPECT_EQ(tree_ensemble_v5->type_constraints()[0].allowed_type_strs[2],
-            onnx_op::TensorType::kFloat16);
+            core::schema::TensorType::kFloat16);
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleClassifierSchemaHistory) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> tree_ensemble_classifier_schemas =
+  const std::vector<core::schema::LightOpSchema> tree_ensemble_classifier_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("TreeEnsembleClassifier");
 
   for (int version : {1, 3, 5}) {
-    const onnx_op::LightOpSchema *const schema =
+    const core::schema::LightOpSchema *const schema =
         FindByVersion(tree_ensemble_classifier_schemas, version);
     ASSERT_NE(nullptr, schema) << "version=" << version;
     EXPECT_EQ(schema->domain(), "ai.onnx.ml");
@@ -184,19 +190,20 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleClassifierSchemaHis
     EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs.size(), 4u);
     EXPECT_EQ(schema->type_constraints()[1].type_param_str, "T2");
     EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs.size(), 2u);
-    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kString);
-    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs[1], onnx_op::TensorType::kInt64);
+    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs[0],
+              core::schema::TensorType::kString);
+    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs[1], core::schema::TensorType::kInt64);
   }
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleRegressorSchemaHistory) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> tree_ensemble_regressor_schemas =
+  const std::vector<core::schema::LightOpSchema> tree_ensemble_regressor_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("TreeEnsembleRegressor");
 
   for (int version : {1, 3, 5}) {
-    const onnx_op::LightOpSchema *const schema =
+    const core::schema::LightOpSchema *const schema =
         FindByVersion(tree_ensemble_regressor_schemas, version);
     ASSERT_NE(nullptr, schema) << "version=" << version;
     EXPECT_EQ(schema->domain(), "ai.onnx.ml");
@@ -209,18 +216,19 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleRegressorSchemaHist
     EXPECT_EQ(schema->type_constraints().size(), 1u);
     EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
     EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs.size(), 4u);
-    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat);
-    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kDouble);
-    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
-    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kFloat);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[1],
+              core::schema::TensorType::kDouble);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[2], core::schema::TensorType::kInt64);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[3], core::schema::TensorType::kInt32);
   }
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsOneHotEncoderSchema) {
-  const std::vector<onnx_op::LightOpSchema> one_hot_encoder_schemas =
+  const std::vector<core::schema::LightOpSchema> one_hot_encoder_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("OneHotEncoder");
 
-  const onnx_op::LightOpSchema *const one_hot_encoder_v1 =
+  const core::schema::LightOpSchema *const one_hot_encoder_v1 =
       FindByVersion(one_hot_encoder_schemas, 1);
   ASSERT_NE(nullptr, one_hot_encoder_v1);
   EXPECT_EQ(one_hot_encoder_v1->domain(), "ai.onnx.ml");
@@ -234,22 +242,23 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsOneHotEncoderSchema) {
   EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs.size(), 5u);
   EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs[0],
-            onnx_op::TensorType::kString);
+            core::schema::TensorType::kString);
   EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs[1],
-            onnx_op::TensorType::kInt64);
+            core::schema::TensorType::kInt64);
   EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs[2],
-            onnx_op::TensorType::kInt32);
+            core::schema::TensorType::kInt32);
   EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs[3],
-            onnx_op::TensorType::kFloat);
+            core::schema::TensorType::kFloat);
   EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs[4],
-            onnx_op::TensorType::kDouble);
+            core::schema::TensorType::kDouble);
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsSVMClassifierSchema) {
-  const std::vector<onnx_op::LightOpSchema> svm_classifier_schemas =
+  const std::vector<core::schema::LightOpSchema> svm_classifier_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("SVMClassifier");
 
-  const onnx_op::LightOpSchema *const svm_classifier_v1 = FindByVersion(svm_classifier_schemas, 1);
+  const core::schema::LightOpSchema *const svm_classifier_v1 =
+      FindByVersion(svm_classifier_schemas, 1);
   ASSERT_NE(nullptr, svm_classifier_v1);
   EXPECT_EQ(svm_classifier_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(svm_classifier_v1->inputs().size(), 1u);
@@ -268,10 +277,11 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsSVMClassifierSchema) {
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsSVMRegressorSchema) {
-  const std::vector<onnx_op::LightOpSchema> svm_regressor_schemas =
+  const std::vector<core::schema::LightOpSchema> svm_regressor_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("SVMRegressor");
 
-  const onnx_op::LightOpSchema *const svm_regressor_v1 = FindByVersion(svm_regressor_schemas, 1);
+  const core::schema::LightOpSchema *const svm_regressor_v1 =
+      FindByVersion(svm_regressor_schemas, 1);
   ASSERT_NE(nullptr, svm_regressor_v1);
   EXPECT_EQ(svm_regressor_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(svm_regressor_v1->inputs().size(), 1u);
@@ -286,10 +296,10 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsSVMRegressorSchema) {
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsScalerSchema) {
-  const std::vector<onnx_op::LightOpSchema> scaler_schemas =
+  const std::vector<core::schema::LightOpSchema> scaler_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("Scaler");
 
-  const onnx_op::LightOpSchema *const scaler_v1 = FindByVersion(scaler_schemas, 1);
+  const core::schema::LightOpSchema *const scaler_v1 = FindByVersion(scaler_schemas, 1);
   ASSERT_NE(nullptr, scaler_v1);
   EXPECT_EQ(scaler_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(scaler_v1->inputs().size(), 1u);
@@ -301,17 +311,21 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsScalerSchema) {
   EXPECT_EQ(scaler_v1->type_constraints().size(), 1u);
   EXPECT_EQ(scaler_v1->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat);
-  EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kDouble);
-  EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
-  EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
+  EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[0],
+            core::schema::TensorType::kFloat);
+  EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[1],
+            core::schema::TensorType::kDouble);
+  EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[2],
+            core::schema::TensorType::kInt64);
+  EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[3],
+            core::schema::TensorType::kInt32);
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLinearClassifierSchema) {
-  const std::vector<onnx_op::LightOpSchema> linear_classifier_schemas =
+  const std::vector<core::schema::LightOpSchema> linear_classifier_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LinearClassifier");
 
-  const onnx_op::LightOpSchema *const linear_classifier_v1 =
+  const core::schema::LightOpSchema *const linear_classifier_v1 =
       FindByVersion(linear_classifier_schemas, 1);
   ASSERT_NE(nullptr, linear_classifier_v1);
   EXPECT_EQ(linear_classifier_v1->domain(), "ai.onnx.ml");
@@ -331,10 +345,10 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLinearClassifierSchema) {
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLinearRegressorSchema) {
-  const std::vector<onnx_op::LightOpSchema> linear_regressor_schemas =
+  const std::vector<core::schema::LightOpSchema> linear_regressor_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LinearRegressor");
 
-  const onnx_op::LightOpSchema *const linear_regressor_v1 =
+  const core::schema::LightOpSchema *const linear_regressor_v1 =
       FindByVersion(linear_regressor_schemas, 1);
   ASSERT_NE(nullptr, linear_regressor_v1);
   EXPECT_EQ(linear_regressor_v1->domain(), "ai.onnx.ml");
@@ -350,10 +364,10 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLinearRegressorSchema) {
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsImputerSchema) {
-  const std::vector<onnx_op::LightOpSchema> imputer_schemas =
+  const std::vector<core::schema::LightOpSchema> imputer_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("Imputer");
 
-  const onnx_op::LightOpSchema *const imputer_v1 = FindByVersion(imputer_schemas, 1);
+  const core::schema::LightOpSchema *const imputer_v1 = FindByVersion(imputer_schemas, 1);
   ASSERT_NE(nullptr, imputer_v1);
   EXPECT_EQ(imputer_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(imputer_v1->inputs().size(), 1u);
@@ -365,17 +379,21 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsImputerSchema) {
   EXPECT_EQ(imputer_v1->type_constraints().size(), 1u);
   EXPECT_EQ(imputer_v1->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat);
-  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kDouble);
-  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
-  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
+  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[0],
+            core::schema::TensorType::kFloat);
+  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[1],
+            core::schema::TensorType::kDouble);
+  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[2],
+            core::schema::TensorType::kInt64);
+  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[3],
+            core::schema::TensorType::kInt32);
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsCategoryMapperSchema) {
-  const std::vector<onnx_op::LightOpSchema> category_mapper_schemas =
+  const std::vector<core::schema::LightOpSchema> category_mapper_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("CategoryMapper");
 
-  const onnx_op::LightOpSchema *const category_mapper_v1 =
+  const core::schema::LightOpSchema *const category_mapper_v1 =
       FindByVersion(category_mapper_schemas, 1);
   ASSERT_NE(nullptr, category_mapper_v1);
   EXPECT_EQ(category_mapper_v1->domain(), "ai.onnx.ml");
@@ -389,22 +407,22 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsCategoryMapperSchema) {
   EXPECT_EQ(category_mapper_v1->type_constraints()[0].type_param_str, "T1");
   EXPECT_EQ(category_mapper_v1->type_constraints()[0].allowed_type_strs.size(), 2u);
   EXPECT_EQ(category_mapper_v1->type_constraints()[0].allowed_type_strs[0],
-            onnx_op::TensorType::kString);
+            core::schema::TensorType::kString);
   EXPECT_EQ(category_mapper_v1->type_constraints()[0].allowed_type_strs[1],
-            onnx_op::TensorType::kInt64);
+            core::schema::TensorType::kInt64);
   EXPECT_EQ(category_mapper_v1->type_constraints()[1].type_param_str, "T2");
   EXPECT_EQ(category_mapper_v1->type_constraints()[1].allowed_type_strs.size(), 2u);
   EXPECT_EQ(category_mapper_v1->type_constraints()[1].allowed_type_strs[0],
-            onnx_op::TensorType::kString);
+            core::schema::TensorType::kString);
   EXPECT_EQ(category_mapper_v1->type_constraints()[1].allowed_type_strs[1],
-            onnx_op::TensorType::kInt64);
+            core::schema::TensorType::kInt64);
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsNormalizerSchema) {
-  const std::vector<onnx_op::LightOpSchema> normalizer_schemas =
+  const std::vector<core::schema::LightOpSchema> normalizer_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("Normalizer");
 
-  const onnx_op::LightOpSchema *const normalizer_v1 = FindByVersion(normalizer_schemas, 1);
+  const core::schema::LightOpSchema *const normalizer_v1 = FindByVersion(normalizer_schemas, 1);
   ASSERT_NE(nullptr, normalizer_v1);
   EXPECT_EQ(normalizer_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(normalizer_v1->inputs().size(), 1u);
@@ -416,17 +434,20 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsNormalizerSchema) {
   EXPECT_EQ(normalizer_v1->type_constraints().size(), 1u);
   EXPECT_EQ(normalizer_v1->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(normalizer_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(normalizer_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat);
+  EXPECT_EQ(normalizer_v1->type_constraints()[0].allowed_type_strs[0],
+            core::schema::TensorType::kFloat);
   EXPECT_EQ(normalizer_v1->type_constraints()[0].allowed_type_strs[1],
-            onnx_op::TensorType::kDouble);
-  EXPECT_EQ(normalizer_v1->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
-  EXPECT_EQ(normalizer_v1->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
+            core::schema::TensorType::kDouble);
+  EXPECT_EQ(normalizer_v1->type_constraints()[0].allowed_type_strs[2],
+            core::schema::TensorType::kInt64);
+  EXPECT_EQ(normalizer_v1->type_constraints()[0].allowed_type_strs[3],
+            core::schema::TensorType::kInt32);
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsDictVectorizerSchema) {
-  const std::vector<onnx_op::LightOpSchema> dv_schemas =
+  const std::vector<core::schema::LightOpSchema> dv_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("DictVectorizer");
-  const onnx_op::LightOpSchema *const dv_v1 = FindByVersion(dv_schemas, 1);
+  const core::schema::LightOpSchema *const dv_v1 = FindByVersion(dv_schemas, 1);
   ASSERT_NE(nullptr, dv_v1);
   EXPECT_EQ(dv_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(dv_v1->inputs().size(), 1u);
@@ -445,9 +466,9 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsDictVectorizerSchema) {
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsFeatureVectorizerSchema) {
-  const std::vector<onnx_op::LightOpSchema> fv_schemas =
+  const std::vector<core::schema::LightOpSchema> fv_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("FeatureVectorizer");
-  const onnx_op::LightOpSchema *const fv_v1 = FindByVersion(fv_schemas, 1);
+  const core::schema::LightOpSchema *const fv_v1 = FindByVersion(fv_schemas, 1);
   ASSERT_NE(nullptr, fv_v1);
   EXPECT_EQ(fv_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(fv_v1->inputs().size(), 1u);
@@ -462,9 +483,9 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsFeatureVectorizerSchema) {
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsCastMapSchema) {
-  const std::vector<onnx_op::LightOpSchema> cm_schemas =
+  const std::vector<core::schema::LightOpSchema> cm_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("CastMap");
-  const onnx_op::LightOpSchema *const cm_v1 = FindByVersion(cm_schemas, 1);
+  const core::schema::LightOpSchema *const cm_v1 = FindByVersion(cm_schemas, 1);
   ASSERT_NE(nullptr, cm_v1);
   EXPECT_EQ(cm_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(cm_v1->inputs().size(), 1u);
@@ -479,13 +500,14 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsCastMapSchema) {
   // T1 lists the 2 supported map(int64, value) types.
   ASSERT_EQ(cm_v1->type_constraints()[0].allowed_type_strs.size(), 2u);
   EXPECT_EQ(cm_v1->type_constraints()[0].allowed_type_strs[0],
-            onnx_op::TensorType::kMapInt64String);
-  EXPECT_EQ(cm_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kMapInt64Float);
+            core::schema::TensorType::kMapInt64String);
+  EXPECT_EQ(cm_v1->type_constraints()[0].allowed_type_strs[1],
+            core::schema::TensorType::kMapInt64Float);
   // T2 lists the 3 supported output tensor types.
   ASSERT_EQ(cm_v1->type_constraints()[1].allowed_type_strs.size(), 3u);
-  EXPECT_EQ(cm_v1->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kString);
-  EXPECT_EQ(cm_v1->type_constraints()[1].allowed_type_strs[1], onnx_op::TensorType::kFloat);
-  EXPECT_EQ(cm_v1->type_constraints()[1].allowed_type_strs[2], onnx_op::TensorType::kInt64);
+  EXPECT_EQ(cm_v1->type_constraints()[1].allowed_type_strs[0], core::schema::TensorType::kString);
+  EXPECT_EQ(cm_v1->type_constraints()[1].allowed_type_strs[1], core::schema::TensorType::kFloat);
+  EXPECT_EQ(cm_v1->type_constraints()[1].allowed_type_strs[2], core::schema::TensorType::kInt64);
 }
 
 } // namespace Test

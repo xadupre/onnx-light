@@ -4,7 +4,14 @@
 
 #pragma once
 
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
+#include "onnx_core/symbolic/sym_map.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 /**
@@ -16,10 +23,52 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
+
+// The generic shape-inference engine (ShapesContext, dispatch table,
+// domain constants, ...) lives in ``onnx_core`` so it never depends on
+// any particular set of operator implementations; the symbolic value
+// descriptors (SymDim, SymShape, SymTensor, ...) live in
+// ``onnx_core::symbolic`` for the same reason. Bring them into
+// ``onnx_optim::shapes`` so shape functions can keep referring to them
+// unqualified, exactly as before those types moved to ``onnx_core``.
+using ::onnx_light::core::shapes::BroadcastDimOp;
+using ::onnx_light::core::shapes::BroadcastShapes;
+using ::onnx_light::core::shapes::CheckNodeOpAndOutput;
+using ::onnx_light::core::shapes::ComputeShapeBinaryBroadcast;
+using ::onnx_light::core::shapes::InferShapesModel;
+using ::onnx_light::core::shapes::kOnnxDomain;
+using ::onnx_light::core::shapes::kUnknownOpsetVersion;
+using ::onnx_light::core::shapes::PropagateValueAsShapeArithmetic;
+using ::onnx_light::core::shapes::ShapeEvent;
+using ::onnx_light::core::shapes::ShapeEventAction;
+using ::onnx_light::core::shapes::ShapeEventActionName;
+using ::onnx_light::core::shapes::ShapesContext;
+
+using ::onnx_light::core::symbolic::DataTypeToTensorType;
+using ::onnx_light::core::symbolic::Device;
+using ::onnx_light::core::symbolic::GPUIndex;
+using ::onnx_light::core::symbolic::IsGPU;
+using ::onnx_light::core::symbolic::IsIntegerTensorType;
+using ::onnx_light::core::symbolic::kMaxGPUIndex;
+using ::onnx_light::core::symbolic::kMaxOptimRank;
+using ::onnx_light::core::symbolic::kOptimValueAsShapeMaxElements;
+using ::onnx_light::core::symbolic::kValueInfoDeviceMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMaxMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMinMetadataKey;
+using ::onnx_light::core::symbolic::ShapeFromTensorProtoDims;
+using ::onnx_light::core::symbolic::SymCmpResult;
+using ::onnx_light::core::symbolic::SymDim;
+using ::onnx_light::core::symbolic::SymMap;
+using ::onnx_light::core::symbolic::SymSequence;
+using ::onnx_light::core::symbolic::SymShape;
+using ::onnx_light::core::symbolic::SymTensor;
+using ::onnx_light::core::symbolic::TensorType;
+using ::onnx_light::core::symbolic::TensorTypeToDataType;
+
 namespace logical {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``And`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``And`` node and
  * stores it in ``ctx``.
  *
  * ``And`` is the logical, element-wise AND of two boolean operands
@@ -48,7 +97,7 @@ namespace logical {
 void ComputeShapeAnd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Or`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Or`` node and
  * stores it in ``ctx``.
  *
  * ``Or`` is the logical, element-wise OR of two boolean operands with
@@ -74,7 +123,7 @@ void ComputeShapeAnd(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeOr(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Xor`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Xor`` node and
  * stores it in ``ctx``.
  *
  * ``Xor`` is the logical, element-wise XOR of two boolean operands with
@@ -100,7 +149,7 @@ void ComputeShapeOr(ShapesContext &ctx, const NodeProto &node, const char *a, co
 void ComputeShapeXor(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Greater`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Greater`` node and
  * stores it in ``ctx``.
  *
  * ``Greater`` is the element-wise ``A > B`` comparison of two numeric
@@ -129,7 +178,7 @@ void ComputeShapeXor(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeGreater(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Less`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Less`` node and
  * stores it in ``ctx``.
  *
  * ``Less`` is the element-wise ``A < B`` comparison of two numeric
@@ -158,7 +207,7 @@ void ComputeShapeGreater(ShapesContext &ctx, const NodeProto &node, const char *
 void ComputeShapeLess(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``GreaterOrEqual`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``GreaterOrEqual`` node
  * and stores it in ``ctx``.
  *
  * ``GreaterOrEqual`` is the element-wise ``A >= B`` comparison of two
@@ -187,7 +236,7 @@ void ComputeShapeGreaterOrEqual(ShapesContext &ctx, const NodeProto &node, const
                                 const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``LessOrEqual`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``LessOrEqual`` node
  * and stores it in ``ctx``.
  *
  * ``LessOrEqual`` is the element-wise ``A <= B`` comparison of two
@@ -216,7 +265,7 @@ void ComputeShapeLessOrEqual(ShapesContext &ctx, const NodeProto &node, const ch
                              const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Equal`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Equal`` node and
  * stores it in ``ctx``.
  *
  * ``Equal`` is the element-wise ``A == B`` comparison of two operands
@@ -245,7 +294,7 @@ void ComputeShapeLessOrEqual(ShapesContext &ctx, const NodeProto &node, const ch
 void ComputeShapeEqual(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Where`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Where`` node and
  * stores it in ``ctx``.
  *
  * ``Where`` returns elements from ``x`` or ``y`` depending on ``condition``.
@@ -256,7 +305,7 @@ void ComputeShapeWhere(ShapesContext &ctx, const NodeProto &node, const char *co
                        const char *x, const char *y);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseAnd`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseAnd`` node
  * (opset 18) and stores it in ``ctx``.
  *
  * ``BitwiseAnd`` is element-wise with numpy-style multidirectional
@@ -282,14 +331,14 @@ void ComputeShapeBitwiseAnd(ShapesContext &ctx, const NodeProto &node, const cha
                             const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseOr`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseOr`` node
  * (opset 18) and stores it in ``ctx``. Shape/type semantics match
  * :cpp:func:`ComputeShapeBitwiseAnd`.
  */
 void ComputeShapeBitwiseOr(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseXor`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseXor`` node
  * (opset 18) and stores it in ``ctx``. Shape/type semantics match
  * :cpp:func:`ComputeShapeBitwiseAnd`.
  */
@@ -297,7 +346,7 @@ void ComputeShapeBitwiseXor(ShapesContext &ctx, const NodeProto &node, const cha
                             const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseNot`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseNot`` node
  * (opset 18) and stores it in ``ctx``.
  *
  * ``BitwiseNot`` is element-wise and unary: the output dtype and shape
@@ -318,7 +367,7 @@ void ComputeShapeBitwiseXor(ShapesContext &ctx, const NodeProto &node, const cha
 void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Not`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``Not`` node
  * (opset 1) and stores it in ``ctx``.
  *
  * ``Not`` is the element-wise logical NOT of a boolean tensor: the
@@ -340,7 +389,7 @@ void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const cha
 void ComputeShapeNot(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``IsNaN`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``IsNaN`` node and
  * stores it in ``ctx``.
  *
  * ``IsNaN`` is element-wise on a floating-point tensor: the output dtype
@@ -362,7 +411,7 @@ void ComputeShapeNot(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeIsNaN(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``IsInf`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``IsInf`` node and
  * stores it in ``ctx``.
  *
  * ``IsInf`` is element-wise on a floating-point tensor: the output dtype
@@ -386,7 +435,7 @@ void ComputeShapeIsNaN(ShapesContext &ctx, const NodeProto &node, const char *x)
 void ComputeShapeIsInf(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitShift`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitShift`` node
  * (opset 11) and stores it in ``ctx``.
  *
  * ``BitShift`` is element-wise with numpy-style multidirectional

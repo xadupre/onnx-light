@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -23,19 +23,19 @@ namespace {
 // padding are known, returns
 // ``floor((D + pad_begin + pad_end - dilation * (k - 1) - 1) / stride) + 1``.
 // Otherwise propagates a symbolic dim labeled ``"DeformConv.<x>:<axis>"``.
-OptimDim ComputeSpatialDim(const OptimDim &in_dim, int64_t kernel, int64_t stride,
-                           int64_t pad_begin, int64_t pad_end, int64_t dilation,
-                           const std::string &x_name, size_t spatial_axis) {
+SymDim ComputeSpatialDim(const SymDim &in_dim, int64_t kernel, int64_t stride, int64_t pad_begin,
+                         int64_t pad_end, int64_t dilation, const std::string &x_name,
+                         size_t spatial_axis) {
   if (in_dim.IsInt()) {
     const int64_t effective_kernel = dilation * (kernel - 1) + 1;
     const int64_t numer = in_dim.AsInt() + pad_begin + pad_end - effective_kernel;
     if (numer < 0 || stride <= 0) {
       // Match upstream behavior: invalid → leave symbolic.
-      return OptimDim(std::string("DeformConv.") + x_name + ":" + std::to_string(spatial_axis));
+      return SymDim(std::string("DeformConv.") + x_name + ":" + std::to_string(spatial_axis));
     }
-    return OptimDim(numer / stride + 1);
+    return SymDim(numer / stride + 1);
   }
-  return OptimDim(std::string("DeformConv.") + x_name + ":" + std::to_string(spatial_axis));
+  return SymDim(std::string("DeformConv.") + x_name + ":" + std::to_string(spatial_axis));
 }
 
 } // namespace
@@ -44,10 +44,10 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
                             const char *w) {
   CheckNodeOpAndOutput(node, "DeformConv", "ComputeShapeDeformConv");
 
-  const OptimTensor &x_tensor = ctx.Get(x);
-  const OptimTensor &w_tensor = ctx.Get(w);
-  const OptimShape &x_shape = x_tensor.Shape();
-  const OptimShape &w_shape = w_tensor.Shape();
+  const SymTensor &x_tensor = ctx.Get(x);
+  const SymTensor &w_tensor = ctx.Get(w);
+  const SymShape &x_shape = x_tensor.Shape();
+  const SymShape &w_shape = w_tensor.Shape();
 
   EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShapeDeformConv: input '", x,
                       "' must have rank >= 3 (N, C, D1, ...).");
@@ -62,7 +62,7 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
   if (kernel_shape.empty()) {
     kernel_shape.reserve(n_spatial);
     for (size_t i = 0; i < n_spatial; ++i) {
-      const OptimDim &kd = w_shape[i + 2];
+      const SymDim &kd = w_shape[i + 2];
       kernel_shape.push_back(kd.IsInt() ? kd.AsInt() : -1);
     }
   } else if (kernel_shape.size() != n_spatial) {
@@ -96,19 +96,19 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
     EXT_THROW_INVALID("ComputeShapeDeformConv: 'pads' attribute size must be 2 * spatial rank.");
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(x_shape[0]); // N
   out_shape.PushBack(w_shape[0]); // oC
   for (size_t i = 0; i < n_spatial; ++i) {
     if (kernel_shape[i] <= 0) {
-      out_shape.PushBack(OptimDim(std::string("DeformConv.") + x + ":" + std::to_string(i)));
+      out_shape.PushBack(SymDim(std::string("DeformConv.") + x + ":" + std::to_string(i)));
       continue;
     }
     out_shape.PushBack(ComputeSpatialDim(x_shape[i + 2], kernel_shape[i], strides[i], pads[i],
                                          pads[i + n_spatial], dilations[i], x, i));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, x_tensor.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, x_tensor.Dtype(), std::move(out_shape)));
 }
 
 } // namespace nn

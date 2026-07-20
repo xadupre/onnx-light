@@ -9,26 +9,30 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_optim/expressions.h"
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/_helpers/shape_helpers.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/expressions/expressions.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_core/symbolic/symbolic_helper.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
+
+// Alias to the symbolic dimension-expression library, which lives in
+// ``onnx_core`` so both ``onnx_op`` and ``onnx_optim`` can share it.
+namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
 namespace shapes {
 namespace tensor {
 
 namespace {
 
 // Converts an ``expressions::DimType`` produced by the symbolic dimension
-// helpers back into an ``OptimDim``.
-OptimDim FromDimType(const expressions::DimType &d) {
+// helpers back into an ``SymDim``.
+SymDim FromDimType(const expressions::DimType &d) {
   if (std::holds_alternative<int64_t>(d)) {
-    return OptimDim(std::get<int64_t>(d));
+    return SymDim(std::get<int64_t>(d));
   }
-  return OptimDim(std::get<std::string>(d));
+  return SymDim(std::get<std::string>(d));
 }
 
 // Extracts the per-axis pad values from a known ``pads`` initializer (length
@@ -72,9 +76,9 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapePad: Pad requires at least one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
+  const SymTensor &input = ctx.Get(node.input(0));
   const TensorType dtype = input.Dtype();
-  const OptimShape &in_shape = input.Shape();
+  const SymShape &in_shape = input.Shape();
   const std::size_t rank = in_shape.Rank();
 
   // Resolve pads (per data axis). pad_begin / pad_end default to 0; has_pad
@@ -104,15 +108,15 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
     }
   } else {
     // v11+: pads are input(1); v18+ adds optional axes input(3).
-    const OptimTensor &pads_input = ctx.Get(node.input(1));
+    const SymTensor &pads_input = ctx.Get(node.input(1));
     std::vector<int64_t> axes_values;
     bool axes_known = true;
     if (node.input_size() >= 4 && !node.input(3).empty()) {
-      const OptimTensor &axes_input = ctx.Get(node.input(3));
+      const SymTensor &axes_input = ctx.Get(node.input(3));
       if (axes_input.HasValueAsShape()) {
-        const OptimShape &axes_shape = axes_input.ValueAsShape();
+        const SymShape &axes_shape = axes_input.ValueAsShape();
         for (std::size_t i = 0; i < axes_shape.Rank(); ++i) {
-          const OptimDim &d = axes_shape[i];
+          const SymDim &d = axes_shape[i];
           if (!d.IsInt()) {
             axes_known = false;
             break;
@@ -130,11 +134,11 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
     }
 
     if (axes_known && pads_input.HasValueAsShape()) {
-      const OptimShape &pads_shape = pads_input.ValueAsShape();
+      const SymShape &pads_shape = pads_input.ValueAsShape();
       std::vector<int64_t> pads_values;
       bool pads_all_int = true;
       for (std::size_t i = 0; i < pads_shape.Rank(); ++i) {
-        const OptimDim &d = pads_shape[i];
+        const SymDim &d = pads_shape[i];
         if (!d.IsInt()) {
           pads_all_int = false;
           break;
@@ -150,9 +154,9 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
     }
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   for (std::size_t i = 0; i < rank; ++i) {
-    const OptimDim &in_dim = in_shape[i];
+    const SymDim &in_dim = in_shape[i];
     if (all_pads_known) {
       // output_dim = input_dim + pad_begin + pad_end. When the input dim is
       // symbolic this yields a symbolic expression (e.g. ``H+2``) rather than
@@ -161,10 +165,10 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
       out_shape.PushBack(
           FromDimType(expressions::dim_add(ToDimType(in_dim), expressions::DimType{total})));
     } else {
-      out_shape.PushBack(OptimDim("Pad_dim" + std::to_string(i)));
+      out_shape.PushBack(SymDim("Pad_dim" + std::to_string(i)));
     }
   }
-  ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, dtype, std::move(out_shape)));
 }
 
 } // namespace tensor

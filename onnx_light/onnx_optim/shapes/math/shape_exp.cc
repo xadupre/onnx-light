@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/math/shape_math.h"
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -13,8 +13,8 @@ namespace math {
 
 void ComputeShapeExp(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "Exp", "ComputeShapeExp");
-  const OptimTensor &input = ctx.Get(x);
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  const SymTensor &input = ctx.Get(x);
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace math

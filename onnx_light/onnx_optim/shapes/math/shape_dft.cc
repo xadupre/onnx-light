@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -19,9 +19,9 @@ namespace math {
 
 namespace {
 
-// Reads a 0-D INT32/INT64 OptimTensor value if it has a backing constant
+// Reads a 0-D INT32/INT64 SymTensor value if it has a backing constant
 // buffer; returns ``true`` when a value was extracted.
-bool ReadScalarInt(const OptimTensor &t, int64_t &out) {
+bool ReadScalarInt(const SymTensor &t, int64_t &out) {
   if (t.Data() == nullptr) {
     return false;
   }
@@ -48,9 +48,9 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapeDFT: DFT requires at least one input (input).");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
+  const SymTensor &input = ctx.Get(node.input(0));
   const TensorType dtype = input.Dtype();
-  const OptimShape &in_shape = input.Shape();
+  const SymShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
 
   const AttributeProto *onesided_attr = FindAttribute(node, "onesided");
@@ -101,37 +101,37 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
   }
 
   // Build the output shape. Output rank matches input rank.
-  OptimShape out_shape;
+  SymShape out_shape;
   if (rank == 0) {
-    ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+    ctx.Set(node.output(0), SymTensor(nullptr, dtype, std::move(out_shape)));
     return;
   }
   const std::string sym = "DFT_" + node.output(0) + "_axis";
   for (int64_t d = 0; d < rank; ++d) {
     if (d == rank - 1) {
-      out_shape.PushBack(OptimDim(out_last));
+      out_shape.PushBack(SymDim(out_last));
     } else if (axis_known && d == axis) {
       if (dft_length_known) {
         if (onesided && !inverse) {
-          out_shape.PushBack(OptimDim((dft_length / 2) + 1));
+          out_shape.PushBack(SymDim((dft_length / 2) + 1));
         } else {
-          out_shape.PushBack(OptimDim(dft_length));
+          out_shape.PushBack(SymDim(dft_length));
         }
       } else if (onesided || inverse) {
         // Cannot infer the output axis dim without dft_length.
-        out_shape.PushBack(OptimDim(sym));
+        out_shape.PushBack(SymDim(sym));
       } else {
         // Standard DFT with no dft_length: signal axis dim is preserved.
         out_shape.PushBack(in_shape[static_cast<std::size_t>(d)]);
       }
     } else if (!axis_known && d != rank - 1) {
       // Without knowing the signal axis, all non-trailing dims are symbolic.
-      out_shape.PushBack(OptimDim(sym + "_" + std::to_string(d)));
+      out_shape.PushBack(SymDim(sym + "_" + std::to_string(d)));
     } else {
       out_shape.PushBack(in_shape[static_cast<std::size_t>(d)]);
     }
   }
-  ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, dtype, std::move(out_shape)));
 }
 
 } // namespace math

@@ -21,8 +21,8 @@ constexpr size_t kExpectedIfSchemaCount = 3;
 constexpr size_t kExpectedLoopSchemaCount = 3;
 constexpr size_t kExpectedScanSchemaCount = 3;
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -32,17 +32,17 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> if_schemas =
+  const std::vector<core::schema::LightOpSchema> if_schemas =
       onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory("If");
 
   EXPECT_EQ(schemas.size(),
             kExpectedIfSchemaCount + kExpectedLoopSchemaCount + kExpectedScanSchemaCount);
 
-  const onnx_op::LightOpSchema *const if_v13 = FindByVersion(if_schemas, 13);
-  const onnx_op::LightOpSchema *const if_v11 = FindByVersion(if_schemas, 11);
-  const onnx_op::LightOpSchema *const if_v1 = FindByVersion(if_schemas, 1);
+  const core::schema::LightOpSchema *const if_v13 = FindByVersion(if_schemas, 13);
+  const core::schema::LightOpSchema *const if_v11 = FindByVersion(if_schemas, 11);
+  const core::schema::LightOpSchema *const if_v1 = FindByVersion(if_schemas, 1);
 
   ASSERT_NE(nullptr, if_v13);
   ASSERT_NE(nullptr, if_v11);
@@ -57,14 +57,14 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithoutShapeInference) {
 
   EXPECT_EQ(if_v1->type_constraints()[0].allowed_type_strs.size(), 15u);
   EXPECT_EQ(if_v13->type_constraints()[0].allowed_type_strs.size(), 30u);
-  EXPECT_STREQ(onnx_op::ToTypeString(if_v1->type_constraints()[0].allowed_type_strs.front()),
+  EXPECT_STREQ(core::schema::ToTypeString(if_v1->type_constraints()[0].allowed_type_strs.front()),
                "tensor(uint8)");
-  EXPECT_STREQ(onnx_op::ToTypeString(if_v1->type_constraints()[0].allowed_type_strs.back()),
+  EXPECT_STREQ(core::schema::ToTypeString(if_v1->type_constraints()[0].allowed_type_strs.back()),
                "tensor(complex128)");
-  EXPECT_STREQ(onnx_op::ToTypeString(if_v13->type_constraints()[0].allowed_type_strs[15]),
+  EXPECT_STREQ(core::schema::ToTypeString(if_v13->type_constraints()[0].allowed_type_strs[15]),
                "seq(tensor(uint8))");
   EXPECT_EQ(if_v13->type_constraints()[1].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(if_v13->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_EQ(if_v13->type_constraints()[1].allowed_type_strs[0], core::schema::TensorType::kBool);
   EXPECT_EQ(if_v13->type_constraints()[0].description, "All Tensor and Sequence types");
   EXPECT_EQ(if_v11->type_constraints()[0].description, "All Tensor types");
   EXPECT_EQ(if_v13->doc(), "If conditional");
@@ -91,13 +91,13 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithoutShapeInference) {
 }
 
 TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithExpectedBranchAttributes) {
-  const std::vector<onnx_op::LightOpSchema> if_schemas =
+  const std::vector<core::schema::LightOpSchema> if_schemas =
       onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory("If");
   EXPECT_EQ(if_schemas.size(), kExpectedIfSchemaCount);
 
-  const onnx_op::LightOpSchema *const if_v13 = FindByVersion(if_schemas, 13);
-  const onnx_op::LightOpSchema *const if_v11 = FindByVersion(if_schemas, 11);
-  const onnx_op::LightOpSchema *const if_v1 = FindByVersion(if_schemas, 1);
+  const core::schema::LightOpSchema *const if_v13 = FindByVersion(if_schemas, 13);
+  const core::schema::LightOpSchema *const if_v11 = FindByVersion(if_schemas, 11);
+  const core::schema::LightOpSchema *const if_v1 = FindByVersion(if_schemas, 1);
 
   ASSERT_NE(nullptr, if_v13);
   ASSERT_NE(nullptr, if_v11);
@@ -108,12 +108,12 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithExpectedBranchAttrib
   for (const auto *s : {if_v1, if_v11, if_v13}) {
     ASSERT_EQ(s->attributes().size(), 2u);
     EXPECT_EQ(s->attributes()[0].name, "then_branch");
-    EXPECT_EQ(s->attributes()[0].type, onnx_op::AttributeType::GRAPH);
+    EXPECT_EQ(s->attributes()[0].type, core::schema::AttributeType::GRAPH);
     EXPECT_TRUE(s->attributes()[0].required);
     EXPECT_EQ(s->attributes()[0].description,
               onnx_op::controlflow::MakeIfThenBranchAttributeDescription());
     EXPECT_EQ(s->attributes()[1].name, "else_branch");
-    EXPECT_EQ(s->attributes()[1].type, onnx_op::AttributeType::GRAPH);
+    EXPECT_EQ(s->attributes()[1].type, core::schema::AttributeType::GRAPH);
     EXPECT_TRUE(s->attributes()[1].required);
     EXPECT_EQ(s->attributes()[1].description,
               onnx_op::controlflow::MakeIfElseBranchAttributeDescription());
@@ -121,13 +121,13 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithExpectedBranchAttrib
 }
 
 TEST(OnnxOpControlflowRegistrationTest, ReturnsLoopSchemasWithExpectedTypeHistory) {
-  const std::vector<onnx_op::LightOpSchema> loop_schemas =
+  const std::vector<core::schema::LightOpSchema> loop_schemas =
       onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory("Loop");
   EXPECT_EQ(loop_schemas.size(), kExpectedLoopSchemaCount);
 
-  const onnx_op::LightOpSchema *const loop_v13 = FindByVersion(loop_schemas, 13);
-  const onnx_op::LightOpSchema *const loop_v11 = FindByVersion(loop_schemas, 11);
-  const onnx_op::LightOpSchema *const loop_v1 = FindByVersion(loop_schemas, 1);
+  const core::schema::LightOpSchema *const loop_v13 = FindByVersion(loop_schemas, 13);
+  const core::schema::LightOpSchema *const loop_v11 = FindByVersion(loop_schemas, 11);
+  const core::schema::LightOpSchema *const loop_v1 = FindByVersion(loop_schemas, 1);
 
   ASSERT_NE(nullptr, loop_v13);
   ASSERT_NE(nullptr, loop_v11);
@@ -151,15 +151,15 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsLoopSchemasWithExpectedTypeHistor
   // I and B type constraints are stable across versions.
   EXPECT_EQ(loop_v13->type_constraints()[1].type_param_str, "I");
   EXPECT_EQ(loop_v13->type_constraints()[1].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(loop_v13->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kInt64);
+  EXPECT_EQ(loop_v13->type_constraints()[1].allowed_type_strs[0], core::schema::TensorType::kInt64);
   EXPECT_EQ(loop_v13->type_constraints()[2].type_param_str, "B");
-  EXPECT_EQ(loop_v13->type_constraints()[2].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_EQ(loop_v13->type_constraints()[2].allowed_type_strs[0], core::schema::TensorType::kBool);
 
   // Required GRAPH attribute "body" is present on all opset versions.
   for (const auto *s : {loop_v1, loop_v11, loop_v13}) {
     ASSERT_EQ(s->attributes().size(), 1u);
     EXPECT_EQ(s->attributes()[0].name, "body");
-    EXPECT_EQ(s->attributes()[0].type, onnx_op::AttributeType::GRAPH);
+    EXPECT_EQ(s->attributes()[0].type, core::schema::AttributeType::GRAPH);
     EXPECT_TRUE(s->attributes()[0].required);
   }
 
@@ -174,13 +174,13 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsLoopSchemasWithExpectedTypeHistor
 }
 
 TEST(OnnxOpControlflowRegistrationTest, ReturnsScanSchemasWithExpectedHistory) {
-  const std::vector<onnx_op::LightOpSchema> scan_schemas =
+  const std::vector<core::schema::LightOpSchema> scan_schemas =
       onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory("Scan");
   EXPECT_EQ(scan_schemas.size(), kExpectedScanSchemaCount);
 
-  const onnx_op::LightOpSchema *const scan_v11 = FindByVersion(scan_schemas, 11);
-  const onnx_op::LightOpSchema *const scan_v9 = FindByVersion(scan_schemas, 9);
-  const onnx_op::LightOpSchema *const scan_v8 = FindByVersion(scan_schemas, 8);
+  const core::schema::LightOpSchema *const scan_v11 = FindByVersion(scan_schemas, 11);
+  const core::schema::LightOpSchema *const scan_v9 = FindByVersion(scan_schemas, 9);
+  const core::schema::LightOpSchema *const scan_v8 = FindByVersion(scan_schemas, 8);
 
   ASSERT_NE(nullptr, scan_v11);
   ASSERT_NE(nullptr, scan_v9);
@@ -211,7 +211,7 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsScanSchemasWithExpectedHistory) {
   EXPECT_EQ(scan_v8->type_constraints().size(), 2u);
   EXPECT_EQ(scan_v8->type_constraints()[0].type_param_str, "I");
   EXPECT_EQ(scan_v8->type_constraints()[0].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(scan_v8->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kInt64);
+  EXPECT_EQ(scan_v8->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kInt64);
   EXPECT_EQ(scan_v8->type_constraints()[1].type_param_str, "V");
   EXPECT_EQ(scan_v8->type_constraints()[1].allowed_type_strs.size(), 15u);
   EXPECT_EQ(scan_v9->type_constraints().size(), 1u);
@@ -221,13 +221,13 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsScanSchemasWithExpectedHistory) {
   // Attributes: opset 8 has body, num_scan_inputs, directions.
   ASSERT_EQ(scan_v8->attributes().size(), 3u);
   EXPECT_EQ(scan_v8->attributes()[0].name, "body");
-  EXPECT_EQ(scan_v8->attributes()[0].type, onnx_op::AttributeType::GRAPH);
+  EXPECT_EQ(scan_v8->attributes()[0].type, core::schema::AttributeType::GRAPH);
   EXPECT_TRUE(scan_v8->attributes()[0].required);
   EXPECT_EQ(scan_v8->attributes()[1].name, "num_scan_inputs");
-  EXPECT_EQ(scan_v8->attributes()[1].type, onnx_op::AttributeType::INT);
+  EXPECT_EQ(scan_v8->attributes()[1].type, core::schema::AttributeType::INT);
   EXPECT_TRUE(scan_v8->attributes()[1].required);
   EXPECT_EQ(scan_v8->attributes()[2].name, "directions");
-  EXPECT_EQ(scan_v8->attributes()[2].type, onnx_op::AttributeType::INTS);
+  EXPECT_EQ(scan_v8->attributes()[2].type, core::schema::AttributeType::INTS);
   EXPECT_FALSE(scan_v8->attributes()[2].required);
 
   // Opsets 9 and 11 replace ``directions`` with four split attributes.
@@ -238,7 +238,7 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsScanSchemasWithExpectedHistory) {
     EXPECT_EQ(s->attributes()[1].name, "num_scan_inputs");
     EXPECT_TRUE(s->attributes()[1].required);
     EXPECT_EQ(s->attributes()[2].name, "scan_input_directions");
-    EXPECT_EQ(s->attributes()[2].type, onnx_op::AttributeType::INTS);
+    EXPECT_EQ(s->attributes()[2].type, core::schema::AttributeType::INTS);
     EXPECT_FALSE(s->attributes()[2].required);
     EXPECT_EQ(s->attributes()[3].name, "scan_output_directions");
     EXPECT_EQ(s->attributes()[4].name, "scan_input_axes");

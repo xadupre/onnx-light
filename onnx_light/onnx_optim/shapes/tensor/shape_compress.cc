@@ -10,14 +10,18 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_optim/expressions.h"
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/_helpers/shape_helpers.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/expressions/expressions.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_core/symbolic/symbolic_helper.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
+
+// Alias to the symbolic dimension-expression library, which lives in
+// ``onnx_core`` so both ``onnx_op`` and ``onnx_optim`` can share it.
+namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
 namespace shapes {
 namespace tensor {
 
@@ -27,9 +31,9 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeCompress: Compress requires two inputs (input, condition).");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
+  const SymTensor &input = ctx.Get(node.input(0));
   const TensorType dtype = input.Dtype();
-  const OptimShape &in_shape = input.Shape();
+  const SymShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
 
   // The symbol used for the unknown output count (number of selected slices).
@@ -40,8 +44,8 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
     // No axis: input is flattened and individual elements are selected.
     // Output is 1-D with a symbolic (unknown) length. The count is
     // bounded above by the number of elements in the input.
-    OptimShape out_shape;
-    out_shape.PushBack(OptimDim(sym));
+    SymShape out_shape;
+    out_shape.PushBack(SymDim(sym));
     if (rank > 0) {
       std::vector<expressions::DimType> dims;
       dims.reserve(in_shape.Rank());
@@ -50,7 +54,7 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
       }
       ctx.AddLessEqualConstraint(sym, expressions::dim_to_string(expressions::dim_multi_mul(dims)));
     }
-    ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+    ctx.Set(node.output(0), SymTensor(nullptr, dtype, std::move(out_shape)));
     return;
   }
 
@@ -65,10 +69,10 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
                         " out of range for input rank ", rank, ".");
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   for (int64_t d = 0; d < rank; ++d) {
     if (d == axis) {
-      out_shape.PushBack(OptimDim(sym));
+      out_shape.PushBack(SymDim(sym));
     } else {
       out_shape.PushBack(in_shape[static_cast<std::size_t>(d)]);
     }
@@ -79,7 +83,7 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
     ctx.AddLessEqualConstraint(
         sym, expressions::dim_to_string(ToDimType(in_shape[static_cast<std::size_t>(axis)])));
   }
-  ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, dtype, std::move(out_shape)));
 }
 
 } // namespace tensor

@@ -40,7 +40,7 @@ from __future__ import annotations
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx_optim.shape_inference import (
+from onnx_light.onnx_core.shape_inference import (
     ShapesContext,
     apply_inferred_shapes_to_model,
     compute_shape_model,
@@ -87,7 +87,7 @@ print(pretty_onnx(model))
 # Shape info
 # ++++++++++
 #
-# Pass ``shape_inference=True`` to run :mod:`onnx_light.onnx_optim.shape_inference`
+# Pass ``shape_inference=True`` to run :mod:`onnx_light.onnx_core.shape_inference`
 # shape inference before rendering.  After inference every value in
 # ``model.graph.value_info`` and ``model.graph.output`` carries its inferred
 # dtype and shape, which :func:`~onnx_light.tools.pretty_onnx` then shows
@@ -112,7 +112,7 @@ print(pretty_onnx(model, shape_inference=True))
 # * ``axes`` — a tensor whose value represents a set of axis indices.
 # * ``weight`` — a trainable parameter (initializer).
 #
-# :func:`~onnx_light.onnx_optim.shape_inference.write_value_and_node_tags_to_metadata`
+# :func:`~onnx_light.onnx_core.shape_inference.write_value_and_node_tags_to_metadata`
 # writes these labels into ``metadata_props``; then
 # ``include_node_tags=True`` renders them as ``[shape]``, ``[axes]`` or
 # ``[weight]`` prefixes on the relevant node lines.
@@ -131,7 +131,7 @@ print(pretty_onnx(model, include_node_tags=True))
 # are *aliasable*: the output can overwrite the input's allocation when the
 # shapes match and the input is not needed by any later node.
 #
-# :func:`~onnx_light.onnx_optim.shape_inference.write_inplace_reuse_to_metadata`
+# :func:`~onnx_light.onnx_core.shape_inference.write_inplace_reuse_to_metadata`
 # records each reuse opportunity under the ``onnx_light.inplace_reuse``
 # metadata key as a ``out_idx:in_idx:kind`` triplet.  With
 # ``include_inplace=True`` these are rendered as

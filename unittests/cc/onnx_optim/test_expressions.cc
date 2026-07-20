@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// C++ unit tests for onnx_light::onnx_optim::expressions.
+// C++ unit tests for onnx_light::core::expressions.
 // These test cases are translated from
 // https://github.com/xadupre/yet-another-onnx-builder/tree/main/unittests/xexpressions
 
-#include "onnx_optim/expressions.h"
+#include "onnx_core/expressions/expressions.h"
 
 #include <gtest/gtest.h>
 #include <map>
@@ -13,7 +13,7 @@
 #include <unordered_set>
 #include <variant>
 
-using namespace onnx_light::onnx_optim::expressions;
+using namespace onnx_light::core::expressions;
 
 // ─────────────────────────── helpers ─────────────────────────────────────
 

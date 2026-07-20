@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "onnx_optim/shapes/shape_broadcast.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -23,17 +23,17 @@ void ComputeShapeMax(ShapesContext &ctx, const NodeProto &node) {
   // Start from the shape and dtype of the first input. Max's type constraint
   // ``T`` requires every input to share the same dtype, so the output dtype
   // is the dtype of the first input.
-  const OptimTensor &first = ctx.Get(node.input(0));
+  const SymTensor &first = ctx.Get(node.input(0));
   const TensorType out_dtype = first.Dtype();
-  OptimShape out_shape = first.Shape();
+  SymShape out_shape = first.Shape();
 
   // Multidirectional broadcast across all remaining inputs.
   for (int i = 1; i < n_inputs; ++i) {
-    const OptimTensor &cur = ctx.Get(node.input(i));
+    const SymTensor &cur = ctx.Get(node.input(i));
     out_shape = BroadcastShapes(out_shape, cur.Shape());
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 
 } // namespace math

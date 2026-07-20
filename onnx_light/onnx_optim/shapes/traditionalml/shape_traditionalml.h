@@ -4,7 +4,14 @@
 
 #pragma once
 
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
+#include "onnx_core/symbolic/sym_map.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 #include <string>
@@ -19,13 +26,55 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
+
+// The generic shape-inference engine (ShapesContext, dispatch table,
+// domain constants, ...) lives in ``onnx_core`` so it never depends on
+// any particular set of operator implementations; the symbolic value
+// descriptors (SymDim, SymShape, SymTensor, ...) live in
+// ``onnx_core::symbolic`` for the same reason. Bring them into
+// ``onnx_optim::shapes`` so shape functions can keep referring to them
+// unqualified, exactly as before those types moved to ``onnx_core``.
+using ::onnx_light::core::shapes::BroadcastDimOp;
+using ::onnx_light::core::shapes::BroadcastShapes;
+using ::onnx_light::core::shapes::CheckNodeOpAndOutput;
+using ::onnx_light::core::shapes::ComputeShapeBinaryBroadcast;
+using ::onnx_light::core::shapes::InferShapesModel;
+using ::onnx_light::core::shapes::kOnnxDomain;
+using ::onnx_light::core::shapes::kUnknownOpsetVersion;
+using ::onnx_light::core::shapes::PropagateValueAsShapeArithmetic;
+using ::onnx_light::core::shapes::ShapeEvent;
+using ::onnx_light::core::shapes::ShapeEventAction;
+using ::onnx_light::core::shapes::ShapeEventActionName;
+using ::onnx_light::core::shapes::ShapesContext;
+
+using ::onnx_light::core::symbolic::DataTypeToTensorType;
+using ::onnx_light::core::symbolic::Device;
+using ::onnx_light::core::symbolic::GPUIndex;
+using ::onnx_light::core::symbolic::IsGPU;
+using ::onnx_light::core::symbolic::IsIntegerTensorType;
+using ::onnx_light::core::symbolic::kMaxGPUIndex;
+using ::onnx_light::core::symbolic::kMaxOptimRank;
+using ::onnx_light::core::symbolic::kOptimValueAsShapeMaxElements;
+using ::onnx_light::core::symbolic::kValueInfoDeviceMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMaxMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMinMetadataKey;
+using ::onnx_light::core::symbolic::ShapeFromTensorProtoDims;
+using ::onnx_light::core::symbolic::SymCmpResult;
+using ::onnx_light::core::symbolic::SymDim;
+using ::onnx_light::core::symbolic::SymMap;
+using ::onnx_light::core::symbolic::SymSequence;
+using ::onnx_light::core::symbolic::SymShape;
+using ::onnx_light::core::symbolic::SymTensor;
+using ::onnx_light::core::symbolic::TensorType;
+using ::onnx_light::core::symbolic::TensorTypeToDataType;
+
 namespace traditionalml {
 
 /// Canonical domain string for the ``ai.onnx.ml`` operator set.
 inline constexpr const char *kOnnxMlDomain = "ai.onnx.ml";
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Binarizer`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``Binarizer`` node
  * and stores it in ``ctx``.
  *
  * ``Binarizer`` (``ai.onnx.ml``) is an element-wise operator: the output
@@ -49,7 +98,7 @@ inline constexpr const char *kOnnxMlDomain = "ai.onnx.ml";
 void ComputeShapeBinarizer(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``CategoryMapper`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``CategoryMapper`` node
  * and stores it in ``ctx``.
  *
  * ``CategoryMapper`` (``ai.onnx.ml``) is a one-to-one mapping between
@@ -75,7 +124,7 @@ void ComputeShapeBinarizer(ShapesContext &ctx, const NodeProto &node, const char
 void ComputeShapeCategoryMapper(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``CastMap`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``CastMap`` node and
  * stores it in ``ctx``.
  *
  * ``CastMap`` (``ai.onnx.ml``) converts a map into a 1-D tensor. The
@@ -102,7 +151,7 @@ void ComputeShapeCategoryMapper(ShapesContext &ctx, const NodeProto &node, const
 void ComputeShapeCastMap(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Imputer`` node
+ * Computes the output :cpp:class:`SymTensor` of an ``Imputer`` node
  * and stores it in ``ctx``.
  *
  * ``Imputer`` (``ai.onnx.ml``) is an element-wise operator: the output
@@ -127,7 +176,7 @@ void ComputeShapeCastMap(ShapesContext &ctx, const NodeProto &node, const char *
 void ComputeShapeImputer(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an
+ * Computes the output :cpp:class:`SymTensor` of an
  * ``ArrayFeatureExtractor`` node and stores it in ``ctx``.
  *
  * ``ArrayFeatureExtractor`` selects values from the last axis of ``x``
@@ -159,7 +208,7 @@ void ComputeShapeArrayFeatureExtractor(ShapesContext &ctx, const NodeProto &node
                                        const char *y);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``LabelEncoder``
+ * Computes the output :cpp:class:`SymTensor` of a ``LabelEncoder``
  * node and stores it in ``ctx``.
  *
  * ``LabelEncoder`` (``ai.onnx.ml``) is a one-to-one mapping from input
@@ -194,7 +243,7 @@ void ComputeShapeArrayFeatureExtractor(ShapesContext &ctx, const NodeProto &node
 void ComputeShapeLabelEncoder(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``OneHotEncoder``
+ * Computes the output :cpp:class:`SymTensor` of a ``OneHotEncoder``
  * node and stores it in ``ctx``.
  *
  * ``OneHotEncoder`` (``ai.onnx.ml``) emits a one-hot encoding of the
@@ -221,7 +270,7 @@ void ComputeShapeLabelEncoder(ShapesContext &ctx, const NodeProto &node, const c
 void ComputeShapeOneHotEncoder(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` objects of a ``LinearClassifier``
+ * Computes the output :cpp:class:`SymTensor` objects of a ``LinearClassifier``
  * node and stores them in ``ctx``.
  *
  * ``LinearClassifier`` (``ai.onnx.ml``) consumes either a single feature vector
@@ -242,7 +291,7 @@ void ComputeShapeOneHotEncoder(ShapesContext &ctx, const NodeProto &node, const 
 void ComputeShapeLinearClassifier(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``LinearRegressor`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``LinearRegressor`` node and
  * stores it in ``ctx``.
  *
  * ``LinearRegressor`` (``ai.onnx.ml``) consumes either ``[C]`` or ``[N,C]`` and
@@ -256,7 +305,7 @@ void ComputeShapeLinearClassifier(ShapesContext &ctx, const NodeProto &node, con
 void ComputeShapeLinearRegressor(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Scaler`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Scaler`` node and
  * stores it in ``ctx``.
  *
  * ``Scaler`` (``ai.onnx.ml``) is an element-wise operator: the output
@@ -280,7 +329,7 @@ void ComputeShapeLinearRegressor(ShapesContext &ctx, const NodeProto &node, cons
 void ComputeShapeScaler(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Normalizer`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Normalizer`` node and
  * stores it in ``ctx``.
  *
  * ``Normalizer`` (``ai.onnx.ml``) normalizes its input along the last
@@ -304,7 +353,7 @@ void ComputeShapeScaler(ShapesContext &ctx, const NodeProto &node, const char *x
 void ComputeShapeNormalizer(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` objects of an ``SVMClassifier``
+ * Computes the output :cpp:class:`SymTensor` objects of an ``SVMClassifier``
  * node and stores them in ``ctx``.
  *
  * ``SVMClassifier`` (``ai.onnx.ml``) consumes either a single feature vector
@@ -323,7 +372,7 @@ void ComputeShapeNormalizer(ShapesContext &ctx, const NodeProto &node, const cha
 void ComputeShapeSVMClassifier(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``SVMRegressor`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``SVMRegressor`` node and
  * stores it in ``ctx``.
  *
  * ``SVMRegressor`` (``ai.onnx.ml``) consumes either ``[C]`` or ``[N,C]`` and
@@ -337,7 +386,7 @@ void ComputeShapeSVMClassifier(ShapesContext &ctx, const NodeProto &node, const 
 void ComputeShapeSVMRegressor(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``TreeEnsembleRegressor``
+ * Computes the output :cpp:class:`SymTensor` of a ``TreeEnsembleRegressor``
  * node and stores it in ``ctx``.
  *
  * ``TreeEnsembleRegressor`` (``ai.onnx.ml``) consumes either ``[C]`` or
@@ -352,7 +401,7 @@ void ComputeShapeSVMRegressor(ShapesContext &ctx, const NodeProto &node, const c
 void ComputeShapeTreeEnsembleRegressor(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` objects of a
+ * Computes the output :cpp:class:`SymTensor` objects of a
  * ``TreeEnsembleClassifier`` node and stores them in ``ctx``.
  *
  * ``TreeEnsembleClassifier`` (``ai.onnx.ml``) consumes either ``[C]`` or
@@ -371,7 +420,7 @@ void ComputeShapeTreeEnsembleRegressor(ShapesContext &ctx, const NodeProto &node
 void ComputeShapeTreeEnsembleClassifier(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``TreeEnsemble`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``TreeEnsemble`` node
  * and stores it in ``ctx``.
  *
  * ``TreeEnsemble`` (``ai.onnx.ml``, opset 5) consumes ``[N, F]`` and emits
@@ -386,7 +435,7 @@ void ComputeShapeTreeEnsembleClassifier(ShapesContext &ctx, const NodeProto &nod
 void ComputeShapeTreeEnsemble(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ZipMap`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``ZipMap`` node and
  * stores it in ``ctx``.
  *
  * ``ZipMap`` (``ai.onnx.ml``) converts each row of the float input tensor
@@ -410,7 +459,7 @@ void ComputeShapeTreeEnsemble(ShapesContext &ctx, const NodeProto &node, const c
 void ComputeShapeZipMap(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``DictVectorizer`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``DictVectorizer`` node
  * and stores it in ``ctx``.
  *
  * ``DictVectorizer`` (``ai.onnx.ml``) converts a dictionary input into a 1-D
@@ -430,7 +479,7 @@ void ComputeShapeZipMap(ShapesContext &ctx, const NodeProto &node, const char *x
 void ComputeShapeDictVectorizer(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``FeatureVectorizer`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``FeatureVectorizer`` node
  * and stores it in ``ctx``.
  *
  * ``FeatureVectorizer`` (``ai.onnx.ml``) concatenates a variadic list of

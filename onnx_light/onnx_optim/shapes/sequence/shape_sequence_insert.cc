@@ -6,9 +6,9 @@
 
 #include <limits>
 
-#include "onnx_optim/optim_sequence.h"
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -20,8 +20,8 @@ void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 2,
                       "ComputeShapeSequenceInsert: SequenceInsert requires at least two inputs.");
 
-  const OptimSequence &seq = ctx.GetSequence(node.input(0));
-  const OptimTensor &inserted = ctx.Get(node.input(1));
+  const SymSequence &seq = ctx.GetSequence(node.input(0));
+  const SymTensor &inserted = ctx.Get(node.input(1));
 
   const bool seq_has_dtype = seq.HasElemDtype();
   const TensorType out_dtype = seq_has_dtype ? seq.ElemDtype() : inserted.Dtype();
@@ -31,17 +31,17 @@ void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node) {
                         "dtype must match.");
   }
 
-  OptimDim out_length;
+  SymDim out_length;
   if (seq.Length().IsInt()) {
     const int64_t in_len = seq.Length().AsInt();
     EXT_ENFORCE_INVALID(in_len < std::numeric_limits<int64_t>::max(),
                         "ComputeShapeSequenceInsert: input sequence length overflows int64.");
-    out_length = OptimDim(in_len + 1);
+    out_length = SymDim(in_len + 1);
   } else {
-    out_length = OptimDim("SequenceInsert_" + node.output(0) + "_len");
+    out_length = SymDim("SequenceInsert_" + node.output(0) + "_len");
   }
 
-  ctx.SetSequence(node.output(0), OptimSequence(out_dtype, std::move(out_length)));
+  ctx.SetSequence(node.output(0), SymSequence(out_dtype, std::move(out_length)));
 }
 
 } // namespace sequence

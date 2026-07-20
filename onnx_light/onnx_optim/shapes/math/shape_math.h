@@ -4,7 +4,14 @@
 
 #pragma once
 
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
+#include "onnx_core/symbolic/sym_map.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 /**
@@ -15,10 +22,52 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
+
+// The generic shape-inference engine (ShapesContext, dispatch table,
+// domain constants, ...) lives in ``onnx_core`` so it never depends on
+// any particular set of operator implementations; the symbolic value
+// descriptors (SymDim, SymShape, SymTensor, ...) live in
+// ``onnx_core::symbolic`` for the same reason. Bring them into
+// ``onnx_optim::shapes`` so shape functions can keep referring to them
+// unqualified, exactly as before those types moved to ``onnx_core``.
+using ::onnx_light::core::shapes::BroadcastDimOp;
+using ::onnx_light::core::shapes::BroadcastShapes;
+using ::onnx_light::core::shapes::CheckNodeOpAndOutput;
+using ::onnx_light::core::shapes::ComputeShapeBinaryBroadcast;
+using ::onnx_light::core::shapes::InferShapesModel;
+using ::onnx_light::core::shapes::kOnnxDomain;
+using ::onnx_light::core::shapes::kUnknownOpsetVersion;
+using ::onnx_light::core::shapes::PropagateValueAsShapeArithmetic;
+using ::onnx_light::core::shapes::ShapeEvent;
+using ::onnx_light::core::shapes::ShapeEventAction;
+using ::onnx_light::core::shapes::ShapeEventActionName;
+using ::onnx_light::core::shapes::ShapesContext;
+
+using ::onnx_light::core::symbolic::DataTypeToTensorType;
+using ::onnx_light::core::symbolic::Device;
+using ::onnx_light::core::symbolic::GPUIndex;
+using ::onnx_light::core::symbolic::IsGPU;
+using ::onnx_light::core::symbolic::IsIntegerTensorType;
+using ::onnx_light::core::symbolic::kMaxGPUIndex;
+using ::onnx_light::core::symbolic::kMaxOptimRank;
+using ::onnx_light::core::symbolic::kOptimValueAsShapeMaxElements;
+using ::onnx_light::core::symbolic::kValueInfoDeviceMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMaxMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMinMetadataKey;
+using ::onnx_light::core::symbolic::ShapeFromTensorProtoDims;
+using ::onnx_light::core::symbolic::SymCmpResult;
+using ::onnx_light::core::symbolic::SymDim;
+using ::onnx_light::core::symbolic::SymMap;
+using ::onnx_light::core::symbolic::SymSequence;
+using ::onnx_light::core::symbolic::SymShape;
+using ::onnx_light::core::symbolic::SymTensor;
+using ::onnx_light::core::symbolic::TensorType;
+using ::onnx_light::core::symbolic::TensorTypeToDataType;
+
 namespace math {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Abs`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Abs`` node and
  * stores it in ``ctx``.
  *
  * ``Abs`` is element-wise and unary in every revision of its schema
@@ -41,7 +90,7 @@ namespace math {
 void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Neg`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Neg`` node and
  * stores it in ``ctx``.
  *
  * ``Neg`` is element-wise and unary in every revision of its schema
@@ -64,7 +113,7 @@ void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeNeg(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Add`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Add`` node and
  * stores it in ``ctx``.
  *
  * ``Add`` is element-wise and binary, with numpy-style multidirectional
@@ -93,7 +142,7 @@ void ComputeShapeNeg(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeAdd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Sub`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Sub`` node and
  * stores it in ``ctx``.
  *
  * ``Sub`` is element-wise and binary, with numpy-style multidirectional
@@ -120,7 +169,7 @@ void ComputeShapeAdd(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeSub(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Mul`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Mul`` node and
  * stores it in ``ctx``.
  *
  * ``Mul`` is element-wise and binary, with numpy-style multidirectional
@@ -147,7 +196,7 @@ void ComputeShapeSub(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeMul(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Pow`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Pow`` node and
  * stores it in ``ctx``.
  *
  * ``Pow`` is element-wise and binary, with numpy-style multidirectional
@@ -173,7 +222,7 @@ void ComputeShapeMul(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapePow(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``PRelu`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``PRelu`` node and
  * stores it in ``ctx``.
  *
  * ``PRelu`` is element-wise binary, with the ``slope`` operand
@@ -200,7 +249,7 @@ void ComputeShapePow(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapePRelu(ShapesContext &ctx, const NodeProto &node, const char *x, const char *slope);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Div`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Div`` node and
  * stores it in ``ctx``.
  *
  * ``Div`` is element-wise and binary, with numpy-style multidirectional
@@ -227,7 +276,7 @@ void ComputeShapePRelu(ShapesContext &ctx, const NodeProto &node, const char *x,
 void ComputeShapeDiv(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Mod`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Mod`` node and
  * stores it in ``ctx``.
  *
  * ``Mod`` is element-wise and binary, with numpy-style multidirectional
@@ -254,7 +303,7 @@ void ComputeShapeDiv(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeMod(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Mish`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Mish`` node and
  * stores it in ``ctx``.
  *
  * ``Mish`` is element-wise and unary: the output dtype and shape match
@@ -263,7 +312,7 @@ void ComputeShapeMod(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeMish(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Acos`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Acos`` node and
  * stores it in ``ctx``.
  *
  * ``Acos`` is element-wise and unary in every revision of its schema
@@ -286,7 +335,7 @@ void ComputeShapeMish(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeAcos(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Acosh`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Acosh`` node and
  * stores it in ``ctx``.
  *
  * ``Acosh`` is element-wise and unary in every revision of its schema
@@ -309,7 +358,7 @@ void ComputeShapeAcos(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeAcosh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Asin`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Asin`` node and
  * stores it in ``ctx``.
  *
  * ``Asin`` is element-wise and unary in every revision of its schema
@@ -332,7 +381,7 @@ void ComputeShapeAcosh(ShapesContext &ctx, const NodeProto &node, const char *x)
 void ComputeShapeAsin(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Asinh`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Asinh`` node and
  * stores it in ``ctx``.
  *
  * ``Asinh`` is element-wise and unary in every revision of its schema
@@ -355,7 +404,7 @@ void ComputeShapeAsin(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeAsinh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Atan`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Atan`` node and
  * stores it in ``ctx``.
  *
  * ``Atan`` is element-wise and unary in every revision of its schema
@@ -378,7 +427,7 @@ void ComputeShapeAsinh(ShapesContext &ctx, const NodeProto &node, const char *x)
 void ComputeShapeAtan(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Atanh`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Atanh`` node and
  * stores it in ``ctx``.
  *
  * ``Atanh`` is element-wise and unary in every revision of its schema
@@ -401,7 +450,7 @@ void ComputeShapeAtan(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeAtanh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Cos`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Cos`` node and
  * stores it in ``ctx``.
  *
  * ``Cos`` is element-wise and unary in every revision of its schema
@@ -424,7 +473,7 @@ void ComputeShapeAtanh(ShapesContext &ctx, const NodeProto &node, const char *x)
 void ComputeShapeCos(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Cosh`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Cosh`` node and
  * stores it in ``ctx``.
  *
  * ``Cosh`` is element-wise and unary in every revision of its schema
@@ -456,7 +505,7 @@ void ComputeShapeErf(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeSign(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Gemm`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Gemm`` node and
  * stores it in ``ctx``.
  *
  * ``Gemm`` computes ``Y = alpha * A' * B' + beta * C`` where the
@@ -485,7 +534,7 @@ void ComputeShapeSign(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeGemm(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``MatMul`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``MatMul`` node and
  * stores it in ``ctx``.
  *
  * ``MatMul`` follows NumPy matmul rules:
@@ -497,7 +546,7 @@ void ComputeShapeGemm(ShapesContext &ctx, const NodeProto &node, const char *a, 
 void ComputeShapeMatMul(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``MatMulInteger`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``MatMulInteger`` node and
  * stores it in ``ctx``.
  *
  * The shape rule matches :cpp:func:`ComputeShapeMatMul` applied to the inputs
@@ -511,7 +560,7 @@ void ComputeShapeMatMulInteger(ShapesContext &ctx, const NodeProto &node, const 
 void ComputeShapeLog(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Det`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Det`` node and stores
  * it in ``ctx``.
  *
  * ``Det`` takes one input of shape ``[*, M, M]`` (rank >= 2) and produces an
@@ -548,7 +597,7 @@ void ComputeShapeSoftplus(ShapesContext &ctx, const NodeProto &node, const char 
 void ComputeShapeSoftsign(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output ``OptimTensor``(s) of a ``SoftmaxCrossEntropyLoss``
+ * Computes the output ``SymTensor``(s) of a ``SoftmaxCrossEntropyLoss``
  * node and stores them in ``ctx``.
  *
  * Inputs are ``scores`` (shape ``(N, C)`` or ``(N, C, D1, ..., Dk)``),
@@ -563,7 +612,7 @@ void ComputeShapeSoftmaxCrossEntropyLoss(ShapesContext &ctx, const NodeProto &no
                                          const char *weights);
 
 /**
- * Computes the output ``OptimTensor`` of a ``NegativeLogLikelihoodLoss``
+ * Computes the output ``SymTensor`` of a ``NegativeLogLikelihoodLoss``
  * node and stores it in ``ctx``.
  *
  * Inputs are ``input`` (shape ``(N, C)`` or ``(N, C, D1, ..., Dk)``),
@@ -577,7 +626,7 @@ void ComputeShapeNegativeLogLikelihoodLoss(ShapesContext &ctx, const NodeProto &
                                            const char *weight);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Sin`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Sin`` node and
  * stores it in ``ctx``.
  *
  * ``Sin`` is element-wise and unary in every revision of its schema
@@ -587,7 +636,7 @@ void ComputeShapeNegativeLogLikelihoodLoss(ShapesContext &ctx, const NodeProto &
 void ComputeShapeSin(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Reciprocal`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Reciprocal`` node and
  * stores it in ``ctx``.
  *
  * ``Reciprocal`` is element-wise and unary in every revision of its schema
@@ -597,7 +646,7 @@ void ComputeShapeSin(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeReciprocal(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Sinh`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Sinh`` node and
  * stores it in ``ctx``.
  *
  * ``Sinh`` is element-wise and unary in every revision of its schema
@@ -607,7 +656,7 @@ void ComputeShapeReciprocal(ShapesContext &ctx, const NodeProto &node, const cha
 void ComputeShapeSinh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Sqrt`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Sqrt`` node and
  * stores it in ``ctx``.
  *
  * ``Sqrt`` is element-wise and unary in every revision of its schema
@@ -617,7 +666,7 @@ void ComputeShapeSinh(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeSqrt(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Tan`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Tan`` node and
  * stores it in ``ctx``.
  *
  * ``Tan`` is element-wise and unary in every revision of its schema
@@ -627,7 +676,7 @@ void ComputeShapeSqrt(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeTan(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Tanh`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Tanh`` node and
  * stores it in ``ctx``.
  *
  * ``Tanh`` is element-wise and unary in every revision of its schema
@@ -661,7 +710,7 @@ void ComputeShapeSelu(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeShrink(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Floor`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Floor`` node and
  * stores it in ``ctx``.
  *
  * ``Floor`` is element-wise and unary in every revision of its schema
@@ -671,7 +720,7 @@ void ComputeShapeShrink(ShapesContext &ctx, const NodeProto &node, const char *x
 void ComputeShapeFloor(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Ceil`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Ceil`` node and
  * stores it in ``ctx``.
  *
  * ``Ceil`` is element-wise and unary in every revision of its schema
@@ -681,7 +730,7 @@ void ComputeShapeFloor(ShapesContext &ctx, const NodeProto &node, const char *x)
 void ComputeShapeCeil(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Clip`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Clip`` node and
  * stores it in ``ctx``.
  *
  * ``Clip`` is element-wise; the optional ``min`` and ``max`` inputs are
@@ -691,7 +740,7 @@ void ComputeShapeCeil(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeClip(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Round`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Round`` node and
  * stores it in ``ctx``.
  *
  * ``Round`` is element-wise and unary in every revision of its schema
@@ -701,7 +750,7 @@ void ComputeShapeClip(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeRound(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Einsum`` node
+ * Computes the output :cpp:class:`SymTensor` of an ``Einsum`` node
  * (opset 12) and stores it in ``ctx``.
  *
  * ``Einsum`` evaluates the Einstein summation expressed by the ``equation``
@@ -725,7 +774,7 @@ void ComputeShapeRound(ShapesContext &ctx, const NodeProto &node, const char *x)
 void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Sum`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Sum`` node and stores
  * it in ``ctx``.
  *
  * ``Sum`` is a variadic element-wise operator: every input must share the
@@ -751,7 +800,7 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSum(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Max`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Max`` node and stores
  * it in ``ctx``.
  *
  * ``Max`` (opsets 1-13) is a variadic element-wise maximum operator. Since
@@ -775,7 +824,7 @@ void ComputeShapeSum(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeMax(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Min`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Min`` node and stores
  * it in ``ctx``.
  *
  * ``Min`` (opsets 1-13) is a variadic element-wise minimum operator. Since
@@ -799,7 +848,7 @@ void ComputeShapeMax(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeMin(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Mean`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Mean`` node and stores
  * it in ``ctx``.
  *
  * ``Mean`` (opsets 1, 6, 8 and 13) is a variadic element-wise mean operator.
@@ -824,7 +873,7 @@ void ComputeShapeMin(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeMean(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``CumSum`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``CumSum`` node and
  * stores it in ``ctx``.
  *
  * ``CumSum`` (opsets 11 and 14) is a unary running-sum operator along an
@@ -847,7 +896,7 @@ void ComputeShapeMean(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeCumSum(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``CumProd`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``CumProd`` node and
  * stores it in ``ctx``.
  *
  * ``CumProd`` (opset 26) is a unary running-product operator along an axis
@@ -869,7 +918,7 @@ void ComputeShapeCumSum(ShapesContext &ctx, const NodeProto &node, const char *x
 void ComputeShapeCumProd(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` entries of a ``TopK`` node
+ * Computes the output :cpp:class:`SymTensor` entries of a ``TopK`` node
  * and stores them in ``ctx``.
  *
  * ``TopK`` returns two outputs that share the same shape:
@@ -880,7 +929,7 @@ void ComputeShapeCumProd(ShapesContext &ctx, const NodeProto &node, const char *
  *
  * In opset 1 the number ``k`` is read from the required integer attribute
  * ``k``. In opsets 10 and 11 ``k`` is supplied as a 1-D tensor input;
- * because :class:`OptimTensor` does not always carry concrete data, the
+ * because :class:`SymTensor` does not always carry concrete data, the
  * axis dimension is emitted as a symbolic dimension (``TopK_<output>_k``)
  * when ``k`` cannot be resolved from a constant.
  *
@@ -899,7 +948,7 @@ void ComputeShapeCumProd(ShapesContext &ctx, const NodeProto &node, const char *
 void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``DFT`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``DFT`` node and stores
  * it in ``ctx``.
  *
  * ``DFT`` (since opset 17; ``axis`` moved from attribute to input at opset
@@ -925,7 +974,7 @@ void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``STFT`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of an ``STFT`` node and stores
  * it in ``ctx``.
  *
  * ``STFT`` (opset 17) returns a rank-4 tensor with shape

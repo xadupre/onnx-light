@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/math/shape_math.h"
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -13,10 +13,10 @@ namespace math {
 
 void ComputeShapeAtan(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "Atan", "ComputeShapeAtan");
-  const OptimTensor &input = ctx.Get(x);
+  const SymTensor &input = ctx.Get(x);
   // Atan is element-wise in every supported opset revision: the output
   // dtype and shape match the input.
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace math

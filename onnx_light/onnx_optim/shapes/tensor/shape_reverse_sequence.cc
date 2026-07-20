@@ -6,8 +6,8 @@
 
 #include <stdexcept>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -19,14 +19,14 @@ void ComputeShapeReverseSequence(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeReverseSequence: ReverseSequence requires two inputs.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
+  const SymTensor &input = ctx.Get(node.input(0));
   EXT_ENFORCE_INVALID(!(input.Shape().Rank() < 2),
                       "ComputeShapeReverseSequence: input rank must be >= 2.");
-  const OptimTensor &sequence_lens = ctx.Get(node.input(1));
+  const SymTensor &sequence_lens = ctx.Get(node.input(1));
   EXT_ENFORCE_INVALID(sequence_lens.Shape().Rank() == 1,
                       "ComputeShapeReverseSequence: 'sequence_lens' must have rank of 1.");
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace tensor

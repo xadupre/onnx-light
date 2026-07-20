@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -21,12 +21,12 @@ namespace tensor {
 
 namespace {
 
-OptimDim ScaleDim(const OptimDim &dim, float scale, std::size_t axis) {
+SymDim ScaleDim(const SymDim &dim, float scale, std::size_t axis) {
   if (dim.IsInt()) {
     const double scaled = static_cast<double>(dim.AsInt()) * static_cast<double>(scale);
-    return OptimDim(static_cast<int64_t>(std::floor(scaled)));
+    return SymDim(static_cast<int64_t>(std::floor(scaled)));
   }
-  return OptimDim("Upsample_dim" + std::to_string(axis));
+  return SymDim("Upsample_dim" + std::to_string(axis));
 }
 
 } // namespace
@@ -36,8 +36,8 @@ void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapeUpsample: Upsample requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
-  const OptimShape &input_shape = input.Shape();
+  const SymTensor &input = ctx.Get(node.input(0));
+  const SymShape &input_shape = input.Shape();
   const std::size_t rank = input_shape.Rank();
 
   // Recover the per-axis float scales when statically known. Three
@@ -76,16 +76,16 @@ void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node) {
                       "ComputeShapeUpsample: 'scales' length (", scales.size(),
                       ") must equal the rank of input 'X' (", rank, ").");
 
-  OptimShape out_shape;
+  SymShape out_shape;
   for (std::size_t i = 0; i < rank; ++i) {
     if (scales_known) {
       out_shape.PushBack(ScaleDim(input_shape[i], scales[i], i));
     } else {
-      out_shape.PushBack(OptimDim("Upsample_dim" + std::to_string(i)));
+      out_shape.PushBack(SymDim("Upsample_dim" + std::to_string(i)));
     }
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
 }
 
 } // namespace tensor

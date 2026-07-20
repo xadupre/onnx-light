@@ -4,7 +4,7 @@
 ComputeContext memory expressions
 =================================
 
-:class:`~onnx_light.onnx_optim.shape_inference.ComputeContext` reports, for each
+:class:`~onnx_light.onnx_core.shape_inference.ComputeContext` reports, for each
 node, how much memory is already live before execution, how much extra output
 allocation is still needed, and the resulting total. When input shapes are
 symbolic, these quantities stay symbolic as well.
@@ -25,8 +25,8 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as helper
 from onnx_light.tools import pretty_onnx
-from onnx_light.onnx_optim.expressions import evaluate_expression
-from onnx_light.onnx_optim.shape_inference import (
+from onnx_light.onnx_core.expressions import evaluate_expression
+from onnx_light.onnx_core.shape_inference import (
     ComputeContext,
     NODE_MEMORY_ALREADY_ALLOCATED_BYTES_KEY,
     NODE_MEMORY_INPUTS_KEY,

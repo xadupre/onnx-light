@@ -62,8 +62,8 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedRNNSchemaCount + kExpectedRMSNormalizationSchemaCount +
     kExpectedRotaryEmbeddingSchemaCount;
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -73,19 +73,19 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsAveragePoolSchemasWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> average_pool_schemas =
+  const std::vector<core::schema::LightOpSchema> average_pool_schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("AveragePool");
 
   EXPECT_EQ(schemas.size(), kExpectedNnSchemaCount);
 
-  const onnx_op::LightOpSchema *const ap_v22 = FindByVersion(average_pool_schemas, 22);
-  const onnx_op::LightOpSchema *const ap_v19 = FindByVersion(average_pool_schemas, 19);
-  const onnx_op::LightOpSchema *const ap_v11 = FindByVersion(average_pool_schemas, 11);
-  const onnx_op::LightOpSchema *const ap_v10 = FindByVersion(average_pool_schemas, 10);
-  const onnx_op::LightOpSchema *const ap_v7 = FindByVersion(average_pool_schemas, 7);
-  const onnx_op::LightOpSchema *const ap_v1 = FindByVersion(average_pool_schemas, 1);
+  const core::schema::LightOpSchema *const ap_v22 = FindByVersion(average_pool_schemas, 22);
+  const core::schema::LightOpSchema *const ap_v19 = FindByVersion(average_pool_schemas, 19);
+  const core::schema::LightOpSchema *const ap_v11 = FindByVersion(average_pool_schemas, 11);
+  const core::schema::LightOpSchema *const ap_v10 = FindByVersion(average_pool_schemas, 10);
+  const core::schema::LightOpSchema *const ap_v7 = FindByVersion(average_pool_schemas, 7);
+  const core::schema::LightOpSchema *const ap_v1 = FindByVersion(average_pool_schemas, 1);
 
   ASSERT_NE(nullptr, ap_v22);
   ASSERT_NE(nullptr, ap_v19);
@@ -104,7 +104,8 @@ TEST(OnnxOpNnRegistrationTest, ReturnsAveragePoolSchemasWithoutShapeInference) {
   EXPECT_EQ(ap_v22->outputs()[0].type, "T");
   EXPECT_EQ(ap_v22->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(ap_v22->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(ap_v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+  EXPECT_EQ(ap_v22->type_constraints()[0].allowed_type_strs[0],
+            core::schema::TensorType::kBfloat16);
 
   EXPECT_EQ(ap_v19->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(ap_v11->type_constraints()[0].allowed_type_strs.size(), 3u);
@@ -112,28 +113,28 @@ TEST(OnnxOpNnRegistrationTest, ReturnsAveragePoolSchemasWithoutShapeInference) {
   EXPECT_EQ(ap_v7->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(ap_v1->type_constraints()[0].allowed_type_strs.size(), 3u);
 
-  EXPECT_EQ(ap_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat16);
-  EXPECT_EQ(ap_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kFloat);
-  EXPECT_EQ(ap_v1->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kDouble);
+  EXPECT_EQ(ap_v1->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kFloat16);
+  EXPECT_EQ(ap_v1->type_constraints()[0].allowed_type_strs[1], core::schema::TensorType::kFloat);
+  EXPECT_EQ(ap_v1->type_constraints()[0].allowed_type_strs[2], core::schema::TensorType::kDouble);
 
   EXPECT_FALSE(ap_v1->doc().empty());
   EXPECT_FALSE(ap_v22->doc().empty());
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsMaxPoolSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> mp_schemas =
+  const std::vector<core::schema::LightOpSchema> mp_schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("MaxPool");
 
   EXPECT_EQ(mp_schemas.size(), kExpectedMaxPoolSchemaCount);
 
-  const onnx_op::LightOpSchema *const mp_v22 = FindByVersion(mp_schemas, 22);
-  const onnx_op::LightOpSchema *const mp_v12 = FindByVersion(mp_schemas, 12);
-  const onnx_op::LightOpSchema *const mp_v11 = FindByVersion(mp_schemas, 11);
-  const onnx_op::LightOpSchema *const mp_v10 = FindByVersion(mp_schemas, 10);
-  const onnx_op::LightOpSchema *const mp_v8 = FindByVersion(mp_schemas, 8);
-  const onnx_op::LightOpSchema *const mp_v1 = FindByVersion(mp_schemas, 1);
+  const core::schema::LightOpSchema *const mp_v22 = FindByVersion(mp_schemas, 22);
+  const core::schema::LightOpSchema *const mp_v12 = FindByVersion(mp_schemas, 12);
+  const core::schema::LightOpSchema *const mp_v11 = FindByVersion(mp_schemas, 11);
+  const core::schema::LightOpSchema *const mp_v10 = FindByVersion(mp_schemas, 10);
+  const core::schema::LightOpSchema *const mp_v8 = FindByVersion(mp_schemas, 8);
+  const core::schema::LightOpSchema *const mp_v1 = FindByVersion(mp_schemas, 1);
 
   ASSERT_NE(nullptr, mp_v22);
   ASSERT_NE(nullptr, mp_v12);
@@ -169,16 +170,16 @@ TEST(OnnxOpNnRegistrationTest, ReturnsMaxPoolSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsMaxUnpoolSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> mu_schemas =
+  const std::vector<core::schema::LightOpSchema> mu_schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("MaxUnpool");
 
   EXPECT_EQ(mu_schemas.size(), kExpectedMaxUnpoolSchemaCount);
 
-  const onnx_op::LightOpSchema *const mu_v22 = FindByVersion(mu_schemas, 22);
-  const onnx_op::LightOpSchema *const mu_v11 = FindByVersion(mu_schemas, 11);
-  const onnx_op::LightOpSchema *const mu_v9 = FindByVersion(mu_schemas, 9);
+  const core::schema::LightOpSchema *const mu_v22 = FindByVersion(mu_schemas, 22);
+  const core::schema::LightOpSchema *const mu_v11 = FindByVersion(mu_schemas, 11);
+  const core::schema::LightOpSchema *const mu_v9 = FindByVersion(mu_schemas, 9);
 
   ASSERT_NE(nullptr, mu_v22);
   ASSERT_NE(nullptr, mu_v11);
@@ -203,13 +204,13 @@ TEST(OnnxOpNnRegistrationTest, ReturnsMaxUnpoolSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsMaxRoiPoolSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> mrp_schemas =
+  const std::vector<core::schema::LightOpSchema> mrp_schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("MaxRoiPool");
 
   EXPECT_EQ(mrp_schemas.size(), kExpectedMaxRoiPoolSchemaCount);
 
-  const onnx_op::LightOpSchema *const mrp_v22 = FindByVersion(mrp_schemas, 22);
-  const onnx_op::LightOpSchema *const mrp_v1 = FindByVersion(mrp_schemas, 1);
+  const core::schema::LightOpSchema *const mrp_v22 = FindByVersion(mrp_schemas, 22);
+  const core::schema::LightOpSchema *const mrp_v1 = FindByVersion(mrp_schemas, 1);
 
   ASSERT_NE(nullptr, mrp_v22);
   ASSERT_NE(nullptr, mrp_v1);
@@ -239,15 +240,15 @@ TEST(OnnxOpNnRegistrationTest, ReturnsMaxRoiPoolSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsRNNSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> rnn_schemas =
+  const std::vector<core::schema::LightOpSchema> rnn_schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("RNN");
 
-  const onnx_op::LightOpSchema *const rnn_v22 = FindByVersion(rnn_schemas, 22);
-  const onnx_op::LightOpSchema *const rnn_v14 = FindByVersion(rnn_schemas, 14);
-  const onnx_op::LightOpSchema *const rnn_v7 = FindByVersion(rnn_schemas, 7);
-  const onnx_op::LightOpSchema *const rnn_v1 = FindByVersion(rnn_schemas, 1);
+  const core::schema::LightOpSchema *const rnn_v22 = FindByVersion(rnn_schemas, 22);
+  const core::schema::LightOpSchema *const rnn_v14 = FindByVersion(rnn_schemas, 14);
+  const core::schema::LightOpSchema *const rnn_v7 = FindByVersion(rnn_schemas, 7);
+  const core::schema::LightOpSchema *const rnn_v1 = FindByVersion(rnn_schemas, 1);
 
   ASSERT_NE(nullptr, rnn_v22);
   ASSERT_NE(nullptr, rnn_v14);
@@ -269,12 +270,14 @@ TEST(OnnxOpNnRegistrationTest, ReturnsRNNSchemasForAllVersions) {
   EXPECT_EQ(rnn_v22->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(rnn_v22->type_constraints()[1].type_param_str, "T1");
   EXPECT_EQ(rnn_v22->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(rnn_v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+  EXPECT_EQ(rnn_v22->type_constraints()[0].allowed_type_strs[0],
+            core::schema::TensorType::kBfloat16);
   EXPECT_EQ(rnn_v22->type_constraints()[1].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(rnn_v22->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kInt32);
+  EXPECT_EQ(rnn_v22->type_constraints()[1].allowed_type_strs[0], core::schema::TensorType::kInt32);
 
   EXPECT_EQ(rnn_v14->type_constraints()[0].allowed_type_strs.size(), 3u);
-  EXPECT_EQ(rnn_v14->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat16);
+  EXPECT_EQ(rnn_v14->type_constraints()[0].allowed_type_strs[0],
+            core::schema::TensorType::kFloat16);
 
   EXPECT_NE(rnn_v1->outputs()[0].description, rnn_v22->outputs()[0].description);
 
@@ -283,16 +286,16 @@ TEST(OnnxOpNnRegistrationTest, ReturnsRNNSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsGRUSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> gru_schemas =
+  const std::vector<core::schema::LightOpSchema> gru_schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("GRU");
 
-  const onnx_op::LightOpSchema *const gru_v22 = FindByVersion(gru_schemas, 22);
-  const onnx_op::LightOpSchema *const gru_v14 = FindByVersion(gru_schemas, 14);
-  const onnx_op::LightOpSchema *const gru_v7 = FindByVersion(gru_schemas, 7);
-  const onnx_op::LightOpSchema *const gru_v3 = FindByVersion(gru_schemas, 3);
-  const onnx_op::LightOpSchema *const gru_v1 = FindByVersion(gru_schemas, 1);
+  const core::schema::LightOpSchema *const gru_v22 = FindByVersion(gru_schemas, 22);
+  const core::schema::LightOpSchema *const gru_v14 = FindByVersion(gru_schemas, 14);
+  const core::schema::LightOpSchema *const gru_v7 = FindByVersion(gru_schemas, 7);
+  const core::schema::LightOpSchema *const gru_v3 = FindByVersion(gru_schemas, 3);
+  const core::schema::LightOpSchema *const gru_v1 = FindByVersion(gru_schemas, 1);
 
   ASSERT_NE(nullptr, gru_v22);
   ASSERT_NE(nullptr, gru_v14);
@@ -309,15 +312,15 @@ TEST(OnnxOpNnRegistrationTest, ReturnsGRUSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsLSTMSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> lstm_schemas =
+  const std::vector<core::schema::LightOpSchema> lstm_schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("LSTM");
 
-  const onnx_op::LightOpSchema *const lstm_v22 = FindByVersion(lstm_schemas, 22);
-  const onnx_op::LightOpSchema *const lstm_v14 = FindByVersion(lstm_schemas, 14);
-  const onnx_op::LightOpSchema *const lstm_v7 = FindByVersion(lstm_schemas, 7);
-  const onnx_op::LightOpSchema *const lstm_v1 = FindByVersion(lstm_schemas, 1);
+  const core::schema::LightOpSchema *const lstm_v22 = FindByVersion(lstm_schemas, 22);
+  const core::schema::LightOpSchema *const lstm_v14 = FindByVersion(lstm_schemas, 14);
+  const core::schema::LightOpSchema *const lstm_v7 = FindByVersion(lstm_schemas, 7);
+  const core::schema::LightOpSchema *const lstm_v1 = FindByVersion(lstm_schemas, 1);
 
   ASSERT_NE(nullptr, lstm_v22);
   ASSERT_NE(nullptr, lstm_v14);
@@ -336,17 +339,17 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLSTMSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsBatchNormalizationSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> batch_normalization_schemas =
+  const std::vector<core::schema::LightOpSchema> batch_normalization_schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("BatchNormalization");
 
-  const onnx_op::LightOpSchema *const bn_v15 = FindByVersion(batch_normalization_schemas, 15);
-  const onnx_op::LightOpSchema *const bn_v14 = FindByVersion(batch_normalization_schemas, 14);
-  const onnx_op::LightOpSchema *const bn_v9 = FindByVersion(batch_normalization_schemas, 9);
-  const onnx_op::LightOpSchema *const bn_v7 = FindByVersion(batch_normalization_schemas, 7);
-  const onnx_op::LightOpSchema *const bn_v6 = FindByVersion(batch_normalization_schemas, 6);
-  const onnx_op::LightOpSchema *const bn_v1 = FindByVersion(batch_normalization_schemas, 1);
+  const core::schema::LightOpSchema *const bn_v15 = FindByVersion(batch_normalization_schemas, 15);
+  const core::schema::LightOpSchema *const bn_v14 = FindByVersion(batch_normalization_schemas, 14);
+  const core::schema::LightOpSchema *const bn_v9 = FindByVersion(batch_normalization_schemas, 9);
+  const core::schema::LightOpSchema *const bn_v7 = FindByVersion(batch_normalization_schemas, 7);
+  const core::schema::LightOpSchema *const bn_v6 = FindByVersion(batch_normalization_schemas, 6);
+  const core::schema::LightOpSchema *const bn_v1 = FindByVersion(batch_normalization_schemas, 1);
 
   ASSERT_NE(nullptr, bn_v15);
   ASSERT_NE(nullptr, bn_v14);
@@ -406,16 +409,16 @@ TEST(OnnxOpNnRegistrationTest, ReturnsBatchNormalizationSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsDropoutSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> dropout_schemas =
+  const std::vector<core::schema::LightOpSchema> dropout_schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("Dropout");
 
-  const onnx_op::LightOpSchema *const d_v22 = FindByVersion(dropout_schemas, 22);
-  const onnx_op::LightOpSchema *const d_v13 = FindByVersion(dropout_schemas, 13);
-  const onnx_op::LightOpSchema *const d_v12 = FindByVersion(dropout_schemas, 12);
-  const onnx_op::LightOpSchema *const d_v10 = FindByVersion(dropout_schemas, 10);
-  const onnx_op::LightOpSchema *const d_v7 = FindByVersion(dropout_schemas, 7);
-  const onnx_op::LightOpSchema *const d_v6 = FindByVersion(dropout_schemas, 6);
-  const onnx_op::LightOpSchema *const d_v1 = FindByVersion(dropout_schemas, 1);
+  const core::schema::LightOpSchema *const d_v22 = FindByVersion(dropout_schemas, 22);
+  const core::schema::LightOpSchema *const d_v13 = FindByVersion(dropout_schemas, 13);
+  const core::schema::LightOpSchema *const d_v12 = FindByVersion(dropout_schemas, 12);
+  const core::schema::LightOpSchema *const d_v10 = FindByVersion(dropout_schemas, 10);
+  const core::schema::LightOpSchema *const d_v7 = FindByVersion(dropout_schemas, 7);
+  const core::schema::LightOpSchema *const d_v6 = FindByVersion(dropout_schemas, 6);
+  const core::schema::LightOpSchema *const d_v1 = FindByVersion(dropout_schemas, 1);
 
   ASSERT_NE(nullptr, d_v22);
   ASSERT_NE(nullptr, d_v13);
@@ -450,7 +453,7 @@ TEST(OnnxOpNnRegistrationTest, ReturnsDropoutSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, RecurrentSchemasStripDocsWhenRequested) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory(/*op_type=*/"", /*init_doc=*/false);
   for (const auto &schema : schemas) {
     EXPECT_TRUE(schema.doc().empty());
@@ -458,13 +461,13 @@ TEST(OnnxOpNnRegistrationTest, RecurrentSchemasStripDocsWhenRequested) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsGlobalAveragePoolSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("GlobalAveragePool");
 
   ASSERT_EQ(schemas.size(), kExpectedGlobalAveragePoolSchemaCount);
 
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
 
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v1);
@@ -477,23 +480,23 @@ TEST(OnnxOpNnRegistrationTest, ReturnsGlobalAveragePoolSchemasForAllVersions) {
   EXPECT_EQ(v22->outputs()[0].name, "Y");
   EXPECT_EQ(v22->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kBfloat16);
 
   EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
-  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat16);
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kFloat16);
 
   EXPECT_FALSE(v22->doc().empty());
   EXPECT_FALSE(v1->doc().empty());
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsGlobalMaxPoolSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("GlobalMaxPool");
 
   ASSERT_EQ(schemas.size(), kExpectedGlobalMaxPoolSchemaCount);
 
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
 
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v1);
@@ -509,14 +512,14 @@ TEST(OnnxOpNnRegistrationTest, ReturnsGlobalMaxPoolSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsGlobalLpPoolSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("GlobalLpPool");
 
   ASSERT_EQ(schemas.size(), kExpectedGlobalLpPoolSchemaCount);
 
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v2 = FindByVersion(schemas, 2);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v2 = FindByVersion(schemas, 2);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
 
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v2);
@@ -535,12 +538,12 @@ TEST(OnnxOpNnRegistrationTest, ReturnsGlobalLpPoolSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsCol2ImSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("Col2Im");
 
   ASSERT_EQ(schemas.size(), kExpectedCol2ImSchemaCount);
 
-  const onnx_op::LightOpSchema *const v18 = FindByVersion(schemas, 18);
+  const core::schema::LightOpSchema *const v18 = FindByVersion(schemas, 18);
   ASSERT_NE(nullptr, v18);
 
   EXPECT_EQ(v18->name(), "Col2Im");
@@ -559,30 +562,30 @@ TEST(OnnxOpNnRegistrationTest, ReturnsCol2ImSchemasForAllVersions) {
   EXPECT_EQ(v18->type_constraints()[0].type_param_str, "T");
   ASSERT_EQ(v18->attributes().size(), 3u);
   EXPECT_EQ(v18->attributes()[0].name, "dilations");
-  EXPECT_EQ(v18->attributes()[0].type, onnx_op::AttributeType::INTS);
+  EXPECT_EQ(v18->attributes()[0].type, core::schema::AttributeType::INTS);
   EXPECT_FALSE(v18->attributes()[0].required);
   EXPECT_EQ(v18->attributes()[1].name, "pads");
-  EXPECT_EQ(v18->attributes()[1].type, onnx_op::AttributeType::INTS);
+  EXPECT_EQ(v18->attributes()[1].type, core::schema::AttributeType::INTS);
   EXPECT_FALSE(v18->attributes()[1].required);
   EXPECT_EQ(v18->attributes()[2].name, "strides");
-  EXPECT_EQ(v18->attributes()[2].type, onnx_op::AttributeType::INTS);
+  EXPECT_EQ(v18->attributes()[2].type, core::schema::AttributeType::INTS);
   EXPECT_FALSE(v18->attributes()[2].required);
   EXPECT_FALSE(v18->doc().empty());
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsLRNSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("LRN");
 
   ASSERT_EQ(schemas.size(), kExpectedLRNSchemaCount);
 
-  const onnx_op::LightOpSchema *const v13 = FindByVersion(schemas, 13);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v13 = FindByVersion(schemas, 13);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
 
   ASSERT_NE(nullptr, v13);
   ASSERT_NE(nullptr, v1);
 
-  for (const onnx_op::LightOpSchema *schema : {v1, v13}) {
+  for (const core::schema::LightOpSchema *schema : {v1, v13}) {
     SCOPED_TRACE("LRN@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "LRN");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -596,16 +599,16 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLRNSchemasForAllVersions) {
     EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
     ASSERT_EQ(schema->attributes().size(), 4u);
     EXPECT_EQ(schema->attributes()[0].name, "alpha");
-    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::FLOAT);
+    EXPECT_EQ(schema->attributes()[0].type, core::schema::AttributeType::FLOAT);
     EXPECT_FALSE(schema->attributes()[0].required);
     EXPECT_EQ(schema->attributes()[1].name, "beta");
-    EXPECT_EQ(schema->attributes()[1].type, onnx_op::AttributeType::FLOAT);
+    EXPECT_EQ(schema->attributes()[1].type, core::schema::AttributeType::FLOAT);
     EXPECT_FALSE(schema->attributes()[1].required);
     EXPECT_EQ(schema->attributes()[2].name, "bias");
-    EXPECT_EQ(schema->attributes()[2].type, onnx_op::AttributeType::FLOAT);
+    EXPECT_EQ(schema->attributes()[2].type, core::schema::AttributeType::FLOAT);
     EXPECT_FALSE(schema->attributes()[2].required);
     EXPECT_EQ(schema->attributes()[3].name, "size");
-    EXPECT_EQ(schema->attributes()[3].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[3].type, core::schema::AttributeType::INT);
     EXPECT_TRUE(schema->attributes()[3].required);
     EXPECT_FALSE(schema->doc().empty());
   }
@@ -616,18 +619,18 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLRNSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsLpNormalizationSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("LpNormalization");
 
   ASSERT_EQ(schemas.size(), kExpectedLpNormalizationSchemaCount);
 
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
 
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v1);
 
-  for (const onnx_op::LightOpSchema *schema : {v1, v22}) {
+  for (const core::schema::LightOpSchema *schema : {v1, v22}) {
     SCOPED_TRACE("LpNormalization@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "LpNormalization");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -641,10 +644,10 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLpNormalizationSchemasForAllVersions) {
     EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
     ASSERT_EQ(schema->attributes().size(), 2u);
     EXPECT_EQ(schema->attributes()[0].name, "axis");
-    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[0].type, core::schema::AttributeType::INT);
     EXPECT_FALSE(schema->attributes()[0].required);
     EXPECT_EQ(schema->attributes()[1].name, "p");
-    EXPECT_EQ(schema->attributes()[1].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[1].type, core::schema::AttributeType::INT);
     EXPECT_FALSE(schema->attributes()[1].required);
     EXPECT_FALSE(schema->doc().empty());
   }
@@ -655,16 +658,16 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLpNormalizationSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsLpPoolSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("LpPool");
 
   ASSERT_EQ(schemas.size(), kExpectedLpPoolSchemaCount);
 
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v18 = FindByVersion(schemas, 18);
-  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
-  const onnx_op::LightOpSchema *const v2 = FindByVersion(schemas, 2);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v18 = FindByVersion(schemas, 18);
+  const core::schema::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  const core::schema::LightOpSchema *const v2 = FindByVersion(schemas, 2);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
 
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v18);
@@ -672,7 +675,7 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLpPoolSchemasForAllVersions) {
   ASSERT_NE(nullptr, v2);
   ASSERT_NE(nullptr, v1);
 
-  for (const onnx_op::LightOpSchema *schema : {v1, v2, v11, v18, v22}) {
+  for (const core::schema::LightOpSchema *schema : {v1, v2, v11, v18, v22}) {
     SCOPED_TRACE("LpPool@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "LpPool");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -690,26 +693,26 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLpPoolSchemasForAllVersions) {
   // v22 promotes the type set to include bfloat16 (matches upstream
   // LpPool@22, which uses ``OpSchema::all_float_types_ir4()``).
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
-  for (const onnx_op::LightOpSchema *schema : {v1, v2, v11, v18}) {
+  for (const core::schema::LightOpSchema *schema : {v1, v2, v11, v18}) {
     SCOPED_TRACE("LpPool@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs.size(), 3u);
   }
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsFlattenSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("Flatten");
 
   ASSERT_EQ(schemas.size(), kExpectedFlattenSchemaCount);
 
-  const onnx_op::LightOpSchema *const v25 = FindByVersion(schemas, 25);
-  const onnx_op::LightOpSchema *const v24 = FindByVersion(schemas, 24);
-  const onnx_op::LightOpSchema *const v23 = FindByVersion(schemas, 23);
-  const onnx_op::LightOpSchema *const v21 = FindByVersion(schemas, 21);
-  const onnx_op::LightOpSchema *const v13 = FindByVersion(schemas, 13);
-  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
-  const onnx_op::LightOpSchema *const v9 = FindByVersion(schemas, 9);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v25 = FindByVersion(schemas, 25);
+  const core::schema::LightOpSchema *const v24 = FindByVersion(schemas, 24);
+  const core::schema::LightOpSchema *const v23 = FindByVersion(schemas, 23);
+  const core::schema::LightOpSchema *const v21 = FindByVersion(schemas, 21);
+  const core::schema::LightOpSchema *const v13 = FindByVersion(schemas, 13);
+  const core::schema::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  const core::schema::LightOpSchema *const v9 = FindByVersion(schemas, 9);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
 
   ASSERT_NE(nullptr, v25);
   ASSERT_NE(nullptr, v24);
@@ -720,7 +723,7 @@ TEST(OnnxOpNnRegistrationTest, ReturnsFlattenSchemasForAllVersions) {
   ASSERT_NE(nullptr, v9);
   ASSERT_NE(nullptr, v1);
 
-  for (const onnx_op::LightOpSchema *schema : {v1, v9, v11, v13, v21, v23, v24, v25}) {
+  for (const core::schema::LightOpSchema *schema : {v1, v9, v11, v13, v21, v23, v24, v25}) {
     SCOPED_TRACE("Flatten@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "Flatten");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -734,7 +737,7 @@ TEST(OnnxOpNnRegistrationTest, ReturnsFlattenSchemasForAllVersions) {
     EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
     ASSERT_EQ(schema->attributes().size(), 1u);
     EXPECT_EQ(schema->attributes()[0].name, "axis");
-    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[0].type, core::schema::AttributeType::INT);
     EXPECT_FALSE(schema->doc().empty());
   }
 
@@ -744,18 +747,18 @@ TEST(OnnxOpNnRegistrationTest, ReturnsFlattenSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsDeformConvSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("DeformConv");
 
   ASSERT_EQ(schemas.size(), kExpectedDeformConvSchemaCount);
 
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v19 = FindByVersion(schemas, 19);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v19 = FindByVersion(schemas, 19);
 
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v19);
 
-  for (const onnx_op::LightOpSchema *schema : {v19, v22}) {
+  for (const core::schema::LightOpSchema *schema : {v19, v22}) {
     SCOPED_TRACE("DeformConv@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "DeformConv");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -778,26 +781,26 @@ TEST(OnnxOpNnRegistrationTest, ReturnsDeformConvSchemasForAllVersions) {
 
   // Opset 22 widens T to include bfloat16.
   EXPECT_EQ(v19->type_constraints()[0].allowed_type_strs.size(), 3u);
-  EXPECT_EQ(v19->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat16);
+  EXPECT_EQ(v19->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kFloat16);
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kBfloat16);
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsConvSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("Conv");
 
   ASSERT_EQ(schemas.size(), kExpectedConvSchemaCount);
 
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
 
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v11);
   ASSERT_NE(nullptr, v1);
 
-  for (const onnx_op::LightOpSchema *schema : {v1, v11, v22}) {
+  for (const core::schema::LightOpSchema *schema : {v1, v11, v22}) {
     SCOPED_TRACE("Conv@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "Conv");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -814,16 +817,16 @@ TEST(OnnxOpNnRegistrationTest, ReturnsConvSchemasForAllVersions) {
   EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs.size(), 4u);
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kBfloat16);
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsConvIntegerSchemaForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("ConvInteger");
 
   ASSERT_EQ(schemas.size(), kExpectedConvIntegerSchemaCount);
 
-  const onnx_op::LightOpSchema *const v10 = FindByVersion(schemas, 10);
+  const core::schema::LightOpSchema *const v10 = FindByVersion(schemas, 10);
   ASSERT_NE(nullptr, v10);
 
   EXPECT_EQ(v10->name(), "ConvInteger");
@@ -840,20 +843,20 @@ TEST(OnnxOpNnRegistrationTest, ReturnsConvIntegerSchemaForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsConvTransposeSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("ConvTranspose");
 
   ASSERT_EQ(schemas.size(), kExpectedConvTransposeSchemaCount);
 
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
 
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v11);
   ASSERT_NE(nullptr, v1);
 
-  for (const onnx_op::LightOpSchema *schema : {v1, v11, v22}) {
+  for (const core::schema::LightOpSchema *schema : {v1, v11, v22}) {
     SCOPED_TRACE("ConvTranspose@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "ConvTranspose");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -868,22 +871,22 @@ TEST(OnnxOpNnRegistrationTest, ReturnsConvTransposeSchemasForAllVersions) {
   }
 
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kBfloat16);
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsInstanceNormalizationSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("InstanceNormalization");
   ASSERT_EQ(schemas.size(), kExpectedInstanceNormalizationSchemaCount);
 
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v6 = FindByVersion(schemas, 6);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v6 = FindByVersion(schemas, 6);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v6);
   ASSERT_NE(nullptr, v1);
 
-  for (const onnx_op::LightOpSchema *schema : {v1, v6, v22}) {
+  for (const core::schema::LightOpSchema *schema : {v1, v6, v22}) {
     SCOPED_TRACE("InstanceNormalization@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "InstanceNormalization");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -910,16 +913,16 @@ TEST(OnnxOpNnRegistrationTest, ReturnsInstanceNormalizationSchemasForAllVersions
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsGroupNormalizationSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("GroupNormalization");
   ASSERT_EQ(schemas.size(), kExpectedGroupNormalizationSchemaCount);
 
-  const onnx_op::LightOpSchema *const v21 = FindByVersion(schemas, 21);
-  const onnx_op::LightOpSchema *const v18 = FindByVersion(schemas, 18);
+  const core::schema::LightOpSchema *const v21 = FindByVersion(schemas, 21);
+  const core::schema::LightOpSchema *const v18 = FindByVersion(schemas, 18);
   ASSERT_NE(nullptr, v21);
   ASSERT_NE(nullptr, v18);
 
-  for (const onnx_op::LightOpSchema *schema : {v18, v21}) {
+  for (const core::schema::LightOpSchema *schema : {v18, v21}) {
     SCOPED_TRACE("GroupNormalization@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "GroupNormalization");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -943,16 +946,16 @@ TEST(OnnxOpNnRegistrationTest, ReturnsGroupNormalizationSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsMeanVarianceNormalizationSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("MeanVarianceNormalization");
   ASSERT_EQ(schemas.size(), kExpectedMeanVarianceNormalizationSchemaCount);
 
-  const onnx_op::LightOpSchema *const v13 = FindByVersion(schemas, 13);
-  const onnx_op::LightOpSchema *const v9 = FindByVersion(schemas, 9);
+  const core::schema::LightOpSchema *const v13 = FindByVersion(schemas, 13);
+  const core::schema::LightOpSchema *const v9 = FindByVersion(schemas, 9);
   ASSERT_NE(nullptr, v13);
   ASSERT_NE(nullptr, v9);
 
-  for (const onnx_op::LightOpSchema *schema : {v9, v13}) {
+  for (const core::schema::LightOpSchema *schema : {v9, v13}) {
     SCOPED_TRACE("MeanVarianceNormalization@" + std::to_string(schema->since_version()));
     EXPECT_EQ(schema->name(), "MeanVarianceNormalization");
     EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -971,11 +974,11 @@ TEST(OnnxOpNnRegistrationTest, ReturnsMeanVarianceNormalizationSchemasForAllVers
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsLayerNormalizationSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("LayerNormalization");
   ASSERT_EQ(schemas.size(), kExpectedLayerNormalizationSchemaCount);
 
-  const onnx_op::LightOpSchema *const v17 = FindByVersion(schemas, 17);
+  const core::schema::LightOpSchema *const v17 = FindByVersion(schemas, 17);
   ASSERT_NE(nullptr, v17);
 
   EXPECT_EQ(v17->name(), "LayerNormalization");
@@ -1008,11 +1011,11 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLayerNormalizationSchemasForAllVersions) {
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsRMSNormalizationSchemasForAllVersions) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("RMSNormalization");
   ASSERT_EQ(schemas.size(), kExpectedRMSNormalizationSchemaCount);
 
-  const onnx_op::LightOpSchema *const v23 = FindByVersion(schemas, 23);
+  const core::schema::LightOpSchema *const v23 = FindByVersion(schemas, 23);
   ASSERT_NE(nullptr, v23);
 
   EXPECT_EQ(v23->name(), "RMSNormalization");

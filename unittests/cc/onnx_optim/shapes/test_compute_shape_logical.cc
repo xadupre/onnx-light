@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_optim/shapes/logical/shape_logical.h"
-#include "onnx_optim/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>
 
@@ -29,42 +29,42 @@ NodeProto MakeAndNode(const std::string &a = "A", const std::string &b = "B",
 
 TEST(OnnxOptimShapesLogicalAnd, PropagatesEqualShapesWithBoolDtype) {
   NodeProto node = MakeAndNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape));
 
   onnx_optim::shapes::logical::ComputeShapeAnd(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalAnd, BroadcastsShapes) {
   NodeProto node = MakeAndNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
-  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)};
-  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape_a));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape_b));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(3)};
+  core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape_b));
 
   onnx_optim::shapes::logical::ComputeShapeAnd(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), expected);
 }
 
 TEST(OnnxOptimShapesLogicalAnd, SymbolicBroadcast) {
   NodeProto node = MakeAndNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(1)};
-  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim("M")};
-  onnx_optim::OptimShape expected{onnx_optim::OptimDim("N"), onnx_optim::OptimDim("M")};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape_a));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape_b));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim("N"), core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim("M")};
+  core::symbolic::SymShape expected{core::symbolic::SymDim("N"), core::symbolic::SymDim("M")};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape_b));
 
   onnx_optim::shapes::logical::ComputeShapeAnd(ctx, node, "A", "B");
 
@@ -78,9 +78,9 @@ TEST(OnnxOptimShapesLogicalAnd, RejectsWrongOpType) {
   node.add_input("A");
   node.add_input("B");
   node.add_output("C");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeAnd(ctx, node, "A", "B"),
                std::invalid_argument);
 }
@@ -90,28 +90,28 @@ TEST(OnnxOptimShapesLogicalAnd, RejectsNodeWithoutOutput) {
   node.set_op_type("And");
   node.add_input("A");
   node.add_input("B");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeAnd(ctx, node, "A", "B"),
                std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalAnd, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeAndNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeAnd(ctx, node, "A", "B"),
                std::out_of_range);
 }
 
 TEST(OnnxOptimShapesLogicalAnd, ThrowsOnIncompatibleShapes) {
   NodeProto node = MakeAndNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(4)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeAnd(ctx, node, "A", "B"),
                std::invalid_argument);
 }
@@ -146,57 +146,57 @@ NodeProto MakeWhereNode(const std::string &condition = "condition", const std::s
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesLogicalOr, PropagatesEqualShapesWithBoolDtype) {
   NodeProto node = MakeBinaryLogicalNode("Or");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape));
 
   onnx_optim::shapes::logical::ComputeShapeOr(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalOr, BroadcastsShapes) {
   NodeProto node = MakeBinaryLogicalNode("Or");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
-  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)};
-  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape_a));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape_b));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(3)};
+  core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape_b));
 
   onnx_optim::shapes::logical::ComputeShapeOr(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), expected);
 }
 
 TEST(OnnxOptimShapesLogicalOr, RejectsWrongOpType) {
   NodeProto node = MakeBinaryLogicalNode("And");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeOr(ctx, node, "A", "B"),
                std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalOr, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeBinaryLogicalNode("Or");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeOr(ctx, node, "A", "B"), std::out_of_range);
 }
 
 TEST(OnnxOptimShapesLogicalOr, ThrowsOnIncompatibleShapes) {
   NodeProto node = MakeBinaryLogicalNode("Or");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(4)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeOr(ctx, node, "A", "B"),
                std::invalid_argument);
 }
@@ -206,58 +206,58 @@ TEST(OnnxOptimShapesLogicalOr, ThrowsOnIncompatibleShapes) {
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesLogicalXor, PropagatesEqualShapesWithBoolDtype) {
   NodeProto node = MakeBinaryLogicalNode("Xor");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape));
 
   onnx_optim::shapes::logical::ComputeShapeXor(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalXor, BroadcastsShapes) {
   NodeProto node = MakeBinaryLogicalNode("Xor");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
-  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)};
-  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape_a));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape_b));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(3)};
+  core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape_b));
 
   onnx_optim::shapes::logical::ComputeShapeXor(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), expected);
 }
 
 TEST(OnnxOptimShapesLogicalXor, RejectsWrongOpType) {
   NodeProto node = MakeBinaryLogicalNode("And");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeXor(ctx, node, "A", "B"),
                std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalXor, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeBinaryLogicalNode("Xor");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeXor(ctx, node, "A", "B"),
                std::out_of_range);
 }
 
 TEST(OnnxOptimShapesLogicalXor, ThrowsOnIncompatibleShapes) {
   NodeProto node = MakeBinaryLogicalNode("Xor");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(4)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeXor(ctx, node, "A", "B"),
                std::invalid_argument);
 }
@@ -267,58 +267,58 @@ TEST(OnnxOptimShapesLogicalXor, ThrowsOnIncompatibleShapes) {
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesLogicalGreater, PropagatesEqualShapesWithBoolDtype) {
   NodeProto node = MakeBinaryLogicalNode("Greater");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   onnx_optim::shapes::logical::ComputeShapeGreater(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalGreater, BroadcastsShapes) {
   NodeProto node = MakeBinaryLogicalNode("Greater");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
-  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)};
-  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_a));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_b));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(3)};
+  core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_b));
 
   onnx_optim::shapes::logical::ComputeShapeGreater(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), expected);
 }
 
 TEST(OnnxOptimShapesLogicalGreater, RejectsWrongOpType) {
   NodeProto node = MakeBinaryLogicalNode("Less");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeGreater(ctx, node, "A", "B"),
                std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalGreater, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeBinaryLogicalNode("Greater");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeGreater(ctx, node, "A", "B"),
                std::out_of_range);
 }
 
 TEST(OnnxOptimShapesLogicalGreater, ThrowsOnIncompatibleShapes) {
   NodeProto node = MakeBinaryLogicalNode("Greater");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(4)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeGreater(ctx, node, "A", "B"),
                std::invalid_argument);
 }
@@ -328,58 +328,58 @@ TEST(OnnxOptimShapesLogicalGreater, ThrowsOnIncompatibleShapes) {
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesLogicalLess, PropagatesEqualShapesWithBoolDtype) {
   NodeProto node = MakeBinaryLogicalNode("Less");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   onnx_optim::shapes::logical::ComputeShapeLess(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalLess, BroadcastsShapes) {
   NodeProto node = MakeBinaryLogicalNode("Less");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
-  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)};
-  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_a));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_b));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(3)};
+  core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_b));
 
   onnx_optim::shapes::logical::ComputeShapeLess(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), expected);
 }
 
 TEST(OnnxOptimShapesLogicalLess, RejectsWrongOpType) {
   NodeProto node = MakeBinaryLogicalNode("Greater");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeLess(ctx, node, "A", "B"),
                std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalLess, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeBinaryLogicalNode("Less");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeLess(ctx, node, "A", "B"),
                std::out_of_range);
 }
 
 TEST(OnnxOptimShapesLogicalLess, ThrowsOnIncompatibleShapes) {
   NodeProto node = MakeBinaryLogicalNode("Less");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(4)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeLess(ctx, node, "A", "B"),
                std::invalid_argument);
 }
@@ -389,39 +389,39 @@ TEST(OnnxOptimShapesLogicalLess, ThrowsOnIncompatibleShapes) {
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesLogicalGreaterOrEqual, PropagatesEqualShapesWithBoolDtype) {
   NodeProto node = MakeBinaryLogicalNode("GreaterOrEqual");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   onnx_optim::shapes::logical::ComputeShapeGreaterOrEqual(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalGreaterOrEqual, BroadcastsShapes) {
   NodeProto node = MakeBinaryLogicalNode("GreaterOrEqual");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
-  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)};
-  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_a));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_b));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(3)};
+  core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_b));
 
   onnx_optim::shapes::logical::ComputeShapeGreaterOrEqual(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), expected);
 }
 
 TEST(OnnxOptimShapesLogicalGreaterOrEqual, RejectsWrongOpType) {
   NodeProto node = MakeBinaryLogicalNode("Greater");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeGreaterOrEqual(ctx, node, "A", "B"),
                std::invalid_argument);
 }
@@ -431,39 +431,39 @@ TEST(OnnxOptimShapesLogicalGreaterOrEqual, RejectsWrongOpType) {
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesLogicalLessOrEqual, PropagatesEqualShapesWithBoolDtype) {
   NodeProto node = MakeBinaryLogicalNode("LessOrEqual");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   onnx_optim::shapes::logical::ComputeShapeLessOrEqual(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalLessOrEqual, BroadcastsShapes) {
   NodeProto node = MakeBinaryLogicalNode("LessOrEqual");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
-  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)};
-  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_a));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_b));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(3)};
+  core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_b));
 
   onnx_optim::shapes::logical::ComputeShapeLessOrEqual(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), expected);
 }
 
 TEST(OnnxOptimShapesLogicalLessOrEqual, RejectsWrongOpType) {
   NodeProto node = MakeBinaryLogicalNode("Less");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeLessOrEqual(ctx, node, "A", "B"),
                std::invalid_argument);
 }
@@ -473,58 +473,58 @@ TEST(OnnxOptimShapesLogicalLessOrEqual, RejectsWrongOpType) {
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesLogicalEqual, PropagatesEqualShapesWithBoolDtype) {
   NodeProto node = MakeBinaryLogicalNode("Equal");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape));
 
   onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalEqual, BroadcastsShapes) {
   NodeProto node = MakeBinaryLogicalNode("Equal");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
-  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)};
-  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape_a));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape_b));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(3)};
+  core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape_b));
 
   onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("C").Shape(), expected);
 }
 
 TEST(OnnxOptimShapesLogicalEqual, RejectsWrongOpType) {
   NodeProto node = MakeBinaryLogicalNode("Greater");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, {}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, {}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B"),
                std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalEqual, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeBinaryLogicalNode("Equal");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B"),
                std::out_of_range);
 }
 
 TEST(OnnxOptimShapesLogicalEqual, ThrowsOnIncompatibleShapes) {
   NodeProto node = MakeBinaryLogicalNode("Equal");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(4)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B"),
                std::invalid_argument);
 }
@@ -534,54 +534,56 @@ TEST(OnnxOptimShapesLogicalEqual, ThrowsOnIncompatibleShapes) {
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesLogicalWhere, BroadcastsThreeInputShapesAndPropagatesDataType) {
   NodeProto node = MakeWhereNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("condition", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
-                                               onnx_optim::OptimShape{onnx_optim::OptimDim(2),
-                                                                      onnx_optim::OptimDim(1)}));
-  ctx.Set("X", onnx_optim::OptimTensor(
-                   nullptr, onnx_optim::TensorType::kInt32,
-                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
-  ctx.Set("Y", onnx_optim::OptimTensor(
-                   nullptr, onnx_optim::TensorType::kInt32,
-                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("condition",
+          core::symbolic::SymTensor(
+              nullptr, core::symbolic::TensorType::kBool,
+              core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(1)}));
+  ctx.Set("X", core::symbolic::SymTensor(
+                   nullptr, core::symbolic::TensorType::kInt32,
+                   core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
+  ctx.Set("Y", core::symbolic::SymTensor(
+                   nullptr, core::symbolic::TensorType::kInt32,
+                   core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(3)}));
 
   onnx_optim::shapes::logical::ComputeShapeWhere(ctx, node, "condition", "X", "Y");
 
   ASSERT_TRUE(ctx.Has("output"));
-  EXPECT_EQ(ctx.Get("output").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("output").Dtype(), core::symbolic::TensorType::kInt32);
   EXPECT_EQ(ctx.Get("output").Shape(),
-            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+            (core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
 }
 
 TEST(OnnxOptimShapesLogicalWhere, RejectsWrongOpType) {
   NodeProto node = MakeBinaryLogicalNode("Equal", "condition", "X", "output");
   node.add_input("Y");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("condition", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("condition", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
+  ctx.Set("Y", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeWhere(ctx, node, "condition", "X", "Y"),
                std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalWhere, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeWhereNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("condition", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("condition", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeWhere(ctx, node, "condition", "X", "Y"),
                std::out_of_range);
 }
 
 TEST(OnnxOptimShapesLogicalWhere, ThrowsOnIncompatibleShapes) {
   NodeProto node = MakeWhereNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("condition", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
-                                               onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
-  ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("condition",
+          core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool,
+                                    core::symbolic::SymShape{core::symbolic::SymDim(2)}));
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
+  ctx.Set("Y", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(4)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeWhere(ctx, node, "condition", "X", "Y"),
                std::invalid_argument);
 }
@@ -614,63 +616,63 @@ NodeProto MakeBitwiseNotNode(const std::string &x = "X", const std::string &out 
 
 TEST(OnnxOptimShapesLogicalBitwiseAnd, PropagatesShapeAndIntDtype) {
   NodeProto node = MakeBinaryBitwiseNode("BitwiseAnd");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape));
 
   onnx_optim::shapes::logical::ComputeShapeBitwiseAnd(ctx, node, "A", "B");
 
   ASSERT_TRUE(ctx.Has("C"));
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kInt32);
   EXPECT_EQ(ctx.Get("C").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalBitwiseOr, BroadcastsShapes) {
   NodeProto node = MakeBinaryBitwiseNode("BitwiseOr");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
-  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(4)};
-  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)};
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kUint64, shape_a));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kUint64, shape_b));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(4)};
+  core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(4)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kUint64, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kUint64, shape_b));
 
   onnx_optim::shapes::logical::ComputeShapeBitwiseOr(ctx, node, "A", "B");
 
-  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kUint64);
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kUint64);
   EXPECT_EQ(ctx.Get("C").Shape(), expected);
 }
 
 TEST(OnnxOptimShapesLogicalBitwiseXor, ThrowsOnIncompatibleShapes) {
   NodeProto node = MakeBinaryBitwiseNode("BitwiseXor");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt16,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
-  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt16,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt16,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt16,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(4)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeBitwiseXor(ctx, node, "A", "B"),
                std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalBitwiseNot, PropagatesShapeAndDtype) {
   NodeProto node = MakeBitwiseNotNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kUint8, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(5)};
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kUint8, shape));
 
   onnx_optim::shapes::logical::ComputeShapeBitwiseNot(ctx, node, "X");
 
   ASSERT_TRUE(ctx.Has("Y"));
-  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kUint8);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kUint8);
   EXPECT_EQ(ctx.Get("Y").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalBitwiseNot, ThrowsOnWrongOpType) {
   NodeProto node = MakeBitwiseNotNode();
   node.set_op_type("Not");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeBitwiseNot(ctx, node, "X"),
                std::invalid_argument);
 }
@@ -689,30 +691,30 @@ NodeProto MakeNotNode(const std::string &x = "X", const std::string &out = "Y") 
 
 TEST(OnnxOptimShapesLogicalNot, PropagatesShapeAndDtype) {
   NodeProto node = MakeNotNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(30), onnx_optim::OptimDim(4),
-                               onnx_optim::OptimDim(5)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(30), core::symbolic::SymDim(4),
+                                 core::symbolic::SymDim(5)};
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape));
 
   onnx_optim::shapes::logical::ComputeShapeNot(ctx, node, "X");
 
   ASSERT_TRUE(ctx.Has("Y"));
-  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("Y").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalNot, ThrowsOnWrongOpType) {
   NodeProto node = MakeNotNode();
   node.set_op_type("BitwiseNot");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeNot(ctx, node, "X"), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalNot, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeNotNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeNot(ctx, node, "X"), std::out_of_range);
 }
 
@@ -738,59 +740,59 @@ NodeProto MakeIsInfNode(const std::string &x = "X", const std::string &out = "Y"
 
 TEST(OnnxOptimShapesLogicalIsNaN, PropagatesShapeAndBoolDtype) {
   NodeProto node = MakeIsNaNNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(3), onnx_optim::OptimDim("N")};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(3), core::symbolic::SymDim("N")};
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   onnx_optim::shapes::logical::ComputeShapeIsNaN(ctx, node, "X");
 
   ASSERT_TRUE(ctx.Has("Y"));
-  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("Y").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalIsNaN, ThrowsOnWrongOpType) {
   NodeProto node = MakeIsNaNNode();
   node.set_op_type("IsInf");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeIsNaN(ctx, node, "X"),
                std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalIsNaN, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeIsNaNNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeIsNaN(ctx, node, "X"), std::out_of_range);
 }
 
 TEST(OnnxOptimShapesLogicalIsInf, PropagatesShapeAndBoolDtype) {
   NodeProto node = MakeIsInfNode();
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim(4), core::symbolic::SymDim(5)};
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
 
   onnx_optim::shapes::logical::ComputeShapeIsInf(ctx, node, "X");
 
   ASSERT_TRUE(ctx.Has("Y"));
-  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kBool);
   EXPECT_EQ(ctx.Get("Y").Shape(), shape);
 }
 
 TEST(OnnxOptimShapesLogicalIsInf, ThrowsOnWrongOpType) {
   NodeProto node = MakeIsInfNode();
   node.set_op_type("IsNaN");
-  onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  core::shapes::ShapesContext ctx;
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeIsInf(ctx, node, "X"),
                std::invalid_argument);
 }
 
 TEST(OnnxOptimShapesLogicalIsInf, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeIsInfNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeIsInf(ctx, node, "X"), std::out_of_range);
 }
 

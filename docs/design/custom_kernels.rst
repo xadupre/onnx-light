@@ -161,7 +161,7 @@ Symmetry with shape inference
 -----------------------------
 
 The custom-kernel hook is intentionally symmetric to
-:cpp:func:`onnx::onnx_optim::shapes::ShapesContext::SetCustomShapeInferenceFunction`
+:cpp:func:`onnx::core::shapes::ShapesContext::SetCustomShapeInferenceFunction`
 in the shape-inference layer: both allow callers to plug a callable
 keyed by ``(domain, op_type)`` into a per-invocation context and both
 are consulted *before* the built-in domain dispatch.

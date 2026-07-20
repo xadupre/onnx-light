@@ -18,8 +18,8 @@ namespace Test {
 
 namespace {
 
-const onnx_op::LightOpSchema *FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                            int version) {
+const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -31,11 +31,11 @@ const onnx_op::LightOpSchema *FindByVersion(const std::vector<onnx_op::LightOpSc
 } // namespace
 
 TEST(OnnxOpMathSoftplus, HasSchemasForV1AndV22) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Softplus");
   ASSERT_EQ(schemas.size(), 2u);
-  const onnx_op::LightOpSchema *const softplus_v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const softplus_v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const softplus_v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const softplus_v1 = FindByVersion(schemas, 1);
   ASSERT_NE(nullptr, softplus_v22);
   ASSERT_NE(nullptr, softplus_v1);
   EXPECT_EQ(softplus_v22->domain(), "ai.onnx");
@@ -50,11 +50,11 @@ TEST(OnnxOpMathSoftplus, HasSchemasForV1AndV22) {
 }
 
 TEST(OnnxOpMathSoftsign, HasSchemasForV1AndV22) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Softsign");
   ASSERT_EQ(schemas.size(), 2u);
-  const onnx_op::LightOpSchema *const softsign_v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const softsign_v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const softsign_v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const softsign_v1 = FindByVersion(schemas, 1);
   ASSERT_NE(nullptr, softsign_v22);
   ASSERT_NE(nullptr, softsign_v1);
   EXPECT_EQ(softsign_v22->domain(), "ai.onnx");

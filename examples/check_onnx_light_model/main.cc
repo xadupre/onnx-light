@@ -6,7 +6,7 @@
  *   ./check_onnx_light_model <model.onnx> [full_check] [infer_shapes]
  *
  * When ``infer_shapes`` is set to 1, the model is loaded into a ``ModelProto``
- * and passed to :cpp:func:`onnx_optim::shapes::InferShapesModel`, which
+ * and passed to :cpp:func:`core::shapes::InferShapesModel`, which
  * mutates the graph in place so that its outputs and value_info entries carry
  * the inferred shapes. The example then prints how many value_info entries
  * the inferred graph contains.
@@ -14,9 +14,10 @@
  * See CMakeLists.txt for build instructions.
  */
 
+#include "onnx_core/shapes/shape_inference.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/common/file_utils.h"
-#include "onnx_optim/shapes/shape_inference.h"
+#include "onnx_optim/dispatch_table.h"
 #include "onnx_proto/onnx.h"
 
 #include <charconv>
@@ -73,7 +74,12 @@ int main(int argc, char *argv[]) {
     if (infer_shapes) {
       ONNX_LIGHT_NAMESPACE::ModelProto model;
       ONNX_LIGHT_NAMESPACE::LoadProtoFromPath(argv[1], model);
-      ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::InferShapesModel(model);
+      // `core::shapes::InferShapesModel` looks up shape functions in
+      // `core::shapes::DispatchTable()`, which `onnx_core` leaves empty; the
+      // built-in `onnx_optim` shape functions must be registered explicitly
+      // before it can resolve any operator.
+      ONNX_LIGHT_NAMESPACE::onnx_optim::RegisterShapeFunctions();
+      ONNX_LIGHT_NAMESPACE::core::shapes::InferShapesModel(model);
       std::cout << "  shape inference: ok\n";
       std::cout << "    graph.value_info entries: " << model.graph().value_info_size() << "\n";
       std::cout << "    graph.output entries:     " << model.graph().output_size() << "\n";

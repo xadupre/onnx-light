@@ -19,8 +19,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -30,14 +30,15 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpPreviewRegistrationTest, ReturnsFlexAttentionSchemaWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::preview::GetAllOnnxOpPreviewSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> flex_attention_schemas =
+  const std::vector<core::schema::LightOpSchema> flex_attention_schemas =
       onnx_op::preview::GetAllOnnxOpPreviewSchemasWithHistory("FlexAttention");
 
   EXPECT_EQ(schemas.size(), 1u);
 
-  const onnx_op::LightOpSchema *const flex_attention_v1 = FindByVersion(flex_attention_schemas, 1);
+  const core::schema::LightOpSchema *const flex_attention_v1 =
+      FindByVersion(flex_attention_schemas, 1);
   ASSERT_NE(nullptr, flex_attention_v1);
   EXPECT_EQ(flex_attention_v1->domain(), "ai.onnx.preview");
   EXPECT_EQ(flex_attention_v1->domain(), onnx_op::preview::kOnnxPreviewDomain);
@@ -61,13 +62,13 @@ TEST(OnnxOpPreviewRegistrationTest, ReturnsFlexAttentionSchemaWithoutShapeInfere
             "Constrain Q, K, V to float tensors.");
   ASSERT_EQ(flex_attention_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
   EXPECT_EQ(flex_attention_v1->type_constraints()[0].allowed_type_strs[0],
-            onnx_op::TensorType::kBfloat16);
+            core::schema::TensorType::kBfloat16);
   EXPECT_EQ(flex_attention_v1->type_constraints()[0].allowed_type_strs[1],
-            onnx_op::TensorType::kFloat16);
+            core::schema::TensorType::kFloat16);
   EXPECT_EQ(flex_attention_v1->type_constraints()[0].allowed_type_strs[2],
-            onnx_op::TensorType::kFloat);
+            core::schema::TensorType::kFloat);
   EXPECT_EQ(flex_attention_v1->type_constraints()[0].allowed_type_strs[3],
-            onnx_op::TensorType::kDouble);
+            core::schema::TensorType::kDouble);
 
   EXPECT_NE(flex_attention_v1->doc().find("scaled dot-product attention"), std::string::npos);
   EXPECT_NE(flex_attention_v1->doc().find("score_mod"), std::string::npos);

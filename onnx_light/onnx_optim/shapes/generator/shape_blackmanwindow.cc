@@ -7,8 +7,8 @@
 #include <cstdint>
 #include <utility>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -28,9 +28,9 @@ void ComputeShapeBlackmanWindow(ShapesContext &ctx, const NodeProto &node) {
       GetAttributeOr<int64_t>(node, "output_datatype", static_cast<int64_t>(TensorProto::FLOAT));
   dtype = DataTypeToTensorType(static_cast<TensorProto::DataType>(output_datatype));
 
-  const OptimTensor &size_input = ctx.Get(node.input(0));
+  const SymTensor &size_input = ctx.Get(node.input(0));
 
-  OptimShape out_shape;
+  SymShape out_shape;
   if (size_input.HasValueAsShape() && size_input.ValueAsShape().Rank() == 1 &&
       size_input.ValueAsShape()[0].IsInt()) {
     // ``size`` is a known constant integer scalar: produce a concrete
@@ -38,10 +38,10 @@ void ComputeShapeBlackmanWindow(ShapesContext &ctx, const NodeProto &node) {
     out_shape.PushBack(size_input.ValueAsShape()[0]);
   } else {
     // Unknown ``size``: produce a single symbolic dim.
-    out_shape.PushBack(OptimDim("BlackmanWindow_dim0"));
+    out_shape.PushBack(SymDim("BlackmanWindow_dim0"));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, dtype, std::move(out_shape)));
 }
 
 } // namespace generator

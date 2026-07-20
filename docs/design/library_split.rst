@@ -36,12 +36,17 @@ base dependency)::
 
 ``lib_onnx_core`` is a lightweight intermediate library that sits
 between ``lib_onnx_proto`` and all higher-level libraries.  It owns the
-``TensorType`` enumeration, the ``ToTypeString`` converter, and the
 graph-node input helpers (``CollectExternalInputs``, ``CollectNodeInputs``,
-``CollectRemainingInputs``) so that ``lib_onnx_op`` (operator schemas),
+``CollectRemainingInputs``), the symbolic dimension-expression library
+(``onnx_core/expressions/expressions.h``), and the ``LightOpSchema``
+operator-schema data structures (``onnx_core/light_op_schema/light_op_schema.h``)
+so that ``lib_onnx_op`` (operator schemas),
 ``lib_onnx_manipulations``, ``lib_onnx_optim`` (shape inference), and
 ``lib_onnx_kernels`` (reference kernels) can share them without any of
-them depending on each other.
+them depending on each other.  The ``TensorType`` enumeration and the
+``ToTypeString`` converter live one level lower, in ``lib_onnx_proto``
+(``onnx_proto/type_helper.h``), so that ``lib_onnx_core`` itself can use
+them.
 ``lib_onnx_op``, ``lib_onnx_manipulations``, ``lib_onnx_optim``, and
 ``lib_onnx_kernels`` are siblings that each depend on ``lib_onnx_core``
 (and transitively on ``lib_onnx_proto``).  ``lib_onnx_optim`` depends on
@@ -84,20 +89,24 @@ Summary of each library
     * - ``onnx_light::lib_onnx_core``:
         ``onnx_light/onnx_core/``
       - Intermediate library that sits between ``lib_onnx_proto`` and all
-        higher-level libraries.  Owns the ``TensorType`` enumeration, the
-        ``ToTypeString`` converter, and the graph-node input helpers
+        higher-level libraries.  Owns the graph-node input helpers
         (``CollectExternalInputs``, ``CollectNodeInputs``,
-        ``CollectRemainingInputs``) so that ``lib_onnx_op``,
-        ``lib_onnx_manipulations``, ``lib_onnx_optim``, and
-        ``lib_onnx_kernels`` can share them without depending on each
-        other.  Depends publicly on ``lib_onnx_proto``.
+        ``CollectRemainingInputs``), the symbolic dimension-expression
+        library, and the ``LightOpSchema`` operator-schema data structures
+        so that ``lib_onnx_op``, ``lib_onnx_manipulations``,
+        ``lib_onnx_optim``, and ``lib_onnx_kernels`` can share them without
+        depending on each other.  Depends publicly on ``lib_onnx_proto``
+        (which owns the ``TensorType`` enumeration and ``ToTypeString``
+        converter).
     * - ``onnx_light::lib_onnx_op``:``onnx_light/onnx_op/``
       - Lightweight ``LightOpSchema`` registrations for ONNX operator
-        domains (math, logical, tensor, sequence, traditional ML, ...).
-        Does not depend on shape inference and does not pull in the
-        full ONNX defs.  Useful when only the operator catalogue is
-        needed.  Depends publicly on ``lib_onnx_core`` (and transitively
-        on ``lib_onnx_proto``).
+        domains (math, logical, tensor, sequence, traditional ML, ...),
+        built on top of the ``LightOpSchema`` data structures defined in
+        ``lib_onnx_core`` (``onnx_core/light_op_schema/light_op_schema.h``,
+        ``core::schema`` namespace).  Does not depend on shape
+        inference and does not pull in the full ONNX defs.  Useful when
+        only the operator catalogue is needed.  Depends publicly on
+        ``lib_onnx_core`` (and transitively on ``lib_onnx_proto``).
     * - ``onnx_light::lib_onnx_manipulations`` (in-tree target
         ``lib_onnx_manipulations``):
         ``onnx_light/onnx_manipulations/``,

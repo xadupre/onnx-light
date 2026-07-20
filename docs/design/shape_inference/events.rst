@@ -117,7 +117,7 @@ API reference
 -------------
 
 * **C++ API**: :cpp:class:`ShapeEvent`, :cpp:enum:`ShapeEventAction`
-  (:doc:`/api/cpp/onnx_optim/shapes/shapes_context`).
+  (:doc:`/api/cpp/onnx_core/shapes/shapes_context`).
 * **Python API**: :class:`ShapeEvent`, :class:`ShapeEventAction` and
   :class:`ShapesContext`
   (:doc:`/api/python/onnx_optim/shape_inference`).

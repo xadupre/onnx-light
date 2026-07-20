@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -76,12 +76,12 @@ void SplitEquation(const std::string &equation, std::vector<std::string> &input_
   output_term = std::move(rhs);
 }
 
-// Merges two ``OptimDim`` instances representing the same label seen across
+// Merges two ``SymDim`` instances representing the same label seen across
 // inputs. Two concrete values must agree, except that broadcasting allows a
 // dimension of 1 to be promoted to the other size. A concrete value wins
 // over a symbolic one. Two symbolic values are merged only when they share
 // the same expression; otherwise the existing entry is preserved.
-OptimDim MergeLabelDim(const OptimDim &out, const OptimDim &in, char label) {
+SymDim MergeLabelDim(const SymDim &out, const SymDim &in, char label) {
   if (out.IsInt() && in.IsInt()) {
     if (out.AsInt() == in.AsInt()) {
       return out;
@@ -122,9 +122,9 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
                       input_terms.size(), ") does not match number of inputs (", n_inputs, ").");
 
   // Collect input shapes and the dtype (propagated from the first input).
-  std::vector<OptimShape> input_shapes;
+  std::vector<SymShape> input_shapes;
   input_shapes.reserve(n_inputs);
-  const OptimTensor &first = ctx.Get(node.input(0));
+  const SymTensor &first = ctx.Get(node.input(0));
   const TensorType out_dtype = first.Dtype();
   input_shapes.push_back(first.Shape());
   for (int i = 1; i < n_inputs; ++i) {
@@ -169,16 +169,16 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
   }
 
   // Determine the size of every label and validate consistency.
-  std::unordered_map<char, OptimDim> label_dim;
+  std::unordered_map<char, SymDim> label_dim;
   for (int i = 0; i < n_inputs; ++i) {
     const std::string &labels = input_labels[i];
-    const OptimShape &shape = input_shapes[i];
+    const SymShape &shape = input_shapes[i];
     EXT_ENFORCE_INVALID(labels.size() == shape.Rank(), "ComputeShapeEinsum: expanded term '",
                         labels, "' has ", labels.size(), " labels but input ", i, " has rank ",
                         shape.Rank(), ".");
     for (std::size_t d = 0; d < labels.size(); ++d) {
       const char lbl = labels[d];
-      const OptimDim &dim = shape[d];
+      const SymDim &dim = shape[d];
       auto it = label_dim.find(lbl);
       if (it == label_dim.end()) {
         label_dim.emplace(lbl, dim);
@@ -214,7 +214,7 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
     expanded_output.append(singletons.begin(), singletons.end());
   }
 
-  std::vector<OptimDim> out_dims;
+  std::vector<SymDim> out_dims;
   out_dims.reserve(expanded_output.size());
   for (char c : expanded_output) {
     auto it = label_dim.find(c);
@@ -223,7 +223,7 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
     out_dims.push_back(it->second);
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, OptimShape(out_dims)));
+  ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, SymShape(out_dims)));
 }
 
 } // namespace math

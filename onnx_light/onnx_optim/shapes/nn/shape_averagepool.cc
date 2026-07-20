@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_kernels/kernels/auto_pad.h"
-#include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -64,8 +64,8 @@ int64_t AutoPadOutputDim(AutoPad auto_pad, int64_t in_dim, int64_t kernel, int64
 void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "AveragePool", "ComputeShapeAveragePool");
 
-  const OptimTensor &input = ctx.Get(x);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(x);
+  const SymShape &in_shape = input.Shape();
   EXT_ENFORCE_INVALID(in_shape.Rank() >= 2,
                       "ComputeShapeAveragePool: input must have rank >= 2 (N, C, D1, ...).");
   const size_t n_input_dims = in_shape.Rank() - 2;
@@ -110,11 +110,11 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
 
   const bool ceil_mode = GetAttributeOr<int64_t>(node, "ceil_mode", 0) != 0;
 
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(in_shape[0]);
   out_shape.PushBack(in_shape[1]);
   for (size_t i = 0; i < n_input_dims; ++i) {
-    const OptimDim &d = in_shape[i + 2];
+    const SymDim &d = in_shape[i + 2];
     if (d.IsInt()) {
       int64_t out_d;
       if (use_auto_pad) {
@@ -123,7 +123,7 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
         out_d = OutputDim(d.AsInt(), kernel_shape[i], strides[i], pads[i], pads[i + n_input_dims],
                           ceil_mode, dilations[i]);
       }
-      out_shape.PushBack(OptimDim(out_d));
+      out_shape.PushBack(SymDim(out_d));
     } else {
       // Symbolic spatial dimension: propagate as a fresh symbolic
       // expression derived from the input expression and the pooling
@@ -138,11 +138,11 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
                 ",ceil=" + (ceil_mode ? "1" : "0");
       }
       expr += ")";
-      out_shape.PushBack(OptimDim(expr));
+      out_shape.PushBack(SymDim(expr));
     }
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
 }
 
 } // namespace nn

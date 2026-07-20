@@ -18,8 +18,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -29,44 +29,45 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpSequenceRegistrationTest, ReturnsSchemasWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> sequence_empty_schemas =
+  const std::vector<core::schema::LightOpSchema> sequence_empty_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceEmpty");
-  const std::vector<onnx_op::LightOpSchema> sequence_length_schemas =
+  const std::vector<core::schema::LightOpSchema> sequence_length_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceLength");
-  const std::vector<onnx_op::LightOpSchema> sequence_construct_schemas =
+  const std::vector<core::schema::LightOpSchema> sequence_construct_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceConstruct");
-  const std::vector<onnx_op::LightOpSchema> sequence_insert_schemas =
+  const std::vector<core::schema::LightOpSchema> sequence_insert_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceInsert");
-  const std::vector<onnx_op::LightOpSchema> sequence_at_schemas =
+  const std::vector<core::schema::LightOpSchema> sequence_at_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceAt");
-  const std::vector<onnx_op::LightOpSchema> sequence_erase_schemas =
+  const std::vector<core::schema::LightOpSchema> sequence_erase_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceErase");
-  const std::vector<onnx_op::LightOpSchema> sequence_map_schemas =
+  const std::vector<core::schema::LightOpSchema> sequence_map_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceMap");
-  const std::vector<onnx_op::LightOpSchema> split_to_sequence_schemas =
+  const std::vector<core::schema::LightOpSchema> split_to_sequence_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SplitToSequence");
-  const std::vector<onnx_op::LightOpSchema> concat_from_sequence_schemas =
+  const std::vector<core::schema::LightOpSchema> concat_from_sequence_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("ConcatFromSequence");
 
   EXPECT_EQ(schemas.size(), 9u);
 
-  const onnx_op::LightOpSchema *const sequence_empty_v11 =
+  const core::schema::LightOpSchema *const sequence_empty_v11 =
       FindByVersion(sequence_empty_schemas, 11);
-  const onnx_op::LightOpSchema *const sequence_length_v11 =
+  const core::schema::LightOpSchema *const sequence_length_v11 =
       FindByVersion(sequence_length_schemas, 11);
-  const onnx_op::LightOpSchema *const sequence_construct_v11 =
+  const core::schema::LightOpSchema *const sequence_construct_v11 =
       FindByVersion(sequence_construct_schemas, 11);
-  const onnx_op::LightOpSchema *const sequence_insert_v11 =
+  const core::schema::LightOpSchema *const sequence_insert_v11 =
       FindByVersion(sequence_insert_schemas, 11);
-  const onnx_op::LightOpSchema *const sequence_at_v11 = FindByVersion(sequence_at_schemas, 11);
-  const onnx_op::LightOpSchema *const sequence_erase_v11 =
+  const core::schema::LightOpSchema *const sequence_at_v11 = FindByVersion(sequence_at_schemas, 11);
+  const core::schema::LightOpSchema *const sequence_erase_v11 =
       FindByVersion(sequence_erase_schemas, 11);
-  const onnx_op::LightOpSchema *const sequence_map_v17 = FindByVersion(sequence_map_schemas, 17);
-  const onnx_op::LightOpSchema *const split_to_sequence_v11 =
+  const core::schema::LightOpSchema *const sequence_map_v17 =
+      FindByVersion(sequence_map_schemas, 17);
+  const core::schema::LightOpSchema *const split_to_sequence_v11 =
       FindByVersion(split_to_sequence_schemas, 11);
-  const onnx_op::LightOpSchema *const concat_from_sequence_v11 =
+  const core::schema::LightOpSchema *const concat_from_sequence_v11 =
       FindByVersion(concat_from_sequence_schemas, 11);
 
   ASSERT_NE(nullptr, sequence_empty_v11);
@@ -88,15 +89,15 @@ TEST(OnnxOpSequenceRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(sequence_empty_v11->type_constraints()[0].type_param_str, "S");
   EXPECT_EQ(sequence_empty_v11->type_constraints()[0].allowed_type_strs.size(), 15u);
   EXPECT_STREQ(
-      onnx_op::ToTypeString(sequence_empty_v11->type_constraints()[0].allowed_type_strs[0]),
+      core::schema::ToTypeString(sequence_empty_v11->type_constraints()[0].allowed_type_strs[0]),
       "seq(tensor(uint8))");
-  EXPECT_STREQ(
-      onnx_op::ToTypeString(sequence_empty_v11->type_constraints()[0].allowed_type_strs.back()),
-      "seq(tensor(complex128))");
+  EXPECT_STREQ(core::schema::ToTypeString(
+                   sequence_empty_v11->type_constraints()[0].allowed_type_strs.back()),
+               "seq(tensor(complex128))");
   // Optional 'dtype' attribute (no default).
   ASSERT_EQ(sequence_empty_v11->attributes().size(), 1u);
   EXPECT_EQ(sequence_empty_v11->attributes()[0].name, "dtype");
-  EXPECT_EQ(sequence_empty_v11->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_EQ(sequence_empty_v11->attributes()[0].type, core::schema::AttributeType::INT);
   EXPECT_FALSE(sequence_empty_v11->attributes()[0].required);
   EXPECT_TRUE(
       std::holds_alternative<std::monostate>(sequence_empty_v11->attributes()[0].default_value));
@@ -111,7 +112,7 @@ TEST(OnnxOpSequenceRegistrationTest, ReturnsSchemasWithoutShapeInference) {
             sequence_empty_v11->type_constraints()[0].allowed_type_strs);
   EXPECT_EQ(sequence_length_v11->type_constraints()[1].allowed_type_strs.size(), 1u);
   EXPECT_EQ(sequence_length_v11->type_constraints()[1].allowed_type_strs[0],
-            onnx_op::TensorType::kInt64);
+            core::schema::TensorType::kInt64);
   EXPECT_EQ(sequence_length_v11->doc(),
             R"DOC(
 Produces a scalar(tensor of empty shape) containing the number of tensors in 'input_sequence'.
@@ -157,10 +158,10 @@ Produces a scalar(tensor of empty shape) containing the number of tensors in 'in
   // axis (required) and new_axis (optional, default 0).
   ASSERT_EQ(concat_from_sequence_v11->attributes().size(), 2u);
   EXPECT_EQ(concat_from_sequence_v11->attributes()[0].name, "axis");
-  EXPECT_EQ(concat_from_sequence_v11->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_EQ(concat_from_sequence_v11->attributes()[0].type, core::schema::AttributeType::INT);
   EXPECT_TRUE(concat_from_sequence_v11->attributes()[0].required);
   EXPECT_EQ(concat_from_sequence_v11->attributes()[1].name, "new_axis");
-  EXPECT_EQ(concat_from_sequence_v11->attributes()[1].type, onnx_op::AttributeType::INT);
+  EXPECT_EQ(concat_from_sequence_v11->attributes()[1].type, core::schema::AttributeType::INT);
   EXPECT_FALSE(concat_from_sequence_v11->attributes()[1].required);
   ASSERT_TRUE(
       std::holds_alternative<int64_t>(concat_from_sequence_v11->attributes()[1].default_value));

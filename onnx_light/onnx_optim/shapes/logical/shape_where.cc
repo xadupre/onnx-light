@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_optim/shapes/logical/shape_logical.h"
-#include "onnx_optim/shapes/shape_broadcast.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -16,14 +16,15 @@ void ComputeShapeWhere(ShapesContext &ctx, const NodeProto &node, const char *co
                       "ComputeShapeWhere expects node.op_type() == 'Where'.");
   EXT_ENFORCE_INVALID(node.output_size() > 0, "ComputeShapeWhere expects at least one output.");
 
-  const onnx_optim::OptimTensor &condition_tensor = ctx.Get(condition);
-  const onnx_optim::OptimTensor &x_tensor = ctx.Get(x);
-  const onnx_optim::OptimTensor &y_tensor = ctx.Get(y);
+  const core::symbolic::SymTensor &condition_tensor = ctx.Get(condition);
+  const core::symbolic::SymTensor &x_tensor = ctx.Get(x);
+  const core::symbolic::SymTensor &y_tensor = ctx.Get(y);
 
-  const onnx_optim::OptimShape xy_shape = BroadcastShapes(x_tensor.Shape(), y_tensor.Shape());
-  const onnx_optim::OptimShape out_shape = BroadcastShapes(condition_tensor.Shape(), xy_shape);
+  const core::symbolic::SymShape xy_shape = BroadcastShapes(x_tensor.Shape(), y_tensor.Shape());
+  const core::symbolic::SymShape out_shape = BroadcastShapes(condition_tensor.Shape(), xy_shape);
 
-  ctx.Set(node.output(0), onnx_optim::OptimTensor(nullptr, x_tensor.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0),
+          core::symbolic::SymTensor(nullptr, x_tensor.Dtype(), std::move(out_shape)));
 }
 
 } // namespace logical

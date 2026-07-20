@@ -7,8 +7,8 @@
 #include <cstdint>
 #include <string>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -20,8 +20,8 @@ void ComputeShapeDequantizeLinear(ShapesContext &ctx, const NodeProto &node, con
                                   const char *x_scale) {
   CheckNodeOpAndOutput(node, "DequantizeLinear", "ComputeShapeDequantizeLinear");
 
-  const OptimTensor &input = ctx.Get(x);
-  OptimShape out_shape = input.Shape();
+  const SymTensor &input = ctx.Get(x);
+  SymShape out_shape = input.Shape();
 
   TensorType out_dtype = TensorType::kUndefined;
   const int64_t output_dtype_attr = GetAttributeOr<int64_t>(node, "output_dtype", 0);
@@ -37,7 +37,7 @@ void ComputeShapeDequantizeLinear(ShapesContext &ctx, const NodeProto &node, con
     out_dtype = ctx.Get(x_scale).Dtype();
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 
 } // namespace quantization

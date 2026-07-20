@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -32,7 +32,7 @@ bool HasNonEmptyInt64Labels(const NodeProto &node) {
 void ComputeShapeZipMap(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "ZipMap", "ComputeShapeZipMap");
 
-  const OptimTensor &input = ctx.Get(x);
+  const SymTensor &input = ctx.Get(x);
   EXT_ENFORCE_INVALID(input.Dtype() == TensorType::kFloat,
                       "ComputeShapeZipMap: input must be a float tensor, got '",
                       std::to_string(static_cast<int>(input.Dtype())), "'.");
@@ -47,7 +47,7 @@ void ComputeShapeZipMap(ShapesContext &ctx, const NodeProto &node, const char *x
   const TensorType output_type =
       has_string_labels ? TensorType::kSeqMapStringFloat : TensorType::kSeqMapInt64Float;
 
-  OptimShape output_shape;
+  SymShape output_shape;
   if (!input.Shape().Empty()) {
     EXT_ENFORCE_INVALID(
         input.Shape().Rank() == 1 || input.Shape().Rank() == 2,
@@ -55,12 +55,12 @@ void ComputeShapeZipMap(ShapesContext &ctx, const NodeProto &node, const char *x
         std::to_string(input.Shape().Rank()), ".");
   }
   if (input.Shape().Rank() == 1) {
-    output_shape.PushBack(OptimDim(1));
+    output_shape.PushBack(SymDim(1));
   } else if (input.Shape().Rank() == 2) {
     output_shape.PushBack(input.Shape()[0]);
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, output_type, std::move(output_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, output_type, std::move(output_shape)));
 }
 
 } // namespace traditionalml

@@ -1,4 +1,5 @@
 #include "onnx.h"
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/common/ir_pb_converter.h"
 #include "onnx_lib/defs/schema.h"
@@ -10,7 +11,6 @@
 #include "onnx_manipulations/compose.h"
 #include "onnx_manipulations/parser.h"
 #include "onnx_manipulations/printer.h"
-#include "onnx_optim/expressions.h"
 #include <algorithm>
 #include <limits>
 #include <nanobind/stl/map.h>

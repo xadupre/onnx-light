@@ -6,10 +6,12 @@
 
 #include <vector>
 
-#include "onnx_op/light_op_schema.h"
+#include "onnx_core/light_op_schema/light_op_schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
+
+using namespace ONNX_LIGHT_NAMESPACE::core::schema;
 namespace logical {
 
 /**

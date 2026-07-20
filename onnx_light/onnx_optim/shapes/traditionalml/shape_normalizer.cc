@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -17,8 +17,8 @@ void ComputeShapeNormalizer(ShapesContext &ctx, const NodeProto &node, const cha
   // Normalizer preserves the input shape: output is the same shape as the
   // input. The output dtype is always float per the ONNX schema, regardless
   // of the input dtype.
-  const OptimTensor &input = ctx.Get(x);
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kFloat, input.Shape()));
+  const SymTensor &input = ctx.Get(x);
+  ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kFloat, input.Shape()));
 }
 
 } // namespace traditionalml

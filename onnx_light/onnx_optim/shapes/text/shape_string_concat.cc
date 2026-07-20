@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_optim/shapes/text/shape_text.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

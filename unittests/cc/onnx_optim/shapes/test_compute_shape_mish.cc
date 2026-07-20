@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_optim/shapes/math/shape_math.h"
-#include "onnx_optim/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>
 
@@ -28,14 +28,15 @@ NodeProto MakeUnaryNode(const std::string &op_type, const std::string &input_nam
 
 TEST(OnnxOptimShapesMathMish, PropagatesTypeAndShape) {
   NodeProto node = MakeUnaryNode("Mish");
-  onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)};
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   onnx_optim::shapes::math::ComputeShapeMish(ctx, node, "X");
 
   ASSERT_TRUE(ctx.Has("Y"));
-  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  EXPECT_EQ(ctx.Get("Y"),
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 }
 
 } // namespace Test

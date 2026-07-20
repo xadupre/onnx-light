@@ -138,7 +138,7 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
 //   * ``lim`` is the function's **input parameter**, bound at the call site
 //     to the graph initializer ``limit_val: int64[] = 5``.
 //
-// When ``ExpandLocalFunctionCall`` copies the caller's ``OptimTensor`` for
+// When ``ExpandLocalFunctionCall`` copies the caller's ``SymTensor`` for
 // ``limit_val`` (which carries ``ValueAsShape = [5]`` from initializer
 // data-propagation) into the function sub-context as ``lim``, the
 // ``ValueAsShape`` annotation must survive the copy so that
@@ -210,7 +210,7 @@ void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &regist
   // Graph initializer: ``limit_val : int64[] = 5``.
   // ``onnx_optim`` seeds this with ``ValueAsShape = [5]``.  When the local
   // function is called, ``ExpandLocalFunctionCall`` copies the full
-  // ``OptimTensor`` (including ``ValueAsShape``) to the sub-context as
+  // ``SymTensor`` (including ``ValueAsShape``) to the sub-context as
   // ``lim``, allowing ``ComputeShapeRange`` to resolve the output length.
   AddInitializer<int64_t>(*graph, "limit_val", {}, {kRangeLimit});
 

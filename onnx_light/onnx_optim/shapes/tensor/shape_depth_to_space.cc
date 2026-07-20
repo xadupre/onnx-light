@@ -8,8 +8,8 @@
 #include <stdexcept>
 #include <string>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -19,21 +19,21 @@ namespace tensor {
 
 namespace {
 
-OptimDim MulDim(const OptimDim &dim, int64_t factor) {
+SymDim MulDim(const SymDim &dim, int64_t factor) {
   if (dim.IsInt()) {
-    return OptimDim(dim.AsInt() * factor);
+    return SymDim(dim.AsInt() * factor);
   }
-  return OptimDim("(" + dim.AsExpr() + ")*" + std::to_string(factor));
+  return SymDim("(" + dim.AsExpr() + ")*" + std::to_string(factor));
 }
 
-OptimDim DivDim(const OptimDim &dim, int64_t divisor) {
+SymDim DivDim(const SymDim &dim, int64_t divisor) {
   if (dim.IsInt()) {
     EXT_ENFORCE_INVALID(!(divisor <= 0 || dim.AsInt() % divisor != 0),
                         "ComputeShapeDepthToSpace: input channel dim (", dim.AsInt(),
                         ") is not divisible by blocksize * blocksize (", divisor, ").");
-    return OptimDim(dim.AsInt() / divisor);
+    return SymDim(dim.AsInt() / divisor);
   }
-  return OptimDim("(" + dim.AsExpr() + ")/" + std::to_string(divisor));
+  return SymDim("(" + dim.AsExpr() + ")/" + std::to_string(divisor));
 }
 
 } // namespace
@@ -43,8 +43,8 @@ void ComputeShapeDepthToSpace(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapeDepthToSpace: DepthToSpace requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
-  const OptimShape &input_shape = input.Shape();
+  const SymTensor &input = ctx.Get(node.input(0));
+  const SymShape &input_shape = input.Shape();
 
   int64_t blocksize = 0;
   const AttributeProto *blocksize_attr = FindAttribute(node, "blocksize");
@@ -60,13 +60,13 @@ void ComputeShapeDepthToSpace(ShapesContext &ctx, const NodeProto &node) {
                       input_shape.Rank(), ").");
 
   const int64_t bs2 = blocksize * blocksize;
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(input_shape[0]);
   out_shape.PushBack(DivDim(input_shape[1], bs2));
   out_shape.PushBack(MulDim(input_shape[2], blocksize));
   out_shape.PushBack(MulDim(input_shape[3], blocksize));
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
 }
 
 } // namespace tensor

@@ -28,8 +28,8 @@ constexpr size_t kExpectedRandomUniformLikeSchemaCount = 2;
 constexpr size_t kExpectedRangeSchemaCount = 2;
 constexpr size_t kExpectedMultinomialSchemaCount = 2;
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -39,9 +39,9 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> constant_schemas =
+  const std::vector<core::schema::LightOpSchema> constant_schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Constant");
 
   EXPECT_EQ(schemas.size(),
@@ -51,16 +51,16 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInferenc
                 kExpectedRandomUniformSchemaCount + kExpectedRandomUniformLikeSchemaCount +
                 kExpectedRangeSchemaCount + kExpectedMultinomialSchemaCount);
 
-  const onnx_op::LightOpSchema *const constant_v25 = FindByVersion(constant_schemas, 25);
-  const onnx_op::LightOpSchema *const constant_v24 = FindByVersion(constant_schemas, 24);
-  const onnx_op::LightOpSchema *const constant_v23 = FindByVersion(constant_schemas, 23);
-  const onnx_op::LightOpSchema *const constant_v21 = FindByVersion(constant_schemas, 21);
-  const onnx_op::LightOpSchema *const constant_v19 = FindByVersion(constant_schemas, 19);
-  const onnx_op::LightOpSchema *const constant_v13 = FindByVersion(constant_schemas, 13);
-  const onnx_op::LightOpSchema *const constant_v12 = FindByVersion(constant_schemas, 12);
-  const onnx_op::LightOpSchema *const constant_v11 = FindByVersion(constant_schemas, 11);
-  const onnx_op::LightOpSchema *const constant_v9 = FindByVersion(constant_schemas, 9);
-  const onnx_op::LightOpSchema *const constant_v1 = FindByVersion(constant_schemas, 1);
+  const core::schema::LightOpSchema *const constant_v25 = FindByVersion(constant_schemas, 25);
+  const core::schema::LightOpSchema *const constant_v24 = FindByVersion(constant_schemas, 24);
+  const core::schema::LightOpSchema *const constant_v23 = FindByVersion(constant_schemas, 23);
+  const core::schema::LightOpSchema *const constant_v21 = FindByVersion(constant_schemas, 21);
+  const core::schema::LightOpSchema *const constant_v19 = FindByVersion(constant_schemas, 19);
+  const core::schema::LightOpSchema *const constant_v13 = FindByVersion(constant_schemas, 13);
+  const core::schema::LightOpSchema *const constant_v12 = FindByVersion(constant_schemas, 12);
+  const core::schema::LightOpSchema *const constant_v11 = FindByVersion(constant_schemas, 11);
+  const core::schema::LightOpSchema *const constant_v9 = FindByVersion(constant_schemas, 9);
+  const core::schema::LightOpSchema *const constant_v1 = FindByVersion(constant_schemas, 1);
 
   ASSERT_NE(nullptr, constant_v25);
   ASSERT_NE(nullptr, constant_v24);
@@ -80,7 +80,7 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInferenc
   EXPECT_EQ(constant_v25->outputs()[0].name, "output");
   EXPECT_EQ(constant_v25->outputs()[0].description,
             "Output tensor containing the same value of the provided tensor.");
-  EXPECT_EQ(constant_v1->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
+  EXPECT_EQ(constant_v1->type_constraints()[0].allowed_type_strs, core::schema::FloatTypes());
   EXPECT_EQ(constant_v9->type_constraints()[0].allowed_type_strs.size(), 15u);
   EXPECT_EQ(constant_v13->type_constraints()[0].allowed_type_strs.size(), 16u);
   EXPECT_EQ(constant_v19->type_constraints()[0].allowed_type_strs.size(), 20u);
@@ -89,15 +89,15 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInferenc
   EXPECT_EQ(constant_v24->type_constraints()[0].allowed_type_strs.size(), 24u);
   EXPECT_EQ(constant_v25->type_constraints()[0].allowed_type_strs.size(), 26u);
   EXPECT_EQ(constant_v25->type_constraints()[0].allowed_type_strs.back(),
-            onnx_op::TensorType::kInt2);
+            core::schema::TensorType::kInt2);
   EXPECT_EQ(constant_v24->type_constraints()[0].allowed_type_strs.back(),
-            onnx_op::TensorType::kFloat8e8m0);
+            core::schema::TensorType::kFloat8e8m0);
   EXPECT_EQ(constant_v23->type_constraints()[0].allowed_type_strs.back(),
-            onnx_op::TensorType::kFloat4e2m1);
+            core::schema::TensorType::kFloat4e2m1);
   EXPECT_EQ(constant_v21->type_constraints()[0].allowed_type_strs.back(),
-            onnx_op::TensorType::kInt4);
+            core::schema::TensorType::kInt4);
   EXPECT_EQ(constant_v19->type_constraints()[0].allowed_type_strs.back(),
-            onnx_op::TensorType::kFloat8e5m2fnuz);
+            core::schema::TensorType::kFloat8e5m2fnuz);
   EXPECT_EQ(constant_v11->doc(),
             R"DOC(
 A constant tensor. Exactly one of the two attributes, either value or sparse_value,
@@ -112,17 +112,17 @@ or value_* must be specified.
 }
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantOfShapeSchemas) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> constant_of_shape_schemas =
+  const std::vector<core::schema::LightOpSchema> constant_of_shape_schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("ConstantOfShape");
 
-  const onnx_op::LightOpSchema *const cos_v25 = FindByVersion(constant_of_shape_schemas, 25);
-  const onnx_op::LightOpSchema *const cos_v24 = FindByVersion(constant_of_shape_schemas, 24);
-  const onnx_op::LightOpSchema *const cos_v23 = FindByVersion(constant_of_shape_schemas, 23);
-  const onnx_op::LightOpSchema *const cos_v21 = FindByVersion(constant_of_shape_schemas, 21);
-  const onnx_op::LightOpSchema *const cos_v20 = FindByVersion(constant_of_shape_schemas, 20);
-  const onnx_op::LightOpSchema *const cos_v9 = FindByVersion(constant_of_shape_schemas, 9);
+  const core::schema::LightOpSchema *const cos_v25 = FindByVersion(constant_of_shape_schemas, 25);
+  const core::schema::LightOpSchema *const cos_v24 = FindByVersion(constant_of_shape_schemas, 24);
+  const core::schema::LightOpSchema *const cos_v23 = FindByVersion(constant_of_shape_schemas, 23);
+  const core::schema::LightOpSchema *const cos_v21 = FindByVersion(constant_of_shape_schemas, 21);
+  const core::schema::LightOpSchema *const cos_v20 = FindByVersion(constant_of_shape_schemas, 20);
+  const core::schema::LightOpSchema *const cos_v9 = FindByVersion(constant_of_shape_schemas, 9);
 
   ASSERT_NE(nullptr, cos_v25);
   ASSERT_NE(nullptr, cos_v24);
@@ -142,7 +142,7 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantOfShapeSchemas) {
   ASSERT_EQ(cos_v25->type_constraints().size(), 2u);
   EXPECT_EQ(cos_v25->type_constraints()[0].type_param_str, "T1");
   EXPECT_EQ(cos_v25->type_constraints()[0].allowed_type_strs,
-            (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt64}));
+            (std::vector<core::schema::TensorType>{core::schema::TensorType::kInt64}));
   EXPECT_EQ(cos_v25->type_constraints()[1].type_param_str, "T2");
 
   // Type-count progression (matches upstream ONNX schema history).
@@ -161,7 +161,7 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantOfShapeSchemas) {
   // ``value`` attribute metadata.
   ASSERT_EQ(cos_v25->attributes().size(), 1u);
   EXPECT_EQ(cos_v25->attributes()[0].name, "value");
-  EXPECT_EQ(cos_v25->attributes()[0].type, onnx_op::AttributeType::TENSOR);
+  EXPECT_EQ(cos_v25->attributes()[0].type, core::schema::AttributeType::TENSOR);
   EXPECT_FALSE(cos_v25->attributes()[0].required);
 
   EXPECT_EQ(cos_v9->doc(),
@@ -171,17 +171,17 @@ Generate a tensor with given value and shape.
 }
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsBernoulliSchemas) {
-  const std::vector<onnx_op::LightOpSchema> bernoulli_schemas =
+  const std::vector<core::schema::LightOpSchema> bernoulli_schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Bernoulli");
 
   ASSERT_EQ(bernoulli_schemas.size(), kExpectedBernoulliSchemaCount);
 
-  const onnx_op::LightOpSchema *const bernoulli_v22 = FindByVersion(bernoulli_schemas, 22);
-  const onnx_op::LightOpSchema *const bernoulli_v15 = FindByVersion(bernoulli_schemas, 15);
+  const core::schema::LightOpSchema *const bernoulli_v22 = FindByVersion(bernoulli_schemas, 22);
+  const core::schema::LightOpSchema *const bernoulli_v15 = FindByVersion(bernoulli_schemas, 15);
   ASSERT_NE(nullptr, bernoulli_v22);
   ASSERT_NE(nullptr, bernoulli_v15);
 
-  for (const onnx_op::LightOpSchema *schema : {bernoulli_v22, bernoulli_v15}) {
+  for (const core::schema::LightOpSchema *schema : {bernoulli_v22, bernoulli_v15}) {
     EXPECT_EQ(schema->domain(), "ai.onnx");
     ASSERT_EQ(schema->inputs().size(), 1u);
     EXPECT_EQ(schema->inputs()[0].name, "input");
@@ -198,10 +198,10 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsBernoulliSchemas) {
 
     ASSERT_EQ(schema->attributes().size(), 2u);
     EXPECT_EQ(schema->attributes()[0].name, "seed");
-    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::FLOAT);
+    EXPECT_EQ(schema->attributes()[0].type, core::schema::AttributeType::FLOAT);
     EXPECT_FALSE(schema->attributes()[0].required);
     EXPECT_EQ(schema->attributes()[1].name, "dtype");
-    EXPECT_EQ(schema->attributes()[1].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[1].type, core::schema::AttributeType::INT);
     EXPECT_FALSE(schema->attributes()[1].required);
   }
 
@@ -209,7 +209,7 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsBernoulliSchemas) {
   EXPECT_EQ(bernoulli_v15->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(bernoulli_v22->type_constraints()[0].allowed_type_strs.size(), 4u);
   EXPECT_EQ(bernoulli_v22->type_constraints()[0].allowed_type_strs[0],
-            onnx_op::TensorType::kBfloat16);
+            core::schema::TensorType::kBfloat16);
 
   // T2 size is 13 in both versions.
   EXPECT_EQ(bernoulli_v15->type_constraints()[1].allowed_type_strs.size(), 13u);
@@ -217,16 +217,16 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsBernoulliSchemas) {
 }
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsEyeLikeSchemas) {
-  const std::vector<onnx_op::LightOpSchema> eye_like_schemas =
+  const std::vector<core::schema::LightOpSchema> eye_like_schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("EyeLike");
   ASSERT_EQ(eye_like_schemas.size(), kExpectedEyeLikeSchemaCount);
 
-  const onnx_op::LightOpSchema *const eye_like_v22 = FindByVersion(eye_like_schemas, 22);
-  const onnx_op::LightOpSchema *const eye_like_v9 = FindByVersion(eye_like_schemas, 9);
+  const core::schema::LightOpSchema *const eye_like_v22 = FindByVersion(eye_like_schemas, 22);
+  const core::schema::LightOpSchema *const eye_like_v9 = FindByVersion(eye_like_schemas, 9);
   ASSERT_NE(nullptr, eye_like_v22);
   ASSERT_NE(nullptr, eye_like_v9);
 
-  for (const onnx_op::LightOpSchema *schema : {eye_like_v22, eye_like_v9}) {
+  for (const core::schema::LightOpSchema *schema : {eye_like_v22, eye_like_v9}) {
     EXPECT_EQ(schema->domain(), "ai.onnx");
     ASSERT_EQ(schema->inputs().size(), 1u);
     EXPECT_EQ(schema->inputs()[0].name, "input");
@@ -241,21 +241,21 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsEyeLikeSchemas) {
               "Constrain output types. Strings and complex are not supported.");
     ASSERT_EQ(schema->attributes().size(), 2u);
     EXPECT_EQ(schema->attributes()[0].name, "k");
-    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[0].type, core::schema::AttributeType::INT);
     EXPECT_EQ(schema->attributes()[1].name, "dtype");
-    EXPECT_EQ(schema->attributes()[1].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[1].type, core::schema::AttributeType::INT);
   }
 
   EXPECT_EQ(eye_like_v9->type_constraints()[0].allowed_type_strs.size(), 12u);
   EXPECT_EQ(eye_like_v22->type_constraints()[0].allowed_type_strs.size(), 13u);
   EXPECT_EQ(eye_like_v22->type_constraints()[0].allowed_type_strs[8],
-            onnx_op::TensorType::kBfloat16);
+            core::schema::TensorType::kBfloat16);
 }
 
 namespace {
 
 // Common per-version invariants for the four Random* schemas.
-void CheckRandomSchemaInvariants(const onnx_op::LightOpSchema *schema, bool is_like,
+void CheckRandomSchemaInvariants(const core::schema::LightOpSchema *schema, bool is_like,
                                  size_t expected_attr_count) {
   ASSERT_NE(nullptr, schema);
   EXPECT_EQ(schema->domain(), "ai.onnx");
@@ -281,36 +281,36 @@ void CheckRandomSchemaInvariants(const onnx_op::LightOpSchema *schema, bool is_l
 } // namespace
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomNormalSchemas) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("RandomNormal");
   ASSERT_EQ(schemas.size(), kExpectedRandomNormalSchemaCount);
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
   CheckRandomSchemaInvariants(v22, /*is_like=*/false, /*expected_attr_count=*/5);
   CheckRandomSchemaInvariants(v1, /*is_like=*/false, /*expected_attr_count=*/5);
 
   // v22 adds bfloat16 to T.
   EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kBfloat16);
 
   // Attribute order: mean, scale, seed, dtype, shape.
   EXPECT_EQ(v22->attributes()[0].name, "mean");
-  EXPECT_EQ(v22->attributes()[0].type, onnx_op::AttributeType::FLOAT);
+  EXPECT_EQ(v22->attributes()[0].type, core::schema::AttributeType::FLOAT);
   EXPECT_EQ(v22->attributes()[1].name, "scale");
   EXPECT_EQ(v22->attributes()[2].name, "seed");
   EXPECT_EQ(v22->attributes()[3].name, "dtype");
   EXPECT_EQ(v22->attributes()[4].name, "shape");
-  EXPECT_EQ(v22->attributes()[4].type, onnx_op::AttributeType::INTS);
+  EXPECT_EQ(v22->attributes()[4].type, core::schema::AttributeType::INTS);
   EXPECT_TRUE(v22->attributes()[4].required);
 }
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomUniformSchemas) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("RandomUniform");
   ASSERT_EQ(schemas.size(), kExpectedRandomUniformSchemaCount);
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
   CheckRandomSchemaInvariants(v22, /*is_like=*/false, /*expected_attr_count=*/5);
   CheckRandomSchemaInvariants(v1, /*is_like=*/false, /*expected_attr_count=*/5);
 
@@ -323,11 +323,11 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomUniformSchemas) {
 }
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomNormalLikeSchemas) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("RandomNormalLike");
   ASSERT_EQ(schemas.size(), kExpectedRandomNormalLikeSchemaCount);
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
   CheckRandomSchemaInvariants(v22, /*is_like=*/true, /*expected_attr_count=*/4);
   CheckRandomSchemaInvariants(v1, /*is_like=*/true, /*expected_attr_count=*/4);
 
@@ -345,11 +345,11 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomNormalLikeSchemas) {
 }
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomUniformLikeSchemas) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("RandomUniformLike");
   ASSERT_EQ(schemas.size(), kExpectedRandomUniformLikeSchemaCount);
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
   CheckRandomSchemaInvariants(v22, /*is_like=*/true, /*expected_attr_count=*/4);
   CheckRandomSchemaInvariants(v1, /*is_like=*/true, /*expected_attr_count=*/4);
 
@@ -360,16 +360,16 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomUniformLikeSchemas) {
 }
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsRangeSchemas) {
-  const std::vector<onnx_op::LightOpSchema> range_schemas =
+  const std::vector<core::schema::LightOpSchema> range_schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Range");
   ASSERT_EQ(range_schemas.size(), kExpectedRangeSchemaCount);
 
-  const onnx_op::LightOpSchema *const range_v11 = FindByVersion(range_schemas, 11);
-  const onnx_op::LightOpSchema *const range_v27 = FindByVersion(range_schemas, 27);
+  const core::schema::LightOpSchema *const range_v11 = FindByVersion(range_schemas, 11);
+  const core::schema::LightOpSchema *const range_v27 = FindByVersion(range_schemas, 27);
   ASSERT_NE(nullptr, range_v11);
   ASSERT_NE(nullptr, range_v27);
 
-  for (const onnx_op::LightOpSchema *schema : {range_v11, range_v27}) {
+  for (const core::schema::LightOpSchema *schema : {range_v11, range_v27}) {
     EXPECT_EQ(schema->domain(), "ai.onnx");
     ASSERT_EQ(schema->inputs().size(), 3u);
     EXPECT_EQ(schema->inputs()[0].name, "start");
@@ -389,39 +389,39 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsRangeSchemas) {
               "Constrain input types to common numeric type tensors.");
   }
 
-  EXPECT_EQ(
-      range_v11->type_constraints()[0].allowed_type_strs,
-      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble,
-                                        onnx_op::TensorType::kInt16, onnx_op::TensorType::kInt32,
-                                        onnx_op::TensorType::kInt64}));
+  EXPECT_EQ(range_v11->type_constraints()[0].allowed_type_strs,
+            (std::vector<core::schema::TensorType>{
+                core::schema::TensorType::kFloat, core::schema::TensorType::kDouble,
+                core::schema::TensorType::kInt16, core::schema::TensorType::kInt32,
+                core::schema::TensorType::kInt64}));
   EXPECT_EQ(range_v11->attributes().size(), 0u);
 
-  EXPECT_EQ(
-      range_v27->type_constraints()[0].allowed_type_strs,
-      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble,
-                                        onnx_op::TensorType::kInt16, onnx_op::TensorType::kInt32,
-                                        onnx_op::TensorType::kInt64, onnx_op::TensorType::kFloat16,
-                                        onnx_op::TensorType::kBfloat16}));
+  EXPECT_EQ(range_v27->type_constraints()[0].allowed_type_strs,
+            (std::vector<core::schema::TensorType>{
+                core::schema::TensorType::kFloat, core::schema::TensorType::kDouble,
+                core::schema::TensorType::kInt16, core::schema::TensorType::kInt32,
+                core::schema::TensorType::kInt64, core::schema::TensorType::kFloat16,
+                core::schema::TensorType::kBfloat16}));
 
   ASSERT_EQ(range_v27->attributes().size(), 1u);
   EXPECT_EQ(range_v27->attributes()[0].name, "stash_type");
-  EXPECT_EQ(range_v27->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_EQ(range_v27->attributes()[0].type, core::schema::AttributeType::INT);
   EXPECT_FALSE(range_v27->attributes()[0].required);
   ASSERT_TRUE(std::holds_alternative<int64_t>(range_v27->attributes()[0].default_value));
   EXPECT_EQ(std::get<int64_t>(range_v27->attributes()[0].default_value), 1);
 }
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsMultinomialSchemas) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Multinomial");
   ASSERT_EQ(schemas.size(), kExpectedMultinomialSchemaCount);
 
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v7 = FindByVersion(schemas, 7);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v7 = FindByVersion(schemas, 7);
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v7);
 
-  for (const onnx_op::LightOpSchema *schema : {v22, v7}) {
+  for (const core::schema::LightOpSchema *schema : {v22, v7}) {
     EXPECT_EQ(schema->domain(), "ai.onnx");
     ASSERT_EQ(schema->inputs().size(), 1u);
     EXPECT_EQ(schema->inputs()[0].name, "input");
@@ -437,25 +437,25 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsMultinomialSchemas) {
     EXPECT_EQ(schema->type_constraints()[1].description,
               "Constrain output types to integral tensors.");
     EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs,
-              (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32,
-                                                onnx_op::TensorType::kInt64}));
+              (std::vector<core::schema::TensorType>{core::schema::TensorType::kInt32,
+                                                     core::schema::TensorType::kInt64}));
 
     ASSERT_EQ(schema->attributes().size(), 3u);
     EXPECT_EQ(schema->attributes()[0].name, "sample_size");
-    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[0].type, core::schema::AttributeType::INT);
     EXPECT_FALSE(schema->attributes()[0].required);
     EXPECT_EQ(schema->attributes()[1].name, "seed");
-    EXPECT_EQ(schema->attributes()[1].type, onnx_op::AttributeType::FLOAT);
+    EXPECT_EQ(schema->attributes()[1].type, core::schema::AttributeType::FLOAT);
     EXPECT_FALSE(schema->attributes()[1].required);
     EXPECT_EQ(schema->attributes()[2].name, "dtype");
-    EXPECT_EQ(schema->attributes()[2].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[2].type, core::schema::AttributeType::INT);
     EXPECT_FALSE(schema->attributes()[2].required);
   }
 
   // v22 adds bfloat16 to the T1 constraint.
   EXPECT_EQ(v7->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kBfloat16);
 }
 
 } // namespace Test

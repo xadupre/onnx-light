@@ -7,8 +7,8 @@
 #include <cstdint>
 #include <utility>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -22,10 +22,10 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeAffineGrid: AffineGrid requires two inputs (theta, size).");
 
-  const OptimTensor &theta = ctx.Get(node.input(0));
-  const OptimTensor &size_tensor = ctx.Get(node.input(1));
+  const SymTensor &theta = ctx.Get(node.input(0));
+  const SymTensor &size_tensor = ctx.Get(node.input(1));
 
-  const OptimShape &theta_shape = theta.Shape();
+  const SymShape &theta_shape = theta.Shape();
   EXT_ENFORCE_INVALID(
       theta_shape.Rank() == 3,
       "ComputeShapeAffineGrid: theta must have rank 3 ((N, 2, 3) for 2D or (N, 3, 4) for 3D).");
@@ -49,7 +49,7 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
 
   // ``size`` is a 1-D INT64 tensor. Cross-check its single dim with ``mode``
   // when known.
-  const OptimShape &size_shape = size_tensor.Shape();
+  const SymShape &size_shape = size_tensor.Shape();
   if (size_shape.Rank() != 1) {
     // Be lenient: when the size input shape is unknown we still produce a
     // best-effort output. But if the rank is wrong, bail out.
@@ -69,12 +69,12 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
   }
 
   // If we still don't know the mode, leave the output fully symbolic.
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(theta_shape[0]); // N
 
   // Try to read the spatial dims from ``size``'s constant value, if known.
   const bool size_known = size_tensor.HasValueAsShape();
-  const OptimShape *size_values = size_known ? &size_tensor.ValueAsShape() : nullptr;
+  const SymShape *size_values = size_known ? &size_tensor.ValueAsShape() : nullptr;
   if (size_known) {
     const int64_t len = static_cast<int64_t>(size_values->Rank());
     EXT_ENFORCE_INVALID(!(len != 4 && len != 5),
@@ -92,8 +92,8 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
     // Best effort: rank-unknown output. Mirror the convention used by other
     // shape-inference functions (single symbolic dim) so downstream nodes
     // can still consume the result.
-    out_shape.PushBack(OptimDim("AffineGrid_dim0"));
-    ctx.Set(node.output(0), OptimTensor(nullptr, theta.Dtype(), std::move(out_shape)));
+    out_shape.PushBack(SymDim("AffineGrid_dim0"));
+    ctx.Set(node.output(0), SymTensor(nullptr, theta.Dtype(), std::move(out_shape)));
     return;
   }
 
@@ -102,24 +102,24 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
       out_shape.PushBack((*size_values)[2]); // H
       out_shape.PushBack((*size_values)[3]); // W
     } else {
-      out_shape.PushBack(OptimDim("AffineGrid_H"));
-      out_shape.PushBack(OptimDim("AffineGrid_W"));
+      out_shape.PushBack(SymDim("AffineGrid_H"));
+      out_shape.PushBack(SymDim("AffineGrid_W"));
     }
-    out_shape.PushBack(OptimDim(static_cast<int64_t>(2)));
+    out_shape.PushBack(SymDim(static_cast<int64_t>(2)));
   } else { // k3D
     if (size_known) {
       out_shape.PushBack((*size_values)[2]); // D
       out_shape.PushBack((*size_values)[3]); // H
       out_shape.PushBack((*size_values)[4]); // W
     } else {
-      out_shape.PushBack(OptimDim("AffineGrid_D"));
-      out_shape.PushBack(OptimDim("AffineGrid_H"));
-      out_shape.PushBack(OptimDim("AffineGrid_W"));
+      out_shape.PushBack(SymDim("AffineGrid_D"));
+      out_shape.PushBack(SymDim("AffineGrid_H"));
+      out_shape.PushBack(SymDim("AffineGrid_W"));
     }
-    out_shape.PushBack(OptimDim(static_cast<int64_t>(3)));
+    out_shape.PushBack(SymDim(static_cast<int64_t>(3)));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, theta.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, theta.Dtype(), std::move(out_shape)));
 }
 
 } // namespace tensor

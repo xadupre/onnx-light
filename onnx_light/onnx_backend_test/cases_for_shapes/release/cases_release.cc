@@ -4,8 +4,8 @@
 
 #include "onnx_backend_test/cases_for_shapes/release/include_release_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_core/annotations/inplace_reuse.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
-#include "onnx_optim/annotations/inplace_reuse.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -67,8 +67,8 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode mode) {
   // node 1, so it is reported as "not used after". No shape-tag metadata is
   // involved here.
   // NOLINTNEXTLINE: nodes has exactly 2 elements (Shape + Reshape added above).
-  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kReleaseAfterMetadataKey, "S");
-  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNotUsedAfterMetadataKey, "X");
+  (*graph->mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "S");
+  (*graph->mutable_node())[1].add_metadata(core::annotations::kNotUsedAfterMetadataKey, "X");
 
   // Build the reference DataSet so the case is executable end-to-end.
   const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});

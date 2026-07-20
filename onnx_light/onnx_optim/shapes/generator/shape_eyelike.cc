@@ -7,8 +7,8 @@
 #include <cstdint>
 #include <utility>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -20,7 +20,7 @@ void ComputeShapeEyeLike(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "EyeLike", "ComputeShapeEyeLike");
   EXT_ENFORCE_INVALID(node.input_size() >= 1, "ComputeShapeEyeLike: EyeLike requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
+  const SymTensor &input = ctx.Get(node.input(0));
   EXT_ENFORCE_INVALID(input.Shape().Rank() == 2,
                       "ComputeShapeEyeLike: input tensor must be 2-dimensional.");
 
@@ -34,8 +34,8 @@ void ComputeShapeEyeLike(ShapesContext &ctx, const NodeProto &node) {
                         dtype_value, ".");
   }
 
-  OptimShape out_shape = input.Shape();
-  ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
+  SymShape out_shape = input.Shape();
+  ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 
 } // namespace generator

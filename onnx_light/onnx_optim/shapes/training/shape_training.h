@@ -4,7 +4,14 @@
 
 #pragma once
 
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
+#include "onnx_core/symbolic/sym_map.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 /**
@@ -16,13 +23,55 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
+
+// The generic shape-inference engine (ShapesContext, dispatch table,
+// domain constants, ...) lives in ``onnx_core`` so it never depends on
+// any particular set of operator implementations; the symbolic value
+// descriptors (SymDim, SymShape, SymTensor, ...) live in
+// ``onnx_core::symbolic`` for the same reason. Bring them into
+// ``onnx_optim::shapes`` so shape functions can keep referring to them
+// unqualified, exactly as before those types moved to ``onnx_core``.
+using ::onnx_light::core::shapes::BroadcastDimOp;
+using ::onnx_light::core::shapes::BroadcastShapes;
+using ::onnx_light::core::shapes::CheckNodeOpAndOutput;
+using ::onnx_light::core::shapes::ComputeShapeBinaryBroadcast;
+using ::onnx_light::core::shapes::InferShapesModel;
+using ::onnx_light::core::shapes::kOnnxDomain;
+using ::onnx_light::core::shapes::kUnknownOpsetVersion;
+using ::onnx_light::core::shapes::PropagateValueAsShapeArithmetic;
+using ::onnx_light::core::shapes::ShapeEvent;
+using ::onnx_light::core::shapes::ShapeEventAction;
+using ::onnx_light::core::shapes::ShapeEventActionName;
+using ::onnx_light::core::shapes::ShapesContext;
+
+using ::onnx_light::core::symbolic::DataTypeToTensorType;
+using ::onnx_light::core::symbolic::Device;
+using ::onnx_light::core::symbolic::GPUIndex;
+using ::onnx_light::core::symbolic::IsGPU;
+using ::onnx_light::core::symbolic::IsIntegerTensorType;
+using ::onnx_light::core::symbolic::kMaxGPUIndex;
+using ::onnx_light::core::symbolic::kMaxOptimRank;
+using ::onnx_light::core::symbolic::kOptimValueAsShapeMaxElements;
+using ::onnx_light::core::symbolic::kValueInfoDeviceMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMaxMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMinMetadataKey;
+using ::onnx_light::core::symbolic::ShapeFromTensorProtoDims;
+using ::onnx_light::core::symbolic::SymCmpResult;
+using ::onnx_light::core::symbolic::SymDim;
+using ::onnx_light::core::symbolic::SymMap;
+using ::onnx_light::core::symbolic::SymSequence;
+using ::onnx_light::core::symbolic::SymShape;
+using ::onnx_light::core::symbolic::SymTensor;
+using ::onnx_light::core::symbolic::TensorType;
+using ::onnx_light::core::symbolic::TensorTypeToDataType;
+
 namespace training {
 
 /// Canonical domain string for the ``ai.onnx.preview.training`` operator set.
 inline constexpr const char *kOnnxPreviewTrainingDomain = "ai.onnx.preview.training";
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Adam`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Adam`` node and
  * stores it in ``ctx``.
  *
  * ``Adam`` (``ai.onnx.preview.training``) updates ``N`` optimised
@@ -55,7 +104,7 @@ inline constexpr const char *kOnnxPreviewTrainingDomain = "ai.onnx.preview.train
 void ComputeShapeAdam(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Adagrad`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Adagrad`` node and
  * stores it in ``ctx``.
  *
  * ``Adagrad`` (``ai.onnx.preview.training``) updates ``N`` optimised
@@ -87,7 +136,7 @@ void ComputeShapeAdam(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeAdagrad(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Momentum`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Momentum`` node and
  * stores it in ``ctx``.
  *
  * ``Momentum`` (``ai.onnx.preview.training``) updates ``N`` optimised

@@ -4,8 +4,8 @@
 
 #include "onnx_optim/shapes/tensor/shape_tensor.h"
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -19,10 +19,10 @@ void ComputeShapeScatterElements(ShapesContext &ctx, const NodeProto &node) {
                       "ComputeShapeScatterElements: ScatterElements requires three "
                       "inputs (data, indices, updates).");
 
-  const OptimTensor &data = ctx.Get(node.input(0));
+  const SymTensor &data = ctx.Get(node.input(0));
 
   // Output has the same shape and dtype as data.
-  ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), data.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, data.Dtype(), data.Shape()));
 }
 
 } // namespace tensor

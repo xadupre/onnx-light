@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -33,8 +33,8 @@ void ComputeShapeDictVectorizer(ShapesContext &ctx, const NodeProto &node, const
   CheckNodeOpAndOutput(node, "DictVectorizer", "ComputeShapeDictVectorizer");
 
   const int64_t c = VocabularyLength(node);
-  OptimShape output_shape;
-  output_shape.PushBack(OptimDim(c));
+  SymShape output_shape;
+  output_shape.PushBack(SymDim(c));
 
   // The output element type is the value type of the input map. When the input
   // is recorded in the context as a typed tensor (e.g. coming from a producer
@@ -42,12 +42,12 @@ void ComputeShapeDictVectorizer(ShapesContext &ctx, const NodeProto &node, const
   // forward that dtype; otherwise we mark the dtype as undefined.
   TensorType output_dtype = TensorType::kUndefined;
   if (ctx.Has(x)) {
-    const OptimTensor &input = ctx.Get(x);
+    const SymTensor &input = ctx.Get(x);
     if (input.Dtype() != TensorType::kUndefined) {
       output_dtype = input.Dtype();
     }
   }
-  ctx.Set(node.output(0), OptimTensor(nullptr, output_dtype, std::move(output_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, output_dtype, std::move(output_shape)));
 }
 
 } // namespace traditionalml

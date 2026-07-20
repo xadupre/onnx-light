@@ -4,7 +4,14 @@
 
 #pragma once
 
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
+#include "onnx_core/symbolic/sym_map.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 /**
@@ -15,10 +22,52 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
+
+// The generic shape-inference engine (ShapesContext, dispatch table,
+// domain constants, ...) lives in ``onnx_core`` so it never depends on
+// any particular set of operator implementations; the symbolic value
+// descriptors (SymDim, SymShape, SymTensor, ...) live in
+// ``onnx_core::symbolic`` for the same reason. Bring them into
+// ``onnx_optim::shapes`` so shape functions can keep referring to them
+// unqualified, exactly as before those types moved to ``onnx_core``.
+using ::onnx_light::core::shapes::BroadcastDimOp;
+using ::onnx_light::core::shapes::BroadcastShapes;
+using ::onnx_light::core::shapes::CheckNodeOpAndOutput;
+using ::onnx_light::core::shapes::ComputeShapeBinaryBroadcast;
+using ::onnx_light::core::shapes::InferShapesModel;
+using ::onnx_light::core::shapes::kOnnxDomain;
+using ::onnx_light::core::shapes::kUnknownOpsetVersion;
+using ::onnx_light::core::shapes::PropagateValueAsShapeArithmetic;
+using ::onnx_light::core::shapes::ShapeEvent;
+using ::onnx_light::core::shapes::ShapeEventAction;
+using ::onnx_light::core::shapes::ShapeEventActionName;
+using ::onnx_light::core::shapes::ShapesContext;
+
+using ::onnx_light::core::symbolic::DataTypeToTensorType;
+using ::onnx_light::core::symbolic::Device;
+using ::onnx_light::core::symbolic::GPUIndex;
+using ::onnx_light::core::symbolic::IsGPU;
+using ::onnx_light::core::symbolic::IsIntegerTensorType;
+using ::onnx_light::core::symbolic::kMaxGPUIndex;
+using ::onnx_light::core::symbolic::kMaxOptimRank;
+using ::onnx_light::core::symbolic::kOptimValueAsShapeMaxElements;
+using ::onnx_light::core::symbolic::kValueInfoDeviceMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMaxMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMinMetadataKey;
+using ::onnx_light::core::symbolic::ShapeFromTensorProtoDims;
+using ::onnx_light::core::symbolic::SymCmpResult;
+using ::onnx_light::core::symbolic::SymDim;
+using ::onnx_light::core::symbolic::SymMap;
+using ::onnx_light::core::symbolic::SymSequence;
+using ::onnx_light::core::symbolic::SymShape;
+using ::onnx_light::core::symbolic::SymTensor;
+using ::onnx_light::core::symbolic::TensorType;
+using ::onnx_light::core::symbolic::TensorTypeToDataType;
+
 namespace nn {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``AveragePool`` node
+ * Computes the output :cpp:class:`SymTensor` of an ``AveragePool`` node
  * and stores it in ``ctx``.
  *
  * The output dtype matches the input dtype. The output rank is the input
@@ -51,7 +100,7 @@ namespace nn {
 void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``LpPool`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``LpPool`` node and
  * stores it in ``ctx``.
  *
  * The output dtype matches the input dtype and the output shape is computed
@@ -77,7 +126,7 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
 void ComputeShapeLpPool(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a global pooling node
+ * Computes the output :cpp:class:`SymTensor` of a global pooling node
  * (``GlobalAveragePool``, ``GlobalMaxPool``, or ``GlobalLpPool``) and stores
  * it in ``ctx``.
  *
@@ -102,7 +151,7 @@ void ComputeShapeLpPool(ShapesContext &ctx, const NodeProto &node, const char *x
 void ComputeShapeGlobalPool(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Flatten`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Flatten`` node and
  * stores it in ``ctx``.
  *
  * The output dtype matches the input dtype. The output shape is always
@@ -128,7 +177,7 @@ void ComputeShapeGlobalPool(ShapesContext &ctx, const NodeProto &node, const cha
 void ComputeShapeFlatten(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``LRN`` (Local Response
+ * Computes the output :cpp:class:`SymTensor` of an ``LRN`` (Local Response
  * Normalization) node and stores it in ``ctx``.
  *
  * The output dtype and shape match the input dtype and shape. The input must
@@ -149,7 +198,7 @@ void ComputeShapeFlatten(ShapesContext &ctx, const NodeProto &node, const char *
 void ComputeShapeLRN(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``LpNormalization`` node
+ * Computes the output :cpp:class:`SymTensor` of an ``LpNormalization`` node
  * and stores it in ``ctx``.
  *
  * The output dtype and shape match the input dtype and shape. The input must
@@ -170,7 +219,7 @@ void ComputeShapeLRN(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeLpNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BatchNormalization``
+ * Computes the output :cpp:class:`SymTensor` of a ``BatchNormalization``
  * node and stores it in ``ctx``.
  *
  * The op has between 1 and 5 outputs depending on opset / mode. The first
@@ -211,7 +260,7 @@ void ComputeShapeBatchNormalization(ShapesContext &ctx, const NodeProto &node, c
                                     const char *input_mean);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``InstanceNormalization``
+ * Computes the output :cpp:class:`SymTensor` of an ``InstanceNormalization``
  * node and stores it in ``ctx``.
  *
  * The output dtype and shape are always inherited from input ``X``. ``scale``
@@ -231,7 +280,7 @@ void ComputeShapeBatchNormalization(ShapesContext &ctx, const NodeProto &node, c
 void ComputeShapeInstanceNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``GroupNormalization``
+ * Computes the output :cpp:class:`SymTensor` of a ``GroupNormalization``
  * node and stores it in ``ctx``.
  *
  * The output dtype and shape are always inherited from input ``X``. ``scale``
@@ -251,7 +300,7 @@ void ComputeShapeInstanceNormalization(ShapesContext &ctx, const NodeProto &node
 void ComputeShapeGroupNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a
+ * Computes the output :cpp:class:`SymTensor` of a
  * ``MeanVarianceNormalization`` node and stores it in ``ctx``.
  *
  * The output dtype and shape are always inherited from input ``X``.
@@ -269,7 +318,7 @@ void ComputeShapeMeanVarianceNormalization(ShapesContext &ctx, const NodeProto &
                                            const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``RMSNormalization``
+ * Computes the output :cpp:class:`SymTensor` of an ``RMSNormalization``
  * node and stores it in ``ctx``.
  *
  * The output dtype and shape are always inherited from input ``X``. The
@@ -289,7 +338,7 @@ void ComputeShapeMeanVarianceNormalization(ShapesContext &ctx, const NodeProto &
 void ComputeShapeRMSNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``LayerNormalization``
+ * Computes the output :cpp:class:`SymTensor` of a ``LayerNormalization``
  * node and stores it in ``ctx``.
  *
  * Output 0 (``Y``) always inherits ``X``'s dtype and shape. The optional
@@ -312,7 +361,7 @@ void ComputeShapeRMSNormalization(ShapesContext &ctx, const NodeProto &node, con
 void ComputeShapeLayerNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor`(s) of a ``Dropout`` node and
+ * Computes the output :cpp:class:`SymTensor`(s) of a ``Dropout`` node and
  * stores them in ``ctx``.
  *
  * ``output`` always has the same dtype and shape as ``data``. If the optional
@@ -324,7 +373,7 @@ void ComputeShapeDropout(ShapesContext &ctx, const NodeProto &node, const char *
                          const char *ratio = nullptr, const char *training_mode = nullptr);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``RoiAlign`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``RoiAlign`` node and
  * stores it in ``ctx``.
  *
  * The output dtype matches the input feature-map dtype. The output shape
@@ -357,7 +406,7 @@ void ComputeShapeRoiAlign(ShapesContext &ctx, const NodeProto &node, const char 
                           const char *rois, const char *batch_indices);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``NonMaxSuppression`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``NonMaxSuppression`` node
  * and stores it in ``ctx``.
  *
  * The output dtype is always ``TensorType::kInt64``. The output shape is
@@ -386,7 +435,7 @@ void ComputeShapeNonMaxSuppression(ShapesContext &ctx, const NodeProto &node, co
                                    const char *scores);
 
 /**
- * Computes the output :cpp:class:`OptimTensor`(s) of an ``RNN``, ``GRU`` or
+ * Computes the output :cpp:class:`SymTensor`(s) of an ``RNN``, ``GRU`` or
  * ``LSTM`` node and stores them in ``ctx``. The three operators share the
  * same output-shape semantics — only the number of outputs differs
  * (``RNN`` / ``GRU`` expose ``Y`` and ``Y_h``; ``LSTM`` also exposes
@@ -434,7 +483,7 @@ void ComputeShapeNonMaxSuppression(ShapesContext &ctx, const NodeProto &node, co
 void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, const char *r);
 
 /**
- * Computes the output :cpp:class:`OptimTensor`(s) of an ``Attention`` node
+ * Computes the output :cpp:class:`SymTensor`(s) of an ``Attention`` node
  * (since opset 23 in the ``ai.onnx`` domain) and stores them in ``ctx``.
  *
  * ``Attention`` accepts 3 to 7 inputs (``Q``, ``K``, ``V`` and the optional
@@ -491,7 +540,7 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
                            const char *past_value = nullptr);
 
 /**
- * Computes the output :cpp:class:`OptimTensor`(s) of a ``LinearAttention``
+ * Computes the output :cpp:class:`SymTensor`(s) of a ``LinearAttention``
  * node (since opset 27 in the ``ai.onnx`` domain) and stores them in ``ctx``.
  *
  * ``LinearAttention`` takes 3 to 6 inputs (``query``, ``key``, ``value`` and
@@ -541,7 +590,7 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
                                  const char *past_state = nullptr);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``RotaryEmbedding`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``RotaryEmbedding`` node
  * (since opset 23 in the ``ai.onnx`` domain) and stores it in ``ctx``.
  *
  * The output has the same shape and dtype as the input ``X``. ``X`` may be
@@ -565,7 +614,7 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
 void ComputeShapeRotaryEmbedding(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor`s of a ``CausalConvWithState``
+ * Computes the output :cpp:class:`SymTensor`s of a ``CausalConvWithState``
  * node (since opset 27 in the ``ai.onnx`` domain) and stores them in ``ctx``.
  *
  * The first output has the same shape and dtype as the input. The second
@@ -591,7 +640,7 @@ void ComputeShapeCausalConvWithState(ShapesContext &ctx, const NodeProto &node, 
                                      const char *weight);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``DeformConv`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``DeformConv`` node and
  * stores it in ``ctx``.
  *
  * The output dtype matches the input ``X`` dtype. The output shape is
@@ -623,7 +672,7 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
                             const char *w);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Col2Im`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Col2Im`` node and stores
  * it in ``ctx``.
  *
  * The output dtype matches the input ``input`` dtype. The output shape is
@@ -656,7 +705,7 @@ void ComputeShapeCol2Im(ShapesContext &ctx, const NodeProto &node, const char *i
                         const char *image_shape, const char *block_shape);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Conv`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Conv`` node and stores
  * it in ``ctx``.
  *
  * The output dtype matches ``X``. The output shape is ``(N, M, o1, ..., on)``
@@ -667,7 +716,7 @@ void ComputeShapeCol2Im(ShapesContext &ctx, const NodeProto &node, const char *i
 void ComputeShapeConv(ShapesContext &ctx, const NodeProto &node, const char *x, const char *w);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ConvInteger`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``ConvInteger`` node and
  * stores it in ``ctx``. The shape rule matches :cpp:func:`ComputeShapeConv`;
  * the output dtype is always ``TensorType::kInt32``.
  */
@@ -675,7 +724,7 @@ void ComputeShapeConvInteger(ShapesContext &ctx, const NodeProto &node, const ch
                              const char *w);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ConvTranspose`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``ConvTranspose`` node
  * and stores it in ``ctx``.
  *
  * The output dtype matches ``X``. The output shape is ``(N, M, o1, ..., on)``
@@ -688,7 +737,7 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
                                const char *w);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``MaxPool`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``MaxPool`` node.
  *
  * Mirrors :cpp:func:`ComputeShapeAveragePool`. The first output ``Y`` has
  * the same dtype as ``X`` and a shape derived from ``kernel_shape``,
@@ -700,7 +749,7 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
 void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``MaxUnpool`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``MaxUnpool`` node.
  *
  * The output dtype matches ``X``. When ``output_shape`` is provided and is
  * a rank-1 ``int64`` tensor with a known value, the output shape is taken
@@ -713,7 +762,7 @@ void ComputeShapeMaxUnpool(ShapesContext &ctx, const NodeProto &node, const char
                            const char *output_shape);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``MaxRoiPool`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``MaxRoiPool`` node and
  * stores it in ``ctx``.
  *
  * The output dtype matches the input feature-map dtype. The output shape

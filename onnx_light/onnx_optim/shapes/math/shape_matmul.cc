@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "onnx_optim/shapes/shape_broadcast.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -18,34 +18,34 @@ namespace math {
 void ComputeShapeMatMul(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b) {
   CheckNodeOpAndOutput(node, "MatMul", "ComputeShapeMatMul");
 
-  const OptimTensor &tensor_a = ctx.Get(a);
-  const OptimTensor &tensor_b = ctx.Get(b);
-  const OptimShape &shape_a = tensor_a.Shape();
-  const OptimShape &shape_b = tensor_b.Shape();
+  const SymTensor &tensor_a = ctx.Get(a);
+  const SymTensor &tensor_b = ctx.Get(b);
+  const SymShape &shape_a = tensor_a.Shape();
+  const SymShape &shape_b = tensor_b.Shape();
 
   EXT_ENFORCE_INVALID(shape_a.Rank() != 0,
                       "ComputeShapeMatMul: input A must have rank >= 1, got rank 0.");
   EXT_ENFORCE_INVALID(shape_b.Rank() != 0,
                       "ComputeShapeMatMul: input B must have rank >= 1, got rank 0.");
 
-  auto promoted = [](const OptimShape &s, bool left) {
-    std::vector<OptimDim> dims;
+  auto promoted = [](const SymShape &s, bool left) {
+    std::vector<SymDim> dims;
     if (s.Rank() == 1) {
       if (left) {
-        dims = {OptimDim(1), s[0]};
+        dims = {SymDim(1), s[0]};
       } else {
-        dims = {s[0], OptimDim(1)};
+        dims = {s[0], SymDim(1)};
       }
     } else {
       dims = s.Dims();
     }
-    return OptimShape(dims);
+    return SymShape(dims);
   };
 
-  const OptimShape a2 = promoted(shape_a, true);
-  const OptimShape b2 = promoted(shape_b, false);
-  const OptimDim k_left = a2[a2.Rank() - 1];
-  const OptimDim k_right = b2[b2.Rank() - 2];
+  const SymShape a2 = promoted(shape_a, true);
+  const SymShape b2 = promoted(shape_b, false);
+  const SymDim k_left = a2[a2.Rank() - 1];
+  const SymDim k_right = b2[b2.Rank() - 2];
 
   if (k_left.IsInt() && k_right.IsInt()) {
     EXT_ENFORCE_INVALID(
@@ -53,15 +53,15 @@ void ComputeShapeMatMul(ShapesContext &ctx, const NodeProto &node, const char *a
         std::to_string(k_left.AsInt()), " and ", std::to_string(k_right.AsInt()), ".");
   }
 
-  std::vector<OptimDim> a_prefix_dims;
-  std::vector<OptimDim> b_prefix_dims;
+  std::vector<SymDim> a_prefix_dims;
+  std::vector<SymDim> b_prefix_dims;
   for (size_t i = 0; i + 2 < a2.Rank(); ++i) {
     a_prefix_dims.push_back(a2[i]);
   }
   for (size_t i = 0; i + 2 < b2.Rank(); ++i) {
     b_prefix_dims.push_back(b2[i]);
   }
-  OptimShape out_shape = BroadcastShapes(OptimShape(a_prefix_dims), OptimShape(b_prefix_dims));
+  SymShape out_shape = BroadcastShapes(SymShape(a_prefix_dims), SymShape(b_prefix_dims));
 
   if (shape_a.Rank() != 1) {
     out_shape.PushBack(a2[a2.Rank() - 2]);
@@ -70,7 +70,7 @@ void ComputeShapeMatMul(ShapesContext &ctx, const NodeProto &node, const char *a
     out_shape.PushBack(b2[b2.Rank() - 1]);
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, tensor_a.Dtype(), out_shape));
+  ctx.Set(node.output(0), SymTensor(nullptr, tensor_a.Dtype(), out_shape));
 }
 
 } // namespace math

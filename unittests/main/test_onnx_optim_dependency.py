@@ -8,32 +8,32 @@ class TestOnnxOptimDependency(unittest.TestCase):
     def setUp(self):
         self.root = Path(__file__).resolve().parents[2]
 
-    def test_optim_tensor_includes_onnx_core_not_onnx_op(self):
-        header = self.root / "onnx_light" / "onnx_optim" / "optim_tensor.h"
+    def test_sym_tensor_includes_onnx_core_not_onnx_op(self):
+        header = self.root / "onnx_light" / "onnx_core" / "symbolic" / "sym_tensor.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
-            "onnx_core/tensor_type.h",
+            "onnx_proto/type_helper.h",
             content,
-            "optim_tensor.h must include onnx_core/tensor_type.h",
+            "sym_tensor.h must include onnx_proto/type_helper.h",
         )
         self.assertNotIn(
             "onnx_op/light_op_schema.h",
             content,
-            "optim_tensor.h must not include onnx_op/light_op_schema.h",
+            "sym_tensor.h must not include onnx_op/light_op_schema.h",
         )
 
-    def test_optim_tensor_type_alias_uses_onnx_core(self):
-        header = self.root / "onnx_light" / "onnx_optim" / "optim_tensor.h"
+    def test_sym_tensor_type_alias_uses_onnx_core(self):
+        header = self.root / "onnx_light" / "onnx_core" / "symbolic" / "sym_tensor.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
-            "onnx_core::TensorType",
+            "onnx_proto::TensorType",
             content,
-            "TensorType alias in optim_tensor.h must reference onnx_core::TensorType",
+            "TensorType alias in sym_tensor.h must reference onnx_proto::TensorType",
         )
         self.assertNotIn(
             "onnx_op::TensorType",
             content,
-            "TensorType alias in optim_tensor.h must not reference onnx_op::TensorType",
+            "TensorType alias in sym_tensor.h must not reference onnx_op::TensorType",
         )
 
     def test_cmake_optim_links_onnx_core(self):
@@ -54,29 +54,116 @@ class TestOnnxOptimDependency(unittest.TestCase):
             "lib_onnx_optim must not directly link against lib_onnx_op",
         )
 
-    def test_tensor_type_header_in_onnx_core(self):
-        header = self.root / "onnx_light" / "onnx_core" / "tensor_type.h"
-        self.assertTrue(header.exists(), "onnx_core/tensor_type.h must exist")
+    def test_tensor_type_header_in_onnx_proto(self):
+        header = self.root / "onnx_light" / "onnx_proto" / "type_helper.h"
+        self.assertTrue(header.exists(), "onnx_proto/type_helper.h must exist")
         content = header.read_text(encoding="utf-8")
         self.assertIn(
-            "enum class TensorType", content, "tensor_type.h must define the TensorType enum"
+            "enum class TensorType", content, "type_helper.h must define the TensorType enum"
         )
         self.assertIn(
-            "const char *ToTypeString", content, "tensor_type.h must declare ToTypeString"
+            "const char *ToTypeString", content, "type_helper.h must declare ToTypeString"
         )
 
-    def test_light_op_schema_re_exports_tensor_type(self):
+    def test_onnx_op_light_op_schema_wrapper_removed(self):
         header = self.root / "onnx_light" / "onnx_op" / "light_op_schema.h"
+        self.assertFalse(
+            header.exists(),
+            "onnx_op/light_op_schema.h must not exist; consumers include "
+            "onnx_core/light_op_schema/light_op_schema.h directly",
+        )
+
+    def test_operator_sets_includes_onnx_core_light_op_schema(self):
+        header = self.root / "onnx_light" / "onnx_op" / "operator_sets.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
-            "onnx_core/tensor_type.h",
+            "onnx_core/light_op_schema/light_op_schema.h",
             content,
-            "light_op_schema.h must include onnx_core/tensor_type.h",
+            "operator_sets.h must include onnx_core/light_op_schema/light_op_schema.h",
+        )
+        self.assertNotIn(
+            '"onnx_op/light_op_schema.h"',
+            content,
+            "operator_sets.h must not include the removed onnx_op/light_op_schema.h wrapper",
+        )
+
+    def test_onnx_core_light_op_schema_re_exports_tensor_type(self):
+        header = self.root / "onnx_light" / "onnx_core" / "light_op_schema" / "light_op_schema.h"
+        self.assertTrue(header.exists(), "onnx_core/light_op_schema/light_op_schema.h must exist")
+        content = header.read_text(encoding="utf-8")
+        self.assertIn(
+            "onnx_proto/type_helper.h",
+            content,
+            "light_op_schema.h must include onnx_proto/type_helper.h",
         )
         self.assertIn(
-            "using TensorType = onnx_core::TensorType",
+            "using TensorType = onnx_proto::TensorType",
             content,
-            "light_op_schema.h must re-export TensorType from onnx_core",
+            "light_op_schema.h must re-export TensorType from onnx_proto",
+        )
+
+    def test_shapes_engine_lives_in_onnx_core(self):
+        shapes_dir = self.root / "onnx_light" / "onnx_core" / "shapes"
+        for name in (
+            "shapes_context.h",
+            "shape_check.h",
+            "shape_broadcast.h",
+            "shape_inference.h",
+            "dispatch_table.h",
+            "dispatch_table.cc",
+        ):
+            self.assertTrue(
+                (shapes_dir / name).exists(),
+                f"onnx_core/shapes/{name} must exist: the generic shape-inference engine "
+                "(ShapesContext, the dispatch table, ...) lives in onnx_core, while the "
+                "per-operator ComputeShape* functions stay in onnx_optim",
+            )
+        for name in (
+            "shapes_context.h",
+            "shape_check.h",
+            "shape_broadcast.h",
+            "shape_inference.h",
+        ):
+            self.assertFalse(
+                (self.root / "onnx_light" / "onnx_optim" / "shapes" / name).exists(),
+                f"onnx_optim/shapes/{name} must not exist; consumers must include "
+                f"onnx_core/shapes/{name} directly",
+            )
+
+    def test_onnx_core_dispatch_table_does_not_include_onnx_optim(self):
+        for name in (
+            "dispatch_table.h",
+            "dispatch_table.cc",
+            "shape_inference.h",
+            "shape_inference.cc",
+        ):
+            header = self.root / "onnx_light" / "onnx_core" / "shapes" / name
+            content = header.read_text(encoding="utf-8")
+            self.assertNotIn(
+                "onnx_optim/",
+                content,
+                f"onnx_core/shapes/{name} must not include any onnx_optim header",
+            )
+
+    def test_onnx_core_dispatch_table_exposes_registration_function(self):
+        header = self.root / "onnx_light" / "onnx_core" / "shapes" / "dispatch_table.h"
+        content = header.read_text(encoding="utf-8")
+        self.assertIn(
+            "RegisterComputeShapeFn",
+            content,
+            "onnx_core/shapes/dispatch_table.h must declare RegisterComputeShapeFn so "
+            "onnx_optim can populate the dispatch table without onnx_core depending on it",
+        )
+
+    def test_onnx_optim_registers_its_builtin_shape_functions(self):
+        header = self.root / "onnx_light" / "onnx_optim" / "dispatch_table.h"
+        content = header.read_text(encoding="utf-8")
+        self.assertIn(
+            "RegisterShapeFunctions",
+            content,
+            "onnx_optim/dispatch_table.h must declare RegisterShapeFunctions, which "
+            "registers every built-in onnx_optim shape function with "
+            "core::shapes::RegisterComputeShapeFn",
         )
 
 

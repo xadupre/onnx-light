@@ -18,8 +18,8 @@ namespace Test {
 
 namespace {
 
-const onnx_op::LightOpSchema *FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                            int version) {
+const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -28,7 +28,8 @@ const onnx_op::LightOpSchema *FindByVersion(const std::vector<onnx_op::LightOpSc
   return nullptr;
 }
 
-const onnx_op::AttributeParam *FindAttr(const onnx_op::LightOpSchema &schema, const char *name) {
+const core::schema::AttributeParam *FindAttr(const core::schema::LightOpSchema &schema,
+                                             const char *name) {
   for (const auto &attr : schema.attributes()) {
     if (attr.name == name) {
       return &attr;
@@ -40,12 +41,12 @@ const onnx_op::AttributeParam *FindAttr(const onnx_op::LightOpSchema &schema, co
 } // namespace
 
 TEST(OnnxOpMathHardSigmoid, HasSchemasForV1V6V22) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("HardSigmoid");
   ASSERT_EQ(schemas.size(), 3u);
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v6 = FindByVersion(schemas, 6);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v6 = FindByVersion(schemas, 6);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v6);
   ASSERT_NE(nullptr, v1);
@@ -62,11 +63,11 @@ TEST(OnnxOpMathHardSigmoid, HasSchemasForV1V6V22) {
 }
 
 TEST(OnnxOpMathHardSwish, HasSchemasForV14AndV22) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("HardSwish");
   ASSERT_EQ(schemas.size(), 2u);
-  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const v14 = FindByVersion(schemas, 14);
+  const core::schema::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const v14 = FindByVersion(schemas, 14);
   ASSERT_NE(nullptr, v22);
   ASSERT_NE(nullptr, v14);
   EXPECT_EQ(v22->name(), "HardSwish");
@@ -80,12 +81,12 @@ TEST(OnnxOpMathHardSwish, HasSchemasForV14AndV22) {
 }
 
 TEST(OnnxOpMathHardmax, HasSchemasForV1V11V13) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Hardmax");
   ASSERT_EQ(schemas.size(), 3u);
-  const onnx_op::LightOpSchema *const v13 = FindByVersion(schemas, 13);
-  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
-  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  const core::schema::LightOpSchema *const v13 = FindByVersion(schemas, 13);
+  const core::schema::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  const core::schema::LightOpSchema *const v1 = FindByVersion(schemas, 1);
   ASSERT_NE(nullptr, v13);
   ASSERT_NE(nullptr, v11);
   ASSERT_NE(nullptr, v1);
@@ -94,19 +95,19 @@ TEST(OnnxOpMathHardmax, HasSchemasForV1V11V13) {
   EXPECT_EQ(v13->inputs()[0].name, "input");
   ASSERT_EQ(v13->outputs().size(), 1u);
   EXPECT_EQ(v13->outputs()[0].name, "output");
-  const onnx_op::AttributeParam *axis_v13 = FindAttr(*v13, "axis");
+  const core::schema::AttributeParam *axis_v13 = FindAttr(*v13, "axis");
   ASSERT_NE(axis_v13, nullptr);
   EXPECT_FALSE(axis_v13->required);
-  const onnx_op::AttributeParam *axis_v11 = FindAttr(*v11, "axis");
+  const core::schema::AttributeParam *axis_v11 = FindAttr(*v11, "axis");
   ASSERT_NE(axis_v11, nullptr);
   EXPECT_FALSE(axis_v11->required);
 }
 
 TEST(OnnxOpMathShrink, HasSchemaForV9) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Shrink");
   ASSERT_EQ(schemas.size(), 1u);
-  const onnx_op::LightOpSchema *const v9 = FindByVersion(schemas, 9);
+  const core::schema::LightOpSchema *const v9 = FindByVersion(schemas, 9);
   ASSERT_NE(nullptr, v9);
   EXPECT_EQ(v9->domain(), "ai.onnx");
   EXPECT_EQ(v9->name(), "Shrink");
@@ -115,10 +116,10 @@ TEST(OnnxOpMathShrink, HasSchemaForV9) {
   EXPECT_EQ(v9->inputs()[0].name, "input");
   ASSERT_EQ(v9->outputs().size(), 1u);
   EXPECT_EQ(v9->outputs()[0].name, "output");
-  const onnx_op::AttributeParam *bias = FindAttr(*v9, "bias");
+  const core::schema::AttributeParam *bias = FindAttr(*v9, "bias");
   ASSERT_NE(bias, nullptr);
   EXPECT_FALSE(bias->required);
-  const onnx_op::AttributeParam *lambd = FindAttr(*v9, "lambd");
+  const core::schema::AttributeParam *lambd = FindAttr(*v9, "lambd");
   ASSERT_NE(lambd, nullptr);
   EXPECT_FALSE(lambd->required);
 }

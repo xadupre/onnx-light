@@ -6,13 +6,13 @@ providing the shared types and graph-manipulation helpers that sit below both
 
 The ``TensorType`` enum and ``ToTypeString`` helper are the canonical Python
 spelling for the element / sequence type descriptor defined in
-``onnx_core/tensor_type.h``.  ``onnx_light.onnx_op.TensorType`` re-exports
+``onnx_proto/type_helper.h``.  ``onnx_light.onnx_op.TensorType`` re-exports
 the same object for backward compatibility.
 
 The three graph-analysis functions (``collect_external_inputs``,
 ``collect_node_inputs``, ``collect_remaining_inputs``) mirror the helpers
-defined in ``onnx_core/graph_manipulations.h`` and are also re-exported from
-``onnx_light.onnx`` for convenience.
+defined in ``onnx_core/graph/graph_manipulations.h`` and are also re-exported
+from ``onnx_light.onnx`` for convenience.
 """
 
 from __future__ import annotations

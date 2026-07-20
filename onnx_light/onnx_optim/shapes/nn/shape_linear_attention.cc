@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -16,7 +16,7 @@ namespace nn {
 
 namespace {
 
-OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
+SymDim MergeDim(const SymDim &a, const SymDim &b, const char *what) {
   if (a.IsInt() && b.IsInt()) {
     EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), "ComputeShapeLinearAttention: ", what,
                         " mismatch: ", a.AsInt(), " vs ", b.AsInt(), ".");
@@ -31,12 +31,12 @@ OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
   return a;
 }
 
-void RequireRank3(const OptimShape &shape, const char *name) {
+void RequireRank3(const SymShape &shape, const char *name) {
   EXT_ENFORCE_INVALID(shape.Rank() == 3, "ComputeShapeLinearAttention: input '", name,
                       "' must have rank 3, got ", shape.Rank(), ".");
 }
 
-void RequireRank4(const OptimShape &shape, const char *name) {
+void RequireRank4(const SymShape &shape, const char *name) {
   EXT_ENFORCE_INVALID(shape.Rank() == 4, "ComputeShapeLinearAttention: input '", name,
                       "' must have rank 4, got ", shape.Rank(), ".");
 }
@@ -71,28 +71,28 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
                       "ComputeShapeLinearAttention: q_num_heads (", q_num_heads,
                       ") must be a multiple of kv_num_heads (", kv_num_heads, ").");
 
-  const OptimTensor &Q = ctx.Get(query);
-  const OptimTensor &K = ctx.Get(key);
-  const OptimTensor &V = ctx.Get(value);
+  const SymTensor &Q = ctx.Get(query);
+  const SymTensor &K = ctx.Get(key);
+  const SymTensor &V = ctx.Get(value);
 
-  const OptimShape &q_shape = Q.Shape();
-  const OptimShape &k_shape = K.Shape();
-  const OptimShape &v_shape = V.Shape();
+  const SymShape &q_shape = Q.Shape();
+  const SymShape &k_shape = K.Shape();
+  const SymShape &v_shape = V.Shape();
   RequireRank3(q_shape, query);
   RequireRank3(k_shape, key);
   RequireRank3(v_shape, value);
 
   // Batch and sequence length: shared between Q, K and V.
-  OptimDim batch = MergeDim(q_shape[0], k_shape[0], "batch");
+  SymDim batch = MergeDim(q_shape[0], k_shape[0], "batch");
   batch = MergeDim(batch, v_shape[0], "batch");
-  OptimDim seq_len = MergeDim(q_shape[1], k_shape[1], "sequence_length");
+  SymDim seq_len = MergeDim(q_shape[1], k_shape[1], "sequence_length");
   seq_len = MergeDim(seq_len, v_shape[1], "sequence_length");
 
   // d_k = key.shape[-1] / kv_num_heads; d_v = value.shape[-1] / kv_num_heads.
   // When the value/key last dim is symbolic we fall back to a fresh symbolic
   // placeholder ("?") so the rank is correct even if the exact value is
   // unknown. ``past_state`` (if provided) can refine these below.
-  OptimDim d_k;
+  SymDim d_k;
   bool d_k_resolved = false;
   if (k_shape[2].IsInt()) {
     const int64_t hidden_k = k_shape[2].AsInt();
@@ -109,24 +109,24 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
       EXT_ENFORCE_INVALID(q_d_k == k_d_k, "ComputeShapeLinearAttention: query head_size (", q_d_k,
                           ") must equal key head_size (", k_d_k, ").");
     }
-    d_k = OptimDim(hidden_k / kv_num_heads);
+    d_k = SymDim(hidden_k / kv_num_heads);
     d_k_resolved = true;
   }
 
-  OptimDim d_v;
+  SymDim d_v;
   bool d_v_resolved = false;
   if (v_shape[2].IsInt()) {
     const int64_t hidden_v = v_shape[2].AsInt();
     EXT_ENFORCE_INVALID((hidden_v % kv_num_heads) == 0,
                         "ComputeShapeLinearAttention: value last dim (", hidden_v,
                         ") must be divisible by kv_num_heads (", kv_num_heads, ").");
-    d_v = OptimDim(hidden_v / kv_num_heads);
+    d_v = SymDim(hidden_v / kv_num_heads);
     d_v_resolved = true;
   }
 
   // Cross-check / refine using past_state (B, H_kv, d_k, d_v) if present.
   if (past_state != nullptr && ctx.Has(past_state)) {
-    const OptimShape &ps_shape = ctx.Get(past_state).Shape();
+    const SymShape &ps_shape = ctx.Get(past_state).Shape();
     RequireRank4(ps_shape, past_state);
     batch = MergeDim(batch, ps_shape[0], "batch");
     EXT_ENFORCE_INVALID(!(ps_shape[1].IsInt() && ps_shape[1].AsInt() != kv_num_heads),
@@ -147,36 +147,36 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
   }
 
   // Compute output last dim = q_num_heads * d_v.
-  OptimDim out_last;
+  SymDim out_last;
   if (d_v_resolved) {
-    out_last = OptimDim(q_num_heads * d_v.AsInt());
+    out_last = SymDim(q_num_heads * d_v.AsInt());
   } else if (q_num_heads == kv_num_heads && !v_shape[2].IsInt()) {
     // Special case: q_num_heads * d_v = q_num_heads * (v_shape[2] / kv_num_heads) = v_shape[2].
     out_last = v_shape[2];
   } else {
-    out_last = OptimDim(std::string("?"));
+    out_last = SymDim(std::string("?"));
   }
   if (!d_k_resolved) {
-    d_k = OptimDim(std::string("?"));
+    d_k = SymDim(std::string("?"));
   }
   if (!d_v_resolved) {
-    d_v = OptimDim(std::string("?"));
+    d_v = SymDim(std::string("?"));
   }
 
   // Output 0: output = (B, T, q_num_heads * d_v).
   {
-    OptimShape out_shape;
+    SymShape out_shape;
     out_shape.PushBack(batch);
     out_shape.PushBack(seq_len);
     out_shape.PushBack(out_last);
-    ctx.Set(node.output(0), OptimTensor(nullptr, Q.Dtype(), std::move(out_shape)));
+    ctx.Set(node.output(0), SymTensor(nullptr, Q.Dtype(), std::move(out_shape)));
   }
 
   // Output 1: present_state = (B, kv_num_heads, d_k, d_v).
   if (node.output_size() > 1 && !node.output(1).empty()) {
-    OptimShape ps_shape;
+    SymShape ps_shape;
     ps_shape.PushBack(batch);
-    ps_shape.PushBack(OptimDim(kv_num_heads));
+    ps_shape.PushBack(SymDim(kv_num_heads));
     ps_shape.PushBack(d_k);
     ps_shape.PushBack(d_v);
     // Dtype: prefer past_state dtype when available, otherwise inherit from Q.
@@ -184,7 +184,7 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
     if (past_state != nullptr && ctx.Has(past_state)) {
       state_dtype = ctx.Get(past_state).Dtype();
     }
-    ctx.Set(node.output(1), OptimTensor(nullptr, state_dtype, std::move(ps_shape)));
+    ctx.Set(node.output(1), SymTensor(nullptr, state_dtype, std::move(ps_shape)));
   }
 }
 

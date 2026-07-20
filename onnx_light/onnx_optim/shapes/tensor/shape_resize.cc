@@ -11,25 +11,29 @@
 #include <variant>
 #include <vector>
 
-#include "onnx_optim/expressions.h"
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/_helpers/shape_helpers.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/expressions/expressions.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_core/symbolic/symbolic_helper.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
+
+// Alias to the symbolic dimension-expression library, which lives in
+// ``onnx_core`` so both ``onnx_op`` and ``onnx_optim`` can share it.
+namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
 namespace shapes {
 namespace tensor {
 
 namespace {
 
-// Converts a ``DimType`` back to an ``OptimDim``.
-OptimDim FromDimType(const expressions::DimType &d) {
+// Converts a ``DimType`` back to an ``SymDim``.
+SymDim FromDimType(const expressions::DimType &d) {
   if (std::holds_alternative<int64_t>(d)) {
-    return OptimDim(std::get<int64_t>(d));
+    return SymDim(std::get<int64_t>(d));
   }
-  return OptimDim(std::get<std::string>(d));
+  return SymDim(std::get<std::string>(d));
 }
 
 // Reads the optional ``axes`` attribute introduced at opset 18 and normalises
@@ -92,8 +96,8 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapeResize: Resize requires at least one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
-  const OptimShape &input_shape = input.Shape();
+  const SymTensor &input = ctx.Get(node.input(0));
+  const SymShape &input_shape = input.Shape();
   const std::size_t rank = input_shape.Rank();
 
   // The v10 schema is ``(X, scales)``; v11+ is ``(X, roi, scales, sizes)``
@@ -112,9 +116,9 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   std::vector<int64_t> sizes_data;
   bool sizes_known = false;
   if (!sizes_name.empty()) {
-    const OptimTensor &sizes_tensor = ctx.Get(sizes_name);
+    const SymTensor &sizes_tensor = ctx.Get(sizes_name);
     if (sizes_tensor.HasValueAsShape()) {
-      const OptimShape &val = sizes_tensor.ValueAsShape();
+      const SymShape &val = sizes_tensor.ValueAsShape();
       sizes_known = true;
       for (std::size_t i = 0; i < val.Rank(); ++i) {
         if (!val[i].IsInt()) {
@@ -142,7 +146,7 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
       scales_name_str = node.input(1);
     }
     if (!scales_name_str.empty() && ctx.Has(scales_name_str)) {
-      const OptimTensor &scales_tensor = ctx.Get(scales_name_str);
+      const SymTensor &scales_tensor = ctx.Get(scales_name_str);
       if (scales_tensor.HasMin() && scales_tensor.HasMax() &&
           scales_tensor.Min() == scales_tensor.Max()) {
         scales_known = ScaleToRational(scales_tensor.Min(), scale_divisor, scale_multiplier);
@@ -154,9 +158,9 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   // to. When absent it defaults to all axes.
   std::vector<int64_t> axes = ResolveAxes(node, rank);
 
-  OptimShape out_shape;
+  SymShape out_shape;
   for (std::size_t i = 0; i < rank; ++i) {
-    out_shape.PushBack(OptimDim("Resize_dim" + std::to_string(i)));
+    out_shape.PushBack(SymDim("Resize_dim" + std::to_string(i)));
   }
   // Non-axis dims (when ``axes`` is provided) keep the input dim.
   if (axes.size() != rank) {
@@ -167,7 +171,7 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
 
   if (sizes_known && sizes_data.size() == axes.size()) {
     for (std::size_t i = 0; i < axes.size(); ++i) {
-      out_shape[static_cast<std::size_t>(axes[i])] = OptimDim(sizes_data[i]);
+      out_shape[static_cast<std::size_t>(axes[i])] = SymDim(sizes_data[i]);
     }
   } else if (scales_known) {
     for (std::size_t i = 0; i < axes.size(); ++i) {
@@ -182,7 +186,7 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
     }
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
 }
 
 } // namespace tensor

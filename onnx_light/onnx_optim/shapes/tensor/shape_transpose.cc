@@ -7,8 +7,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -21,8 +21,8 @@ void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 1),
                       "ComputeShapeTranspose: Transpose requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
-  const OptimShape &input_shape = input.Shape();
+  const SymTensor &input = ctx.Get(node.input(0));
+  const SymShape &input_shape = input.Shape();
   const std::size_t rank = input_shape.Rank();
 
   std::vector<int64_t> perm;
@@ -47,11 +47,11 @@ void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node) {
     seen[static_cast<std::size_t>(p)] = true;
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   for (int64_t p : perm) {
     out_shape.PushBack(input_shape[static_cast<std::size_t>(p)]);
   }
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
 }
 
 } // namespace tensor

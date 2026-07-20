@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -23,7 +23,7 @@ void CheckScalarInput(const ShapesContext &ctx, const char *name, const char *la
   if (input_name.empty()) {
     return;
   }
-  const OptimShape &shape = ctx.Get(input_name).Shape();
+  const SymShape &shape = ctx.Get(input_name).Shape();
   EXT_ENFORCE_INVALID(shape.Rank() == 0u, "ComputeShapeDropout: ", label,
                       " of Dropout must be a scalar.");
 }
@@ -34,9 +34,9 @@ void ComputeShapeDropout(ShapesContext &ctx, const NodeProto &node, const char *
                          const char *ratio, const char *training_mode) {
   CheckNodeOpAndOutput(node, "Dropout", "ComputeShapeDropout");
 
-  const OptimTensor &input = ctx.Get(data);
-  const OptimShape &in_shape = input.Shape();
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), in_shape));
+  const SymTensor &input = ctx.Get(data);
+  const SymShape &in_shape = input.Shape();
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), in_shape));
 
   CheckScalarInput(ctx, ratio, "Ratio");
   CheckScalarInput(ctx, training_mode, "training_mode");
@@ -44,7 +44,7 @@ void ComputeShapeDropout(ShapesContext &ctx, const NodeProto &node, const char *
   if (node.output_size() >= 2) {
     const std::string mask_name = node.output(1);
     if (!mask_name.empty()) {
-      ctx.Set(mask_name, OptimTensor(nullptr, TensorType::kBool, in_shape));
+      ctx.Set(mask_name, SymTensor(nullptr, TensorType::kBool, in_shape));
     }
   }
 }

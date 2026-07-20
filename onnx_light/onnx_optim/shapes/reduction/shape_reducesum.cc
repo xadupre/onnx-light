@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -30,13 +30,13 @@ int64_t ResolveAxis(int64_t axis, int64_t rank, const std::string &op_type) {
 // Builds the output shape of a reduction given the boolean mask of reduced
 // dimensions. Reduced positions are either dropped (``keepdims=false``) or
 // replaced by ``1`` (``keepdims=true``).
-OptimShape BuildOutputShape(const OptimShape &in_shape, const std::vector<bool> &is_reduced,
-                            bool keepdims) {
-  OptimShape out;
+SymShape BuildOutputShape(const SymShape &in_shape, const std::vector<bool> &is_reduced,
+                          bool keepdims) {
+  SymShape out;
   for (std::size_t d = 0; d < in_shape.Rank(); ++d) {
     if (is_reduced[d]) {
       if (keepdims) {
-        out.PushBack(OptimDim(static_cast<int64_t>(1)));
+        out.PushBack(SymDim(static_cast<int64_t>(1)));
       }
     } else {
       out.PushBack(in_shape[d]);
@@ -52,8 +52,8 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
   const std::string op(op_type);
   CheckNodeOpAndOutput(node, op_type, ("ComputeShape" + op).c_str());
 
-  const OptimTensor &input = ctx.Get(data);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(data);
+  const SymShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
 
   const bool keepdims = GetAttributeOr<int64_t>(node, "keepdims", 1) != 0;
@@ -72,9 +72,9 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
   if (axes_is_input) {
     const bool has_axes_input = axes != nullptr && axes[0] != '\0' && ctx.Has(std::string(axes));
     if (has_axes_input) {
-      const OptimTensor &axes_tensor = ctx.Get(std::string(axes));
+      const SymTensor &axes_tensor = ctx.Get(std::string(axes));
       if (axes_tensor.HasValueAsShape()) {
-        const OptimShape &av = axes_tensor.ValueAsShape();
+        const SymShape &av = axes_tensor.ValueAsShape();
         axes_known = true;
         axes_count_known = true;
         axes_count = static_cast<int64_t>(av.Rank());
@@ -96,7 +96,7 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
       } else {
         // Concrete values unknown but the rank-1 shape of ``axes`` may still
         // tell us how many axes will be reduced.
-        const OptimShape &as = axes_tensor.Shape();
+        const SymShape &as = axes_tensor.Shape();
         if (as.Rank() == 1 && as[0].IsInt()) {
           axes_count_known = true;
           axes_count = as[0].AsInt();
@@ -131,7 +131,7 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
     axes_count = static_cast<int64_t>(attr_axes.size());
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   if (axes_known) {
     out_shape = BuildOutputShape(in_shape, is_reduced, keepdims);
   } else if (keepdims) {
@@ -139,10 +139,10 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
     // Because we do not know which dims are reduced, mark every dim as a
     // fresh symbolic expression derived from the input dim.
     for (std::size_t d = 0; d < in_shape.Rank(); ++d) {
-      const OptimDim &din = in_shape[d];
+      const SymDim &din = in_shape[d];
       const std::string expr =
           op + "(" + (din.IsInt() ? std::to_string(din.AsInt()) : din.AsExpr()) + ")";
-      out_shape.PushBack(OptimDim(expr));
+      out_shape.PushBack(SymDim(expr));
     }
   } else if (axes_count_known) {
     // Rank decreases by ``axes_count``; we cannot know which dims survive,
@@ -151,7 +151,7 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
     EXT_ENFORCE_INVALID(!(out_rank < 0), "ComputeShape", op, ": number of axes (", axes_count,
                         ") exceeds input rank (", rank, ").");
     for (int64_t d = 0; d < out_rank; ++d) {
-      out_shape.PushBack(OptimDim(op + "_d" + std::to_string(d)));
+      out_shape.PushBack(SymDim(op + "_d" + std::to_string(d)));
     }
   } else {
     // Neither the axes nor their count is known: not enough information to
@@ -161,7 +161,7 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
                       "axes values nor the number of axes is known and 'keepdims' is 0.");
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
 }
 
 void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char *data,

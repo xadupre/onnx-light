@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -35,15 +35,15 @@ TensorType ResolveDtype(const NodeProto &node, const char *op_name) {
   return out_dtype;
 }
 
-OptimShape ShapeFromAttribute(const NodeProto &node, const char *op_name) {
+SymShape ShapeFromAttribute(const NodeProto &node, const char *op_name) {
   std::vector<int64_t> dims;
   EXT_ENFORCE_INVALID(GetAttributeInts(node, "shape", dims), op_name,
                       ": required attribute 'shape' is missing.");
-  OptimShape out_shape;
+  SymShape out_shape;
   for (int64_t dim : dims) {
     EXT_ENFORCE_INVALID(dim >= 0, op_name,
                         ": attribute 'shape' must not contain negative dims, got ", dim, ".");
-    out_shape.PushBack(OptimDim(dim));
+    out_shape.PushBack(SymDim(dim));
   }
   return out_shape;
 }
@@ -87,9 +87,9 @@ void ComputeShapeDelayedInitializer(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "DelayedInitializer", kCaller);
   EXT_ENFORCE_INVALID(node.input_size() == 0, kCaller, ": DelayedInitializer requires no inputs.");
   TensorType out_dtype = ResolveDtype(node, kCaller);
-  OptimShape out_shape = ShapeFromAttribute(node, kCaller);
+  SymShape out_shape = ShapeFromAttribute(node, kCaller);
   ValidateDeviceAttributes(node, kCaller);
-  ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 
 } // namespace rt

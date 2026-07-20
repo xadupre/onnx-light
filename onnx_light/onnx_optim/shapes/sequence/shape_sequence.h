@@ -4,7 +4,14 @@
 
 #pragma once
 
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
+#include "onnx_core/symbolic/sym_map.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 /**
@@ -16,10 +23,52 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
+
+// The generic shape-inference engine (ShapesContext, dispatch table,
+// domain constants, ...) lives in ``onnx_core`` so it never depends on
+// any particular set of operator implementations; the symbolic value
+// descriptors (SymDim, SymShape, SymTensor, ...) live in
+// ``onnx_core::symbolic`` for the same reason. Bring them into
+// ``onnx_optim::shapes`` so shape functions can keep referring to them
+// unqualified, exactly as before those types moved to ``onnx_core``.
+using ::onnx_light::core::shapes::BroadcastDimOp;
+using ::onnx_light::core::shapes::BroadcastShapes;
+using ::onnx_light::core::shapes::CheckNodeOpAndOutput;
+using ::onnx_light::core::shapes::ComputeShapeBinaryBroadcast;
+using ::onnx_light::core::shapes::InferShapesModel;
+using ::onnx_light::core::shapes::kOnnxDomain;
+using ::onnx_light::core::shapes::kUnknownOpsetVersion;
+using ::onnx_light::core::shapes::PropagateValueAsShapeArithmetic;
+using ::onnx_light::core::shapes::ShapeEvent;
+using ::onnx_light::core::shapes::ShapeEventAction;
+using ::onnx_light::core::shapes::ShapeEventActionName;
+using ::onnx_light::core::shapes::ShapesContext;
+
+using ::onnx_light::core::symbolic::DataTypeToTensorType;
+using ::onnx_light::core::symbolic::Device;
+using ::onnx_light::core::symbolic::GPUIndex;
+using ::onnx_light::core::symbolic::IsGPU;
+using ::onnx_light::core::symbolic::IsIntegerTensorType;
+using ::onnx_light::core::symbolic::kMaxGPUIndex;
+using ::onnx_light::core::symbolic::kMaxOptimRank;
+using ::onnx_light::core::symbolic::kOptimValueAsShapeMaxElements;
+using ::onnx_light::core::symbolic::kValueInfoDeviceMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMaxMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMinMetadataKey;
+using ::onnx_light::core::symbolic::ShapeFromTensorProtoDims;
+using ::onnx_light::core::symbolic::SymCmpResult;
+using ::onnx_light::core::symbolic::SymDim;
+using ::onnx_light::core::symbolic::SymMap;
+using ::onnx_light::core::symbolic::SymSequence;
+using ::onnx_light::core::symbolic::SymShape;
+using ::onnx_light::core::symbolic::SymTensor;
+using ::onnx_light::core::symbolic::TensorType;
+using ::onnx_light::core::symbolic::TensorTypeToDataType;
+
 namespace sequence {
 
 /**
- * Computes the output :cpp:class:`OptimSequence` of a
+ * Computes the output :cpp:class:`SymSequence` of a
  * ``SequenceConstruct`` node and stores it in ``ctx``.
  *
  * ``SequenceConstruct`` (since opset 11 in the ``ai.onnx`` domain) takes
@@ -27,18 +76,18 @@ namespace sequence {
  * produces a single tensor-sequence output of length ``N``. The element
  * dtype of the output sequence is the common dtype of the inputs; the
  * ONNX schema does not require the inputs to share a common shape, so
- * the output :cpp:class:`OptimSequence` records one
- * :cpp:class:`OptimShape` per input verbatim (see
- * :cpp:func:`OptimSequence::ElemShapes`).
+ * the output :cpp:class:`SymSequence` records one
+ * :cpp:class:`SymShape` per input verbatim (see
+ * :cpp:func:`SymSequence::ElemShapes`).
  *
  * When called with zero inputs, the output sequence has length ``0``,
  * an unknown element dtype (:cpp:enumerator:`TensorType::kUndefined`)
  * and an empty per-element shapes vector.
  *
  * @param ctx   In/out context. Must already contain an
- *              :cpp:class:`OptimTensor` entry for every named input of
+ *              :cpp:class:`SymTensor` entry for every named input of
  *              ``node``; on return it also contains an
- *              :cpp:class:`OptimSequence` entry for ``node.output(0)``.
+ *              :cpp:class:`SymSequence` entry for ``node.output(0)``.
  * @param node  The ``SequenceConstruct`` ``NodeProto`` whose output
  *              should be described. ``node.op_type()`` must be
  *              ``"SequenceConstruct"`` and ``node`` must declare at
@@ -53,7 +102,7 @@ namespace sequence {
 void ComputeShapeSequenceConstruct(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ConcatFromSequence``
+ * Computes the output :cpp:class:`SymTensor` of a ``ConcatFromSequence``
  * node and stores it in ``ctx``.
  *
  * ``ConcatFromSequence`` (since opset 11 in the ``ai.onnx`` domain) takes
@@ -74,13 +123,13 @@ void ComputeShapeSequenceConstruct(ShapesContext &ctx, const NodeProto &node);
  * dimension is merged across elements.
  *
  * When the per-element shapes of the input sequence are unknown
- * (:cpp:func:`OptimSequence::HasElemShapes` is ``false``), only the
+ * (:cpp:func:`SymSequence::HasElemShapes` is ``false``), only the
  * element dtype is recorded on the output and the shape is left
  * empty.
  *
  * @param ctx   In/out context. Must already contain an
- *              :cpp:class:`OptimSequence` entry for ``node.input(0)``;
- *              on return it also contains an :cpp:class:`OptimTensor`
+ *              :cpp:class:`SymSequence` entry for ``node.input(0)``;
+ *              on return it also contains an :cpp:class:`SymTensor`
  *              entry for ``node.output(0)``.
  * @param node  The ``ConcatFromSequence`` ``NodeProto`` whose output
  *              should be described.
@@ -97,15 +146,15 @@ void ComputeShapeSequenceConstruct(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``SequenceLength``
+ * Computes the output :cpp:class:`SymTensor` of a ``SequenceLength``
  * node and stores it in ``ctx``.
  *
  * ``SequenceLength`` takes one sequence input and produces one scalar
  * INT64 tensor output. The output shape is always empty (rank 0).
  *
  * @param ctx   In/out context. Must already contain an
- *              :cpp:class:`OptimSequence` entry for ``node.input(0)``;
- *              on return it also contains an :cpp:class:`OptimTensor`
+ *              :cpp:class:`SymSequence` entry for ``node.input(0)``;
+ *              on return it also contains an :cpp:class:`SymTensor`
  *              entry for ``node.output(0)``.
  * @param node  The ``SequenceLength`` ``NodeProto`` whose output should
  *              be described.
@@ -119,7 +168,7 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimSequence` of a ``SequenceEmpty``
+ * Computes the output :cpp:class:`SymSequence` of a ``SequenceEmpty``
  * node and stores it in ``ctx``.
  *
  * ``SequenceEmpty`` (since opset 11 in the ``ai.onnx`` domain) takes no
@@ -130,7 +179,7 @@ void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node);
  * the per-element shapes vector is empty.
  *
  * @param ctx   In/out context. On return it contains an
- *              :cpp:class:`OptimSequence` entry for ``node.output(0)``.
+ *              :cpp:class:`SymSequence` entry for ``node.output(0)``.
  * @param node  The ``SequenceEmpty`` ``NodeProto`` whose output should
  *              be described. ``node.op_type()`` must be
  *              ``"SequenceEmpty"`` and ``node`` must declare at least
@@ -143,7 +192,7 @@ void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSequenceEmpty(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimSequence` of a
+ * Computes the output :cpp:class:`SymSequence` of a
  * ``SequenceErase`` node and stores it in ``ctx``.
  *
  * ``SequenceErase`` (since opset 11 in the ``ai.onnx`` domain) takes a
@@ -158,9 +207,9 @@ void ComputeShapeSequenceEmpty(ShapesContext &ctx, const NodeProto &node);
  * sequence length.
  *
  * @param ctx   In/out context. Must already contain an
- *              :cpp:class:`OptimSequence` entry for ``node.input(0)``;
+ *              :cpp:class:`SymSequence` entry for ``node.input(0)``;
  *              on return it also contains an
- *              :cpp:class:`OptimSequence` entry for ``node.output(0)``.
+ *              :cpp:class:`SymSequence` entry for ``node.output(0)``.
  * @param node  The ``SequenceErase`` ``NodeProto`` whose output should
  *              be described. ``node.op_type()`` must be
  *              ``"SequenceErase"`` and ``node`` must declare at least
@@ -174,7 +223,7 @@ void ComputeShapeSequenceEmpty(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``SequenceAt`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``SequenceAt`` node and
  * stores it in ``ctx``.
  *
  * ``SequenceAt`` (since opset 11 in the ``ai.onnx`` domain) takes a sequence
@@ -186,8 +235,8 @@ void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node);
  * equal, in which case the shared shape is forwarded as the output shape.
  *
  * @param ctx   In/out context. Must already contain an
- *              :cpp:class:`OptimSequence` entry for ``node.input(0)``; on
- *              return it also contains an :cpp:class:`OptimTensor` entry for
+ *              :cpp:class:`SymSequence` entry for ``node.input(0)``; on
+ *              return it also contains an :cpp:class:`SymTensor` entry for
  *              ``node.output(0)``.
  * @param node  The ``SequenceAt`` ``NodeProto`` whose output should be
  *              described. ``node.op_type()`` must be ``"SequenceAt"`` and
@@ -201,7 +250,7 @@ void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimSequence` of a
+ * Computes the output :cpp:class:`SymSequence` of a
  * ``SequenceInsert`` node and stores it in ``ctx``.
  *
  * ``SequenceInsert`` (since opset 11 in the ``ai.onnx`` domain) takes a
@@ -213,10 +262,10 @@ void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node);
  * output shapes are not inferred.
  *
  * @param ctx   In/out context. Must already contain an
- *              :cpp:class:`OptimSequence` entry for ``node.input(0)`` and
- *              an :cpp:class:`OptimTensor` entry for ``node.input(1)``;
+ *              :cpp:class:`SymSequence` entry for ``node.input(0)`` and
+ *              an :cpp:class:`SymTensor` entry for ``node.input(1)``;
  *              on return it also contains an
- *              :cpp:class:`OptimSequence` entry for ``node.output(0)``.
+ *              :cpp:class:`SymSequence` entry for ``node.output(0)``.
  * @param node  The ``SequenceInsert`` ``NodeProto`` whose output should
  *              be described. ``node.op_type()`` must be
  *              ``"SequenceInsert"`` and ``node`` must declare at least
@@ -232,7 +281,7 @@ void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimSequence`(s) of a ``SequenceMap`` node
+ * Computes the output :cpp:class:`SymSequence`(s) of a ``SequenceMap`` node
  * and stores them in ``ctx``.
  *
  * ``SequenceMap`` (since opset 17 in the ``ai.onnx`` domain) takes a
@@ -259,11 +308,11 @@ void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node);
  * shape across iterations and we forward only the dtype).
  *
  * @param ctx   In/out context. Must already contain an
- *              :cpp:class:`OptimSequence` entry for ``node.input(0)`` and
- *              the matching :cpp:class:`OptimTensor` /
- *              :cpp:class:`OptimSequence` entries for the remaining
+ *              :cpp:class:`SymSequence` entry for ``node.input(0)`` and
+ *              the matching :cpp:class:`SymTensor` /
+ *              :cpp:class:`SymSequence` entries for the remaining
  *              ``node`` inputs; on return it also contains one
- *              :cpp:class:`OptimSequence` entry per declared
+ *              :cpp:class:`SymSequence` entry per declared
  *              ``node.output``.
  * @param node  The ``SequenceMap`` ``NodeProto`` whose outputs should be
  *              described. ``node.op_type()`` must be ``"SequenceMap"``,
@@ -280,7 +329,7 @@ void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimSequence` of a ``SplitToSequence``
+ * Computes the output :cpp:class:`SymSequence` of a ``SplitToSequence``
  * node and stores it in ``ctx``.
  *
  * ``SplitToSequence`` (since opset 11 in the ``ai.onnx`` domain) takes a
@@ -307,9 +356,9 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node);
  * element dtype is forwarded together with a symbolic length.
  *
  * @param ctx   In/out context. Must already contain an
- *              :cpp:class:`OptimTensor` entry for ``node.input(0)``
+ *              :cpp:class:`SymTensor` entry for ``node.input(0)``
  *              and, when present, for ``node.input(1)``; on return it
- *              also contains an :cpp:class:`OptimSequence` entry for
+ *              also contains an :cpp:class:`SymSequence` entry for
  *              ``node.output(0)``.
  * @param node  The ``SplitToSequence`` ``NodeProto`` whose output
  *              should be described. ``node.op_type()`` must be

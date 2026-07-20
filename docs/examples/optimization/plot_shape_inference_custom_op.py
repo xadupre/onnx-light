@@ -12,9 +12,9 @@ inference has no way to compute output shapes and stops with an error.
 *onnx-light* lets users register a Python callback to handle the shape
 inference of a custom operator. The callback receives the current
 :class:`ShapesContext` and the node, and is responsible for setting an
-:class:`OptimTensor` for every output. Once registered, the callback is
+:class:`SymTensor` for every output. Once registered, the callback is
 invoked automatically by
-:func:`~onnx_light.onnx_optim.shape_inference.compute_shape_node`
+:func:`~onnx_light.onnx_core.shape_inference.compute_shape_node`
 (and by the graph/model variants) whenever a node with the matching
 ``(domain, op_type)`` is encountered.
 
@@ -87,7 +87,7 @@ def seed_context(model) -> si.ShapesContext:
     for inp in model.graph.input:
         tt = inp.type.tensor_type
         dims = [d.dim_value if d.dim_value else d.dim_param for d in tt.shape.dim]
-        ctx.set(inp.name, si.OptimTensor(tt.elem_type, dims))
+        ctx.set(inp.name, si.SymTensor(tt.elem_type, dims))
     return ctx
 
 
@@ -170,7 +170,7 @@ def infer_scaled_linear(ctx: si.ShapesContext, node) -> None:
             raise ValueError(f"{CUSTOM_OP}: B[0]={b_shape[0]} must match W[1]={w_shape[1]}.")
 
     out_shape = [x_shape[0], w_shape[1]]
-    ctx.set(str(node.output[0]), si.OptimTensor(x.dtype, out_shape))
+    ctx.set(str(node.output[0]), si.SymTensor(x.dtype, out_shape))
 
 
 ctx.set_custom_shape_inference_function(CUSTOM_DOMAIN, CUSTOM_OP, infer_scaled_linear)
@@ -221,7 +221,7 @@ assert list(ctx2.get("Y").shape) == ["N", 3]
 #   :func:`compute_shape_node`/:func:`compute_shape_model` via the
 #   :meth:`ShapesContext.set_custom_shape_inference_function` registration.
 # * The callback signature is ``fn(ctx, node) -> None``; it must call
-#   ``ctx.set(name, OptimTensor(dtype, shape))`` for each output of the node.
+#   ``ctx.set(name, SymTensor(dtype, shape))`` for each output of the node.
 # * Validate input ranks and dimension compatibility inside the callback to
 #   catch malformed graphs early and to keep symbolic dims working when
 #   concrete sizes are not yet known.

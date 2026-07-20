@@ -7,13 +7,15 @@
 #include <string>
 #include <vector>
 
-#include "onnx_op/light_op_schema.h"
+#include "onnx_core/light_op_schema/light_op_schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
+
+using namespace ONNX_LIGHT_NAMESPACE::core::schema;
 namespace object_detection {
 
-using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
+using LightOpSchema = ONNX_LIGHT_NAMESPACE::core::schema::LightOpSchema;
 
 /**
  * Returns the versioned schema history for all supported object-detection

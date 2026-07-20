@@ -1,8 +1,8 @@
 import unittest
 
-import onnx_light.onnx_optim.expressions as onnx_expressions
+import onnx_light.onnx_core.expressions as onnx_expressions
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light.onnx_optim.expressions import (
+from onnx_light.onnx_core.expressions import (
     simplify_expression,
     simplify_two_expressions,
     compare_expressions,
@@ -395,7 +395,7 @@ class TestExactDiv(ExtTestCase):
     """Tests for the /: (exact division) operator."""
 
     def test_parse_unparse(self):
-        from onnx_light.onnx_optim.expressions import simplify_expression
+        from onnx_light.onnx_core.expressions import simplify_expression
 
         # Round-trip through parse/simplify.
         self.assertEqual(simplify_expression("a/:b"), "a/:b")

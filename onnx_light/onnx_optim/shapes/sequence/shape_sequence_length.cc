@@ -4,8 +4,8 @@
 
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -17,7 +17,7 @@ void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeSequenceLength: SequenceLength requires one input.");
   (void)ctx.GetSequence(node.input(0));
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
+  ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kInt64, SymShape{}));
 }
 
 } // namespace sequence

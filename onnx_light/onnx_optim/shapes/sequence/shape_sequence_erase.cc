@@ -6,9 +6,9 @@
 
 #include <string>
 
-#include "onnx_optim/optim_sequence.h"
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -21,7 +21,7 @@ void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node) {
                       "ComputeShapeSequenceErase: SequenceErase requires at least one input.");
 
   const std::string seq_name = node.input(0);
-  const OptimSequence &seq = ctx.GetSequence(seq_name);
+  const SymSequence &seq = ctx.GetSequence(seq_name);
   const TensorType elem_dtype = seq.ElemDtype();
 
   // The output element type is always the same as the input sequence's.
@@ -30,16 +30,16 @@ void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node) {
   // Because the erase position is a runtime value, per-element output
   // shapes are not inferred (we would need to know which element is
   // removed to enumerate the remaining shapes).
-  OptimDim out_length;
+  SymDim out_length;
   if (seq.Length().IsInt()) {
     const int64_t in_len = seq.Length().AsInt();
-    out_length = OptimDim(in_len > 0 ? in_len - 1 : int64_t{0});
+    out_length = SymDim(in_len > 0 ? in_len - 1 : int64_t{0});
   } else {
     // Symbolic length: produce a fresh symbolic name for the output.
-    out_length = OptimDim("SequenceErase_" + node.output(0) + "_len");
+    out_length = SymDim("SequenceErase_" + node.output(0) + "_len");
   }
 
-  ctx.SetSequence(node.output(0), OptimSequence(elem_dtype, std::move(out_length)));
+  ctx.SetSequence(node.output(0), SymSequence(elem_dtype, std::move(out_length)));
 }
 
 } // namespace sequence

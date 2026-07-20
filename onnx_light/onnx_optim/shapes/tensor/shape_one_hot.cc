@@ -6,8 +6,8 @@
 
 #include <cstdint>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -20,11 +20,11 @@ void ComputeShapeOneHot(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 3),
                       "ComputeShapeOneHot: OneHot requires three inputs (indices, depth, values).");
 
-  const OptimTensor &indices = ctx.Get(node.input(0));
-  const OptimTensor &depth = ctx.Get(node.input(1));
-  const OptimTensor &values = ctx.Get(node.input(2));
+  const SymTensor &indices = ctx.Get(node.input(0));
+  const SymTensor &depth = ctx.Get(node.input(1));
+  const SymTensor &values = ctx.Get(node.input(2));
 
-  const OptimShape &indices_shape = indices.Shape();
+  const SymShape &indices_shape = indices.Shape();
   const std::size_t in_rank = indices_shape.Rank();
   const int64_t out_rank = static_cast<int64_t>(in_rank) + 1;
 
@@ -37,15 +37,15 @@ void ComputeShapeOneHot(ShapesContext &ctx, const NodeProto &node) {
   // Resolve the depth dimension. When the value of the ``depth`` input is
   // known via data-propagation (encoded as a 1-D value-as-shape of length 1)
   // we use it; otherwise the dimension is left symbolic.
-  OptimDim depth_dim("OneHot_depth");
+  SymDim depth_dim("OneHot_depth");
   if (depth.HasValueAsShape()) {
-    const OptimShape &val = depth.ValueAsShape();
+    const SymShape &val = depth.ValueAsShape();
     if (val.Rank() == 1 && val[0].IsInt()) {
-      depth_dim = OptimDim(val[0].AsInt());
+      depth_dim = SymDim(val[0].AsInt());
     }
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   for (int64_t i = 0; i < out_rank; ++i) {
     if (i == axis_pos) {
       out_shape.PushBack(depth_dim);
@@ -56,7 +56,7 @@ void ComputeShapeOneHot(ShapesContext &ctx, const NodeProto &node) {
     }
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, values.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, values.Dtype(), std::move(out_shape)));
 }
 
 } // namespace tensor

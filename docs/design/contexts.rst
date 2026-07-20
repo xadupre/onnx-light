@@ -24,7 +24,7 @@ kernels, inferring shapes, and computing graph-level annotations.
       - :class:`onnx_light.onnx.reference.RuntimeContext`
     * - ``ShapesContext`` (shape context)
       - Tracks symbolic tensor shapes and types during shape inference.
-      - :cpp:class:`onnx::onnx_optim::shapes::ShapesContext`
+      - :cpp:class:`onnx::core::shapes::ShapesContext`
       - :class:`onnx_light.onnx_optim.shape_inference.ShapesContext`
     * - ``ComputeContext``
       - Computes graph-level annotation results (value tags, in-place reuse,
@@ -37,8 +37,8 @@ See also
 
 * :doc:`../api/cpp/onnx_kernels/kernels/kernel_context`
 * :doc:`../api/cpp/onnx_kernels/runtime_context`
-* :doc:`../api/cpp/onnx_optim/shapes/shapes_context`
-* :doc:`../api/cpp/onnx_optim/annotations/inplace_reuse`
+* :doc:`../api/cpp/onnx_core/shapes/shapes_context`
+* :doc:`../api/cpp/onnx_core/annotations/inplace_reuse`
 * :doc:`../api/python/onnx/reference`
 * :doc:`../api/python/onnx_optim/shape_inference`
 * :doc:`../api/python/onnx_optim/compute_context`

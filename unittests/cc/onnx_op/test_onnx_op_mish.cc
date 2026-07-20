@@ -18,8 +18,8 @@ namespace Test {
 
 namespace {
 
-const onnx_op::LightOpSchema *FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                            int version) {
+const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -31,11 +31,11 @@ const onnx_op::LightOpSchema *FindByVersion(const std::vector<onnx_op::LightOpSc
 } // namespace
 
 TEST(OnnxOpMathMish, HasSchemasForV18AndV22) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mish");
   ASSERT_EQ(schemas.size(), 2u);
-  const onnx_op::LightOpSchema *const mish_v22 = FindByVersion(schemas, 22);
-  const onnx_op::LightOpSchema *const mish_v18 = FindByVersion(schemas, 18);
+  const core::schema::LightOpSchema *const mish_v22 = FindByVersion(schemas, 22);
+  const core::schema::LightOpSchema *const mish_v18 = FindByVersion(schemas, 18);
   ASSERT_NE(nullptr, mish_v22);
   ASSERT_NE(nullptr, mish_v18);
   EXPECT_EQ(mish_v22->domain(), "ai.onnx");

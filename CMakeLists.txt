@@ -1039,6 +1039,12 @@ if(ONNX_LIGHT_INSTALL)
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
+  # Install public headers from onnx_light/onnx_core
+  install(DIRECTORY "${ONNX_CORE_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_core"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
   # Install public headers from onnx_light/onnx_backend_test
   if(ONNX_LIGHT_BUILD_KERNELS)
     install(DIRECTORY "${ONNX_BACKEND_TEST_PATH}/"

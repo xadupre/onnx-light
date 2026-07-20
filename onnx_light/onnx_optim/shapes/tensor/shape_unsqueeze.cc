@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -41,13 +41,13 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 2,
                       "ComputeShapeUnsqueeze: Unsqueeze requires two inputs (data, axes).");
 
-  const OptimTensor &data = ctx.Get(node.input(0));
-  const OptimTensor &axes_tensor = ctx.Get(node.input(1));
+  const SymTensor &data = ctx.Get(node.input(0));
+  const SymTensor &axes_tensor = ctx.Get(node.input(1));
   const int64_t input_rank = static_cast<int64_t>(data.Shape().Rank());
 
-  OptimShape out_shape;
+  SymShape out_shape;
   if (axes_tensor.HasValueAsShape()) {
-    const OptimShape &axes = axes_tensor.ValueAsShape();
+    const SymShape &axes = axes_tensor.ValueAsShape();
     std::vector<int64_t> raw_axes;
     raw_axes.reserve(axes.Rank());
     for (size_t i = 0; i < axes.Rank(); ++i) {
@@ -63,7 +63,7 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node) {
     size_t input_index = 0;
     for (int64_t out_i = 0; out_i < output_rank; ++out_i) {
       if (axis_index < normalized_axes.size() && normalized_axes[axis_index] == out_i) {
-        out_shape.PushBack(OptimDim(1));
+        out_shape.PushBack(SymDim(1));
         ++axis_index;
       } else {
         out_shape.PushBack(data.Shape()[input_index]);
@@ -75,13 +75,13 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node) {
     EXT_ENFORCE_INVALID(output_rank >= 0,
                         "ComputeShapeUnsqueeze: inferred output rank must be non-negative.");
     for (int64_t i = 0; i < output_rank; ++i) {
-      out_shape.PushBack(OptimDim("Unsqueeze_dim" + std::to_string(i)));
+      out_shape.PushBack(SymDim("Unsqueeze_dim" + std::to_string(i)));
     }
   } else {
-    out_shape.PushBack(OptimDim("Unsqueeze_dim0"));
+    out_shape.PushBack(SymDim("Unsqueeze_dim0"));
   }
 
-  OptimTensor out_tensor(nullptr, data.Dtype(), std::move(out_shape));
+  SymTensor out_tensor(nullptr, data.Dtype(), std::move(out_shape));
 
   // Unsqueeze only inserts size-1 dimensions into the shape; it does not
   // change the tensor values.  Forward the ValueAsShape annotation so that

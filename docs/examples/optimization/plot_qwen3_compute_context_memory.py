@@ -7,7 +7,7 @@ Qwen3-like ComputeContext memory profile
 This example builds a random-weight Qwen3-like model aligned with
 ``test_cc_shape_inference_big_qwen3_4_layers_like`` by retrieving it from
 backend test cases through :func:`onnx_light.onnx.backend.collect_test_case`,
-computes :class:`~onnx_light.onnx_optim.shape_inference.ComputeContext` memory
+computes :class:`~onnx_light.onnx_core.shape_inference.ComputeContext` memory
 events, saves them to Excel, and prints the same profile as a table.
 """
 
@@ -19,8 +19,8 @@ import matplotlib.pyplot as plt
 import pandas
 from onnx_light.onnx import load as ol_load, save as ol_save, inliner
 from onnx_light.onnx.backend import collect_test_cases_by_name
-from onnx_light.onnx_optim.expressions import evaluate_expression
-from onnx_light.onnx_optim.shape_inference import (
+from onnx_light.onnx_core.expressions import evaluate_expression
+from onnx_light.onnx_core.shape_inference import (
     ComputeContext,
     NODE_MEMORY_INITIALIZERS_KEY,
     NODE_MEMORY_TOTAL_BYTES_KEY,

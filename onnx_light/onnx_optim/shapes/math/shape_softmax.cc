@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -22,7 +22,7 @@ constexpr int kSoftmaxDefaultOpsetVersion = 13;
 
 void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "Softmax", "ComputeShapeSoftmax");
-  const OptimTensor &input = ctx.Get(x);
+  const SymTensor &input = ctx.Get(x);
   const int64_t rank = static_cast<int64_t>(input.Shape().Rank());
   EXT_ENFORCE_INVALID(rank >= 1, "ComputeShapeSoftmax: input rank must be >= 1.");
 
@@ -35,7 +35,7 @@ void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *
                       std::to_string(axis), " is out of range for rank ", std::to_string(rank),
                       ".");
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace math

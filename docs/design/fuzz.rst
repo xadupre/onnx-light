@@ -41,7 +41,7 @@ Harnesses
       - :cpp:func:`onnx_light::shape_inference::InferShapes`
       - Raw bytes → protobuf parser
     * - ``fuzz/fuzz_optim_shape_inference.cc``
-      - :cpp:func:`onnx_light::onnx_optim::shapes::InferShapesModel`
+      - :cpp:func:`onnx_light::core::shapes::InferShapesModel`
       - Raw bytes → protobuf parser
     * - ``fuzz/fuzz_version_converter.cc``
       - :cpp:func:`onnx_light::version_conversion::ConvertVersion`

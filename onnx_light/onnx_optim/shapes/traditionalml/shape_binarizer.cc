@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -15,8 +15,8 @@ void ComputeShapeBinarizer(ShapesContext &ctx, const NodeProto &node, const char
   CheckNodeOpAndOutput(node, "Binarizer", "ComputeShapeBinarizer");
 
   // Binarizer is element-wise: the output has the same dtype and shape as the input.
-  const OptimTensor &input = ctx.Get(x);
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  const SymTensor &input = ctx.Get(x);
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace traditionalml

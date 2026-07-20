@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_optim/shapes/text/shape_text.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -14,8 +14,8 @@ void ComputeShapeRegexFullMatch(ShapesContext &ctx, const NodeProto &node, const
   CheckNodeOpAndOutput(node, "RegexFullMatch", "ComputeShapeRegexFullMatch");
   // RegexFullMatch is element-wise: output dtype is bool, output
   // shape equals the input shape.
-  const OptimTensor &input = ctx.Get(a);
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kBool, input.Shape()));
+  const SymTensor &input = ctx.Get(a);
+  ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kBool, input.Shape()));
 }
 
 } // namespace text

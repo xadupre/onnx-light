@@ -15,8 +15,8 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_proto/onnx_helper.h"
 

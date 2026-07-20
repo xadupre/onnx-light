@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_core/runtime/raw_buffer_allocator.h"
 #include "onnx_core/runtime/simple_map.h"
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx.h"
 

@@ -564,7 +564,8 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
     SerializeOptions opts;
     bool ok = self.SerializeToString(out, opts);
     if (!ok) {
-      throw std::runtime_error("Serialization to ostream failed.");
+      throw std::runtime_error(
+          "Serialization to ostream failed: output exceeded SerializeOptions.max_serialized_size_bytes.");
     }
     output.attr("write")(nb::bytes(out.data(), out.size()));
   };

@@ -15,10 +15,10 @@
  */
 
 #include "onnx_core/shapes/shape_inference.h"
+#include "onnx_extensions/onnx_shapes/dispatch_table.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/common/file_utils.h"
 #include "onnx_proto/onnx.h"
-#include "onnx_shapes/dispatch_table.h"
 
 #include <charconv>
 #include <iostream>

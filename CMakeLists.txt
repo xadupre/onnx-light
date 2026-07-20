@@ -139,7 +139,7 @@ set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
 set(ONNX_CORE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_core")
 set(ONNX_MANIPULATIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_manipulations")
 set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
-set(ONNX_SHAPE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_shapes")
+set(ONNX_SHAPE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/onnx_shapes")
 set(ONNX_BACKEND_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_backend_test")
 set(ONNX_KERNELS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_kernels")
 set(ONNX_GRADIENT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_gradient")
@@ -675,7 +675,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_lib/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op/test_*.cc")
-  file(GLOB_RECURSE ONNX_CPP_SHAPE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_shapes/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_SHAPE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/onnx_shapes/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_GRADIENT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_gradient/test_*.cc")
@@ -771,7 +771,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
                FILES ${ONNX_CPP_LIB_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op" PREFIX "Source Files/cc/onnx_op"
                FILES ${ONNX_CPP_OP_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_shapes" PREFIX "Source Files/cc/onnx_shapes"
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/onnx_shapes" PREFIX "Source Files/cc/onnx_shapes"
                FILES ${ONNX_CPP_SHAPE_TEST_SOURCES})
   if(ONNX_LIGHT_BUILD_KERNELS)
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels" PREFIX "Source Files/cc/onnx_kernels"
@@ -1033,9 +1033,9 @@ if(ONNX_LIGHT_INSTALL)
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
-  # Install public headers from onnx_light/onnx_shapes
+  # Install public headers from onnx_light/onnx_extensions/onnx_shapes
   install(DIRECTORY "${ONNX_SHAPE_PATH}/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_shapes"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_extensions/onnx_shapes"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 

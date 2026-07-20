@@ -136,7 +136,12 @@ class TestSchemaComparison(ExtTestCase):
         # Locate the C++ dispatch source file inside the source tree.
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         cc_path = os.path.join(
-            repo_root, "onnx_light", "onnx_shapes", "shapes", "dispatch_table.cc"
+            repo_root,
+            "onnx_light",
+            "onnx_extensions",
+            "onnx_shapes",
+            "shapes",
+            "dispatch_table.cc",
         )
         if not os.path.exists(cc_path):
             self.skipTest("dispatch_table.cc not available in this install")

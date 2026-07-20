@@ -13,8 +13,8 @@ does not recognise and raises :class:`ValueError`.
 *onnx-light* lets you plug in a callback that handles the shape
 inference for any ``(domain, op_type)`` pair, in Python and in C++. Once
 registered, the callback is invoked transparently by
-:func:`~onnx_light.onnx_shapes.shape_inference.compute_shape_node` and
-:func:`~onnx_light.onnx_shapes.shape_inference.compute_shape_model` in
+:func:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.compute_shape_node` and
+:func:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.compute_shape_model` in
 Python, and by
 :cpp:func:`onnx::core::shapes::ShapesContext::ComputeShapeNode` and
 :cpp:func:`onnx::core::shapes::ShapesContext::ComputeShapeModel` in
@@ -33,7 +33,7 @@ matching C++ headers:
 
       .. code-block:: python
 
-          from onnx_light.onnx_shapes.shape_inference import (
+          from onnx_light.onnx_extensions.onnx_shapes.shape_inference import (
               ShapesContext,
               SymTensor,
               compute_shape_node,
@@ -58,9 +58,9 @@ Write the callback
 The callback must have the signature ``fn(ctx, node) -> None`` in Python and
 ``void fn(ShapesContext &ctx, const NodeProto &node)`` in C++.
 
-* ``ctx`` is the current :class:`~onnx_light.onnx_shapes.shape_inference.ShapesContext`.
-  Call :meth:`~onnx_light.onnx_shapes.shape_inference.ShapesContext.get` to read
-  input descriptors and :meth:`~onnx_light.onnx_shapes.shape_inference.ShapesContext.set`
+* ``ctx`` is the current :class:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.ShapesContext`.
+  Call :meth:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.ShapesContext.get` to read
+  input descriptors and :meth:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.ShapesContext.set`
   to write output descriptors.
 * ``node`` is the :class:`~onnx_light.onnx_lib.NodeProto` being processed.
   Use ``node.input``, ``node.output``, and ``node.attribute`` to inspect
@@ -101,7 +101,7 @@ doing arithmetic on them in Python (or ``SymDim::IsInt`` in C++).
 Register the callback
 ---------------------
 
-Call :meth:`~onnx_light.onnx_shapes.shape_inference.ShapesContext.set_custom_shape_inference_function`
+Call :meth:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.ShapesContext.set_custom_shape_inference_function`
 (C++ :cpp:func:`~onnx::core::shapes::ShapesContext::SetCustomShapeInferenceFunction`)
 on the context before running inference:
 
@@ -153,7 +153,7 @@ You can check whether a callback is registered:
 Infer shapes for a single node
 -------------------------------
 
-:func:`~onnx_light.onnx_shapes.shape_inference.compute_shape_node`
+:func:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.compute_shape_node`
 (C++ :cpp:func:`~onnx::core::shapes::ShapesContext::ComputeShapeNode`)
 processes one node at a time. Seed the context with the node's input
 descriptors first:
@@ -206,7 +206,7 @@ descriptors first:
 Infer shapes for a whole model
 -------------------------------
 
-:func:`~onnx_light.onnx_shapes.shape_inference.compute_shape_model`
+:func:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.compute_shape_model`
 (C++ :cpp:func:`~onnx::core::shapes::ShapesContext::ComputeShapeModel`)
 walks every node of the main graph in topological order. Register the
 callback on the context **before** calling it:
@@ -240,10 +240,10 @@ callback on the context **before** calling it:
             // t.Shape(), t.Dtype()
           }
 
-:func:`~onnx_light.onnx_shapes.shape_inference.infer_shapes_model`
+:func:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.infer_shapes_model`
 (C++ :cpp:func:`onnx::core::shapes::InferShapesModel`) creates its own
 internal context and does **not** accept a pre-configured context. Use
-:func:`~onnx_light.onnx_shapes.shape_inference.compute_shape_model`
+:func:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.compute_shape_model`
 (C++ :cpp:func:`~onnx::core::shapes::ShapesContext::ComputeShapeModel`)
 instead when your model contains custom operators, then apply the inferred
 shapes back manually if needed:
@@ -255,7 +255,7 @@ shapes back manually if needed:
 
       .. code-block:: python
 
-          from onnx_light.onnx_shapes.shape_inference import (
+          from onnx_light.onnx_extensions.onnx_shapes.shape_inference import (
               compute_shape_model,
               apply_inferred_shapes_to_model,
           )

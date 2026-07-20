@@ -12,7 +12,7 @@ function that computes its output shapes.
 out empty: it is a mutable registry
 (:cpp:func:`RegisterComputeShapeFn`) that ``onnx_shapes`` populates with its
 per-operator ``ComputeShape*`` functions (see
-:doc:`../../onnx_shapes/dispatch_table`) via
+:doc:`../../onnx_extensions/onnx_shapes/dispatch_table`) via
 :cpp:func:`onnx_light::onnx_shapes::RegisterShapeFunctions`. Any consumer of
 the shape-inference engine (Python bindings, tests, examples, ...) must call
 that function once before using :cpp:func:`InferShapesModel` or

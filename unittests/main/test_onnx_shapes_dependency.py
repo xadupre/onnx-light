@@ -125,9 +125,11 @@ class TestOnnxOptimDependency(unittest.TestCase):
             "shape_inference.h",
         ):
             self.assertFalse(
-                (self.root / "onnx_light" / "onnx_shapes" / "shapes" / name).exists(),
-                f"onnx_shapes/shapes/{name} must not exist; consumers must include "
-                f"onnx_core/shapes/{name} directly",
+                (
+                    self.root / "onnx_light" / "onnx_extensions" / "onnx_shapes" / "shapes" / name
+                ).exists(),
+                f"onnx_extensions/onnx_shapes/shapes/{name} must not exist; consumers must "
+                f"include onnx_core/shapes/{name} directly",
             )
 
     def test_onnx_core_dispatch_table_does_not_include_onnx_shapes(self):
@@ -140,7 +142,7 @@ class TestOnnxOptimDependency(unittest.TestCase):
             header = self.root / "onnx_light" / "onnx_core" / "shapes" / name
             content = header.read_text(encoding="utf-8")
             self.assertNotIn(
-                "onnx_shapes/",
+                "onnx_extensions/onnx_shapes/",
                 content,
                 f"onnx_core/shapes/{name} must not include any onnx_shapes header",
             )
@@ -156,13 +158,13 @@ class TestOnnxOptimDependency(unittest.TestCase):
         )
 
     def test_onnx_shapes_registers_its_builtin_shape_functions(self):
-        header = self.root / "onnx_light" / "onnx_shapes" / "dispatch_table.h"
+        header = self.root / "onnx_light" / "onnx_extensions" / "onnx_shapes" / "dispatch_table.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
             "RegisterShapeFunctions",
             content,
-            "onnx_shapes/dispatch_table.h must declare RegisterShapeFunctions, which "
-            "registers every built-in onnx_shapes shape function with "
+            "onnx_extensions/onnx_shapes/dispatch_table.h must declare RegisterShapeFunctions, "
+            "which registers every built-in onnx_shapes shape function with "
             "core::shapes::RegisterComputeShapeFn",
         )
 

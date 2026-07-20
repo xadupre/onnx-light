@@ -69,7 +69,7 @@ Control-flow operators embed graphs in their attributes: ``then_branch``
 / ``else_branch`` for ``If``, ``body`` for ``Loop`` and
 ``Scan``. Each subgraph is inferred in a **child**
 :cpp:class:`ShapesContext` derived from the parent (see
-``onnx_light/onnx_shapes/shapes/controlflow/shape_controlflow.cc``):
+``onnx_light/onnx_extensions/onnx_shapes/shapes/controlflow/shape_controlflow.cc``):
 
 #. The child context is **copied from the parent** so the subgraph can
    read outer-scope values it captures by name, then seeded with the

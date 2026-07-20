@@ -62,7 +62,7 @@ void AppendIdentityOutput(GraphProto &g, const std::string &input_name,
 // keeps an axis only when *both* branches agree on it; any differing axis
 // is replaced by a fresh symbolic dim named ``If_<out>_d<i>`` (see
 // ``MergeBranchOutputs`` in
-// ``onnx_shapes/shapes/controlflow/shape_controlflow.cc``).
+// ``onnx_extensions/onnx_shapes/shapes/controlflow/shape_controlflow.cc``).
 //
 // The ``else_branch`` deliberately includes a data-dependent ``Compress``
 // node so the differing leading axis of ``out_a`` originates from

@@ -132,7 +132,7 @@ Summary of each library
         Depends publicly on ``lib_onnx_manipulations`` (and transitively
         on ``lib_onnx_proto``).
     * - ``lib_onnx_shape`` (exported as ``onnx_light::lib_onnx_shape``):
-        ``onnx_light/onnx_shapes/``
+        ``onnx_light/onnx_extensions/onnx_shapes/``
       - Shape-inference dispatch table, expression engine for small
         tensor / backward-propagation shape inference, and graph
         optimization helpers.  Depends publicly on ``lib_onnx_core``

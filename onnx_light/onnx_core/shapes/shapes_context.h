@@ -649,7 +649,7 @@ public:
   // The methods below run shape inference on a single ``NodeProto``, a
   // sequence of nodes, a ``GraphProto`` or an entire ``ModelProto``,
   // writing the inferred descriptors back into this context. See
-  // ``onnx_shapes/shapes/shape_inference.h`` for the full per-method
+  // ``onnx_extensions/onnx_shapes/shapes/shape_inference.h`` for the full per-method
   // documentation.
 
   /// Dispatches a single ``NodeProto`` to the matching per-operator

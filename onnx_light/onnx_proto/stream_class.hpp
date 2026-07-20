@@ -36,6 +36,9 @@
   bool cls::SerializeToOstream(std::ostream *output) const {                                       \
     return _SerializeToOstream(*this, output);                                                     \
   }                                                                                                \
+  bool cls::SerializeToOStream(std::ostream *output) const {                                       \
+    return _SerializeToOstream(*this, output);                                                     \
+  }                                                                                                \
   bool cls::SerializeToString(std::string &out) const { return _SerializeToString(*this, out); }   \
   bool cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
     return _SerializeToString(*this, out, opts);                                                   \
@@ -44,6 +47,10 @@
     return _SerializeToFileDescriptor(*this, fd);                                                  \
   }                                                                                                \
   bool cls::SerializeToFileDescriptor(int fd, SerializeOptions &opts) const {                      \
+    return _SerializeToFileDescriptor(*this, fd, opts);                                            \
+  }                                                                                                \
+  bool cls::SaveToFileDescriptor(int fd) const { return _SerializeToFileDescriptor(*this, fd); }   \
+  bool cls::SaveToFileDescriptor(int fd, SerializeOptions &opts) const {                           \
     return _SerializeToFileDescriptor(*this, fd, opts);                                            \
   }
 

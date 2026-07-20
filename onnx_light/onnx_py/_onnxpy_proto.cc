@@ -555,7 +555,26 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             }
           },
           nb::arg("fd"), nb::arg("options") = nb::none(),
-          "Serializes this instance into an open file descriptor without closing it.")
+          "Serializes this instance into an open file descriptor without closing it.");
+
+  // Helper lambda for ostream serialization, used by both SerializeToOstream and
+  // SerializeToOStream to avoid code duplication
+  auto serialize_to_ostream_impl = [](cls &self, nb::object output) {
+    std::string out;
+    SerializeOptions opts;
+    bool ok = self.SerializeToString(out, opts);
+    if (!ok) {
+      throw std::runtime_error("Serialization to ostream failed (likely exceeded size limit).");
+    }
+    output.attr("write")(nb::bytes(out.data(), out.size()));
+  };
+
+  name_inst
+      .def("SerializeToOstream", serialize_to_ostream_impl, nb::arg("output"),
+           "Serializes this instance to a Python file-like object that has a write() method.")
+      .def("SerializeToOStream", serialize_to_ostream_impl, nb::arg("output"),
+           "Alias for SerializeToOstream (capital S) for protobuf API compatibility. "
+           "Serializes this instance to a Python file-like object that has a write() method.")
       .def(
           "__str__",
           [](cls &self) -> std::string {

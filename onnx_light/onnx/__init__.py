@@ -58,6 +58,7 @@ from ..onnx_proto._io_helper import (  # noqa: F401
     save,
     save_encrypted,
     save_encrypted_string,
+    save_to_file_descriptor,
 )
 from ..onnx_proto._helper import proto_str_to_multiline  # noqa: F401
 

@@ -4,9 +4,9 @@
 
 #include "onnx_optim/shapes/training/shape_training.h"
 
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/shapes/shape_inference.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
@@ -53,12 +53,12 @@ NodeProto MakeAdamNode(int n) {
   return node;
 }
 
-void SeedScalar(onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
+void SeedScalar(core::shapes::ShapesContext &ctx, const std::string &name,
                 core::symbolic::TensorType dtype) {
   ctx.Set(name, core::symbolic::SymTensor(nullptr, dtype, core::symbolic::SymShape{}));
 }
 
-void SeedTensor(onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
+void SeedTensor(core::shapes::ShapesContext &ctx, const std::string &name,
                 core::symbolic::TensorType dtype, core::symbolic::SymShape shape) {
   ctx.Set(name, core::symbolic::SymTensor(nullptr, dtype, std::move(shape)));
 }
@@ -68,7 +68,7 @@ void SeedTensor(onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
 TEST(OnnxOptimShapeAdam, PropagatesShapesForSingleOptimizedTensor) {
   NodeProto node = MakeAdamNode(1);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   const core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
@@ -91,7 +91,7 @@ TEST(OnnxOptimShapeAdam, PropagatesShapesForSingleOptimizedTensor) {
 TEST(OnnxOptimShapeAdam, PropagatesShapesForMultipleOptimizedTensors) {
   NodeProto node = MakeAdamNode(2);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   const core::symbolic::SymShape shape_x1{core::symbolic::SymDim(4)};
@@ -137,7 +137,7 @@ TEST(OnnxOptimShapeAdam, RejectsInputCountNotMultipleOfFour) {
   node.add_output("Y1");
   node.add_output("Y2");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   for (int i = 0; i < 5; ++i) {
@@ -163,7 +163,7 @@ TEST(OnnxOptimShapeAdam, RejectsWrongOutputCount) {
   node.add_output("X1_new");
   node.add_output("V1_new");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   const core::symbolic::SymShape shape{core::symbolic::SymDim(3)};
@@ -180,7 +180,7 @@ TEST(OnnxOptimShapeAdam, DirectCallRejectsWrongOpType) {
   node.set_op_type("NotAdam");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::training::ComputeShapeAdam(ctx, node), std::invalid_argument);
 }
 
@@ -245,7 +245,7 @@ NodeProto MakeMomentumNode(int n) {
 TEST(OnnxOptimShapeAdagrad, PropagatesShapesForSingleOptimizedTensor) {
   NodeProto node = MakeAdagradNode(1);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   const core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
@@ -265,7 +265,7 @@ TEST(OnnxOptimShapeAdagrad, PropagatesShapesForSingleOptimizedTensor) {
 TEST(OnnxOptimShapeAdagrad, PropagatesShapesForMultipleOptimizedTensors) {
   NodeProto node = MakeAdagradNode(2);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   const core::symbolic::SymShape shape_x1{core::symbolic::SymDim(4)};
@@ -304,7 +304,7 @@ TEST(OnnxOptimShapeAdagrad, RejectsInputCountNotMultipleOfThree) {
   node.add_output("Y0");
   node.add_output("Y1");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   for (int i = 0; i < 4; ++i) {
@@ -328,7 +328,7 @@ TEST(OnnxOptimShapeAdagrad, RejectsWrongOutputCount) {
   node.add_input("H1");
   node.add_output("X1_new");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   const core::symbolic::SymShape shape{core::symbolic::SymDim(3)};
@@ -344,14 +344,14 @@ TEST(OnnxOptimShapeAdagrad, DirectCallRejectsWrongOpType) {
   node.set_op_type("NotAdagrad");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::training::ComputeShapeAdagrad(ctx, node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeMomentum, PropagatesShapesForSingleOptimizedTensor) {
   NodeProto node = MakeMomentumNode(1);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   const core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
@@ -371,7 +371,7 @@ TEST(OnnxOptimShapeMomentum, PropagatesShapesForSingleOptimizedTensor) {
 TEST(OnnxOptimShapeMomentum, PropagatesShapesForMultipleOptimizedTensors) {
   NodeProto node = MakeMomentumNode(2);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   const core::symbolic::SymShape shape_x1{core::symbolic::SymDim(4)};
@@ -410,7 +410,7 @@ TEST(OnnxOptimShapeMomentum, RejectsInputCountNotMultipleOfThree) {
   node.add_output("Y0");
   node.add_output("Y1");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   for (int i = 0; i < 4; ++i) {
@@ -434,7 +434,7 @@ TEST(OnnxOptimShapeMomentum, RejectsWrongOutputCount) {
   node.add_input("V1");
   node.add_output("X1_new");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
   SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   const core::symbolic::SymShape shape{core::symbolic::SymDim(3)};
@@ -450,7 +450,7 @@ TEST(OnnxOptimShapeMomentum, DirectCallRejectsWrongOpType) {
   node.set_op_type("NotMomentum");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::training::ComputeShapeMomentum(ctx, node),
                std::invalid_argument);
 }

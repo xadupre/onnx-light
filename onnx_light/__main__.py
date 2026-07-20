@@ -209,7 +209,7 @@ def _seed_context_with_token_ranges(
         token_ranges: Mapping from symbolic dim name to ``(low, high)``
             where *low* is used as the concrete substitute value.
     """
-    from .onnx_optim.shape_inference import SymTensor
+    from .onnx_core.shape_inference import SymTensor
 
     initializer_names = {init.name for init in model.graph.initializer}
     for vi in model.graph.input:
@@ -261,7 +261,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     """Implements the ``fillshape`` subcommand."""
     from .onnx import load, save
     from .onnx_lib.external_data_helper import uses_external_data
-    from .onnx_optim.shape_inference import (
+    from .onnx_core.shape_inference import (
         ComputeContext,
         ShapesContext,
         apply_inferred_shapes_to_model,
@@ -414,7 +414,7 @@ def _cmd_show(args: argparse.Namespace) -> None:
     model = load(model_path, load_external_data=False)
 
     if run_shape_inference:
-        from .onnx_optim.shape_inference import (
+        from .onnx_core.shape_inference import (
             ShapesContext,
             apply_inferred_shapes_to_model,
             compute_shape_model,

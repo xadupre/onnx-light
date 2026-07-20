@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

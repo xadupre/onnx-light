@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/shape_inference.h"
+#include "onnx_core/shapes/shape_inference.h"
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -39,7 +39,7 @@ NodeProto MakeNode(const std::string &op_type, const std::vector<std::string> &i
 
 TEST(OnnxOptimShapeInference, DispatchesAbs) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -52,7 +52,7 @@ TEST(OnnxOptimShapeInference, DispatchesAbs) {
 
 TEST(OnnxOptimShapeInference, SupportsUtilsStringLookupForNodeOutput) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -66,7 +66,7 @@ TEST(OnnxOptimShapeInference, SupportsUtilsStringLookupForNodeOutput) {
 
 TEST(OnnxOptimShapeInference, DispatchesAddWithBroadcast) {
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
   core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(3)};
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_a));
@@ -82,7 +82,7 @@ TEST(OnnxOptimShapeInference, DispatchesAddWithBroadcast) {
 
 TEST(OnnxOptimShapeInference, DispatchesMulWithBroadcast) {
   NodeProto node = MakeNode("Mul", {"A", "B"}, {"C"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape_a{core::symbolic::SymDim(3), core::symbolic::SymDim(4),
                                    core::symbolic::SymDim(5)};
   core::symbolic::SymShape shape_b{core::symbolic::SymDim(5)};
@@ -98,7 +98,7 @@ TEST(OnnxOptimShapeInference, DispatchesMulWithBroadcast) {
 
 TEST(OnnxOptimShapeInference, DispatchesDivWithBroadcast) {
   NodeProto node = MakeNode("Div", {"A", "B"}, {"C"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape_a{core::symbolic::SymDim(3), core::symbolic::SymDim(4),
                                    core::symbolic::SymDim(5)};
   core::symbolic::SymShape shape_b{core::symbolic::SymDim(5)};
@@ -114,7 +114,7 @@ TEST(OnnxOptimShapeInference, DispatchesDivWithBroadcast) {
 
 TEST(OnnxOptimShapeInference, DispatchesAnd) {
   NodeProto node = MakeNode("And", {"A", "B"}, {"C"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(4)};
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape));
   ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, shape));
@@ -128,7 +128,7 @@ TEST(OnnxOptimShapeInference, DispatchesAnd) {
 
 TEST(OnnxOptimShapeInference, DispatchesAcos) {
   NodeProto node = MakeNode("Acos", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -141,7 +141,7 @@ TEST(OnnxOptimShapeInference, DispatchesAcos) {
 
 TEST(OnnxOptimShapeInference, DispatchesAcosh) {
   NodeProto node = MakeNode("Acosh", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
 
@@ -154,7 +154,7 @@ TEST(OnnxOptimShapeInference, DispatchesAcosh) {
 
 TEST(OnnxOptimShapeInference, DispatchesCos) {
   NodeProto node = MakeNode("Cos", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -167,7 +167,7 @@ TEST(OnnxOptimShapeInference, DispatchesCos) {
 
 TEST(OnnxOptimShapeInference, DispatchesCosh) {
   NodeProto node = MakeNode("Cosh", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
 
@@ -181,7 +181,7 @@ TEST(OnnxOptimShapeInference, DispatchesCosh) {
 TEST(OnnxOptimShapeInference, DispatchesConcat) {
   NodeProto node = MakeNode("Concat", {"A", "B"}, {"C"});
   AddAttribute<int64_t>(node, "axis", 0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(
                    nullptr, core::symbolic::TensorType::kFloat,
                    core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
@@ -199,7 +199,7 @@ TEST(OnnxOptimShapeInference, DispatchesConcat) {
 
 TEST(OnnxOptimShapeInference, AcceptsExplicitAiOnnxDomain) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"}, "ai.onnx");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymTensor input(nullptr, core::symbolic::TensorType::kFloat,
                                   core::symbolic::SymShape{core::symbolic::SymDim(2)});
   ctx.Set("X", std::move(input));
@@ -211,21 +211,21 @@ TEST(OnnxOptimShapeInference, AcceptsExplicitAiOnnxDomain) {
 
 TEST(OnnxOptimShapeInference, RejectsUnknownDomain) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"}, "com.acme");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, RejectsUnsupportedOpType) {
   NodeProto node = MakeNode("NoSuchOp", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, RejectsNodeWithMissingInputs) {
   NodeProto node = MakeNode("Add", {"A"}, {"C"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
@@ -240,7 +240,7 @@ TEST(OnnxOptimShapeInference, ComputeShapesProcessesNodesInOrder) {
   *graph.add_node() = MakeNode("Abs", {"T"}, {"U"});
   *graph.add_node() = MakeNode("And", {"M", "N"}, {"V"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape_ab{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_ab));
   ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape_ab));
@@ -263,7 +263,7 @@ TEST(OnnxOptimShapeInference, ComputeShapesProcessesNodesInOrder) {
 
 TEST(OnnxOptimShapeInference, ComputeShapesEmptyListIsNoOp) {
   GraphProto graph;
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_NO_THROW(ctx.ComputeShapes(graph.node()));
   EXPECT_TRUE(ctx.Empty());
 }
@@ -273,7 +273,7 @@ TEST(OnnxOptimShapeInference, ComputeShapesPropagatesErrorFromNode) {
   *graph.add_node() = MakeNode("Abs", {"X"}, {"Y"});
   *graph.add_node() = MakeNode("NoSuchOp", {"Y"}, {"Z"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          core::symbolic::SymShape{core::symbolic::SymDim(1)}));
 
@@ -286,7 +286,7 @@ TEST(OnnxOptimShapeInference, ComputeShapesPropagatesErrorFromNode) {
 
 TEST(OnnxOptimShapeInferenceChecks, InputsAvailableAcceptsWhenAllPresent) {
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_NO_THROW(ctx.CheckInputsAvailable(node));
@@ -296,7 +296,7 @@ TEST(OnnxOptimShapeInferenceChecks, InputsAvailableSkipsEmptyOptionalInputs) {
   // The middle input is an empty string: ONNX uses that to signal an
   // optional input that is not provided. The check must ignore it.
   NodeProto node = MakeNode("SomeOp", {"A", "", "C"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   ctx.Set("C", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_NO_THROW(ctx.CheckInputsAvailable(node));
@@ -304,14 +304,14 @@ TEST(OnnxOptimShapeInferenceChecks, InputsAvailableSkipsEmptyOptionalInputs) {
 
 TEST(OnnxOptimShapeInferenceChecks, InputsAvailableThrowsWhenMissing) {
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(ctx.CheckInputsAvailable(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInferenceChecks, OutputsNotAvailableAcceptsWhenAllAbsent) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_NO_THROW(ctx.CheckOutputsNotAvailable(node));
 }
@@ -320,13 +320,13 @@ TEST(OnnxOptimShapeInferenceChecks, OutputsNotAvailableSkipsEmptyOptionalOutputs
   // ONNX uses an empty output name to mark an optional output that is
   // not produced by the node; the check must ignore it.
   NodeProto node = MakeNode("SomeOp", {"X"}, {"Y", ""});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_NO_THROW(ctx.CheckOutputsNotAvailable(node));
 }
 
 TEST(OnnxOptimShapeInferenceChecks, OutputsNotAvailableThrowsWhenPresent) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("Y", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(ctx.CheckOutputsNotAvailable(node), std::invalid_argument);
 }
@@ -336,14 +336,14 @@ TEST(OnnxOptimShapeInferenceChecks, ComputeShapeNodeRejectsMissingInput) {
   // CheckInputsAvailable should throw std::invalid_argument before
   // dispatch.
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInferenceChecks, ComputeShapeNodeRejectsAlreadyComputedOutput) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          core::symbolic::SymShape{core::symbolic::SymDim(1)}));
   ctx.Set("Y", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
@@ -355,7 +355,7 @@ TEST(OnnxOptimShapeInference, DispatchesReduceSumNoAxesInputReducesAll) {
   // opset >= 13: axes input is omitted -> default behaviour reduces all axes.
   NodeProto node = MakeNode("ReduceSum", {"X"}, {"Y"});
   AddAttribute<int64_t>(node, "keepdims", 0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   ctx.Set("X", core::symbolic::SymTensor(
                    nullptr, core::symbolic::TensorType::kFloat,
@@ -372,7 +372,7 @@ TEST(OnnxOptimShapeInference, DispatchesReduceSumNoAxesInputReducesAll) {
 TEST(OnnxOptimShapeInference, DispatchesReduceSumWithAxesInputValueAsShape) {
   // opset >= 13 with an axes input carrying ValueAsShape (a constant).
   NodeProto node = MakeNode("ReduceSum", {"X", "axes"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 18);
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          core::symbolic::SymShape{core::symbolic::SymDim(2),
@@ -397,7 +397,7 @@ TEST(OnnxOptimShapeInference, DispatchesReduceSumWithAxesInputValueAsShape) {
 TEST(OnnxOptimShapeInference, DispatchesReduceMaxNoAxesInputReducesAll) {
   NodeProto node = MakeNode("ReduceMax", {"X"}, {"Y"});
   AddAttribute<int64_t>(node, "keepdims", 0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 18);
   ctx.Set("X", core::symbolic::SymTensor(
                    nullptr, core::symbolic::TensorType::kFloat,
@@ -412,7 +412,7 @@ TEST(OnnxOptimShapeInference, DispatchesReduceMaxNoAxesInputReducesAll) {
 
 TEST(OnnxOptimShapeInference, DispatchesReduceMinWithAxesInputValueAsShape) {
   NodeProto node = MakeNode("ReduceMin", {"X", "axes"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 18);
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          core::symbolic::SymShape{core::symbolic::SymDim(2),
@@ -438,7 +438,7 @@ TEST(OnnxOptimShapeInference, DispatchesRoiAlign) {
   AddAttribute<int64_t>(node, "output_height", 7);
   AddAttribute<int64_t>(node, "output_width", 7);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X",
           core::symbolic::SymTensor(
               nullptr, core::symbolic::TensorType::kFloat,
@@ -463,7 +463,7 @@ TEST(OnnxOptimShapeInference, DispatchesRoiAlign) {
 TEST(OnnxOptimShapeInference, DispatchesAffineGrid2DWithConstantSize) {
   NodeProto node = MakeNode("AffineGrid", {"theta", "size"}, {"grid"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("theta", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                              core::symbolic::SymShape{core::symbolic::SymDim(2),
                                                                       core::symbolic::SymDim(2),
@@ -558,7 +558,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelReshapeStaticShape) {
   // Reshape(X, Constant([-1, 2])) with a fully-static input shape.
   // The -1 must be back-filled from the input element count (3 * 4 / 2 = 6).
   ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
 
   ctx.ComputeShapeModel(model);
 
@@ -581,7 +581,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelReshapeDynamicShape) {
   ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
                                                   /*target=*/{-1, 2},
                                                   /*symbolic_names=*/{"N"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
 
   ctx.ComputeShapeModel(model);
 
@@ -603,7 +603,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillPrefersOutputAnchor) {
   SetValueInfoTensorType(*model.mutable_graph()->mutable_output(0), TensorProto::DataType::FLOAT,
                          /*shape=*/{-1, 2}, /*symbolic_names=*/{"ANCHOR"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model, /*prefill_with_value_info_output=*/true);
 
   ASSERT_TRUE(ctx.Has("Y"));
@@ -648,7 +648,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillPreservesGraphInputSymbol)
                          /*symbolic_names=*/{"ANCHOR"});
   *graph->add_node() = MakeNode("Relu", {"X"}, {"Y"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model, /*prefill_with_value_info_output=*/true);
 
   // Y adopts the anchor symbol.
@@ -676,7 +676,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillRaisesOnDimConflict) {
   SetValueInfoTensorType(*model.mutable_graph()->mutable_output(0), TensorProto::DataType::FLOAT,
                          /*shape=*/{-1, 4}, /*symbolic_names=*/{"ANCHOR"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(ctx.ComputeShapeModel(model,
                                      /*prefill_with_value_info_output=*/true),
                std::invalid_argument);
@@ -707,7 +707,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {
   init->add_int64_data(std::vector<int64_t>{-1, 2});
   *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
 
   ASSERT_TRUE(ctx.Has("S"));
@@ -719,7 +719,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {
 
 TEST(OnnxOptimShapeInference, ComputeShapeModelRejectsModelWithoutGraph) {
   ModelProto model;
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(ctx.ComputeShapeModel(model), std::invalid_argument);
 }
 
@@ -731,7 +731,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   // carry the inferred {6, 2} shape and the intermediate S tensor
   // must appear in graph.value_info().
   ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
   ctx.ApplyInferredShapesToModel(model);
 
@@ -774,7 +774,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelPreservesSymbolicDims) {
   ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
                                                   /*target=*/{-1, 2},
                                                   /*symbolic_names=*/{"N"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
   ctx.ApplyInferredShapesToModel(model);
 
@@ -790,14 +790,14 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelPreservesSymbolicDims) {
 
 TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelRejectsModelWithoutGraph) {
   ModelProto model;
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(ctx.ApplyInferredShapesToModel(model), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, InferShapesModelEndToEnd) {
   // Convenience wrapper: runs ComputeShapeModel + ApplyInferredShapesToModel.
   ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
-  onnx_optim::shapes::InferShapesModel(model);
+  core::shapes::InferShapesModel(model);
 
   const ValueInfoProto &out = model.graph().output(0);
   ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
@@ -818,7 +818,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillAnchorExpressionTokens) {
   SetValueInfoTensorType(*model.mutable_graph()->mutable_output(0), TensorProto::DataType::FLOAT,
                          /*shape=*/{-1, 2}, /*symbolic_names=*/{"A+B"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model, /*prefill_with_value_info_output=*/true);
 
   ASSERT_TRUE(ctx.Has("Y"));
@@ -841,7 +841,7 @@ TEST(OnnxOptimShapeInference, InferShapesModelWithPrefillPrefersOutputAnchor) {
   SetValueInfoTensorType(*model.mutable_graph()->mutable_output(0), TensorProto::DataType::FLOAT,
                          /*shape=*/{-1, 2}, /*symbolic_names=*/{"ANCHOR"});
 
-  onnx_optim::shapes::InferShapesModel(model, /*prefill_with_value_info_output=*/true);
+  core::shapes::InferShapesModel(model, /*prefill_with_value_info_output=*/true);
 
   const ValueInfoProto &out = model.graph().output(0);
   ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
@@ -894,7 +894,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelReplacesConcatExprWithInputAnchor
   *graph->add_node() = std::move(concat);
   *graph->add_node() = MakeNode("Identity", {"present"}, {"consumed"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
 
   // The graph output adopts the declared anchor directly.
@@ -943,7 +943,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelKeepsConcatExprWithoutInputAnchor
   *graph->add_node() = std::move(concat);
   *graph->add_node() = MakeNode("Identity", {"present"}, {"consumed"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
 
   ASSERT_TRUE(ctx.Has("consumed"));
@@ -1019,7 +1019,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelExpandsLocalFunctionCall) {
   // rebinds the function-local names ``a``/``b``/``c`` to the caller's
   // ``X``/``Y``/``Z``, and the inferred output is mapped back.
   ModelProto model = MakeLocalFunctionAddModel();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
 
   ctx.ComputeShapeModel(model);
 
@@ -1036,7 +1036,7 @@ TEST(OnnxOptimShapeInference, InferShapesModelWritesBackLocalFunctionOutput) {
   // the proto.
   ModelProto model = MakeLocalFunctionAddModel();
 
-  onnx_optim::shapes::InferShapesModel(model);
+  core::shapes::InferShapesModel(model);
 
   const ValueInfoProto &out = model.graph().output(0);
   ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
@@ -1050,21 +1050,21 @@ TEST(OnnxOptimShapeInference, ComputeShapeNodeRejectsUnknownNonLocalFunctionDoma
   // Sanity check: a node in an unknown domain that does **not** match any
   // registered model-local function still triggers the domain check.
   NodeProto node = MakeNode("does_not_exist", {"X"}, {"Y"}, "com.acme");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, ComputeShapeNodeUsesRegisteredCustomDomainCallback) {
   NodeProto node = MakeNode("CustomIdentity", {"X"}, {"Y"}, "com.acme");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          {core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
 
   bool called = false;
   ctx.SetCustomShapeInferenceFunction(
       "com.acme", "CustomIdentity",
-      [&called](onnx_optim::shapes::ShapesContext &inner_ctx, const NodeProto &inner_node) {
+      [&called](core::shapes::ShapesContext &inner_ctx, const NodeProto &inner_node) {
         called = true;
         const std::string input_name = inner_node.input(0);
         const std::string output_name = inner_node.output(0);
@@ -1143,7 +1143,7 @@ TEST(OnnxOptimShapeInference, ExpandsLocalFunctionWithLinkedAttribute) {
   // type, so the inferred Z must take that dtype.
   ModelProto model =
       MakeLocalFunctionRefAttrCastModel(static_cast<int64_t>(TensorProto::DataType::INT64));
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
 
   ctx.ComputeShapeModel(model);
 
@@ -1154,7 +1154,7 @@ TEST(OnnxOptimShapeInference, ExpandsLocalFunctionWithLinkedAttribute) {
 }
 
 TEST(OnnxOptimShapesContextLessEqualConstraint, AddAndQuery) {
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_EQ(ctx.LessEqualConstraintsSize(), 0u);
   // Self-bound is dropped.
   EXPECT_FALSE(ctx.AddLessEqualConstraint("a", "a"));
@@ -1178,7 +1178,7 @@ TEST(OnnxOptimShapesContextLessEqualConstraint, AddAndQuery) {
 }
 
 TEST(OnnxOptimShapesContextEventLog, DisabledByDefault) {
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_FALSE(ctx.events_enabled());
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          core::symbolic::SymShape{core::symbolic::SymDim(2)}));
@@ -1187,8 +1187,8 @@ TEST(OnnxOptimShapesContextEventLog, DisabledByDefault) {
 }
 
 TEST(OnnxOptimShapesContextEventLog, SetRecordsAddAndReplace) {
-  using onnx_optim::shapes::ShapeEventAction;
-  onnx_optim::shapes::ShapesContext ctx;
+  using core::shapes::ShapeEventAction;
+  core::shapes::ShapesContext ctx;
   ctx.set_events_enabled(true);
   EXPECT_TRUE(ctx.Events().empty());
 
@@ -1218,9 +1218,9 @@ TEST(OnnxOptimShapesContextEventLog, SetRecordsAddAndReplace) {
 }
 
 TEST(OnnxOptimShapesContextEventLog, ComputeShapeNodeRecordsComputeNodeEvent) {
-  using onnx_optim::shapes::ShapeEventAction;
+  using core::shapes::ShapeEventAction;
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.set_events_enabled(true);
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
@@ -1246,8 +1246,8 @@ TEST(OnnxOptimShapesContextEventLog, ComputeShapeNodeRecordsComputeNodeEvent) {
 }
 
 TEST(OnnxOptimShapesContextEventLog, ConstraintsRecordEvents) {
-  using onnx_optim::shapes::ShapeEventAction;
-  onnx_optim::shapes::ShapesContext ctx;
+  using core::shapes::ShapeEventAction;
+  core::shapes::ShapesContext ctx;
   ctx.set_events_enabled(true);
 
   // A new equality constraint records a kConstraint event with the
@@ -1276,15 +1276,15 @@ TEST(OnnxOptimShapesContextEventLog, ConstraintsRecordEvents) {
 }
 
 TEST(OnnxOptimShapesContextEventLog, ConstraintsDoNotRecordWhenDisabled) {
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_TRUE(ctx.AddConstraint("N", "M"));
   EXPECT_TRUE(ctx.AddLessEqualConstraint("nnz", "2*N"));
   EXPECT_TRUE(ctx.Events().empty());
 }
 
 TEST(OnnxOptimShapesContextEventLog, ActionNames) {
-  using onnx_optim::shapes::ShapeEventAction;
-  using onnx_optim::shapes::ShapeEventActionName;
+  using core::shapes::ShapeEventAction;
+  using core::shapes::ShapeEventActionName;
   EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kAdd), "add");
   EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kReplace), "replace");
   EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kComputeNode), "compute_node");
@@ -1293,8 +1293,8 @@ TEST(OnnxOptimShapesContextEventLog, ActionNames) {
 }
 
 TEST(OnnxOptimShapesContextEventLog, NodeIndexTagsInputsInitializersAndNodes) {
-  using onnx_optim::shapes::ShapeEvent;
-  using onnx_optim::shapes::ShapeEventAction;
+  using core::shapes::ShapeEvent;
+  using core::shapes::ShapeEventAction;
   // Graph: input X (float [3,4]), initializer S (int64 [2]) and a single
   // Reshape node producing Y. Inputs are tagged with node_index -1,
   // initializers with -2, and descriptors / compute_node events produced by
@@ -1318,7 +1318,7 @@ TEST(OnnxOptimShapesContextEventLog, NodeIndexTagsInputsInitializersAndNodes) {
   init->add_int64_data(std::vector<int64_t>{-1, 2});
   *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.set_events_enabled(true);
   ctx.ComputeShapeModel(model);
 
@@ -1372,7 +1372,7 @@ TEST(OnnxOptimShapesContextEventLog, TopLevelEventsHaveEmptyGraphName) {
   out->set_name("Y");
   *graph->add_node() = node;
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.set_events_enabled(true);
   ctx.ComputeShapeModel(model);
 
@@ -1387,7 +1387,7 @@ TEST(OnnxOptimShapesContextEventLog, IfSubgraphEventsCarryBranchGraphName) {
   // Events from then_branch must carry subgraph_attr_name="then_branch" and
   // from else_branch subgraph_attr_name="else_branch"; outer events must have
   // empty subgraph_attr_name.
-  using onnx_optim::shapes::ShapeEvent;
+  using core::shapes::ShapeEvent;
   ModelProto model;
   model.set_ir_version(8);
   OperatorSetIdProto *osi = model.add_opset_import();
@@ -1429,7 +1429,7 @@ TEST(OnnxOptimShapesContextEventLog, IfSubgraphEventsCarryBranchGraphName) {
     eb->add_output()->set_name("Z_else");
   }
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.set_events_enabled(true);
   ctx.ComputeShapeModel(model);
 
@@ -1449,7 +1449,7 @@ TEST(OnnxOptimShapesContextEventLog, IfSubgraphEventsCarryBranchGraphName) {
 
 TEST(OnnxOptimShapesContextEventLog, LoopSubgraphEventsCarryBodyGraphName) {
   // Build a Loop model: sum = Loop(M, cond, init) with a body that adds 1.
-  using onnx_optim::shapes::ShapeEvent;
+  using core::shapes::ShapeEvent;
 
   ModelProto model;
   model.set_ir_version(8);
@@ -1499,7 +1499,7 @@ TEST(OnnxOptimShapesContextEventLog, LoopSubgraphEventsCarryBodyGraphName) {
   body->add_output()->set_name("s_out");
   body->add_output()->set_name("s_out");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.set_events_enabled(true);
   ctx.ComputeShapeModel(model);
 

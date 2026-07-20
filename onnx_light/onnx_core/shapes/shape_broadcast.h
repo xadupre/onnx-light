@@ -6,8 +6,8 @@
 
 #include <string>
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
 /**

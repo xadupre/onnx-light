@@ -19,13 +19,13 @@ initializer tensor named ``reshape_shape``.
 
 The three approaches compared here are:
 
-* **model-level** via :func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model` —
+* **model-level** via :func:`~onnx_light.onnx_core.shape_inference.infer_shapes_model` —
   internally reads initializer *values*, so ``Z`` is fully resolved.
 * **node-by-node (naïve)** — seeds the :class:`ShapesContext` with
   initializer *shapes* only; the ``[0, 0, -1]`` values are not
   propagated, so the Reshape output carries symbolic placeholders.
 * **node-by-node (with value propagation)** — additionally calls
-  :meth:`~onnx_light.onnx_optim.shape_inference.SymTensor.set_value_as_shape`
+  :meth:`~onnx_light.onnx_core.shape_inference.SymTensor.set_value_as_shape`
   for each initializer, enabling full resolution of ``Z``.
 
 The final plot shows the last inferred dimension for each tensor under
@@ -37,7 +37,7 @@ Understanding value_info
 ONNX models store inferred shapes in ``model.graph.value_info``, which is a
 list of ``ValueInfoProto`` messages. Each entry associates a tensor name with
 its type and shape. When you call
-:func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model`, the
+:func:`~onnx_light.onnx_core.shape_inference.infer_shapes_model`, the
 function mutates the model in place and populates ``value_info`` with the
 inferred shapes for all intermediate tensors. Graph inputs and outputs store
 their shapes directly in ``model.graph.input`` and ``model.graph.output``.
@@ -53,7 +53,7 @@ import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx.backend import collect_test_cases
-from onnx_light.onnx_optim.shape_inference import (
+from onnx_light.onnx_core.shape_inference import (
     infer_shapes_model,
     SymTensor,
     ShapeEventAction,

@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_optim/shapes/math/shape_math.h"
-#include "onnx_optim/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>
 
@@ -28,7 +28,7 @@ NodeProto MakeShrinkNode(const std::string &input_name = "input",
 
 TEST(OnnxOptimShapesMathShrink, PropagatesTypeAndShape) {
   NodeProto node = MakeShrinkNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)};
   ctx.Set("input", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -41,7 +41,7 @@ TEST(OnnxOptimShapesMathShrink, PropagatesTypeAndShape) {
 
 TEST(OnnxOptimShapesMathShrink, PropagatesIntegerType) {
   NodeProto node = MakeShrinkNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(3), core::symbolic::SymDim(2)};
   ctx.Set("input", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape));
 

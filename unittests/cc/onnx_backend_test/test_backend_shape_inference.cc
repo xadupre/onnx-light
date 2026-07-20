@@ -5,10 +5,10 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_core/annotations/inplace_reuse.h"
 #include "onnx_core/annotations/value_tags.h"
+#include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
-#include "onnx_optim/shapes/shape_inference.h"
 
 #include <gtest/gtest.h>
 
@@ -648,7 +648,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimSupportsNestedLocalFunctionCall) {
     ASSERT_NE(tt, nullptr);
     tt->clear_shape();
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
 
     const ValueInfoProto &out = model_copy.ref_graph().ref_output()[0];
     ASSERT_TRUE(out.has_type());
@@ -710,7 +710,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimPropagatesValueAsShapeInLocalFuncti
     ASSERT_NE(tt, nullptr);
     tt->clear_shape();
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
 
     const ValueInfoProto &out = model_copy.ref_graph().ref_output()[0];
     ASSERT_TRUE(out.has_type());
@@ -761,7 +761,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopSubgraph) {
       ott->clear_shape();
     }
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
 
     const auto &out_infos = model_copy.ref_graph().ref_output();
     ASSERT_EQ(out_infos.size(), 1u);
@@ -806,7 +806,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeScanSubgraph) {
       ott->clear_shape();
     }
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
 
     const auto &out_infos = model_copy.ref_graph().ref_output();
     ASSERT_EQ(out_infos.size(), 1u);
@@ -852,7 +852,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapePairwiseDistanceScan) {
       }
     }
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
 
     const auto &out_infos = model_copy.ref_graph().ref_output();
     ASSERT_EQ(out_infos.size(), 2u);
@@ -897,7 +897,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
     }
     found = true;
 
-    onnx_optim::shapes::ShapesContext ctx;
+    core::shapes::ShapesContext ctx;
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
     const std::vector<std::unordered_map<std::string, std::string>> expected_metadata = {
@@ -950,7 +950,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopPairwiseDistance) {
       ott->clear_shape();
     }
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
 
     const auto &out_infos = model_copy.ref_graph().ref_output();
     ASSERT_EQ(out_infos.size(), 1u);
@@ -1073,7 +1073,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTopKPairwiseDistance) {
     }
     optim_copy.mutable_graph()->mutable_value_info()->clear();
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
 
     std::unordered_map<std::string, const ValueInfoProto *> optim_by_name;
     const auto &optim_value_infos = optim_copy.ref_graph().ref_value_info();
@@ -1140,7 +1140,7 @@ TEST(BackendTestCaseShapeInference, DISABLED_OnnxOptimInfersShapeLoopTopKPairwis
     }
     optim_copy.mutable_graph()->mutable_value_info()->clear();
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
 
     std::unordered_map<std::string, const ValueInfoProto *> by_name;
     const auto &value_infos = optim_copy.ref_graph().ref_value_info();
@@ -1211,7 +1211,7 @@ TEST(BackendTestCaseShapeInference, DISABLED_OnnxOptimInfersShapeScanTopKPairwis
     }
     optim_copy.mutable_graph()->mutable_value_info()->clear();
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
 
     std::unordered_map<std::string, const ValueInfoProto *> by_name;
     const auto &value_infos = optim_copy.ref_graph().ref_value_info();
@@ -1344,7 +1344,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKSameK) {
     }
     optim_copy.mutable_graph()->mutable_value_info()->clear();
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
 
     std::unordered_map<std::string, const ValueInfoProto *> optim_by_name;
     const auto &optim_value_infos = optim_copy.ref_graph().ref_value_info();
@@ -1483,7 +1483,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKDifferentK) {
     }
     optim_copy.mutable_graph()->mutable_value_info()->clear();
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
 
     std::unordered_map<std::string, const ValueInfoProto *> optim_by_name;
     const auto &optim_value_infos = optim_copy.ref_graph().ref_value_info();
@@ -1563,7 +1563,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimPropagatesGatherValueAsShape) {
     }
     optim_copy.mutable_graph()->mutable_value_info()->clear();
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
 
     // Build a name-indexed map for value_info inspection.
     std::unordered_map<std::string, const ValueInfoProto *> by_name;
@@ -1812,7 +1812,7 @@ TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
     }
     found = true;
 
-    onnx_optim::shapes::ShapesContext ctx;
+    core::shapes::ShapesContext ctx;
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
     core::annotations::ComputeContext inplace;
@@ -2280,7 +2280,7 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
     }
     model_copy.mutable_graph()->mutable_value_info()->clear();
 
-    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
 
     // Every graph output must have a type after shape inference.
     for (const auto &out : model_copy.ref_graph().ref_output()) {
@@ -2301,7 +2301,7 @@ TEST(BackendTestCaseShapeInference, BigModelsReleaseInfo) {
     found = true;
     SCOPED_TRACE(tc.name);
 
-    onnx_optim::shapes::ShapesContext ctx;
+    core::shapes::ShapesContext ctx;
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
     core::annotations::ComputeContext inplace;
@@ -2353,7 +2353,7 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
     found = true;
     SCOPED_TRACE(tc.name);
 
-    onnx_optim::shapes::ShapesContext ctx;
+    core::shapes::ShapesContext ctx;
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
     ASSERT_NO_THROW(core::annotations::ComputeInPlaceReuse(tc.model().ref_graph(), ctx,

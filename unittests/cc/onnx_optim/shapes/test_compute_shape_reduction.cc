@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_optim/shapes/reduction/shape_reduction.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <gtest/gtest.h>
@@ -45,12 +45,12 @@ NodeProto MakeReduceSumNode(const std::vector<std::string> &inputs,
   return MakeReduceNode("ReduceSum", inputs, keepdims, noop_with_empty_axes, axes_attr);
 }
 
-void SetData(onnx_optim::shapes::ShapesContext &ctx, const core::symbolic::SymShape &shape,
+void SetData(core::shapes::ShapesContext &ctx, const core::symbolic::SymShape &shape,
              core::symbolic::TensorType dtype = core::symbolic::TensorType::kFloat) {
   ctx.Set("X", core::symbolic::SymTensor(nullptr, dtype, shape));
 }
 
-void SetAxesValue(onnx_optim::shapes::ShapesContext &ctx, const std::vector<int64_t> &axes_values) {
+void SetAxesValue(core::shapes::ShapesContext &ctx, const std::vector<int64_t> &axes_values) {
   core::symbolic::SymShape shape{core::symbolic::SymDim(static_cast<int64_t>(axes_values.size()))};
   core::symbolic::SymTensor t(nullptr, core::symbolic::TensorType::kInt64, shape);
   core::symbolic::SymShape vshape;
@@ -69,7 +69,7 @@ TEST(OnnxOptimShapesReductionReduceSum, DefaultReducesAllKeepdims) {
   // No axes input, no keepdims attribute (defaults to 1), no
   // noop_with_empty_axes -> reduce every dim and keep them as 1.
   NodeProto node = MakeReduceSumNode({"X"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -86,7 +86,7 @@ TEST(OnnxOptimShapesReductionReduceSum, DefaultReducesAllKeepdims) {
 
 TEST(OnnxOptimShapesReductionReduceSum, DefaultReducesAllNoKeepdimsScalar) {
   NodeProto node = MakeReduceSumNode({"X"}, /*keepdims=*/0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -98,7 +98,7 @@ TEST(OnnxOptimShapesReductionReduceSum, DefaultReducesAllNoKeepdimsScalar) {
 TEST(OnnxOptimShapesReductionReduceSum, NoopWithEmptyAxesIsIdentity) {
   // noop_with_empty_axes=1 with no axes input -> identity, output == input.
   NodeProto node = MakeReduceSumNode({"X"}, /*keepdims=*/std::nullopt, /*noop_with_empty_axes=*/1);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   const core::symbolic::SymShape in{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   SetData(ctx, in);
@@ -110,7 +110,7 @@ TEST(OnnxOptimShapesReductionReduceSum, NoopWithEmptyAxesIsIdentity) {
 
 TEST(OnnxOptimShapesReductionReduceSum, AxesInputValueAsShapeKeepdims) {
   NodeProto node = MakeReduceSumNode({"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -127,7 +127,7 @@ TEST(OnnxOptimShapesReductionReduceSum, AxesInputValueAsShapeKeepdims) {
 
 TEST(OnnxOptimShapesReductionReduceSum, AxesInputValueAsShapeNoKeepdims) {
   NodeProto node = MakeReduceSumNode({"X", "axes"}, /*keepdims=*/0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -142,7 +142,7 @@ TEST(OnnxOptimShapesReductionReduceSum, AxesInputValueAsShapeNoKeepdims) {
 
 TEST(OnnxOptimShapesReductionReduceSum, AxesInputNegativeAxis) {
   NodeProto node = MakeReduceSumNode({"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -161,7 +161,7 @@ TEST(OnnxOptimShapesReductionReduceSum, AxesInputEmptyValueAsShapeReducesAll) {
   // axes input present but with value-as-shape of rank 0 -> "empty axes".
   // With noop_with_empty_axes=0 (default) it reduces all dims.
   NodeProto node = MakeReduceSumNode({"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
   core::symbolic::SymTensor t(nullptr, core::symbolic::TensorType::kInt64,
@@ -180,7 +180,7 @@ TEST(OnnxOptimShapesReductionReduceSum, AxesInputEmptyValueAsShapeReducesAll) {
 TEST(OnnxOptimShapesReductionReduceSum, AxesInputEmptyValueAsShapeNoop) {
   NodeProto node =
       MakeReduceSumNode({"X", "axes"}, /*keepdims=*/std::nullopt, /*noop_with_empty_axes=*/1);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   const core::symbolic::SymShape in{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   SetData(ctx, in);
@@ -199,7 +199,7 @@ TEST(OnnxOptimShapesReductionReduceSum, AxesInputUnknownValuesKeepdimsKeepsRank)
   // will be reduced but not which ones. With keepdims=1 the rank is
   // preserved; the dims become symbolic.
   NodeProto node = MakeReduceSumNode({"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -219,7 +219,7 @@ TEST(OnnxOptimShapesReductionReduceSum, AxesInputUnknownValuesNoKeepdimsReducesR
   // axes input present, rank-1 shape of size 2 known but content unknown,
   // keepdims=0: output rank = 3 - 2 = 1 with symbolic dim.
   NodeProto node = MakeReduceSumNode({"X", "axes"}, /*keepdims=*/0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -235,7 +235,7 @@ TEST(OnnxOptimShapesReductionReduceSum, AxesInputUnknownValuesNoKeepdimsReducesR
 
 TEST(OnnxOptimShapesReductionReduceSum, RejectsAxisOutOfRange) {
   NodeProto node = MakeReduceSumNode({"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
   SetAxesValue(ctx, {5});
@@ -247,7 +247,7 @@ TEST(OnnxOptimShapesReductionReduceSum, RejectsAxisOutOfRange) {
 TEST(OnnxOptimShapesReductionReduceSum, RejectsTooManyAxesNoKeepdims) {
   // 4 axes but rank-3 input -> would yield negative rank.
   NodeProto node = MakeReduceSumNode({"X", "axes"}, /*keepdims=*/0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -261,7 +261,7 @@ TEST(OnnxOptimShapesReductionReduceSum, RejectsTooManyAxesNoKeepdims) {
 TEST(OnnxOptimShapesReductionReduceSum, RejectsWrongOpType) {
   NodeProto node = MakeReduceSumNode({"X"});
   node.set_op_type("ReduceMean");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2)});
   EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeReduceSum(ctx, node, "X", nullptr),
@@ -270,7 +270,7 @@ TEST(OnnxOptimShapesReductionReduceSum, RejectsWrongOpType) {
 
 TEST(OnnxOptimShapesReductionReduceSum, PreservesInputDtype) {
   NodeProto node = MakeReduceSumNode({"X"}, /*keepdims=*/0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)},
           core::symbolic::TensorType::kDouble);
@@ -282,7 +282,7 @@ TEST(OnnxOptimShapesReductionReduceSum, PreservesInputDtype) {
 
 TEST(OnnxOptimShapesReductionReduceSum, PropagatesSymbolicDimsThatAreNotReduced) {
   NodeProto node = MakeReduceSumNode({"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim("D")});
@@ -304,7 +304,7 @@ TEST(OnnxOptimShapesReductionReduceSum, PropagatesSymbolicDimsThatAreNotReduced)
 TEST(OnnxOptimShapesReductionReduceSum, AttributeAxesOpset11) {
   NodeProto node = MakeReduceSumNode({"X"}, /*keepdims=*/1, /*noop_with_empty_axes=*/std::nullopt,
                                      /*axes_attr=*/{1});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 11);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -321,7 +321,7 @@ TEST(OnnxOptimShapesReductionReduceSum, AttributeAxesOpset11) {
 TEST(OnnxOptimShapesReductionReduceSum, AttributeAxesOpset11NoKeepdims) {
   NodeProto node = MakeReduceSumNode({"X"}, /*keepdims=*/0, /*noop_with_empty_axes=*/std::nullopt,
                                      /*axes_attr=*/{0, 2});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 11);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -335,7 +335,7 @@ TEST(OnnxOptimShapesReductionReduceSum, AttributeAxesOpset11NoKeepdims) {
 
 TEST(OnnxOptimShapesReductionReduceSum, AttributeAxesMissingReducesAll) {
   NodeProto node = MakeReduceSumNode({"X"}, /*keepdims=*/0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 11);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -346,7 +346,7 @@ TEST(OnnxOptimShapesReductionReduceSum, AttributeAxesMissingReducesAll) {
 
 TEST(OnnxOptimShapesReductionReduceMax, AxesInputValueAsShapeKeepdims) {
   NodeProto node = MakeReduceNode("ReduceMax", {"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 18);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -366,7 +366,7 @@ TEST(OnnxOptimShapesReductionReduceMin, AttributeAxesNoKeepdims) {
   NodeProto node = MakeReduceNode("ReduceMin", {"X"}, /*keepdims=*/0,
                                   /*noop_with_empty_axes=*/std::nullopt,
                                   /*axes_attr=*/{0, 2});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 11);
   SetData(ctx,
           core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
@@ -383,7 +383,7 @@ TEST(OnnxOptimShapesReductionReduceMin, AttributeAxesNoKeepdims) {
 
 TEST(OnnxOptimShapesReductionReduceMax, RejectsWrongOpType) {
   NodeProto node = MakeReduceSumNode({"X"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2)});
   EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeReduceMax(ctx, node, "X", nullptr),
@@ -394,7 +394,7 @@ TEST(OnnxOptimShapesReductionReduceMax, RejectsWrongOpType) {
 
 TEST(OnnxOptimShapesReductionReduceL1, AxesInputValueAsShapeKeepdims) {
   NodeProto node = MakeReduceNode("ReduceL1", {"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 18);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -414,7 +414,7 @@ TEST(OnnxOptimShapesReductionReduceL2, AttributeAxesNoKeepdims) {
   NodeProto node = MakeReduceNode("ReduceL2", {"X"}, /*keepdims=*/0,
                                   /*noop_with_empty_axes=*/std::nullopt,
                                   /*axes_attr=*/{0, 2});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 11);
   SetData(ctx,
           core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
@@ -431,7 +431,7 @@ TEST(OnnxOptimShapesReductionReduceL2, AttributeAxesNoKeepdims) {
 
 TEST(OnnxOptimShapesReductionReduceL1, RejectsWrongOpType) {
   NodeProto node = MakeReduceSumNode({"X"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2)});
   EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeReduceL1(ctx, node, "X", nullptr),
@@ -440,7 +440,7 @@ TEST(OnnxOptimShapesReductionReduceL1, RejectsWrongOpType) {
 
 TEST(OnnxOptimShapesReductionReduceL2, RejectsWrongOpType) {
   NodeProto node = MakeReduceSumNode({"X"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2)});
   EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeReduceL2(ctx, node, "X", nullptr),
@@ -451,7 +451,7 @@ TEST(OnnxOptimShapesReductionReduceL2, RejectsWrongOpType) {
 
 TEST(OnnxOptimShapesReductionReduceSumSquare, AxesInputValueAsShapeKeepdims) {
   NodeProto node = MakeReduceNode("ReduceSumSquare", {"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 18);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -471,7 +471,7 @@ TEST(OnnxOptimShapesReductionReduceSumSquare, AttributeAxesNoKeepdimsOpset11) {
   NodeProto node = MakeReduceNode("ReduceSumSquare", {"X"}, /*keepdims=*/0,
                                   /*noop_with_empty_axes=*/std::nullopt,
                                   /*axes_attr=*/{0, 2});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 11);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -485,7 +485,7 @@ TEST(OnnxOptimShapesReductionReduceSumSquare, AttributeAxesNoKeepdimsOpset11) {
 
 TEST(OnnxOptimShapesReductionReduceSumSquare, RejectsWrongOpType) {
   NodeProto node = MakeReduceSumNode({"X"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2)});
   EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeReduceSumSquare(ctx, node, "X", nullptr),
@@ -496,7 +496,7 @@ TEST(OnnxOptimShapesReductionReduceSumSquare, RejectsWrongOpType) {
 
 TEST(OnnxOptimShapesReductionReduceProd, AxesInputValueAsShapeKeepdims) {
   NodeProto node = MakeReduceNode("ReduceProd", {"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 18);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -516,7 +516,7 @@ TEST(OnnxOptimShapesReductionReduceProd, AttributeAxesNoKeepdimsOpset11) {
   NodeProto node = MakeReduceNode("ReduceProd", {"X"}, /*keepdims=*/0,
                                   /*noop_with_empty_axes=*/std::nullopt,
                                   /*axes_attr=*/{0, 2});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 11);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -530,7 +530,7 @@ TEST(OnnxOptimShapesReductionReduceProd, AttributeAxesNoKeepdimsOpset11) {
 
 TEST(OnnxOptimShapesReductionReduceProd, RejectsWrongOpType) {
   NodeProto node = MakeReduceSumNode({"X"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2)});
   EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeReduceProd(ctx, node, "X", nullptr),
@@ -541,7 +541,7 @@ TEST(OnnxOptimShapesReductionReduceProd, RejectsWrongOpType) {
 
 TEST(OnnxOptimShapesReductionReduceMean, AxesInputValueAsShapeKeepdims) {
   NodeProto node = MakeReduceNode("ReduceMean", {"X", "axes"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 18);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -561,7 +561,7 @@ TEST(OnnxOptimShapesReductionReduceMean, AttributeAxesNoKeepdimsOpset11) {
   NodeProto node = MakeReduceNode("ReduceMean", {"X"}, /*keepdims=*/0,
                                   /*noop_with_empty_axes=*/std::nullopt,
                                   /*axes_attr=*/{0, 2});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 11);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -575,7 +575,7 @@ TEST(OnnxOptimShapesReductionReduceMean, AttributeAxesNoKeepdimsOpset11) {
 
 TEST(OnnxOptimShapesReductionReduceMean, RejectsWrongOpType) {
   NodeProto node = MakeReduceSumNode({"X"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2)});
   EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeReduceMean(ctx, node, "X", nullptr),
@@ -611,7 +611,7 @@ NodeProto MakeArgReduceNode(const std::string &op_type,
 TEST(OnnxOptimShapesReductionArgReduce, DefaultAxisKeepdimsArgMax) {
   // axis defaults to 0, keepdims defaults to 1.
   NodeProto node = MakeArgReduceNode("ArgMax");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -628,7 +628,7 @@ TEST(OnnxOptimShapesReductionArgReduce, DefaultAxisKeepdimsArgMax) {
 
 TEST(OnnxOptimShapesReductionArgReduce, ExplicitAxisNoKeepdimsDropsDim) {
   NodeProto node = MakeArgReduceNode("ArgMin", /*axis=*/1, /*keepdims=*/0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -644,7 +644,7 @@ TEST(OnnxOptimShapesReductionArgReduce, ExplicitAxisNoKeepdimsDropsDim) {
 
 TEST(OnnxOptimShapesReductionArgReduce, NegativeAxisKeepdims) {
   NodeProto node = MakeArgReduceNode("ArgMax", /*axis=*/-1, /*keepdims=*/1);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim(4)});
@@ -660,7 +660,7 @@ TEST(OnnxOptimShapesReductionArgReduce, NegativeAxisKeepdims) {
 
 TEST(OnnxOptimShapesReductionArgReduce, OutputIsInt64IndependentOfInputDtype) {
   NodeProto node = MakeArgReduceNode("ArgMin", /*axis=*/0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)},
           core::symbolic::TensorType::kDouble);
@@ -672,7 +672,7 @@ TEST(OnnxOptimShapesReductionArgReduce, OutputIsInt64IndependentOfInputDtype) {
 
 TEST(OnnxOptimShapesReductionArgReduce, PreservesSymbolicNonReducedDims) {
   NodeProto node = MakeArgReduceNode("ArgMax", /*axis=*/1, /*keepdims=*/0);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(3),
                                         core::symbolic::SymDim("D")});
@@ -690,7 +690,7 @@ TEST(OnnxOptimShapesReductionArgReduce, PreservesSymbolicNonReducedDims) {
 TEST(OnnxOptimShapesReductionArgReduce, IgnoresSelectLastIndexAttribute) {
   NodeProto node = MakeArgReduceNode("ArgMax", /*axis=*/1, /*keepdims=*/1,
                                      /*select_last_index=*/1);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -704,7 +704,7 @@ TEST(OnnxOptimShapesReductionArgReduce, IgnoresSelectLastIndexAttribute) {
 
 TEST(OnnxOptimShapesReductionArgReduce, RejectsAxisOutOfRange) {
   NodeProto node = MakeArgReduceNode("ArgMax", /*axis=*/5);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -714,7 +714,7 @@ TEST(OnnxOptimShapesReductionArgReduce, RejectsAxisOutOfRange) {
 
 TEST(OnnxOptimShapesReductionArgReduce, RejectsScalarInput) {
   NodeProto node = MakeArgReduceNode("ArgMax");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{});
 
@@ -724,7 +724,7 @@ TEST(OnnxOptimShapesReductionArgReduce, RejectsScalarInput) {
 
 TEST(OnnxOptimShapesReductionArgReduce, RejectsWrongOpType) {
   NodeProto node = MakeArgReduceNode("ReduceSum");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("", 13);
   SetData(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2)});
 

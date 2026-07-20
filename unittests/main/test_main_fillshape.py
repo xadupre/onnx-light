@@ -229,7 +229,7 @@ class TestMainFillshape(ExtTestCase):
     def test_fillshape_shape_tag_option(self):
         """fillshape --shape-tag writes value/node tag metadata into the model."""
         from onnx_light.__main__ import main
-        from onnx_light.onnx_optim.shape_inference import (
+        from onnx_light.onnx_core.shape_inference import (
             NODE_TAG_METADATA_KEY,
             VALUE_TAG_METADATA_KEY,
             VALUE_TAGS_METADATA_KEY,
@@ -272,7 +272,7 @@ class TestMainFillshape(ExtTestCase):
     def test_fillshape_shape_tag_output_is_shape(self):
         """fillshape --shape-tag writes 'shape' value_tag on a model output that is a shape tensor."""  # noqa: E501
         from onnx_light.__main__ import main
-        from onnx_light.onnx_optim.shape_inference import (
+        from onnx_light.onnx_core.shape_inference import (
             NODE_TAG_METADATA_KEY,
             VALUE_TAG_METADATA_KEY,
             VALUE_TAGS_METADATA_KEY,
@@ -452,7 +452,7 @@ class TestMainFillshape(ExtTestCase):
         --shape-tag).
         """
         from onnx_light.__main__ import main
-        from onnx_light.onnx_optim.shape_inference import (
+        from onnx_light.onnx_core.shape_inference import (
             INPLACE_REUSE_METADATA_KEY,
             NODE_TAG_METADATA_KEY,
             RELEASE_AFTER_METADATA_KEY,
@@ -561,11 +561,9 @@ class TestMainFillshape(ExtTestCase):
             self._save_model(_make_add_model(), model_path)
 
             with (
+                patch("onnx_light.onnx_core.shape_inference.ComputeContext", _FakeComputeContext),
                 patch(
-                    "onnx_light.onnx_optim.shape_inference.ComputeContext", _FakeComputeContext
-                ),
-                patch(
-                    "onnx_light.onnx_optim.shape_inference.write_value_and_node_tags_to_metadata",
+                    "onnx_light.onnx_core.shape_inference.write_value_and_node_tags_to_metadata",
                     side_effect=_record_write_value_and_node_tags_to_metadata,
                 ),
             ):

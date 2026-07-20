@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_optim/shapes/math/shape_math.h"
-#include "onnx_optim/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>
 
@@ -29,7 +29,7 @@ NodeProto MakeUnaryNode(const std::string &op_type, const std::string &input_nam
 
 TEST(OnnxOptimShapesMathSigmoid, PropagatesTypeAndShape) {
   NodeProto node = MakeUnaryNode("Sigmoid");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -42,7 +42,7 @@ TEST(OnnxOptimShapesMathSigmoid, PropagatesTypeAndShape) {
 
 TEST(OnnxOptimShapesMathSoftmax, PropagatesTypeAndShapeWithDefaultAxisOpset13) {
   NodeProto node = MakeUnaryNode("Softmax", "input", "output");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("ai.onnx", 13);
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("input", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
@@ -56,7 +56,7 @@ TEST(OnnxOptimShapesMathSoftmax, PropagatesTypeAndShapeWithDefaultAxisOpset13) {
 
 TEST(OnnxOptimShapesMathSoftmax, UsesOpsetDependentDefaultAxis) {
   NodeProto node = MakeUnaryNode("Softmax");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("ai.onnx", 11);
   core::symbolic::SymShape shape{core::symbolic::SymDim(5)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
@@ -72,7 +72,7 @@ TEST(OnnxOptimShapesMathSoftmax, RejectsOutOfRangeAxis) {
   axis->set_type(AttributeProto::INT);
   axis->set_i(2);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -82,7 +82,7 @@ TEST(OnnxOptimShapesMathSoftmax, RejectsOutOfRangeAxis) {
 
 TEST(OnnxOptimShapesMathLogSoftmax, PropagatesTypeAndShapeWithDefaultAxisOpset13) {
   NodeProto node = MakeUnaryNode("LogSoftmax", "input", "output");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("ai.onnx", 13);
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("input", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
@@ -96,7 +96,7 @@ TEST(OnnxOptimShapesMathLogSoftmax, PropagatesTypeAndShapeWithDefaultAxisOpset13
 
 TEST(OnnxOptimShapesMathLogSoftmax, UsesOpsetDependentDefaultAxis) {
   NodeProto node = MakeUnaryNode("LogSoftmax");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("ai.onnx", 11);
   core::symbolic::SymShape shape{core::symbolic::SymDim(5)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
@@ -113,7 +113,7 @@ TEST(OnnxOptimShapesMathLogSoftmax, RejectsOutOfRangeAxis) {
   axis->set_type(AttributeProto::INT);
   axis->set_i(2);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 

@@ -13,4 +13,5 @@ types.
 .. toctree::
     :maxdepth: 1
 
+    dispatch_table
     shapes/index

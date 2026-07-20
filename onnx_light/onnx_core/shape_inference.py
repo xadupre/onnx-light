@@ -7,13 +7,13 @@ combined into a single :func:`infer_shapes_model` entry point.
 
 Typical usage::
 
-    from onnx_light.onnx_optim.shape_inference import infer_shapes_model
+    from onnx_light.onnx_core.shape_inference import infer_shapes_model
 
     infer_shapes_model(model)
     # model.graph.output[i].type and model.graph.value_info now carry
     # the inferred element types and shapes.
 
-The module is exposed as ``onnx_light.onnx_optim.shape_inference``.
+The module is exposed as ``onnx_light.onnx_core.shape_inference``.
 """
 
 from __future__ import annotations

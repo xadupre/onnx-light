@@ -4,7 +4,7 @@ import unittest
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx_optim.shape_inference import (
+from onnx_light.onnx_core.shape_inference import (
     NODE_TAG_METADATA_KEY,
     VALUE_TAG_METADATA_KEY,
     VALUE_TAGS_METADATA_KEY,

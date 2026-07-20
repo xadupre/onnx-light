@@ -104,7 +104,7 @@ Local functions
 
 A call to a model-local function (a ``FunctionProto`` listed in
 ``model.functions``) is expanded by ``ExpandLocalFunctionCall`` (in
-``onnx_light/onnx_optim/shapes/shape_inference.cc``). Unlike a subgraph,
+``onnx_light/onnx_core/shapes/shape_inference.cc``). Unlike a subgraph,
 a function body does **not** capture outer-scope values, so it runs in a
 **fresh, isolated** child :cpp:class:`ShapesContext` that:
 
@@ -139,7 +139,7 @@ API reference
 * **C++ API**: :cpp:class:`SymSequence`
   (:doc:`/api/cpp/onnx_core/sym_sequence`),
   :cpp:class:`ShapesContext`
-  (:doc:`/api/cpp/onnx_optim/shapes/shapes_context`) and
-  :doc:`/api/cpp/onnx_optim/shapes/shape_inference`.
+  (:doc:`/api/cpp/onnx_core/shapes/shapes_context`) and
+  :doc:`/api/cpp/onnx_core/shapes/shape_inference`.
 * **Tensor types**: :cpp:enum:`TensorType`
   (:doc:`/api/cpp/onnx_core/light_op_schema`).

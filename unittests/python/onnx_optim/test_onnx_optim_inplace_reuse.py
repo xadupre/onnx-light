@@ -5,7 +5,7 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light.onnx_optim import shape_inference as si
+from onnx_light.onnx_core import shape_inference as si
 
 
 class TestInPlaceReuse(ExtTestCase):

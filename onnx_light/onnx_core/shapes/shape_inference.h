@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
 /**

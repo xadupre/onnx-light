@@ -10,8 +10,8 @@
 
 #include "onnx_core/annotations/inplace_reuse.h"
 
-#include "onnx_optim/shapes/shape_inference.h"
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
@@ -28,11 +28,11 @@ using core::annotations::ComputeInPlaceReuse;
 using core::annotations::InPlaceReuse;
 using core::annotations::InPlaceReuseKind;
 using core::annotations::WriteInPlaceReuseToMetadata;
+using core::shapes::ShapesContext;
 using core::symbolic::SymDim;
 using core::symbolic::SymShape;
 using core::symbolic::SymTensor;
 using core::symbolic::TensorType;
-using onnx_optim::shapes::ShapesContext;
 
 namespace Test {
 

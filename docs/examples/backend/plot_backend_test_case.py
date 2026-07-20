@@ -156,7 +156,7 @@ for ds_idx, ds in enumerate(tc.data_sets):
 # test case.
 
 import onnx_light.onnx as onnxl  # noqa: E402
-from onnx_light.onnx_optim.shape_inference import infer_shapes_model  # noqa: E402
+from onnx_light.onnx_core.shape_inference import infer_shapes_model  # noqa: E402
 from onnx_light.onnx.backend import make_test_class  # noqa: F401, E402
 
 

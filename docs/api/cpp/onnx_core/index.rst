@@ -15,4 +15,5 @@ libraries depending on the other.
     sym_tensor
     sym_sequence
     sym_map
+    shapes/index
     annotations/index

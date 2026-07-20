@@ -4,7 +4,7 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx import defs
-from onnx_light.onnx_optim.shape_inference import infer_shapes_model
+from onnx_light.onnx_core.shape_inference import infer_shapes_model
 
 
 class TestOnnxOptimShapeInferenceModel(ExtTestCase):

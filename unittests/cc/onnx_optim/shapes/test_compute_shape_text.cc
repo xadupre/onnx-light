@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_optim/shapes/text/shape_text.h"
 
 #include <gtest/gtest.h>
@@ -29,7 +29,7 @@ NodeProto MakeStringSplitNode(const std::string &in = "X", const std::string &su
 
 TEST(OnnxOptimShapesTextStringSplit, PropagatesInputShapeToBothOutputs) {
   NodeProto node = MakeStringSplitNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape input_shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X",
           core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString, input_shape));
@@ -48,7 +48,7 @@ TEST(OnnxOptimShapesTextStringSplit, PropagatesInputShapeToBothOutputs) {
 
 TEST(OnnxOptimShapesTextStringSplit, ScalarInputProducesRankOneSubstrings) {
   NodeProto node = MakeStringSplitNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString, {}));
 
   onnx_optim::shapes::text::ComputeShapeStringSplit(ctx, node, "X");
@@ -64,7 +64,7 @@ TEST(OnnxOptimShapesTextStringSplit, RejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
   node.add_output("Z");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString,
                                          core::symbolic::SymShape{core::symbolic::SymDim(3)}));
   EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringSplit(ctx, node, "X"),
@@ -73,7 +73,7 @@ TEST(OnnxOptimShapesTextStringSplit, RejectsWrongOpType) {
 
 TEST(OnnxOptimShapesTextStringSplit, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeStringSplitNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringSplit(ctx, node, "X"),
                std::out_of_range);
 }
@@ -94,7 +94,7 @@ NodeProto MakeStringConcatNode(const std::string &a = "A", const std::string &b 
 
 TEST(OnnxOptimShapesTextStringConcat, PropagatesEqualShapesWithStringDtype) {
   NodeProto node = MakeStringConcatNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString, shape));
   ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString, shape));
@@ -108,7 +108,7 @@ TEST(OnnxOptimShapesTextStringConcat, PropagatesEqualShapesWithStringDtype) {
 
 TEST(OnnxOptimShapesTextStringConcat, BroadcastsShapes) {
   NodeProto node = MakeStringConcatNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(1)};
   core::symbolic::SymShape shape_b{core::symbolic::SymDim(1), core::symbolic::SymDim(3)};
   core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
@@ -124,7 +124,7 @@ TEST(OnnxOptimShapesTextStringConcat, BroadcastsShapes) {
 
 TEST(OnnxOptimShapesTextStringConcat, ScalarBroadcast) {
   NodeProto node = MakeStringConcatNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(2)};
   core::symbolic::SymShape shape_b{};
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString, shape_a));
@@ -143,7 +143,7 @@ TEST(OnnxOptimShapesTextStringConcat, RejectsWrongOpType) {
   node.add_input("A");
   node.add_input("B");
   node.add_output("C");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString, {}));
   ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString, {}));
   EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringConcat(ctx, node, "A", "B"),
@@ -152,7 +152,7 @@ TEST(OnnxOptimShapesTextStringConcat, RejectsWrongOpType) {
 
 TEST(OnnxOptimShapesTextStringConcat, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeStringConcatNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString, {}));
   EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringConcat(ctx, node, "A", "B"),
                std::out_of_range);
@@ -160,7 +160,7 @@ TEST(OnnxOptimShapesTextStringConcat, ThrowsWhenInputMissingFromContext) {
 
 TEST(OnnxOptimShapesTextStringConcat, ThrowsOnIncompatibleShapes) {
   NodeProto node = MakeStringConcatNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString,
                                          core::symbolic::SymShape{core::symbolic::SymDim(3)}));
   ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString,
@@ -183,7 +183,7 @@ NodeProto MakeStringNormalizerNode(const std::string &in = "X", const std::strin
 
 TEST(OnnxOptimShapesTextStringNormalizer, OneDimensionalProducesSymbolicLastDim) {
   NodeProto node = MakeStringNormalizerNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString,
                                          core::symbolic::SymShape{core::symbolic::SymDim(5)}));
 
@@ -199,7 +199,7 @@ TEST(OnnxOptimShapesTextStringNormalizer, OneDimensionalProducesSymbolicLastDim)
 
 TEST(OnnxOptimShapesTextStringNormalizer, TwoDimensionalKeepsLeadingOne) {
   NodeProto node = MakeStringNormalizerNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(
                    nullptr, core::symbolic::TensorType::kString,
                    core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(5)}));
@@ -219,7 +219,7 @@ TEST(OnnxOptimShapesTextStringNormalizer, RejectsWrongOpType) {
   node.set_op_type("And");
   node.add_input("X");
   node.add_output("Y");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString,
                                          core::symbolic::SymShape{core::symbolic::SymDim(3)}));
   EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringNormalizer(ctx, node, "X"),
@@ -228,7 +228,7 @@ TEST(OnnxOptimShapesTextStringNormalizer, RejectsWrongOpType) {
 
 TEST(OnnxOptimShapesTextStringNormalizer, RejectsBadRank) {
   NodeProto node = MakeStringNormalizerNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString,
                                          core::symbolic::SymShape{core::symbolic::SymDim(1),
                                                                   core::symbolic::SymDim(1),
@@ -239,7 +239,7 @@ TEST(OnnxOptimShapesTextStringNormalizer, RejectsBadRank) {
 
 TEST(OnnxOptimShapesTextStringNormalizer, RejectsTwoDimLeadingNotOne) {
   NodeProto node = MakeStringNormalizerNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(
                    nullptr, core::symbolic::TensorType::kString,
                    core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
@@ -249,7 +249,7 @@ TEST(OnnxOptimShapesTextStringNormalizer, RejectsTwoDimLeadingNotOne) {
 
 TEST(OnnxOptimShapesTextStringNormalizer, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeStringNormalizerNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringNormalizer(ctx, node, "X"),
                std::out_of_range);
 }
@@ -268,7 +268,7 @@ NodeProto MakeRegexFullMatchNode(const std::string &in = "X", const std::string 
 
 TEST(OnnxOptimShapesTextRegexFullMatch, PropagatesInputShapeAsBoolOutput) {
   NodeProto node = MakeRegexFullMatchNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString, shape));
 
@@ -281,7 +281,7 @@ TEST(OnnxOptimShapesTextRegexFullMatch, PropagatesInputShapeAsBoolOutput) {
 
 TEST(OnnxOptimShapesTextRegexFullMatch, ScalarInputProducesScalarBool) {
   NodeProto node = MakeRegexFullMatchNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString, {}));
 
   onnx_optim::shapes::text::ComputeShapeRegexFullMatch(ctx, node, "X");
@@ -296,7 +296,7 @@ TEST(OnnxOptimShapesTextRegexFullMatch, RejectsWrongOpType) {
   node.set_op_type("And");
   node.add_input("X");
   node.add_output("Y");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kString,
                                          core::symbolic::SymShape{core::symbolic::SymDim(3)}));
   EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeRegexFullMatch(ctx, node, "X"),
@@ -305,7 +305,7 @@ TEST(OnnxOptimShapesTextRegexFullMatch, RejectsWrongOpType) {
 
 TEST(OnnxOptimShapesTextRegexFullMatch, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeRegexFullMatchNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeRegexFullMatch(ctx, node, "X"),
                std::out_of_range);
 }

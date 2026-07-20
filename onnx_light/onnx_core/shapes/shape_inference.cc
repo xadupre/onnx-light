@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/shape_inference.h"
+#include "onnx_core/shapes/shape_inference.h"
 
 #include <algorithm>
 #include <map>
@@ -16,12 +16,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include "onnx_core/expressions/expressions.h"
-#include "onnx_optim/shapes/dispatch_table.h"
-#include "onnx_optim/shapes/generator/shape_generator.h"
-#include "onnx_optim/shapes/preview/shape_preview.h"
-#include "onnx_optim/shapes/rt/shape_rt.h"
-#include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
-#include "onnx_optim/shapes/training/shape_training.h"
+#include "onnx_core/shapes/dispatch_table.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
@@ -40,10 +35,9 @@ namespace {
 // support.
 void CheckOnnxDomain(const NodeProto &node) {
   EXT_ENFORCE_INVALID(
-      node.domain().empty() || node.domain() == kOnnxDomain ||
-          node.domain() == traditionalml::kOnnxMlDomain ||
-          node.domain() == preview::kOnnxPreviewDomain || node.domain() == rt::kAiRtDomain ||
-          node.domain() == training::kOnnxPreviewTrainingDomain,
+      node.domain().empty() || node.domain() == kOnnxDomain || node.domain() == kOnnxMlDomain ||
+          node.domain() == kOnnxPreviewDomain || node.domain() == kAiRtDomain ||
+          node.domain() == kOnnxPreviewTrainingDomain,
       "ComputeShapeNode: unsupported domain '", node.domain(), "' for op '", node.op_type(), "'.");
 }
 

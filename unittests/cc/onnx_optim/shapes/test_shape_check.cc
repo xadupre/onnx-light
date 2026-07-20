@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 
 #include <gtest/gtest.h>
 
@@ -17,7 +17,7 @@ TEST(OnnxOptimShapesCheck, AcceptsMatchingOpAndOutput) {
   NodeProto node;
   node.set_op_type("Abs");
   node.add_output("Y");
-  EXPECT_NO_THROW(onnx_optim::shapes::CheckNodeOpAndOutput(node, "Abs", "ComputeShapeAbs"));
+  EXPECT_NO_THROW(core::shapes::CheckNodeOpAndOutput(node, "Abs", "ComputeShapeAbs"));
 }
 
 TEST(OnnxOptimShapesCheck, RejectsWrongOpType) {
@@ -25,7 +25,7 @@ TEST(OnnxOptimShapesCheck, RejectsWrongOpType) {
   node.set_op_type("Neg");
   node.add_output("Y");
   try {
-    onnx_optim::shapes::CheckNodeOpAndOutput(node, "Abs", "ComputeShapeAbs");
+    core::shapes::CheckNodeOpAndOutput(node, "Abs", "ComputeShapeAbs");
     FAIL() << "Expected std::invalid_argument";
   } catch (const std::invalid_argument &e) {
     const std::string what = e.what();
@@ -39,7 +39,7 @@ TEST(OnnxOptimShapesCheck, RejectsNodeWithoutOutput) {
   NodeProto node;
   node.set_op_type("Abs");
   try {
-    onnx_optim::shapes::CheckNodeOpAndOutput(node, "Abs", "ComputeShapeAbs");
+    core::shapes::CheckNodeOpAndOutput(node, "Abs", "ComputeShapeAbs");
     FAIL() << "Expected std::invalid_argument";
   } catch (const std::invalid_argument &e) {
     const std::string what = e.what();

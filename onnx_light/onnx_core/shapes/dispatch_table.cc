@@ -6,6 +6,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "onnx_proto/onnx_helper.h"
 
@@ -15,19 +16,31 @@ namespace shapes {
 
 namespace {
 
-// Verifies the node declares at least `expected` inputs.
-void RequireInputs(const NodeProto &node, int expected) {
-  EXT_ENFORCE_INVALID(node.input_size() >= expected, "ComputeShapeNode: op '", node.op_type(),
-                      "' expects at least ", std::to_string(expected), " input(s), got ",
-                      std::to_string(node.input_size()), ".");
+// Returns the ``"<domain>:<op_type>"`` dispatch key, normalising an empty
+// domain to :cpp:var:`kOnnxDomain`.
+std::string DispatchKey(const std::string &domain, const std::string &op_type) {
+  return (domain.empty() ? std::string(kOnnxDomain) : domain) + ":" + op_type;
+}
+
+// Returns the mutable dispatch table singleton. Only
+// :cpp:func:`RegisterComputeShapeFn` writes to it; :cpp:func:`DispatchTable`
+// exposes a read-only view for lookups.
+std::unordered_map<std::string, ComputeShapeFn> &MutableDispatchTable() {
+  static std::unordered_map<std::string, ComputeShapeFn> table;
+  return table;
 }
 
 } // namespace
 
 const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
-  return std::unordered_map<std::string, ComputeShapeFn>();
+  return MutableDispatchTable();
+}
+
+void RegisterComputeShapeFn(const std::string &domain, const std::string &op_type,
+                            ComputeShapeFn fn) {
+  MutableDispatchTable()[DispatchKey(domain, op_type)] = std::move(fn);
 }
 
 } // namespace shapes
-} // namespace onnx_optim
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

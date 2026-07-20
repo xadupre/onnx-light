@@ -10,10 +10,10 @@
 // ``ValueAsShape`` annotation is correctly propagated through those
 // operators so that the downstream ``Expand`` recovers a precise shape.
 
-#include "onnx_optim/shapes/shape_inference.h"
+#include "onnx_core/shapes/shape_inference.h"
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -188,7 +188,7 @@ bool DimEqualsExpr(const core::symbolic::SymDim &d, const std::string &s) {
 TEST(OnnxOptimShapeInference, ValueAsShapePropagatesThroughShapeConcatAddSubExpand) {
   ModelProto model = MakeValueAsShapeModel();
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
 
   // ``shape`` (= Concat([Shape(x, 0, 1), Shape(x, 1, 2)])) carries the

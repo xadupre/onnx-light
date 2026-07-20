@@ -73,6 +73,25 @@ inline constexpr int kUnknownOpsetVersion = -1;
 /// equivalent to this value.
 inline constexpr const char *kOnnxDomain = "ai.onnx";
 
+/// Canonical domain string for the traditional ML operator set
+/// (``ai.onnx.ml``), shared by :cpp:class:`ShapesContext` domain
+/// validation and the ``onnx_optim::shapes::traditionalml`` shape
+/// functions, which alias this constant instead of redefining it.
+inline constexpr const char *kOnnxMlDomain = "ai.onnx.ml";
+
+/// Canonical domain string for the preview operator set
+/// (``ai.onnx.preview``). See :cpp:var:`kOnnxMlDomain` for rationale.
+inline constexpr const char *kOnnxPreviewDomain = "ai.onnx.preview";
+
+/// Canonical domain string for the training-preview operator set
+/// (``ai.onnx.preview.training``). See :cpp:var:`kOnnxMlDomain` for
+/// rationale.
+inline constexpr const char *kOnnxPreviewTrainingDomain = "ai.onnx.preview.training";
+
+/// Canonical domain string for the runtime-only operator set
+/// (``ai.rt``). See :cpp:var:`kOnnxMlDomain` for rationale.
+inline constexpr const char *kAiRtDomain = "ai.rt";
+
 /**
  * Kind of shape-inference event recorded in the
  * :cpp:class:`ShapesContext` event log. Mirrors the runtime

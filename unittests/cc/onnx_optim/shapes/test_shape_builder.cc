@@ -12,10 +12,10 @@
 // Python ``get_attribute_with_default`` / ``get_attributes_with_default``
 // wrappers.
 
-#include "onnx_optim/shapes/shape_inference.h"
+#include "onnx_core/shapes/shape_inference.h"
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -108,7 +108,7 @@ void AddFloatOutput(GraphProto &graph, const std::string &name, const std::vecto
 
 // Checks that ``ctx`` contains ``name``, that its dtype matches ``expected``,
 // and that every dimension in ``shape`` equals the corresponding ``SymDim``.
-void CheckShape(const onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
+void CheckShape(const core::shapes::ShapesContext &ctx, const std::string &name,
                 const core::symbolic::SymShape &expected_shape,
                 core::symbolic::TensorType expected_dtype) {
   ASSERT_TRUE(ctx.Has(name)) << "missing tensor: " << name;
@@ -122,7 +122,7 @@ void CheckShape(const onnx_optim::shapes::ShapesContext &ctx, const std::string 
 
 // Checks that dim ``idx`` of tensor ``name`` in ``ctx`` is a concrete integer
 // equal to ``value``.
-void CheckConcreteDim(const onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
+void CheckConcreteDim(const core::shapes::ShapesContext &ctx, const std::string &name,
                       std::size_t idx, int64_t value) {
   ASSERT_TRUE(ctx.Has(name)) << "missing tensor: " << name;
   const core::symbolic::SymShape &s = ctx.Get(name).Shape();
@@ -133,7 +133,7 @@ void CheckConcreteDim(const onnx_optim::shapes::ShapesContext &ctx, const std::s
 
 // Checks that dim ``idx`` of tensor ``name`` in ``ctx`` is a symbolic
 // expression equal to ``expr``.
-void CheckSymbolicDim(const onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
+void CheckSymbolicDim(const core::shapes::ShapesContext &ctx, const std::string &name,
                       std::size_t idx, const std::string &expr) {
   ASSERT_TRUE(ctx.Has(name)) << "missing tensor: " << name;
   const core::symbolic::SymShape &s = ctx.Get(name).Shape();
@@ -144,7 +144,7 @@ void CheckSymbolicDim(const onnx_optim::shapes::ShapesContext &ctx, const std::s
 
 // Checks that dim ``idx`` of tensor ``name`` in ``ctx`` is symbolic (any
 // expression).
-void CheckIsSymbolic(const onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
+void CheckIsSymbolic(const core::shapes::ShapesContext &ctx, const std::string &name,
                      std::size_t idx) {
   ASSERT_TRUE(ctx.Has(name)) << "missing tensor: " << name;
   const core::symbolic::SymShape &s = ctx.Get(name).Shape();
@@ -209,7 +209,7 @@ TEST(OnnxOptimShapeBuilder, CheckShapeComputesExpectedRankTypesAndConcreteDims) 
   *graph->add_node() = MakeNode("MatMul", {"xm1", "xm2"}, {"xm"});
   *graph->add_node() = MakeNode("Reshape", {"xm", "shape3"}, {"Z"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
 
   // ── initializer ranks / types ────────────────────────────────────────────
@@ -371,7 +371,7 @@ TEST(OnnxOptimShapeBuilder, ReshapeReshapePreservesRankAndPartialDims) {
   *graph->add_node() = MakeNode("Reshape", {"xr", "shape2"}, {"xrr"});
   *graph->add_node() = MakeNode("Add", {"xrr", "one"}, {"Y"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
 
   // X: float[a, b, c]
@@ -488,7 +488,7 @@ TEST(OnnxOptimShapeBuilder, ValueAsShapeFromShapeConcatMatMulReshapeTranspose) {
     *graph->add_node() = std::move(ct_node);
   }
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
 
   // ── init328 ValueAsShape ─────────────────────────────────────────────────
@@ -602,7 +602,7 @@ TEST(OnnxOptimShapeBuilder, ConcatProducesSymbolicAxisDimAndAppliedToGraph) {
   AddAttribute<int64_t>(concat_node, "axis", 1);
   *graph->add_node() = std::move(concat_node);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
 
   // Z has rank 2
@@ -682,7 +682,7 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
   }
   *graph->add_node() = MakeNode("Tanh", {"zs"}, {"Z"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.ComputeShapeModel(model);
 
   // xy = Concat(X, Y, axis=1): rank 2

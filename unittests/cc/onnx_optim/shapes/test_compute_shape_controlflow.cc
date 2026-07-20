@@ -4,9 +4,9 @@
 
 #include "onnx_optim/shapes/controlflow/shape_controlflow.h"
 
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/shapes/shape_inference.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
@@ -73,7 +73,7 @@ TEST(OnnxOptimShapeIf, IdenticalBranchesSameDtypeAndShape) {
   GraphProto else_b = MakeUnaryBranch("Abs", "x", "y_else");
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
@@ -118,7 +118,7 @@ TEST(OnnxOptimShapeIf, BranchesAgreeOnConstantTensor) {
   }
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
 
   ctx.ComputeShapeNode(node);
@@ -146,7 +146,7 @@ TEST(OnnxOptimShapeIf, DtypeMismatchYieldsUndefined) {
   }
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(4)};
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
@@ -167,7 +167,7 @@ TEST(OnnxOptimShapeIf, DifferingDimsBecomeSymbolic) {
   GraphProto else_b = MakeUnaryBranch("Abs", "b", "y_else");
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("a", core::symbolic::SymTensor(
                    nullptr, core::symbolic::TensorType::kFloat,
@@ -196,7 +196,7 @@ TEST(OnnxOptimShapeIf, DifferingSymbolicDimsRecordsMaxUpperBound) {
   GraphProto else_b = MakeUnaryBranch("Abs", "b", "y_else");
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("a", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          core::symbolic::SymShape{core::symbolic::SymDim("N")}));
@@ -225,7 +225,7 @@ TEST(OnnxOptimShapeIf, RankMismatchThrows) {
   GraphProto else_b = MakeUnaryBranch("Abs", "b", "y_else");
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("a", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          core::symbolic::SymShape{core::symbolic::SymDim(4)}));
@@ -252,7 +252,7 @@ TEST(OnnxOptimShapeIf, MultipleOutputsAreMergedIndependently) {
 
   NodeProto node = MakeIfNode("cond", {"y1", "y2"}, then_b, else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape sa{core::symbolic::SymDim(2)};
   core::symbolic::SymShape sb{core::symbolic::SymDim(3), core::symbolic::SymDim(4)};
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
@@ -273,7 +273,7 @@ TEST(OnnxOptimShapeIf, RejectsWrongOpType) {
   NodeProto node;
   node.set_op_type("NotIf");
   node.add_output("y");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeIf(ctx, node), std::invalid_argument);
 }
 
@@ -289,7 +289,7 @@ TEST(OnnxOptimShapeIf, RejectsMissingThenBranchAttribute) {
   e->set_type(AttributeProto::AttributeType::GRAPH);
   e->set_g(else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          core::symbolic::SymShape{core::symbolic::SymDim(1)}));
@@ -302,7 +302,7 @@ TEST(OnnxOptimShapeIf, RejectsWrongInputArity) {
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
   node.add_input("extra"); // Now 2 inputs, which is invalid for If.
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("extra", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                              core::symbolic::SymShape{}));
@@ -323,7 +323,7 @@ TEST(OnnxOptimShapeIf, RejectsMismatchedOutputCount) {
 
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          core::symbolic::SymShape{core::symbolic::SymDim(1)}));
@@ -335,7 +335,7 @@ TEST(OnnxOptimShapeInference, DispatchesIf) {
   GraphProto else_b = MakeUnaryBranch("Abs", "x", "y_else");
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(4)};
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
@@ -354,7 +354,7 @@ TEST(OnnxOptimShapeIf, RetainsBranchSubgraphContexts) {
   GraphProto else_b = MakeUnaryBranch("Abs", "x", "y_else");
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
@@ -367,11 +367,11 @@ TEST(OnnxOptimShapeIf, RetainsBranchSubgraphContexts) {
   ASSERT_TRUE(ctx.HasSubgraphContext(-1, "else_branch"));
   EXPECT_FALSE(ctx.HasSubgraphContext(-1, "body"));
 
-  const onnx_optim::shapes::ShapesContext &then_ctx = ctx.GetSubgraphContext(-1, "then_branch");
+  const core::shapes::ShapesContext &then_ctx = ctx.GetSubgraphContext(-1, "then_branch");
   ASSERT_TRUE(then_ctx.Has("y_then"));
   EXPECT_EQ(then_ctx.Get("y_then").Shape(), shape);
 
-  const onnx_optim::shapes::ShapesContext &else_ctx = ctx.GetSubgraphContext(-1, "else_branch");
+  const core::shapes::ShapesContext &else_ctx = ctx.GetSubgraphContext(-1, "else_branch");
   ASSERT_TRUE(else_ctx.Has("y_else"));
   EXPECT_EQ(else_ctx.Get("y_else").Shape(), shape);
 }
@@ -439,7 +439,7 @@ TEST(OnnxOptimShapeLoop, PropagatesCarriedShapeAndScanShape) {
   GraphProto body = BuildLoopBodyIdentityCarry();
   NodeProto node = MakeLoopNode({"M", "cond", "v_init"}, {"v_final", "scan_out"}, body);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("M", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, {}));
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
@@ -464,7 +464,7 @@ TEST(OnnxOptimShapeLoop, RetainsBodySubgraphContext) {
   GraphProto body = BuildLoopBodyIdentityCarry();
   NodeProto node = MakeLoopNode({"M", "cond", "v_init"}, {"v_final", "scan_out"}, body);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("M", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, {}));
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
@@ -473,7 +473,7 @@ TEST(OnnxOptimShapeLoop, RetainsBodySubgraphContext) {
   onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node);
 
   ASSERT_TRUE(ctx.HasSubgraphContext(-1, "body"));
-  const onnx_optim::shapes::ShapesContext &body_ctx = ctx.GetSubgraphContext(-1, "body");
+  const core::shapes::ShapesContext &body_ctx = ctx.GetSubgraphContext(-1, "body");
   ASSERT_TRUE(body_ctx.Has("v_out"));
   EXPECT_EQ(body_ctx.Get("v_out").Shape(), shape);
 }
@@ -483,7 +483,7 @@ TEST(OnnxOptimShapeLoop, AcceptsOmittedMAndCond) {
   // Both M and cond are omitted using empty input names.
   NodeProto node = MakeLoopNode({"", "", "v_init"}, {"v_final", "scan_out"}, body);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(4)};
   ctx.Set("v_init", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
 
@@ -501,7 +501,7 @@ TEST(OnnxOptimShapeLoop, UsesTripCountFromValueAsShape) {
   GraphProto body = BuildLoopBodyIdentityCarry();
   NodeProto node = MakeLoopNode({"M", "cond", "v_init"}, {"v_final", "scan_out"}, body);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   // M is a [1] INT64 tensor with ValueAsShape = [N] (symbolic trip count).
   core::symbolic::SymTensor m_tensor(nullptr, core::symbolic::TensorType::kInt64,
@@ -528,7 +528,7 @@ TEST(OnnxOptimShapeLoop, RejectsWrongOpType) {
   NodeProto node;
   node.set_op_type("NotLoop");
   node.add_output("y");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node), std::invalid_argument);
 }
 
@@ -537,7 +537,7 @@ TEST(OnnxOptimShapeLoop, RejectsTooFewInputs) {
   node.set_op_type("Loop");
   node.add_input("M");
   node.add_output("scan");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node), std::invalid_argument);
 }
 
@@ -547,7 +547,7 @@ TEST(OnnxOptimShapeLoop, RejectsMissingBodyAttribute) {
   node.add_input("M");
   node.add_input("cond");
   node.add_output("scan");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("M", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, {}));
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node), std::invalid_argument);
@@ -557,7 +557,7 @@ TEST(OnnxOptimShapeInference, DispatchesLoop) {
   GraphProto body = BuildLoopBodyIdentityCarry();
   NodeProto node = MakeLoopNode({"M", "cond", "v_init"}, {"v_final", "scan_out"}, body);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(5)};
   ctx.Set("M", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, {}));
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
@@ -615,7 +615,7 @@ TEST(OnnxOptimShapeScan, PrependsTripCountAxisToScanOutput) {
   GraphProto body = BuildScanBodyIdentity();
   NodeProto node = MakeScanNode({"X"}, {"Y"}, body, /*num_scan_inputs=*/1);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape x_shape{core::symbolic::SymDim(4), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, x_shape));
 
@@ -638,7 +638,7 @@ TEST(OnnxOptimShapeScan, HonorsScanOutputAxes) {
   axes->set_type(AttributeProto::AttributeType::INTS);
   axes->add_ints(1);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape x_shape{core::symbolic::SymDim(5), core::symbolic::SymDim(7)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, x_shape));
 
@@ -662,7 +662,7 @@ TEST(OnnxOptimShapeScan, RejectsMissingNumScanInputs) {
   b->set_type(AttributeProto::AttributeType::GRAPH);
   b->set_g(body);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape x_shape{core::symbolic::SymDim(3), core::symbolic::SymDim(2)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, x_shape));
   EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node), std::invalid_argument);
@@ -672,7 +672,7 @@ TEST(OnnxOptimShapeScan, RejectsWrongOpType) {
   NodeProto node;
   node.set_op_type("NotScan");
   node.add_output("Y");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node), std::invalid_argument);
 }
 
@@ -680,7 +680,7 @@ TEST(OnnxOptimShapeInference, DispatchesScan) {
   GraphProto body = BuildScanBodyIdentity();
   NodeProto node = MakeScanNode({"X"}, {"Y"}, body, /*num_scan_inputs=*/1);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape x_shape{core::symbolic::SymDim(6), core::symbolic::SymDim(2)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, x_shape));
 
@@ -694,14 +694,14 @@ TEST(OnnxOptimShapeScan, RetainsBodySubgraphContext) {
   GraphProto body = BuildScanBodyIdentity();
   NodeProto node = MakeScanNode({"X"}, {"Y"}, body, /*num_scan_inputs=*/1);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape x_shape{core::symbolic::SymDim(4), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, x_shape));
 
   onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node);
 
   ASSERT_TRUE(ctx.HasSubgraphContext(-1, "body"));
-  const onnx_optim::shapes::ShapesContext &body_ctx = ctx.GetSubgraphContext(-1, "body");
+  const core::shapes::ShapesContext &body_ctx = ctx.GetSubgraphContext(-1, "body");
   // The per-iteration scan-input slice drops the trip-count axis: [3].
   ASSERT_TRUE(body_ctx.Has("y_elt"));
   ASSERT_EQ(body_ctx.Get("y_elt").Shape().Rank(), 1u);
@@ -735,7 +735,7 @@ TEST(OnnxOptimShapeScan, HandlesOpset8BatchDimension) {
   NodeProto node =
       MakeScanNode({"", "initial", "x"}, {"y_state", "y_scan"}, body, /*num_scan_inputs=*/1);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("ai.onnx", 8);
 
   // initial: [B=1, D=2], x: [B=1, T=3, D=2].
@@ -773,7 +773,7 @@ TEST(OnnxOptimShapeScan, RejectsNumScanInputsExceedingNodeInputCount) {
   // num_scan_inputs=9 but the node only has 1 input.
   NodeProto node = MakeScanNode({"X"}, {"Y"}, body, /*num_scan_inputs=*/9);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape x_shape{core::symbolic::SymDim(4), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, x_shape));
   EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node), std::invalid_argument);
@@ -798,7 +798,7 @@ TEST(OnnxOptimShapeScan, RejectsLoopStateVarsExceedingOutputCount) {
   // Only 1 output declared on the node → invalid.
   NodeProto node = MakeScanNode({"s0", "s1", "x"}, {"out"}, body, /*num_scan_inputs=*/1);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2)};
   ctx.Set("s0", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
   ctx.Set("s1", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));

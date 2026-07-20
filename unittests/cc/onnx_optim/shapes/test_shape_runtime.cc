@@ -25,10 +25,10 @@
 // ``Unsqueeze``, ``Range``, ``Slice``, ``Mul``, ``Div``, ``Mod``) are not
 // translated to avoid asserting on unimplemented behaviour.
 
-#include "onnx_optim/shapes/shape_inference.h"
+#include "onnx_core/shapes/shape_inference.h"
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -107,7 +107,7 @@ TEST(OnnxOptimShapeRuntime, ShapeNoAttrsKnownShape) {
   // Python: Shape(X) on a (2,3,4) input gives value_as_shape == (2,3,4)
   // and Y has shape (3,).
   NodeProto node = MakeNode("Shape", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                  core::symbolic::SymDim(4)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
@@ -132,7 +132,7 @@ TEST(OnnxOptimShapeRuntime, ShapeNoAttrsUnknownShapeIsEmpty) {
   // shape stored). In C++ an unregistered input has rank 0 so ``Shape``
   // produces a 1-D INT64 tensor with shape (0,) and an empty ValueAsShape.
   NodeProto node = MakeNode("Shape", {"X"}, {"Y"});
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
 
   ctx.ComputeShapeNode(node);
@@ -150,7 +150,7 @@ TEST(OnnxOptimShapeRuntime, ShapeWithStartAttr) {
   // Python: Shape(X, start=2) on (2,3,4,5) -> value_as_shape == (4,5).
   NodeProto node = MakeNode("Shape", {"X"}, {"Y"});
   AddIntAttribute(node, "start", 2);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                  core::symbolic::SymDim(4), core::symbolic::SymDim(5)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
@@ -171,7 +171,7 @@ TEST(OnnxOptimShapeRuntime, ShapeWithStartEndAttrs) {
   NodeProto node = MakeNode("Shape", {"X"}, {"Y"});
   AddIntAttribute(node, "start", 1);
   AddIntAttribute(node, "end", 3);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                  core::symbolic::SymDim(4), core::symbolic::SymDim(5)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
@@ -196,7 +196,7 @@ TEST(OnnxOptimShapeRuntime, ConcatTwoShapeTuples) {
   NodeProto node = MakeNode("Concat", {"a", "b"}, {"out"});
   AddIntAttribute(node, "axis", 0);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("a", MakeInt64ValueAsShape({core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
   ctx.Set("b", MakeInt64ValueAsShape({core::symbolic::SymDim(4), core::symbolic::SymDim(5)}));
 
@@ -222,7 +222,7 @@ TEST(OnnxOptimShapeRuntime, AddTuplesElementWise) {
   // Python: Add([(2,3), (1,4)]) -> (3, 7)
   NodeProto node = MakeNode("Add", {"a", "b"}, {"out"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("a", MakeInt64ValueAsShape({core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
   ctx.Set("b", MakeInt64ValueAsShape({core::symbolic::SymDim(1), core::symbolic::SymDim(4)}));
 
@@ -241,7 +241,7 @@ TEST(OnnxOptimShapeRuntime, SubTuplesElementWise) {
   // Python: Sub([10, 3]) -> 7; here translated to 1-D Sub([(10,), (3,)]) -> (7,).
   NodeProto node = MakeNode("Sub", {"a", "b"}, {"out"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("a", MakeInt64ValueAsShape({core::symbolic::SymDim(10)}));
   ctx.Set("b", MakeInt64ValueAsShape({core::symbolic::SymDim(3)}));
 
@@ -260,7 +260,7 @@ TEST(OnnxOptimShapeRuntime, AddBroadcastScalarToTuple) {
   // VAS Add of a length-1 vector with a length-3 vector.
   NodeProto node = MakeNode("Add", {"a", "b"}, {"out"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("a", MakeInt64ValueAsShape({core::symbolic::SymDim(1)}));
   ctx.Set("b", MakeInt64ValueAsShape({core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                       core::symbolic::SymDim(4)}));
@@ -283,7 +283,7 @@ TEST(OnnxOptimShapeRuntime, AddStrAndInt) {
   // mentions both operands.
   NodeProto node = MakeNode("Add", {"a", "b"}, {"out"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("a", MakeInt64ValueAsShape({core::symbolic::SymDim("batch")}));
   ctx.Set("b", MakeInt64ValueAsShape({core::symbolic::SymDim(static_cast<int64_t>(1))}));
 

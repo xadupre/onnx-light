@@ -4,7 +4,7 @@ import unittest
 from onnx_light.ext_test_case import import_or_skip
 
 import onnx_light.onnx as onnxl
-import onnx_light.onnx_optim.shape_inference as shape_inference
+import onnx_light.onnx_core.shape_inference as shape_inference
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).

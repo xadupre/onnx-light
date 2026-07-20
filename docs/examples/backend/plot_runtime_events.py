@@ -19,7 +19,7 @@ This example:
   initializer and three operators (``Mul``, ``Add`` then ``Reshape``)
   so that one of the intermediate tensors has a shape expressed as
   an arithmetic expression of ``N`` (here ``2*N``),
-* runs :func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model`
+* runs :func:`~onnx_light.onnx_core.shape_inference.infer_shapes_model`
   on it so the expected shape of each intermediate tensor is
   recorded in ``graph.value_info``,
 * uses :func:`~onnx_light.onnx_core.expressions.evaluate_expression`
@@ -47,7 +47,7 @@ import numpy as np
 
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx_core.expressions import evaluate_expression
-from onnx_light.onnx_optim.shape_inference import infer_shapes_model
+from onnx_light.onnx_core.shape_inference import infer_shapes_model
 from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.tools import pretty_onnx
 

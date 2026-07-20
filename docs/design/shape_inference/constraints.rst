@@ -6,9 +6,9 @@ Symbolic-dimension constraint mechanism
 This page describes how ``onnx_optim`` shape inference records and
 resolves *constraints* between symbolic tensor dimensions. The
 constraint store lives on :cpp:class:`ShapesContext` (see
-``onnx_light/onnx_optim/shapes/shapes_context.h``) and is consumed by the
+``onnx_light/onnx_core/shapes/shapes_context.h``) and is consumed by the
 anchor-propagation pass in
-``onnx_light/onnx_optim/shapes/shape_inference.cc``.
+``onnx_light/onnx_core/shapes/shape_inference.cc``.
 
 Motivation
 ----------
@@ -128,6 +128,6 @@ API reference
 -------------
 
 * **C++ API**: :cpp:class:`ShapesContext`
-  (:doc:`/api/cpp/onnx_optim/shapes/shapes_context`) and
-  :doc:`/api/cpp/onnx_optim/shapes/shape_inference`.
+  (:doc:`/api/cpp/onnx_core/shapes/shapes_context`) and
+  :doc:`/api/cpp/onnx_core/shapes/shape_inference`.
 * **Expression simplifier**: :ref:`l-design-expressions`.

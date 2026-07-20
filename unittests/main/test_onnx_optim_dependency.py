@@ -102,6 +102,70 @@ class TestOnnxOptimDependency(unittest.TestCase):
             "light_op_schema.h must re-export TensorType from onnx_proto",
         )
 
+    def test_shapes_engine_lives_in_onnx_core(self):
+        shapes_dir = self.root / "onnx_light" / "onnx_core" / "shapes"
+        for name in (
+            "shapes_context.h",
+            "shape_check.h",
+            "shape_broadcast.h",
+            "shape_inference.h",
+            "dispatch_table.h",
+            "dispatch_table.cc",
+        ):
+            self.assertTrue(
+                (shapes_dir / name).exists(),
+                f"onnx_core/shapes/{name} must exist: the generic shape-inference engine "
+                "(ShapesContext, the dispatch table, ...) lives in onnx_core, while the "
+                "per-operator ComputeShape* functions stay in onnx_optim",
+            )
+        for name in (
+            "shapes_context.h",
+            "shape_check.h",
+            "shape_broadcast.h",
+            "shape_inference.h",
+        ):
+            self.assertFalse(
+                (self.root / "onnx_light" / "onnx_optim" / "shapes" / name).exists(),
+                f"onnx_optim/shapes/{name} must not exist; consumers must include "
+                f"onnx_core/shapes/{name} directly",
+            )
+
+    def test_onnx_core_dispatch_table_does_not_include_onnx_optim(self):
+        for name in (
+            "dispatch_table.h",
+            "dispatch_table.cc",
+            "shape_inference.h",
+            "shape_inference.cc",
+        ):
+            header = self.root / "onnx_light" / "onnx_core" / "shapes" / name
+            content = header.read_text(encoding="utf-8")
+            self.assertNotIn(
+                "onnx_optim/",
+                content,
+                f"onnx_core/shapes/{name} must not include any onnx_optim header",
+            )
+
+    def test_onnx_core_dispatch_table_exposes_registration_function(self):
+        header = self.root / "onnx_light" / "onnx_core" / "shapes" / "dispatch_table.h"
+        content = header.read_text(encoding="utf-8")
+        self.assertIn(
+            "RegisterComputeShapeFn",
+            content,
+            "onnx_core/shapes/dispatch_table.h must declare RegisterComputeShapeFn so "
+            "onnx_optim can populate the dispatch table without onnx_core depending on it",
+        )
+
+    def test_onnx_optim_registers_its_builtin_shape_functions(self):
+        header = self.root / "onnx_light" / "onnx_optim" / "dispatch_table.h"
+        content = header.read_text(encoding="utf-8")
+        self.assertIn(
+            "RegisterShapeFunctions",
+            content,
+            "onnx_optim/dispatch_table.h must declare RegisterShapeFunctions, which "
+            "registers every built-in onnx_optim shape function with "
+            "core::shapes::RegisterComputeShapeFn",
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

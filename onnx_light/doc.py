@@ -1442,7 +1442,7 @@ def generate_operators_doc(
 
 
 from . import onnx as onnxl  # noqa: E402
-from .onnx_optim.shape_inference import infer_shapes_model  # noqa: E402
+from .onnx_core.shape_inference import infer_shapes_model  # noqa: E402
 from .tools import pretty_onnx  # noqa: E402
 from .onnx_lib.backend.test.case import collect_test_case  # noqa: E402
 from .onnx_lib.backend.test.case.base import TestCase  # noqa: E402

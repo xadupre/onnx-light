@@ -4,9 +4,9 @@
 
 #include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
 
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/shapes/shape_inference.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
@@ -37,7 +37,7 @@ AttributeProto *AddAttr(NodeProto &node, const std::string &name,
   return attr;
 }
 
-void SeedInput(onnx_optim::shapes::ShapesContext &ctx, core::symbolic::TensorType dtype,
+void SeedInput(core::shapes::ShapesContext &ctx, core::symbolic::TensorType dtype,
                core::symbolic::SymShape shape) {
   ctx.Set("X", core::symbolic::SymTensor(nullptr, dtype, std::move(shape)));
 }
@@ -54,7 +54,7 @@ TEST(OnnxOptimShapeLabelEncoder, MapsStringKeysToInt64Values) {
   values->add_ints(static_cast<int64_t>(5));
   values->add_ints(static_cast<int64_t>(6));
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kString,
             core::symbolic::SymShape{core::symbolic::SymDim(5)});
 
@@ -75,7 +75,7 @@ TEST(OnnxOptimShapeLabelEncoder, MapsInt64KeysToStringValues) {
   (*values->add_strings()) = "one";
   (*values->add_strings()) = "two";
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -95,7 +95,7 @@ TEST(OnnxOptimShapeLabelEncoder, MapsFloatKeysToFloatValues) {
   AttributeProto *values = AddAttr(node, "values_floats", AttributeProto::AttributeType::FLOATS);
   values->add_floats(2.0f);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(4)});
 
@@ -116,7 +116,7 @@ TEST(OnnxOptimShapeLabelEncoder, UsesValuesTensorDtype) {
   t->set_data_type(static_cast<TensorProto::DataType>(TensorProto::DataType::DOUBLE));
   t->add_dims(1);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(7)});
 
@@ -133,7 +133,7 @@ TEST(OnnxOptimShapeLabelEncoder, RejectsMissingValuesAttribute) {
   keys->add_ints(static_cast<int64_t>(0));
   // No values_* attribute set.
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(1)});
 
@@ -146,7 +146,7 @@ TEST(OnnxOptimShapeLabelEncoder, RejectsMultipleValuesAttributes) {
       ->add_ints(static_cast<int64_t>(1));
   AddAttr(node, "values_floats", AttributeProto::AttributeType::FLOATS)->add_floats(1.0f);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(1)});
 
@@ -159,7 +159,7 @@ TEST(OnnxOptimShapeLabelEncoder, DirectCallRejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(1)});
 
@@ -184,7 +184,7 @@ NodeProto MakeArrayFeatureExtractorNode() {
 TEST(OnnxOptimShapeArrayFeatureExtractor, ReplacesLastDimWithFlattenedIndicesCount) {
   NodeProto node = MakeArrayFeatureExtractorNode();
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(5)});
   ctx.Set("Y", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64,
@@ -201,7 +201,7 @@ TEST(OnnxOptimShapeArrayFeatureExtractor, ReplacesLastDimWithFlattenedIndicesCou
 TEST(OnnxOptimShapeArrayFeatureExtractor, PreservesSingleSymbolicIndicesDim) {
   NodeProto node = MakeArrayFeatureExtractorNode();
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt32,
             core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(8)});
   ctx.Set("Y", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64,
@@ -223,7 +223,7 @@ TEST(OnnxOptimShapeArrayFeatureExtractor, DirectCallRejectsWrongOpType) {
   node.add_input("Y");
   node.add_output("Z");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
   ctx.Set("Y", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64,
@@ -254,7 +254,7 @@ NodeProto MakeBinarizerNode(float threshold = 0.0f) {
 TEST(OnnxOptimShapeBinarizer, PreservesInputShapeAndFloatDtype) {
   NodeProto node = MakeBinarizerNode(1.0f);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(3), core::symbolic::SymDim(4),
                                      core::symbolic::SymDim(5)});
@@ -271,7 +271,7 @@ TEST(OnnxOptimShapeBinarizer, PreservesInputShapeAndFloatDtype) {
 TEST(OnnxOptimShapeBinarizer, PreservesInputShapeAndInt64Dtype) {
   NodeProto node = MakeBinarizerNode(2.5f);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(2)});
 
@@ -289,7 +289,7 @@ TEST(OnnxOptimShapeBinarizer, DirectCallRejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(1)});
 
@@ -317,7 +317,7 @@ NodeProto MakeScalerNode() {
 TEST(OnnxOptimShapeScaler, PreservesShapeAndForcesFloatDtypeForFloatInput) {
   NodeProto node = MakeScalerNode();
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -332,7 +332,7 @@ TEST(OnnxOptimShapeScaler, PreservesShapeAndForcesFloatDtypeForFloatInput) {
 TEST(OnnxOptimShapeScaler, PreservesShapeAndForcesFloatDtypeForInt64Input) {
   NodeProto node = MakeScalerNode();
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)});
 
@@ -350,7 +350,7 @@ TEST(OnnxOptimShapeScaler, DirectCallRejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(1)});
 
@@ -376,7 +376,7 @@ NodeProto MakeNormalizerNode(const std::string &norm) {
 TEST(OnnxOptimShapeNormalizer, PreservesShapeAndForcesFloatDtypeForFloatInput) {
   NodeProto node = MakeNormalizerNode("L2");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -391,7 +391,7 @@ TEST(OnnxOptimShapeNormalizer, PreservesShapeAndForcesFloatDtypeForFloatInput) {
 TEST(OnnxOptimShapeNormalizer, PreservesShapeAndForcesFloatDtypeForInt64Input) {
   NodeProto node = MakeNormalizerNode("L1");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)});
 
@@ -409,7 +409,7 @@ TEST(OnnxOptimShapeNormalizer, DirectCallRejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(1)});
 
@@ -437,7 +437,7 @@ TEST(OnnxOptimShapeZipMap, UsesStringKeyOutputTypeForClasslabelsStrings) {
   (*labels->add_strings()) = "c0";
   (*labels->add_strings()) = "c1";
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -454,7 +454,7 @@ TEST(OnnxOptimShapeZipMap, UsesInt64KeyOutputTypeForClasslabelsInt64s) {
   labels->add_ints(static_cast<int64_t>(0));
   labels->add_ints(static_cast<int64_t>(1));
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(3)});
 
@@ -466,7 +466,7 @@ TEST(OnnxOptimShapeZipMap, UsesInt64KeyOutputTypeForClasslabelsInt64s) {
 }
 
 TEST(OnnxOptimShapeZipMap, RejectsInvalidClasslabelsConfiguration) {
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -506,7 +506,7 @@ TEST(OnnxOptimShapeOneHotEncoder, AppendsCategoryDimForInt64Categories) {
   cats->add_ints(static_cast<int64_t>(2));
   cats->add_ints(static_cast<int64_t>(3));
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim("N")});
 
@@ -525,7 +525,7 @@ TEST(OnnxOptimShapeOneHotEncoder, AppendsCategoryDimForStringCategories) {
   (*cats->add_strings()) = "b";
   (*cats->add_strings()) = "c";
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kString,
             core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(5)});
 
@@ -539,7 +539,7 @@ TEST(OnnxOptimShapeOneHotEncoder, AppendsCategoryDimForStringCategories) {
 }
 
 TEST(OnnxOptimShapeOneHotEncoder, RejectsInvalidCategoryAttributeConfiguration) {
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(1)});
 
@@ -564,7 +564,7 @@ TEST(OnnxOptimShapeOneHotEncoder, DirectCallRejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(1)});
 
@@ -601,7 +601,7 @@ TEST(OnnxOptimShapeSVMClassifier, InfersInt64LabelsAndBinaryScoreShape) {
   labels->add_ints(static_cast<int64_t>(0));
   labels->add_ints(static_cast<int64_t>(1));
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(3), core::symbolic::SymDim(5)});
 
@@ -624,7 +624,7 @@ TEST(OnnxOptimShapeSVMClassifier, InfersStringLabelsAndMulticlassScoreShape) {
   (*labels->add_strings()) = "b";
   (*labels->add_strings()) = "c";
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kDouble,
             core::symbolic::SymShape{core::symbolic::SymDim(7)});
 
@@ -640,7 +640,7 @@ TEST(OnnxOptimShapeSVMClassifier, InfersStringLabelsAndMulticlassScoreShape) {
 
 TEST(OnnxOptimShapeSVMRegressor, InfersBatchByOneFloatOutput) {
   NodeProto node = MakeSVMRegressorNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt32,
             core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)});
 
@@ -659,7 +659,7 @@ TEST(OnnxOptimShapeSVMClassifier, DirectCallRejectsWrongOpType) {
   node.add_output("Y");
   node.add_output("Z");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -673,7 +673,7 @@ TEST(OnnxOptimShapeSVMRegressor, DirectCallRejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(1)});
 
@@ -712,7 +712,7 @@ TEST(OnnxOptimShapeLinearClassifier, InfersInt64LabelsBinaryScoreShape) {
   labels->add_ints(static_cast<int64_t>(0));
   labels->add_ints(static_cast<int64_t>(1));
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(3), core::symbolic::SymDim(5)});
 
@@ -741,7 +741,7 @@ TEST(OnnxOptimShapeLinearClassifier, InfersStringLabelsMulticlassScoreShape) {
   (*labels->add_strings()) = "b";
   (*labels->add_strings()) = "c";
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kDouble,
             core::symbolic::SymShape{core::symbolic::SymDim(7)});
 
@@ -760,7 +760,7 @@ TEST(OnnxOptimShapeLinearRegressor, InfersBatchByTargetsFloatOutput) {
   AttributeProto *targets = AddAttr(node, "targets", AttributeProto::AttributeType::INT);
   targets->set_i(static_cast<int64_t>(3));
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt32,
             core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)});
 
@@ -774,7 +774,7 @@ TEST(OnnxOptimShapeLinearRegressor, InfersBatchByTargetsFloatOutput) {
 
 TEST(OnnxOptimShapeLinearRegressor, DefaultsTargetsToOne) {
   NodeProto node = MakeLinearRegressorNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(4)});
 
@@ -793,7 +793,7 @@ TEST(OnnxOptimShapeLinearClassifier, DirectCallRejectsWrongOpType) {
   node.add_output("Y");
   node.add_output("Z");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
 
@@ -807,7 +807,7 @@ TEST(OnnxOptimShapeLinearRegressor, DirectCallRejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(1)});
 
@@ -847,7 +847,7 @@ TEST(OnnxOptimShapeDictVectorizer, OutputShapeIsVocabularyLengthWithStringVocab)
   (*vocab->add_strings()) = "b";
   (*vocab->add_strings()) = "c";
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(static_cast<int64_t>(1))});
   ctx.ComputeShapeNode(node);
@@ -862,7 +862,7 @@ TEST(OnnxOptimShapeDictVectorizer, OutputShapeIsVocabularyLengthWithInt64Vocab) 
   vocab->add_ints(10);
   vocab->add_ints(20);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kFloat,
             core::symbolic::SymShape{core::symbolic::SymDim(static_cast<int64_t>(1))});
   ctx.ComputeShapeNode(node);
@@ -878,7 +878,7 @@ TEST(OnnxOptimShapeDictVectorizer, DirectCallRejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeDictVectorizer(ctx, node, "X"),
                std::invalid_argument);
 }
@@ -886,7 +886,7 @@ TEST(OnnxOptimShapeDictVectorizer, DirectCallRejectsWrongOpType) {
 TEST(OnnxOptimShapeFeatureVectorizer, ConcatenatesFeatureDimsWhenKnown) {
   NodeProto node = MakeFeatureVectorizerNode({"A", "B"});
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(
                    nullptr, core::symbolic::TensorType::kFloat,
                    core::symbolic::SymShape{core::symbolic::SymDim(static_cast<int64_t>(4)),
@@ -911,7 +911,7 @@ TEST(OnnxOptimShapeFeatureVectorizer, UsesInputDimensionsAttributeWhenProvided) 
   dims->add_ints(3);
   dims->add_ints(2);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("A", core::symbolic::SymTensor(
                    nullptr, core::symbolic::TensorType::kFloat,
                    core::symbolic::SymShape{core::symbolic::SymDim(static_cast<int64_t>(2)),
@@ -936,7 +936,7 @@ TEST(OnnxOptimShapeFeatureVectorizer, DirectCallRejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeFeatureVectorizer(
                    ctx, node, std::vector<std::string>{"X"}),
                std::invalid_argument);
@@ -964,7 +964,7 @@ TEST(OnnxOptimShapeCastMap, SparseProducesShapeFromMaxMap) {
   AttributeProto *max_map = AddAttr(node, "max_map", AttributeProto::AttributeType::INT);
   max_map->set_i(7);
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(static_cast<int64_t>(1))});
   ctx.ComputeShapeNode(node);
@@ -979,7 +979,7 @@ TEST(OnnxOptimShapeCastMap, DenseProducesSymbolic1DShape) {
   AttributeProto *cast_to = AddAttr(node, "cast_to", AttributeProto::AttributeType::STRING);
   cast_to->set_s("TO_STRING");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(static_cast<int64_t>(1))});
   ctx.ComputeShapeNode(node);
@@ -994,7 +994,7 @@ TEST(OnnxOptimShapeCastMap, DefaultsCastToToFloat) {
   // No cast_to / map_form / max_map attributes — should default to TO_FLOAT/DENSE.
   NodeProto node = MakeCastMapNode();
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SeedInput(ctx, core::symbolic::TensorType::kInt64,
             core::symbolic::SymShape{core::symbolic::SymDim(static_cast<int64_t>(1))});
   ctx.ComputeShapeNode(node);
@@ -1009,7 +1009,7 @@ TEST(OnnxOptimShapeCastMap, DirectCallRejectsWrongOpType) {
   node.add_input("X");
   node.add_output("Y");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeCastMap(ctx, node, "X"),
                std::invalid_argument);
 }
@@ -1019,7 +1019,7 @@ TEST(OnnxOptimShapeCastMap, DirectCallRejectsUnknownCastTo) {
   AttributeProto *cast_to = AddAttr(node, "cast_to", AttributeProto::AttributeType::STRING);
   cast_to->set_s("TO_BANANA");
 
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeCastMap(ctx, node, "X"),
                std::invalid_argument);
 }

@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_optim/shapes/preview/shape_preview.h"
-#include "onnx_optim/shapes/shape_inference.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <gtest/gtest.h>
@@ -28,7 +28,7 @@ NodeProto MakeFlexAttentionNode() {
   return node;
 }
 
-void SetFlexInputs(onnx_optim::shapes::ShapesContext &ctx, const core::symbolic::SymShape &q,
+void SetFlexInputs(core::shapes::ShapesContext &ctx, const core::symbolic::SymShape &q,
                    const core::symbolic::SymShape &k, const core::symbolic::SymShape &v,
                    core::symbolic::TensorType dtype = core::symbolic::TensorType::kFloat) {
   ctx.Set("Q", core::symbolic::SymTensor(nullptr, dtype, q));
@@ -46,7 +46,7 @@ core::symbolic::SymShape Shape4(int64_t a, int64_t b, int64_t c, int64_t d) {
 TEST(OnnxOptimShapesPreviewFlexAttention, BasicShape) {
   // Same number of Q and KV heads, output is (B, Hq, L, Dv).
   NodeProto node = MakeFlexAttentionNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SetFlexInputs(ctx, /*q=*/Shape4(2, 4, 8, 16),
                 /*k=*/Shape4(2, 4, 12, 16),
                 /*v=*/Shape4(2, 4, 12, 32));
@@ -66,7 +66,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, BasicShape) {
 TEST(OnnxOptimShapesPreviewFlexAttention, GroupedQueryAttention) {
   // q_num_heads=8 is a multiple of kv_num_heads=2. Output[1] follows Q.
   NodeProto node = MakeFlexAttentionNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SetFlexInputs(ctx, Shape4(1, 8, 5, 6), Shape4(1, 2, 7, 6), Shape4(1, 2, 7, 6));
 
   onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V");
@@ -83,7 +83,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, PropagatesSymbolicBatch) {
   // When the batch dim is symbolic in Q but static in K, the static
   // value wins so downstream ops see a concrete batch.
   NodeProto node = MakeFlexAttentionNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape q{core::symbolic::SymDim("B"), core::symbolic::SymDim(4),
                              core::symbolic::SymDim(8), core::symbolic::SymDim(16)};
   SetFlexInputs(ctx, q, Shape4(2, 4, 12, 16), Shape4(2, 4, 12, 32));
@@ -98,7 +98,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, PropagatesSymbolicBatch) {
 
 TEST(OnnxOptimShapesPreviewFlexAttention, RejectsMismatchedBatch) {
   NodeProto node = MakeFlexAttentionNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SetFlexInputs(ctx, Shape4(2, 4, 8, 16), Shape4(3, 4, 12, 16), Shape4(3, 4, 12, 32));
   EXPECT_THROW(onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V"),
                std::invalid_argument);
@@ -106,7 +106,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, RejectsMismatchedBatch) {
 
 TEST(OnnxOptimShapesPreviewFlexAttention, RejectsMismatchedKvSeqLen) {
   NodeProto node = MakeFlexAttentionNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SetFlexInputs(ctx, Shape4(1, 2, 3, 4), Shape4(1, 2, 5, 4), Shape4(1, 2, 7, 4));
   EXPECT_THROW(onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V"),
                std::invalid_argument);
@@ -114,7 +114,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, RejectsMismatchedKvSeqLen) {
 
 TEST(OnnxOptimShapesPreviewFlexAttention, RejectsMismatchedQkHeadSize) {
   NodeProto node = MakeFlexAttentionNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SetFlexInputs(ctx, Shape4(1, 2, 3, 8), Shape4(1, 2, 3, 16), Shape4(1, 2, 3, 16));
   EXPECT_THROW(onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V"),
                std::invalid_argument);
@@ -123,7 +123,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, RejectsMismatchedQkHeadSize) {
 TEST(OnnxOptimShapesPreviewFlexAttention, RejectsInvalidGqa) {
   // q_num_heads=7 is not a multiple of kv_num_heads=2.
   NodeProto node = MakeFlexAttentionNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SetFlexInputs(ctx, Shape4(1, 7, 3, 4), Shape4(1, 2, 3, 4), Shape4(1, 2, 3, 4));
   EXPECT_THROW(onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V"),
                std::invalid_argument);
@@ -131,7 +131,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, RejectsInvalidGqa) {
 
 TEST(OnnxOptimShapesPreviewFlexAttention, RejectsWrongRank) {
   NodeProto node = MakeFlexAttentionNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("Q", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          core::symbolic::SymShape{core::symbolic::SymDim(1),
                                                                   core::symbolic::SymDim(2),
@@ -150,7 +150,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, RejectsWrongRank) {
 
 TEST(OnnxOptimShapesPreviewFlexAttention, RejectsMismatchedDtype) {
   NodeProto node = MakeFlexAttentionNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   ctx.Set("Q", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
                                          Shape4(2, 4, 8, 16)));
   ctx.Set("K", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat16,
@@ -168,7 +168,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, RejectsWrongOpType) {
   node.add_input("K");
   node.add_input("V");
   node.add_output("Y");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SetFlexInputs(ctx, Shape4(2, 4, 8, 16), Shape4(2, 4, 12, 16), Shape4(2, 4, 12, 32));
   EXPECT_THROW(onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V"),
                std::invalid_argument);
@@ -178,7 +178,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, DispatchesThroughComputeShapeNode) {
   // End-to-end check: the dispatch in ComputeShapeNode picks up the
   // ai.onnx.preview:FlexAttention entry.
   NodeProto node = MakeFlexAttentionNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   SetFlexInputs(ctx, Shape4(2, 4, 8, 16), Shape4(2, 4, 12, 16), Shape4(2, 4, 12, 32));
 
   ctx.ComputeShapeNode(node);

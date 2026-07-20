@@ -1,9 +1,10 @@
 #include "onnx_core/annotations/inplace_reuse.h"
 #include "onnx_core/annotations/value_tags.h"
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_core/shapes/shape_inference.h"
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/shapes/shape_inference.h"
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_optim/dispatch_table.h"
 #include <algorithm>
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
@@ -357,9 +358,16 @@ void AddOnnxPyExpressions(nb::module_ &m) {
 }
 
 void AddOnnxPyShapeInference(nb::module_ &m) {
+  // `core::shapes::DispatchTable()` starts out empty (`onnx_core` must not
+  // depend on `onnx_optim`), so the built-in `onnx_optim` shape functions
+  // have to be registered explicitly before any of the bindings below can
+  // resolve an operator. Idempotent and cheap if this module init function
+  // ever ran more than once.
+  ::onnx_light::onnx_optim::RegisterShapeFunctions();
+
   namespace onnx_annotations = ::onnx_light::core::annotations;
   namespace expr = ::onnx_light::core::expressions;
-  namespace onnx_shapes = ::onnx_light::onnx_optim::shapes;
+  namespace onnx_shapes = ::onnx_light::core::shapes;
   using ::onnx_light::core::symbolic::DataTypeToTensorType;
   using ::onnx_light::core::symbolic::SymDim;
   using ::onnx_light::core::symbolic::SymShape;
@@ -557,7 +565,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
 
   // -----------------------------------------------------------------------
   // ShapeEventAction — enum classifying a ShapeEvent record.
-  // Mirrors :cpp:enum:`onnx_optim::shapes::ShapeEventAction`.
+  // Mirrors :cpp:enum:`core::shapes::ShapeEventAction`.
   // -----------------------------------------------------------------------
   nb::enum_<onnx_shapes::ShapeEventAction>(shape_mod, "ShapeEventAction", nb::is_arithmetic(),
                                            "Action kind recorded in a :class:`ShapeEvent`. "
@@ -579,7 +587,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
 
   // -----------------------------------------------------------------------
   // ShapeEvent — append-only log entry for a single shape-inference event.
-  // Mirrors :cpp:class:`onnx_optim::shapes::ShapeEvent`; ``shape`` is exposed
+  // Mirrors :cpp:class:`core::shapes::ShapeEvent`; ``shape`` is exposed
   // as a list of per-dimension strings so symbolic dims are preserved.
   // -----------------------------------------------------------------------
   nb::class_<onnx_shapes::ShapeEvent>(

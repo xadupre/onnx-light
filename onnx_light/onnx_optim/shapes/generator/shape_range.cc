@@ -11,8 +11,8 @@
 #include <variant>
 
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_core/shapes/shape_check.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

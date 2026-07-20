@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/dispatch_table.h"
+#include "onnx_optim/dispatch_table.h"
 
 #include <string>
 #include <unordered_map>
 
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include "onnx_optim/shapes/controlflow/shape_controlflow.h"
@@ -39,9 +40,13 @@ void RequireInputs(const NodeProto &node, int expected) {
                       std::to_string(node.input_size()), ".");
 }
 
-} // namespace
+using ::onnx_light::core::shapes::ComputeShapeFn;
 
-const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
+// Built-in table of every ``onnx_optim`` shape function, keyed by
+// ``"<domain>:<op_type>"``. Only used to populate the shared
+// ``core::shapes`` dispatch table via :cpp:func:`RegisterShapeFunctions`;
+// never queried directly by shape inference.
+const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
   static const std::unordered_map<std::string, ComputeShapeFn> table = {
       {"ai.onnx:Abs",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -1319,6 +1324,30 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
   return table;
 }
 
+} // namespace
 } // namespace shapes
+
+void RegisterShapeFunctions() {
+  // `lib_onnx_optim` is a plain static archive: a translation unit with no
+  // symbol referenced from elsewhere would simply be dropped by the linker,
+  // so registration cannot rely on a file-scope static object running as a
+  // side effect of "just being linked in" (unlike, say,
+  // `OpSchemaRegistry::map()` in `onnx_lib`, which can call its registration
+  // functions lazily because both live in the same library). Callers must
+  // invoke this function explicitly before using the shape-inference engine;
+  // it is idempotent, so calling it more than once (or from multiple
+  // independent entry points) is safe and cheap after the first call.
+  static const bool kRegistered = [] {
+    for (const auto &entry : shapes::BuiltinShapeFunctions()) {
+      const std::string &key = entry.first;
+      const std::size_t sep = key.find(':');
+      ::onnx_light::core::shapes::RegisterComputeShapeFn(key.substr(0, sep), key.substr(sep + 1),
+                                                         entry.second);
+    }
+    return true;
+  }();
+  (void)kRegistered;
+}
+
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

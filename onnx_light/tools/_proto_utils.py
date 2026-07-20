@@ -20,7 +20,7 @@ _shape_inference: Any = None
 
 if importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None:
     with contextlib.suppress(ImportError):  # pragma: no cover
-        from ..onnx_optim import shape_inference as _shape_inference
+        from ..onnx_core import shape_inference as _shape_inference
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only.
     from collections.abc import Iterable
@@ -207,12 +207,12 @@ def _require_shape_inference_extension() -> Any:
     """Gets the shape inference nanobind module.
 
     Returns:
-        The imported ``onnx_light.onnx_optim.shape_inference`` module.
+        The imported ``onnx_light.onnx_core.shape_inference`` module.
     """
     if _shape_inference is None:
         raise RuntimeError(
             "onnx_light.onnx_py._onnxpyoptim is unavailable, so "
-            "onnx_light.onnx_optim.shape_inference cannot be used. "
+            "onnx_light.onnx_core.shape_inference cannot be used. "
             "Install the onnx_light C++ extension to use value/node tag inference."
         )
     return _shape_inference

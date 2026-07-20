@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_optim/shapes/math/shape_math.h"
-#include "onnx_optim/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>
 
@@ -28,7 +28,7 @@ NodeProto MakeDetNode(const std::string &input_name = "X", const std::string &ou
 
 TEST(OnnxOptimShapesMathDet, ScalarOutputFor2DInput) {
   NodeProto node = MakeDetNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(3), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -42,7 +42,7 @@ TEST(OnnxOptimShapesMathDet, ScalarOutputFor2DInput) {
 
 TEST(OnnxOptimShapesMathDet, DropsTrailingTwoDimensionsForBatchedInput) {
   NodeProto node = MakeDetNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim("B"), core::symbolic::SymDim(2),
                                  core::symbolic::SymDim(4), core::symbolic::SymDim(4)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
@@ -59,7 +59,7 @@ TEST(OnnxOptimShapesMathDet, DropsTrailingTwoDimensionsForBatchedInput) {
 
 TEST(OnnxOptimShapesMathDet, RejectsRankLessThanTwo) {
   NodeProto node = MakeDetNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(4)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -68,7 +68,7 @@ TEST(OnnxOptimShapesMathDet, RejectsRankLessThanTwo) {
 
 TEST(OnnxOptimShapesMathDet, RejectsMismatchedInnerDimensions) {
   NodeProto node = MakeDetNode();
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 

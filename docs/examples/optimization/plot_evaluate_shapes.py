@@ -15,7 +15,7 @@ This example shows how to:
 
 1. Build a small model whose inputs carry symbolic dimensions.
 2. Run model-level shape inference with
-   :func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model` to
+   :func:`~onnx_light.onnx_core.shape_inference.infer_shapes_model` to
    populate ``model.graph.value_info`` and ``model.graph.output`` with
    symbolic shapes.
 3. Evaluate every inferred dimension to a concrete integer for several
@@ -34,7 +34,7 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx_core.expressions import evaluate_expression
-from onnx_light.onnx_optim.shape_inference import infer_shapes_model
+from onnx_light.onnx_core.shape_inference import infer_shapes_model
 
 # Built-in operator schemas must be registered before shape inference
 # (the C++ dispatch table looks them up).

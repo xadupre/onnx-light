@@ -16,8 +16,8 @@ registered, the callback is invoked transparently by
 :func:`~onnx_light.onnx_optim.shape_inference.compute_shape_node` and
 :func:`~onnx_light.onnx_optim.shape_inference.compute_shape_model` in
 Python, and by
-:cpp:func:`onnx::onnx_optim::shapes::ShapesContext::ComputeShapeNode` and
-:cpp:func:`onnx::onnx_optim::shapes::ShapesContext::ComputeShapeModel` in
+:cpp:func:`onnx::core::shapes::ShapesContext::ComputeShapeNode` and
+:cpp:func:`onnx::core::shapes::ShapesContext::ComputeShapeModel` in
 C++.
 
 Import the shape-inference module
@@ -46,11 +46,11 @@ matching C++ headers:
       .. code-block:: cpp
 
           #include "onnx_core/symbolic/sym_tensor.h"
-          #include "onnx_optim/shapes/shape_inference.h"
-          #include "onnx_optim/shapes/shapes_context.h"
+          #include "onnx_core/shapes/shape_inference.h"
+          #include "onnx_core/shapes/shapes_context.h"
 
           using namespace onnx::core::symbolic;      // SymTensor, SymShape, SymDim
-          using namespace onnx::onnx_optim::shapes;  // ShapesContext
+          using namespace onnx::core::shapes;        // ShapesContext
 
 Write the callback
 ------------------
@@ -102,7 +102,7 @@ Register the callback
 ---------------------
 
 Call :meth:`~onnx_light.onnx_optim.shape_inference.ShapesContext.set_custom_shape_inference_function`
-(C++ :cpp:func:`~onnx::onnx_optim::shapes::ShapesContext::SetCustomShapeInferenceFunction`)
+(C++ :cpp:func:`~onnx::core::shapes::ShapesContext::SetCustomShapeInferenceFunction`)
 on the context before running inference:
 
 .. tab-set::
@@ -154,7 +154,7 @@ Infer shapes for a single node
 -------------------------------
 
 :func:`~onnx_light.onnx_optim.shape_inference.compute_shape_node`
-(C++ :cpp:func:`~onnx::onnx_optim::shapes::ShapesContext::ComputeShapeNode`)
+(C++ :cpp:func:`~onnx::core::shapes::ShapesContext::ComputeShapeNode`)
 processes one node at a time. Seed the context with the node's input
 descriptors first:
 
@@ -207,7 +207,7 @@ Infer shapes for a whole model
 -------------------------------
 
 :func:`~onnx_light.onnx_optim.shape_inference.compute_shape_model`
-(C++ :cpp:func:`~onnx::onnx_optim::shapes::ShapesContext::ComputeShapeModel`)
+(C++ :cpp:func:`~onnx::core::shapes::ShapesContext::ComputeShapeModel`)
 walks every node of the main graph in topological order. Register the
 callback on the context **before** calling it:
 
@@ -241,10 +241,10 @@ callback on the context **before** calling it:
           }
 
 :func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model`
-(C++ :cpp:func:`onnx::onnx_optim::shapes::InferShapesModel`) creates its own
+(C++ :cpp:func:`onnx::core::shapes::InferShapesModel`) creates its own
 internal context and does **not** accept a pre-configured context. Use
 :func:`~onnx_light.onnx_optim.shape_inference.compute_shape_model`
-(C++ :cpp:func:`~onnx::onnx_optim::shapes::ShapesContext::ComputeShapeModel`)
+(C++ :cpp:func:`~onnx::core::shapes::ShapesContext::ComputeShapeModel`)
 instead when your model contains custom operators, then apply the inferred
 shapes back manually if needed:
 

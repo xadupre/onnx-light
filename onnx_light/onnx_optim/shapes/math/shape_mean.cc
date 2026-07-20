@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "onnx_optim/shapes/shape_broadcast.h"
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_broadcast.h"
+#include "onnx_core/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {

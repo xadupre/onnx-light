@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/math/shape_math.h"
 
-#include "onnx_optim/shapes/shape_check.h"
+#include "onnx_core/shapes/shape_check.h"
 
 #include <vector>
 

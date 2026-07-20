@@ -13,13 +13,13 @@
 #include <vector>
 
 #include "onnx_core/expressions/expressions.h"
-#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
 /**
  * @file inplace_reuse.h
  * @brief Heuristic that leverages the shapes inferred by
- *        :cpp:class:`onnx_optim::shapes::ShapesContext` to guess, for
+ *        :cpp:class:`core::shapes::ShapesContext` to guess, for
  *        every node of a graph, which output buffers may reuse which
  *        input buffers in place.
  *
@@ -56,7 +56,7 @@
  *
  * The analysis is exposed through :cpp:class:`ComputeContext`, which
  * stores the per-node result (mirroring the way
- * :cpp:class:`onnx_optim::shapes::ShapesContext` stores inferred
+ * :cpp:class:`core::shapes::ShapesContext` stores inferred
  * descriptors). The free functions :cpp:func:`ComputeInPlaceReuse` and
  * :cpp:func:`WriteInPlaceReuseToMetadata` remain available as thin
  * convenience wrappers around it.
@@ -70,7 +70,7 @@ namespace core {
 namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
 namespace annotations {
 
-using ::onnx_light::onnx_optim::shapes::ShapesContext;
+using ::onnx_light::core::shapes::ShapesContext;
 
 // The symbolic value descriptors live in ``core::symbolic``; bring them
 // into ``core::annotations`` so this file can keep referring to them
@@ -281,7 +281,7 @@ inline const TaggedMemory &NodeMemoryProfileBucket(const NodeMemoryProfile &prof
 
 /**
  * Holds the in-place reuse opportunities computed for a graph, mirroring the
- * way :cpp:class:`onnx_optim::shapes::ShapesContext` holds the inferred
+ * way :cpp:class:`core::shapes::ShapesContext` holds the inferred
  * descriptors.
  *
  * The reuse guess is purely structural: it reports the opportunities implied
@@ -553,7 +553,7 @@ public:
 
 private:
   static std::string NormalizeDomain(const std::string &domain) {
-    return domain.empty() ? std::string(::onnx_light::onnx_optim::shapes::kOnnxDomain) : domain;
+    return domain.empty() ? std::string(::onnx_light::core::shapes::kOnnxDomain) : domain;
   }
 
   static std::string MakeCustomValueTagKey(const std::string &domain, const std::string &op_type) {

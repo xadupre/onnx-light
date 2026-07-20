@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_optim/shapes/math/shape_math.h"
-#include "onnx_optim/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>
 
@@ -41,7 +41,7 @@ NodeProto MakeHardmaxNode(int64_t axis, const std::string &input_name = "input",
 
 TEST(OnnxOptimShapesMathHardSigmoid, PropagatesTypeAndShape) {
   NodeProto node = MakeUnaryNode("HardSigmoid");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -54,7 +54,7 @@ TEST(OnnxOptimShapesMathHardSigmoid, PropagatesTypeAndShape) {
 
 TEST(OnnxOptimShapesMathHardSwish, PropagatesTypeAndShape) {
   NodeProto node = MakeUnaryNode("HardSwish");
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)};
   ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
 
@@ -67,7 +67,7 @@ TEST(OnnxOptimShapesMathHardSwish, PropagatesTypeAndShape) {
 
 TEST(OnnxOptimShapesMathHardmax, PropagatesTypeAndShapeAndAcceptsValidAxis) {
   NodeProto node = MakeHardmaxNode(/*axis=*/-1);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("input", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
@@ -80,7 +80,7 @@ TEST(OnnxOptimShapesMathHardmax, PropagatesTypeAndShapeAndAcceptsValidAxis) {
 
 TEST(OnnxOptimShapesMathHardmax, RejectsOutOfRangeAxis) {
   NodeProto node = MakeHardmaxNode(/*axis=*/5);
-  onnx_optim::shapes::ShapesContext ctx;
+  core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("input", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 

@@ -292,7 +292,7 @@ API reference
 * **C++ API**: :cpp:class:`SymTensor`
   (:doc:`/api/cpp/onnx_core/sym_tensor`),
   :cpp:func:`PropagateValueAsShapeArithmetic`
-  (:doc:`/api/cpp/onnx_optim/shapes/shape_broadcast`).
+  (:doc:`/api/cpp/onnx_core/shapes/shape_broadcast`).
 * **Python API**: :class:`SymTensor`
   (:doc:`/api/python/onnx_optim/shape_inference`).
 * **Expression library**: :ref:`l-design-expressions`.

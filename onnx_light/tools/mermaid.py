@@ -190,7 +190,7 @@ def to_mermaid(
 
     The example below builds a small ``Abs`` chain, runs shape inference and
     records the in-place reuse opportunities into the graph metadata with
-    :func:`onnx_light.onnx_optim.shape_inference.write_inplace_reuse_to_metadata`,
+    :func:`onnx_light.onnx_core.shape_inference.write_inplace_reuse_to_metadata`,
     then renders the annotated flowchart with ``include_inplace=True``:
 
     .. runpython::
@@ -204,7 +204,7 @@ def to_mermaid(
             make_opsetid,
             make_tensor_value_info,
         )
-        from onnx_light.onnx_optim import shape_inference
+        from onnx_light.onnx_core import shape_inference
         from onnx_light.tools import to_mermaid
 
         X = make_tensor_value_info("X", TensorProto.FLOAT, [3, 4])

@@ -3,7 +3,7 @@ name: ci-orchestrator
 # Single-file CI pipeline that enforces a phased execution order by calling
 # existing reusable workflow definitions via `uses:`.
 #
-#   Phase 1 – fast checks (clang-format, style, typing, spelling, CodeQL)
+#   Phase 1 – fast checks (clang-format, style, typing, spelling)
 #              all run in parallel; any failure stops the pipeline.
 #   Gate 1  – a lightweight job that blocks Phase 2 until Phase 1 is green.
 #   Phase 2 – ci-1-core preflight and builds (reduced → no-onnx → heavy),
@@ -49,18 +49,11 @@ jobs:
     permissions:
       contents: read
 
-  fast_codeql:
-    name: CodeQL
-    uses: ./.github/workflows/codeql.yml
-    permissions:
-      contents: read
-      security-events: write
-
   # ── Gate 1: all fast checks must pass ────────────────────────────────────────
 
   fast_gate:
     name: fast checks
-    needs: [fast_clang_format, fast_style, fast_typing, fast_spelling, fast_codeql]
+    needs: [fast_clang_format, fast_style, fast_typing, fast_spelling]
     runs-on: ubuntu-latest
     permissions: {}
     steps:

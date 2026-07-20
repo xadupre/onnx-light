@@ -38,13 +38,7 @@ class TestCiOrchestrator(unittest.TestCase):
     def test_fast_phase_jobs_exist(self):
         """Verifies that all fast-phase jobs are present in the orchestrator."""
         jobs = self.data["jobs"]
-        for job in (
-            "fast_clang_format",
-            "fast_style",
-            "fast_typing",
-            "fast_spelling",
-            "fast_codeql",
-        ):
+        for job in ("fast_clang_format", "fast_style", "fast_typing", "fast_spelling"):
             self.assertIn(job, jobs, f"Fast-phase job '{job}' is missing")
 
     def test_fast_phase_jobs_use_existing_workflows(self):
@@ -55,7 +49,6 @@ class TestCiOrchestrator(unittest.TestCase):
             "fast_style": "./.github/workflows/style.yml",
             "fast_typing": "./.github/workflows/typing.yml",
             "fast_spelling": "./.github/workflows/spelling.yml",
-            "fast_codeql": "./.github/workflows/codeql.yml",
         }
         for job, expected_uses in expected.items():
             self.assertEqual(
@@ -65,37 +58,16 @@ class TestCiOrchestrator(unittest.TestCase):
     def test_fast_phase_jobs_have_no_needs(self):
         """Verifies that fast-phase jobs have no dependencies so they run first."""
         jobs = self.data["jobs"]
-        for job in (
-            "fast_clang_format",
-            "fast_style",
-            "fast_typing",
-            "fast_spelling",
-            "fast_codeql",
-        ):
+        for job in ("fast_clang_format", "fast_style", "fast_typing", "fast_spelling"):
             self.assertNotIn("needs", jobs[job], f"Fast-phase job '{job}' must not have 'needs'")
-
-    def test_codeql_grants_security_events_write(self):
-        """Verifies that the fast_codeql job grants security-events: write permission."""
-        perms = self.data["jobs"]["fast_codeql"].get("permissions", {})
-        self.assertEqual(
-            perms.get("security-events"),
-            "write",
-            "fast_codeql must grant 'security-events: write'",
-        )
 
     # ── Gate 1 ───────────────────────────────────────────────────────────────
 
     def test_fast_gate_needs_all_fast_jobs(self):
-        """Verifies that fast_gate depends on all five fast-phase jobs."""
+        """Verifies that fast_gate depends on all four fast-phase jobs."""
         gate = self.data["jobs"]["fast_gate"]
         needs = gate["needs"]
-        for job in (
-            "fast_clang_format",
-            "fast_style",
-            "fast_typing",
-            "fast_spelling",
-            "fast_codeql",
-        ):
+        for job in ("fast_clang_format", "fast_style", "fast_typing", "fast_spelling"):
             self.assertIn(job, needs, f"fast_gate must need '{job}'")
 
     # ── Phase 2+3: ci-1-core called as reusable workflow ─────────────────────
@@ -143,7 +115,6 @@ class TestCiOrchestrator(unittest.TestCase):
         self.assertIn("fast_style", needs("fast_gate"))
         self.assertIn("fast_typing", needs("fast_gate"))
         self.assertIn("fast_spelling", needs("fast_gate"))
-        self.assertIn("fast_codeql", needs("fast_gate"))
         # call_ci_core needs gate 1
         self.assertIn("fast_gate", needs("call_ci_core"))
         # ci_pass needs call_ci_core
@@ -154,14 +125,7 @@ class TestCiOrchestrator(unittest.TestCase):
     def test_reusable_workflows_have_workflow_call_trigger(self):
         """Verifies that every called workflow file supports workflow_call:."""
         wf_dir = self.root / ".github" / "workflows"
-        called = [
-            "clang_format.yml",
-            "style.yml",
-            "typing.yml",
-            "spelling.yml",
-            "codeql.yml",
-            "ci_core.yml",
-        ]
+        called = ["clang_format.yml", "style.yml", "typing.yml", "spelling.yml", "ci_core.yml"]
         for fname in called:
             data = yaml.safe_load((wf_dir / fname).read_text(encoding="utf-8"))
             # PyYAML parses bare 'on' as True

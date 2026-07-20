@@ -13,7 +13,7 @@
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
 namespace shapes {
 
 /**
@@ -32,5 +32,5 @@ namespace shapes {
 void CheckNodeOpAndOutput(const NodeProto &node, const char *expected_op_type, const char *caller);
 
 } // namespace shapes
-} // namespace onnx_optim
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

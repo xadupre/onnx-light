@@ -36,7 +36,7 @@
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
 namespace shapes {
 
 // The symbolic value descriptors (SymDim, SymShape, SymTensor, SymSequence,
@@ -787,5 +787,5 @@ private:
 };
 
 } // namespace shapes
-} // namespace onnx_optim
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -36,7 +36,7 @@
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
 namespace shapes {
 
 /**
@@ -58,5 +58,5 @@ namespace shapes {
 void InferShapesModel(ModelProto &model, bool prefill_with_value_info_output = false);
 
 } // namespace shapes
-} // namespace onnx_optim
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

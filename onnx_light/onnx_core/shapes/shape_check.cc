@@ -5,7 +5,7 @@
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
 namespace shapes {
 
 void CheckNodeOpAndOutput(const NodeProto &node, const char *expected_op_type, const char *caller) {
@@ -15,5 +15,5 @@ void CheckNodeOpAndOutput(const NodeProto &node, const char *expected_op_type, c
 }
 
 } // namespace shapes
-} // namespace onnx_optim
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -14,7 +14,7 @@
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
 
 // Alias to the symbolic dimension-expression library, which lives in
 // ``onnx_core`` so both ``onnx_op`` and ``onnx_optim`` can share it.
@@ -165,5 +165,5 @@ void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, 
 }
 
 } // namespace shapes
-} // namespace onnx_optim
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

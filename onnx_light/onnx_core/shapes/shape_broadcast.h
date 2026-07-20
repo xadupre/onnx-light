@@ -18,7 +18,7 @@
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_optim {
+namespace core {
 namespace shapes {
 
 /**
@@ -103,5 +103,5 @@ void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, 
                                      const char *input_b, BroadcastDimOp op);
 
 } // namespace shapes
-} // namespace onnx_optim
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

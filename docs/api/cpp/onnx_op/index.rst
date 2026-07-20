@@ -4,7 +4,6 @@ onnx_op
 .. toctree::
     :maxdepth: 1
 
-    light_op_schema
     operator_sets
     operator_sets_controlflow
     operator_sets_controlflow_doc

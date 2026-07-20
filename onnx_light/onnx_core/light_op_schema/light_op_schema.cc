@@ -7,7 +7,8 @@
 #include <sstream>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
+namespace core {
+namespace schema {
 
 namespace {
 
@@ -298,5 +299,6 @@ CollectSchemasFromBuilders(const std::map<std::string, SchemaBuilder> &builders,
   return init_doc ? result : StripDocs(result);
 }
 
-} // namespace onnx_op
+} // namespace schema
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

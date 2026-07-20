@@ -10,3 +10,4 @@ libraries depending on the other.
     :maxdepth: 1
 
     expressions
+    light_op_schema

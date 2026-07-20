@@ -50,7 +50,7 @@ ONNX *map* values (``map(K, V)``) and *sequences of maps*
 (``ZipMap``, ``CastMap``, ``DictVectorizer``, ...). They are
 not given a dedicated descriptor; instead they reuse
 :cpp:class:`OptimTensor` with a map-valued :cpp:enum:`TensorType`
-enumerator (see ``onnx_light/onnx_op/light_op_schema.h``):
+enumerator (see ``onnx_light/onnx_core/light_op_schema/light_op_schema.h``):
 
 * ``kMapStringInt64`` / ``kMapInt64String`` / ``kMapInt64Float`` / ... —
   the ``map(K, V)`` element types;
@@ -142,4 +142,4 @@ API reference
   (:doc:`/api/cpp/onnx_optim/shapes/shapes_context`) and
   :doc:`/api/cpp/onnx_optim/shapes/shape_inference`.
 * **Tensor types**: :cpp:enum:`TensorType`
-  (:doc:`/api/cpp/onnx_op/light_op_schema`).
+  (:doc:`/api/cpp/onnx_core/light_op_schema`).

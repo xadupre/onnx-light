@@ -84,6 +84,6 @@ void ApplyBackward(const NodeProto &node,
                    std::unordered_map<std::string, std::string> &grad_accum, int &counter,
                    FunctionProto &func, const GradRegistry &registry);
 
-}
-} // namespace onnx_gradient
+} // namespace gradient
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

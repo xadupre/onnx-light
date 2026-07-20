@@ -2,11 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/gradient/grad_common.h"
+#include "onnx_gradient/gradient/grad_common.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace gradient {
+namespace onnx_gradient {
 
 void AccumulateGrad(const std::string &contrib_name, std::string &acc_name, int &counter,
                     FunctionProto &func) {
@@ -23,6 +22,5 @@ std::string NewGradName(const std::string &prefix, int &counter) {
   return prefix + "_" + std::to_string(counter++);
 }
 
-} // namespace gradient
-} // namespace core
+} // namespace onnx_gradient
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/gradient/grad_dispatcher.h"
 #include "onnx_light_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -45,6 +46,6 @@ void ApplyBackward(const NodeProto &node,
   it->second(node, output_grad, grad_accum, counter, func);
 }
 
-}
-} // namespace onnx_gradient
+} // namespace gradient
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

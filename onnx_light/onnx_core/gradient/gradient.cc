@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_gradient/gradient.h"
-#include "onnx_gradient/gradient/grad_dispatcher.h"
+#include "onnx_core/gradient/gradient.h"
+#include "onnx_core/gradient/grad_dispatcher.h"
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx_helper.h"
 #include <algorithm>
@@ -161,6 +161,6 @@ FunctionProto GradientOfFunction(const FunctionProto &function, std::span<const 
                          domain, name, registry);
 }
 
-}
-} // namespace onnx_gradient
+} // namespace gradient
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -4,14 +4,13 @@
 
 #pragma once
 
-#include "onnx_core/gradient/grad_dispatcher.h"
+#include "onnx_gradient/gradient/grad_dispatcher.h"
 #include "onnx_proto/onnx.h"
 #include <span>
 #include <string>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace gradient {
+namespace onnx_gradient {
 
 /**
  * Computes the gradient FunctionProto from a list of ONNX nodes.
@@ -34,9 +33,9 @@ namespace gradient {
  * @param y            The output tensor name whose gradient is computed.
  * @param zs           Additional non-differentiable input variable names.
  * @param registry     Operator-to-GradFn map used for backward dispatch.
- *                     Pass a populated registry (e.g. from onnx_gradient's
- *                     DefaultGradRegistry, or a custom one built with
- *                     RegisterGradientFunction) to support specific operators.
+ *                     Defaults to DefaultGradRegistry().  Pass a copy with
+ *                     additional entries (via RegisterGradientFunction) to
+ *                     support custom operators.
  * @return             A FunctionProto encoding the gradient computation.
  * @throws std::invalid_argument if @p xs is empty, @p y is empty, or @p y
  *         cannot be reached from the given nodes.
@@ -46,7 +45,8 @@ namespace gradient {
 FunctionProto GradientOfNodes(std::span<const NodeProto> nodes, std::span<const std::string> inputs,
                               std::span<const TensorProto> initializers,
                               std::span<const std::string> xs, const std::string &y,
-                              std::span<const std::string> zs, const GradRegistry &registry);
+                              std::span<const std::string> zs,
+                              const GradRegistry &registry = DefaultGradRegistry());
 
 /**
  * Computes the gradient FunctionProto from an existing FunctionProto.
@@ -62,14 +62,14 @@ FunctionProto GradientOfNodes(std::span<const NodeProto> nodes, std::span<const 
  * @param y         The output tensor name whose gradient is computed.
  * @param zs        Additional non-differentiable input variable names.
  * @param registry  Operator-to-GradFn map used for backward dispatch.
+ *                  Defaults to DefaultGradRegistry().
  * @return          A FunctionProto encoding the gradient computation.
  * @throws std::invalid_argument on invalid arguments (same as GradientOfNodes).
  * @throws std::runtime_error on operators not found in @p registry.
  */
 FunctionProto GradientOfFunction(const FunctionProto &function, std::span<const std::string> xs,
                                  const std::string &y, std::span<const std::string> zs,
-                                 const GradRegistry &registry);
+                                 const GradRegistry &registry = DefaultGradRegistry());
 
-} // namespace gradient
-} // namespace core
+} // namespace onnx_gradient
 } // namespace ONNX_LIGHT_NAMESPACE

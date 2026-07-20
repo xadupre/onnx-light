@@ -489,7 +489,7 @@ target_include_directories(lib_onnx_gradient PUBLIC
 )
 set_property(TARGET lib_onnx_gradient PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_gradient PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_gradient PUBLIC lib_onnx_proto)
+target_link_libraries(lib_onnx_gradient PUBLIC lib_onnx_core)
 endif() # ONNX_LIGHT_BUILD_KERNELS (gradient)
 # When ONNX_LIGHT_PROVIDE_ONNX_TARGETS=ON, expose CMake targets named exactly
 # like the ones upstream onnx defines (`onnx`, `onnx_proto`) so a downstream

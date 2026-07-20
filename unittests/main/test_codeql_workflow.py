@@ -14,13 +14,8 @@ class TestCodeqlWorkflow(unittest.TestCase):
 
     def test_cpp_uses_build_mode_none(self):
         """Verifies C/C++ is analyzed with build-mode none to avoid the slow dynamic build."""
-        import yaml
-
-        data = yaml.safe_load(self.path.read_text(encoding="utf-8"))
-        includes = data["jobs"]["analyze"]["strategy"]["matrix"]["include"]
-        by_language = {entry["language"]: entry for entry in includes}
-        self.assertIn("c-cpp", by_language)
-        self.assertEqual(by_language["c-cpp"]["build-mode"], "none")
+        content = self.path.read_text(encoding="utf-8")
+        self.assertRegex(content, r"(?s)- language: c-cpp\s+build-mode: none")
 
     def test_uses_codeql_action_v3(self):
         """Verifies the workflow drives CodeQL via the official action init/analyze steps."""

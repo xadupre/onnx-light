@@ -569,7 +569,8 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
     output.attr("write")(nb::bytes(out.data(), out.size()));
   };
 
-  base.def("SerializeToOstream", serialize_to_ostream_impl, nb::arg("output"),
+  name_inst
+      .def("SerializeToOstream", serialize_to_ostream_impl, nb::arg("output"),
            "Serializes this instance to a Python file-like object that has a write() method.")
       .def("SerializeToOStream", serialize_to_ostream_impl, nb::arg("output"),
            "Alias for SerializeToOstream (capital S) for protobuf API compatibility. "

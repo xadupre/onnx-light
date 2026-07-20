@@ -26,31 +26,31 @@ concurrency:
 
 jobs:
   fast_clang_format:
-    name: fast / clang-format
+    name: clang-format
     uses: ./.github/workflows/clang_format.yml
     permissions:
       contents: read
 
   fast_style:
-    name: fast / style
+    name: style
     uses: ./.github/workflows/style.yml
     permissions:
       contents: read
 
   fast_typing:
-    name: fast / typing
+    name: typing
     uses: ./.github/workflows/typing.yml
     permissions:
       contents: read
 
   fast_spelling:
-    name: fast / spelling
+    name: spelling
     uses: ./.github/workflows/spelling.yml
     permissions:
       contents: read
 
   fast_codeql:
-    name: fast / codeql
+    name: CodeQL
     uses: ./.github/workflows/codeql.yml
     permissions:
       contents: read
@@ -59,7 +59,7 @@ jobs:
   # ── Gate 1: all fast checks must pass ────────────────────────────────────────
 
   fast_gate:
-    name: fast gate
+    name: fast checks
     needs: [fast_clang_format, fast_style, fast_typing, fast_spelling, fast_codeql]
     runs-on: ubuntu-latest
     permissions: {}

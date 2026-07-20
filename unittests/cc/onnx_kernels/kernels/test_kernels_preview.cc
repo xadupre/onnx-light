@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+#include "onnx_core/runtime/float16_promote.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 
@@ -14,8 +14,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::Tensor;
 using onnx_backend_test::OpsetId;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::FlexAttention;
 using onnx_kernels::kernel::KernelContext;
 
@@ -92,7 +92,7 @@ TEST(KernelClass, FlexAttentionRejectsInvalidInputs) {
   EXPECT_THROW(flex(bad, K, V), std::invalid_argument);
 
   // Non-FLOAT input is rejected.
-  Tensor int_Q("", onnx_kernels::DataType::INT32, {1, 1, 1, 2},
+  Tensor int_Q("", core::runtime::DataType::INT32, {1, 1, 1, 2},
                std::vector<uint8_t>(2 * sizeof(int32_t)));
   EXPECT_THROW(flex(int_Q, K, V), std::invalid_argument);
 
@@ -149,7 +149,7 @@ TEST(KernelClass, FlexAttentionIdentityProbModMatchesBaseline) {
   bool observed = false;
   auto identity = [&observed](Tensor &probs) {
     observed = true;
-    EXPECT_EQ(probs.data_type, onnx_kernels::DataType::FLOAT);
+    EXPECT_EQ(probs.data_type, core::runtime::DataType::FLOAT);
     EXPECT_EQ(probs.shape, (std::vector<int64_t>{1, 2, 1, 2}));
     // Softmax probabilities sum to 1 along the last axis.
     for (int64_t b = 0; b < probs.shape[0]; ++b) {
@@ -213,7 +213,7 @@ TEST(KernelClass, FlexAttentionProbModMustPreserveShapeAndType) {
   auto reshape = [](Tensor &probs) { probs.shape = {1, 1, 2, 1}; };
   EXPECT_THROW(flex(Q, K, V, scale, reshape), std::invalid_argument);
 
-  auto retype = [](Tensor &probs) { probs.data_type = onnx_kernels::DataType::DOUBLE; };
+  auto retype = [](Tensor &probs) { probs.data_type = core::runtime::DataType::DOUBLE; };
   EXPECT_THROW(flex(Q, K, V, scale, retype), std::invalid_argument);
 }
 
@@ -229,8 +229,8 @@ TEST(KernelClass, FlexAttentionHalfPrecisionMatchesFloatReference) {
   const FlexAttention flex{ctx};
   const Tensor ref = flex(Q, K, V);
 
-  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
-                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+  for (int32_t target : {static_cast<int32_t>(core::runtime::DataType::FLOAT16),
+                         static_cast<int32_t>(core::runtime::DataType::BFLOAT16)}) {
     const Tensor Qh = onnx_kernels::DemoteFromFloat32(Q, target);
     const Tensor Kh = onnx_kernels::DemoteFromFloat32(K, target);
     const Tensor Vh = onnx_kernels::DemoteFromFloat32(V, target);
@@ -239,7 +239,7 @@ TEST(KernelClass, FlexAttentionHalfPrecisionMatchesFloatReference) {
     ASSERT_EQ(Yh.shape, ref.shape);
     const Tensor Yh_decoded = onnx_kernels::PromoteToFloat32(Yh);
     const float tol =
-        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+        target == static_cast<int32_t>(core::runtime::DataType::FLOAT16) ? 1e-2f : 5e-2f;
     for (int64_t i = 0; i < ref.element_count(); ++i) {
       EXPECT_NEAR(Yh_decoded.AsFloat()[i], ref.AsFloat()[i], tol) << "i=" << i;
     }
@@ -261,7 +261,7 @@ TEST(KernelClass, FlexAttentionDoubleMatchesFloatReference) {
   const Tensor Kd = Tensor::FromDouble("", {1, 1, 2, 2}, {1.0, 0.0, 0.0, 1.0});
   const Tensor Vd = Tensor::FromDouble("", {1, 1, 2, 2}, {1.0, 2.0, 3.0, 4.0});
   const Tensor Yd = flex(Qd, Kd, Vd);
-  ASSERT_EQ(Yd.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+  ASSERT_EQ(Yd.data_type, static_cast<int32_t>(core::runtime::DataType::DOUBLE));
   ASSERT_EQ(Yd.shape, ref.shape);
   for (int64_t i = 0; i < ref.element_count(); ++i) {
     EXPECT_NEAR(Yd.AsDouble()[i], static_cast<double>(ref.AsFloat()[i]), 1e-6) << "i=" << i;

@@ -4,55 +4,50 @@
 
 #pragma once
 
-#include "onnx_kernels/runtime_context.h"
-#include "onnx_kernels/simple_tensor.h"
-#include "onnx_proto/onnx.h"
-
-#include <functional>
-#include <string>
-#include <unordered_map>
-
 /**
  * @file kernel_dispatch_table.h
- * @brief Static, name-keyed table that maps an ONNX
- *        ``(domain, op_type)`` pair to a per-operator trampoline able
- *        to execute the matching backend-test kernel from a
- *        :cpp:class:`NodeProto` + :cpp:class:`RuntimeContext`.
+ * @brief Registers every ``onnx_kernels`` operator kernel (the built-in
+ *        ``ai.onnx``/``ai.onnx.ml``/``ai.rt``/... operator set) with the
+ *        generic kernel dispatch table owned by ``onnx_core``
+ *        (:cpp:func:`core::runtime::KernelDispatchTable`).
  *
- * The table powers :cpp:func:`onnx_kernels::RunNode` (defined in
- * ``run_nodes.cc``). It is kept in its own translation unit so that
- * adding a new operator requires touching only one file: the kernel
- * implementation under ``onnx_kernels/kernels`` and one new entry
- * in :cpp:func:`KernelDispatchTable` in ``kernel_dispatch_table.cc``.
- *
- * The default ONNX domain (empty string in ``NodeProto::domain()``)
- * is normalised to ``"ai.onnx"`` by the caller before lookup, so all
- * keys in the table use the explicit ``"ai.onnx:<op_type>"`` form.
+ * The kernel implementations themselves stay in ``onnx_kernels``, one per
+ * ``onnx_kernels/kernels/<domain>/kernel_<name>.cc`` file (except the
+ * control-flow kernels ``If``/``Loop``/``Scan``, which live in
+ * ``onnx_core/runtime/controlflow`` since the runtime dispatcher needs to
+ * invoke them directly while recursively evaluating sub-graphs), and this
+ * translation unit is the single place that wires all of them into the
+ * shared registry via :cpp:func:`RegisterKernelFunctions`. Keeping the
+ * registration here (instead of in ``onnx_core``) preserves the
+ * ``onnx_kernels`` -> ``onnx_core`` dependency direction: ``onnx_core``
+ * never needs to know about ``onnx_kernels``'s operator implementations.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 
 /**
- * Signature of every per-operator trampoline registered in
- * :cpp:func:`KernelDispatchTable`. Implementations read their inputs
- * from ``rt.tensors()`` by name, call the matching kernel
- * (constructed with ``rt.kernel_ctx()``), and insert the produced
- * outputs back into ``rt.tensors()`` under the names declared by
- * ``node.output(i)``.
+ * Registers every built-in ``onnx_kernels`` operator kernel with
+ * :cpp:func:`core::runtime::RegisterKernelFn`, and registers
+ * ``kernel::SequenceMap`` as the ``core::runtime`` ``SequenceMap``
+ * output-packing callback (see
+ * :cpp:func:`core::runtime::RegisterSequenceMapPackFn`). Idempotent and
+ * cheap to call more than once (the actual registration work only happens
+ * once, guarded by a function-local static).
+ *
+ * Unlike ``onnx_lib``'s ``OpSchemaRegistry::map()`` (which can lazily
+ * self-register because both the accessor and the registration functions
+ * live in the same library), ``core::runtime::KernelDispatchTable()``
+ * cannot do this: ``onnx_core`` must not depend on or call into
+ * ``onnx_kernels``. ``lib_onnx_kernels`` is also a plain static archive, so
+ * a file-scope static object with no externally-referenced symbol is not
+ * reliably linked in either. Every entry point that runs a model (Python
+ * bindings, C++ unit tests, examples, fuzzers, ...) must therefore call
+ * this function explicitly before calling
+ * :cpp:func:`core::runtime::RunNode` / :cpp:func:`core::runtime::RunGraph`
+ * / :cpp:func:`core::runtime::RunModel`.
  */
-using NodeKernelFn = std::function<void(const NodeProto &node, RuntimeContext &rt)>;
-
-/**
- * Returns the ``"<domain>:<op_type>"`` dispatch table used by
- * :cpp:func:`onnx_kernels::RunNode`. The table is constructed on first
- * use and shared across calls (the same reference is returned every
- * time). The default ONNX domain (empty string in
- * ``NodeProto::domain()``) is normalised to ``"ai.onnx"`` before
- * lookup; adding a new operator only requires inserting one new entry
- * in this table.
- */
-const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable();
+void RegisterKernelFunctions();
 
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -236,9 +236,9 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     for (int i = 0; i < 16; ++i) {
       Xv[i] = static_cast<float>(i) * 0.5f;
     }
-    Tensor X = kernel::MakeFloat16Tensor("X", {1, 1, 4, 4}, Xv);
-    Tensor W = kernel::MakeFloat16Tensor("W", {1, 1, 3, 3}, std::vector<float>(9, 0.25f));
-    Tensor B = kernel::MakeFloat16Tensor("B", {1}, {0.5f});
+    Tensor X = MakeFloat16Tensor("X", {1, 1, 4, 4}, Xv);
+    Tensor W = MakeFloat16Tensor("W", {1, 1, 3, 3}, std::vector<float>(9, 0.25f));
+    Tensor B = MakeFloat16Tensor("B", {1}, {0.5f});
     kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 1, 1, 1};

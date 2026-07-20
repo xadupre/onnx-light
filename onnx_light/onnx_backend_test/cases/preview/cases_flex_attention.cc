@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/preview/include_preview_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 
 #include <cmath>
@@ -778,14 +778,18 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor V = Tensor::FromFloat("", {1, 2, 2, 3},
                                  {
                                      // kv head 0
-                                     1.0f, 2.0f,
+                                     1.0f,
+                                     2.0f,
                                      3.0f, // v0
-                                     4.0f, 5.0f,
+                                     4.0f,
+                                     5.0f,
                                      6.0f, // v1
                                            // kv head 1
-                                     -1.0f, 0.0f,
+                                     -1.0f,
+                                     0.0f,
                                      1.0f, // v0
-                                     0.0f, 1.0f,
+                                     0.0f,
+                                     1.0f,
                                      -1.0f, // v1
                                  });
     Tensor Y = flex(Q, K, V);
@@ -953,41 +957,41 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
   // FLOAT16 so the kernel's half-precision promote/compute/demote path is
   // exercised (upstream ``test_flexattention_fp16``).
   {
-    Tensor Q = kernel::MakeFloat16Tensor("", {1, 2, 2, 2},
-                                         {
-                                             // head 0
-                                             1.0f, 0.0f, // q0
-                                             0.0f, 1.0f, // q1
-                                                         // head 1
-                                             0.5f, 0.5f, // q0
-                                             1.0f, -1.0f // q1
-                                         });
-    Tensor K = kernel::MakeFloat16Tensor("", {1, 2, 2, 2},
-                                         {
-                                             // head 0
-                                             1.0f,
-                                             0.0f, // k0
-                                             0.0f,
-                                             1.0f, // k1
-                                                   // head 1
-                                             1.0f,
-                                             1.0f, // k0
-                                             -1.0f,
-                                             1.0f, // k1
-                                         });
-    Tensor V = kernel::MakeFloat16Tensor("", {1, 2, 2, 2},
-                                         {
-                                             // head 0
-                                             1.0f,
-                                             2.0f, // v0
-                                             3.0f,
-                                             4.0f, // v1
-                                                   // head 1
-                                             -1.0f,
-                                             0.0f, // v0
-                                             0.0f,
-                                             1.0f, // v1
-                                         });
+    Tensor Q = MakeFloat16Tensor("", {1, 2, 2, 2},
+                                 {
+                                     // head 0
+                                     1.0f, 0.0f, // q0
+                                     0.0f, 1.0f, // q1
+                                                 // head 1
+                                     0.5f, 0.5f, // q0
+                                     1.0f, -1.0f // q1
+                                 });
+    Tensor K = MakeFloat16Tensor("", {1, 2, 2, 2},
+                                 {
+                                     // head 0
+                                     1.0f,
+                                     0.0f, // k0
+                                     0.0f,
+                                     1.0f, // k1
+                                           // head 1
+                                     1.0f,
+                                     1.0f, // k0
+                                     -1.0f,
+                                     1.0f, // k1
+                                 });
+    Tensor V = MakeFloat16Tensor("", {1, 2, 2, 2},
+                                 {
+                                     // head 0
+                                     1.0f,
+                                     2.0f, // v0
+                                     3.0f,
+                                     4.0f, // v1
+                                           // head 1
+                                     -1.0f,
+                                     0.0f, // v0
+                                     0.0f,
+                                     1.0f, // v1
+                                 });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
     Expect(registry, std::move(node), "test_cc_flexattention_fp16", {default_opset, opset},

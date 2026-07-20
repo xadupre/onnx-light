@@ -4,11 +4,11 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
-#include "onnx_kernels/kernels/_helpers/cast_float8.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
-#include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
+#include "onnx_core/runtime/cast_float8.h"
+#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/cast_sub_byte.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

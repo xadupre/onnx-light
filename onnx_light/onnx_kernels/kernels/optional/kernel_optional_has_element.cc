@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/kernels/optional/include_optional_kernels.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
 #include <vector>

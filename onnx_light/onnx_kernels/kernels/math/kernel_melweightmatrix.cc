@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

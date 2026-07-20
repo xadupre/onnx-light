@@ -37,7 +37,7 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
 }
 
 void CheckCastCasePresent(const std::vector<TestCase> &cases, const std::string &name,
-                          onnx_kernels::DataType expected_output_dtype) {
+                          core::runtime::DataType expected_output_dtype) {
   const TestCase *tc = FindCase(cases, name);
   ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
@@ -58,17 +58,17 @@ void CheckCastCasePresent(const std::vector<TestCase> &cases, const std::string 
 }
 
 struct DtypeNameEntry {
-  onnx_kernels::DataType dtype;
+  core::runtime::DataType dtype;
   const char *name;
 };
 
 const std::vector<DtypeNameEntry> &SupportedDtypeNames() {
   static const std::vector<DtypeNameEntry> kEntries = {
-      {onnx_kernels::DataType::FLOAT, "FLOAT"}, {onnx_kernels::DataType::DOUBLE, "DOUBLE"},
-      {onnx_kernels::DataType::INT32, "INT32"}, {onnx_kernels::DataType::INT64, "INT64"},
-      {onnx_kernels::DataType::INT8, "INT8"},   {onnx_kernels::DataType::UINT8, "UINT8"},
-      {onnx_kernels::DataType::INT16, "INT16"}, {onnx_kernels::DataType::UINT16, "UINT16"},
-      {onnx_kernels::DataType::BOOL, "BOOL"},   {onnx_kernels::DataType::STRING, "STRING"},
+      {core::runtime::DataType::FLOAT, "FLOAT"}, {core::runtime::DataType::DOUBLE, "DOUBLE"},
+      {core::runtime::DataType::INT32, "INT32"}, {core::runtime::DataType::INT64, "INT64"},
+      {core::runtime::DataType::INT8, "INT8"},   {core::runtime::DataType::UINT8, "UINT8"},
+      {core::runtime::DataType::INT16, "INT16"}, {core::runtime::DataType::UINT16, "UINT16"},
+      {core::runtime::DataType::BOOL, "BOOL"},   {core::runtime::DataType::STRING, "STRING"},
   };
   return kEntries;
 }
@@ -94,7 +94,7 @@ TEST(BackendTestCase, CastFloatToInt32TruncatesTowardZero) {
   ASSERT_NE(tc, nullptr);
 
   const auto &ds = tc->data_sets()[0];
-  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
   const std::vector<int64_t> expected_shape = {4};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
 
@@ -111,7 +111,7 @@ TEST(BackendTestCase, CastBoolToInt32MapsTrueToOne) {
   ASSERT_NE(tc, nullptr);
 
   const auto &ds = tc->data_sets()[0];
-  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
   const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
   EXPECT_EQ(py[0], 0);
   EXPECT_EQ(py[1], 1);
@@ -125,7 +125,7 @@ TEST(BackendTestCase, CastInt32ToStringFormatsDecimal) {
   ASSERT_NE(tc, nullptr);
 
   const auto &ds = tc->data_sets()[0];
-  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::STRING));
   ASSERT_EQ(ds.outputs[0].string_data.size(), 4u);
   EXPECT_EQ(ds.outputs[0].string_data[0], "-3");
   EXPECT_EQ(ds.outputs[0].string_data[1], "0");
@@ -139,7 +139,7 @@ TEST(BackendTestCase, CastStringToInt32ParsesDecimal) {
   ASSERT_NE(tc, nullptr);
 
   const auto &ds = tc->data_sets()[0];
-  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
   const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
   EXPECT_EQ(py[0], -3);
   EXPECT_EQ(py[1], 0);
@@ -158,7 +158,7 @@ TEST(BackendTestCase, CastStringToInt32ParsesDecimal) {
 namespace {
 
 void CheckCastLikeCasePresent(const std::vector<TestCase> &cases, const std::string &name,
-                              onnx_kernels::DataType expected_output_dtype) {
+                              core::runtime::DataType expected_output_dtype) {
   const TestCase *tc = FindCase(cases, name);
   ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
@@ -199,7 +199,7 @@ TEST(BackendTestCase, CastLikeFloatToInt32MatchesCast) {
   const TestCase *tc = FindCase(cases, "test_cc_castlike_FLOAT_to_INT32");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets()[0];
-  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
   const std::vector<int64_t> expected_shape = {4};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
   const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
@@ -214,7 +214,7 @@ namespace {
 
 struct Float8Expectation {
   const char *name;
-  onnx_kernels::DataType dtype;
+  core::runtime::DataType dtype;
   std::vector<uint8_t> expected_bytes;
 };
 
@@ -224,16 +224,16 @@ const std::vector<Float8Expectation> &Float8Expectations() {
   // node tests exercise.
   static const std::vector<Float8Expectation> kExpectations = {
       {"FLOAT8E4M3FN",
-       onnx_kernels::DataType::FLOAT8E4M3FN,
+       core::runtime::DataType::FLOAT8E4M3FN,
        {0x2F, 0x2F, 0x30, 0x35, 0x2F, 0x34, 0x7E, 0x00, 0x7F, 0x7E, 0x7E, 0xFE, 0x80, 0x00, 0xFE}},
       {"FLOAT8E4M3FNUZ",
-       onnx_kernels::DataType::FLOAT8E4M3FNUZ,
+       core::runtime::DataType::FLOAT8E4M3FNUZ,
        {0x37, 0x37, 0x38, 0x3D, 0x37, 0x3C, 0x7F, 0x00, 0x80, 0x7F, 0x7F, 0xFF, 0x00, 0x00, 0xFF}},
       {"FLOAT8E5M2",
-       onnx_kernels::DataType::FLOAT8E5M2,
+       core::runtime::DataType::FLOAT8E5M2,
        {0x38, 0x38, 0x38, 0x3B, 0x38, 0x3A, 0x7B, 0x00, 0x7E, 0x7B, 0x7B, 0xFB, 0x80, 0x00, 0xFB}},
       {"FLOAT8E5M2FNUZ",
-       onnx_kernels::DataType::FLOAT8E5M2FNUZ,
+       core::runtime::DataType::FLOAT8E5M2FNUZ,
        {0x3C, 0x3C, 0x3C, 0x3F, 0x3C, 0x3E, 0x7F, 0x00, 0x80, 0x7F, 0x7F, 0xFF, 0x00, 0x00, 0xFF}},
   };
   return kExpectations;
@@ -274,7 +274,7 @@ TEST(BackendTestCase, CastFloat8ToFloatInputMatchesSaturatedEncoding) {
     for (size_t i = 0; i < f8.expected_bytes.size(); ++i) {
       EXPECT_EQ(ds.inputs[0].data[i], f8.expected_bytes[i]) << "byte " << i << " of " << name;
     }
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].data.size(), f8.expected_bytes.size() * sizeof(float));
   }
 }
@@ -315,11 +315,11 @@ TEST(BackendTestCase, AffineGridUpstreamCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.theta_shape);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.inputs[1].shape, exp.size_shape);
-    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
     EXPECT_EQ(ds.outputs[0].shape, exp.grid_shape);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   }
 }
 
@@ -408,7 +408,7 @@ namespace {
 
 struct SubByteExpectation {
   const char *name;
-  onnx_kernels::DataType dtype;
+  core::runtime::DataType dtype;
   std::vector<int64_t> shape;
   // Packed wire bytes the upstream ONNX ``test_cast_FLOAT_to_<NAME>`` node
   // test exercises: wrapping cast of the input ``np.arange`` vector into
@@ -420,7 +420,7 @@ struct SubByteExpectation {
   // variants, ``UINT8`` for the unsigned ones). Stored as int32 so the
   // expectation vector is dtype-agnostic.
   std::vector<int32_t> unpacked_values;
-  onnx_kernels::DataType wide_int_dtype;
+  core::runtime::DataType wide_int_dtype;
   const char *wide_int_name;
 };
 
@@ -433,31 +433,31 @@ const std::vector<SubByteExpectation> &SubByteExpectations() {
       // Nibbles: 7,8,9,A,B,C,D,E,F,0,1,2,3,4,5,6,7,8,9,A,B,C,D,E,F (low first).
       //   byte[0]=0x87, byte[1]=0xA9, ..., byte[8]=0x87, ...
       {"UINT4",
-       onnx_kernels::DataType::UINT4,
+       core::runtime::DataType::UINT4,
        {5, 5},
        {0x87, 0xA9, 0xCB, 0xED, 0x0F, 0x21, 0x43, 0x65, 0x87, 0xA9, 0xCB, 0xED, 0x0F},
        {7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-       onnx_kernels::DataType::UINT8,
+       core::runtime::DataType::UINT8,
        "UINT8"},
       // INT4: input values -9..15 → wrap to low 4 bits → 7,-8,-7,...,-1,0,...,7,-8,...,-1.
       // Same packed bytes as UINT4; sign-extended unpacked values differ.
       {"INT4",
-       onnx_kernels::DataType::INT4,
+       core::runtime::DataType::INT4,
        {5, 5},
        {0x87, 0xA9, 0xCB, 0xED, 0x0F, 0x21, 0x43, 0x65, 0x87, 0xA9, 0xCB, 0xED, 0x0F},
        {7, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, -4, -3, -2, -1},
-       onnx_kernels::DataType::INT8,
+       core::runtime::DataType::INT8,
        "INT8"},
       // UINT2: input values -3..3 → wrap to low 2 bits → 1,2,3,0,1,2,3.
       // Packed 4 elements per byte (low pair first):
       //   byte0 = 1|2<<2|3<<4|0<<6 = 0x39
       //   byte1 = 1|2<<2|3<<4|0<<6 = 0x39
       {"UINT2",
-       onnx_kernels::DataType::UINT2,
+       core::runtime::DataType::UINT2,
        {7, 1},
        {0x39, 0x39},
        {1, 2, 3, 0, 1, 2, 3},
-       onnx_kernels::DataType::UINT8,
+       core::runtime::DataType::UINT8,
        "UINT8"},
       // INT2: input values -3..3 → wrap via low 2 bits → 1,-2,-1,0,1,-2,-1.
       // Mapping: -3→1, -2→-2, -1→-1, 0→0, 1→1, 2→-2, 3→-1.
@@ -465,11 +465,11 @@ const std::vector<SubByteExpectation> &SubByteExpectations() {
       //   byte0 = 1|2<<2|3<<4|0<<6 = 0x39
       //   byte1 = 1|2<<2|3<<4|0<<6 = 0x39
       {"INT2",
-       onnx_kernels::DataType::INT2,
+       core::runtime::DataType::INT2,
        {7, 1},
        {0x39, 0x39},
        {1, -2, -1, 0, 1, -2, -1},
-       onnx_kernels::DataType::INT8,
+       core::runtime::DataType::INT8,
        "INT8"},
   };
   return kEntries;
@@ -510,7 +510,7 @@ TEST(BackendTestCase, CastSubByteToFloatInputMatchesWrappedPackedEncoding) {
     for (size_t i = 0; i < e.expected_bytes.size(); ++i) {
       EXPECT_EQ(ds.inputs[0].data[i], e.expected_bytes[i]) << "byte " << i << " of " << name;
     }
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     ASSERT_EQ(ds.outputs[0].data.size(), e.unpacked_values.size() * sizeof(float));
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     for (size_t i = 0; i < e.unpacked_values.size(); ++i) {
@@ -532,7 +532,7 @@ TEST(BackendTestCase, CastSubByteToWideIntegerProducesUnpackedWrappedValues) {
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(e.wide_int_dtype));
     EXPECT_EQ(ds.outputs[0].shape, e.shape);
     ASSERT_EQ(ds.outputs[0].data.size(), e.unpacked_values.size());
-    if (e.wide_int_dtype == onnx_kernels::DataType::INT8) {
+    if (e.wide_int_dtype == core::runtime::DataType::INT8) {
       const int8_t *py = reinterpret_cast<const int8_t *>(ds.outputs[0].data.data());
       for (size_t i = 0; i < e.unpacked_values.size(); ++i) {
         EXPECT_EQ(static_cast<int32_t>(py[i]), e.unpacked_values[i])
@@ -611,10 +611,10 @@ TEST(BackendTestCase, ExpandDimChangedAndDimUnchangedCasesRegistered) {
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
     EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   }
 }
 
@@ -723,7 +723,7 @@ TEST(BackendTestCase, DepthToSpaceCasesRegistered) {
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
     EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   }
 }
 
@@ -758,7 +758,7 @@ TEST(BackendTestCase, SpaceToDepthCasesRegistered) {
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
     EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   }
 }
 
@@ -793,9 +793,9 @@ TEST(BackendTestCase, TransposeDefaultAndPermCasesRegistered) {
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   }
 }
 
@@ -938,7 +938,7 @@ TEST(BackendTestCase, NonZeroCasesRegistered) {
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
     EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   }
 }
 

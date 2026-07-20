@@ -21,7 +21,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTestCases;
 using onnx_backend_test::DataSet;
 using onnx_backend_test::TestCase;
-using DataTensor = onnx_kernels::Tensor;
+using DataTensor = core::runtime::Tensor;
 
 namespace Test {
 
@@ -223,7 +223,7 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfMapsOutputType) {
   input->set_name("X");
   TypeProto *input_type = input->add_type();
   TypeProto::Tensor *input_tt = input_type->add_tensor_type();
-  input_tt->set_elem_type(onnx_kernels::DataType::FLOAT);
+  input_tt->set_elem_type(core::runtime::DataType::FLOAT);
   TensorShapeProto *mutable_input_shape = input_tt->add_shape();
   mutable_input_shape->add_dim()->set_dim_value(2);
   mutable_input_shape->add_dim()->set_dim_value(3);
@@ -255,7 +255,7 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfMapsOutputType) {
   const TypeProto::Map &map_type = seq_elem_type.ref_map_type();
   ASSERT_TRUE(map_type.ref_value_type().has_tensor_type());
   const TypeProto::Tensor &value_tensor = map_type.ref_value_type().ref_tensor_type();
-  EXPECT_EQ(value_tensor.ref_elem_type(), onnx_kernels::DataType::FLOAT);
+  EXPECT_EQ(value_tensor.ref_elem_type(), core::runtime::DataType::FLOAT);
   ASSERT_TRUE(value_tensor.has_shape());
   EXPECT_EQ(value_tensor.ref_shape().ref_dim().size(), 0u);
 }
@@ -279,7 +279,7 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfStringKeyMapsOutputTyp
   input->set_name("X");
   TypeProto *input_type = input->add_type();
   TypeProto::Tensor *input_tt = input_type->add_tensor_type();
-  input_tt->set_elem_type(onnx_kernels::DataType::FLOAT);
+  input_tt->set_elem_type(core::runtime::DataType::FLOAT);
   TensorShapeProto *mutable_input_shape = input_tt->add_shape();
   mutable_input_shape->add_dim()->set_dim_value(2);
   mutable_input_shape->add_dim()->set_dim_value(kClassCount);
@@ -314,7 +314,7 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfStringKeyMapsOutputTyp
   const TypeProto::Map &map_type = seq_elem_type.ref_map_type();
   ASSERT_TRUE(map_type.ref_value_type().has_tensor_type());
   const TypeProto::Tensor &value_tensor = map_type.ref_value_type().ref_tensor_type();
-  EXPECT_EQ(value_tensor.ref_elem_type(), onnx_kernels::DataType::FLOAT);
+  EXPECT_EQ(value_tensor.ref_elem_type(), core::runtime::DataType::FLOAT);
   ASSERT_TRUE(value_tensor.has_shape());
   EXPECT_EQ(value_tensor.ref_shape().ref_dim().size(), 0u);
 }
@@ -774,7 +774,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopSubgraph) {
     const TypeProto::Tensor *ott = TensorTypeOf(out.ref_type());
     ASSERT_NE(ott, nullptr);
     EXPECT_EQ(static_cast<int32_t>(ott->elem_type()),
-              static_cast<int32_t>(onnx_kernels::DataType::INT64));
+              static_cast<int32_t>(core::runtime::DataType::INT64));
     ASSERT_TRUE(ott->has_shape());
     const auto dims = DimsOf(*ott);
     // Rank must be 2: symbolic trip-count axis + concrete [1] element shape.
@@ -1634,7 +1634,7 @@ ModelProto MakeConvTransposeGroupModel(int64_t group) {
   ValueInfoProto *x = graph->add_input();
   x->set_name("x");
   TypeProto::Tensor *x_tt = x->add_type()->add_tensor_type();
-  x_tt->set_elem_type(onnx_kernels::DataType::FLOAT);
+  x_tt->set_elem_type(core::runtime::DataType::FLOAT);
   TensorShapeProto *x_shape = x_tt->add_shape();
   for (int64_t dim : {1, 32, 14, 14}) {
     x_shape->add_dim()->set_dim_value(dim);
@@ -1643,7 +1643,7 @@ ModelProto MakeConvTransposeGroupModel(int64_t group) {
   ValueInfoProto *w = graph->add_input();
   w->set_name("w");
   TypeProto::Tensor *w_tt = w->add_type()->add_tensor_type();
-  w_tt->set_elem_type(onnx_kernels::DataType::FLOAT);
+  w_tt->set_elem_type(core::runtime::DataType::FLOAT);
   TensorShapeProto *w_shape = w_tt->add_shape();
   for (int64_t dim : {32, 64, 3, 3}) {
     w_shape->add_dim()->set_dim_value(dim);

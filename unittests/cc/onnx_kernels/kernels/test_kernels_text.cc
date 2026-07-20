@@ -13,8 +13,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::RegexFullMatch;
 using onnx_kernels::kernel::StringConcat;
@@ -30,7 +30,7 @@ TEST(KernelClass, StringConcatEqualShapeMatchesReference) {
   Tensor y = Tensor::FromStrings("", {3}, {"def", "xyz", "world"});
   Tensor z = string_concat(x, y);
   ASSERT_EQ(z.element_count(), 3);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(core::runtime::DataType::STRING));
   EXPECT_EQ(z.shape, x.shape);
   const auto &out = z.AsStrings();
   ASSERT_EQ(out.size(), 3u);

@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/raw_buffer_allocator.h"
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/raw_buffer_allocator.h"
+#include "onnx_core/runtime/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -12,10 +12,10 @@
 #include <stdexcept>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::RawBuffer;
-using onnx_kernels::RawBufferAllocator;
-using onnx_kernels::RuntimeContext;
-using onnx_kernels::SimpleRawBufferAllocator;
+using core::runtime::RawBuffer;
+using core::runtime::RawBufferAllocator;
+using core::runtime::RuntimeContext;
+using core::runtime::SimpleRawBufferAllocator;
 
 namespace Test {
 
@@ -141,7 +141,7 @@ TEST(RuntimeContextAllocator, SetStoresAllocatorBackedTensorData) {
   RuntimeContext ctx;
   ctx.set_allocator(&alloc);
 
-  ctx.Set("x", onnx_kernels::Tensor::FromInt32("", {2}, {1, 2}));
+  ctx.Set("x", core::runtime::Tensor::FromInt32("", {2}, {1, 2}));
   const auto &stored = ctx.Get("x");
   EXPECT_TRUE(stored.has_allocation());
   EXPECT_EQ(stored.data.size(), 0u);
@@ -154,9 +154,9 @@ TEST(RuntimeContextAllocator, PutReplacesAndReleasesPreviousAllocation) {
   RuntimeContext ctx;
   ctx.set_allocator(&alloc);
 
-  ctx.Put("x", onnx_kernels::Tensor::FromInt32("", {2}, {1, 2}));
+  ctx.Put("x", core::runtime::Tensor::FromInt32("", {2}, {1, 2}));
   const uint8_t *first = ctx.Get("x").bytes();
-  ctx.Put("x", onnx_kernels::Tensor::FromInt32("", {2}, {3, 4}));
+  ctx.Put("x", core::runtime::Tensor::FromInt32("", {2}, {3, 4}));
   const uint8_t *second = ctx.Get("x").bytes();
 
   EXPECT_NE(first, second);
@@ -168,7 +168,7 @@ TEST(RuntimeContextAllocator, RemoveReleasesAllocatorBackedTensorData) {
   RuntimeContext ctx;
   ctx.set_allocator(&alloc);
 
-  ctx.Set("x", onnx_kernels::Tensor::FromInt32("", {1}, {7}));
+  ctx.Set("x", core::runtime::Tensor::FromInt32("", {1}, {7}));
   EXPECT_EQ(alloc.allocated_count(), 1u);
   EXPECT_TRUE(ctx.Remove("x"));
   EXPECT_EQ(alloc.allocated_count(), 0u);
@@ -179,7 +179,7 @@ TEST(RuntimeContextAllocator, DestroyingContextReleasesAllocatorBackedTensorData
   {
     RuntimeContext ctx;
     ctx.set_allocator(&alloc);
-    ctx.Set("x", onnx_kernels::Tensor::FromInt32("", {1}, {7}));
+    ctx.Set("x", core::runtime::Tensor::FromInt32("", {1}, {7}));
     EXPECT_EQ(alloc.allocated_count(), 1u);
   }
   EXPECT_EQ(alloc.allocated_count(), 0u);

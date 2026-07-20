@@ -5,10 +5,10 @@
 #pragma once
 
 #include "onnx.h"
+#include "onnx_core/runtime/random.h"
+#include "onnx_core/runtime/simple_map.h"
+#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_kernels/kernels/kernel_context.h"
-#include "onnx_kernels/random.h"
-#include "onnx_kernels/simple_map.h"
-#include "onnx_kernels/simple_tensor.h"
 
 #include <cstdint>
 #include <functional>
@@ -36,6 +36,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 using namespace onnx_kernels;
+using namespace ::onnx_light::core::runtime;
 using OpsetId = onnx_kernels::kernel::OpsetId;
 using onnx_kernels::kernel::DefaultOpset;
 

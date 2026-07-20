@@ -5,9 +5,9 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/math/matmul_shape_utils.h"
 
-#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+#include "onnx_core/runtime/float16_promote.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 #include <string>

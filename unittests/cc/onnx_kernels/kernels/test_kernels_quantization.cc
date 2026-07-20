@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_float8.h"
+#include "onnx_core/runtime/cast_float8.h"
+#include "onnx_core/runtime/raw_buffer_allocator.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
-#include "onnx_kernels/raw_buffer_allocator.h"
-#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -18,12 +18,12 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::RuntimeContext;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
 using onnx_kernels::RawBuffer;
 using onnx_kernels::RawBufferAllocator;
-using onnx_kernels::RuntimeContext;
 using onnx_kernels::SimpleRawBufferAllocator;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::DequantizeLinear;
 using onnx_kernels::kernel::DynamicQuantizeLinear;
 using onnx_kernels::kernel::KernelContext;
@@ -67,7 +67,7 @@ TEST(KernelClass, QuantizeLinearDefaultUint8) {
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
   Tensor y = q(x, scale);
   ASSERT_EQ(y.element_count(), 6);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::UINT8));
   // round-half-to-even(x / 2) + 0, saturated to [0, 255].
   EXPECT_EQ(static_cast<int>(y.data[0]), 0);
   EXPECT_EQ(static_cast<int>(y.data[1]), 1);
@@ -83,11 +83,11 @@ TEST(KernelClass, QuantizeLinearInt8WithZeroPoint) {
   Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, -2.0f, 300.0f});
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
   // y_zero_point is INT8 = -10.
-  const Tensor zp("", static_cast<int32_t>(onnx_kernels::DataType::INT8), {},
+  const Tensor zp("", static_cast<int32_t>(core::runtime::DataType::INT8), {},
                   std::vector<uint8_t>(1, static_cast<uint8_t>(static_cast<int8_t>(-10))));
   Tensor y = q(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT8));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::INT8));
   const int8_t *py = reinterpret_cast<const int8_t *>(y.data.data());
   EXPECT_EQ(static_cast<int>(py[0]), -10);
   EXPECT_EQ(static_cast<int>(py[1]), -9);
@@ -103,10 +103,10 @@ TEST(KernelClass, QuantizeLinearUint16WithZeroPoint) {
   const uint16_t zp_value = 32767;
   std::vector<uint8_t> zp_bytes(sizeof(uint16_t));
   std::memcpy(zp_bytes.data(), &zp_value, sizeof(uint16_t));
-  const Tensor zp("", static_cast<int32_t>(onnx_kernels::DataType::UINT16), {}, zp_bytes);
+  const Tensor zp("", static_cast<int32_t>(core::runtime::DataType::UINT16), {}, zp_bytes);
   Tensor y = q(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT16));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::UINT16));
   const uint16_t *py = reinterpret_cast<const uint16_t *>(y.data.data());
   EXPECT_EQ(py[0], static_cast<uint16_t>(32767));
   EXPECT_EQ(py[1], static_cast<uint16_t>(32768));
@@ -122,10 +122,10 @@ TEST(KernelClass, QuantizeLinearInt16WithZeroPoint) {
   const int16_t zp_value = -1024;
   std::vector<uint8_t> zp_bytes(sizeof(int16_t));
   std::memcpy(zp_bytes.data(), &zp_value, sizeof(int16_t));
-  const Tensor zp("", static_cast<int32_t>(onnx_kernels::DataType::INT16), {}, zp_bytes);
+  const Tensor zp("", static_cast<int32_t>(core::runtime::DataType::INT16), {}, zp_bytes);
   Tensor y = q(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT16));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::INT16));
   const int16_t *py = reinterpret_cast<const int16_t *>(y.data.data());
   EXPECT_EQ(py[0], static_cast<int16_t>(-1024));
   EXPECT_EQ(py[1], static_cast<int16_t>(-1023));
@@ -147,7 +147,7 @@ TEST(KernelClass, QuantizeLinearPerAxisUint16ZeroPointUsesAllocator) {
   {
     Tensor y = q(x, scale, zp, 1, &rt);
     ASSERT_TRUE(y.has_allocation());
-    ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT16));
+    ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::UINT16));
     const uint16_t *py = reinterpret_cast<const uint16_t *>(y.bytes());
     EXPECT_EQ(py[0], static_cast<uint16_t>(100));
     EXPECT_EQ(py[1], static_cast<uint16_t>(201));
@@ -173,9 +173,9 @@ TEST(KernelClass, QuantizeLinearPerAxisUint16ImplicitZeroPointUsesAllocator) {
   Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
 
   {
-    Tensor y = q(x, scale, 1, static_cast<int32_t>(onnx_kernels::DataType::UINT16), &rt);
+    Tensor y = q(x, scale, 1, static_cast<int32_t>(core::runtime::DataType::UINT16), &rt);
     ASSERT_TRUE(y.has_allocation());
-    ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT16));
+    ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::UINT16));
     const uint16_t *py = reinterpret_cast<const uint16_t *>(y.bytes());
     EXPECT_EQ(py[0], static_cast<uint16_t>(0));
     EXPECT_EQ(py[1], static_cast<uint16_t>(1));
@@ -213,7 +213,7 @@ TEST(KernelClass, DequantizeLinearDefaultUint8) {
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
   Tensor y = d(x, scale);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   // (x - 0) * 2.0
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 6.0f);
@@ -226,11 +226,11 @@ TEST(KernelClass, DequantizeLinearInt8WithZeroPoint) {
   DequantizeLinear d{ctx};
   Tensor x = Tensor::FromInt8("", {4}, {-10, -9, 0, 127});
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
-  const Tensor zp("", static_cast<int32_t>(onnx_kernels::DataType::INT8), {},
+  const Tensor zp("", static_cast<int32_t>(core::runtime::DataType::INT8), {},
                   std::vector<uint8_t>(1, static_cast<uint8_t>(static_cast<int8_t>(-10))));
   Tensor y = d(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   // (x - (-10)) * 2.0
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 2.0f);
@@ -247,7 +247,7 @@ TEST(KernelClass, DequantizeLinearRejectsBadInputs) {
   Tensor bad_scale = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   EXPECT_THROW(d(x, bad_scale), std::invalid_argument);
   // Mismatched x_zero_point dtype (INT8 vs UINT8 x).
-  const Tensor zp_int8("", static_cast<int32_t>(onnx_kernels::DataType::INT8), {},
+  const Tensor zp_int8("", static_cast<int32_t>(core::runtime::DataType::INT8), {},
                        std::vector<uint8_t>(1, 0));
   EXPECT_THROW(d(x, scale, zp_int8), std::invalid_argument);
   // Unsupported x element type (FLOAT).
@@ -263,10 +263,10 @@ TEST(KernelClass, DequantizeLinearUint16WithZeroPoint) {
   const uint16_t zp_value = 32767;
   std::vector<uint8_t> zp_bytes(sizeof(uint16_t));
   std::memcpy(zp_bytes.data(), &zp_value, sizeof(uint16_t));
-  const Tensor zp("", static_cast<int32_t>(onnx_kernels::DataType::UINT16), {}, zp_bytes);
+  const Tensor zp("", static_cast<int32_t>(core::runtime::DataType::UINT16), {}, zp_bytes);
   Tensor y = d(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   // (x - 32767) * 2.0
   EXPECT_FLOAT_EQ(y.AsFloat()[0], -5534.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[1], -3534.0f);
@@ -282,10 +282,10 @@ TEST(KernelClass, DequantizeLinearInt16WithZeroPoint) {
   const int16_t zp_value = -1024;
   std::vector<uint8_t> zp_bytes(sizeof(int16_t));
   std::memcpy(zp_bytes.data(), &zp_value, sizeof(int16_t));
-  const Tensor zp("", static_cast<int32_t>(onnx_kernels::DataType::INT16), {}, zp_bytes);
+  const Tensor zp("", static_cast<int32_t>(core::runtime::DataType::INT16), {}, zp_bytes);
   Tensor y = d(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   // (x - (-1024)) * 2.0
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 1448.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 1988.0f);
@@ -299,13 +299,13 @@ TEST(KernelClass, DequantizeLinearFloat8E4M3FNNoZeroPoint) {
   const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 448.0f, -104.0f};
   std::vector<uint8_t> bytes(fvals.size());
   for (size_t i = 0; i < fvals.size(); ++i) {
-    bytes[i] = onnx_kernels::kernel::FloatToFloat8E4M3FNBits(fvals[i]);
+    bytes[i] = onnx_kernels::FloatToFloat8E4M3FNBits(fvals[i]);
   }
-  const Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN), {5}, bytes);
+  const Tensor x("", static_cast<int32_t>(core::runtime::DataType::FLOAT8E4M3FN), {5}, bytes);
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
   Tensor y = d(x, scale);
   ASSERT_EQ(y.element_count(), 5);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 1.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[2], 2.0f);
@@ -319,9 +319,9 @@ TEST(KernelClass, DequantizeLinearFloat8E5M2NoZeroPoint) {
   const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 49152.0f, -96.0f};
   std::vector<uint8_t> bytes(fvals.size());
   for (size_t i = 0; i < fvals.size(); ++i) {
-    bytes[i] = onnx_kernels::kernel::FloatToFloat8E5M2Bits(fvals[i]);
+    bytes[i] = onnx_kernels::FloatToFloat8E5M2Bits(fvals[i]);
   }
-  const Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2), {5}, bytes);
+  const Tensor x("", static_cast<int32_t>(core::runtime::DataType::FLOAT8E5M2), {5}, bytes);
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
   Tensor y = d(x, scale);
   ASSERT_EQ(y.element_count(), 5);
@@ -338,12 +338,12 @@ TEST(KernelClass, DequantizeLinearFloat8E4M3FNWithZeroPoint) {
   const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 448.0f, -104.0f};
   std::vector<uint8_t> bytes(fvals.size());
   for (size_t i = 0; i < fvals.size(); ++i) {
-    bytes[i] = onnx_kernels::kernel::FloatToFloat8E4M3FNBits(fvals[i]);
+    bytes[i] = onnx_kernels::FloatToFloat8E4M3FNBits(fvals[i]);
   }
-  const Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN), {5}, bytes);
+  const Tensor x("", static_cast<int32_t>(core::runtime::DataType::FLOAT8E4M3FN), {5}, bytes);
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
-  const Tensor zp("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN), {1},
-                  std::vector<uint8_t>{onnx_kernels::kernel::FloatToFloat8E4M3FNBits(0.0f)});
+  const Tensor zp("", static_cast<int32_t>(core::runtime::DataType::FLOAT8E4M3FN), {1},
+                  std::vector<uint8_t>{onnx_kernels::FloatToFloat8E4M3FNBits(0.0f)});
   Tensor y = d(x, scale, zp);
   ASSERT_EQ(y.element_count(), 5);
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
@@ -361,15 +361,15 @@ TEST(KernelClass, DequantizeLinearFloat8E4M3FNFloat16Scale) {
   const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 448.0f, -104.0f};
   std::vector<uint8_t> bytes(fvals.size());
   for (size_t i = 0; i < fvals.size(); ++i) {
-    bytes[i] = onnx_kernels::kernel::FloatToFloat8E4M3FNBits(fvals[i]);
+    bytes[i] = onnx_kernels::FloatToFloat8E4M3FNBits(fvals[i]);
   }
-  const Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN), {5}, bytes);
+  const Tensor x("", static_cast<int32_t>(core::runtime::DataType::FLOAT8E4M3FN), {5}, bytes);
   // Bit pattern 0x4000 = 2.0 in IEEE-754 binary16.
-  Tensor scale("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {},
+  Tensor scale("", static_cast<int32_t>(core::runtime::DataType::FLOAT16), {},
                std::vector<uint8_t>{0x00, 0x40});
   Tensor y = d(x, scale);
   ASSERT_EQ(y.element_count(), 5);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
   ASSERT_EQ(y.data.size(), 5u * sizeof(uint16_t));
   // Expected FLOAT16 bit patterns for {0, 1, 2, 896, -208}.
   const std::vector<uint16_t> expected_bits = {0x0000, 0x3c00, 0x4000, 0x6300, 0xda80};
@@ -387,11 +387,11 @@ TEST(KernelClass, DynamicQuantizeLinearStraddleZero) {
   Tensor x = Tensor::FromFloat("", {6}, {0.0f, 2.0f, -3.0f, -2.5f, 1.34f, 0.5f});
   auto [y, y_scale, y_zero_point] = d(x);
 
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::UINT8));
   ASSERT_EQ(y.element_count(), 6);
-  ASSERT_EQ(y_scale.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  ASSERT_EQ(y_scale.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   ASSERT_TRUE(y_scale.shape.empty());
-  ASSERT_EQ(y_zero_point.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+  ASSERT_EQ(y_zero_point.data_type, static_cast<int32_t>(core::runtime::DataType::UINT8));
   ASSERT_TRUE(y_zero_point.shape.empty());
 
   EXPECT_NEAR(y_scale.AsFloat()[0], 0.0196078438f, 1e-7f);

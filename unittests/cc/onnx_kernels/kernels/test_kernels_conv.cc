@@ -12,8 +12,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::AutoPad;
 using onnx_kernels::kernel::Conv;
 using onnx_kernels::kernel::KernelContext;

@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <limits>
 #include <stdexcept>

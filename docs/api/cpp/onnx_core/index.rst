@@ -16,4 +16,5 @@ libraries depending on the other.
     sym_sequence
     sym_map
     shapes/index
+    runtime/index
     annotations/index

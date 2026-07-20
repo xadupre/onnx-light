@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <cstdint>
@@ -201,9 +201,9 @@ void RegisterMinCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_1");
     node.add_output("result");
     Expect(registry, std::move(node), "test_min_float16", {opset}, [=]() -> IoData {
-      Tensor x0 = kernel::MakeFloat16Tensor("", {3}, {1.0f, 4.0f, 3.0f});
-      Tensor x1 = kernel::MakeFloat16Tensor("", {3}, {3.0f, 2.0f, 5.0f});
-      Tensor expected = kernel::MakeFloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
+      Tensor x0 = MakeFloat16Tensor("", {3}, {1.0f, 4.0f, 3.0f});
+      Tensor x1 = MakeFloat16Tensor("", {3}, {3.0f, 2.0f, 5.0f});
+      Tensor expected = MakeFloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
       return IoData{{std::move(x0), std::move(x1)}, {std::move(expected)}};
     });
   }

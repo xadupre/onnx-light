@@ -4,8 +4,8 @@
 
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_core/runtime/simple_map.h"
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
-#include "onnx_kernels/simple_map.h"
 
 #include <cstdint>
 #include <string>

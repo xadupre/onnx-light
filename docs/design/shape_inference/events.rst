@@ -13,7 +13,7 @@ node that produced a wrong dimension or the constraint that renamed a
 symbol unexpectedly.
 
 The mechanism mirrors the runtime event log of
-:cpp:class:`onnx_kernels::RuntimeContext` (see the
+:cpp:class:`onnx_light::core::runtime::RuntimeContext` (see the
 ``plot_runtime_events`` gallery example).
 
 Enabling the log

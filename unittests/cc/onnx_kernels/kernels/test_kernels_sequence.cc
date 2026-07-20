@@ -14,9 +14,9 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
 using onnx_kernels::Sequence;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::SequenceAt;
 using onnx_kernels::kernel::SequenceConstruct;
@@ -89,7 +89,7 @@ TEST(KernelClass, SequenceConstructRejectsBadInputsAndMismatchedOutput) {
   EXPECT_THROW(seq({bad_first}), std::invalid_argument);
 
   // In-place overload with a mismatched output buffer is rejected.
-  Tensor bad_out_dtype("", static_cast<int32_t>(onnx_kernels::DataType::INT32), {2, 2},
+  Tensor bad_out_dtype("", static_cast<int32_t>(core::runtime::DataType::INT32), {2, 2},
                        std::vector<uint8_t>(4 * sizeof(int32_t)));
   EXPECT_THROW(seq({a, b}, bad_out_dtype), std::invalid_argument);
 
@@ -132,13 +132,13 @@ TEST(KernelClass, SequenceConstructAsSequenceRejectsDtypeMismatch) {
 TEST(KernelClass, SequenceLengthReturnsScalarInt64Count) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceLength op{ctx};
-  Sequence seq("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT),
+  Sequence seq("", static_cast<int32_t>(core::runtime::DataType::FLOAT),
                {Tensor::FromFloat("", {2}, {1.0f, 2.0f}), Tensor::FromFloat("", {1}, {3.0f}),
                 Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f})});
 
   Tensor out = op(seq);
 
-  EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   EXPECT_TRUE(out.shape.empty());
   ASSERT_EQ(out.data.size(), sizeof(int64_t));
   EXPECT_EQ(*out.AsInt64(), 3);
@@ -151,7 +151,7 @@ TEST(KernelClass, SequenceLengthHandlesEmptySequence) {
 
   Tensor out = op(empty);
 
-  EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   EXPECT_TRUE(out.shape.empty());
   ASSERT_EQ(out.data.size(), sizeof(int64_t));
   EXPECT_EQ(*out.AsInt64(), 0);
@@ -167,23 +167,23 @@ TEST(KernelClass, SequenceEmptyDefaultDtypeIsFloat) {
   Sequence out = op();
   EXPECT_TRUE(out.empty());
   EXPECT_EQ(out.size(), 0u);
-  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(out.elem_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
 TEST(KernelClass, SequenceEmptyUndefinedDtypeFallsBackToFloat) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceEmpty op{ctx};
-  Sequence out = op(static_cast<int32_t>(onnx_kernels::DataType::UNDEFINED));
+  Sequence out = op(static_cast<int32_t>(core::runtime::DataType::UNDEFINED));
   EXPECT_TRUE(out.empty());
-  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(out.elem_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
 TEST(KernelClass, SequenceEmptyHonoursExplicitDtype) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceEmpty op{ctx};
-  Sequence out = op(static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  Sequence out = op(static_cast<int32_t>(core::runtime::DataType::INT64));
   EXPECT_TRUE(out.empty());
-  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(out.elem_type, static_cast<int32_t>(core::runtime::DataType::INT64));
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -652,7 +652,7 @@ TEST(KernelClass, SequenceMapRejectsMixedDtypeWithinOneOutput) {
 TEST(KernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
   const KernelContext ctx{DefaultOpset(17)};
   onnx_kernels::kernel::SequenceMap op{ctx};
-  const Sequence in_seq("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT), {});
+  const Sequence in_seq("", static_cast<int32_t>(core::runtime::DataType::FLOAT), {});
 
   // Zero iterations: each body output row is empty; the resulting output
   // sequence is empty and its elem_type degrades to UNDEFINED (since no
@@ -662,7 +662,7 @@ TEST(KernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
 
   ASSERT_EQ(outs.size(), 1u);
   EXPECT_EQ(outs[0].size(), 0u);
-  EXPECT_EQ(outs[0].elem_type, static_cast<int32_t>(onnx_kernels::DataType::UNDEFINED));
+  EXPECT_EQ(outs[0].elem_type, static_cast<int32_t>(core::runtime::DataType::UNDEFINED));
 }
 
 // ──────────────────────────────────────────────────────────────────────

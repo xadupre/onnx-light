@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <vector>
@@ -69,7 +69,7 @@ void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_celu_float16", {opset28}, [=]() -> IoData {
       alpha->set_f(2.0f);
 
-      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
+      Tensor x = MakeFloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
       Tensor y = celu_kernel(x, 2.0f);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -88,7 +88,7 @@ void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_celu_bfloat16", {opset28}, [=]() -> IoData {
       alpha->set_f(1.0f);
 
-      Tensor x = kernel::MakeBfloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
+      Tensor x = MakeBfloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
       Tensor y = celu_kernel(x, 1.0f);
       return IoData{{std::move(x)}, {std::move(y)}};
     });

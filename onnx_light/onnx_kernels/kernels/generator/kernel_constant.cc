@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
 

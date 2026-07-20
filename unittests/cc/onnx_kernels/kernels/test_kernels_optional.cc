@@ -12,8 +12,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using OptionalKernel = onnx_kernels::kernel::Optional;
 
@@ -42,7 +42,7 @@ TEST(KernelClass, OptionalRejectsBadInputsAndMismatchedOutput) {
   EXPECT_THROW(opt(bad_input), std::invalid_argument);
 
   // In-place overload with a mismatched output buffer is rejected.
-  Tensor bad_dtype("", static_cast<int32_t>(onnx_kernels::DataType::INT32), x.shape,
+  Tensor bad_dtype("", static_cast<int32_t>(core::runtime::DataType::INT32), x.shape,
                    std::vector<uint8_t>(x.element_count() * sizeof(int32_t)));
   EXPECT_THROW(opt(x, bad_dtype), std::invalid_argument);
 

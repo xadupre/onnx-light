@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <cstdint>
@@ -46,8 +46,8 @@ std::vector<int32_t> Arange30() {
 }
 
 // IEEE-754 binary16 encoder (round-to-nearest-even) and the FLOAT16 tensor
-// builder ``kernel::MakeFloat16Tensor`` are provided by
-// ``onnx_kernels/kernels/_helpers/cast_helper.h``.
+// builder ``MakeFloat16Tensor`` are provided by
+// ``onnx_core/runtime/cast_helper.h``.
 
 } // namespace
 
@@ -82,8 +82,8 @@ void RegisterModCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeModNode(/*fmod=*/1);
     Expect(registry, std::move(node), "test_mod_mixed_sign_float16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeFloat16Tensor("", {6}, {-4.3f, 7.2f, 5.0f, 4.3f, -7.2f, 8.0f});
-      Tensor y = kernel::MakeFloat16Tensor("", {6}, {2.1f, -3.4f, 8.0f, -2.1f, 3.4f, 5.0f});
+      Tensor x = MakeFloat16Tensor("", {6}, {-4.3f, 7.2f, 5.0f, 4.3f, -7.2f, 8.0f});
+      Tensor y = MakeFloat16Tensor("", {6}, {2.1f, -3.4f, 8.0f, -2.1f, 3.4f, 5.0f});
       Tensor z = mod_kernel(x, y, /*fmod=*/1);
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -91,8 +91,8 @@ void RegisterModCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeModNode(/*fmod=*/1);
     Expect(registry, std::move(node), "test_mod_mixed_sign_bfloat16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeBfloat16Tensor("", {6}, {-4.0f, 7.0f, 5.0f, 4.0f, -7.0f, 8.0f});
-      Tensor y = kernel::MakeBfloat16Tensor("", {6}, {2.0f, -3.0f, 8.0f, -2.0f, 3.0f, 5.0f});
+      Tensor x = MakeBfloat16Tensor("", {6}, {-4.0f, 7.0f, 5.0f, 4.0f, -7.0f, 8.0f});
+      Tensor y = MakeBfloat16Tensor("", {6}, {2.0f, -3.0f, 8.0f, -2.0f, 3.0f, 5.0f});
       Tensor z = mod_kernel(x, y, /*fmod=*/1);
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -218,8 +218,8 @@ void RegisterModCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeModNode(/*fmod=*/1);
     Expect(registry, std::move(node), "test_cc_mod_bfloat16_fmod", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeBfloat16Tensor("", {3}, {4.5f, -4.5f, 7.0f});
-      Tensor y = kernel::MakeBfloat16Tensor("", {3}, {3.0f, 3.0f, 2.5f});
+      Tensor x = MakeBfloat16Tensor("", {3}, {4.5f, -4.5f, 7.0f});
+      Tensor y = MakeBfloat16Tensor("", {3}, {3.0f, 3.0f, 2.5f});
       Tensor z = mod_kernel(x, y, /*fmod=*/1);
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });

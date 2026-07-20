@@ -7,7 +7,7 @@
 #include "onnx_kernels/kernels/traditionalml/kernel_svm_common.h"
 #include "onnx_kernels/kernels/traditionalml/kernel_tree_ensemble_common.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <string>
 #include <unordered_set>

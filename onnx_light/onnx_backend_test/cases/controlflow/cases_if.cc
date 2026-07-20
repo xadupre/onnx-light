@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -77,7 +77,7 @@ void BuildConstantBranch(GraphProto &g, const std::string &graph_name,
 void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const kernel::KernelContext ctx{opset};
-  const kernel::If if_kernel{ctx};
+  const If if_kernel{ctx};
 
   const Tensor then_value = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   const Tensor else_value = Tensor::FromFloat("", {2}, {3.0f, 4.0f});

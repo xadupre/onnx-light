@@ -149,7 +149,7 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
     const auto &ds = def->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 3, 3}));
     EXPECT_FLOAT_EQ(ds.outputs[0].AsFloat()[0], 3.5f);
     EXPECT_FLOAT_EQ(ds.outputs[0].AsFloat()[8], 13.5f);
@@ -251,7 +251,7 @@ TEST(BackendTestCase, BatchNormalizationCasesArePresent) {
     const auto &ds = example->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 5u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 1, 3}));
   }
 
@@ -301,7 +301,7 @@ TEST(BackendTestCase, InstanceNormalizationCasesArePresent) {
   const auto &ds = example->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
 TEST(BackendTestCase, GroupNormalizationCasesArePresent) {
@@ -321,7 +321,7 @@ TEST(BackendTestCase, GroupNormalizationCasesArePresent) {
   const auto &ds = example->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
 TEST(BackendTestCase, RMSNormalizationCasesArePresent) {
@@ -341,7 +341,7 @@ TEST(BackendTestCase, RMSNormalizationCasesArePresent) {
   const auto &ds = axis0->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
 TEST(BackendTestCase, LayerNormalizationCasesArePresent) {
@@ -361,9 +361,9 @@ TEST(BackendTestCase, LayerNormalizationCasesArePresent) {
   const auto &ds = axis0->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 3u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-  EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-  EXPECT_EQ(ds.outputs[2].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[2].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
 TEST(BackendTestCase, MeanVarianceNormalizationCasesArePresent) {
@@ -387,7 +387,7 @@ TEST(BackendTestCase, MeanVarianceNormalizationCasesArePresent) {
   const auto &ds = mvn->data_sets()[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
 TEST(BackendTestCase, RNNCasesArePresent) {
@@ -427,7 +427,7 @@ TEST(BackendTestCase, RNNCasesArePresent) {
     const auto &ds = defaults->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 4}));
   }
 
@@ -496,7 +496,7 @@ TEST(BackendTestCase, AttentionCasesArePresent) {
     const auto &ds = tc->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape.size(), 4u);
   }
 
@@ -543,7 +543,7 @@ TEST(BackendTestCase, DropoutCasesArePresent) {
     const auto &ds = training->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 2u);
-    EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+    EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(core::runtime::DataType::BOOL));
     EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{2, 3}));
   }
 }
@@ -628,7 +628,7 @@ TEST(BackendTestCase, LSTMCasesArePresent) {
     const auto &ds = defaults->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 3}));
   }
 
@@ -654,7 +654,7 @@ TEST(BackendTestCase, LSTMCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 8u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     // ``sequence_lens`` is INT32 per the LSTM schema.
-    EXPECT_EQ(ds.inputs[4].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+    EXPECT_EQ(ds.inputs[4].data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 3}));
   }
 
@@ -711,7 +711,7 @@ TEST(BackendTestCase, GRUCasesArePresent) {
     const auto &ds = defaults->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 5}));
   }
 

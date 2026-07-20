@@ -4,9 +4,9 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
-#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+#include "onnx_core/runtime/float16_promote.h"
 
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>

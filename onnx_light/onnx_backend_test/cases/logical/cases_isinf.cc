@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -96,7 +96,7 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
     Expect(registry, std::move(node), "test_isinf_float16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeFloat16Tensor("", {6}, {-inf_v, -1.0f, 0.0f, 1.0f, inf_v, nan_v});
+      Tensor x = MakeFloat16Tensor("", {6}, {-inf_v, -1.0f, 0.0f, 1.0f, inf_v, nan_v});
       // Expected: [True, False, False, False, True, False]
       Tensor y = Tensor::FromBool("", {6}, {1, 0, 0, 0, 1, 0});
       return IoData{{std::move(x)}, {std::move(y)}};

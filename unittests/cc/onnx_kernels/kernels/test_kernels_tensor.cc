@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_float8.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_float8.h"
+#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/raw_buffer_allocator.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
-#include "onnx_kernels/raw_buffer_allocator.h"
-#include "onnx_kernels/runtime_context.h"
 
 #include <gtest/gtest.h>
 
@@ -20,10 +20,10 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::RuntimeContext;
+using core::runtime::Tensor;
 using onnx_backend_test::DefaultOpset;
-using onnx_kernels::RuntimeContext;
 using onnx_kernels::SimpleRawBufferAllocator;
-using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Cast;
 using onnx_kernels::kernel::CastLike;
 using onnx_kernels::kernel::Concat;
@@ -84,7 +84,7 @@ TEST(KernelClass, ConcatInPlaceWritesToPreallocatedOutput) {
   Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 3}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
-  Tensor y("out", onnx_kernels::DataType::FLOAT, {2, 5}, std::vector<uint8_t>(10 * sizeof(float)));
+  Tensor y("out", core::runtime::DataType::FLOAT, {2, 5}, std::vector<uint8_t>(10 * sizeof(float)));
   concat_kernel({x0, x1}, /*axis=*/-1, y);
   EXPECT_EQ(y.name, "out");
   ASSERT_EQ(y.element_count(), 10);
@@ -100,7 +100,7 @@ TEST(KernelClass, ConcatInPlaceRejectsMismatchedShape) {
   Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
-  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {3, 2},
+  Tensor bad_shape("", core::runtime::DataType::FLOAT, {3, 2},
                    std::vector<uint8_t>(6 * sizeof(float)));
   EXPECT_THROW(concat_kernel({x0, x1}, /*axis=*/0, bad_shape), std::invalid_argument);
 }
@@ -200,8 +200,8 @@ TEST(KernelClass, CastClassFloatToDouble) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.5f, 0.0f, 2.25f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::DOUBLE));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::DOUBLE));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const double *py = y.AsDouble();
   EXPECT_DOUBLE_EQ(py[0], -1.5);
@@ -213,8 +213,8 @@ TEST(KernelClass, CastClassFloatToInt32TruncatesTowardZero) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {-1.5f, 0.0f, 2.75f, 4.0f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::INT32));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::INT32));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
   const int32_t *py = y.AsInt32();
   EXPECT_EQ(py[0], -1);
   EXPECT_EQ(py[1], 0);
@@ -229,7 +229,7 @@ TEST(KernelClass, CastClassFloatToInt32TruncatesTowardZero) {
 // into 2^-9), which broke the ``test_cast_FLOAT16_to_FLOAT8*`` backend
 // runtime checks.
 TEST(KernelClass, Float16BitsToFloatDecodesSubnormals) {
-  using onnx_kernels::kernel::Float16BitsToFloat;
+  using onnx_kernels::Float16BitsToFloat;
   // Smallest positive subnormal half: 2^-24.
   EXPECT_FLOAT_EQ(Float16BitsToFloat(0x0001u), std::ldexp(1.0f, -24));
   // 2^-23 (the value the FLOAT16 -> FLOAT8E5M2 backend test feeds in).
@@ -244,90 +244,88 @@ TEST(KernelClass, Float16BitsToFloatDecodesSubnormals) {
 
 TEST(KernelClass, MakeFloat16TensorAcceptsShape) {
   const onnx_kernels::Shape shape{2, 1};
-  Tensor t = onnx_kernels::kernel::MakeFloat16Tensor("", shape, {1.0f, -2.0f});
+  Tensor t = onnx_kernels::MakeFloat16Tensor("", shape, {1.0f, -2.0f});
   EXPECT_EQ(t.shape, shape);
-  EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  EXPECT_EQ(t.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
 }
 
 TEST(KernelClass, MakeFloat8TensorRejectsShapeMismatch) {
-  EXPECT_THROW((void)onnx_kernels::kernel::MakeFloat8Tensor(
-                   onnx_kernels::DataType::FLOAT8E5M2, {3}, {0.0f, 1.0f},
-                   &onnx_kernels::kernel::FloatToFloat8E5M2Bits),
+  EXPECT_THROW((void)onnx_kernels::MakeFloat8Tensor(core::runtime::DataType::FLOAT8E5M2, {3},
+                                                    {0.0f, 1.0f},
+                                                    &onnx_kernels::FloatToFloat8E5M2Bits),
                std::invalid_argument);
 }
 
 TEST(KernelClass, AllocatorBackedTensorBuilders) {
   onnx_kernels::SimpleRawBufferAllocator alloc(16);
 
-  Tensor f16 = onnx_kernels::kernel::MakeFloat16Tensor("f16", {2}, {1.0f, -2.0f}, &alloc);
+  Tensor f16 = onnx_kernels::MakeFloat16Tensor("f16", {2}, {1.0f, -2.0f}, &alloc);
   ASSERT_TRUE(f16.has_allocation());
   EXPECT_EQ(f16.allocation_owner(), &alloc);
   EXPECT_TRUE(f16.data.empty());
   EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(f16.bytes())[0],
-            onnx_kernels::kernel::FloatToFloat16Bits(1.0f));
+            onnx_kernels::FloatToFloat16Bits(1.0f));
   EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(f16.bytes())[1],
-            onnx_kernels::kernel::FloatToFloat16Bits(-2.0f));
+            onnx_kernels::FloatToFloat16Bits(-2.0f));
 
-  Tensor f16_scalar = onnx_kernels::kernel::MakeFloat16Scalar("f16s", 1.5f, &alloc);
+  Tensor f16_scalar = onnx_kernels::MakeFloat16Scalar("f16s", 1.5f, &alloc);
   ASSERT_TRUE(f16_scalar.has_allocation());
   EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(f16_scalar.bytes())[0],
-            onnx_kernels::kernel::FloatToFloat16Bits(1.5f));
+            onnx_kernels::FloatToFloat16Bits(1.5f));
 
-  Tensor bf16 = onnx_kernels::kernel::MakeBfloat16Tensor("bf16", {2}, {1.0f, -2.0f}, &alloc);
+  Tensor bf16 = onnx_kernels::MakeBfloat16Tensor("bf16", {2}, {1.0f, -2.0f}, &alloc);
   ASSERT_TRUE(bf16.has_allocation());
   EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(bf16.bytes())[0],
-            onnx_kernels::kernel::FloatToBfloat16Bits(1.0f));
+            onnx_kernels::FloatToBfloat16Bits(1.0f));
   EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(bf16.bytes())[1],
-            onnx_kernels::kernel::FloatToBfloat16Bits(-2.0f));
+            onnx_kernels::FloatToBfloat16Bits(-2.0f));
 
-  Tensor bf16_scalar = onnx_kernels::kernel::MakeBfloat16Scalar("bf16s", 1.5f, &alloc);
+  Tensor bf16_scalar = onnx_kernels::MakeBfloat16Scalar("bf16s", 1.5f, &alloc);
   ASSERT_TRUE(bf16_scalar.has_allocation());
   EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(bf16_scalar.bytes())[0],
-            onnx_kernels::kernel::FloatToBfloat16Bits(1.5f));
+            onnx_kernels::FloatToBfloat16Bits(1.5f));
 
   Tensor src = Tensor::FromFloat("src", {2}, {1.0f, -2.0f});
-  Tensor cast_f16 = onnx_kernels::kernel::FloatToFloat16Tensor("cast", src, &alloc);
+  Tensor cast_f16 = onnx_kernels::FloatToFloat16Tensor("cast", src, &alloc);
   ASSERT_TRUE(cast_f16.has_allocation());
   EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(cast_f16.bytes())[0],
-            onnx_kernels::kernel::FloatToFloat16Bits(1.0f));
+            onnx_kernels::FloatToFloat16Bits(1.0f));
   EXPECT_EQ(reinterpret_cast<const std::uint16_t *>(cast_f16.bytes())[1],
-            onnx_kernels::kernel::FloatToFloat16Bits(-2.0f));
+            onnx_kernels::FloatToFloat16Bits(-2.0f));
 
-  Tensor rounded =
-      onnx_kernels::kernel::RoundToFloat16(Tensor::FromFloat("round", {1}, {1.1f}), &alloc);
+  Tensor rounded = onnx_kernels::RoundToFloat16(Tensor::FromFloat("round", {1}, {1.1f}), &alloc);
   ASSERT_TRUE(rounded.has_allocation());
-  EXPECT_FLOAT_EQ(
-      reinterpret_cast<const float *>(rounded.bytes())[0],
-      onnx_kernels::kernel::Float16BitsToFloat(onnx_kernels::kernel::FloatToFloat16Bits(1.1f)));
+  EXPECT_FLOAT_EQ(reinterpret_cast<const float *>(rounded.bytes())[0],
+                  onnx_kernels::Float16BitsToFloat(onnx_kernels::FloatToFloat16Bits(1.1f)));
 
-  Tensor u16_zp = onnx_kernels::kernel::Uint16ZeroPoint(7u, &alloc);
+  Tensor u16_zp = onnx_kernels::Uint16ZeroPoint(7u, &alloc);
   ASSERT_TRUE(u16_zp.has_allocation());
   EXPECT_EQ(u16_zp.AsUint16()[0], 7u);
 
-  Tensor i16_zp = onnx_kernels::kernel::Int16ZeroPoint(-3, &alloc);
+  Tensor i16_zp = onnx_kernels::Int16ZeroPoint(-3, &alloc);
   ASSERT_TRUE(i16_zp.has_allocation());
   EXPECT_EQ(i16_zp.AsInt16()[0], -3);
 
-  const auto encode_float8_e5m2 = &onnx_kernels::kernel::FloatToFloat8E5M2Bits;
-  Tensor f8 = onnx_kernels::kernel::MakeFloat8Tensor(onnx_kernels::DataType::FLOAT8E5M2, {2},
-                                                     {0.0f, 1.0f}, encode_float8_e5m2, &alloc);
+  const auto encode_float8_e5m2 = &onnx_kernels::FloatToFloat8E5M2Bits;
+  Tensor f8 = onnx_kernels::MakeFloat8Tensor(core::runtime::DataType::FLOAT8E5M2, {2}, {0.0f, 1.0f},
+                                             encode_float8_e5m2, &alloc);
   ASSERT_TRUE(f8.has_allocation());
-  EXPECT_EQ(f8.bytes()[0], onnx_kernels::kernel::FloatToFloat8E5M2Bits(0.0f));
-  EXPECT_EQ(f8.bytes()[1], onnx_kernels::kernel::FloatToFloat8E5M2Bits(1.0f));
+  EXPECT_EQ(f8.bytes()[0], onnx_kernels::FloatToFloat8E5M2Bits(0.0f));
+  EXPECT_EQ(f8.bytes()[1], onnx_kernels::FloatToFloat8E5M2Bits(1.0f));
 
-  Tensor subbyte = onnx_kernels::kernel::MakeSubByteTensor(onnx_kernels::DataType::UINT4, {3},
-                                                           {1, 2, 3}, /*bits=*/4, &alloc);
+  Tensor subbyte = onnx_kernels::MakeSubByteTensor(core::runtime::DataType::UINT4, {3}, {1, 2, 3},
+                                                   /*bits=*/4, &alloc);
   ASSERT_TRUE(subbyte.has_allocation());
   const std::vector<std::uint8_t> expected_packed_bytes = {0x21u, 0x03u};
   EXPECT_EQ(subbyte.size_bytes(), expected_packed_bytes.size());
   EXPECT_EQ(std::vector<std::uint8_t>(subbyte.bytes(), subbyte.bytes() + subbyte.size_bytes()),
             expected_packed_bytes);
 
-  Tensor float4 = onnx_kernels::kernel::MakeFloat4E2M1Tensor({2}, {0.0f, 1.0f}, &alloc);
+  Tensor float4 = onnx_kernels::MakeFloat4E2M1Tensor({2}, {0.0f, 1.0f}, &alloc);
   ASSERT_TRUE(float4.has_allocation());
   EXPECT_EQ(float4.bytes()[0],
-            static_cast<std::uint8_t>(onnx_kernels::kernel::FloatToFloat4E2M1Nibble(0.0f) |
-                                      (onnx_kernels::kernel::FloatToFloat4E2M1Nibble(1.0f) << 4)));
+            static_cast<std::uint8_t>(onnx_kernels::FloatToFloat4E2M1Nibble(0.0f) |
+                                      (onnx_kernels::FloatToFloat4E2M1Nibble(1.0f) << 4)));
 }
 
 // Regression test for the FLOAT16 -> FLOAT8E5M2 underflow path: a subnormal
@@ -340,9 +338,9 @@ TEST(KernelClass, CastClassFloat16SubnormalToFloat8E5M2) {
   const std::vector<std::uint16_t> bits = {0x0002u, 0x8002u, 0x0100u};
   std::vector<std::uint8_t> bytes(bits.size() * sizeof(std::uint16_t));
   std::memcpy(bytes.data(), bits.data(), bytes.size());
-  Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {3}, std::move(bytes));
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
+  Tensor x("", static_cast<int32_t>(core::runtime::DataType::FLOAT16), {3}, std::move(bytes));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::FLOAT8E5M2));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT8E5M2));
   ASSERT_EQ(y.data.size(), bits.size());
   EXPECT_EQ(y.data[0], 0x00u); // 2^-23 underflows to +0.
   EXPECT_EQ(y.data[1], 0x80u); // -2^-23 underflows to -0.
@@ -353,8 +351,8 @@ TEST(KernelClass, CastClassInt64ToFloat) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromInt64("", {4}, {-3, 0, 7, 42});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], -3.0f);
   EXPECT_FLOAT_EQ(py[1], 0.0f);
@@ -366,7 +364,7 @@ TEST(KernelClass, CastClassIdentityCopiesBytes) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   ASSERT_EQ(y.shape, x.shape);
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 1.0f);
@@ -379,7 +377,7 @@ TEST(KernelClass, CastClassRejectsUnsupportedTo) {
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
   // UINT32 is not in the supported set for the kernel today.
-  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::UINT32)),
+  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::UINT32)),
                std::invalid_argument);
 }
 
@@ -388,8 +386,9 @@ TEST(KernelClass, CastInPlaceRejectsDtypeMismatch) {
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   // Output dtype declared as FLOAT but the caller asks for INT32.
-  Tensor wrong_out("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
-  EXPECT_THROW(cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::INT32), wrong_out),
+  Tensor wrong_out("", core::runtime::DataType::FLOAT, {2},
+                   std::vector<uint8_t>(2 * sizeof(float)));
+  EXPECT_THROW(cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::INT32), wrong_out),
                std::invalid_argument);
 }
 
@@ -403,8 +402,8 @@ TEST(KernelClass, CastClassFloatToStringMatchesOrtFormat) {
                                {0.47892547f, 1000000.0f, 1e-7f, std::nanf(""),
                                 std::numeric_limits<float>::infinity(),
                                 -std::numeric_limits<float>::infinity(), 0.0f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::STRING));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::STRING));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::STRING));
   const std::vector<std::string> &ys = y.AsStrings();
   ASSERT_EQ(ys.size(), 7u);
   EXPECT_EQ(ys[0], "0.47892547");
@@ -422,7 +421,7 @@ TEST(KernelClass, CastClassDoubleToStringMatchesOrtFormat) {
   Tensor x = Tensor::FromDouble("", {4},
                                 {0.123456789, std::nan(""), std::numeric_limits<double>::infinity(),
                                  -std::numeric_limits<double>::infinity()});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::STRING));
   const std::vector<std::string> &ys = y.AsStrings();
   EXPECT_EQ(ys[0], "0.12345679");
   EXPECT_EQ(ys[1], "NaN");
@@ -446,7 +445,7 @@ TEST(KernelClass, CastLikeClassFloatToDouble) {
   // target_type carries the destination dtype only; its value is ignored.
   Tensor target = Tensor::FromDouble("", {1}, {0.0});
   Tensor y = castlike_kernel(x, target);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::DOUBLE));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const double *py = y.AsDouble();
   EXPECT_DOUBLE_EQ(py[0], -1.5);
@@ -464,8 +463,8 @@ TEST(KernelClass, CastLikeClassIgnoresTargetValues) {
   Tensor t2 = Tensor::FromInt32("", {2}, {12345, -67890});
   Tensor y1 = castlike_kernel(x, t1);
   Tensor y2 = castlike_kernel(x, t2);
-  ASSERT_EQ(y1.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
-  ASSERT_EQ(y2.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  ASSERT_EQ(y1.data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
+  ASSERT_EQ(y2.data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
   ASSERT_EQ(y1.shape, x.shape);
   ASSERT_EQ(y2.shape, x.shape);
   const int32_t *p1 = y1.AsInt32();
@@ -485,7 +484,7 @@ TEST(KernelClass, CastLikeInPlaceWritesToPreallocatedOutput) {
   CastLike castlike_kernel{ctx};
   Tensor x = Tensor::FromInt64("", {3}, {-3, 0, 42});
   Tensor target = Tensor::FromFloat("", {1}, {0.0f});
-  Tensor out("", onnx_kernels::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
+  Tensor out("", core::runtime::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
   castlike_kernel(x, target, out);
   const float *po = out.AsFloat();
   EXPECT_FLOAT_EQ(po[0], -3.0f);
@@ -499,7 +498,8 @@ TEST(KernelClass, CastLikeInPlaceRejectsDtypeMismatch) {
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor target = Tensor::FromInt32("", {1}, {0});
   // Pre-allocated output dtype does not match target_type.data_type.
-  Tensor wrong_out("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+  Tensor wrong_out("", core::runtime::DataType::FLOAT, {2},
+                   std::vector<uint8_t>(2 * sizeof(float)));
   EXPECT_THROW(castlike_kernel(x, target, wrong_out), std::invalid_argument);
 }
 
@@ -518,7 +518,7 @@ TEST(KernelClass, CastLikeUsesAllocatorWhenRuntimeContextHasOne) {
 
   EXPECT_TRUE(y.has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::DOUBLE));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const double *py = y.AsDouble();
   EXPECT_DOUBLE_EQ(py[0], -1.5);
@@ -541,7 +541,7 @@ TEST(KernelClass, CastLikeWithSaturateUsesAllocatorWhenRuntimeContextHasOne) {
 
   EXPECT_TRUE(y.has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
   const int32_t *py = y.AsInt32();
   EXPECT_EQ(py[0], 1);
@@ -783,7 +783,7 @@ TEST(KernelClass, NonZeroFloat2DReturnsRowMajorIndices) {
   // Output is (rank=2, nnz=3) = [[0,1,1],[0,0,1]].
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 0.0f, 1.0f, 1.0f});
   Tensor y = nonzero_kernel(x);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 0);
@@ -829,7 +829,7 @@ TEST(KernelClass, ShapeDefaultReturnsFullShape) {
   Shape shape_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3, 4}, std::vector<float>(24, 0.0f));
   Tensor y = shape_kernel(x);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 2);
@@ -1484,7 +1484,7 @@ TEST(KernelClass, OneHotDefaultAxisMatchesReference) {
   onnx_kernels::kernel::OneHot::Attributes attrs; // axis = -1
   Tensor y = one_hot(indices, depth, values, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 12}));
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::INT32));
   const int32_t *py = y.AsInt32();
   // Expected rows: position 0, 7, 8 are 5 (on_value); rest 2 (off_value).
   for (int64_t i = 0; i < 3; ++i) {

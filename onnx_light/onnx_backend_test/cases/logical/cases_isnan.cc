@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -70,7 +70,7 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
     Expect(registry, std::move(node), "test_isnan_float16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeFloat16Tensor("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
+      Tensor x = MakeFloat16Tensor("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
       Tensor y = isnan_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -85,7 +85,7 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
       std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
       auto *dst = reinterpret_cast<uint16_t *>(raw.data());
       for (size_t i = 0; i < vals.size(); ++i)
-        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+        dst[i] = FloatToBfloat16Bits(vals[i]);
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {6}, std::move(raw));
       Tensor y = isnan_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};

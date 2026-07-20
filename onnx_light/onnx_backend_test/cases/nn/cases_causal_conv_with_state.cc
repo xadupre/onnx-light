@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -29,7 +29,7 @@ namespace onnx_backend_test {
 namespace {
 
 // The FLOAT16 tensor builder is provided by
-// ``onnx_kernels/kernels/_helpers/cast_helper.h`` as ``kernel::MakeFloat16Tensor``.
+// ``onnx_core/runtime/cast_helper.h`` as ``MakeFloat16Tensor``.
 
 NodeProto MakeCausalConvNode(const std::vector<std::string> &inputs,
                              const std::vector<std::string> &outputs) {
@@ -143,20 +143,18 @@ void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry, TestMode 
 
   // Case: fp16
   {
-    Tensor X = kernel::MakeFloat16Tensor("input", {1, 2, 4},
-                                         {0.0f, 0.1f, 0.2f, 0.3f, 1.0f, 1.1f, 1.2f, 1.3f});
-    Tensor W =
-        kernel::MakeFloat16Tensor("weight", {2, 1, 3}, {0.5f, -0.25f, 0.125f, 1.0f, 0.5f, 0.25f});
+    Tensor X =
+        MakeFloat16Tensor("input", {1, 2, 4}, {0.0f, 0.1f, 0.2f, 0.3f, 1.0f, 1.1f, 1.2f, 1.3f});
+    Tensor W = MakeFloat16Tensor("weight", {2, 1, 3}, {0.5f, -0.25f, 0.125f, 1.0f, 0.5f, 0.25f});
     RegisterCase(registry, "test_cc_causal_conv_with_state_fp16", opset, kernel, X, W, nullptr,
                  nullptr, "none");
   }
 
   // Case: silu_fp16 (activation = "silu")
   {
-    Tensor X = kernel::MakeFloat16Tensor("input", {1, 2, 4},
-                                         {0.0f, 0.1f, 0.2f, 0.3f, 1.0f, 1.1f, 1.2f, 1.3f});
-    Tensor W =
-        kernel::MakeFloat16Tensor("weight", {2, 1, 3}, {0.5f, -0.25f, 0.125f, 1.0f, 0.5f, 0.25f});
+    Tensor X =
+        MakeFloat16Tensor("input", {1, 2, 4}, {0.0f, 0.1f, 0.2f, 0.3f, 1.0f, 1.1f, 1.2f, 1.3f});
+    Tensor W = MakeFloat16Tensor("weight", {2, 1, 3}, {0.5f, -0.25f, 0.125f, 1.0f, 0.5f, 0.25f});
     RegisterCase(registry, "test_cc_causal_conv_with_state_silu_fp16", opset, kernel, X, W, nullptr,
                  nullptr, "silu");
   }

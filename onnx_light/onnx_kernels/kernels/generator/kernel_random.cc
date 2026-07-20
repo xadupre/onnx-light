@@ -10,8 +10,8 @@
 #include <string>
 #include <utility>
 
-#include "onnx_kernels/random.h"
-#include "onnx_kernels/runtime_context.h"
+#include "onnx_core/runtime/random.h"
+#include "onnx_core/runtime/runtime_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

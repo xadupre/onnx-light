@@ -20,8 +20,8 @@ std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_
   return registry;
 }
 } // namespace
+using core::runtime::Tensor;
 using onnx_backend_test::TestCase;
-using onnx_kernels::Tensor;
 
 namespace Test {
 
@@ -80,10 +80,10 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     for (const Tensor &t : ds.inputs) {
-      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+      EXPECT_EQ(t.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
       EXPECT_EQ(t.shape.size(), 4u);
     }
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape.size(), 4u);
 
     // Model must import the ``ai.onnx.preview`` opset at version 1.
@@ -205,10 +205,10 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     for (const Tensor &t : ds.inputs) {
-      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+      EXPECT_EQ(t.data_type, static_cast<int32_t>(core::runtime::DataType::DOUBLE));
       EXPECT_EQ(t.shape.size(), 4u);
     }
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::DOUBLE));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 2}));
 
     const float *baseline = basic->data_sets()[0].outputs[0].AsFloat();

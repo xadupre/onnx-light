@@ -4,9 +4,9 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
-#include "onnx_kernels/random.h"
 
 #include <cstdint>
 #include <vector>
@@ -85,7 +85,7 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_log_float16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f});
+      Tensor x = MakeFloat16Tensor("", {2, 3}, {0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f});
       Tensor y = log_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -102,7 +102,7 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
       std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
       auto *dst = reinterpret_cast<uint16_t *>(raw.data());
       for (size_t i = 0; i < vals.size(); ++i)
-        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+        dst[i] = FloatToBfloat16Bits(vals[i]);
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
       Tensor y = log_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};

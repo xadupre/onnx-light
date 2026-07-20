@@ -4,8 +4,8 @@
 
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_float8.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_float8.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -21,10 +21,10 @@ namespace onnx_backend_test {
 namespace {
 
 // Tensor builders and bit packing helpers are provided by
-// ``onnx_kernels/kernels/_helpers/cast_helper.h`` (kernel::Uint16ZeroPoint,
-// kernel::Int16ZeroPoint, kernel::MakeFloat8Tensor, kernel::Pack2Bit,
-// kernel::Pack4Bit, kernel::MakeSubByteTensor,
-// kernel::FloatToFloat4E2M1Nibble, kernel::MakeFloat4E2M1Tensor).
+// ``onnx_core/runtime/cast_helper.h`` (Uint16ZeroPoint,
+// Int16ZeroPoint, MakeFloat8Tensor, kernel::Pack2Bit,
+// kernel::Pack4Bit, MakeSubByteTensor,
+// kernel::FloatToFloat4E2M1Nibble, MakeFloat4E2M1Tensor).
 
 } // namespace
 
@@ -142,7 +142,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
     Expect(registry, node, "test_quantizelinear_uint16", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, 3.0f, 200000.0f});
       Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
-      const Tensor y_zero_point = kernel::Uint16ZeroPoint(32767);
+      const Tensor y_zero_point = Uint16ZeroPoint(32767);
       Tensor y = quantize_kernel(x, y_scale, y_zero_point);
       return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)}, {std::move(y)}};
     });
@@ -153,7 +153,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
     Expect(registry, node, "test_quantizelinear_int16", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, 3.0f, -100000.0f});
       Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
-      const Tensor y_zero_point = kernel::Int16ZeroPoint(-1024);
+      const Tensor y_zero_point = Int16ZeroPoint(-1024);
       Tensor y = quantize_kernel(x, y_scale, y_zero_point);
       return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)}, {std::move(y)}};
     });
@@ -214,11 +214,11 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
            [=]() -> IoData {
              Tensor x = Tensor::FromFloat("", {5}, {0.0f, 1.0f, 2.0f, 100000.0f, 200.0f});
              Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
-             Tensor y_zero_point = kernel::MakeFloat8Tensor(DataType::FLOAT8E4M3FN, {1}, {0.0f},
-                                                            &kernel::FloatToFloat8E4M3FNBits);
-             Tensor y = kernel::MakeFloat8Tensor(DataType::FLOAT8E4M3FN, {5},
-                                                 {0.0f, 0.5f, 1.0f, 448.0f, 96.0f},
-                                                 &kernel::FloatToFloat8E4M3FNBits);
+             Tensor y_zero_point =
+                 MakeFloat8Tensor(DataType::FLOAT8E4M3FN, {1}, {0.0f}, &FloatToFloat8E4M3FNBits);
+             Tensor y =
+                 MakeFloat8Tensor(DataType::FLOAT8E4M3FN, {5}, {0.0f, 0.5f, 1.0f, 448.0f, 96.0f},
+                                  &FloatToFloat8E4M3FNBits);
              return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)},
                            {std::move(y)}};
            });
@@ -233,18 +233,17 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
     e5m2_node.add_input("y_scale");
     e5m2_node.add_input("y_zero_point");
     e5m2_node.add_output("y");
-    Expect(registry, std::move(e5m2_node), "test_quantizelinear_e5m2", {opset_v21},
-           [=]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {5}, {0.0f, 1.0f, 2.0f, 100000.0f, 200.0f});
-             Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
-             Tensor y_zero_point = kernel::MakeFloat8Tensor(DataType::FLOAT8E5M2, {1}, {0.0f},
-                                                            &kernel::FloatToFloat8E5M2Bits);
-             Tensor y = kernel::MakeFloat8Tensor(DataType::FLOAT8E5M2, {5},
-                                                 {0.0f, 0.5f, 1.0f, 49152.0f, 96.0f},
-                                                 &kernel::FloatToFloat8E5M2Bits);
-             return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)},
-                           {std::move(y)}};
-           });
+    Expect(
+        registry, std::move(e5m2_node), "test_quantizelinear_e5m2", {opset_v21}, [=]() -> IoData {
+          Tensor x = Tensor::FromFloat("", {5}, {0.0f, 1.0f, 2.0f, 100000.0f, 200.0f});
+          Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
+          Tensor y_zero_point =
+              MakeFloat8Tensor(DataType::FLOAT8E5M2, {1}, {0.0f}, &FloatToFloat8E5M2Bits);
+          Tensor y = MakeFloat8Tensor(DataType::FLOAT8E5M2, {5},
+                                      {0.0f, 0.5f, 1.0f, 49152.0f, 96.0f}, &FloatToFloat8E5M2Bits);
+          return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)},
+                        {std::move(y)}};
+        });
   }
 
   // The remaining upstream cases (UINT4/INT4/UINT2/INT2/FLOAT4E2M1) all use
@@ -268,9 +267,9 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
       Tensor x = Tensor::FromFloat(
           "", sub_byte_x_shape,
           {0.0f, 2.5f, 4.8f, 8.6f, -30.0f, -20.0f, 6.0f, 9.0f, 12.0f, 15.0f, 16.0f, 40.0f});
-      Tensor y_zero_point = kernel::MakeSubByteTensor(DataType::UINT4, {3}, {1, 1, 1}, /*bits=*/4);
-      Tensor y = kernel::MakeSubByteTensor(DataType::UINT4, sub_byte_x_shape,
-                                           {1, 2, 3, 5, 0, 0, 3, 4, 4, 5, 5, 11}, /*bits=*/4);
+      Tensor y_zero_point = MakeSubByteTensor(DataType::UINT4, {3}, {1, 1, 1}, /*bits=*/4);
+      Tensor y = MakeSubByteTensor(DataType::UINT4, sub_byte_x_shape,
+                                   {1, 2, 3, 5, 0, 0, 3, 4, 4, 5, 5, 11}, /*bits=*/4);
       return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
                     {std::move(y)}};
     });
@@ -282,9 +281,9 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
       Tensor x = Tensor::FromFloat(
           "", sub_byte_x_shape,
           {0.0f, 2.5f, 4.8f, 8.6f, -30.0f, -20.0f, 6.0f, 9.0f, 12.0f, 15.0f, 16.0f, 40.0f});
-      Tensor y_zero_point = kernel::MakeSubByteTensor(DataType::INT4, {3}, {1, 1, 1}, /*bits=*/4);
-      Tensor y = kernel::MakeSubByteTensor(DataType::INT4, sub_byte_x_shape,
-                                           {1, 2, 3, 5, -8, -6, 3, 4, 4, 5, 5, 7}, /*bits=*/4);
+      Tensor y_zero_point = MakeSubByteTensor(DataType::INT4, {3}, {1, 1, 1}, /*bits=*/4);
+      Tensor y = MakeSubByteTensor(DataType::INT4, sub_byte_x_shape,
+                                   {1, 2, 3, 5, -8, -6, 3, 4, 4, 5, 5, 7}, /*bits=*/4);
       return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
                     {std::move(y)}};
     });
@@ -296,9 +295,9 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
       Tensor x = Tensor::FromFloat(
           "", sub_byte_x_shape,
           {0.0f, 2.5f, 4.8f, 8.6f, -2.0f, -1.0f, 1.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
-      Tensor y_zero_point = kernel::MakeSubByteTensor(DataType::UINT2, {3}, {0, 0, 0}, /*bits=*/2);
-      Tensor y = kernel::MakeSubByteTensor(DataType::UINT2, sub_byte_x_shape,
-                                           {0, 1, 2, 3, 0, 0, 0, 1, 1, 1, 2, 2}, /*bits=*/2);
+      Tensor y_zero_point = MakeSubByteTensor(DataType::UINT2, {3}, {0, 0, 0}, /*bits=*/2);
+      Tensor y = MakeSubByteTensor(DataType::UINT2, sub_byte_x_shape,
+                                   {0, 1, 2, 3, 0, 0, 0, 1, 1, 1, 2, 2}, /*bits=*/2);
       return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
                     {std::move(y)}};
     });
@@ -310,9 +309,9 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
       Tensor x = Tensor::FromFloat(
           "", sub_byte_x_shape,
           {0.0f, 2.5f, 4.8f, 8.6f, -4.0f, -3.0f, 1.0f, 2.0f, -0.0f, -2.5f, -4.8f, -8.6f});
-      Tensor y_zero_point = kernel::MakeSubByteTensor(DataType::INT2, {3}, {0, 0, 0}, /*bits=*/2);
-      Tensor y = kernel::MakeSubByteTensor(DataType::INT2, sub_byte_x_shape,
-                                           {0, 1, 1, 1, -1, -1, 0, 1, 0, -1, -1, -2}, /*bits=*/2);
+      Tensor y_zero_point = MakeSubByteTensor(DataType::INT2, {3}, {0, 0, 0}, /*bits=*/2);
+      Tensor y = MakeSubByteTensor(DataType::INT2, sub_byte_x_shape,
+                                   {0, 1, 1, 1, -1, -1, 0, 1, 0, -1, -1, -2}, /*bits=*/2);
       return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
                     {std::move(y)}};
     });
@@ -324,10 +323,9 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
       Tensor x = Tensor::FromFloat(
           "", sub_byte_x_shape,
           {0.0f, 2.5f, 4.8f, 8.6f, -30.0f, -20.0f, 6.0f, 9.0f, -0.0f, -2.5f, -4.8f, -8.6f});
-      Tensor y_zero_point = kernel::MakeFloat4E2M1Tensor({3}, {0.0f, 0.0f, 0.0f});
-      Tensor y =
-          kernel::MakeFloat4E2M1Tensor(sub_byte_x_shape, {0.0f, 1.0f, 2.0f, 4.0f, -6.0f, -6.0f,
-                                                          2.0f, 3.0f, 0.0f, -0.5f, -1.0f, -2.0f});
+      Tensor y_zero_point = MakeFloat4E2M1Tensor({3}, {0.0f, 0.0f, 0.0f});
+      Tensor y = MakeFloat4E2M1Tensor(sub_byte_x_shape, {0.0f, 1.0f, 2.0f, 4.0f, -6.0f, -6.0f, 2.0f,
+                                                         3.0f, 0.0f, -0.5f, -1.0f, -2.0f});
       return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
                     {std::move(y)}};
     });

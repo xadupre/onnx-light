@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <string>
@@ -100,7 +100,7 @@ void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("X");
     node.add_output("Y");
     Expect(registry, std::move(node), "test_cc_gelu_default_float16", {opset}, [=]() -> IoData {
-      Tensor x = kernel::MakeFloat16Tensor("", {3}, {-1.0f, 0.0f, 1.0f});
+      Tensor x = MakeFloat16Tensor("", {3}, {-1.0f, 0.0f, 1.0f});
       Tensor y = gelu_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -119,7 +119,7 @@ void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_gelu_tanh_float16", {opset}, [=]() -> IoData {
       approximate->set_s("tanh");
 
-      Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
+      Tensor x = MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
       Tensor y = gelu_kernel(x, "tanh");
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -136,7 +136,7 @@ void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
       std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
       auto *dst = reinterpret_cast<uint16_t *>(raw.data());
       for (size_t i = 0; i < vals.size(); ++i) {
-        dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+        dst[i] = FloatToBfloat16Bits(vals[i]);
       }
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(raw));
       Tensor y = gelu_kernel(x);

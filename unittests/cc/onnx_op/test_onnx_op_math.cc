@@ -19,8 +19,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -30,98 +30,98 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> add_schemas =
+  const std::vector<core::schema::LightOpSchema> add_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Add");
-  const std::vector<onnx_op::LightOpSchema> mul_schemas =
+  const std::vector<core::schema::LightOpSchema> mul_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mul");
-  const std::vector<onnx_op::LightOpSchema> div_schemas =
+  const std::vector<core::schema::LightOpSchema> div_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Div");
-  const std::vector<onnx_op::LightOpSchema> sub_schemas =
+  const std::vector<core::schema::LightOpSchema> sub_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sub");
-  const std::vector<onnx_op::LightOpSchema> mod_schemas =
+  const std::vector<core::schema::LightOpSchema> mod_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mod");
-  const std::vector<onnx_op::LightOpSchema> pow_schemas =
+  const std::vector<core::schema::LightOpSchema> pow_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Pow");
-  const std::vector<onnx_op::LightOpSchema> prelu_schemas =
+  const std::vector<core::schema::LightOpSchema> prelu_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("PRelu");
-  const std::vector<onnx_op::LightOpSchema> abs_schemas =
+  const std::vector<core::schema::LightOpSchema> abs_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Abs");
-  const std::vector<onnx_op::LightOpSchema> sin_schemas =
+  const std::vector<core::schema::LightOpSchema> sin_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sin");
-  const std::vector<onnx_op::LightOpSchema> cos_schemas =
+  const std::vector<core::schema::LightOpSchema> cos_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Cos");
-  const std::vector<onnx_op::LightOpSchema> cosh_schemas =
+  const std::vector<core::schema::LightOpSchema> cosh_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Cosh");
-  const std::vector<onnx_op::LightOpSchema> sinh_schemas =
+  const std::vector<core::schema::LightOpSchema> sinh_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sinh");
-  const std::vector<onnx_op::LightOpSchema> asin_schemas =
+  const std::vector<core::schema::LightOpSchema> asin_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Asin");
-  const std::vector<onnx_op::LightOpSchema> acos_schemas =
+  const std::vector<core::schema::LightOpSchema> acos_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Acos");
-  const std::vector<onnx_op::LightOpSchema> asinh_schemas =
+  const std::vector<core::schema::LightOpSchema> asinh_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Asinh");
-  const std::vector<onnx_op::LightOpSchema> acosh_schemas =
+  const std::vector<core::schema::LightOpSchema> acosh_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Acosh");
-  const std::vector<onnx_op::LightOpSchema> atan_schemas =
+  const std::vector<core::schema::LightOpSchema> atan_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Atan");
-  const std::vector<onnx_op::LightOpSchema> atanh_schemas =
+  const std::vector<core::schema::LightOpSchema> atanh_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Atanh");
-  const std::vector<onnx_op::LightOpSchema> tan_schemas =
+  const std::vector<core::schema::LightOpSchema> tan_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Tan");
-  const std::vector<onnx_op::LightOpSchema> tanh_schemas =
+  const std::vector<core::schema::LightOpSchema> tanh_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Tanh");
-  const std::vector<onnx_op::LightOpSchema> blackman_window_schemas =
+  const std::vector<core::schema::LightOpSchema> blackman_window_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("BlackmanWindow");
-  const std::vector<onnx_op::LightOpSchema> hann_window_schemas =
+  const std::vector<core::schema::LightOpSchema> hann_window_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("HannWindow");
-  const std::vector<onnx_op::LightOpSchema> hamming_window_schemas =
+  const std::vector<core::schema::LightOpSchema> hamming_window_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("HammingWindow");
-  const std::vector<onnx_op::LightOpSchema> sigmoid_schemas =
+  const std::vector<core::schema::LightOpSchema> sigmoid_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sigmoid");
-  const std::vector<onnx_op::LightOpSchema> softmax_schemas =
+  const std::vector<core::schema::LightOpSchema> softmax_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Softmax");
-  const std::vector<onnx_op::LightOpSchema> logsoftmax_schemas =
+  const std::vector<core::schema::LightOpSchema> logsoftmax_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("LogSoftmax");
-  const std::vector<onnx_op::LightOpSchema> sqrt_schemas =
+  const std::vector<core::schema::LightOpSchema> sqrt_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sqrt");
-  const std::vector<onnx_op::LightOpSchema> exp_schemas =
+  const std::vector<core::schema::LightOpSchema> exp_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Exp");
-  const std::vector<onnx_op::LightOpSchema> erf_schemas =
+  const std::vector<core::schema::LightOpSchema> erf_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Erf");
-  const std::vector<onnx_op::LightOpSchema> sign_schemas =
+  const std::vector<core::schema::LightOpSchema> sign_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sign");
-  const std::vector<onnx_op::LightOpSchema> log_schemas =
+  const std::vector<core::schema::LightOpSchema> log_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Log");
-  const std::vector<onnx_op::LightOpSchema> mat_mul_schemas =
+  const std::vector<core::schema::LightOpSchema> mat_mul_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("MatMul");
-  const std::vector<onnx_op::LightOpSchema> gemm_schemas =
+  const std::vector<core::schema::LightOpSchema> gemm_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Gemm");
-  const std::vector<onnx_op::LightOpSchema> sum_schemas =
+  const std::vector<core::schema::LightOpSchema> sum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sum");
-  const std::vector<onnx_op::LightOpSchema> einsum_schemas =
+  const std::vector<core::schema::LightOpSchema> einsum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Einsum");
-  const std::vector<onnx_op::LightOpSchema> topk_schemas =
+  const std::vector<core::schema::LightOpSchema> topk_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("TopK");
-  const std::vector<onnx_op::LightOpSchema> swish_schemas =
+  const std::vector<core::schema::LightOpSchema> swish_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Swish");
-  const std::vector<onnx_op::LightOpSchema> neg_schemas =
+  const std::vector<core::schema::LightOpSchema> neg_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Neg");
-  const std::vector<onnx_op::LightOpSchema> max_schemas =
+  const std::vector<core::schema::LightOpSchema> max_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Max");
-  const std::vector<onnx_op::LightOpSchema> min_schemas =
+  const std::vector<core::schema::LightOpSchema> min_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Min");
-  const std::vector<onnx_op::LightOpSchema> mean_schemas =
+  const std::vector<core::schema::LightOpSchema> mean_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mean");
 
   EXPECT_EQ(schemas.size(), 181u);
 
   // Neg has three versioned schemas (v1, v6, v13).
   ASSERT_EQ(neg_schemas.size(), 3u);
-  const onnx_op::LightOpSchema *const neg_v1 = FindByVersion(neg_schemas, 1);
-  const onnx_op::LightOpSchema *const neg_v6 = FindByVersion(neg_schemas, 6);
-  const onnx_op::LightOpSchema *const neg_v13 = FindByVersion(neg_schemas, 13);
+  const core::schema::LightOpSchema *const neg_v1 = FindByVersion(neg_schemas, 1);
+  const core::schema::LightOpSchema *const neg_v6 = FindByVersion(neg_schemas, 6);
+  const core::schema::LightOpSchema *const neg_v13 = FindByVersion(neg_schemas, 13);
   ASSERT_NE(nullptr, neg_v1);
   ASSERT_NE(nullptr, neg_v6);
   ASSERT_NE(nullptr, neg_v13);
@@ -136,7 +136,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
 
   // Swish was introduced at v24 and has had a single schema since then.
   ASSERT_EQ(swish_schemas.size(), 1u);
-  const onnx_op::LightOpSchema *const swish_v24 = FindByVersion(swish_schemas, 24);
+  const core::schema::LightOpSchema *const swish_v24 = FindByVersion(swish_schemas, 24);
   ASSERT_NE(nullptr, swish_v24);
   EXPECT_EQ(swish_v24->domain(), "ai.onnx");
   EXPECT_EQ(swish_v24->since_version(), 24);
@@ -147,12 +147,12 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(swish_v24->outputs()[0].name, "Y");
   ASSERT_EQ(swish_v24->attributes().size(), 1u);
   EXPECT_EQ(swish_v24->attributes()[0].name, "alpha");
-  EXPECT_EQ(swish_v24->attributes()[0].type, onnx_op::AttributeType::FLOAT);
+  EXPECT_EQ(swish_v24->attributes()[0].type, core::schema::AttributeType::FLOAT);
   EXPECT_FALSE(swish_v24->attributes()[0].required);
 
   // Einsum was introduced at v12 and has had a single schema since then.
   ASSERT_EQ(einsum_schemas.size(), 1u);
-  const onnx_op::LightOpSchema *const einsum_v12 = FindByVersion(einsum_schemas, 12);
+  const core::schema::LightOpSchema *const einsum_v12 = FindByVersion(einsum_schemas, 12);
   ASSERT_NE(nullptr, einsum_v12);
   EXPECT_EQ(einsum_v12->domain(), "ai.onnx");
   EXPECT_EQ(einsum_v12->since_version(), 12);
@@ -165,14 +165,14 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(einsum_v12->type_constraints()[0].type_param_str, "T");
   ASSERT_EQ(einsum_v12->attributes().size(), 1u);
   EXPECT_EQ(einsum_v12->attributes()[0].name, "equation");
-  EXPECT_EQ(einsum_v12->attributes()[0].type, onnx_op::AttributeType::STRING);
+  EXPECT_EQ(einsum_v12->attributes()[0].type, core::schema::AttributeType::STRING);
   EXPECT_TRUE(einsum_v12->attributes()[0].required);
 
   // TopK has three versioned schemas (v1, v10, v11).
   ASSERT_EQ(topk_schemas.size(), 3u);
-  const onnx_op::LightOpSchema *const topk_v1 = FindByVersion(topk_schemas, 1);
-  const onnx_op::LightOpSchema *const topk_v10 = FindByVersion(topk_schemas, 10);
-  const onnx_op::LightOpSchema *const topk_v11 = FindByVersion(topk_schemas, 11);
+  const core::schema::LightOpSchema *const topk_v1 = FindByVersion(topk_schemas, 1);
+  const core::schema::LightOpSchema *const topk_v10 = FindByVersion(topk_schemas, 10);
+  const core::schema::LightOpSchema *const topk_v11 = FindByVersion(topk_schemas, 11);
   ASSERT_NE(nullptr, topk_v1);
   ASSERT_NE(nullptr, topk_v10);
   ASSERT_NE(nullptr, topk_v11);
@@ -190,10 +190,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
 
   // Sum has four versioned schemas (v1, v6, v8, v13).
   EXPECT_EQ(sum_schemas.size(), 4u);
-  const onnx_op::LightOpSchema *const sum_v13 = FindByVersion(sum_schemas, 13);
-  const onnx_op::LightOpSchema *const sum_v8 = FindByVersion(sum_schemas, 8);
-  const onnx_op::LightOpSchema *const sum_v6 = FindByVersion(sum_schemas, 6);
-  const onnx_op::LightOpSchema *const sum_v1 = FindByVersion(sum_schemas, 1);
+  const core::schema::LightOpSchema *const sum_v13 = FindByVersion(sum_schemas, 13);
+  const core::schema::LightOpSchema *const sum_v8 = FindByVersion(sum_schemas, 8);
+  const core::schema::LightOpSchema *const sum_v6 = FindByVersion(sum_schemas, 6);
+  const core::schema::LightOpSchema *const sum_v1 = FindByVersion(sum_schemas, 1);
   ASSERT_NE(nullptr, sum_v13);
   ASSERT_NE(nullptr, sum_v8);
   ASSERT_NE(nullptr, sum_v6);
@@ -222,10 +222,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
 
   // Mean has four versioned schemas (v1, v6, v8, v13), mirroring Sum.
   EXPECT_EQ(mean_schemas.size(), 4u);
-  const onnx_op::LightOpSchema *const mean_v13 = FindByVersion(mean_schemas, 13);
-  const onnx_op::LightOpSchema *const mean_v8 = FindByVersion(mean_schemas, 8);
-  const onnx_op::LightOpSchema *const mean_v6 = FindByVersion(mean_schemas, 6);
-  const onnx_op::LightOpSchema *const mean_v1 = FindByVersion(mean_schemas, 1);
+  const core::schema::LightOpSchema *const mean_v13 = FindByVersion(mean_schemas, 13);
+  const core::schema::LightOpSchema *const mean_v8 = FindByVersion(mean_schemas, 8);
+  const core::schema::LightOpSchema *const mean_v6 = FindByVersion(mean_schemas, 6);
+  const core::schema::LightOpSchema *const mean_v1 = FindByVersion(mean_schemas, 1);
   ASSERT_NE(nullptr, mean_v13);
   ASSERT_NE(nullptr, mean_v8);
   ASSERT_NE(nullptr, mean_v6);
@@ -256,11 +256,11 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   for (const auto *schemas_ptr : {&max_schemas, &min_schemas}) {
     const auto &s = *schemas_ptr;
     EXPECT_EQ(s.size(), 5u);
-    const onnx_op::LightOpSchema *const s_v13 = FindByVersion(s, 13);
-    const onnx_op::LightOpSchema *const s_v12 = FindByVersion(s, 12);
-    const onnx_op::LightOpSchema *const s_v8 = FindByVersion(s, 8);
-    const onnx_op::LightOpSchema *const s_v6 = FindByVersion(s, 6);
-    const onnx_op::LightOpSchema *const s_v1 = FindByVersion(s, 1);
+    const core::schema::LightOpSchema *const s_v13 = FindByVersion(s, 13);
+    const core::schema::LightOpSchema *const s_v12 = FindByVersion(s, 12);
+    const core::schema::LightOpSchema *const s_v8 = FindByVersion(s, 8);
+    const core::schema::LightOpSchema *const s_v6 = FindByVersion(s, 6);
+    const core::schema::LightOpSchema *const s_v1 = FindByVersion(s, 1);
     ASSERT_NE(nullptr, s_v13);
     ASSERT_NE(nullptr, s_v12);
     ASSERT_NE(nullptr, s_v8);
@@ -292,77 +292,77 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(FindByVersion(max_schemas, 13)->outputs()[0].name, "max");
   EXPECT_EQ(FindByVersion(min_schemas, 13)->outputs()[0].name, "min");
 
-  const onnx_op::LightOpSchema *const add = FindByVersion(add_schemas, 14);
-  const onnx_op::LightOpSchema *const add_v1 = FindByVersion(add_schemas, 1);
-  const onnx_op::LightOpSchema *const mul_v13 = FindByVersion(mul_schemas, 13);
-  const onnx_op::LightOpSchema *const div_v7 = FindByVersion(div_schemas, 7);
-  const onnx_op::LightOpSchema *const sub_v6 = FindByVersion(sub_schemas, 6);
-  const onnx_op::LightOpSchema *const mod_v13 = FindByVersion(mod_schemas, 13);
-  const onnx_op::LightOpSchema *const mod_v10 = FindByVersion(mod_schemas, 10);
-  const onnx_op::LightOpSchema *const pow_v7 = FindByVersion(pow_schemas, 7);
-  const onnx_op::LightOpSchema *const pow_v1 = FindByVersion(pow_schemas, 1);
-  const onnx_op::LightOpSchema *const abs_v13 = FindByVersion(abs_schemas, 13);
-  const onnx_op::LightOpSchema *const abs_v6 = FindByVersion(abs_schemas, 6);
-  const onnx_op::LightOpSchema *const abs_v1 = FindByVersion(abs_schemas, 1);
-  const onnx_op::LightOpSchema *const sin_v22 = FindByVersion(sin_schemas, 22);
-  const onnx_op::LightOpSchema *const sin_v7 = FindByVersion(sin_schemas, 7);
-  const onnx_op::LightOpSchema *const cos_v22 = FindByVersion(cos_schemas, 22);
-  const onnx_op::LightOpSchema *const cosh_v22 = FindByVersion(cosh_schemas, 22);
-  const onnx_op::LightOpSchema *const sinh_v22 = FindByVersion(sinh_schemas, 22);
-  const onnx_op::LightOpSchema *const sinh_v9 = FindByVersion(sinh_schemas, 9);
-  const onnx_op::LightOpSchema *const asin_v22 = FindByVersion(asin_schemas, 22);
-  const onnx_op::LightOpSchema *const asin_v7 = FindByVersion(asin_schemas, 7);
-  const onnx_op::LightOpSchema *const acos_v22 = FindByVersion(acos_schemas, 22);
-  const onnx_op::LightOpSchema *const acos_v7 = FindByVersion(acos_schemas, 7);
-  const onnx_op::LightOpSchema *const asinh_v22 = FindByVersion(asinh_schemas, 22);
-  const onnx_op::LightOpSchema *const asinh_v9 = FindByVersion(asinh_schemas, 9);
-  const onnx_op::LightOpSchema *const acosh_v22 = FindByVersion(acosh_schemas, 22);
-  const onnx_op::LightOpSchema *const acosh_v9 = FindByVersion(acosh_schemas, 9);
-  const onnx_op::LightOpSchema *const atan_v22 = FindByVersion(atan_schemas, 22);
-  const onnx_op::LightOpSchema *const atan_v7 = FindByVersion(atan_schemas, 7);
-  const onnx_op::LightOpSchema *const atanh_v22 = FindByVersion(atanh_schemas, 22);
-  const onnx_op::LightOpSchema *const atanh_v9 = FindByVersion(atanh_schemas, 9);
-  const onnx_op::LightOpSchema *const tan_v22 = FindByVersion(tan_schemas, 22);
-  const onnx_op::LightOpSchema *const tan_v7 = FindByVersion(tan_schemas, 7);
-  const onnx_op::LightOpSchema *const tanh_v13 = FindByVersion(tanh_schemas, 13);
-  const onnx_op::LightOpSchema *const tanh_v6 = FindByVersion(tanh_schemas, 6);
-  const onnx_op::LightOpSchema *const tanh_v1 = FindByVersion(tanh_schemas, 1);
-  const onnx_op::LightOpSchema *const blackman_window_v17 =
+  const core::schema::LightOpSchema *const add = FindByVersion(add_schemas, 14);
+  const core::schema::LightOpSchema *const add_v1 = FindByVersion(add_schemas, 1);
+  const core::schema::LightOpSchema *const mul_v13 = FindByVersion(mul_schemas, 13);
+  const core::schema::LightOpSchema *const div_v7 = FindByVersion(div_schemas, 7);
+  const core::schema::LightOpSchema *const sub_v6 = FindByVersion(sub_schemas, 6);
+  const core::schema::LightOpSchema *const mod_v13 = FindByVersion(mod_schemas, 13);
+  const core::schema::LightOpSchema *const mod_v10 = FindByVersion(mod_schemas, 10);
+  const core::schema::LightOpSchema *const pow_v7 = FindByVersion(pow_schemas, 7);
+  const core::schema::LightOpSchema *const pow_v1 = FindByVersion(pow_schemas, 1);
+  const core::schema::LightOpSchema *const abs_v13 = FindByVersion(abs_schemas, 13);
+  const core::schema::LightOpSchema *const abs_v6 = FindByVersion(abs_schemas, 6);
+  const core::schema::LightOpSchema *const abs_v1 = FindByVersion(abs_schemas, 1);
+  const core::schema::LightOpSchema *const sin_v22 = FindByVersion(sin_schemas, 22);
+  const core::schema::LightOpSchema *const sin_v7 = FindByVersion(sin_schemas, 7);
+  const core::schema::LightOpSchema *const cos_v22 = FindByVersion(cos_schemas, 22);
+  const core::schema::LightOpSchema *const cosh_v22 = FindByVersion(cosh_schemas, 22);
+  const core::schema::LightOpSchema *const sinh_v22 = FindByVersion(sinh_schemas, 22);
+  const core::schema::LightOpSchema *const sinh_v9 = FindByVersion(sinh_schemas, 9);
+  const core::schema::LightOpSchema *const asin_v22 = FindByVersion(asin_schemas, 22);
+  const core::schema::LightOpSchema *const asin_v7 = FindByVersion(asin_schemas, 7);
+  const core::schema::LightOpSchema *const acos_v22 = FindByVersion(acos_schemas, 22);
+  const core::schema::LightOpSchema *const acos_v7 = FindByVersion(acos_schemas, 7);
+  const core::schema::LightOpSchema *const asinh_v22 = FindByVersion(asinh_schemas, 22);
+  const core::schema::LightOpSchema *const asinh_v9 = FindByVersion(asinh_schemas, 9);
+  const core::schema::LightOpSchema *const acosh_v22 = FindByVersion(acosh_schemas, 22);
+  const core::schema::LightOpSchema *const acosh_v9 = FindByVersion(acosh_schemas, 9);
+  const core::schema::LightOpSchema *const atan_v22 = FindByVersion(atan_schemas, 22);
+  const core::schema::LightOpSchema *const atan_v7 = FindByVersion(atan_schemas, 7);
+  const core::schema::LightOpSchema *const atanh_v22 = FindByVersion(atanh_schemas, 22);
+  const core::schema::LightOpSchema *const atanh_v9 = FindByVersion(atanh_schemas, 9);
+  const core::schema::LightOpSchema *const tan_v22 = FindByVersion(tan_schemas, 22);
+  const core::schema::LightOpSchema *const tan_v7 = FindByVersion(tan_schemas, 7);
+  const core::schema::LightOpSchema *const tanh_v13 = FindByVersion(tanh_schemas, 13);
+  const core::schema::LightOpSchema *const tanh_v6 = FindByVersion(tanh_schemas, 6);
+  const core::schema::LightOpSchema *const tanh_v1 = FindByVersion(tanh_schemas, 1);
+  const core::schema::LightOpSchema *const blackman_window_v17 =
       FindByVersion(blackman_window_schemas, 17);
-  const onnx_op::LightOpSchema *const hann_window_v17 = FindByVersion(hann_window_schemas, 17);
-  const onnx_op::LightOpSchema *const hamming_window_v17 =
+  const core::schema::LightOpSchema *const hann_window_v17 = FindByVersion(hann_window_schemas, 17);
+  const core::schema::LightOpSchema *const hamming_window_v17 =
       FindByVersion(hamming_window_schemas, 17);
-  const onnx_op::LightOpSchema *const sigmoid_v13 = FindByVersion(sigmoid_schemas, 13);
-  const onnx_op::LightOpSchema *const sigmoid_v6 = FindByVersion(sigmoid_schemas, 6);
-  const onnx_op::LightOpSchema *const sigmoid_v1 = FindByVersion(sigmoid_schemas, 1);
-  const onnx_op::LightOpSchema *const softmax_v13 = FindByVersion(softmax_schemas, 13);
-  const onnx_op::LightOpSchema *const softmax_v11 = FindByVersion(softmax_schemas, 11);
-  const onnx_op::LightOpSchema *const softmax_v1 = FindByVersion(softmax_schemas, 1);
-  const onnx_op::LightOpSchema *const logsoftmax_v13 = FindByVersion(logsoftmax_schemas, 13);
-  const onnx_op::LightOpSchema *const logsoftmax_v11 = FindByVersion(logsoftmax_schemas, 11);
-  const onnx_op::LightOpSchema *const logsoftmax_v1 = FindByVersion(logsoftmax_schemas, 1);
-  const onnx_op::LightOpSchema *const sqrt_v13 = FindByVersion(sqrt_schemas, 13);
-  const onnx_op::LightOpSchema *const sqrt_v6 = FindByVersion(sqrt_schemas, 6);
-  const onnx_op::LightOpSchema *const sqrt_v1 = FindByVersion(sqrt_schemas, 1);
-  const onnx_op::LightOpSchema *const exp_v13 = FindByVersion(exp_schemas, 13);
-  const onnx_op::LightOpSchema *const exp_v6 = FindByVersion(exp_schemas, 6);
-  const onnx_op::LightOpSchema *const exp_v1 = FindByVersion(exp_schemas, 1);
-  const onnx_op::LightOpSchema *const erf_v13 = FindByVersion(erf_schemas, 13);
-  const onnx_op::LightOpSchema *const erf_v9 = FindByVersion(erf_schemas, 9);
-  const onnx_op::LightOpSchema *const sign_v13 = FindByVersion(sign_schemas, 13);
-  const onnx_op::LightOpSchema *const sign_v9 = FindByVersion(sign_schemas, 9);
-  const onnx_op::LightOpSchema *const log_v13 = FindByVersion(log_schemas, 13);
-  const onnx_op::LightOpSchema *const log_v6 = FindByVersion(log_schemas, 6);
-  const onnx_op::LightOpSchema *const log_v1 = FindByVersion(log_schemas, 1);
-  const onnx_op::LightOpSchema *const matmul_v13 = FindByVersion(mat_mul_schemas, 13);
-  const onnx_op::LightOpSchema *const matmul_v9 = FindByVersion(mat_mul_schemas, 9);
-  const onnx_op::LightOpSchema *const matmul_v1 = FindByVersion(mat_mul_schemas, 1);
-  const onnx_op::LightOpSchema *const gemm_v13 = FindByVersion(gemm_schemas, 13);
-  const onnx_op::LightOpSchema *const gemm_v11 = FindByVersion(gemm_schemas, 11);
-  const onnx_op::LightOpSchema *const gemm_v9 = FindByVersion(gemm_schemas, 9);
-  const onnx_op::LightOpSchema *const gemm_v7 = FindByVersion(gemm_schemas, 7);
-  const onnx_op::LightOpSchema *const gemm_v6 = FindByVersion(gemm_schemas, 6);
-  const onnx_op::LightOpSchema *const gemm_v1 = FindByVersion(gemm_schemas, 1);
+  const core::schema::LightOpSchema *const sigmoid_v13 = FindByVersion(sigmoid_schemas, 13);
+  const core::schema::LightOpSchema *const sigmoid_v6 = FindByVersion(sigmoid_schemas, 6);
+  const core::schema::LightOpSchema *const sigmoid_v1 = FindByVersion(sigmoid_schemas, 1);
+  const core::schema::LightOpSchema *const softmax_v13 = FindByVersion(softmax_schemas, 13);
+  const core::schema::LightOpSchema *const softmax_v11 = FindByVersion(softmax_schemas, 11);
+  const core::schema::LightOpSchema *const softmax_v1 = FindByVersion(softmax_schemas, 1);
+  const core::schema::LightOpSchema *const logsoftmax_v13 = FindByVersion(logsoftmax_schemas, 13);
+  const core::schema::LightOpSchema *const logsoftmax_v11 = FindByVersion(logsoftmax_schemas, 11);
+  const core::schema::LightOpSchema *const logsoftmax_v1 = FindByVersion(logsoftmax_schemas, 1);
+  const core::schema::LightOpSchema *const sqrt_v13 = FindByVersion(sqrt_schemas, 13);
+  const core::schema::LightOpSchema *const sqrt_v6 = FindByVersion(sqrt_schemas, 6);
+  const core::schema::LightOpSchema *const sqrt_v1 = FindByVersion(sqrt_schemas, 1);
+  const core::schema::LightOpSchema *const exp_v13 = FindByVersion(exp_schemas, 13);
+  const core::schema::LightOpSchema *const exp_v6 = FindByVersion(exp_schemas, 6);
+  const core::schema::LightOpSchema *const exp_v1 = FindByVersion(exp_schemas, 1);
+  const core::schema::LightOpSchema *const erf_v13 = FindByVersion(erf_schemas, 13);
+  const core::schema::LightOpSchema *const erf_v9 = FindByVersion(erf_schemas, 9);
+  const core::schema::LightOpSchema *const sign_v13 = FindByVersion(sign_schemas, 13);
+  const core::schema::LightOpSchema *const sign_v9 = FindByVersion(sign_schemas, 9);
+  const core::schema::LightOpSchema *const log_v13 = FindByVersion(log_schemas, 13);
+  const core::schema::LightOpSchema *const log_v6 = FindByVersion(log_schemas, 6);
+  const core::schema::LightOpSchema *const log_v1 = FindByVersion(log_schemas, 1);
+  const core::schema::LightOpSchema *const matmul_v13 = FindByVersion(mat_mul_schemas, 13);
+  const core::schema::LightOpSchema *const matmul_v9 = FindByVersion(mat_mul_schemas, 9);
+  const core::schema::LightOpSchema *const matmul_v1 = FindByVersion(mat_mul_schemas, 1);
+  const core::schema::LightOpSchema *const gemm_v13 = FindByVersion(gemm_schemas, 13);
+  const core::schema::LightOpSchema *const gemm_v11 = FindByVersion(gemm_schemas, 11);
+  const core::schema::LightOpSchema *const gemm_v9 = FindByVersion(gemm_schemas, 9);
+  const core::schema::LightOpSchema *const gemm_v7 = FindByVersion(gemm_schemas, 7);
+  const core::schema::LightOpSchema *const gemm_v6 = FindByVersion(gemm_schemas, 6);
+  const core::schema::LightOpSchema *const gemm_v1 = FindByVersion(gemm_schemas, 1);
   ASSERT_NE(nullptr, add);
   ASSERT_NE(nullptr, add_v1);
   ASSERT_NE(nullptr, mul_v13);
@@ -376,11 +376,11 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   // PRelu has five versioned schemas (v1, v6, v7, v9, v16). The element type
   // set widens over time and the v16 schema ships with a function body.
   ASSERT_EQ(prelu_schemas.size(), 5u);
-  const onnx_op::LightOpSchema *const prelu_v1 = FindByVersion(prelu_schemas, 1);
-  const onnx_op::LightOpSchema *const prelu_v6 = FindByVersion(prelu_schemas, 6);
-  const onnx_op::LightOpSchema *const prelu_v7 = FindByVersion(prelu_schemas, 7);
-  const onnx_op::LightOpSchema *const prelu_v9 = FindByVersion(prelu_schemas, 9);
-  const onnx_op::LightOpSchema *const prelu_v16 = FindByVersion(prelu_schemas, 16);
+  const core::schema::LightOpSchema *const prelu_v1 = FindByVersion(prelu_schemas, 1);
+  const core::schema::LightOpSchema *const prelu_v6 = FindByVersion(prelu_schemas, 6);
+  const core::schema::LightOpSchema *const prelu_v7 = FindByVersion(prelu_schemas, 7);
+  const core::schema::LightOpSchema *const prelu_v9 = FindByVersion(prelu_schemas, 9);
+  const core::schema::LightOpSchema *const prelu_v16 = FindByVersion(prelu_schemas, 16);
   ASSERT_NE(nullptr, prelu_v1);
   ASSERT_NE(nullptr, prelu_v6);
   ASSERT_NE(nullptr, prelu_v7);
@@ -480,12 +480,12 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_NE(add_v1->inputs()[0].description, add->inputs()[0].description);
   EXPECT_NE(add_v1->type_constraints()[0].allowed_type_strs,
             add->type_constraints()[0].allowed_type_strs);
-  const std::vector<onnx_op::TensorType> expected_v22_float_types = {
-      onnx_op::TensorType::kBfloat16, onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat,
-      onnx_op::TensorType::kDouble};
-  const std::vector<onnx_op::TensorType> expected_log_v13_float_types = {
-      onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble,
-      onnx_op::TensorType::kBfloat16};
+  const std::vector<core::schema::TensorType> expected_v22_float_types = {
+      core::schema::TensorType::kBfloat16, core::schema::TensorType::kFloat16,
+      core::schema::TensorType::kFloat, core::schema::TensorType::kDouble};
+  const std::vector<core::schema::TensorType> expected_log_v13_float_types = {
+      core::schema::TensorType::kFloat16, core::schema::TensorType::kFloat,
+      core::schema::TensorType::kDouble, core::schema::TensorType::kBfloat16};
   EXPECT_EQ(mod_v13->inputs()[0].description, "Dividend tensor");
   EXPECT_EQ(mod_v13->outputs()[0].description, "Remainder tensor");
   EXPECT_NE(mod_v10->type_constraints()[0].allowed_type_strs,
@@ -585,9 +585,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_EQ(softmax_v11->attributes().size(), 1u);
   ASSERT_EQ(softmax_v1->attributes().size(), 1u);
   EXPECT_EQ(softmax_v13->attributes()[0].name, "axis");
-  EXPECT_EQ(softmax_v13->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{-1}));
-  EXPECT_EQ(softmax_v11->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{1}));
-  EXPECT_EQ(softmax_v1->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{1}));
+  EXPECT_EQ(softmax_v13->attributes()[0].default_value,
+            core::schema::AttributeDefault(int64_t{-1}));
+  EXPECT_EQ(softmax_v11->attributes()[0].default_value, core::schema::AttributeDefault(int64_t{1}));
+  EXPECT_EQ(softmax_v1->attributes()[0].default_value, core::schema::AttributeDefault(int64_t{1}));
   // LogSoftmax mirrors Softmax: same input/output names, attributes, and axis defaults.
   EXPECT_EQ(logsoftmax_v13->inputs()[0].name, "input");
   EXPECT_EQ(logsoftmax_v13->outputs()[0].name, "output");
@@ -595,9 +596,12 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_EQ(logsoftmax_v11->attributes().size(), 1u);
   ASSERT_EQ(logsoftmax_v1->attributes().size(), 1u);
   EXPECT_EQ(logsoftmax_v13->attributes()[0].name, "axis");
-  EXPECT_EQ(logsoftmax_v13->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{-1}));
-  EXPECT_EQ(logsoftmax_v11->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{1}));
-  EXPECT_EQ(logsoftmax_v1->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{1}));
+  EXPECT_EQ(logsoftmax_v13->attributes()[0].default_value,
+            core::schema::AttributeDefault(int64_t{-1}));
+  EXPECT_EQ(logsoftmax_v11->attributes()[0].default_value,
+            core::schema::AttributeDefault(int64_t{1}));
+  EXPECT_EQ(logsoftmax_v1->attributes()[0].default_value,
+            core::schema::AttributeDefault(int64_t{1}));
   // v13 widens the type constraint to include bfloat16 vs. v11/v1.
   EXPECT_NE(logsoftmax_v11->type_constraints()[0].allowed_type_strs,
             logsoftmax_v13->type_constraints()[0].allowed_type_strs);
@@ -610,11 +614,11 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(blackman_window_v17->outputs()[0].name, "output");
   EXPECT_EQ(blackman_window_v17->outputs()[0].type, "T2");
   ASSERT_EQ(blackman_window_v17->type_constraints().size(), 2u);
-  EXPECT_EQ(
-      blackman_window_v17->type_constraints()[0].allowed_type_strs,
-      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32, onnx_op::TensorType::kInt64}));
+  EXPECT_EQ(blackman_window_v17->type_constraints()[0].allowed_type_strs,
+            (std::vector<core::schema::TensorType>{core::schema::TensorType::kInt32,
+                                                   core::schema::TensorType::kInt64}));
   EXPECT_EQ(blackman_window_v17->type_constraints()[1].allowed_type_strs,
-            onnx_op::AllNumericTypesIr4());
+            core::schema::AllNumericTypesIr4());
 
   ASSERT_NE(hann_window_v17, nullptr);
   EXPECT_EQ(hann_window_v17->inputs().size(), 1u);
@@ -624,11 +628,11 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(hann_window_v17->outputs()[0].name, "output");
   EXPECT_EQ(hann_window_v17->outputs()[0].type, "T2");
   ASSERT_EQ(hann_window_v17->type_constraints().size(), 2u);
-  EXPECT_EQ(
-      hann_window_v17->type_constraints()[0].allowed_type_strs,
-      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32, onnx_op::TensorType::kInt64}));
+  EXPECT_EQ(hann_window_v17->type_constraints()[0].allowed_type_strs,
+            (std::vector<core::schema::TensorType>{core::schema::TensorType::kInt32,
+                                                   core::schema::TensorType::kInt64}));
   EXPECT_EQ(hann_window_v17->type_constraints()[1].allowed_type_strs,
-            onnx_op::AllNumericTypesIr4());
+            core::schema::AllNumericTypesIr4());
 
   ASSERT_NE(hamming_window_v17, nullptr);
   EXPECT_EQ(hamming_window_v17->inputs().size(), 1u);
@@ -638,11 +642,11 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(hamming_window_v17->outputs()[0].name, "output");
   EXPECT_EQ(hamming_window_v17->outputs()[0].type, "T2");
   ASSERT_EQ(hamming_window_v17->type_constraints().size(), 2u);
-  EXPECT_EQ(
-      hamming_window_v17->type_constraints()[0].allowed_type_strs,
-      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32, onnx_op::TensorType::kInt64}));
+  EXPECT_EQ(hamming_window_v17->type_constraints()[0].allowed_type_strs,
+            (std::vector<core::schema::TensorType>{core::schema::TensorType::kInt32,
+                                                   core::schema::TensorType::kInt64}));
   EXPECT_EQ(hamming_window_v17->type_constraints()[1].allowed_type_strs,
-            onnx_op::AllNumericTypesIr4());
+            core::schema::AllNumericTypesIr4());
 
   // MatMul
   EXPECT_EQ(matmul_v1->inputs().size(), 2u);
@@ -650,7 +654,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(matmul_v1->inputs()[1].name, "B");
   EXPECT_EQ(matmul_v1->outputs().size(), 1u);
   EXPECT_EQ(matmul_v1->outputs()[0].name, "Y");
-  EXPECT_EQ(matmul_v1->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
+  EXPECT_EQ(matmul_v1->type_constraints()[0].allowed_type_strs, core::schema::FloatTypes());
   EXPECT_NE(matmul_v9->type_constraints()[0].allowed_type_strs,
             matmul_v1->type_constraints()[0].allowed_type_strs);
   EXPECT_NE(matmul_v13->type_constraints()[0].allowed_type_strs,
@@ -665,9 +669,9 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(gemm_v11->inputs()[2].description,
             "Optional input tensor C. If not specified, the computation is done as if C is a "
             "scalar 0. The shape of C should be unidirectional broadcastable to (M, N).");
-  EXPECT_EQ(gemm_v1->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
-  EXPECT_EQ(gemm_v6->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
-  EXPECT_EQ(gemm_v7->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
+  EXPECT_EQ(gemm_v1->type_constraints()[0].allowed_type_strs, core::schema::FloatTypes());
+  EXPECT_EQ(gemm_v6->type_constraints()[0].allowed_type_strs, core::schema::FloatTypes());
+  EXPECT_EQ(gemm_v7->type_constraints()[0].allowed_type_strs, core::schema::FloatTypes());
   EXPECT_NE(gemm_v9->type_constraints()[0].allowed_type_strs,
             gemm_v7->type_constraints()[0].allowed_type_strs);
   EXPECT_NE(gemm_v13->type_constraints()[0].allowed_type_strs,
@@ -677,10 +681,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
 }
 
 TEST(OnnxOpMathRegistrationTest, MatMulIntegerSchemaHasExpectedSignature) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("MatMulInteger");
   ASSERT_EQ(schemas.size(), 1u);
-  const onnx_op::LightOpSchema *const v10 = FindByVersion(schemas, 10);
+  const core::schema::LightOpSchema *const v10 = FindByVersion(schemas, 10);
   ASSERT_NE(nullptr, v10);
   EXPECT_EQ(v10->domain(), "ai.onnx");
   EXPECT_EQ(v10->name(), "MatMulInteger");
@@ -703,25 +707,25 @@ TEST(OnnxOpMathRegistrationTest, MatMulIntegerSchemaHasExpectedSignature) {
 
   ASSERT_EQ(v10->type_constraints().size(), 3u);
   EXPECT_EQ(v10->type_constraints()[0].type_param_str, "T1");
-  EXPECT_EQ(
-      v10->type_constraints()[0].allowed_type_strs,
-      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt8, onnx_op::TensorType::kUint8}));
+  EXPECT_EQ(v10->type_constraints()[0].allowed_type_strs,
+            (std::vector<core::schema::TensorType>{core::schema::TensorType::kInt8,
+                                                   core::schema::TensorType::kUint8}));
   EXPECT_EQ(v10->type_constraints()[1].type_param_str, "T2");
-  EXPECT_EQ(
-      v10->type_constraints()[1].allowed_type_strs,
-      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt8, onnx_op::TensorType::kUint8}));
+  EXPECT_EQ(v10->type_constraints()[1].allowed_type_strs,
+            (std::vector<core::schema::TensorType>{core::schema::TensorType::kInt8,
+                                                   core::schema::TensorType::kUint8}));
   EXPECT_EQ(v10->type_constraints()[2].type_param_str, "T3");
   EXPECT_EQ(v10->type_constraints()[2].allowed_type_strs,
-            (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32}));
+            (std::vector<core::schema::TensorType>{core::schema::TensorType::kInt32}));
   EXPECT_TRUE(v10->attributes().empty());
 }
 
 TEST(OnnxOpMathRegistrationTest, DetHistoryHasExpectedVersions) {
-  const std::vector<onnx_op::LightOpSchema> det_schemas =
+  const std::vector<core::schema::LightOpSchema> det_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Det");
   ASSERT_EQ(det_schemas.size(), 2u);
-  const onnx_op::LightOpSchema *const det_v22 = FindByVersion(det_schemas, 22);
-  const onnx_op::LightOpSchema *const det_v11 = FindByVersion(det_schemas, 11);
+  const core::schema::LightOpSchema *const det_v22 = FindByVersion(det_schemas, 22);
+  const core::schema::LightOpSchema *const det_v11 = FindByVersion(det_schemas, 11);
   ASSERT_NE(nullptr, det_v22);
   ASSERT_NE(nullptr, det_v11);
   EXPECT_EQ(det_v22->domain(), "ai.onnx");
@@ -735,7 +739,7 @@ TEST(OnnxOpMathRegistrationTest, DetHistoryHasExpectedVersions) {
   ASSERT_EQ(det_v22->type_constraints().size(), 1u);
   EXPECT_EQ(det_v22->type_constraints()[0].type_param_str, "T");
   // v22 widens T to include bfloat16; v11 does not.
-  EXPECT_EQ(det_v11->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
+  EXPECT_EQ(det_v11->type_constraints()[0].allowed_type_strs, core::schema::FloatTypes());
   EXPECT_NE(det_v22->type_constraints()[0].allowed_type_strs,
             det_v11->type_constraints()[0].allowed_type_strs);
   EXPECT_TRUE(det_v22->attributes().empty());
@@ -743,44 +747,44 @@ TEST(OnnxOpMathRegistrationTest, DetHistoryHasExpectedVersions) {
 }
 
 TEST(OnnxOpMathRegistrationTest, OpTypeFilterReturnsOnlyMatchingSchemas) {
-  const std::vector<onnx_op::LightOpSchema> abs_schemas =
+  const std::vector<core::schema::LightOpSchema> abs_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Abs");
   EXPECT_EQ(abs_schemas.size(), 3u);
   for (const auto &schema : abs_schemas) {
     EXPECT_EQ(schema.name(), "Abs");
   }
 
-  const std::vector<onnx_op::LightOpSchema> empty_schemas =
+  const std::vector<core::schema::LightOpSchema> empty_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("DoesNotExist");
   EXPECT_TRUE(empty_schemas.empty());
 
-  const std::vector<onnx_op::LightOpSchema> all_schemas =
+  const std::vector<core::schema::LightOpSchema> all_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> default_filter =
+  const std::vector<core::schema::LightOpSchema> default_filter =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("");
   EXPECT_EQ(default_filter.size(), all_schemas.size());
 }
 
 TEST(OnnxOpMathRegistrationTest, FloorCeilRoundHistoryHasExpectedVersions) {
-  const std::vector<onnx_op::LightOpSchema> floor_schemas =
+  const std::vector<core::schema::LightOpSchema> floor_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Floor");
-  const std::vector<onnx_op::LightOpSchema> ceil_schemas =
+  const std::vector<core::schema::LightOpSchema> ceil_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Ceil");
-  const std::vector<onnx_op::LightOpSchema> round_schemas =
+  const std::vector<core::schema::LightOpSchema> round_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Round");
 
   ASSERT_EQ(floor_schemas.size(), 3u);
   ASSERT_EQ(ceil_schemas.size(), 3u);
   ASSERT_EQ(round_schemas.size(), 2u);
 
-  const onnx_op::LightOpSchema *const floor_v13 = FindByVersion(floor_schemas, 13);
-  const onnx_op::LightOpSchema *const floor_v6 = FindByVersion(floor_schemas, 6);
-  const onnx_op::LightOpSchema *const floor_v1 = FindByVersion(floor_schemas, 1);
-  const onnx_op::LightOpSchema *const ceil_v13 = FindByVersion(ceil_schemas, 13);
-  const onnx_op::LightOpSchema *const ceil_v6 = FindByVersion(ceil_schemas, 6);
-  const onnx_op::LightOpSchema *const ceil_v1 = FindByVersion(ceil_schemas, 1);
-  const onnx_op::LightOpSchema *const round_v22 = FindByVersion(round_schemas, 22);
-  const onnx_op::LightOpSchema *const round_v11 = FindByVersion(round_schemas, 11);
+  const core::schema::LightOpSchema *const floor_v13 = FindByVersion(floor_schemas, 13);
+  const core::schema::LightOpSchema *const floor_v6 = FindByVersion(floor_schemas, 6);
+  const core::schema::LightOpSchema *const floor_v1 = FindByVersion(floor_schemas, 1);
+  const core::schema::LightOpSchema *const ceil_v13 = FindByVersion(ceil_schemas, 13);
+  const core::schema::LightOpSchema *const ceil_v6 = FindByVersion(ceil_schemas, 6);
+  const core::schema::LightOpSchema *const ceil_v1 = FindByVersion(ceil_schemas, 1);
+  const core::schema::LightOpSchema *const round_v22 = FindByVersion(round_schemas, 22);
+  const core::schema::LightOpSchema *const round_v11 = FindByVersion(round_schemas, 11);
 
   ASSERT_NE(nullptr, floor_v13);
   ASSERT_NE(nullptr, floor_v6);
@@ -792,11 +796,12 @@ TEST(OnnxOpMathRegistrationTest, FloorCeilRoundHistoryHasExpectedVersions) {
   ASSERT_NE(nullptr, round_v11);
 
   // v13 widens dtypes to include bfloat16; earlier versions don't.
-  const std::vector<onnx_op::TensorType> expected_v13_float_types{
-      onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble,
-      onnx_op::TensorType::kBfloat16};
-  const std::vector<onnx_op::TensorType> expected_float_types{
-      onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble};
+  const std::vector<core::schema::TensorType> expected_v13_float_types{
+      core::schema::TensorType::kFloat16, core::schema::TensorType::kFloat,
+      core::schema::TensorType::kDouble, core::schema::TensorType::kBfloat16};
+  const std::vector<core::schema::TensorType> expected_float_types{
+      core::schema::TensorType::kFloat16, core::schema::TensorType::kFloat,
+      core::schema::TensorType::kDouble};
   EXPECT_EQ(floor_v13->type_constraints()[0].allowed_type_strs, expected_v13_float_types);
   EXPECT_EQ(floor_v6->type_constraints()[0].allowed_type_strs, expected_float_types);
   EXPECT_EQ(floor_v1->type_constraints()[0].allowed_type_strs, expected_float_types);
@@ -806,9 +811,9 @@ TEST(OnnxOpMathRegistrationTest, FloorCeilRoundHistoryHasExpectedVersions) {
 
   // Round v22 uses bfloat16-first ordering (all_float_types_ir4); v11 has the
   // narrower float16/float/double set.
-  const std::vector<onnx_op::TensorType> expected_round_v22_float_types{
-      onnx_op::TensorType::kBfloat16, onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat,
-      onnx_op::TensorType::kDouble};
+  const std::vector<core::schema::TensorType> expected_round_v22_float_types{
+      core::schema::TensorType::kBfloat16, core::schema::TensorType::kFloat16,
+      core::schema::TensorType::kFloat, core::schema::TensorType::kDouble};
   EXPECT_EQ(round_v22->type_constraints()[0].allowed_type_strs, expected_round_v22_float_types);
   EXPECT_EQ(round_v11->type_constraints()[0].allowed_type_strs, expected_float_types);
 
@@ -822,17 +827,17 @@ TEST(OnnxOpMathRegistrationTest, FloorCeilRoundHistoryHasExpectedVersions) {
 }
 
 TEST(OnnxOpMathRegistrationTest, ReturnsDFTSchemasWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> dft_schemas =
+  const std::vector<core::schema::LightOpSchema> dft_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("DFT");
 
-  const onnx_op::LightOpSchema *const dft_v17 = FindByVersion(dft_schemas, 17);
-  const onnx_op::LightOpSchema *const dft_v20 = FindByVersion(dft_schemas, 20);
+  const core::schema::LightOpSchema *const dft_v17 = FindByVersion(dft_schemas, 17);
+  const core::schema::LightOpSchema *const dft_v20 = FindByVersion(dft_schemas, 20);
   ASSERT_NE(nullptr, dft_v17);
   ASSERT_NE(nullptr, dft_v20);
 
   // --- v17: axis is an INT attribute; inputs are (input, dft_length?).
   EXPECT_EQ(dft_v17->name(), "DFT");
-  EXPECT_EQ(dft_v17->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(dft_v17->domain(), core::schema::kOnnxDomain);
   EXPECT_EQ(dft_v17->since_version(), 17);
   ASSERT_EQ(dft_v17->inputs().size(), 2u);
   EXPECT_EQ(dft_v17->inputs()[0].name, "input");
@@ -848,13 +853,13 @@ TEST(OnnxOpMathRegistrationTest, ReturnsDFTSchemasWithoutShapeInference) {
   for (const auto &attr : dft_v17->attributes()) {
     if (attr.name == "axis") {
       has_axis = true;
-      EXPECT_EQ(attr.type, onnx_op::AttributeType::INT);
+      EXPECT_EQ(attr.type, core::schema::AttributeType::INT);
     } else if (attr.name == "inverse") {
       has_inverse = true;
-      EXPECT_EQ(attr.type, onnx_op::AttributeType::INT);
+      EXPECT_EQ(attr.type, core::schema::AttributeType::INT);
     } else if (attr.name == "onesided") {
       has_onesided = true;
-      EXPECT_EQ(attr.type, onnx_op::AttributeType::INT);
+      EXPECT_EQ(attr.type, core::schema::AttributeType::INT);
     }
   }
   EXPECT_TRUE(has_axis);
@@ -875,7 +880,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsDFTSchemasWithoutShapeInference) {
   ASSERT_EQ(dft_v20->attributes().size(), 2u);
   for (const auto &attr : dft_v20->attributes()) {
     EXPECT_TRUE(attr.name == "inverse" || attr.name == "onesided");
-    EXPECT_EQ(attr.type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(attr.type, core::schema::AttributeType::INT);
   }
 
   EXPECT_FALSE(dft_v17->doc().empty());
@@ -883,14 +888,14 @@ TEST(OnnxOpMathRegistrationTest, ReturnsDFTSchemasWithoutShapeInference) {
 }
 
 TEST(OnnxOpMathRegistrationTest, ReturnsSTFTSchemaWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> stft_schemas =
+  const std::vector<core::schema::LightOpSchema> stft_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("STFT");
 
-  const onnx_op::LightOpSchema *const stft_v17 = FindByVersion(stft_schemas, 17);
+  const core::schema::LightOpSchema *const stft_v17 = FindByVersion(stft_schemas, 17);
   ASSERT_NE(nullptr, stft_v17);
 
   EXPECT_EQ(stft_v17->name(), "STFT");
-  EXPECT_EQ(stft_v17->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(stft_v17->domain(), core::schema::kOnnxDomain);
   EXPECT_EQ(stft_v17->since_version(), 17);
   ASSERT_EQ(stft_v17->inputs().size(), 4u);
   EXPECT_EQ(stft_v17->inputs()[0].name, "signal");
@@ -906,25 +911,25 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSTFTSchemaWithoutShapeInference) {
   EXPECT_EQ(stft_v17->outputs()[0].type, "T1");
   ASSERT_EQ(stft_v17->attributes().size(), 1u);
   EXPECT_EQ(stft_v17->attributes()[0].name, "onesided");
-  EXPECT_EQ(stft_v17->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_EQ(stft_v17->attributes()[0].type, core::schema::AttributeType::INT);
   EXPECT_FALSE(stft_v17->doc().empty());
 }
 
 TEST(OnnxOpMathRegistrationTest, ReturnsLeakyReluSchemaWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> leakyrelu_schemas =
+  const std::vector<core::schema::LightOpSchema> leakyrelu_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("LeakyRelu");
 
   // LeakyRelu has three versioned schemas (v1, v6, v16).
   ASSERT_EQ(leakyrelu_schemas.size(), 3u);
-  const onnx_op::LightOpSchema *const leakyrelu_v1 = FindByVersion(leakyrelu_schemas, 1);
-  const onnx_op::LightOpSchema *const leakyrelu_v6 = FindByVersion(leakyrelu_schemas, 6);
-  const onnx_op::LightOpSchema *const leakyrelu_v16 = FindByVersion(leakyrelu_schemas, 16);
+  const core::schema::LightOpSchema *const leakyrelu_v1 = FindByVersion(leakyrelu_schemas, 1);
+  const core::schema::LightOpSchema *const leakyrelu_v6 = FindByVersion(leakyrelu_schemas, 6);
+  const core::schema::LightOpSchema *const leakyrelu_v16 = FindByVersion(leakyrelu_schemas, 16);
   ASSERT_NE(nullptr, leakyrelu_v1);
   ASSERT_NE(nullptr, leakyrelu_v6);
   ASSERT_NE(nullptr, leakyrelu_v16);
 
   EXPECT_EQ(leakyrelu_v16->name(), "LeakyRelu");
-  EXPECT_EQ(leakyrelu_v16->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(leakyrelu_v16->domain(), core::schema::kOnnxDomain);
   EXPECT_EQ(leakyrelu_v16->since_version(), 16);
   // v16 ships a function body so the op can be inlined into primitive ops.
   EXPECT_TRUE(leakyrelu_v16->has_function_implementation());
@@ -940,7 +945,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsLeakyReluSchemaWithoutShapeInference) {
 
   ASSERT_EQ(leakyrelu_v16->attributes().size(), 1u);
   EXPECT_EQ(leakyrelu_v16->attributes()[0].name, "alpha");
-  EXPECT_EQ(leakyrelu_v16->attributes()[0].type, onnx_op::AttributeType::FLOAT);
+  EXPECT_EQ(leakyrelu_v16->attributes()[0].type, core::schema::AttributeType::FLOAT);
   EXPECT_FALSE(leakyrelu_v16->attributes()[0].required);
 
   // v16 widens T to include bfloat16 relative to v6.

@@ -19,8 +19,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -30,14 +30,14 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpTrainingRegistrationTest, ReturnsGradientSchemaWithoutFunctionImplementation) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> gradient_schemas =
+  const std::vector<core::schema::LightOpSchema> gradient_schemas =
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory("Gradient");
 
   EXPECT_EQ(schemas.size(), 4u);
 
-  const onnx_op::LightOpSchema *const gradient_v1 = FindByVersion(gradient_schemas, 1);
+  const core::schema::LightOpSchema *const gradient_v1 = FindByVersion(gradient_schemas, 1);
   ASSERT_NE(nullptr, gradient_v1);
   EXPECT_EQ(gradient_v1->domain(), "ai.onnx.preview.training");
   EXPECT_EQ(gradient_v1->domain(), onnx_op::training::kOnnxPreviewTrainingDomain);
@@ -56,27 +56,30 @@ TEST(OnnxOpTrainingRegistrationTest, ReturnsGradientSchemaWithoutFunctionImpleme
   EXPECT_EQ(gradient_v1->type_constraints()[0].description,
             "Allow outputs to be any kind of tensor.");
   EXPECT_EQ(gradient_v1->type_constraints()[0].allowed_type_strs.size(),
-            onnx_op::AllTensorTypes().size());
+            core::schema::AllTensorTypes().size());
 
   EXPECT_EQ(gradient_v1->type_constraints()[1].type_param_str, "T2");
   EXPECT_EQ(gradient_v1->type_constraints()[1].description,
             "Allow inputs to be any kind of floating-point tensor.");
   ASSERT_EQ(gradient_v1->type_constraints()[1].allowed_type_strs.size(), 3u);
-  EXPECT_EQ(gradient_v1->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kFloat16);
-  EXPECT_EQ(gradient_v1->type_constraints()[1].allowed_type_strs[1], onnx_op::TensorType::kFloat);
-  EXPECT_EQ(gradient_v1->type_constraints()[1].allowed_type_strs[2], onnx_op::TensorType::kDouble);
+  EXPECT_EQ(gradient_v1->type_constraints()[1].allowed_type_strs[0],
+            core::schema::TensorType::kFloat16);
+  EXPECT_EQ(gradient_v1->type_constraints()[1].allowed_type_strs[1],
+            core::schema::TensorType::kFloat);
+  EXPECT_EQ(gradient_v1->type_constraints()[1].allowed_type_strs[2],
+            core::schema::TensorType::kDouble);
 
   EXPECT_NE(gradient_v1->doc().find("Gradient operator computes the partial derivatives"),
             std::string::npos);
 }
 
 TEST(OnnxOpTrainingRegistrationTest, ReturnsAdamSchemaWithoutFunctionImplementation) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> adam_schemas =
+  const std::vector<core::schema::LightOpSchema> adam_schemas =
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory("Adam");
 
-  const onnx_op::LightOpSchema *const adam_v1 = FindByVersion(adam_schemas, 1);
+  const core::schema::LightOpSchema *const adam_v1 = FindByVersion(adam_schemas, 1);
   ASSERT_NE(nullptr, adam_v1);
   EXPECT_EQ(adam_v1->domain(), "ai.onnx.preview.training");
   EXPECT_EQ(adam_v1->domain(), onnx_op::training::kOnnxPreviewTrainingDomain);
@@ -97,26 +100,26 @@ TEST(OnnxOpTrainingRegistrationTest, ReturnsAdamSchemaWithoutFunctionImplementat
   ASSERT_EQ(adam_v1->type_constraints().size(), 3u);
   EXPECT_EQ(adam_v1->type_constraints()[0].type_param_str, "T1");
   ASSERT_EQ(adam_v1->type_constraints()[0].allowed_type_strs.size(), 2u);
-  EXPECT_EQ(adam_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat);
-  EXPECT_EQ(adam_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kDouble);
+  EXPECT_EQ(adam_v1->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kFloat);
+  EXPECT_EQ(adam_v1->type_constraints()[0].allowed_type_strs[1], core::schema::TensorType::kDouble);
 
   EXPECT_EQ(adam_v1->type_constraints()[1].type_param_str, "T2");
   ASSERT_EQ(adam_v1->type_constraints()[1].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(adam_v1->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kInt64);
+  EXPECT_EQ(adam_v1->type_constraints()[1].allowed_type_strs[0], core::schema::TensorType::kInt64);
 
   EXPECT_EQ(adam_v1->type_constraints()[2].type_param_str, "T3");
   ASSERT_EQ(adam_v1->type_constraints()[2].allowed_type_strs.size(), 2u);
-  EXPECT_EQ(adam_v1->type_constraints()[2].allowed_type_strs[0], onnx_op::TensorType::kFloat);
-  EXPECT_EQ(adam_v1->type_constraints()[2].allowed_type_strs[1], onnx_op::TensorType::kDouble);
+  EXPECT_EQ(adam_v1->type_constraints()[2].allowed_type_strs[0], core::schema::TensorType::kFloat);
+  EXPECT_EQ(adam_v1->type_constraints()[2].allowed_type_strs[1], core::schema::TensorType::kDouble);
 
   EXPECT_NE(adam_v1->doc().find("Compute one iteration of Adam"), std::string::npos);
 }
 
 TEST(OnnxOpTrainingRegistrationTest, ReturnsAdagradSchemaWithoutFunctionImplementation) {
-  const std::vector<onnx_op::LightOpSchema> adagrad_schemas =
+  const std::vector<core::schema::LightOpSchema> adagrad_schemas =
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory("Adagrad");
 
-  const onnx_op::LightOpSchema *const adagrad_v1 = FindByVersion(adagrad_schemas, 1);
+  const core::schema::LightOpSchema *const adagrad_v1 = FindByVersion(adagrad_schemas, 1);
   ASSERT_NE(nullptr, adagrad_v1);
   EXPECT_EQ(adagrad_v1->domain(), "ai.onnx.preview.training");
   EXPECT_EQ(adagrad_v1->domain(), onnx_op::training::kOnnxPreviewTrainingDomain);
@@ -143,10 +146,10 @@ TEST(OnnxOpTrainingRegistrationTest, ReturnsAdagradSchemaWithoutFunctionImplemen
 }
 
 TEST(OnnxOpTrainingRegistrationTest, ReturnsMomentumSchemaWithoutFunctionImplementation) {
-  const std::vector<onnx_op::LightOpSchema> momentum_schemas =
+  const std::vector<core::schema::LightOpSchema> momentum_schemas =
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory("Momentum");
 
-  const onnx_op::LightOpSchema *const momentum_v1 = FindByVersion(momentum_schemas, 1);
+  const core::schema::LightOpSchema *const momentum_v1 = FindByVersion(momentum_schemas, 1);
   ASSERT_NE(nullptr, momentum_v1);
   EXPECT_EQ(momentum_v1->domain(), "ai.onnx.preview.training");
   EXPECT_EQ(momentum_v1->domain(), onnx_op::training::kOnnxPreviewTrainingDomain);

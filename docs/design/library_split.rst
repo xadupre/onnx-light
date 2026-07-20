@@ -101,9 +101,9 @@ Summary of each library
     * - ``onnx_light::lib_onnx_op``:``onnx_light/onnx_op/``
       - Lightweight ``LightOpSchema`` registrations for ONNX operator
         domains (math, logical, tensor, sequence, traditional ML, ...),
-        built on top of the schema data structures defined in
-        ``lib_onnx_core`` (``onnx_op/light_op_schema.h`` is kept as a
-        backward-compatible re-export).  Does not depend on shape
+        built on top of the ``LightOpSchema`` data structures defined in
+        ``lib_onnx_core`` (``onnx_core/light_op_schema/light_op_schema.h``,
+        ``core::schema`` namespace).  Does not depend on shape
         inference and does not pull in the full ONNX defs.  Useful when
         only the operator catalogue is needed.  Depends publicly on
         ``lib_onnx_core`` (and transitively on ``lib_onnx_proto``).

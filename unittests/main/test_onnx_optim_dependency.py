@@ -65,18 +65,26 @@ class TestOnnxOptimDependency(unittest.TestCase):
             "const char *ToTypeString", content, "type_helper.h must declare ToTypeString"
         )
 
-    def test_light_op_schema_re_exports_tensor_type(self):
+    def test_onnx_op_light_op_schema_wrapper_removed(self):
         header = self.root / "onnx_light" / "onnx_op" / "light_op_schema.h"
+        self.assertFalse(
+            header.exists(),
+            "onnx_op/light_op_schema.h must not exist; consumers include "
+            "onnx_core/light_op_schema/light_op_schema.h directly",
+        )
+
+    def test_operator_sets_includes_onnx_core_light_op_schema(self):
+        header = self.root / "onnx_light" / "onnx_op" / "operator_sets.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
             "onnx_core/light_op_schema/light_op_schema.h",
             content,
-            "onnx_op/light_op_schema.h must include onnx_core/light_op_schema/light_op_schema.h",
+            "operator_sets.h must include onnx_core/light_op_schema/light_op_schema.h",
         )
-        self.assertIn(
-            "using core::schema::TensorType",
+        self.assertNotIn(
+            '"onnx_op/light_op_schema.h"',
             content,
-            "onnx_op/light_op_schema.h must re-export TensorType from core::schema",
+            "operator_sets.h must not include the removed onnx_op/light_op_schema.h wrapper",
         )
 
     def test_onnx_core_light_op_schema_re_exports_tensor_type(self):

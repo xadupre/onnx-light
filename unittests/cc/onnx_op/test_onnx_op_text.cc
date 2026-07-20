@@ -18,8 +18,8 @@ namespace Test {
 
 constexpr size_t kExpectedTextSchemaCount = 5;
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -29,14 +29,15 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpTextRegistrationTest, ReturnsStringConcatSchema) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> string_concat_schemas =
+  const std::vector<core::schema::LightOpSchema> string_concat_schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory("StringConcat");
 
   EXPECT_EQ(schemas.size(), kExpectedTextSchemaCount);
 
-  const onnx_op::LightOpSchema *const string_concat_v20 = FindByVersion(string_concat_schemas, 20);
+  const core::schema::LightOpSchema *const string_concat_v20 =
+      FindByVersion(string_concat_schemas, 20);
   ASSERT_NE(nullptr, string_concat_v20);
 
   EXPECT_EQ(string_concat_v20->domain(), "ai.onnx");
@@ -58,7 +59,7 @@ TEST(OnnxOpTextRegistrationTest, ReturnsStringConcatSchema) {
 
   EXPECT_EQ(string_concat_v20->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(string_concat_v20->type_constraints()[0].allowed_type_strs,
-            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kString});
+            std::vector<core::schema::TensorType>{core::schema::TensorType::kString});
   EXPECT_EQ(string_concat_v20->type_constraints()[0].description,
             "Inputs and outputs must be UTF-8 strings");
 
@@ -67,12 +68,13 @@ TEST(OnnxOpTextRegistrationTest, ReturnsStringConcatSchema) {
 }
 
 TEST(OnnxOpTextRegistrationTest, ReturnsStringSplitSchema) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> string_split_schemas =
+  const std::vector<core::schema::LightOpSchema> string_split_schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory("StringSplit");
 
-  const onnx_op::LightOpSchema *const string_split_v20 = FindByVersion(string_split_schemas, 20);
+  const core::schema::LightOpSchema *const string_split_v20 =
+      FindByVersion(string_split_schemas, 20);
   ASSERT_NE(nullptr, string_split_v20);
 
   EXPECT_EQ(string_split_v20->domain(), "ai.onnx");
@@ -90,24 +92,24 @@ TEST(OnnxOpTextRegistrationTest, ReturnsStringSplitSchema) {
 
   EXPECT_EQ(string_split_v20->type_constraints()[0].type_param_str, "T1");
   EXPECT_EQ(string_split_v20->type_constraints()[0].allowed_type_strs,
-            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kString});
+            std::vector<core::schema::TensorType>{core::schema::TensorType::kString});
   EXPECT_EQ(string_split_v20->type_constraints()[1].type_param_str, "T2");
   EXPECT_EQ(string_split_v20->type_constraints()[1].allowed_type_strs,
-            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kString});
+            std::vector<core::schema::TensorType>{core::schema::TensorType::kString});
   EXPECT_EQ(string_split_v20->type_constraints()[2].type_param_str, "T3");
   EXPECT_EQ(string_split_v20->type_constraints()[2].allowed_type_strs,
-            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt64});
+            std::vector<core::schema::TensorType>{core::schema::TensorType::kInt64});
 
   EXPECT_NE(string_split_v20->doc().find("StringSplit splits a string tensor"), std::string::npos);
 }
 
 TEST(OnnxOpTextRegistrationTest, ReturnsRegexFullMatchSchema) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> regex_full_match_schemas =
+  const std::vector<core::schema::LightOpSchema> regex_full_match_schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory("RegexFullMatch");
 
-  const onnx_op::LightOpSchema *const regex_v20 = FindByVersion(regex_full_match_schemas, 20);
+  const core::schema::LightOpSchema *const regex_v20 = FindByVersion(regex_full_match_schemas, 20);
   ASSERT_NE(nullptr, regex_v20);
 
   EXPECT_EQ(regex_v20->domain(), "ai.onnx");
@@ -122,21 +124,22 @@ TEST(OnnxOpTextRegistrationTest, ReturnsRegexFullMatchSchema) {
 
   EXPECT_EQ(regex_v20->type_constraints()[0].type_param_str, "T1");
   EXPECT_EQ(regex_v20->type_constraints()[0].allowed_type_strs,
-            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kString});
+            std::vector<core::schema::TensorType>{core::schema::TensorType::kString});
   EXPECT_EQ(regex_v20->type_constraints()[1].type_param_str, "T2");
   EXPECT_EQ(regex_v20->type_constraints()[1].allowed_type_strs,
-            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kBool});
+            std::vector<core::schema::TensorType>{core::schema::TensorType::kBool});
 
   EXPECT_NE(regex_v20->doc().find("RegexFullMatch performs a full regex match"), std::string::npos);
 }
 
 TEST(OnnxOpTextRegistrationTest, ReturnsStringNormalizerSchema) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> string_normalizer_schemas =
+  const std::vector<core::schema::LightOpSchema> string_normalizer_schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory("StringNormalizer");
 
-  const onnx_op::LightOpSchema *const normalizer_v10 = FindByVersion(string_normalizer_schemas, 10);
+  const core::schema::LightOpSchema *const normalizer_v10 =
+      FindByVersion(string_normalizer_schemas, 10);
   ASSERT_NE(nullptr, normalizer_v10);
 
   EXPECT_EQ(normalizer_v10->domain(), "ai.onnx");
@@ -154,10 +157,10 @@ TEST(OnnxOpTextRegistrationTest, ReturnsStringNormalizerSchema) {
 }
 
 TEST(OnnxOpTextRegistrationTest, ReturnsTfIdfVectorizerSchema) {
-  const std::vector<onnx_op::LightOpSchema> tf_idf_schemas =
+  const std::vector<core::schema::LightOpSchema> tf_idf_schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory("TfIdfVectorizer");
 
-  const onnx_op::LightOpSchema *const tf_idf_v9 = FindByVersion(tf_idf_schemas, 9);
+  const core::schema::LightOpSchema *const tf_idf_v9 = FindByVersion(tf_idf_schemas, 9);
   ASSERT_NE(nullptr, tf_idf_v9);
 
   EXPECT_EQ(tf_idf_v9->domain(), "ai.onnx");
@@ -173,19 +176,19 @@ TEST(OnnxOpTextRegistrationTest, ReturnsTfIdfVectorizerSchema) {
   EXPECT_EQ(tf_idf_v9->outputs()[0].type, "T1");
 
   EXPECT_EQ(tf_idf_v9->type_constraints()[0].type_param_str, "T");
-  EXPECT_EQ(
-      tf_idf_v9->type_constraints()[0].allowed_type_strs,
-      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kString, onnx_op::TensorType::kInt32,
-                                        onnx_op::TensorType::kInt64}));
+  EXPECT_EQ(tf_idf_v9->type_constraints()[0].allowed_type_strs,
+            (std::vector<core::schema::TensorType>{core::schema::TensorType::kString,
+                                                   core::schema::TensorType::kInt32,
+                                                   core::schema::TensorType::kInt64}));
   EXPECT_EQ(tf_idf_v9->type_constraints()[1].type_param_str, "T1");
   EXPECT_EQ(tf_idf_v9->type_constraints()[1].allowed_type_strs,
-            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kFloat});
+            std::vector<core::schema::TensorType>{core::schema::TensorType::kFloat});
 
   EXPECT_NE(tf_idf_v9->doc().find("This transform extracts n-grams"), std::string::npos);
 }
 
 TEST(OnnxOpTextRegistrationTest, StripDocsRemovesDocumentation) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory(/*op_type=*/"", /*init_doc=*/false);
   EXPECT_EQ(schemas.size(), kExpectedTextSchemaCount);
   for (const auto &schema : schemas) {

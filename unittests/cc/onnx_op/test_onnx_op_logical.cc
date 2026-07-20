@@ -74,7 +74,7 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(isnan_v20->type_constraints()[0].type_param_str, "T1");
   EXPECT_EQ(isnan_v20->type_constraints()[1].type_param_str, "T2");
   ASSERT_EQ(isnan_v20->type_constraints()[1].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(isnan_v20->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_EQ(isnan_v20->type_constraints()[1].allowed_type_strs[0], core::schema::TensorType::kBool);
   EXPECT_TRUE(isnan_v20->attributes().empty());
 
   // IsInf: v10, v20.
@@ -85,11 +85,11 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, isinf_v20);
   ASSERT_EQ(isinf_v20->outputs().size(), 1u);
   ASSERT_EQ(isinf_v20->type_constraints().size(), 2u);
-  EXPECT_EQ(isinf_v20->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_EQ(isinf_v20->type_constraints()[1].allowed_type_strs[0], core::schema::TensorType::kBool);
   ASSERT_EQ(isinf_v20->attributes().size(), 2u);
   EXPECT_EQ(isinf_v20->attributes()[0].name, "detect_positive");
   EXPECT_EQ(isinf_v20->attributes()[1].name, "detect_negative");
-  EXPECT_EQ(isinf_v20->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_EQ(isinf_v20->attributes()[0].type, core::schema::AttributeType::INT);
   EXPECT_FALSE(isinf_v20->attributes()[0].required);
   EXPECT_FALSE(isinf_v20->attributes()[1].required);
 
@@ -155,13 +155,13 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(and_v7->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(and_v7->type_constraints()[1].type_param_str, "T1");
   EXPECT_EQ(and_v7->type_constraints()[0].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(and_v7->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_EQ(and_v7->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kBool);
   EXPECT_EQ(and_v7->type_constraints()[1].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(and_v7->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_EQ(and_v7->type_constraints()[1].allowed_type_strs[0], core::schema::TensorType::kBool);
   EXPECT_EQ(and_v1->since_version(), 1);
   EXPECT_EQ(and_v1->type_constraints().size(), 2u);
   EXPECT_EQ(and_v1->type_constraints()[0].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(and_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_EQ(and_v1->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kBool);
   EXPECT_NE(and_v1->doc(), and_v7->doc());
   EXPECT_NE(and_v1->inputs()[0].description, and_v7->inputs()[0].description);
   EXPECT_EQ(or_v7->inputs().size(), 2u);
@@ -169,9 +169,10 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(or_v1->inputs()[0].description, and_v1->inputs()[0].description);
   EXPECT_EQ(or_v7->inputs()[0].description, and_v7->inputs()[0].description);
   EXPECT_EQ(xor_v7->type_constraints().size(), 2u);
-  EXPECT_EQ(xor_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_EQ(xor_v1->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kBool);
   EXPECT_EQ(greater_v7->type_constraints()[0].allowed_type_strs.size(), 3u);
-  EXPECT_EQ(greater_v7->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat16);
+  EXPECT_EQ(greater_v7->type_constraints()[0].allowed_type_strs[0],
+            core::schema::TensorType::kFloat16);
   EXPECT_EQ(greater_v9->type_constraints()[0].allowed_type_strs.size(), 11u);
   EXPECT_EQ(greater_v13->type_constraints()[0].allowed_type_strs.size(), 12u);
   EXPECT_EQ(greater_v1->inputs()[0].description, and_v1->inputs()[0].description);
@@ -185,7 +186,7 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(less_or_equal_v16->outputs()[0].name, "C");
   EXPECT_EQ(less_or_equal_v16->type_constraints()[1].allowed_type_strs.size(), 1u);
   EXPECT_EQ(less_or_equal_v16->type_constraints()[1].allowed_type_strs[0],
-            onnx_op::TensorType::kBool);
+            core::schema::TensorType::kBool);
   EXPECT_EQ(greater_or_equal_v12->type_constraints()[0].allowed_type_strs.size(), 11u);
   EXPECT_EQ(greater_or_equal_v16->type_constraints()[0].allowed_type_strs.size(), 12u);
   EXPECT_EQ(greater_or_equal_v16->inputs().size(), 2u);
@@ -195,20 +196,20 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(greater_or_equal_v16->outputs()[0].name, "C");
   EXPECT_EQ(greater_or_equal_v16->type_constraints()[1].allowed_type_strs.size(), 1u);
   EXPECT_EQ(greater_or_equal_v16->type_constraints()[1].allowed_type_strs[0],
-            onnx_op::TensorType::kBool);
+            core::schema::TensorType::kBool);
   EXPECT_EQ(equal_v1->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(equal_v11->type_constraints()[0].allowed_type_strs.size(), 12u);
   EXPECT_EQ(equal_v13->type_constraints()[0].allowed_type_strs.size(), 13u);
   EXPECT_EQ(equal_v19->type_constraints()[0].allowed_type_strs.size(), 14u);
   EXPECT_EQ(equal_v19->type_constraints()[0].allowed_type_strs.back(),
-            onnx_op::TensorType::kString);
+            core::schema::TensorType::kString);
   EXPECT_EQ(not_v1->inputs().size(), 1u);
   EXPECT_EQ(not_v1->outputs().size(), 1u);
   EXPECT_EQ(not_v1->inputs()[0].name, "X");
   EXPECT_EQ(not_v1->outputs()[0].name, "Y");
   EXPECT_EQ(not_v1->type_constraints().size(), 1u);
   EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs[0], core::schema::TensorType::kBool);
   EXPECT_EQ(where_v16->inputs().size(), 3u);
   EXPECT_EQ(where_v16->outputs().size(), 1u);
   EXPECT_EQ(where_v16->inputs()[0].name, "condition");
@@ -220,7 +221,8 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(where_v16->type_constraints()[1].type_param_str, "T");
   EXPECT_EQ(where_v9->type_constraints()[1].allowed_type_strs.size(), 15u);
   EXPECT_EQ(where_v16->type_constraints()[1].allowed_type_strs.size(), 16u);
-  EXPECT_EQ(where_v16->type_constraints()[1].allowed_type_strs[8], onnx_op::TensorType::kBfloat16);
+  EXPECT_EQ(where_v16->type_constraints()[1].allowed_type_strs[8],
+            core::schema::TensorType::kBfloat16);
 }
 
 TEST(OnnxOpLogicalRegistrationTest, BitwiseSchemasArePresent) {

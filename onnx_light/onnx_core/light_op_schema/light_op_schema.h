@@ -10,21 +10,21 @@
  * This header defines the core data structures that ``onnx_light`` uses to
  * describe ONNX operators without depending on the full ``onnx`` library:
  *
- * - ::ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema, a read-only record that
+ * - ::ONNX_LIGHT_NAMESPACE::core::schema::LightOpSchema, a read-only record that
  *   captures a single operator at a specific opset version (name, domain,
  *   ``since_version``, documentation string, formal inputs and outputs, and
  *   type constraints).
- * - ::ONNX_LIGHT_NAMESPACE::onnx_op::FormalParameter and
- *   ::ONNX_LIGHT_NAMESPACE::onnx_op::TypeConstraintParam, the building blocks
+ * - ::ONNX_LIGHT_NAMESPACE::core::schema::FormalParameter and
+ *   ::ONNX_LIGHT_NAMESPACE::core::schema::TypeConstraintParam, the building blocks
  *   used to describe input/output parameters and their type constraints.
- * - ::ONNX_LIGHT_NAMESPACE::onnx_op::TensorType, an enumeration of every
+ * - ::ONNX_LIGHT_NAMESPACE::core::schema::TensorType, an enumeration of every
  *   element-tensor, sequence-tensor, and optional-tensor type used in type
- *   constraints, together with ::ONNX_LIGHT_NAMESPACE::onnx_op::ToTypeString
+ *   constraints, together with ::ONNX_LIGHT_NAMESPACE::core::schema::ToTypeString
  *   to convert it to the canonical ONNX type string (e.g. ``"tensor(float)"``).
  * - A collection of helper functions returning common type sets reused across
  *   operator schemas (``FloatTypes()``, ``AllNumericTypes()``,
  *   ``AllTensorTypes()``, ``CastTypesVer*()``, ``EqualTypesV*()``, etc.).
- * - ::ONNX_LIGHT_NAMESPACE::onnx_op::StripDocs to obtain a memory-light copy
+ * - ::ONNX_LIGHT_NAMESPACE::core::schema::StripDocs to obtain a memory-light copy
  *   of a schema list with documentation strings cleared, useful in
  *   memory-constrained environments.
  *
@@ -34,7 +34,7 @@
  * generators and the ``onnx_optim`` shape inference library.
  *
  * Constructing a schema with invalid arguments throws a
- * ::ONNX_LIGHT_NAMESPACE::onnx_op::SchemaError.
+ * ::ONNX_LIGHT_NAMESPACE::core::schema::SchemaError.
  */
 
 #pragma once
@@ -181,7 +181,7 @@ struct AttributeParam {
 };
 
 /// Re-exports ``onnx_proto::TensorType`` so that existing consumers of
-/// ``onnx_op::TensorType`` continue to compile without change.
+/// ``core::schema::TensorType`` continue to compile without change.
 using TensorType = onnx_proto::TensorType;
 
 /// Specifies which tensor types are permitted for a named type parameter.
@@ -198,7 +198,7 @@ struct TypeConstraintParam {
  * Returns the ONNX type-string representation of a TensorType value.
  *
  * Forwards to ``onnx_proto::ToTypeString``; kept here so that existing
- * callers of ``onnx_op::ToTypeString`` continue to compile unchanged.
+ * callers of ``core::schema::ToTypeString`` continue to compile unchanged.
  *
  * @param type Tensor type enumerator to convert.
  * @return Null-terminated string such as `"tensor(float)"` or
@@ -436,7 +436,6 @@ using SchemaBuilder = std::function<std::vector<LightOpSchema>()>;
 std::vector<LightOpSchema>
 CollectSchemasFromBuilders(const std::map<std::string, SchemaBuilder> &builders,
                            const std::string &op_type, bool init_doc);
-
 
 } // namespace schema
 } // namespace core

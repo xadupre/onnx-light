@@ -21,8 +21,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -32,9 +32,9 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpReductionRegistrationTest, ReturnsSchemasWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> reduce_sum_schemas =
+  const std::vector<core::schema::LightOpSchema> reduce_sum_schemas =
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory("ReduceSum");
 
   // Counts per op: ReduceSum=3 (v1,v11,v13); ReduceMax/ReduceMin=6 each
@@ -43,9 +43,9 @@ TEST(OnnxOpReductionRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   // (v1,v11,v13,v18).
   EXPECT_EQ(schemas.size(), 51u);
 
-  const onnx_op::LightOpSchema *const reduce_sum_v13 = FindByVersion(reduce_sum_schemas, 13);
-  const onnx_op::LightOpSchema *const reduce_sum_v11 = FindByVersion(reduce_sum_schemas, 11);
-  const onnx_op::LightOpSchema *const reduce_sum_v1 = FindByVersion(reduce_sum_schemas, 1);
+  const core::schema::LightOpSchema *const reduce_sum_v13 = FindByVersion(reduce_sum_schemas, 13);
+  const core::schema::LightOpSchema *const reduce_sum_v11 = FindByVersion(reduce_sum_schemas, 11);
+  const core::schema::LightOpSchema *const reduce_sum_v1 = FindByVersion(reduce_sum_schemas, 1);
 
   ASSERT_NE(nullptr, reduce_sum_v13);
   ASSERT_NE(nullptr, reduce_sum_v11);
@@ -62,7 +62,7 @@ TEST(OnnxOpReductionRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(reduce_sum_v13->type_constraints().size(), 1u);
   EXPECT_EQ(reduce_sum_v13->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(reduce_sum_v13->type_constraints()[0].allowed_type_strs,
-            onnx_op::NumericTypesForMathReductionIr4());
+            core::schema::NumericTypesForMathReductionIr4());
   EXPECT_FALSE(reduce_sum_v13->has_function_implementation());
 
   // Check v11 schema: one input (axes remain an attribute), one output.
@@ -72,7 +72,7 @@ TEST(OnnxOpReductionRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(reduce_sum_v11->outputs().size(), 1u);
   EXPECT_EQ(reduce_sum_v11->type_constraints().size(), 1u);
   EXPECT_EQ(reduce_sum_v11->type_constraints()[0].allowed_type_strs,
-            onnx_op::NumericTypesForMathReduction());
+            core::schema::NumericTypesForMathReduction());
 
   // Check v1 schema: one input, one output.
   EXPECT_EQ(reduce_sum_v1->since_version(), 1);
@@ -80,7 +80,7 @@ TEST(OnnxOpReductionRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(reduce_sum_v1->outputs().size(), 1u);
   EXPECT_EQ(reduce_sum_v1->type_constraints().size(), 1u);
   EXPECT_EQ(reduce_sum_v1->type_constraints()[0].allowed_type_strs,
-            onnx_op::NumericTypesForMathReduction());
+            core::schema::NumericTypesForMathReduction());
 
   // v13 has bfloat16 while v11 and v1 do not.
   EXPECT_NE(reduce_sum_v13->type_constraints()[0].allowed_type_strs,
@@ -95,7 +95,7 @@ TEST(OnnxOpReductionRegistrationTest, ReturnsSchemasWithoutShapeInference) {
 }
 
 TEST(OnnxOpReductionRegistrationTest, SimpleReduceOpsShareVersionStructure) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
 
   const std::vector<std::string> simple_ops = {
@@ -103,12 +103,12 @@ TEST(OnnxOpReductionRegistrationTest, SimpleReduceOpsShareVersionStructure) {
       "ReduceL1",   "ReduceLogSumExp", "ReduceL2",
   };
   for (const std::string &op : simple_ops) {
-    const std::vector<onnx_op::LightOpSchema> op_schemas =
+    const std::vector<core::schema::LightOpSchema> op_schemas =
         onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory(op);
-    const onnx_op::LightOpSchema *const v18 = FindByVersion(op_schemas, 18);
-    const onnx_op::LightOpSchema *const v13 = FindByVersion(op_schemas, 13);
-    const onnx_op::LightOpSchema *const v11 = FindByVersion(op_schemas, 11);
-    const onnx_op::LightOpSchema *const v1 = FindByVersion(op_schemas, 1);
+    const core::schema::LightOpSchema *const v18 = FindByVersion(op_schemas, 18);
+    const core::schema::LightOpSchema *const v13 = FindByVersion(op_schemas, 13);
+    const core::schema::LightOpSchema *const v11 = FindByVersion(op_schemas, 11);
+    const core::schema::LightOpSchema *const v1 = FindByVersion(op_schemas, 1);
     ASSERT_NE(nullptr, v18) << op;
     ASSERT_NE(nullptr, v13) << op;
     ASSERT_NE(nullptr, v11) << op;
@@ -120,21 +120,23 @@ TEST(OnnxOpReductionRegistrationTest, SimpleReduceOpsShareVersionStructure) {
     EXPECT_EQ(v18->inputs()[1].name, "axes") << op;
     EXPECT_EQ(v18->outputs().size(), 1u) << op;
     EXPECT_EQ(v18->type_constraints()[0].allowed_type_strs,
-              onnx_op::NumericTypesForMathReductionIr4())
+              core::schema::NumericTypesForMathReductionIr4())
         << op;
 
     // v13: axes remain an attribute; bfloat16 supported.
     EXPECT_EQ(v13->inputs().size(), 1u) << op;
     EXPECT_EQ(v13->type_constraints()[0].allowed_type_strs,
-              onnx_op::NumericTypesForMathReductionIr4())
+              core::schema::NumericTypesForMathReductionIr4())
         << op;
 
     // v11 / v1: axes attribute, no bfloat16.
     EXPECT_EQ(v11->inputs().size(), 1u) << op;
-    EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs, onnx_op::NumericTypesForMathReduction())
+    EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs,
+              core::schema::NumericTypesForMathReduction())
         << op;
     EXPECT_EQ(v1->inputs().size(), 1u) << op;
-    EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs, onnx_op::NumericTypesForMathReduction())
+    EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs,
+              core::schema::NumericTypesForMathReduction())
         << op;
 
     // Docs differ across the v18 -> v1 boundary (and other transitions).
@@ -145,18 +147,18 @@ TEST(OnnxOpReductionRegistrationTest, SimpleReduceOpsShareVersionStructure) {
 }
 
 TEST(OnnxOpReductionRegistrationTest, ReduceMaxMinSupports8BitAndBool) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
 
   for (const std::string &op : {"ReduceMax", "ReduceMin"}) {
-    const std::vector<onnx_op::LightOpSchema> op_schemas =
+    const std::vector<core::schema::LightOpSchema> op_schemas =
         onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory(op);
-    const onnx_op::LightOpSchema *const v20 = FindByVersion(op_schemas, 20);
-    const onnx_op::LightOpSchema *const v18 = FindByVersion(op_schemas, 18);
-    const onnx_op::LightOpSchema *const v13 = FindByVersion(op_schemas, 13);
-    const onnx_op::LightOpSchema *const v12 = FindByVersion(op_schemas, 12);
-    const onnx_op::LightOpSchema *const v11 = FindByVersion(op_schemas, 11);
-    const onnx_op::LightOpSchema *const v1 = FindByVersion(op_schemas, 1);
+    const core::schema::LightOpSchema *const v20 = FindByVersion(op_schemas, 20);
+    const core::schema::LightOpSchema *const v18 = FindByVersion(op_schemas, 18);
+    const core::schema::LightOpSchema *const v13 = FindByVersion(op_schemas, 13);
+    const core::schema::LightOpSchema *const v12 = FindByVersion(op_schemas, 12);
+    const core::schema::LightOpSchema *const v11 = FindByVersion(op_schemas, 11);
+    const core::schema::LightOpSchema *const v1 = FindByVersion(op_schemas, 1);
     ASSERT_NE(nullptr, v20) << op;
     ASSERT_NE(nullptr, v18) << op;
     ASSERT_NE(nullptr, v13) << op;
@@ -167,20 +169,20 @@ TEST(OnnxOpReductionRegistrationTest, ReduceMaxMinSupports8BitAndBool) {
     // v20: axes input, includes bool type.
     EXPECT_EQ(v20->inputs().size(), 2u) << op;
     const auto &types_v20 = v20->type_constraints()[0].allowed_type_strs;
-    EXPECT_NE(std::find(types_v20.begin(), types_v20.end(), onnx_op::TensorType::kBool),
+    EXPECT_NE(std::find(types_v20.begin(), types_v20.end(), core::schema::TensorType::kBool),
               types_v20.end())
         << op;
 
     // v18: axes input, includes 8-bit but not bool.
     EXPECT_EQ(v18->inputs().size(), 2u) << op;
     const auto &types_v18 = v18->type_constraints()[0].allowed_type_strs;
-    EXPECT_NE(std::find(types_v18.begin(), types_v18.end(), onnx_op::TensorType::kUint8),
+    EXPECT_NE(std::find(types_v18.begin(), types_v18.end(), core::schema::TensorType::kUint8),
               types_v18.end())
         << op;
-    EXPECT_NE(std::find(types_v18.begin(), types_v18.end(), onnx_op::TensorType::kInt8),
+    EXPECT_NE(std::find(types_v18.begin(), types_v18.end(), core::schema::TensorType::kInt8),
               types_v18.end())
         << op;
-    EXPECT_EQ(std::find(types_v18.begin(), types_v18.end(), onnx_op::TensorType::kBool),
+    EXPECT_EQ(std::find(types_v18.begin(), types_v18.end(), core::schema::TensorType::kBool),
               types_v18.end())
         << op;
 
@@ -188,35 +190,37 @@ TEST(OnnxOpReductionRegistrationTest, ReduceMaxMinSupports8BitAndBool) {
     EXPECT_EQ(v13->inputs().size(), 1u) << op;
     EXPECT_EQ(v12->inputs().size(), 1u) << op;
     const auto &types_v12 = v12->type_constraints()[0].allowed_type_strs;
-    EXPECT_NE(std::find(types_v12.begin(), types_v12.end(), onnx_op::TensorType::kInt8),
+    EXPECT_NE(std::find(types_v12.begin(), types_v12.end(), core::schema::TensorType::kInt8),
               types_v12.end())
         << op;
 
     // v11 / v1 are the pre-8-bit baseline.
-    EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs, onnx_op::NumericTypesForMathReduction())
+    EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs,
+              core::schema::NumericTypesForMathReduction())
         << op;
-    EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs, onnx_op::NumericTypesForMathReduction())
+    EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs,
+              core::schema::NumericTypesForMathReduction())
         << op;
   }
 }
 
 TEST(OnnxOpReductionRegistrationTest, ArgReduceSchemas) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
 
   for (const std::string &op : {"ArgMax", "ArgMin"}) {
-    const std::vector<onnx_op::LightOpSchema> op_schemas =
+    const std::vector<core::schema::LightOpSchema> op_schemas =
         onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory(op);
-    const onnx_op::LightOpSchema *const v13 = FindByVersion(op_schemas, 13);
-    const onnx_op::LightOpSchema *const v12 = FindByVersion(op_schemas, 12);
-    const onnx_op::LightOpSchema *const v11 = FindByVersion(op_schemas, 11);
-    const onnx_op::LightOpSchema *const v1 = FindByVersion(op_schemas, 1);
+    const core::schema::LightOpSchema *const v13 = FindByVersion(op_schemas, 13);
+    const core::schema::LightOpSchema *const v12 = FindByVersion(op_schemas, 12);
+    const core::schema::LightOpSchema *const v11 = FindByVersion(op_schemas, 11);
+    const core::schema::LightOpSchema *const v1 = FindByVersion(op_schemas, 1);
     ASSERT_NE(nullptr, v13) << op;
     ASSERT_NE(nullptr, v12) << op;
     ASSERT_NE(nullptr, v11) << op;
     ASSERT_NE(nullptr, v1) << op;
 
-    for (const onnx_op::LightOpSchema *s : {v13, v12, v11, v1}) {
+    for (const core::schema::LightOpSchema *s : {v13, v12, v11, v1}) {
       EXPECT_EQ(s->inputs().size(), 1u) << op;
       EXPECT_EQ(s->inputs()[0].name, "data") << op;
       EXPECT_EQ(s->outputs().size(), 1u) << op;
@@ -226,10 +230,10 @@ TEST(OnnxOpReductionRegistrationTest, ArgReduceSchemas) {
     }
 
     // v13 includes bfloat16; earlier versions do not.
-    EXPECT_EQ(v13->type_constraints()[0].allowed_type_strs, onnx_op::AllNumericTypesIr4());
-    EXPECT_EQ(v12->type_constraints()[0].allowed_type_strs, onnx_op::AllNumericTypes());
-    EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs, onnx_op::AllNumericTypes());
-    EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs, onnx_op::AllNumericTypes());
+    EXPECT_EQ(v13->type_constraints()[0].allowed_type_strs, core::schema::AllNumericTypesIr4());
+    EXPECT_EQ(v12->type_constraints()[0].allowed_type_strs, core::schema::AllNumericTypes());
+    EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs, core::schema::AllNumericTypes());
+    EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs, core::schema::AllNumericTypes());
 
     // Docs differ between v12 (select_last_index) and v11 / v1.
     EXPECT_NE(v12->doc(), v11->doc()) << op;

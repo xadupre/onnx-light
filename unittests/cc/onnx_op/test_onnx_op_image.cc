@@ -18,8 +18,8 @@ namespace Test {
 
 constexpr size_t kExpectedImageSchemaCount = 1;
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -29,14 +29,15 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpImageRegistrationTest, ReturnsImageDecoderSchema) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::image::GetAllOnnxOpImageSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> image_decoder_schemas =
+  const std::vector<core::schema::LightOpSchema> image_decoder_schemas =
       onnx_op::image::GetAllOnnxOpImageSchemasWithHistory("ImageDecoder");
 
   EXPECT_EQ(schemas.size(), kExpectedImageSchemaCount);
 
-  const onnx_op::LightOpSchema *const image_decoder_v20 = FindByVersion(image_decoder_schemas, 20);
+  const core::schema::LightOpSchema *const image_decoder_v20 =
+      FindByVersion(image_decoder_schemas, 20);
   ASSERT_NE(nullptr, image_decoder_v20);
 
   EXPECT_EQ(image_decoder_v20->domain(), "ai.onnx");
@@ -54,13 +55,13 @@ TEST(OnnxOpImageRegistrationTest, ReturnsImageDecoderSchema) {
 
   EXPECT_EQ(image_decoder_v20->type_constraints()[0].type_param_str, "T1");
   EXPECT_EQ(image_decoder_v20->type_constraints()[0].allowed_type_strs,
-            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kUint8});
+            std::vector<core::schema::TensorType>{core::schema::TensorType::kUint8});
   EXPECT_EQ(image_decoder_v20->type_constraints()[0].description,
             "Constrain input types to 8-bit unsigned integer tensor.");
 
   EXPECT_EQ(image_decoder_v20->type_constraints()[1].type_param_str, "T2");
   EXPECT_EQ(image_decoder_v20->type_constraints()[1].allowed_type_strs,
-            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kUint8});
+            std::vector<core::schema::TensorType>{core::schema::TensorType::kUint8});
   EXPECT_EQ(image_decoder_v20->type_constraints()[1].description,
             "Constrain output types to 8-bit unsigned integer tensor.");
 

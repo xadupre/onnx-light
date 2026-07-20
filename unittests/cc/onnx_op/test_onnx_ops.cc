@@ -19,13 +19,13 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
-static_assert(std::string_view(onnx_op::AttributeType_Name(onnx_op::AttributeType::TYPE_PROTOS)) ==
-              "TYPE_PROTOS");
+static_assert(std::string_view(core::schema::AttributeType_Name(
+                  core::schema::AttributeType::TYPE_PROTOS)) == "TYPE_PROTOS");
 
 namespace Test {
 
 void ExpectSameFormalParameters(
-    const std::vector<onnx_op::FormalParameter> &light_params,
+    const std::vector<core::schema::FormalParameter> &light_params,
     const std::vector<onnx_light::OpSchema::FormalParameter> &onnx_params) {
   ASSERT_EQ(light_params.size(), onnx_params.size());
   for (size_t i = 0; i < light_params.size(); ++i) {
@@ -37,7 +37,7 @@ void ExpectSameFormalParameters(
 }
 
 void ExpectSameTypeConstraints(
-    const std::vector<onnx_op::TypeConstraintParam> &light_constraints,
+    const std::vector<core::schema::TypeConstraintParam> &light_constraints,
     const std::vector<onnx_light::OpSchema::TypeConstraintParam> &onnx_constraints) {
   ASSERT_EQ(light_constraints.size(), onnx_constraints.size());
   for (size_t i = 0; i < light_constraints.size(); ++i) {
@@ -47,7 +47,7 @@ void ExpectSameTypeConstraints(
     ASSERT_EQ(light_constraints[i].allowed_type_strs.size(),
               onnx_constraints[i].allowed_type_strs.size());
     for (size_t j = 0; j < light_constraints[i].allowed_type_strs.size(); ++j) {
-      ASSERT_EQ(onnx_op::ToTypeString(light_constraints[i].allowed_type_strs[j]),
+      ASSERT_EQ(core::schema::ToTypeString(light_constraints[i].allowed_type_strs[j]),
                 onnx_constraints[i].allowed_type_strs[j]);
     }
   }
@@ -55,8 +55,9 @@ void ExpectSameTypeConstraints(
 
 TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   onnx_light::RegisterOnnxOperatorSetSchema(0, false);
-  const std::vector<onnx_op::LightOpSchema> all_schemas = onnx_op::GetAllOnnxOpSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> math_schemas =
+  const std::vector<core::schema::LightOpSchema> all_schemas =
+      onnx_op::GetAllOnnxOpSchemasWithHistory();
+  const std::vector<core::schema::LightOpSchema> math_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
   const std::vector<onnx_op::controlflow::LightOpSchema> controlflow_schemas =
       onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory();
@@ -102,7 +103,7 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
 
   for (const onnx_op::reduction::LightOpSchema &reduction_schema : reduction_schemas) {
     bool found = false;
-    for (const onnx_op::LightOpSchema &schema : all_schemas) {
+    for (const core::schema::LightOpSchema &schema : all_schemas) {
       if (schema.name() == reduction_schema.name() &&
           schema.since_version() == reduction_schema.since_version() &&
           schema.domain() == reduction_schema.domain()) {
@@ -113,7 +114,7 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
     ASSERT_TRUE(found);
   }
 
-  std::vector<onnx_op::LightOpSchema> parity_schemas;
+  std::vector<core::schema::LightOpSchema> parity_schemas;
   parity_schemas.reserve(all_schemas.size() - reduction_schemas.size());
   parity_schemas.insert(parity_schemas.end(), math_schemas.begin(), math_schemas.end());
   parity_schemas.insert(parity_schemas.end(), controlflow_schemas.begin(),
@@ -135,7 +136,7 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
                         traditionalml_schemas.end());
   parity_schemas.insert(parity_schemas.end(), training_schemas.begin(), training_schemas.end());
 
-  for (const onnx_op::LightOpSchema &schema : parity_schemas) {
+  for (const core::schema::LightOpSchema &schema : parity_schemas) {
     SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
     const std::string domain =
         onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
@@ -152,29 +153,31 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
 }
 
 TEST(LightOpSchemaTest, InitDocDefaultStoresDoc) {
-  onnx_op::LightOpSchema schema("Op", onnx_op::kOnnxDomain, 1, "some documentation", {}, {}, {});
+  core::schema::LightOpSchema schema("Op", core::schema::kOnnxDomain, 1, "some documentation", {},
+                                     {}, {});
   EXPECT_EQ(schema.doc(), "some documentation");
 }
 
 TEST(LightOpSchemaTest, InitDocFalseDiscardsDoc) {
-  onnx_op::LightOpSchema schema("Op", onnx_op::kOnnxDomain, 1, "some documentation", {}, {}, {},
-                                /*has_function_implementation=*/false, /*init_doc=*/false);
+  core::schema::LightOpSchema schema("Op", core::schema::kOnnxDomain, 1, "some documentation", {},
+                                     {}, {},
+                                     /*has_function_implementation=*/false, /*init_doc=*/false);
   EXPECT_TRUE(schema.doc().empty());
 }
 
 TEST(LightOpSchemaTest, GetAllOnnxOpSchemasInitDocFalseStripsDocs) {
-  const std::vector<onnx_op::LightOpSchema> with_docs =
+  const std::vector<core::schema::LightOpSchema> with_docs =
       onnx_op::GetAllOnnxOpSchemasWithHistory(/*op_type=*/"", /*init_doc=*/true);
-  const std::vector<onnx_op::LightOpSchema> without_docs =
+  const std::vector<core::schema::LightOpSchema> without_docs =
       onnx_op::GetAllOnnxOpSchemasWithHistory(/*op_type=*/"", /*init_doc=*/false);
 
   ASSERT_EQ(with_docs.size(), without_docs.size());
   ASSERT_FALSE(with_docs.empty());
-  for (const onnx_op::LightOpSchema &schema : without_docs) {
+  for (const core::schema::LightOpSchema &schema : without_docs) {
     EXPECT_TRUE(schema.doc().empty());
   }
   bool any_doc_populated = false;
-  for (const onnx_op::LightOpSchema &schema : with_docs) {
+  for (const core::schema::LightOpSchema &schema : with_docs) {
     if (!schema.doc().empty()) {
       any_doc_populated = true;
       break;
@@ -184,26 +187,26 @@ TEST(LightOpSchemaTest, GetAllOnnxOpSchemasInitDocFalseStripsDocs) {
 }
 
 TEST(LightOpSchemaTest, GetAllOnnxOpSchemasOpNameFiltersByOperator) {
-  const std::vector<onnx_op::LightOpSchema> all_schemas =
+  const std::vector<core::schema::LightOpSchema> all_schemas =
       onnx_op::GetAllOnnxOpSchemasWithHistory(/*op_type=*/"", /*init_doc=*/false);
   ASSERT_FALSE(all_schemas.empty());
 
-  const std::vector<onnx_op::LightOpSchema> abs_schemas =
+  const std::vector<core::schema::LightOpSchema> abs_schemas =
       onnx_op::GetAllOnnxOpSchemasWithHistory(/*op_type=*/"Abs", /*init_doc=*/false);
   ASSERT_FALSE(abs_schemas.empty());
-  for (const onnx_op::LightOpSchema &schema : abs_schemas) {
+  for (const core::schema::LightOpSchema &schema : abs_schemas) {
     EXPECT_EQ(schema.name(), "Abs");
   }
 
   size_t expected_count = 0;
-  for (const onnx_op::LightOpSchema &schema : all_schemas) {
+  for (const core::schema::LightOpSchema &schema : all_schemas) {
     if (schema.name() == "Abs") {
       ++expected_count;
     }
   }
   EXPECT_EQ(abs_schemas.size(), expected_count);
 
-  const std::vector<onnx_op::LightOpSchema> unknown_schemas =
+  const std::vector<core::schema::LightOpSchema> unknown_schemas =
       onnx_op::GetAllOnnxOpSchemasWithHistory(/*op_type=*/"ThisOpDoesNotExist", /*init_doc=*/false);
   EXPECT_TRUE(unknown_schemas.empty());
 }

@@ -19,8 +19,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -30,9 +30,9 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpObjectDetectionRegistrationTest, ReturnsRoiAlignSchemaHistory) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> roi_align_schemas =
+  const std::vector<core::schema::LightOpSchema> roi_align_schemas =
       onnx_op::object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory("RoiAlign");
 
   EXPECT_EQ(schemas.size(), 5u);
@@ -40,10 +40,10 @@ TEST(OnnxOpObjectDetectionRegistrationTest, ReturnsRoiAlignSchemaHistory) {
   const std::vector<int> expected_versions = {22, 16, 10};
   for (int version : expected_versions) {
     SCOPED_TRACE("RoiAlign@" + std::to_string(version));
-    const onnx_op::LightOpSchema *const schema = FindByVersion(roi_align_schemas, version);
+    const core::schema::LightOpSchema *const schema = FindByVersion(roi_align_schemas, version);
     ASSERT_NE(nullptr, schema);
     EXPECT_EQ(schema->name(), "RoiAlign");
-    EXPECT_EQ(schema->domain(), onnx_op::kOnnxDomain);
+    EXPECT_EQ(schema->domain(), core::schema::kOnnxDomain);
     EXPECT_EQ(schema->since_version(), version);
 
     ASSERT_EQ(schema->inputs().size(), 3u);
@@ -61,14 +61,17 @@ TEST(OnnxOpObjectDetectionRegistrationTest, ReturnsRoiAlignSchemaHistory) {
     ASSERT_EQ(schema->type_constraints().size(), 2u);
     EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T1");
     EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs.size(), 4u);
-    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
-    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kFloat16);
-    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kFloat);
-    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kDouble);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[0],
+              core::schema::TensorType::kBfloat16);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[1],
+              core::schema::TensorType::kFloat16);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[2], core::schema::TensorType::kFloat);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[3],
+              core::schema::TensorType::kDouble);
     EXPECT_EQ(schema->type_constraints()[1].type_param_str, "T2");
     ASSERT_EQ(schema->type_constraints()[1].allowed_type_strs.size(), 1u);
-    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kInt64);
-    EXPECT_STREQ(onnx_op::ToTypeString(schema->type_constraints()[1].allowed_type_strs[0]),
+    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs[0], core::schema::TensorType::kInt64);
+    EXPECT_STREQ(core::schema::ToTypeString(schema->type_constraints()[1].allowed_type_strs[0]),
                  "tensor(int64)");
 
     EXPECT_FALSE(schema->doc().empty());
@@ -76,17 +79,17 @@ TEST(OnnxOpObjectDetectionRegistrationTest, ReturnsRoiAlignSchemaHistory) {
 }
 
 TEST(OnnxOpObjectDetectionRegistrationTest, ReturnsNonMaxSuppressionSchemaHistory) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory("NonMaxSuppression");
   ASSERT_EQ(schemas.size(), 2u);
 
   const std::vector<int> expected_versions = {11, 10};
   for (int version : expected_versions) {
     SCOPED_TRACE("NonMaxSuppression@" + std::to_string(version));
-    const onnx_op::LightOpSchema *const schema = FindByVersion(schemas, version);
+    const core::schema::LightOpSchema *const schema = FindByVersion(schemas, version);
     ASSERT_NE(nullptr, schema);
     EXPECT_EQ(schema->name(), "NonMaxSuppression");
-    EXPECT_EQ(schema->domain(), onnx_op::kOnnxDomain);
+    EXPECT_EQ(schema->domain(), core::schema::kOnnxDomain);
     EXPECT_EQ(schema->since_version(), version);
 
     ASSERT_EQ(schema->inputs().size(), 5u);
@@ -106,7 +109,7 @@ TEST(OnnxOpObjectDetectionRegistrationTest, ReturnsNonMaxSuppressionSchemaHistor
 
     ASSERT_EQ(schema->attributes().size(), 1u);
     EXPECT_EQ(schema->attributes()[0].name, "center_point_box");
-    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[0].type, core::schema::AttributeType::INT);
     EXPECT_FALSE(schema->attributes()[0].required);
 
     EXPECT_FALSE(schema->doc().empty());

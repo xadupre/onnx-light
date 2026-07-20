@@ -26,8 +26,8 @@ constexpr size_t kExpectedQuantizationSchemaCount =
     kExpectedQLinearConvSchemaCount + kExpectedQLinearMatMulSchemaCount +
     kExpectedDynamicQuantizeLinearSchemaCount;
 
-static const onnx_op::LightOpSchema *
-FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
+static const core::schema::LightOpSchema *
+FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
     if (schema.since_version() == version) {
       return &schema;
@@ -37,20 +37,20 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
 }
 
 TEST(OnnxOpQuantizationRegistrationTest, ReturnsQuantizeLinearSchemasWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::quantization::GetAllOnnxOpQuantizationSchemasWithHistory();
-  const std::vector<onnx_op::LightOpSchema> quantize_linear_schemas =
+  const std::vector<core::schema::LightOpSchema> quantize_linear_schemas =
       onnx_op::quantization::GetAllOnnxOpQuantizationSchemasWithHistory("QuantizeLinear");
 
   EXPECT_EQ(schemas.size(), kExpectedQuantizationSchemaCount);
 
-  const onnx_op::LightOpSchema *const v25 = FindByVersion(quantize_linear_schemas, 25);
-  const onnx_op::LightOpSchema *const v24 = FindByVersion(quantize_linear_schemas, 24);
-  const onnx_op::LightOpSchema *const v23 = FindByVersion(quantize_linear_schemas, 23);
-  const onnx_op::LightOpSchema *const v21 = FindByVersion(quantize_linear_schemas, 21);
-  const onnx_op::LightOpSchema *const v19 = FindByVersion(quantize_linear_schemas, 19);
-  const onnx_op::LightOpSchema *const v13 = FindByVersion(quantize_linear_schemas, 13);
-  const onnx_op::LightOpSchema *const v10 = FindByVersion(quantize_linear_schemas, 10);
+  const core::schema::LightOpSchema *const v25 = FindByVersion(quantize_linear_schemas, 25);
+  const core::schema::LightOpSchema *const v24 = FindByVersion(quantize_linear_schemas, 24);
+  const core::schema::LightOpSchema *const v23 = FindByVersion(quantize_linear_schemas, 23);
+  const core::schema::LightOpSchema *const v21 = FindByVersion(quantize_linear_schemas, 21);
+  const core::schema::LightOpSchema *const v19 = FindByVersion(quantize_linear_schemas, 19);
+  const core::schema::LightOpSchema *const v13 = FindByVersion(quantize_linear_schemas, 13);
+  const core::schema::LightOpSchema *const v10 = FindByVersion(quantize_linear_schemas, 10);
 
   ASSERT_NE(nullptr, v25);
   ASSERT_NE(nullptr, v24);
@@ -84,14 +84,16 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsQuantizeLinearSchemasWithoutShap
   EXPECT_EQ(v25->type_constraints()[1].type_param_str, "T2");
   EXPECT_EQ(v25->type_constraints()[2].type_param_str, "T3");
   EXPECT_EQ(v25->type_constraints()[2].allowed_type_strs.size(), 13u);
-  EXPECT_EQ(v25->type_constraints()[2].allowed_type_strs.back(), onnx_op::TensorType::kInt2);
+  EXPECT_EQ(v25->type_constraints()[2].allowed_type_strs.back(), core::schema::TensorType::kInt2);
 
   // v24 added float8e8m0 to T2 and the float4e2m1 entry to T3.
   ASSERT_EQ(v24->type_constraints().size(), 3u);
   EXPECT_EQ(v24->type_constraints()[1].allowed_type_strs.size(), 5u);
-  EXPECT_EQ(v24->type_constraints()[1].allowed_type_strs.back(), onnx_op::TensorType::kFloat8e8m0);
+  EXPECT_EQ(v24->type_constraints()[1].allowed_type_strs.back(),
+            core::schema::TensorType::kFloat8e8m0);
   EXPECT_EQ(v24->type_constraints()[2].allowed_type_strs.size(), 11u);
-  EXPECT_EQ(v24->type_constraints()[2].allowed_type_strs.back(), onnx_op::TensorType::kFloat4e2m1);
+  EXPECT_EQ(v24->type_constraints()[2].allowed_type_strs.back(),
+            core::schema::TensorType::kFloat4e2m1);
 
   // v23 has T2 without float8e8m0 but T3 with float4e2m1.
   ASSERT_EQ(v23->type_constraints().size(), 3u);
@@ -128,18 +130,18 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsQuantizeLinearSchemasWithoutShap
 }
 
 TEST(OnnxOpQuantizationRegistrationTest, ReturnsDequantizeLinearSchemasWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> dequantize_linear_schemas =
+  const std::vector<core::schema::LightOpSchema> dequantize_linear_schemas =
       onnx_op::quantization::GetAllOnnxOpQuantizationSchemasWithHistory("DequantizeLinear");
 
   EXPECT_EQ(dequantize_linear_schemas.size(), kExpectedDequantizeLinearSchemaCount);
 
-  const onnx_op::LightOpSchema *const v25 = FindByVersion(dequantize_linear_schemas, 25);
-  const onnx_op::LightOpSchema *const v24 = FindByVersion(dequantize_linear_schemas, 24);
-  const onnx_op::LightOpSchema *const v23 = FindByVersion(dequantize_linear_schemas, 23);
-  const onnx_op::LightOpSchema *const v21 = FindByVersion(dequantize_linear_schemas, 21);
-  const onnx_op::LightOpSchema *const v19 = FindByVersion(dequantize_linear_schemas, 19);
-  const onnx_op::LightOpSchema *const v13 = FindByVersion(dequantize_linear_schemas, 13);
-  const onnx_op::LightOpSchema *const v10 = FindByVersion(dequantize_linear_schemas, 10);
+  const core::schema::LightOpSchema *const v25 = FindByVersion(dequantize_linear_schemas, 25);
+  const core::schema::LightOpSchema *const v24 = FindByVersion(dequantize_linear_schemas, 24);
+  const core::schema::LightOpSchema *const v23 = FindByVersion(dequantize_linear_schemas, 23);
+  const core::schema::LightOpSchema *const v21 = FindByVersion(dequantize_linear_schemas, 21);
+  const core::schema::LightOpSchema *const v19 = FindByVersion(dequantize_linear_schemas, 19);
+  const core::schema::LightOpSchema *const v13 = FindByVersion(dequantize_linear_schemas, 13);
+  const core::schema::LightOpSchema *const v10 = FindByVersion(dequantize_linear_schemas, 10);
 
   ASSERT_NE(nullptr, v25);
   ASSERT_NE(nullptr, v24);
@@ -173,13 +175,14 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsDequantizeLinearSchemasWithoutSh
   EXPECT_EQ(v25->type_constraints()[1].type_param_str, "T2");
   EXPECT_EQ(v25->type_constraints()[2].type_param_str, "T3");
   EXPECT_EQ(v25->type_constraints()[0].allowed_type_strs.size(), 14u);
-  EXPECT_EQ(v25->type_constraints()[0].allowed_type_strs.back(), onnx_op::TensorType::kInt2);
+  EXPECT_EQ(v25->type_constraints()[0].allowed_type_strs.back(), core::schema::TensorType::kInt2);
 
   // v24 introduced T3 + the float8e8m0 entry on T2 vs. v23.
   ASSERT_EQ(v24->type_constraints().size(), 3u);
   EXPECT_EQ(v24->type_constraints()[0].allowed_type_strs.size(), 12u);
   EXPECT_EQ(v24->type_constraints()[1].allowed_type_strs.size(), 4u);
-  EXPECT_EQ(v24->type_constraints()[1].allowed_type_strs.back(), onnx_op::TensorType::kFloat8e8m0);
+  EXPECT_EQ(v24->type_constraints()[1].allowed_type_strs.back(),
+            core::schema::TensorType::kFloat8e8m0);
 
   // v23 has T2 without float8e8m0; T1 still has 12 entries.
   ASSERT_EQ(v23->type_constraints().size(), 3u);
@@ -214,11 +217,11 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsDequantizeLinearSchemasWithoutSh
 }
 
 TEST(OnnxOpQuantizationRegistrationTest, ReturnsDynamicQuantizeLinearSchema) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
+  const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::quantization::GetAllOnnxOpQuantizationSchemasWithHistory("DynamicQuantizeLinear");
 
   ASSERT_EQ(schemas.size(), kExpectedDynamicQuantizeLinearSchemaCount);
-  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  const core::schema::LightOpSchema *const v11 = FindByVersion(schemas, 11);
   ASSERT_NE(nullptr, v11);
 
   EXPECT_EQ(v11->domain(), "ai.onnx");
@@ -240,10 +243,10 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsDynamicQuantizeLinearSchema) {
   ASSERT_EQ(v11->type_constraints().size(), 2u);
   EXPECT_EQ(v11->type_constraints()[0].type_param_str, "T1");
   ASSERT_EQ(v11->type_constraints()[0].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs.front(), onnx_op::TensorType::kFloat);
+  EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs.front(), core::schema::TensorType::kFloat);
   EXPECT_EQ(v11->type_constraints()[1].type_param_str, "T2");
   ASSERT_EQ(v11->type_constraints()[1].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(v11->type_constraints()[1].allowed_type_strs.front(), onnx_op::TensorType::kUint8);
+  EXPECT_EQ(v11->type_constraints()[1].allowed_type_strs.front(), core::schema::TensorType::kUint8);
 
   EXPECT_NE(v11->doc().find("Scale, Zero Point"), std::string::npos);
 }

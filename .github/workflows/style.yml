@@ -24,4 +24,4 @@ jobs:
       - name: Install style tools
         run: pip install black==26.5.1 ruff==0.15.20
       - name: Check style
-        run: ruff check .
+        run: black --check . && ruff check .

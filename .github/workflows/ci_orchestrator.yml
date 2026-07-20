@@ -28,18 +28,26 @@ jobs:
   fast_clang_format:
     name: fast / clang-format
     uses: ./.github/workflows/clang_format.yml
+    permissions:
+      contents: read
 
   fast_style:
     name: fast / style
     uses: ./.github/workflows/style.yml
+    permissions:
+      contents: read
 
   fast_typing:
     name: fast / typing
     uses: ./.github/workflows/typing.yml
+    permissions:
+      contents: read
 
   fast_spelling:
     name: fast / spelling
     uses: ./.github/workflows/spelling.yml
+    permissions:
+      contents: read
 
   fast_codeql:
     name: fast / codeql
@@ -69,6 +77,9 @@ jobs:
     name: ci-1-core
     needs: [fast_gate]
     uses: ./.github/workflows/ci_core.yml
+    permissions:
+      contents: read
+      id-token: write
 
   # ── Final job: the single required PR status check ────────────────────────────
   #

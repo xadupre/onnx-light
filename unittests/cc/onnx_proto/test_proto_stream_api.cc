@@ -142,6 +142,65 @@ TEST(proto_stream_api, SerializeToFileDescriptorWithOptionsReturnsTrue) {
   std::filesystem::remove(path);
 }
 
+TEST(proto_stream_api, SaveToFileDescriptorReturnsTrue) {
+  AttributeProto attr = MakeIntAttr();
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "onnx_light_save_proto_fd.bin";
+  const int fd = OpenTempFdForWrite(path.string());
+  ASSERT_GE(fd, 0);
+  ASSERT_TRUE(attr.SaveToFileDescriptor(fd));
+  CloseFd(fd);
+
+  AttributeProto parsed;
+  ASSERT_TRUE(parsed.ParseFromString(ReadWholeFile(path.string())));
+  EXPECT_EQ(parsed.ref_i(), 123456789);
+  EXPECT_EQ(parsed.ref_name(), "i_attr");
+  std::filesystem::remove(path);
+}
+
+TEST(proto_stream_api, SaveToFileDescriptorWithOptionsReturnsTrue) {
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("onnx-light");
+  SerializeOptions sopts;
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "onnx_light_save_model_proto_fd.bin";
+  const int fd = OpenTempFdForWrite(path.string());
+  ASSERT_GE(fd, 0);
+  ASSERT_TRUE(model.SaveToFileDescriptor(fd, sopts));
+  CloseFd(fd);
+
+  ModelProto parsed;
+  ASSERT_TRUE(parsed.ParseFromString(ReadWholeFile(path.string())));
+  EXPECT_EQ(parsed.ref_ir_version(), 7);
+  EXPECT_EQ(parsed.ref_producer_name(), "onnx-light");
+  std::filesystem::remove(path);
+}
+
+TEST(proto_stream_api, SaveToFileDescriptorMatchesSerializeToFileDescriptor) {
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("onnx-light");
+
+  const std::filesystem::path path1 =
+      std::filesystem::temp_directory_path() / "onnx_light_serialize_fd.bin";
+  const int fd1 = OpenTempFdForWrite(path1.string());
+  ASSERT_GE(fd1, 0);
+  ASSERT_TRUE(model.SerializeToFileDescriptor(fd1));
+  CloseFd(fd1);
+
+  const std::filesystem::path path2 =
+      std::filesystem::temp_directory_path() / "onnx_light_save_fd.bin";
+  const int fd2 = OpenTempFdForWrite(path2.string());
+  ASSERT_GE(fd2, 0);
+  ASSERT_TRUE(model.SaveToFileDescriptor(fd2));
+  CloseFd(fd2);
+
+  EXPECT_EQ(ReadWholeFile(path1.string()), ReadWholeFile(path2.string()));
+  std::filesystem::remove(path1);
+  std::filesystem::remove(path2);
+}
+
 TEST(proto_stream_api, SerializeAsString) {
   AttributeProto attr = MakeIntAttr();
   const std::string serialized = attr.SerializeAsString();

@@ -48,6 +48,10 @@
   }                                                                                                \
   bool cls::SerializeToFileDescriptor(int fd, SerializeOptions &opts) const {                      \
     return _SerializeToFileDescriptor(*this, fd, opts);                                            \
+  }                                                                                                \
+  bool cls::SaveToFileDescriptor(int fd) const { return _SerializeToFileDescriptor(*this, fd); }   \
+  bool cls::SaveToFileDescriptor(int fd, SerializeOptions &opts) const {                           \
+    return _SerializeToFileDescriptor(*this, fd, opts);                                            \
   }
 
 ///////////////////////

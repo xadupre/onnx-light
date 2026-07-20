@@ -36,6 +36,9 @@
   bool cls::SerializeToOstream(std::ostream *output) const {                                       \
     return _SerializeToOstream(*this, output);                                                     \
   }                                                                                                \
+  bool cls::SerializeToOStream(std::ostream *output) const {                                       \
+    return _SerializeToOstream(*this, output);                                                     \
+  }                                                                                                \
   bool cls::SerializeToString(std::string &out) const { return _SerializeToString(*this, out); }   \
   bool cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
     return _SerializeToString(*this, out, opts);                                                   \

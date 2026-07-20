@@ -214,3 +214,28 @@ TEST(proto_stream_api, SerializeToOstreamMatchesSerializeToString) {
   ASSERT_TRUE(model.SerializeToOstream(&oss));
   EXPECT_EQ(oss.str(), via_to_string);
 }
+
+TEST(proto_stream_api, SerializeToOStreamReturnsTrue) {
+  AttributeProto attr = MakeIntAttr();
+  std::ostringstream oss;
+  ASSERT_TRUE(attr.SerializeToOStream(&oss));
+  const std::string serialized = oss.str();
+  EXPECT_FALSE(serialized.empty());
+
+  AttributeProto parsed;
+  EXPECT_TRUE(parsed.ParseFromString(serialized));
+  EXPECT_EQ(parsed.ref_i(), 123456789);
+  EXPECT_EQ(parsed.ref_name(), "i_attr");
+}
+
+TEST(proto_stream_api, SerializeToOStreamMatchesSerializeToOstream) {
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("onnx-light");
+
+  std::ostringstream oss1;
+  ASSERT_TRUE(model.SerializeToOstream(&oss1));
+  std::ostringstream oss2;
+  ASSERT_TRUE(model.SerializeToOStream(&oss2));
+  EXPECT_EQ(oss1.str(), oss2.str());
+}

@@ -151,14 +151,9 @@ def save(
         the bytes and update tensor metadata before serialization.
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
-    assert isinstance(f, (str, Path)) or hasattr(f, "write"), f"Unexpected type {type(f)} for f."
-    if format is None:
-        format = _infer_format(f)
-    if format not in _SUPPORTED_FORMATS:
-        raise ValueError(
-            f"Unsupported format={format!r}; onnx-light only supports "
-            f"{sorted(_SUPPORTED_FORMATS)!r}."
-        )
+    assert isinstance(f, (str, Path)) or hasattr(
+        f, "write"
+    ), f"Expected str, Path, or file-like object with write() method, got {type(f)}."
     if hasattr(f, "write"):
         # File-like object path: external data is not supported.
         if save_as_external_data or location:
@@ -166,16 +161,29 @@ def save(
                 "save_as_external_data and location are not supported when f is a "
                 "file-like object. Pass a file path instead."
             )
-        if format == "textproto":
+        resolved_format = format if format is not None else "protobuf"
+        if resolved_format not in _SUPPORTED_FORMATS:
+            raise ValueError(
+                f"Unsupported format={resolved_format!r}; onnx-light only supports "
+                f"{sorted(_SUPPORTED_FORMATS)!r}."
+            )
+        if resolved_format == "textproto":
             if raw_data_callback is not None:
                 raise ValueError("raw_data_callback is not supported for the 'textproto' format.")
             from ._text_format import serialize_to_textproto
 
             text = serialize_to_textproto(proto)
-            f.write(text.encode("utf-8"))  # type: ignore[arg-type]
+            f.write(text.encode("utf-8"))  # type: ignore[union-attr]
             return
         proto.SerializeToOstream(f)
         return
+    if format is None:
+        format = _infer_format(f)
+    if format not in _SUPPORTED_FORMATS:
+        raise ValueError(
+            f"Unsupported format={format!r}; onnx-light only supports "
+            f"{sorted(_SUPPORTED_FORMATS)!r}."
+        )
     if format == "textproto":
         if save_as_external_data or location or raw_data_callback is not None:
             raise ValueError(

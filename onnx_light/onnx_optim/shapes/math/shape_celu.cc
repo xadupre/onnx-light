@@ -13,8 +13,8 @@ namespace math {
 
 void ComputeShapeCelu(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "Celu", "ComputeShapeCelu");
-  const OptimTensor &input = ctx.Get(x);
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  const SymTensor &input = ctx.Get(x);
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace math

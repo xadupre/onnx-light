@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -42,8 +42,8 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeSqueeze: Squeeze requires at least one input.");
 
-  const OptimTensor &data = ctx.Get(node.input(0));
-  const OptimShape &input_shape = data.Shape();
+  const SymTensor &data = ctx.Get(node.input(0));
+  const SymShape &input_shape = data.Shape();
   const int64_t rank = static_cast<int64_t>(input_shape.Rank());
 
   bool axes_specified = false;
@@ -54,9 +54,9 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node) {
 
   if (node.input_size() >= 2 && !node.input(1).empty()) {
     axes_specified = true;
-    const OptimTensor &axes_tensor = ctx.Get(node.input(1));
+    const SymTensor &axes_tensor = ctx.Get(node.input(1));
     if (axes_tensor.HasValueAsShape()) {
-      const OptimShape &axes = axes_tensor.ValueAsShape();
+      const SymShape &axes = axes_tensor.ValueAsShape();
       std::vector<int64_t> raw_axes;
       raw_axes.reserve(axes.Rank());
       for (size_t i = 0; i < axes.Rank(); ++i) {
@@ -74,7 +74,7 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node) {
     }
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   if (axes_known) {
     size_t axis_index = 0;
     for (int64_t i = 0; i < rank; ++i) {
@@ -99,13 +99,13 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node) {
     EXT_ENFORCE_INVALID(axes_count >= 0 && axes_count <= rank,
                         "ComputeShapeSqueeze: number of axes exceeds input rank.");
     for (int64_t i = 0; i < rank - axes_count; ++i) {
-      out_shape.PushBack(OptimDim("Squeeze_dim" + std::to_string(i)));
+      out_shape.PushBack(SymDim("Squeeze_dim" + std::to_string(i)));
     }
   } else {
-    out_shape.PushBack(OptimDim("Squeeze_dim0"));
+    out_shape.PushBack(SymDim("Squeeze_dim0"));
   }
 
-  OptimTensor out_tensor(nullptr, data.Dtype(), std::move(out_shape));
+  SymTensor out_tensor(nullptr, data.Dtype(), std::move(out_shape));
 
   // Squeeze only removes size-1 dimensions from the shape; it does not
   // change the tensor values.  Forward the ValueAsShape annotation so that

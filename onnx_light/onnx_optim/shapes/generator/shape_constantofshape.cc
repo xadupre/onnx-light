@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -33,9 +33,9 @@ void ComputeShapeConstantOfShape(ShapesContext &ctx, const NodeProto &node) {
     dtype = DataTypeToTensorType(value->t().data_type());
   }
 
-  const OptimTensor &shape_input = ctx.Get(node.input(0));
+  const SymTensor &shape_input = ctx.Get(node.input(0));
 
-  OptimShape out_shape;
+  SymShape out_shape;
   if (shape_input.HasValueAsShape()) {
     out_shape = shape_input.ValueAsShape();
   } else if (shape_input.Shape().Rank() == 1 && shape_input.Shape()[0].IsInt()) {
@@ -43,17 +43,17 @@ void ComputeShapeConstantOfShape(ShapesContext &ctx, const NodeProto &node) {
     // input value has not been data-propagated.
     const int64_t rank = shape_input.Shape()[0].AsInt();
     for (int64_t i = 0; i < rank; ++i) {
-      out_shape.PushBack(OptimDim("ConstantOfShape_dim" + std::to_string(i)));
+      out_shape.PushBack(SymDim("ConstantOfShape_dim" + std::to_string(i)));
     }
   } else if (shape_input.Shape().Rank() == 1) {
     // Single, symbolic dim: rank is unknown, fall back to one symbolic dim.
-    out_shape.PushBack(OptimDim("ConstantOfShape_dim0"));
+    out_shape.PushBack(SymDim("ConstantOfShape_dim0"));
   }
   // ``input`` could legitimately be the empty 1-D tensor, which makes
   // the output a scalar (no dims). Leaving ``out_shape`` empty handles
   // that case.
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, dtype, std::move(out_shape)));
 }
 
 } // namespace generator

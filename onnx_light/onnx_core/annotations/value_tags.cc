@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/annotations/value_tags.h"
+#include "onnx_core/annotations/value_tags.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -10,7 +10,7 @@
 #include <tuple>
 #include <unordered_set>
 
-#include "onnx_optim/annotations/inplace_reuse.h"
+#include "onnx_core/annotations/inplace_reuse.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
@@ -453,7 +453,7 @@ ComputeContext::ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes) {
 
 bool ComputeContext::TrySetValueTag(const std::string &name, const std::string &tag) {
   const bool changed =
-      ::ONNX_LIGHT_NAMESPACE::onnx_optim::annotations::TrySetValueTag(value_tags_, name, tag);
+      ::ONNX_LIGHT_NAMESPACE::core::annotations::TrySetValueTag(value_tags_, name, tag);
   if (changed) {
     custom_value_tags_changed_ = true;
   }

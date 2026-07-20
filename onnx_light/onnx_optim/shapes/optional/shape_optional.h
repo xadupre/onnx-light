@@ -19,13 +19,13 @@ namespace shapes {
 namespace optional {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Optional`` node
+ * Computes the output :cpp:class:`SymTensor` of an ``Optional`` node
  * and stores it in ``ctx``.
  *
  * ``Optional`` (since opset 15) wraps a value into an optional-type
  * output. The wrapped element type is determined either by the input
  * value (when an input is provided) or by the ``type`` ``TypeProto``
- * attribute (when no input is provided). Since :cpp:class:`OptimTensor`
+ * attribute (when no input is provided). Since :cpp:class:`SymTensor`
  * does not model optional or sequence types, this implementation only
  * supports the **tensor-element** path: the output descriptor mirrors
  * the dtype and shape of the wrapped tensor.
@@ -63,12 +63,12 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node);
  * ``OptionalGetElement`` (since opset 15 in the ``ai.onnx`` domain)
  * extracts the element from an optional-type input. Since opset 18 the
  * operator also accepts non-optional tensor or sequence inputs as a
- * no-op. Because :cpp:class:`OptimTensor` does not model optional
+ * no-op. Because :cpp:class:`SymTensor` does not model optional
  * values, this implementation forwards the input descriptor verbatim:
  *
- *   - if the input name is bound to an :cpp:class:`OptimSequence` in
+ *   - if the input name is bound to an :cpp:class:`SymSequence` in
  *     ``ctx``, the output is registered as the same sequence;
- *   - otherwise the input must be bound to an :cpp:class:`OptimTensor`
+ *   - otherwise the input must be bound to an :cpp:class:`SymTensor`
  *     and the output is registered as a tensor with the same dtype and
  *     shape.
  *
@@ -95,11 +95,11 @@ void ComputeShapeOptionalGetElement(ShapesContext &ctx, const NodeProto &node);
  * optional contains an element. Since opset 18 the input may also be a
  * non-optional tensor or sequence, and the input may be omitted
  * entirely (in which case the output is ``false``). The output is
- * always a scalar :cpp:class:`OptimTensor` of dtype
+ * always a scalar :cpp:class:`SymTensor` of dtype
  * :cpp:enumerator:`TensorType::kBool`.
  *
  * @param ctx   In/out context. On return it contains an
- *              :cpp:class:`OptimTensor` entry for ``node.output(0)``.
+ *              :cpp:class:`SymTensor` entry for ``node.output(0)``.
  * @param node  The ``OptionalHasElement`` ``NodeProto``.
  *
  * @throws std::invalid_argument if ``node.op_type()`` is not

@@ -13,10 +13,10 @@ namespace math {
 
 void ComputeShapeSinh(ShapesContext &ctx, const NodeProto &node, const char *x_name) {
   CheckNodeOpAndOutput(node, "Sinh", "ComputeShapeSinh");
-  const OptimTensor &input = ctx.Get(x_name);
+  const SymTensor &input = ctx.Get(x_name);
   // Sinh is element-wise in every supported opset revision: the output
   // dtype and shape match the input.
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace math

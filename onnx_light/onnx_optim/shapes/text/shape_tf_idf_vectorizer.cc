@@ -26,17 +26,17 @@ void ComputeShapeTfIdfVectorizer(ShapesContext &ctx, const NodeProto &node, cons
       "ComputeShapeTfIdfVectorizer: ngram_indexes must be non-empty with no negative values.");
   const int64_t max_last_axis = *std::max_element(ngram_indexes.cbegin(), ngram_indexes.cend()) + 1;
 
-  const OptimTensor &input = ctx.Get(a);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(a);
+  const SymShape &in_shape = input.Shape();
   const std::size_t rank = in_shape.Rank();
   if (rank == 1) {
-    OptimShape out_shape{OptimDim(max_last_axis)};
-    ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kFloat, std::move(out_shape)));
+    SymShape out_shape{SymDim(max_last_axis)};
+    ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kFloat, std::move(out_shape)));
     return;
   }
   if (rank == 2) {
-    OptimShape out_shape{in_shape[0], OptimDim(max_last_axis)};
-    ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kFloat, std::move(out_shape)));
+    SymShape out_shape{in_shape[0], SymDim(max_last_axis)};
+    ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kFloat, std::move(out_shape)));
     return;
   }
   EXT_THROW_INVALID("ComputeShapeTfIdfVectorizer: input tensor must have rank 1 or 2; got rank ",

@@ -22,19 +22,20 @@
 #include "onnx_proto/type_helper.h"
 
 /**
- * @file optim_tensor.h
+ * @file sym_tensor.h
  * @brief Lightweight, non-owning tensor description used by ONNX
  *        graph optimisation passes.
  *
- * The ``onnx_optim`` namespace exposes three small value types:
+ * The ``core::symbolic`` namespace exposes three small value types,
+ * consumed by the ``onnx_optim`` shape-inference library:
  *
- *   - :cpp:class:`OptimDim` — a single shape dimension, either a
+ *   - :cpp:class:`SymDim` — a single shape dimension, either a
  *     concrete ``int64_t`` or a symbolic string expression.
- *   - :cpp:class:`OptimShape` — an ordered, bounded-rank collection of
- *     :cpp:class:`OptimDim`.
- *   - :cpp:class:`OptimTensor` — a non-owning view over a contiguous
+ *   - :cpp:class:`SymShape` — an ordered, bounded-rank collection of
+ *     :cpp:class:`SymDim`.
+ *   - :cpp:class:`SymTensor` — a non-owning view over a contiguous
  *     buffer carrying a :cpp:type:`TensorType`, an
- *     :cpp:class:`OptimShape`, and an optional shape annotation when
+ *     :cpp:class:`SymShape`, and an optional shape annotation when
  *     the tensor itself represents a shape (e.g. the ``shape`` input of
  *     ``Reshape``).
  *
@@ -53,7 +54,7 @@ using TensorType = ONNX_LIGHT_NAMESPACE::onnx_proto::TensorType;
 
 /**
  * Maps a ``TensorProto::DataType`` to the matching :cpp:type:`TensorType`
- * enumerator used by :cpp:class:`OptimTensor`. Returns
+ * enumerator used by :cpp:class:`SymTensor`. Returns
  * :cpp:enumerator:`TensorType::kUndefined` for any data type that is not
  * representable in the ``onnx_optim`` stack (e.g. ``UNDEFINED``).
  */
@@ -215,22 +216,22 @@ constexpr bool IsIntegerTensorType(TensorType t) {
 
 /**
  * A single shape dimension that is either a concrete non-negative integer or
- * a symbolic expression represented as a string. ``OptimDim`` is used by
- * ``OptimShape`` to describe both fully-known and partially-symbolic shapes.
+ * a symbolic expression represented as a string. ``SymDim`` is used by
+ * ``SymShape`` to describe both fully-known and partially-symbolic shapes.
  */
-class OptimDim {
+class SymDim {
 public:
   /// Default constructs a zero-valued integer dimension.
-  OptimDim() : value_(static_cast<int64_t>(0)) {}
+  SymDim() : value_(static_cast<int64_t>(0)) {}
 
   /// Constructs an integer-valued dimension.
-  OptimDim(int64_t value) : value_(value) {}
+  SymDim(int64_t value) : value_(value) {}
 
   /// Constructs a symbolic dimension expressed as a string expression.
-  OptimDim(std::string expr) : value_(std::move(expr)) {}
+  SymDim(std::string expr) : value_(std::move(expr)) {}
 
   /// Convenience overload for C string literals.
-  OptimDim(const char *expr) : value_(std::string(expr)) {}
+  SymDim(const char *expr) : value_(std::string(expr)) {}
 
   /// Returns ``true`` when the dimension holds a concrete integer value.
   bool IsInt() const noexcept { return std::holds_alternative<int64_t>(value_); }
@@ -247,8 +248,8 @@ public:
   const std::string &AsExpr() const { return std::get<std::string>(value_); }
 
   /// Equality compares both the alternative and the underlying value.
-  bool operator==(const OptimDim &other) const noexcept { return value_ == other.value_; }
-  bool operator!=(const OptimDim &other) const noexcept { return !(*this == other); }
+  bool operator==(const SymDim &other) const noexcept { return value_ == other.value_; }
+  bool operator!=(const SymDim &other) const noexcept { return !(*this == other); }
 
   /// Returns a human-readable representation of the dimension: the integer
   /// value for concrete dimensions, or the symbolic expression for string
@@ -259,27 +260,27 @@ private:
   std::variant<int64_t, std::string> value_;
 };
 
-/// Maximum number of dimensions an ``OptimShape`` can describe inline. Shapes
+/// Maximum number of dimensions an ``SymShape`` can describe inline. Shapes
 /// in practice rarely exceed this rank, so storing the dimensions in a small
 /// container keeps the structure compact and cache-friendly.
 inline constexpr std::size_t kMaxOptimRank = 16;
 
 /**
- * A short, value-typed shape composed of ``OptimDim`` entries. The rank is
+ * A short, value-typed shape composed of ``SymDim`` entries. The rank is
  * bounded by ``kMaxOptimRank`` so that the structure fits comfortably on the
  * stack. Symbolic and concrete dimensions can be mixed freely.
  */
-class OptimShape {
+class SymShape {
 public:
-  using value_type = OptimDim;
+  using value_type = SymDim;
 
-  OptimShape() = default;
+  SymShape() = default;
 
   /// Constructs a shape from an initializer list of dimensions.
-  OptimShape(std::initializer_list<OptimDim> dims);
+  SymShape(std::initializer_list<SymDim> dims);
 
-  /// Constructs a shape from any iterable container of ``OptimDim``.
-  explicit OptimShape(const std::vector<OptimDim> &dims);
+  /// Constructs a shape from any iterable container of ``SymDim``.
+  explicit SymShape(const std::vector<SymDim> &dims);
 
   /// Number of dimensions.
   std::size_t Rank() const noexcept { return dims_.size(); }
@@ -288,12 +289,12 @@ public:
   bool Empty() const noexcept { return dims_.empty(); }
 
   /// Access a dimension by index. Throws ``std::out_of_range`` if invalid.
-  const OptimDim &operator[](std::size_t i) const { return dims_.at(i); }
-  OptimDim &operator[](std::size_t i) { return dims_.at(i); }
+  const SymDim &operator[](std::size_t i) const { return dims_.at(i); }
+  SymDim &operator[](std::size_t i) { return dims_.at(i); }
 
   /// Appends a new dimension. Throws ``std::length_error`` when the maximum
   /// rank ``kMaxOptimRank`` would be exceeded.
-  void PushBack(OptimDim dim);
+  void PushBack(SymDim dim);
 
   /// Returns ``true`` when every dimension is a concrete integer.
   bool IsFullyKnown() const noexcept;
@@ -304,11 +305,11 @@ public:
   int64_t NumElements() const;
 
   /// Equality compares the dimensions element-wise.
-  bool operator==(const OptimShape &other) const noexcept { return dims_ == other.dims_; }
-  bool operator!=(const OptimShape &other) const noexcept { return !(*this == other); }
+  bool operator==(const SymShape &other) const noexcept { return dims_ == other.dims_; }
+  bool operator!=(const SymShape &other) const noexcept { return !(*this == other); }
 
   /// Read-only access to the underlying dimensions.
-  const std::vector<OptimDim> &Dims() const noexcept { return dims_; }
+  const std::vector<SymDim> &Dims() const noexcept { return dims_; }
 
   /// Returns a human-readable representation of the shape as a
   /// comma-separated list of dimensions enclosed in square brackets,
@@ -316,42 +317,42 @@ public:
   std::string ToString() const;
 
 private:
-  std::vector<OptimDim> dims_;
+  std::vector<SymDim> dims_;
 };
 
 /**
- * Builds an :cpp:class:`OptimShape` from ``tensor_proto.dims()``.
+ * Builds an :cpp:class:`SymShape` from ``tensor_proto.dims()``.
  *
  * ONNX stores tensor dimensions as non-negative 64-bit integers in
  * ``TensorProto::dims``; this helper converts every dimension into an
- * :cpp:class:`OptimDim` and appends them in order.
+ * :cpp:class:`SymDim` and appends them in order.
  *
  * @param tensor_proto Tensor whose ``dims`` field is converted.
  * @return Converted shape with the same rank and dimension values.
  */
-OptimShape ShapeFromTensorProtoDims(const TensorProto &tensor_proto);
+SymShape ShapeFromTensorProtoDims(const TensorProto &tensor_proto);
 
 /**
- * Result of comparing two :cpp:class:`OptimTensor` descriptors with
- * :cpp:func:`OptimTensor::Cmp`. The four outcomes describe the relative
+ * Result of comparing two :cpp:class:`SymTensor` descriptors with
+ * :cpp:func:`SymTensor::Cmp`. The four outcomes describe the relative
  * precision of the two descriptors when they are interpreted as
  * statements about the same logical tensor.
  *
- * - :cpp:enumerator:`OptimCmpResult::kConflict` — the two descriptors
+ * - :cpp:enumerator:`SymCmpResult::kConflict` — the two descriptors
  *   carry contradictory information (e.g. different known element types,
  *   different ranks, or incompatible concrete dimension values) and
  *   cannot both be true at the same time.
- * - :cpp:enumerator:`OptimCmpResult::kMorePrecise` — ``*this`` is at
+ * - :cpp:enumerator:`SymCmpResult::kMorePrecise` — ``*this`` is at
  *   least as precise as ``other`` on every field and strictly more
  *   precise on at least one (or both are equivalent — the equal case
  *   is reported as ``kMorePrecise``).
- * - :cpp:enumerator:`OptimCmpResult::kLessPrecise` — ``other`` is
+ * - :cpp:enumerator:`SymCmpResult::kLessPrecise` — ``other`` is
  *   strictly more precise than ``*this``.
- * - :cpp:enumerator:`OptimCmpResult::kComplementary` — neither
+ * - :cpp:enumerator:`SymCmpResult::kComplementary` — neither
  *   descriptor dominates: each one carries some information the other
  *   one is missing, but the two are mutually compatible.
  */
-enum class OptimCmpResult {
+enum class SymCmpResult {
   kConflict,
   kMorePrecise,
   kLessPrecise,
@@ -366,7 +367,7 @@ enum class OptimCmpResult {
 inline constexpr int kMaxGPUIndex = 8191;
 
 /**
- * Logical device on which an :cpp:class:`OptimTensor` resides.
+ * Logical device on which an :cpp:class:`SymTensor` resides.
  *
  * The enumeration is intentionally compact: ``kUndefined`` denotes the
  * "no information" state (the default), ``kCPU`` denotes the host CPU,
@@ -428,19 +429,19 @@ std::string DeviceName(Device d);
 Device DeviceFromName(const std::string &name);
 
 /**
- * A non-owning view over a contiguous tensor buffer. ``OptimTensor`` never
+ * A non-owning view over a contiguous tensor buffer. ``SymTensor`` never
  * allocates: the caller is responsible for the lifetime of the underlying
  * memory referenced by ``data``. The shape may contain symbolic dimensions
  * which is useful for representing intermediate values during optimisation
  * passes where the concrete shape is not yet known.
  */
-class OptimTensor {
+class SymTensor {
 public:
   /// Constructs an empty (null) tensor.
-  OptimTensor() = default;
+  SymTensor() = default;
 
   /**
-   * Constructs an ``OptimTensor`` referencing an external buffer.
+   * Constructs an ``SymTensor`` referencing an external buffer.
    *
    * @param data Pointer to the first element of the externally-owned buffer.
    *             May be ``nullptr`` only when ``shape`` is empty or all
@@ -448,7 +449,7 @@ public:
    * @param dtype Element type of the data referenced by ``data``.
    * @param shape Shape describing the layout of the data.
    */
-  OptimTensor(void *data, TensorType dtype, OptimShape shape)
+  SymTensor(void *data, TensorType dtype, SymShape shape)
       : data_(data), dtype_(dtype), shape_(std::move(shape)) {}
 
   /// Pointer to the externally-owned buffer. The view itself is ``const``
@@ -510,18 +511,18 @@ public:
   }
 
   /// Shape of the tensor (may contain symbolic dimensions).
-  const OptimShape &Shape() const noexcept { return shape_; }
-  OptimShape &Shape() noexcept { return shape_; }
+  const SymShape &Shape() const noexcept { return shape_; }
+  SymShape &Shape() noexcept { return shape_; }
 
   /// ``true`` when the tensor has no associated data pointer.
   bool IsNull() const noexcept { return data_ == nullptr; }
 
   /**
    * Tags the tensor as carrying a shape value (e.g. the ``shape`` input of a
-   * ``Reshape`` node) and stores that shape. An empty ``OptimShape`` is
+   * ``Reshape`` node) and stores that shape. An empty ``SymShape`` is
    * permitted: it denotes a rank-0 / scalar shape value.
    */
-  void SetValueAsShape(OptimShape shape) { value_as_shape_ = std::move(shape); }
+  void SetValueAsShape(SymShape shape) { value_as_shape_ = std::move(shape); }
 
   /// Clears the value-as-shape annotation so that ``HasValueAsShape`` becomes
   /// ``false`` again.
@@ -534,23 +535,23 @@ public:
 
   /// Returns the shape value carried by this tensor. Throws
   /// ``std::bad_optional_access`` if ``HasValueAsShape()`` is ``false``.
-  const OptimShape &ValueAsShape() const { return value_as_shape_.value(); }
-  OptimShape &ValueAsShape() { return value_as_shape_.value(); }
+  const SymShape &ValueAsShape() const { return value_as_shape_.value(); }
+  SymShape &ValueAsShape() { return value_as_shape_.value(); }
 
   /// Equality compares the data pointer, dtype, device, shape, the
   /// optional value-as-shape annotation, and the optional ``min``/``max``
-  /// value bounds. Because :cpp:class:`OptimTensor` is a non-owning
+  /// value bounds. Because :cpp:class:`SymTensor` is a non-owning
   /// view, two tensors are considered equal only when they refer to the
   /// same external buffer.
-  bool operator==(const OptimTensor &other) const noexcept {
+  bool operator==(const SymTensor &other) const noexcept {
     return data_ == other.data_ && dtype_ == other.dtype_ && device_ == other.device_ &&
            shape_ == other.shape_ && value_as_shape_ == other.value_as_shape_ &&
            min_ == other.min_ && max_ == other.max_;
   }
-  bool operator!=(const OptimTensor &other) const noexcept { return !(*this == other); }
+  bool operator!=(const SymTensor &other) const noexcept { return !(*this == other); }
 
   /// Returns a human-readable representation of the tensor of the form
-  /// ``"OptimTensor(dtype=<name>, shape=<shape>[, device=<name>][, value_as_shape=<shape>][,
+  /// ``"SymTensor(dtype=<name>, shape=<shape>[, device=<name>][, value_as_shape=<shape>][,
   /// min=<v>][, max=<v>][, data=<ptr>])"``. The ``device`` component is omitted when the
   /// device is :cpp:enumerator:`Device::kUndefined`. The ``data`` component is
   /// omitted when the tensor holds no buffer. The ``value_as_shape``
@@ -562,15 +563,15 @@ public:
   std::string ToString() const;
   /**
    * Compares the information carried by ``*this`` and ``other`` and reports
-   * which descriptor is more precise (see :cpp:enum:`OptimCmpResult`).
+   * which descriptor is more precise (see :cpp:enum:`SymCmpResult`).
    *
    * The comparison covers, in order:
    *   - the element type (an unknown :cpp:enumerator:`TensorType::kUndefined`
    *     is treated as "no information"; two different known types yield
-   *     :cpp:enumerator:`OptimCmpResult::kConflict`);
+   *     :cpp:enumerator:`SymCmpResult::kConflict`);
    *   - the device (an unknown :cpp:enumerator:`Device::kUndefined` is
    *     treated as "no information"; two different known devices yield
-   *     :cpp:enumerator:`OptimCmpResult::kConflict`);
+   *     :cpp:enumerator:`SymCmpResult::kConflict`);
    *   - the shape rank (different ranks yield ``kConflict``);
    *   - each dimension (two different concrete integers or two different
    *     symbolic expressions yield ``kConflict``; an integer is considered
@@ -585,30 +586,30 @@ public:
    *     (``a.min > b.max`` or ``b.min > a.max``) yield ``kConflict``;
    *   - the data-pointer presence (a non-null pointer is more precise than
    *     a null one; two distinct non-null pointers carry no precision
-   *     signal because :cpp:class:`OptimTensor` is a non-owning view and
+   *     signal because :cpp:class:`SymTensor` is a non-owning view and
    *     the buffer contents are not inspected).
    *
    * When ``*this`` and ``other`` are equivalent on every field, the result
-   * is :cpp:enumerator:`OptimCmpResult::kMorePrecise` (``*this`` is at
+   * is :cpp:enumerator:`SymCmpResult::kMorePrecise` (``*this`` is at
    * least as precise as ``other``).
    */
-  OptimCmpResult Cmp(const OptimTensor &other) const noexcept;
+  SymCmpResult Cmp(const SymTensor &other) const noexcept;
 
 private:
   void *data_ = nullptr;
   TensorType dtype_ = TensorType::kUndefined;
   Device device_ = Device::kUndefined;
-  OptimShape shape_{};
-  std::optional<OptimShape> value_as_shape_{};
+  SymShape shape_{};
+  std::optional<SymShape> value_as_shape_{};
   std::optional<double> min_{};
   std::optional<double> max_{};
 };
 
-/// Well-known key used to round-trip the :cpp:func:`OptimTensor::Min`
+/// Well-known key used to round-trip the :cpp:func:`SymTensor::Min`
 /// bound through the ``ValueInfoProto::metadata_props`` field.
 inline constexpr const char *kValueInfoMinMetadataKey = "min";
 
-/// Well-known key used to round-trip the :cpp:func:`OptimTensor::Max`
+/// Well-known key used to round-trip the :cpp:func:`SymTensor::Max`
 /// bound through the ``ValueInfoProto::metadata_props`` field.
 inline constexpr const char *kValueInfoMaxMetadataKey = "max";
 
@@ -630,19 +631,19 @@ inline constexpr const char *kValueInfoDeviceMetadataKey = "device";
  * @param vi  ``ValueInfoProto`` to read from.
  * @param out Tensor to overwrite on success.
  * @return ``true`` when ``vi`` wraps a tensor type; ``false`` for
- *         sequence/map/optional/sparse types (which ``OptimTensor``
+ *         sequence/map/optional/sparse types (which ``SymTensor``
  *         does not model), in which case ``out`` is left untouched.
  */
-bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out);
+bool SymTensorFromValueInfo(const ValueInfoProto &vi, SymTensor &out);
 
 /// Maximum element count of a small integer tensor for which
-/// :cpp:func:`OptimTensorFromTensorProto` (and friends) populate the
-/// :cpp:func:`OptimTensor::ValueAsShape` annotation. Tensors beyond
+/// :cpp:func:`SymTensorFromTensorProto` (and friends) populate the
+/// :cpp:func:`SymTensor::ValueAsShape` annotation. Tensors beyond
 /// this threshold are not data-propagated (the dtype, shape and
 /// ``min``/``max`` bounds are still recorded normally).
 ///
 /// The limit is set to ``kMaxOptimRank + 1`` so that any 1-D integer
-/// constant whose length fits within an :cpp:class:`OptimShape` (i.e., up
+/// constant whose length fits within an :cpp:class:`SymShape` (i.e., up
 /// to ``kMaxOptimRank`` elements) can have its values propagated. This
 /// enables operators like ``Unsqueeze`` to infer fully-concrete output
 /// shapes even when the ``axes`` input is a large initializer (e.g., rank
@@ -654,7 +655,7 @@ inline constexpr int64_t kOptimValueAsShapeMaxElements = static_cast<int64_t>(kM
  *
  * The element type is read from ``tp.data_type()`` and the shape is built
  * from ``tp.dims()`` via :cpp:func:`ShapeFromTensorProtoDims` (every
- * dimension becomes a concrete integer :cpp:class:`OptimDim`). The data
+ * dimension becomes a concrete integer :cpp:class:`SymDim`). The data
  * pointer is left null and the device is left
  * :cpp:enumerator:`Device::kUndefined`.
  *
@@ -665,12 +666,12 @@ inline constexpr int64_t kOptimValueAsShapeMaxElements = static_cast<int64_t>(kM
  *     (FLOAT, DOUBLE) element types are supported. The bounds are skipped
  *     for empty tensors and for tensors whose payload cannot be decoded
  *     (no typed field and no ``raw_data``, unsupported dtype, etc.);
- *   - the :cpp:func:`OptimTensor::ValueAsShape` annotation when the
+ *   - the :cpp:func:`SymTensor::ValueAsShape` annotation when the
  *     element type is integer, the rank is at most one, and the element
  *     count is strictly less than :cpp:var:`kOptimValueAsShapeMaxElements`
  *     (``kMaxOptimRank + 1``, i.e., at most ``kMaxOptimRank`` elements).
  *     This covers every 1-D integer constant whose values fit inside an
- *     :cpp:class:`OptimShape`, enabling ``Reshape``, ``Unsqueeze``, and
+ *     :cpp:class:`SymShape`, enabling ``Reshape``, ``Unsqueeze``, and
  *     similar operators to infer fully-concrete output shapes from
  *     large axes or target-shape initializers.
  *
@@ -680,7 +681,7 @@ inline constexpr int64_t kOptimValueAsShapeMaxElements = static_cast<int64_t>(kM
  *         ``tp.data_type()`` is ``TensorProto::DataType::UNDEFINED``;
  *         ``true`` otherwise.
  */
-bool OptimTensorFromTensorProto(const TensorProto &tp, OptimTensor &out);
+bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out);
 
 /**
  * Writes the ``(dtype, shape, device)`` triple carried by ``tensor``
@@ -701,7 +702,7 @@ bool OptimTensorFromTensorProto(const TensorProto &tp, OptimTensor &out);
  *         an undefined element type, since ``TensorProto::DataType``
  *         provides no meaningful encoding for it; ``true`` otherwise.
  */
-bool OptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi);
+bool SymTensorToValueInfo(const SymTensor &tensor, ValueInfoProto &vi);
 
 } // namespace symbolic
 } // namespace core

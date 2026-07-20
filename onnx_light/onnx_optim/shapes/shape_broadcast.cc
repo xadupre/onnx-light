@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "onnx_core/expressions/expressions.h"
-#include "onnx_optim/shapes/_helpers/shape_helpers.h"
+#include "onnx_core/symbolic/symbolic_helper.h"
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -25,7 +25,7 @@ namespace {
 
 // Returns a textual representation of ``dim`` suitable for embedding in
 // a synthesised symbolic expression.
-std::string DimToString(const OptimDim &dim) {
+std::string DimToString(const SymDim &dim) {
   if (dim.IsInt()) {
     return std::to_string(dim.AsInt());
   }
@@ -34,7 +34,7 @@ std::string DimToString(const OptimDim &dim) {
 
 // Pairs the trailing dimensions of ``a`` and ``b`` (right-aligned) and
 // computes the resulting dimension under numpy-style broadcasting.
-OptimDim BroadcastDim(const OptimDim &a, const OptimDim &b) {
+SymDim BroadcastDim(const SymDim &a, const SymDim &b) {
   // Fast path: both integers.
   if (a.IsInt() && b.IsInt()) {
     const int64_t ai = a.AsInt();
@@ -72,16 +72,16 @@ OptimDim BroadcastDim(const OptimDim &a, const OptimDim &b) {
   }
   // Two different symbolic dimensions: produce a synthesised symbolic
   // expression that records the broadcast.
-  return OptimDim("broadcast(" + DimToString(a) + ", " + DimToString(b) + ")");
+  return SymDim("broadcast(" + DimToString(a) + ", " + DimToString(b) + ")");
 }
 
 } // namespace
 
-OptimShape BroadcastShapes(const OptimShape &a, const OptimShape &b) {
+SymShape BroadcastShapes(const SymShape &a, const SymShape &b) {
   const std::size_t ra = a.Rank();
   const std::size_t rb = b.Rank();
   const std::size_t r = std::max(ra, rb);
-  std::vector<OptimDim> dims;
+  std::vector<SymDim> dims;
   dims.reserve(r);
   for (std::size_t i = 0; i < r; ++i) {
     // Right-align: missing leading dimensions are treated as 1.
@@ -95,26 +95,26 @@ OptimShape BroadcastShapes(const OptimShape &a, const OptimShape &b) {
       dims.push_back(b[i - (r - rb)]);
     }
   }
-  return OptimShape(dims);
+  return SymShape(dims);
 }
 
 void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node, const char *input_a,
                                  const char *input_b, const char *expected_op_type,
                                  TensorType output_dtype) {
   CheckNodeOpAndOutput(node, expected_op_type, "ComputeShapeBinaryBroadcast");
-  const OptimTensor &lhs = ctx.Get(input_a);
-  const OptimTensor &rhs = ctx.Get(input_b);
-  OptimShape out_shape = BroadcastShapes(lhs.Shape(), rhs.Shape());
-  ctx.Set(node.output(0), OptimTensor(nullptr, output_dtype, std::move(out_shape)));
+  const SymTensor &lhs = ctx.Get(input_a);
+  const SymTensor &rhs = ctx.Get(input_b);
+  SymShape out_shape = BroadcastShapes(lhs.Shape(), rhs.Shape());
+  ctx.Set(node.output(0), SymTensor(nullptr, output_dtype, std::move(out_shape)));
 }
 
 namespace {
 
-OptimDim FromDimType(const expressions::DimType &d) {
+SymDim FromDimType(const expressions::DimType &d) {
   if (std::holds_alternative<int64_t>(d)) {
-    return OptimDim(std::get<int64_t>(d));
+    return SymDim(std::get<int64_t>(d));
   }
-  return OptimDim(std::get<std::string>(d));
+  return SymDim(std::get<std::string>(d));
 }
 
 } // namespace
@@ -128,26 +128,26 @@ void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, 
   if (!ctx.Has(out_name)) {
     return;
   }
-  const OptimTensor &lhs = ctx.Get(input_a);
-  const OptimTensor &rhs = ctx.Get(input_b);
+  const SymTensor &lhs = ctx.Get(input_a);
+  const SymTensor &rhs = ctx.Get(input_b);
   if (!lhs.HasValueAsShape() || !rhs.HasValueAsShape()) {
     return;
   }
-  const OptimShape &av = lhs.ValueAsShape();
-  const OptimShape &bv = rhs.ValueAsShape();
+  const SymShape &av = lhs.ValueAsShape();
+  const SymShape &bv = rhs.ValueAsShape();
   const std::size_t ra = av.Rank();
   const std::size_t rb = bv.Rank();
   const std::size_t r = std::max(ra, rb);
   if (r > kMaxOptimRank) {
     return;
   }
-  const OptimDim kOne(static_cast<int64_t>(1));
-  OptimShape out_value_as_shape;
+  const SymDim kOne(static_cast<int64_t>(1));
+  SymShape out_value_as_shape;
   for (std::size_t i = 0; i < r; ++i) {
     const bool has_a = i + ra >= r;
     const bool has_b = i + rb >= r;
-    const OptimDim &da = has_a ? av[i - (r - ra)] : kOne;
-    const OptimDim &db = has_b ? bv[i - (r - rb)] : kOne;
+    const SymDim &da = has_a ? av[i - (r - ra)] : kOne;
+    const SymDim &db = has_b ? bv[i - (r - rb)] : kOne;
     expressions::DimType result;
     switch (op) {
     case BroadcastDimOp::kAdd:
@@ -159,7 +159,7 @@ void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, 
     }
     out_value_as_shape.PushBack(FromDimType(result));
   }
-  OptimTensor updated = ctx.Get(out_name);
+  SymTensor updated = ctx.Get(out_name);
   updated.SetValueAsShape(std::move(out_value_as_shape));
   ctx.Set(out_name, std::move(updated));
 }

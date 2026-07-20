@@ -19,7 +19,7 @@ namespace shapes {
 namespace logical {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``And`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``And`` node and
  * stores it in ``ctx``.
  *
  * ``And`` is the logical, element-wise AND of two boolean operands
@@ -48,7 +48,7 @@ namespace logical {
 void ComputeShapeAnd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Or`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Or`` node and
  * stores it in ``ctx``.
  *
  * ``Or`` is the logical, element-wise OR of two boolean operands with
@@ -74,7 +74,7 @@ void ComputeShapeAnd(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeOr(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Xor`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Xor`` node and
  * stores it in ``ctx``.
  *
  * ``Xor`` is the logical, element-wise XOR of two boolean operands with
@@ -100,7 +100,7 @@ void ComputeShapeOr(ShapesContext &ctx, const NodeProto &node, const char *a, co
 void ComputeShapeXor(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Greater`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Greater`` node and
  * stores it in ``ctx``.
  *
  * ``Greater`` is the element-wise ``A > B`` comparison of two numeric
@@ -129,7 +129,7 @@ void ComputeShapeXor(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeGreater(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Less`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Less`` node and
  * stores it in ``ctx``.
  *
  * ``Less`` is the element-wise ``A < B`` comparison of two numeric
@@ -158,7 +158,7 @@ void ComputeShapeGreater(ShapesContext &ctx, const NodeProto &node, const char *
 void ComputeShapeLess(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``GreaterOrEqual`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``GreaterOrEqual`` node
  * and stores it in ``ctx``.
  *
  * ``GreaterOrEqual`` is the element-wise ``A >= B`` comparison of two
@@ -187,7 +187,7 @@ void ComputeShapeGreaterOrEqual(ShapesContext &ctx, const NodeProto &node, const
                                 const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``LessOrEqual`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``LessOrEqual`` node
  * and stores it in ``ctx``.
  *
  * ``LessOrEqual`` is the element-wise ``A <= B`` comparison of two
@@ -216,7 +216,7 @@ void ComputeShapeLessOrEqual(ShapesContext &ctx, const NodeProto &node, const ch
                              const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Equal`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Equal`` node and
  * stores it in ``ctx``.
  *
  * ``Equal`` is the element-wise ``A == B`` comparison of two operands
@@ -245,7 +245,7 @@ void ComputeShapeLessOrEqual(ShapesContext &ctx, const NodeProto &node, const ch
 void ComputeShapeEqual(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Where`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Where`` node and
  * stores it in ``ctx``.
  *
  * ``Where`` returns elements from ``x`` or ``y`` depending on ``condition``.
@@ -256,7 +256,7 @@ void ComputeShapeWhere(ShapesContext &ctx, const NodeProto &node, const char *co
                        const char *x, const char *y);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseAnd`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseAnd`` node
  * (opset 18) and stores it in ``ctx``.
  *
  * ``BitwiseAnd`` is element-wise with numpy-style multidirectional
@@ -282,14 +282,14 @@ void ComputeShapeBitwiseAnd(ShapesContext &ctx, const NodeProto &node, const cha
                             const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseOr`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseOr`` node
  * (opset 18) and stores it in ``ctx``. Shape/type semantics match
  * :cpp:func:`ComputeShapeBitwiseAnd`.
  */
 void ComputeShapeBitwiseOr(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseXor`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseXor`` node
  * (opset 18) and stores it in ``ctx``. Shape/type semantics match
  * :cpp:func:`ComputeShapeBitwiseAnd`.
  */
@@ -297,7 +297,7 @@ void ComputeShapeBitwiseXor(ShapesContext &ctx, const NodeProto &node, const cha
                             const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseNot`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitwiseNot`` node
  * (opset 18) and stores it in ``ctx``.
  *
  * ``BitwiseNot`` is element-wise and unary: the output dtype and shape
@@ -318,7 +318,7 @@ void ComputeShapeBitwiseXor(ShapesContext &ctx, const NodeProto &node, const cha
 void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Not`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``Not`` node
  * (opset 1) and stores it in ``ctx``.
  *
  * ``Not`` is the element-wise logical NOT of a boolean tensor: the
@@ -340,7 +340,7 @@ void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const cha
 void ComputeShapeNot(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``IsNaN`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``IsNaN`` node and
  * stores it in ``ctx``.
  *
  * ``IsNaN`` is element-wise on a floating-point tensor: the output dtype
@@ -362,7 +362,7 @@ void ComputeShapeNot(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeIsNaN(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``IsInf`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``IsInf`` node and
  * stores it in ``ctx``.
  *
  * ``IsInf`` is element-wise on a floating-point tensor: the output dtype
@@ -386,7 +386,7 @@ void ComputeShapeIsNaN(ShapesContext &ctx, const NodeProto &node, const char *x)
 void ComputeShapeIsInf(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitShift`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitShift`` node
  * (opset 11) and stores it in ``ctx``.
  *
  * ``BitShift`` is element-wise with numpy-style multidirectional

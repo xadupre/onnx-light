@@ -13,8 +13,8 @@ namespace math {
 
 void ComputeShapeHardSigmoid(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "HardSigmoid", "ComputeShapeHardSigmoid");
-  const OptimTensor &input = ctx.Get(x);
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  const SymTensor &input = ctx.Get(x);
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace math

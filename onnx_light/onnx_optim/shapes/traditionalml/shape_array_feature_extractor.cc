@@ -16,14 +16,14 @@ namespace traditionalml {
 
 namespace {
 
-bool TryComputeFlattenedLength(const OptimShape &shape, OptimDim &last_dim) {
+bool TryComputeFlattenedLength(const SymShape &shape, SymDim &last_dim) {
   if (shape.Empty()) {
     return false;
   }
   int64_t product = 1;
   std::string symbolic_dim;
   for (std::size_t i = 0; i < shape.Rank(); ++i) {
-    const OptimDim &d = shape[i];
+    const SymDim &d = shape[i];
     if (d.IsInt()) {
       product *= d.AsInt();
       continue;
@@ -34,11 +34,11 @@ bool TryComputeFlattenedLength(const OptimShape &shape, OptimDim &last_dim) {
     symbolic_dim = d.AsExpr();
   }
   if (symbolic_dim.empty()) {
-    last_dim = OptimDim(product);
+    last_dim = SymDim(product);
     return true;
   }
   if (product == 1) {
-    last_dim = OptimDim(symbolic_dim);
+    last_dim = SymDim(symbolic_dim);
     return true;
   }
   return false;
@@ -49,27 +49,27 @@ bool TryComputeFlattenedLength(const OptimShape &shape, OptimDim &last_dim) {
 void ComputeShapeArrayFeatureExtractor(ShapesContext &ctx, const NodeProto &node, const char *x,
                                        const char *y) {
   CheckNodeOpAndOutput(node, "ArrayFeatureExtractor", "ComputeShapeArrayFeatureExtractor");
-  const OptimTensor &input = ctx.Get(x);
-  const OptimTensor &indices = ctx.Get(y);
+  const SymTensor &input = ctx.Get(x);
+  const SymTensor &indices = ctx.Get(y);
 
   EXT_ENFORCE_INVALID(indices.Dtype() == TensorType::kInt64,
                       "ComputeShapeArrayFeatureExtractor: indices input must be int64.");
 
-  OptimShape output_shape;
-  const OptimShape &input_shape = input.Shape();
+  SymShape output_shape;
+  const SymShape &input_shape = input.Shape();
   for (std::size_t i = 0; i + 1 < input_shape.Rank(); ++i) {
     output_shape.PushBack(input_shape[i]);
   }
 
-  OptimDim last_dim("ArrayFeatureExtractor_dim");
+  SymDim last_dim("ArrayFeatureExtractor_dim");
   const bool has_known_last_dim = TryComputeFlattenedLength(indices.Shape(), last_dim);
   if (has_known_last_dim) {
     output_shape.PushBack(std::move(last_dim));
   } else {
-    output_shape.PushBack(OptimDim("ArrayFeatureExtractor_last_dim"));
+    output_shape.PushBack(SymDim("ArrayFeatureExtractor_last_dim"));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(output_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(output_shape)));
 }
 
 } // namespace traditionalml

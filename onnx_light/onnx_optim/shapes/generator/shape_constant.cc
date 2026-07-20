@@ -22,7 +22,7 @@ namespace {
 // value (rank ≤ 1, fewer than ``kConstantValueAsShapeMaxElements``
 // elements, integer dtype), stamps it with a ``ValueAsShape``
 // annotation reusing the integer values as dims.
-void MaybeSetValueAsShapeFromTensorProto(OptimTensor &tensor, const TensorProto &tensor_proto) {
+void MaybeSetValueAsShapeFromTensorProto(SymTensor &tensor, const TensorProto &tensor_proto) {
   if (!IsIntegerTensorType(tensor.Dtype())) {
     return;
   }
@@ -45,9 +45,9 @@ void MaybeSetValueAsShapeFromTensorProto(OptimTensor &tensor, const TensorProto 
   if (static_cast<int64_t>(values.size()) != count) {
     return;
   }
-  OptimShape value_shape;
+  SymShape value_shape;
   for (int64_t v : values) {
-    value_shape.PushBack(OptimDim(v));
+    value_shape.PushBack(SymDim(v));
   }
   tensor.SetValueAsShape(std::move(value_shape));
 }
@@ -114,59 +114,59 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node) {
                      "'value_int', 'value_ints', 'value_float', 'value_floats', 'value_string' or "
                      "'value_strings' must be specified for a Constant node.");
 
-  OptimTensor output;
+  SymTensor output;
 
   if (value != nullptr) {
     EXT_ENFORCE_INVALID(value->has_t(),
                         "ComputeShapeConstant: attribute 'value' must carry a tensor value.");
     const TensorProto &tensor_proto = value->t();
     const TensorType dtype = DataTypeToTensorType(tensor_proto.data_type());
-    OptimShape shape = ShapeFromTensorProtoDims(tensor_proto);
-    output = OptimTensor(nullptr, dtype, std::move(shape));
+    SymShape shape = ShapeFromTensorProtoDims(tensor_proto);
+    output = SymTensor(nullptr, dtype, std::move(shape));
     MaybeSetValueAsShapeFromTensorProto(output, tensor_proto);
   } else if (value_int != nullptr) {
     // Scalar INT64.
-    output = OptimTensor(nullptr, TensorType::kInt64, OptimShape{});
+    output = SymTensor(nullptr, TensorType::kInt64, SymShape{});
     if (kConstantValueAsShapeMaxElements > 1) {
-      OptimShape value_shape;
-      value_shape.PushBack(OptimDim(value_int->i()));
+      SymShape value_shape;
+      value_shape.PushBack(SymDim(value_int->i()));
       output.SetValueAsShape(std::move(value_shape));
     }
   } else if (value_ints != nullptr) {
     const auto &ints = value_ints->ints();
-    OptimShape shape;
-    shape.PushBack(OptimDim(static_cast<int64_t>(ints.size())));
-    output = OptimTensor(nullptr, TensorType::kInt64, std::move(shape));
+    SymShape shape;
+    shape.PushBack(SymDim(static_cast<int64_t>(ints.size())));
+    output = SymTensor(nullptr, TensorType::kInt64, std::move(shape));
     if (static_cast<int64_t>(ints.size()) < kConstantValueAsShapeMaxElements) {
-      OptimShape value_shape;
+      SymShape value_shape;
       for (int i = 0; i < ints.size(); ++i) {
-        value_shape.PushBack(OptimDim(ints[i]));
+        value_shape.PushBack(SymDim(ints[i]));
       }
       output.SetValueAsShape(std::move(value_shape));
     }
   } else if (value_float != nullptr) {
-    output = OptimTensor(nullptr, TensorType::kFloat, OptimShape{});
+    output = SymTensor(nullptr, TensorType::kFloat, SymShape{});
   } else if (value_floats != nullptr) {
-    OptimShape shape;
-    shape.PushBack(OptimDim(static_cast<int64_t>(value_floats->floats().size())));
-    output = OptimTensor(nullptr, TensorType::kFloat, std::move(shape));
+    SymShape shape;
+    shape.PushBack(SymDim(static_cast<int64_t>(value_floats->floats().size())));
+    output = SymTensor(nullptr, TensorType::kFloat, std::move(shape));
   } else if (value_string != nullptr) {
-    output = OptimTensor(nullptr, TensorType::kString, OptimShape{});
+    output = SymTensor(nullptr, TensorType::kString, SymShape{});
   } else if (value_strings != nullptr) {
-    OptimShape shape;
-    shape.PushBack(OptimDim(static_cast<int64_t>(value_strings->strings().size())));
-    output = OptimTensor(nullptr, TensorType::kString, std::move(shape));
+    SymShape shape;
+    shape.PushBack(SymDim(static_cast<int64_t>(value_strings->strings().size())));
+    output = SymTensor(nullptr, TensorType::kString, std::move(shape));
   } else { // sparse_value
     EXT_ENFORCE_INVALID(
         sparse_value->has_sparse_tensor(),
         "ComputeShapeConstant: attribute 'sparse_value' must carry a sparse tensor value.");
     const SparseTensorProto &sparse = sparse_value->sparse_tensor();
     const TensorType dtype = DataTypeToTensorType(sparse.values().data_type());
-    OptimShape shape;
+    SymShape shape;
     for (int i = 0; i < sparse.dims().size(); ++i) {
-      shape.PushBack(OptimDim(static_cast<int64_t>(sparse.dims()[i])));
+      shape.PushBack(SymDim(static_cast<int64_t>(sparse.dims()[i])));
     }
-    output = OptimTensor(nullptr, dtype, std::move(shape));
+    output = SymTensor(nullptr, dtype, std::move(shape));
   }
 
   ctx.Set(node.output(0), std::move(output));

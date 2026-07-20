@@ -22,22 +22,22 @@ using onnx_kernels::kernel::AutoPadFromString;
 
 namespace {
 
-OptimDim ComputeConvTransposeSpatialDim(const OptimDim &in_dim, int64_t kernel, int64_t stride,
-                                        int64_t pad_begin, int64_t pad_end, int64_t dilation,
-                                        int64_t output_padding, const std::string &x_name,
-                                        size_t spatial_axis) {
+SymDim ComputeConvTransposeSpatialDim(const SymDim &in_dim, int64_t kernel, int64_t stride,
+                                      int64_t pad_begin, int64_t pad_end, int64_t dilation,
+                                      int64_t output_padding, const std::string &x_name,
+                                      size_t spatial_axis) {
   const std::string symbolic =
       std::string("ConvTranspose.") + x_name + ":" + std::to_string(spatial_axis);
   if (!in_dim.IsInt() || kernel <= 0 || stride <= 0) {
-    return OptimDim(symbolic);
+    return SymDim(symbolic);
   }
   const int64_t iD = in_dim.AsInt();
   const int64_t eff_k = dilation * (kernel - 1) + 1;
   const int64_t out = stride * (iD - 1) + output_padding + eff_k - pad_begin - pad_end;
   if (out < 0) {
-    return OptimDim(symbolic);
+    return SymDim(symbolic);
   }
-  return OptimDim(out);
+  return SymDim(out);
 }
 
 } // namespace
@@ -46,10 +46,10 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
                                const char *w) {
   CheckNodeOpAndOutput(node, "ConvTranspose", "ComputeShapeConvTranspose");
 
-  const OptimTensor &x_tensor = ctx.Get(x);
-  const OptimTensor &w_tensor = ctx.Get(w);
-  const OptimShape &x_shape = x_tensor.Shape();
-  const OptimShape &w_shape = w_tensor.Shape();
+  const SymTensor &x_tensor = ctx.Get(x);
+  const SymTensor &w_tensor = ctx.Get(w);
+  const SymShape &x_shape = x_tensor.Shape();
+  const SymShape &w_shape = w_tensor.Shape();
 
   EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShapeConvTranspose: input '", x,
                       "' must have rank >= 3 (N, C, D1, ...).");
@@ -66,7 +66,7 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
   if (kernel_shape.empty()) {
     kernel_shape.reserve(n_spatial);
     for (size_t i = 0; i < n_spatial; ++i) {
-      const OptimDim &kd = w_shape[i + 2];
+      const SymDim &kd = w_shape[i + 2];
       kernel_shape.push_back(kd.IsInt() ? kd.AsInt() : -1);
     }
   } else if (kernel_shape.size() != n_spatial) {
@@ -117,34 +117,34 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
       "ComputeShapeConvTranspose: 'output_shape' size does not match input spatial rank.");
 
   // Output channel dimension: W.shape[1] * group.
-  OptimDim out_channels;
+  SymDim out_channels;
   if (w_shape[1].IsInt()) {
-    out_channels = OptimDim(w_shape[1].AsInt() * group);
+    out_channels = SymDim(w_shape[1].AsInt() * group);
   } else {
-    out_channels = OptimDim(std::string("ConvTranspose.") + w + ":1");
+    out_channels = SymDim(std::string("ConvTranspose.") + w + ":1");
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(x_shape[0]);
   out_shape.PushBack(out_channels);
 
   for (size_t i = 0; i < n_spatial; ++i) {
     if (has_output_shape) {
-      out_shape.PushBack(OptimDim(output_shape_attr[i]));
+      out_shape.PushBack(SymDim(output_shape_attr[i]));
       continue;
     }
     if (auto_pad == AutoPad::kSameUpper || auto_pad == AutoPad::kSameLower) {
       // ``output_spatial = iD * stride`` per upstream default when output_shape
       // is not provided and auto_pad is SAME_*.
       if (x_shape[i + 2].IsInt()) {
-        out_shape.PushBack(OptimDim(x_shape[i + 2].AsInt() * strides[i]));
+        out_shape.PushBack(SymDim(x_shape[i + 2].AsInt() * strides[i]));
       } else {
-        out_shape.PushBack(OptimDim(std::string("ConvTranspose.") + x + ":" + std::to_string(i)));
+        out_shape.PushBack(SymDim(std::string("ConvTranspose.") + x + ":" + std::to_string(i)));
       }
       continue;
     }
     if (kernel_shape[i] <= 0) {
-      out_shape.PushBack(OptimDim(std::string("ConvTranspose.") + x + ":" + std::to_string(i)));
+      out_shape.PushBack(SymDim(std::string("ConvTranspose.") + x + ":" + std::to_string(i)));
       continue;
     }
     out_shape.PushBack(ComputeConvTransposeSpatialDim(x_shape[i + 2], kernel_shape[i], strides[i],
@@ -152,7 +152,7 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
                                                       output_padding[i], x, i));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, x_tensor.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, x_tensor.Dtype(), std::move(out_shape)));
 }
 
 } // namespace nn

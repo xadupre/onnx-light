@@ -20,14 +20,14 @@ namespace generator {
 
 /// Maximum element count of a ``Constant`` value tensor for which
 /// :cpp:func:`ComputeShapeConstant` populates the output
-/// :cpp:func:`OptimTensor::ValueAsShape` annotation. Constants beyond
+/// :cpp:func:`SymTensor::ValueAsShape` annotation. Constants beyond
 /// this threshold are not data-propagated (the output dtype and shape
 /// are still inferred normally). Kept in sync with
 /// :cpp:var:`kOptimValueAsShapeMaxElements`.
 inline constexpr int64_t kConstantValueAsShapeMaxElements = kOptimValueAsShapeMaxElements;
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Constant`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``Constant`` node
  * and stores it in ``ctx``.
  *
  * ``Constant`` declares its output as the value of exactly one of the
@@ -43,7 +43,7 @@ inline constexpr int64_t kConstantValueAsShapeMaxElements = kOptimValueAsShapeMa
  * has rank at most one — i.e. it is small enough to plausibly be used
  * later as a shape input of operators such as ``Reshape``,
  * ``Expand`` or ``ConstantOfShape`` — its integer values are also
- * recorded via :cpp:func:`OptimTensor::SetValueAsShape`. This mirrors
+ * recorded via :cpp:func:`SymTensor::SetValueAsShape`. This mirrors
  * the upstream ONNX shape-inference data-propagation behaviour for
  * small integer constants.
  *
@@ -61,7 +61,7 @@ inline constexpr int64_t kConstantValueAsShapeMaxElements = kOptimValueAsShapeMa
 void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ConstantOfShape``
+ * Computes the output :cpp:class:`SymTensor` of a ``ConstantOfShape``
  * node and stores it in ``ctx``.
  *
  * ``ConstantOfShape`` produces a tensor whose shape is given by the
@@ -72,7 +72,7 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node);
  * The output element type is inferred from the ``value`` attribute when
  * present, otherwise defaults to :cpp:enumerator:`TensorType::kFloat`.
  * The output shape is taken from the input's
- * :cpp:func:`OptimTensor::ValueAsShape` annotation when available. When
+ * :cpp:func:`SymTensor::ValueAsShape` annotation when available. When
  * the input value has not been data-propagated but its static shape is
  * a 1-D tensor whose single dim is a known integer, the corresponding
  * output rank is reconstructed with symbolic dims.
@@ -92,7 +92,7 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeConstantOfShape(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``EyeLike`` node
+ * Computes the output :cpp:class:`SymTensor` of an ``EyeLike`` node
  * and stores it in ``ctx``.
  *
  * ``EyeLike`` outputs a tensor with the same 2-D shape as its input.
@@ -106,7 +106,7 @@ void ComputeShapeConstantOfShape(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeEyeLike(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BlackmanWindow``
+ * Computes the output :cpp:class:`SymTensor` of a ``BlackmanWindow``
  * node and stores it in ``ctx``.
  *
  * ``BlackmanWindow`` produces a 1-D tensor of length ``size`` (its
@@ -117,7 +117,7 @@ void ComputeShapeEyeLike(ShapesContext &ctx, const NodeProto &node);
  * affect the output shape or dtype.
  *
  * The output shape is taken from the input's
- * :cpp:func:`OptimTensor::ValueAsShape` annotation when available
+ * :cpp:func:`SymTensor::ValueAsShape` annotation when available
  * (i.e. when ``size`` is a known constant): the output is then a
  * 1-D tensor with a concrete dim. Otherwise the output is a 1-D
  * tensor with a single symbolic dim.
@@ -135,7 +135,7 @@ void ComputeShapeEyeLike(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeBlackmanWindow(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``HannWindow`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``HannWindow`` node
  * and stores it in ``ctx``. Same semantics as
  * :cpp:func:`ComputeShapeBlackmanWindow` but for the ``HannWindow``
  * operator.
@@ -146,7 +146,7 @@ void ComputeShapeBlackmanWindow(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeHannWindow(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``HammingWindow``
+ * Computes the output :cpp:class:`SymTensor` of a ``HammingWindow``
  * node and stores it in ``ctx``. Same semantics as
  * :cpp:func:`ComputeShapeBlackmanWindow` but for the ``HammingWindow``
  * operator.
@@ -157,7 +157,7 @@ void ComputeShapeHannWindow(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeHammingWindow(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``MelWeightMatrix``
+ * Computes the output :cpp:class:`SymTensor` of a ``MelWeightMatrix``
  * node and stores it in ``ctx``.
  *
  * ``MelWeightMatrix`` produces a 2-D tensor of shape
@@ -167,7 +167,7 @@ void ComputeShapeHammingWindow(ShapesContext &ctx, const NodeProto &node);
  * :cpp:class:`TensorProto::DataType` value, defaults to ``FLOAT``).
  *
  * The output shape is taken from the input's
- * :cpp:func:`OptimTensor::ValueAsShape` annotation when available
+ * :cpp:func:`SymTensor::ValueAsShape` annotation when available
  * (i.e. when ``num_mel_bins`` and ``dft_length`` are known constants).
  * Otherwise the corresponding output dim is symbolic.
  *
@@ -177,7 +177,7 @@ void ComputeShapeHammingWindow(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeMelWeightMatrix(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Bernoulli`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Bernoulli`` node and
  * stores it in ``ctx``.
  *
  * ``Bernoulli`` draws binary samples from a Bernoulli distribution whose
@@ -199,7 +199,7 @@ void ComputeShapeMelWeightMatrix(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeBernoulli(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``RandomNormal`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``RandomNormal`` node and
  * stores it in ``ctx``.
  *
  * ``RandomNormal`` produces a tensor whose shape is given by the required
@@ -215,7 +215,7 @@ void ComputeShapeBernoulli(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeRandomNormal(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``RandomUniform`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``RandomUniform`` node and
  * stores it in ``ctx``. Same shape/dtype semantics as
  * :cpp:func:`ComputeShapeRandomNormal`.
  *
@@ -225,7 +225,7 @@ void ComputeShapeRandomNormal(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeRandomUniform(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``RandomNormalLike``
+ * Computes the output :cpp:class:`SymTensor` of a ``RandomNormalLike``
  * node and stores it in ``ctx``.
  *
  * ``RandomNormalLike`` copies its single input tensor's shape. The output
@@ -240,7 +240,7 @@ void ComputeShapeRandomUniform(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeRandomNormalLike(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``RandomUniformLike``
+ * Computes the output :cpp:class:`SymTensor` of a ``RandomUniformLike``
  * node and stores it in ``ctx``. Same shape/dtype semantics as
  * :cpp:func:`ComputeShapeRandomNormalLike`.
  *
@@ -251,7 +251,7 @@ void ComputeShapeRandomNormalLike(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeRandomUniformLike(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Multinomial`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``Multinomial`` node
  * and stores it in ``ctx``.
  *
  * ``Multinomial`` draws ``sample_size`` samples per row from a multinomial
@@ -269,7 +269,7 @@ void ComputeShapeRandomUniformLike(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeMultinomial(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Range`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Range`` node and
  * stores it in ``ctx``.
  *
  * ``Range`` produces a 1-D tensor whose element type matches the three

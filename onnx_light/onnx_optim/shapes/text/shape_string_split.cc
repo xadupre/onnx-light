@@ -22,11 +22,11 @@ void ComputeShapeStringSplit(ShapesContext &ctx, const NodeProto &node, const ch
   EXT_ENFORCE_INVALID(!y_name.empty() && !z_name.empty(),
                       "ComputeShapeStringSplit: both outputs must be named.");
 
-  const OptimTensor &input = ctx.Get(a);
-  OptimShape y_shape = input.Shape();
-  y_shape.PushBack(OptimDim("StringSplit(" + std::string(a) + ")"));
-  ctx.Set(y_name, OptimTensor(nullptr, TensorType::kString, std::move(y_shape)));
-  ctx.Set(z_name, OptimTensor(nullptr, TensorType::kInt64, input.Shape()));
+  const SymTensor &input = ctx.Get(a);
+  SymShape y_shape = input.Shape();
+  y_shape.PushBack(SymDim("StringSplit(" + std::string(a) + ")"));
+  ctx.Set(y_name, SymTensor(nullptr, TensorType::kString, std::move(y_shape)));
+  ctx.Set(z_name, SymTensor(nullptr, TensorType::kInt64, input.Shape()));
 }
 
 } // namespace text

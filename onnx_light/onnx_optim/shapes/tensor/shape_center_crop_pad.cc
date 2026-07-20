@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -24,8 +24,8 @@ void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeCenterCropPad: CenterCropPad requires two inputs.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(node.input(0));
+  const SymShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
 
   // Resolve the optional ``axes`` attribute (defaulting to ``[0..rank-1]``).
@@ -47,12 +47,12 @@ void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node) {
   // Try to resolve the ``shape`` input as a known 1-D value-as-shape.
   std::vector<int64_t> shape_values;
   bool shape_known = false;
-  const OptimTensor &shape_input = ctx.Get(node.input(1));
+  const SymTensor &shape_input = ctx.Get(node.input(1));
   if (shape_input.HasValueAsShape()) {
-    const OptimShape &shape_as = shape_input.ValueAsShape();
+    const SymShape &shape_as = shape_input.ValueAsShape();
     bool all_int = true;
     for (std::size_t i = 0; i < shape_as.Rank(); ++i) {
-      const OptimDim &d = shape_as[i];
+      const SymDim &d = shape_as[i];
       if (!d.IsInt()) {
         all_int = false;
         break;
@@ -71,20 +71,20 @@ void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node) {
   // Build the output shape: start from the input, overwrite axes selected by
   // ``axes`` with values from ``shape`` (or a fresh symbolic dim when
   // unknown).
-  OptimShape out_shape;
+  SymShape out_shape;
   for (int64_t i = 0; i < rank; ++i) {
     out_shape.PushBack(in_shape[static_cast<std::size_t>(i)]);
   }
   for (std::size_t i = 0; i < axes.size(); ++i) {
     const std::size_t a = static_cast<std::size_t>(axes[i]);
     if (shape_known) {
-      out_shape[a] = OptimDim(shape_values[i]);
+      out_shape[a] = SymDim(shape_values[i]);
     } else {
-      out_shape[a] = OptimDim("CenterCropPad_dim" + std::to_string(a));
+      out_shape[a] = SymDim("CenterCropPad_dim" + std::to_string(a));
     }
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
 }
 
 } // namespace tensor

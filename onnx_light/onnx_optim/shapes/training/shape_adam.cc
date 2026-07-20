@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -38,16 +38,16 @@ void ComputeShapeAdam(ShapesContext &ctx, const NodeProto &node) {
 
   for (int i = 0; i < num_optimized; ++i) {
     // X_i  -> X_i_new        (output i)
-    const OptimTensor &x = ctx.Get(node.input(2 + i));
-    ctx.Set(node.output(i), OptimTensor(nullptr, x.Dtype(), x.Shape()));
+    const SymTensor &x = ctx.Get(node.input(2 + i));
+    ctx.Set(node.output(i), SymTensor(nullptr, x.Dtype(), x.Shape()));
 
     // V_i  -> V_i_new        (output num_optimized + i)
-    const OptimTensor &v = ctx.Get(node.input(2 + 2 * num_optimized + i));
-    ctx.Set(node.output(num_optimized + i), OptimTensor(nullptr, v.Dtype(), v.Shape()));
+    const SymTensor &v = ctx.Get(node.input(2 + 2 * num_optimized + i));
+    ctx.Set(node.output(num_optimized + i), SymTensor(nullptr, v.Dtype(), v.Shape()));
 
     // H_i  -> H_i_new        (output 2 * num_optimized + i)
-    const OptimTensor &h = ctx.Get(node.input(2 + 3 * num_optimized + i));
-    ctx.Set(node.output(2 * num_optimized + i), OptimTensor(nullptr, h.Dtype(), h.Shape()));
+    const SymTensor &h = ctx.Get(node.input(2 + 3 * num_optimized + i));
+    ctx.Set(node.output(2 * num_optimized + i), SymTensor(nullptr, h.Dtype(), h.Shape()));
   }
 }
 

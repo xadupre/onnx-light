@@ -13,10 +13,10 @@ namespace logical {
 
 void ComputeShapeNot(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "Not", "ComputeShapeNot");
-  const OptimTensor &input = ctx.Get(x);
+  const SymTensor &input = ctx.Get(x);
   // Not (opset 1) is element-wise on BOOL tensors: the output dtype and
   // shape match the input.
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace logical

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/annotations/inplace_reuse.h"
+#include "onnx_core/annotations/inplace_reuse.h"
 
 #include <algorithm>
 #include <optional>
@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "onnx_optim/shapes/_helpers/shape_helpers.h"
+#include "onnx_core/symbolic/symbolic_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
@@ -153,12 +153,12 @@ NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
 // element type and identical shape (rank and every dimension, concrete or
 // symbolic). Equal descriptors imply equal element counts and therefore
 // equal buffer sizes, which is the precondition for an in-place reuse.
-bool SameStorage(const OptimTensor &a, const OptimTensor &b) {
+bool SameStorage(const SymTensor &a, const SymTensor &b) {
   if (a.Dtype() != b.Dtype()) {
     return false;
   }
-  const OptimShape &sa = a.Shape();
-  const OptimShape &sb = b.Shape();
+  const SymShape &sa = a.Shape();
+  const SymShape &sb = b.Shape();
   if (sa.Rank() != sb.Rank()) {
     return false;
   }
@@ -216,12 +216,12 @@ constexpr int ElementBitWidth(TensorType t) {
 // Packed byte size of ``t`` when its shape is fully known and its element type
 // has a fixed bit width, otherwise ``std::nullopt``. Sub-byte element types are
 // packed, matching the ONNX storage convention.
-std::optional<int64_t> ConcreteByteSize(const OptimTensor &t) {
+std::optional<int64_t> ConcreteByteSize(const SymTensor &t) {
   const int bits = ElementBitWidth(t.Dtype());
   if (bits == 0) {
     return std::nullopt;
   }
-  const OptimShape &shape = t.Shape();
+  const SymShape &shape = t.Shape();
   if (!shape.IsFullyKnown()) {
     return std::nullopt;
   }
@@ -229,7 +229,7 @@ std::optional<int64_t> ConcreteByteSize(const OptimTensor &t) {
   return (num_elements * bits + 7) / 8;
 }
 
-std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t,
+std::optional<expressions::DimType> ByteSizeExpr(const SymTensor &t,
                                                  SimplifiedExpressionCache *cache = nullptr) {
   const int bits = ElementBitWidth(t.Dtype());
   if (bits == 0) {
@@ -237,7 +237,7 @@ std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t,
   }
   expressions::DimType num_elements = int64_t{1};
   for (std::size_t i = 0; i < t.Shape().Rank(); ++i) {
-    num_elements = expressions::dim_mul(num_elements, shapes::ToDimType(t.Shape()[i]));
+    num_elements = expressions::dim_mul(num_elements, ToDimType(t.Shape()[i]));
   }
   if (bits % 8 == 0) {
     return SimplifyDimType(
@@ -280,8 +280,8 @@ GetCachedByteSizeExpr(const ShapesContext &ctx, const std::string &name,
 // describe equal byte counts at runtime (e.g. a permutation of the same
 // symbolic dimension names), so ``kEqual`` is returned for them.
 std::optional<InPlaceReuseKind> ClassifyReuse(
-    const ShapesContext &ctx, const std::string &out_name, const OptimTensor &out,
-    const std::string &in_name, const OptimTensor &in,
+    const ShapesContext &ctx, const std::string &out_name, const SymTensor &out,
+    const std::string &in_name, const SymTensor &in,
     std::unordered_map<std::string, std::optional<expressions::DimType>> &byte_size_expr_cache,
     SimplifiedExpressionCache *simplification_cache = nullptr) {
   if (SameStorage(out, in)) {
@@ -542,7 +542,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
         if (out_name.empty() || !ctx.Has(out_name)) {
           continue;
         }
-        const OptimTensor &out_tensor = ctx.Get(out_name);
+        const SymTensor &out_tensor = ctx.Get(out_name);
 
         for (int k = 0; k < node.input_size(); ++k) {
           if (used_inputs.count(k)) {

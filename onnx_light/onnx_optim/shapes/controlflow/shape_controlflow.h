@@ -19,7 +19,7 @@ namespace shapes {
 namespace controlflow {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` descriptors of an
+ * Computes the output :cpp:class:`SymTensor` descriptors of an
  * ``If`` node and stores them in ``ctx``.
  *
  * ``If`` (since opset 1 in the ``ai.onnx`` domain) selects one of two
@@ -62,7 +62,7 @@ namespace controlflow {
 void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` descriptors of a
+ * Computes the output :cpp:class:`SymTensor` descriptors of a
  * ``Loop`` node and stores them in ``ctx``.
  *
  * ``Loop`` (since opset 1 in the ``ai.onnx`` domain) takes ``2 + N``
@@ -111,7 +111,7 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` descriptors of a
+ * Computes the output :cpp:class:`SymTensor` descriptors of a
  * ``Scan`` node and stores them in ``ctx``.
  *
  * ``Scan`` iterates over ``M`` ``scan_input`` tensors and produces ``K``

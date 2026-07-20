@@ -30,11 +30,11 @@ running the model. ``onnx-light`` implements it in C++ under
 point :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`.
 
 The engine keeps its working state in a :cpp:class:`ShapesContext`: a
-``name → OptimTensor`` map describing every known value, plus the opset
+``name → SymTensor`` map describing every known value, plus the opset
 versions, the model-local functions, the registered custom callbacks and
 the symbolic-dimension constraints discovered along the way. Each
-:cpp:class:`OptimTensor` records an element type, a shape made of
-:cpp:class:`OptimDim` entries (each either a concrete ``int`` or a
+:cpp:class:`SymTensor` records an element type, a shape made of
+:cpp:class:`SymDim` entries (each either a concrete ``int`` or a
 symbolic expression string), an optional ``value_as_shape`` annotation
 and optional integer min/max bounds.
 
@@ -120,7 +120,7 @@ convenience for callers that want the inferred shapes serialised on the
 :cpp:class:`ShapesContext` and can be read directly without ever
 touching the model. The context exposes ``names`` (every inferred
 tensor name), ``has(name)`` and ``get(name)`` (the
-:cpp:class:`OptimTensor` descriptor, with its element type and shape)
+:cpp:class:`SymTensor` descriptor, with its element type and shape)
 so the full result is accessible programmatically:
 
 .. code-block:: python
@@ -130,7 +130,7 @@ so the full result is accessible programmatically:
     ctx = ShapesContext()
     ctx.compute_shape_model(model)
     for name in ctx.names():
-        tensor = ctx.get(name)  # OptimTensor: element type + shape
+        tensor = ctx.get(name)  # SymTensor: element type + shape
     # ctx.apply_inferred_shapes_to_model(model)  # optional value_info write-back
 
 This basically implements function :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`
@@ -153,7 +153,7 @@ Value-as-shape propagation
 
 Many operators accept a shape tensor whose *runtime values* determine the
 output shape. The ``value_as_shape`` annotation on an
-:cpp:class:`OptimTensor` carries the symbolic content of such tensors so
+:cpp:class:`SymTensor` carries the symbolic content of such tensors so
 that consumers like ``Reshape`` or ``Expand`` can infer precise shapes even
 when the shape tensor is not a literal initializer. The annotation is
 seeded by ``Shape`` and ``Size``, propagated through element-wise

@@ -22,7 +22,7 @@ namespace rt {
 inline constexpr const char *kAiRtDomain = "ai.rt";
 
 /**
- * This function computes the output ``OptimTensor`` of a
+ * This function computes the output ``SymTensor`` of a
  * ``DelayedInitializer`` node and stores it in ``ctx``.
  *
  * ``DelayedInitializer`` is a lightweight runtime-only operator with no inputs.

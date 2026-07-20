@@ -13,10 +13,10 @@ namespace math {
 
 void ComputeShapeCos(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "Cos", "ComputeShapeCos");
-  const OptimTensor &input = ctx.Get(x);
+  const SymTensor &input = ctx.Get(x);
   // Cos is element-wise in every supported opset revision: the output
   // dtype and shape match the input.
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace math

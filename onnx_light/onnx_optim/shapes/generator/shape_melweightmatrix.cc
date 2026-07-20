@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <utility>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -31,26 +31,26 @@ void ComputeShapeMelWeightMatrix(ShapesContext &ctx, const NodeProto &node) {
 
   // First output dim: floor(dft_length / 2) + 1 when ``dft_length`` is a
   // known constant scalar; symbolic otherwise.
-  const OptimTensor &num_mel_bins_input = ctx.Get(node.input(0));
-  const OptimTensor &dft_length_input = ctx.Get(node.input(1));
+  const SymTensor &num_mel_bins_input = ctx.Get(node.input(0));
+  const SymTensor &dft_length_input = ctx.Get(node.input(1));
 
-  OptimShape out_shape;
+  SymShape out_shape;
   if (dft_length_input.HasValueAsShape() && dft_length_input.ValueAsShape().Rank() == 1 &&
       dft_length_input.ValueAsShape()[0].IsInt()) {
     const int64_t dft_length_value = dft_length_input.ValueAsShape()[0].AsInt();
-    out_shape.PushBack(OptimDim(dft_length_value / 2 + 1));
+    out_shape.PushBack(SymDim(dft_length_value / 2 + 1));
   } else {
-    out_shape.PushBack(OptimDim("MelWeightMatrix_dim0"));
+    out_shape.PushBack(SymDim("MelWeightMatrix_dim0"));
   }
 
   if (num_mel_bins_input.HasValueAsShape() && num_mel_bins_input.ValueAsShape().Rank() == 1 &&
       num_mel_bins_input.ValueAsShape()[0].IsInt()) {
     out_shape.PushBack(num_mel_bins_input.ValueAsShape()[0]);
   } else {
-    out_shape.PushBack(OptimDim("MelWeightMatrix_dim1"));
+    out_shape.PushBack(SymDim("MelWeightMatrix_dim1"));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, dtype, std::move(out_shape)));
 }
 
 } // namespace generator

@@ -28,17 +28,17 @@ NodeProto MakeFlexAttentionNode() {
   return node;
 }
 
-void SetFlexInputs(onnx_optim::shapes::ShapesContext &ctx, const onnx_optim::OptimShape &q,
-                   const onnx_optim::OptimShape &k, const onnx_optim::OptimShape &v,
-                   onnx_optim::TensorType dtype = onnx_optim::TensorType::kFloat) {
-  ctx.Set("Q", onnx_optim::OptimTensor(nullptr, dtype, q));
-  ctx.Set("K", onnx_optim::OptimTensor(nullptr, dtype, k));
-  ctx.Set("V", onnx_optim::OptimTensor(nullptr, dtype, v));
+void SetFlexInputs(onnx_optim::shapes::ShapesContext &ctx, const core::symbolic::SymShape &q,
+                   const core::symbolic::SymShape &k, const core::symbolic::SymShape &v,
+                   core::symbolic::TensorType dtype = core::symbolic::TensorType::kFloat) {
+  ctx.Set("Q", core::symbolic::SymTensor(nullptr, dtype, q));
+  ctx.Set("K", core::symbolic::SymTensor(nullptr, dtype, k));
+  ctx.Set("V", core::symbolic::SymTensor(nullptr, dtype, v));
 }
 
-onnx_optim::OptimShape Shape4(int64_t a, int64_t b, int64_t c, int64_t d) {
-  return onnx_optim::OptimShape{onnx_optim::OptimDim(a), onnx_optim::OptimDim(b),
-                                onnx_optim::OptimDim(c), onnx_optim::OptimDim(d)};
+core::symbolic::SymShape Shape4(int64_t a, int64_t b, int64_t c, int64_t d) {
+  return core::symbolic::SymShape{core::symbolic::SymDim(a), core::symbolic::SymDim(b),
+                                  core::symbolic::SymDim(c), core::symbolic::SymDim(d)};
 }
 
 } // namespace
@@ -54,13 +54,13 @@ TEST(OnnxOptimShapesPreviewFlexAttention, BasicShape) {
   onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V");
 
   ASSERT_TRUE(ctx.Has("Y"));
-  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  const core::symbolic::SymShape &out = ctx.Get("Y").Shape();
   ASSERT_EQ(out.Rank(), 4u);
   EXPECT_EQ(out[0].AsInt(), 2);
   EXPECT_EQ(out[1].AsInt(), 4);
   EXPECT_EQ(out[2].AsInt(), 8);
   EXPECT_EQ(out[3].AsInt(), 32);
-  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kFloat);
 }
 
 TEST(OnnxOptimShapesPreviewFlexAttention, GroupedQueryAttention) {
@@ -71,7 +71,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, GroupedQueryAttention) {
 
   onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V");
 
-  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  const core::symbolic::SymShape &out = ctx.Get("Y").Shape();
   ASSERT_EQ(out.Rank(), 4u);
   EXPECT_EQ(out[0].AsInt(), 1);
   EXPECT_EQ(out[1].AsInt(), 8);
@@ -84,13 +84,13 @@ TEST(OnnxOptimShapesPreviewFlexAttention, PropagatesSymbolicBatch) {
   // value wins so downstream ops see a concrete batch.
   NodeProto node = MakeFlexAttentionNode();
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape q{onnx_optim::OptimDim("B"), onnx_optim::OptimDim(4),
-                           onnx_optim::OptimDim(8), onnx_optim::OptimDim(16)};
+  core::symbolic::SymShape q{core::symbolic::SymDim("B"), core::symbolic::SymDim(4),
+                             core::symbolic::SymDim(8), core::symbolic::SymDim(16)};
   SetFlexInputs(ctx, q, Shape4(2, 4, 12, 16), Shape4(2, 4, 12, 32));
 
   onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V");
 
-  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  const core::symbolic::SymShape &out = ctx.Get("Y").Shape();
   ASSERT_EQ(out.Rank(), 4u);
   EXPECT_TRUE(out[0].IsInt());
   EXPECT_EQ(out[0].AsInt(), 2);
@@ -132,18 +132,18 @@ TEST(OnnxOptimShapesPreviewFlexAttention, RejectsInvalidGqa) {
 TEST(OnnxOptimShapesPreviewFlexAttention, RejectsWrongRank) {
   NodeProto node = MakeFlexAttentionNode();
   onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("Q", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1),
-                                                              onnx_optim::OptimDim(2),
-                                                              onnx_optim::OptimDim(3)}));
-  ctx.Set("K", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1),
-                                                              onnx_optim::OptimDim(2),
-                                                              onnx_optim::OptimDim(3)}));
-  ctx.Set("V", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1),
-                                                              onnx_optim::OptimDim(2),
-                                                              onnx_optim::OptimDim(3)}));
+  ctx.Set("Q", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(1),
+                                                                  core::symbolic::SymDim(2),
+                                                                  core::symbolic::SymDim(3)}));
+  ctx.Set("K", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(1),
+                                                                  core::symbolic::SymDim(2),
+                                                                  core::symbolic::SymDim(3)}));
+  ctx.Set("V", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(1),
+                                                                  core::symbolic::SymDim(2),
+                                                                  core::symbolic::SymDim(3)}));
   EXPECT_THROW(onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V"),
                std::invalid_argument);
 }
@@ -151,12 +151,12 @@ TEST(OnnxOptimShapesPreviewFlexAttention, RejectsWrongRank) {
 TEST(OnnxOptimShapesPreviewFlexAttention, RejectsMismatchedDtype) {
   NodeProto node = MakeFlexAttentionNode();
   onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("Q",
-          onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, Shape4(2, 4, 8, 16)));
-  ctx.Set("K",
-          onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat16, Shape4(2, 4, 12, 16)));
-  ctx.Set("V",
-          onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, Shape4(2, 4, 12, 32)));
+  ctx.Set("Q", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         Shape4(2, 4, 8, 16)));
+  ctx.Set("K", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat16,
+                                         Shape4(2, 4, 12, 16)));
+  ctx.Set("V", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         Shape4(2, 4, 12, 32)));
   EXPECT_THROW(onnx_optim::shapes::preview::ComputeShapeFlexAttention(ctx, node, "Q", "K", "V"),
                std::invalid_argument);
 }
@@ -184,7 +184,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, DispatchesThroughComputeShapeNode) {
   ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
-  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  const core::symbolic::SymShape &out = ctx.Get("Y").Shape();
   ASSERT_EQ(out.Rank(), 4u);
   EXPECT_EQ(out[0].AsInt(), 2);
   EXPECT_EQ(out[1].AsInt(), 4);

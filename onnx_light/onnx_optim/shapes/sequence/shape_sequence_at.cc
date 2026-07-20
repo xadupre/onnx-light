@@ -4,8 +4,8 @@
 
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
 
-#include "onnx_optim/optim_sequence.h"
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -18,16 +18,16 @@ void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1,
                       "ComputeShapeSequenceAt: SequenceAt requires at least one input.");
 
-  const OptimSequence &seq = ctx.GetSequence(node.input(0));
+  const SymSequence &seq = ctx.GetSequence(node.input(0));
   const TensorType elem_dtype = seq.ElemDtype();
 
   // The output element type matches the input sequence's element type. The
   // output shape can only be inferred when all per-element shapes are known
   // and identical, since the position is a runtime value.
-  OptimShape out_shape{};
+  SymShape out_shape{};
   bool shape_known = false;
   if (seq.HasElemShapes() && !seq.ElemShapes().empty()) {
-    const std::vector<OptimShape> &shapes = seq.ElemShapes();
+    const std::vector<SymShape> &shapes = seq.ElemShapes();
     bool all_equal = true;
     for (std::size_t i = 1; i < shapes.size(); ++i) {
       if (shapes[i] != shapes[0]) {
@@ -42,9 +42,9 @@ void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node) {
   }
 
   if (shape_known) {
-    ctx.Set(node.output(0), OptimTensor(nullptr, elem_dtype, out_shape));
+    ctx.Set(node.output(0), SymTensor(nullptr, elem_dtype, out_shape));
   } else {
-    ctx.Set(node.output(0), OptimTensor(nullptr, elem_dtype, OptimShape{}));
+    ctx.Set(node.output(0), SymTensor(nullptr, elem_dtype, SymShape{}));
   }
 }
 

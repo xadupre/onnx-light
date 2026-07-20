@@ -54,7 +54,7 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
   // :cpp:var:`onnx_optim::kMaxOptimRank` (``= 16``) bound. With
   // ``axis_count = 16`` the output rank would be 17, which would cause
   // :cpp:func:`onnx_optim::shapes::InferShapesModel` to throw
-  // ``std::length_error("OptimShape exceeds maximum rank")`` and fail
+  // ``std::length_error("SymShape exceeds maximum rank")`` and fail
   // optim shape inference on this case.
   constexpr int64_t kAxisCount = 15;
   const std::vector<int64_t> input_shape(static_cast<size_t>(kAxisCount), 1);

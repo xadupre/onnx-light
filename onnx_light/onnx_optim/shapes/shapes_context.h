@@ -14,20 +14,21 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_optim/optim_sequence.h"
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_map.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/simple_string.h"
 
 /**
  * @file shapes_context.h
- * @brief Name → :cpp:class:`OptimTensor` map shared by all
+ * @brief Name → :cpp:class:`SymTensor` map shared by all
  *        ``onnx_optim`` shape-inference functions.
  *
  * ``ShapesContext`` is the in/out parameter consumed and produced by
  * the per-operator ``ComputeShape*`` functions (for example
  * :cpp:func:`ComputeShapeAbs`). It holds the
- * :cpp:class:`OptimTensor` descriptors of every named value (graph
+ * :cpp:class:`SymTensor` descriptors of every named value (graph
  * input, initializer or intermediate result) currently known to a
  * shape-inference pass. ``ComputeShape*`` functions read the entries
  * corresponding to a node's inputs and insert new entries for the
@@ -37,6 +38,31 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
+
+// The symbolic value descriptors (SymDim, SymShape, SymTensor, SymSequence,
+// TensorType, ...) live in ``onnx_core::symbolic`` so both ``onnx_op`` and
+// ``onnx_optim`` can share them. Bring them into ``onnx_optim::shapes`` so
+// the whole shape-inference stack can keep referring to them unqualified.
+using ::onnx_light::core::symbolic::DataTypeToTensorType;
+using ::onnx_light::core::symbolic::Device;
+using ::onnx_light::core::symbolic::GPUIndex;
+using ::onnx_light::core::symbolic::IsGPU;
+using ::onnx_light::core::symbolic::IsIntegerTensorType;
+using ::onnx_light::core::symbolic::kMaxGPUIndex;
+using ::onnx_light::core::symbolic::kMaxOptimRank;
+using ::onnx_light::core::symbolic::kOptimValueAsShapeMaxElements;
+using ::onnx_light::core::symbolic::kValueInfoDeviceMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMaxMetadataKey;
+using ::onnx_light::core::symbolic::kValueInfoMinMetadataKey;
+using ::onnx_light::core::symbolic::ShapeFromTensorProtoDims;
+using ::onnx_light::core::symbolic::SymCmpResult;
+using ::onnx_light::core::symbolic::SymDim;
+using ::onnx_light::core::symbolic::SymMap;
+using ::onnx_light::core::symbolic::SymSequence;
+using ::onnx_light::core::symbolic::SymShape;
+using ::onnx_light::core::symbolic::SymTensor;
+using ::onnx_light::core::symbolic::TensorType;
+using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 /// Sentinel value returned by :cpp:func:`ShapesContext::OpsetVersion`
 /// when no opset version has been recorded for the requested domain.
@@ -181,10 +207,10 @@ using ShapeEventLog = std::vector<ShapeEvent>;
  * shape-inference functions. ``ShapesContext`` carries two pieces of
  * information:
  *
- *   - a ``name → OptimTensor`` map describing every named value
+ *   - a ``name → SymTensor`` map describing every named value
  *     (graph input, initializer or intermediate result) currently
  *     known to the shape-inference pass;
- *   - a ``name → OptimSequence`` map describing every named
+ *   - a ``name → SymSequence`` map describing every named
  *     sequence-typed value (the output of ``SequenceConstruct``,
  *     ``SequenceEmpty``, ``SplitToSequence``, ...);
  *   - a ``domain → opset_version`` map mirroring the ``opset_import``
@@ -194,7 +220,7 @@ using ShapeEventLog = std::vector<ShapeEvent>;
  *     version.
  *
  * The context is a thin wrapper and does not own any tensor data: the
- * :cpp:class:`OptimTensor` values stored here are themselves
+ * :cpp:class:`SymTensor` values stored here are themselves
  * non-owning views.
  */
 /**
@@ -234,7 +260,7 @@ public:
   /// event log — with action :cpp:enumerator:`ShapeEventAction::kAdd`
   /// when ``name`` was absent and
   /// :cpp:enumerator:`ShapeEventAction::kReplace` otherwise.
-  void Set(const std::string &name, OptimTensor &&tensor) {
+  void Set(const std::string &name, SymTensor &&tensor) {
     if (events_enabled_) {
       LogSetEvent(name, tensor);
     }
@@ -242,14 +268,14 @@ public:
   }
 
   /// Overload: ``name`` given as a null-terminated C string.
-  void Set(const char *name, OptimTensor &&tensor) { Set(std::string(name), std::move(tensor)); }
+  void Set(const char *name, SymTensor &&tensor) { Set(std::string(name), std::move(tensor)); }
 
   /// Returns ``true`` when an entry exists for ``name``.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 
   /// Returns the descriptor for ``name``. Throws ``std::out_of_range``
   /// if no such entry exists.
-  const OptimTensor &Get(const std::string &name) const { return tensors_.at(name); }
+  const SymTensor &Get(const std::string &name) const { return tensors_.at(name); }
 
   /// Number of named entries currently stored.
   std::size_t Size() const noexcept { return tensors_.size(); }
@@ -287,19 +313,19 @@ public:
   }
 
   /// Read-only access to the underlying map (useful for iteration).
-  const std::unordered_map<std::string, OptimTensor> &Tensors() const noexcept { return tensors_; }
+  const std::unordered_map<std::string, SymTensor> &Tensors() const noexcept { return tensors_; }
 
   // ── Sequence descriptors ────────────────────────────────────────────
 
   /// Inserts or replaces the descriptor for a sequence-typed value
   /// named ``name``. ``sequence`` is consumed; callers must pass an
   /// rvalue (use ``std::move``).
-  void SetSequence(const std::string &name, OptimSequence &&sequence) {
+  void SetSequence(const std::string &name, SymSequence &&sequence) {
     sequences_[name] = std::move(sequence);
   }
 
   /// Overload: ``name`` given as a null-terminated C string.
-  void SetSequence(const char *name, OptimSequence &&sequence) {
+  void SetSequence(const char *name, SymSequence &&sequence) {
     sequences_[std::string(name)] = std::move(sequence);
   }
 
@@ -310,13 +336,13 @@ public:
 
   /// Returns the sequence descriptor for ``name``. Throws
   /// ``std::out_of_range`` if no such entry exists.
-  const OptimSequence &GetSequence(const std::string &name) const { return sequences_.at(name); }
+  const SymSequence &GetSequence(const std::string &name) const { return sequences_.at(name); }
 
   /// Number of sequence-typed entries currently stored.
   std::size_t SequencesSize() const noexcept { return sequences_.size(); }
 
   /// Read-only access to the underlying sequence map (useful for iteration).
-  const std::unordered_map<std::string, OptimSequence> &Sequences() const noexcept {
+  const std::unordered_map<std::string, SymSequence> &Sequences() const noexcept {
     return sequences_;
   }
 
@@ -609,7 +635,7 @@ public:
 
   /// Dispatches a single ``NodeProto`` to the matching per-operator
   /// ``ComputeShape*`` function and stores the resulting output
-  /// :cpp:class:`OptimTensor` descriptors in ``*this``.
+  /// :cpp:class:`SymTensor` descriptors in ``*this``.
   void ComputeShapeNode(const NodeProto &node);
 
   /// Throws ``std::invalid_argument`` if any non-empty input name
@@ -719,7 +745,7 @@ private:
   /// :cpp:enumerator:`ShapeEventAction::kReplace` event for ``name``
   /// describing ``tensor`` (the descriptor about to be stored). Only
   /// called by :cpp:func:`Set` when event logging is enabled.
-  void LogSetEvent(const std::string &name, const OptimTensor &tensor);
+  void LogSetEvent(const std::string &name, const SymTensor &tensor);
 
   /// Appends a :cpp:enumerator:`ShapeEventAction::kConstraint` /
   /// :cpp:enumerator:`ShapeEventAction::kConstraintMax` event recording
@@ -734,8 +760,8 @@ private:
     }
   }
 
-  std::unordered_map<std::string, OptimTensor> tensors_;
-  std::unordered_map<std::string, OptimSequence> sequences_;
+  std::unordered_map<std::string, SymTensor> tensors_;
+  std::unordered_map<std::string, SymSequence> sequences_;
   std::unordered_map<std::string, int> opsets_;
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
   CustomShapeInferenceMap custom_shape_inference_;

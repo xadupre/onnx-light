@@ -24,14 +24,14 @@ namespace {
 //     input of size N and treats C as 1),
 //   * a fresh symbolic ``BatchNormalization.C`` expression when the rank
 //     is 0 or unknown.
-OptimDim ChannelDim(const OptimShape &x_shape) {
+SymDim ChannelDim(const SymShape &x_shape) {
   if (x_shape.Rank() >= 2u) {
     return x_shape[1];
   }
   if (x_shape.Rank() == 1u) {
-    return OptimDim(static_cast<int64_t>(1));
+    return SymDim(static_cast<int64_t>(1));
   }
-  return OptimDim(std::string("BatchNormalization.C()"));
+  return SymDim(std::string("BatchNormalization.C()"));
 }
 
 // Returns the opset version of the ``ai.onnx`` domain recorded in ``ctx``.
@@ -51,11 +51,11 @@ void ComputeShapeBatchNormalization(ShapesContext &ctx, const NodeProto &node, c
                                     const char *input_mean) {
   CheckNodeOpAndOutput(node, "BatchNormalization", "ComputeShapeBatchNormalization");
 
-  const OptimTensor &input = ctx.Get(x);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(x);
+  const SymShape &in_shape = input.Shape();
 
   // Output 0 (Y) always mirrors X.
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), in_shape));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), in_shape));
 
   const int n_outputs = node.output_size();
   if (n_outputs <= 1) {
@@ -71,14 +71,14 @@ void ComputeShapeBatchNormalization(ShapesContext &ctx, const NodeProto &node, c
     secondary_dtype = ctx.Get(input_mean).Dtype();
   }
 
-  const OptimShape channel_shape{ChannelDim(in_shape)};
+  const SymShape channel_shape{ChannelDim(in_shape)};
 
   for (int i = 1; i < n_outputs; ++i) {
     const std::string &name = node.output(i);
     if (name.empty()) {
       continue;
     }
-    ctx.Set(name, OptimTensor(nullptr, secondary_dtype, channel_shape));
+    ctx.Set(name, SymTensor(nullptr, secondary_dtype, channel_shape));
   }
 }
 

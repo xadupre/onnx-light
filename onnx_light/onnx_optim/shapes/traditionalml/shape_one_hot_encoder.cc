@@ -41,14 +41,14 @@ void ComputeShapeOneHotEncoder(ShapesContext &ctx, const NodeProto &node, const 
 
   // OneHotEncoder emits a float tensor whose shape is the input shape extended
   // by a trailing dimension equal to the category count.
-  const OptimTensor &input = ctx.Get(x);
-  OptimShape output_shape;
+  const SymTensor &input = ctx.Get(x);
+  SymShape output_shape;
   for (std::size_t i = 0; i < input.Shape().Rank(); ++i) {
     output_shape.PushBack(input.Shape()[i]);
   }
-  output_shape.PushBack(OptimDim(num_cats));
+  output_shape.PushBack(SymDim(num_cats));
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kFloat, std::move(output_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kFloat, std::move(output_shape)));
 }
 
 } // namespace traditionalml

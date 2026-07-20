@@ -3,19 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @file optim_tensor.cc
- * @brief Out-of-line implementation of :cpp:class:`OptimShape`.
+ * @file sym_tensor.cc
+ * @brief Out-of-line implementation of :cpp:class:`SymShape`.
  *
  * Most of the ``onnx_optim`` public API is small enough to be defined
- * inline in ``optim_tensor.h``. Only the few :cpp:class:`OptimShape`
+ * inline in ``sym_tensor.h``. Only the few :cpp:class:`SymShape`
  * members that perform bounds checking, iteration over the stored
  * dimensions, or arithmetic on integer dimensions live here so that
  * the header stays free of ``<stdexcept>``.
  *
- * @see optim_tensor.h
+ * @see sym_tensor.h
  */
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 
 #include "onnx_proto/onnx_helper.h"
 
@@ -82,27 +82,27 @@ Device DeviceFromName(const std::string &name) {
   return Device::kUndefined;
 }
 
-// Builds an ``OptimShape`` from the ``dims`` repeated field of a
+// Builds an ``SymShape`` from the ``dims`` repeated field of a
 // ``TensorProto`` (which uses ``uint64_t`` storage but encodes
 // non-negative shape values).
-OptimShape ShapeFromTensorProtoDims(const TensorProto &tensor_proto) {
-  OptimShape shape;
+SymShape ShapeFromTensorProtoDims(const TensorProto &tensor_proto) {
+  SymShape shape;
   for (int i = 0; i < tensor_proto.dims().size(); ++i) {
-    shape.PushBack(OptimDim(static_cast<int64_t>(tensor_proto.dims()[i])));
+    shape.PushBack(SymDim(static_cast<int64_t>(tensor_proto.dims()[i])));
   }
   return shape;
 }
 
 /**
- * Constructs an :cpp:class:`OptimShape` from a brace-enclosed list of
+ * Constructs an :cpp:class:`SymShape` from a brace-enclosed list of
  * dimensions.
  *
  * @param dims Dimensions to copy into the new shape, in order.
  * @throws std::length_error if ``dims.size() > kMaxOptimRank``.
  */
-OptimShape::OptimShape(std::initializer_list<OptimDim> dims) {
+SymShape::SymShape(std::initializer_list<SymDim> dims) {
   if (dims.size() > kMaxOptimRank) {
-    throw std::length_error("OptimShape exceeds maximum rank");
+    throw std::length_error("SymShape exceeds maximum rank");
   }
   dims_.reserve(dims.size());
   for (const auto &d : dims) {
@@ -111,15 +111,15 @@ OptimShape::OptimShape(std::initializer_list<OptimDim> dims) {
 }
 
 /**
- * Constructs an :cpp:class:`OptimShape` by copying an existing
- * ``std::vector`` of :cpp:class:`OptimDim`.
+ * Constructs an :cpp:class:`SymShape` by copying an existing
+ * ``std::vector`` of :cpp:class:`SymDim`.
  *
  * @param dims Source dimensions to copy.
  * @throws std::length_error if ``dims.size() > kMaxOptimRank``.
  */
-OptimShape::OptimShape(const std::vector<OptimDim> &dims) {
+SymShape::SymShape(const std::vector<SymDim> &dims) {
   if (dims.size() > kMaxOptimRank) {
-    throw std::length_error("OptimShape exceeds maximum rank");
+    throw std::length_error("SymShape exceeds maximum rank");
   }
   dims_ = dims;
 }
@@ -131,9 +131,9 @@ OptimShape::OptimShape(const std::vector<OptimDim> &dims) {
  * @throws std::length_error if the shape already contains
  *         ``kMaxOptimRank`` dimensions.
  */
-void OptimShape::PushBack(OptimDim dim) {
+void SymShape::PushBack(SymDim dim) {
   if (dims_.size() >= kMaxOptimRank) {
-    throw std::length_error("OptimShape exceeds maximum rank");
+    throw std::length_error("SymShape exceeds maximum rank");
   }
   dims_.push_back(std::move(dim));
 }
@@ -142,7 +142,7 @@ void OptimShape::PushBack(OptimDim dim) {
  * Returns ``true`` when every dimension in the shape is a concrete
  * integer. A rank-0 (empty) shape is considered fully known.
  */
-bool OptimShape::IsFullyKnown() const noexcept {
+bool SymShape::IsFullyKnown() const noexcept {
   for (const auto &d : dims_) {
     if (!d.IsInt()) {
       return false;
@@ -161,11 +161,11 @@ bool OptimShape::IsFullyKnown() const noexcept {
  *         :cpp:func:`IsFullyKnown` first if the shape may be
  *         partially symbolic.
  */
-int64_t OptimShape::NumElements() const {
+int64_t SymShape::NumElements() const {
   int64_t total = 1;
   for (const auto &d : dims_) {
     if (!d.IsInt()) {
-      throw std::runtime_error("OptimShape::NumElements requires a fully-known shape");
+      throw std::runtime_error("SymShape::NumElements requires a fully-known shape");
     }
     total *= d.AsInt();
   }
@@ -173,10 +173,10 @@ int64_t OptimShape::NumElements() const {
 }
 
 /**
- * Returns the string representation of an ``OptimDim``: either the
+ * Returns the string representation of an ``SymDim``: either the
  * decimal form of the integer value or the symbolic expression string.
  */
-std::string OptimDim::ToString() const {
+std::string SymDim::ToString() const {
   if (IsInt()) {
     return std::to_string(AsInt());
   }
@@ -187,7 +187,7 @@ std::string OptimDim::ToString() const {
  * Renders the shape as a comma-separated list enclosed in square
  * brackets, e.g. ``"[2,3,N]"``. A rank-0 shape returns ``"[]"``.
  */
-std::string OptimShape::ToString() const {
+std::string SymShape::ToString() const {
   std::string out;
   out.reserve(2 + dims_.size() * 3);
   out.push_back('[');
@@ -264,13 +264,13 @@ constexpr const char *TensorTypeName(TensorType t) {
   }
 }
 
-// Compares two :cpp:class:`OptimDim` values and updates the running
+// Compares two :cpp:class:`SymDim` values and updates the running
 // precision accumulators. Sets ``conflict`` when the dimensions hold
 // incompatible information (two different concrete integers or two
 // different symbolic expressions). When one side is a concrete integer
 // and the other a symbolic expression, the concrete side is considered
 // more precise.
-void CmpDimAccumulate(const OptimDim &a, const OptimDim &b, bool &lhs_more, bool &rhs_more,
+void CmpDimAccumulate(const SymDim &a, const SymDim &b, bool &lhs_more, bool &rhs_more,
                       bool &conflict) noexcept {
   if (a.IsInt() && b.IsInt()) {
     if (a.AsInt() != b.AsInt()) {
@@ -291,9 +291,9 @@ void CmpDimAccumulate(const OptimDim &a, const OptimDim &b, bool &lhs_more, bool
   }
 }
 
-// Compares two :cpp:class:`OptimShape` values (already known to have
+// Compares two :cpp:class:`SymShape` values (already known to have
 // the same rank) and updates the running precision accumulators.
-void CmpShapeAccumulate(const OptimShape &a, const OptimShape &b, bool &lhs_more, bool &rhs_more,
+void CmpShapeAccumulate(const SymShape &a, const SymShape &b, bool &lhs_more, bool &rhs_more,
                         bool &conflict) noexcept {
   for (std::size_t i = 0; i < a.Rank(); ++i) {
     CmpDimAccumulate(a[i], b[i], lhs_more, rhs_more, conflict);
@@ -303,14 +303,14 @@ void CmpShapeAccumulate(const OptimShape &a, const OptimShape &b, bool &lhs_more
 } // namespace
 
 /**
- * Renders the tensor as ``"OptimTensor(dtype=<name>, shape=<shape>"``
+ * Renders the tensor as ``"SymTensor(dtype=<name>, shape=<shape>"``
  * optionally followed by ``", value_as_shape=<shape>"`` when a
  * value-as-shape annotation is set and ``", data=<ptr>"`` when the
  * tensor references a non-null buffer.
  */
-std::string OptimTensor::ToString() const {
+std::string SymTensor::ToString() const {
   std::ostringstream oss;
-  oss << "OptimTensor(dtype=" << TensorTypeName(dtype_) << ", shape=" << shape_.ToString();
+  oss << "SymTensor(dtype=" << TensorTypeName(dtype_) << ", shape=" << shape_.ToString();
   if (device_ != Device::kUndefined) {
     oss << ", device=" << DeviceName(device_);
   }
@@ -330,13 +330,13 @@ std::string OptimTensor::ToString() const {
   return oss.str();
 }
 
-void OptimTensor::SetMinMax(double min, double max) {
-  EXT_ENFORCE_INVALID(!(min > max), "OptimTensor::SetMinMax requires min <= max");
+void SymTensor::SetMinMax(double min, double max) {
+  EXT_ENFORCE_INVALID(!(min > max), "SymTensor::SetMinMax requires min <= max");
   min_ = min;
   max_ = max;
 }
 
-OptimCmpResult OptimTensor::Cmp(const OptimTensor &other) const noexcept {
+SymCmpResult SymTensor::Cmp(const SymTensor &other) const noexcept {
   bool lhs_more = false;
   bool rhs_more = false;
   bool conflict = false;
@@ -376,8 +376,8 @@ OptimCmpResult OptimTensor::Cmp(const OptimTensor &other) const noexcept {
 
   // Value-as-shape annotation.
   if (value_as_shape_.has_value() && other.value_as_shape_.has_value()) {
-    const OptimShape &a = *value_as_shape_;
-    const OptimShape &b = *other.value_as_shape_;
+    const SymShape &a = *value_as_shape_;
+    const SymShape &b = *other.value_as_shape_;
     if (a.Rank() != b.Rank()) {
       conflict = true;
     } else {
@@ -438,34 +438,34 @@ OptimCmpResult OptimTensor::Cmp(const OptimTensor &other) const noexcept {
   }
 
   if (conflict) {
-    return OptimCmpResult::kConflict;
+    return SymCmpResult::kConflict;
   }
   if (lhs_more && rhs_more) {
-    return OptimCmpResult::kComplementary;
+    return SymCmpResult::kComplementary;
   }
   if (rhs_more) {
-    return OptimCmpResult::kLessPrecise;
+    return SymCmpResult::kLessPrecise;
   }
-  return OptimCmpResult::kMorePrecise;
+  return SymCmpResult::kMorePrecise;
 }
 
 namespace {
 
-// Builds an OptimShape from a TensorShapeProto, preserving symbolic
+// Builds an SymShape from a TensorShapeProto, preserving symbolic
 // dimensions: ``dim_value`` becomes a concrete int dim, ``dim_param``
 // becomes a symbolic dim with the same name, and an unset dim becomes
 // an empty-string placeholder. Mirrors the historical helper that
 // lived in shape_inference.cc.
-OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
-  OptimShape shape;
+SymShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
+  SymShape shape;
   for (int i = 0; i < sp.dim().size(); ++i) {
     const TensorShapeProto::Dimension &d = sp.dim()[i];
     if (d.has_dim_value()) {
-      shape.PushBack(OptimDim(static_cast<int64_t>(d.dim_value())));
+      shape.PushBack(SymDim(static_cast<int64_t>(d.dim_value())));
     } else if (d.has_dim_param()) {
-      shape.PushBack(OptimDim(d.dim_param()));
+      shape.PushBack(SymDim(d.dim_param()));
     } else {
-      shape.PushBack(OptimDim(std::string()));
+      shape.PushBack(SymDim(std::string()));
     }
   }
   return shape;
@@ -543,17 +543,17 @@ std::optional<double> ReadNumericMetadata(const ValueInfoProto &vi, const char *
 
 } // namespace
 
-bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
+bool SymTensorFromValueInfo(const ValueInfoProto &vi, SymTensor &out) {
   if (!vi.has_type() || !vi.type().has_tensor_type()) {
     return false;
   }
   const TypeProto::Tensor &tt = vi.type().tensor_type();
   const TensorType dtype = DataTypeToTensorType(tt.elem_type());
-  OptimShape shape;
+  SymShape shape;
   if (tt.has_shape()) {
     shape = ShapeFromTensorShapeProto(tt.shape());
   }
-  out = OptimTensor(nullptr, dtype, std::move(shape));
+  out = SymTensor(nullptr, dtype, std::move(shape));
   const int idx = FindDeviceMetadataIndex(vi);
   if (idx >= 0) {
     const Device device = DeviceFromName(vi.metadata_props()[idx].value());
@@ -572,19 +572,19 @@ bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
   return true;
 }
 
-bool OptimTensorFromTensorProto(const TensorProto &tp, OptimTensor &out) {
+bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out) {
   const TensorType dtype = DataTypeToTensorType(tp.data_type());
   if (dtype == TensorType::kUndefined) {
     return false;
   }
-  OptimTensor tensor(nullptr, dtype, ShapeFromTensorProtoDims(tp));
+  SymTensor tensor(nullptr, dtype, ShapeFromTensorProtoDims(tp));
 
   // Determine the element count from the dims; used both to gate the
   // value-as-shape heuristic and to validate decoded payload sizes.
   int64_t count = 1;
   bool count_known = true;
   for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
-    const OptimDim &d = tensor.Shape()[i];
+    const SymDim &d = tensor.Shape()[i];
     if (!d.IsInt() || d.AsInt() < 0) {
       count_known = false;
       break;
@@ -619,9 +619,9 @@ bool OptimTensorFromTensorProto(const TensorProto &tp, OptimTensor &out) {
       count < kOptimValueAsShapeMaxElements) {
     std::vector<int64_t> values;
     if (ReadIntegerValues(tp, values) && static_cast<int64_t>(values.size()) == count) {
-      OptimShape value_shape;
+      SymShape value_shape;
       for (int64_t v : values) {
-        value_shape.PushBack(OptimDim(v));
+        value_shape.PushBack(SymDim(v));
       }
       tensor.SetValueAsShape(std::move(value_shape));
     }
@@ -631,7 +631,7 @@ bool OptimTensorFromTensorProto(const TensorProto &tp, OptimTensor &out) {
   return true;
 }
 
-bool OptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi) {
+bool SymTensorToValueInfo(const SymTensor &tensor, ValueInfoProto &vi) {
   const TensorProto::DataType dtype = TensorTypeToDataType(tensor.Dtype());
   if (dtype == TensorProto::DataType::UNDEFINED) {
     return false;
@@ -644,7 +644,7 @@ bool OptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi) {
   tt->set_elem_type(static_cast<int>(dtype));
   TensorShapeProto *sp = tt->add_shape();
   for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
-    const OptimDim &d = tensor.Shape()[i];
+    const SymDim &d = tensor.Shape()[i];
     TensorShapeProto::Dimension *dim = sp->add_dim();
     if (d.IsInt()) {
       dim->set_dim_value(d.AsInt());

@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/tensor/shape_tensor.h"
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -18,15 +18,15 @@ void ComputeShapeCastLike(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeCastLike: CastLike requires two inputs.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
-  const OptimTensor &target_type = ctx.Get(node.input(1));
+  const SymTensor &input = ctx.Get(node.input(0));
+  const SymTensor &target_type = ctx.Get(node.input(1));
 
   const TensorType out_dtype = target_type.Dtype();
   EXT_ENFORCE_INVALID(out_dtype != TensorType::kUndefined,
                       "ComputeShapeCastLike: target_type has an undefined element type.");
 
-  OptimShape out_shape = input.Shape();
-  ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
+  SymShape out_shape = input.Shape();
+  ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 
 } // namespace tensor

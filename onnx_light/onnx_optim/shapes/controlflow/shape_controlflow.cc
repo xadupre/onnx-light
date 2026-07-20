@@ -11,8 +11,8 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include "onnx_core/expressions/expressions.h"
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/_helpers/shape_helpers.h"
+#include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_core/symbolic/symbolic_helper.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_optim/shapes/shape_inference.h"
 
@@ -45,8 +45,8 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
     if (name.empty() || local.Has(name)) {
       continue;
     }
-    OptimTensor tensor;
-    if (OptimTensorFromTensorProto(init, tensor)) {
+    SymTensor tensor;
+    if (SymTensorFromTensorProto(init, tensor)) {
       local.Set(name, std::move(tensor));
     }
   }
@@ -64,13 +64,13 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
   return local;
 }
 
-// Retrieves the OptimTensor describing the i-th output of ``subgraph``
+// Retrieves the SymTensor describing the i-th output of ``subgraph``
 // from ``local_ctx``. The output name is taken from the sub-graph's
 // ValueInfoProto output list. Throws std::invalid_argument when the
 // sub-graph has fewer outputs than ``expected`` or when the named
 // value is unknown / is a sequence rather than a tensor.
-const OptimTensor &GetSubgraphOutput(const ShapesContext &local_ctx, const GraphProto &subgraph,
-                                     const char *branch_name, int output_index, int expected) {
+const SymTensor &GetSubgraphOutput(const ShapesContext &local_ctx, const GraphProto &subgraph,
+                                   const char *branch_name, int output_index, int expected) {
   EXT_ENFORCE_INVALID(subgraph.output().size() == expected, "ComputeShapeIf: sub-graph '",
                       branch_name, "' declares ", std::to_string(subgraph.output().size()),
                       " output(s), expected ", std::to_string(expected), ".");
@@ -81,22 +81,22 @@ const OptimTensor &GetSubgraphOutput(const ShapesContext &local_ctx, const Graph
 }
 
 // Merges two output descriptors coming from the ``then_branch`` and
-// ``else_branch`` sub-graphs into a single OptimTensor describing the
+// ``else_branch`` sub-graphs into a single SymTensor describing the
 // corresponding output of the ``If`` node. When a merged dimension is
 // made fully symbolic (because the two branches disagree on that
 // dimension), an upper-bound constraint ``merged_dim <= max(then_dim,
 // else_dim)`` is recorded into ``ctx`` so downstream passes know the
 // merged dim cannot exceed either branch's value.
-OptimTensor MergeBranchOutputs(ShapesContext &ctx, const OptimTensor &then_t,
-                               const OptimTensor &else_t, const std::string &if_output_name) {
+SymTensor MergeBranchOutputs(ShapesContext &ctx, const SymTensor &then_t, const SymTensor &else_t,
+                             const std::string &if_output_name) {
   const TensorType dtype =
       (then_t.Dtype() == else_t.Dtype()) ? then_t.Dtype() : TensorType::kUndefined;
 
-  const OptimShape &then_shape = then_t.Shape();
-  const OptimShape &else_shape = else_t.Shape();
+  const SymShape &then_shape = then_t.Shape();
+  const SymShape &else_shape = else_t.Shape();
 
   if (then_shape == else_shape) {
-    return OptimTensor(nullptr, dtype, then_shape);
+    return SymTensor(nullptr, dtype, then_shape);
   }
   EXT_ENFORCE_INVALID(then_shape.Rank() == else_shape.Rank(),
                       "ComputeShapeIf: rank mismatch between branches for output '", if_output_name,
@@ -104,7 +104,7 @@ OptimTensor MergeBranchOutputs(ShapesContext &ctx, const OptimTensor &then_t,
                       ", else_branch has rank ", std::to_string(else_shape.Rank()),
                       ". This is not supposed to happen for a well-formed If node.");
 
-  OptimShape merged;
+  SymShape merged;
   for (std::size_t i = 0; i < then_shape.Rank(); ++i) {
     if (then_shape[i] == else_shape[i]) {
       merged.PushBack(then_shape[i]);
@@ -115,10 +115,10 @@ OptimTensor MergeBranchOutputs(ShapesContext &ctx, const OptimTensor &then_t,
       const expressions::DimType bound =
           expressions::dim_max(ToDimType(then_shape[i]), ToDimType(else_shape[i]));
       ctx.AddLessEqualConstraint(sym, expressions::dim_to_string(bound));
-      merged.PushBack(OptimDim(sym));
+      merged.PushBack(SymDim(sym));
     }
   }
-  return OptimTensor(nullptr, dtype, std::move(merged));
+  return SymTensor(nullptr, dtype, std::move(merged));
 }
 
 } // namespace
@@ -151,10 +151,8 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
     if (out_name.empty()) {
       continue; // Optional output not produced.
     }
-    const OptimTensor &then_t =
-        GetSubgraphOutput(then_ctx, then_branch, "then_branch", i, n_outputs);
-    const OptimTensor &else_t =
-        GetSubgraphOutput(else_ctx, else_branch, "else_branch", i, n_outputs);
+    const SymTensor &then_t = GetSubgraphOutput(then_ctx, then_branch, "then_branch", i, n_outputs);
+    const SymTensor &else_t = GetSubgraphOutput(else_ctx, else_branch, "else_branch", i, n_outputs);
     ctx.Set(out_name, MergeBranchOutputs(ctx, then_t, else_t, out_name));
   }
 }
@@ -164,10 +162,10 @@ namespace {
 // Builds a fully-symbolic shape of the given ``rank``, where each axis
 // is named ``"<prefix>_d<i>"``. Used when a loop-carried or scan output
 // shape cannot be reproduced verbatim from the body subgraph.
-OptimShape SymbolicShape(std::size_t rank, const std::string &prefix) {
-  OptimShape s;
+SymShape SymbolicShape(std::size_t rank, const std::string &prefix) {
+  SymShape s;
   for (std::size_t i = 0; i < rank; ++i) {
-    s.PushBack(OptimDim(prefix + "_d" + std::to_string(i)));
+    s.PushBack(SymDim(prefix + "_d" + std::to_string(i)));
   }
   return s;
 }
@@ -218,20 +216,20 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     if (name.empty() || local.Has(name)) {
       continue;
     }
-    OptimTensor tensor;
-    if (OptimTensorFromTensorProto(init, tensor)) {
+    SymTensor tensor;
+    if (SymTensorFromTensorProto(init, tensor)) {
       local.Set(name, std::move(tensor));
     }
   }
-  local.Set(body.input()[0].name(), OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
-  local.Set(body.input()[1].name(), OptimTensor(nullptr, TensorType::kBool, OptimShape{}));
+  local.Set(body.input()[0].name(), SymTensor(nullptr, TensorType::kInt64, SymShape{}));
+  local.Set(body.input()[1].name(), SymTensor(nullptr, TensorType::kBool, SymShape{}));
   for (int i = 0; i < n_carried; ++i) {
     const std::string v_initial_name = node.input(2 + i);
     EXT_ENFORCE_INVALID(!v_initial_name.empty(), "ComputeShapeLoop: 'v_initial' input #",
                         std::to_string(i), " has an empty name.");
     EXT_ENFORCE_INVALID(local.Has(v_initial_name), "ComputeShapeLoop: 'v_initial' input '",
                         v_initial_name, "' is missing from the inferred context.");
-    local.Set(body.input()[2 + i].name(), OptimTensor(local.Get(v_initial_name)));
+    local.Set(body.input()[2 + i].name(), SymTensor(local.Get(v_initial_name)));
   }
 
   const size_t events_before = local.Events().size();
@@ -260,15 +258,15 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &v_initial = ctx.Get(node.input(2 + i));
-    const OptimTensor &v_out = local.Get(body.output()[1 + i].name());
+    const SymTensor &v_initial = ctx.Get(node.input(2 + i));
+    const SymTensor &v_out = local.Get(body.output()[1 + i].name());
     EXT_ENFORCE_INVALID(v_out.Dtype() == v_initial.Dtype(), "ComputeShapeLoop: body output #",
                         std::to_string(1 + i),
                         " has a different element type than the matching 'v_initial' input.");
-    OptimShape out_shape = (v_out.Shape() == v_initial.Shape())
-                               ? v_initial.Shape()
-                               : SymbolicShape(v_out.Shape().Rank(), "Loop_" + node_out);
-    ctx.Set(node_out, OptimTensor(nullptr, v_initial.Dtype(), std::move(out_shape)));
+    SymShape out_shape = (v_out.Shape() == v_initial.Shape())
+                             ? v_initial.Shape()
+                             : SymbolicShape(v_out.Shape().Rank(), "Loop_" + node_out);
+    ctx.Set(node_out, SymTensor(nullptr, v_initial.Dtype(), std::move(out_shape)));
   }
 
   // K scan outputs: dtype is taken from the body's scan output; shape is
@@ -276,19 +274,19 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // ValueAsShape carries a single element (the symbolic or concrete trip
   // count), that element is used as the leading axis; otherwise a fresh
   // symbolic dim is introduced.
-  OptimDim trip_dim;
+  SymDim trip_dim;
   {
     const std::string m_name = node.input(0);
     bool resolved = false;
     if (!m_name.empty() && ctx.Has(m_name)) {
-      const OptimTensor &m_tensor = ctx.Get(m_name);
+      const SymTensor &m_tensor = ctx.Get(m_name);
       if (m_tensor.HasValueAsShape() && m_tensor.ValueAsShape().Rank() == 1) {
         trip_dim = m_tensor.ValueAsShape()[0];
         resolved = true;
       }
     }
     if (!resolved) {
-      trip_dim = OptimDim("Loop_trip");
+      trip_dim = SymDim("Loop_trip");
     }
   }
   for (int k = 0; k < k_scan; ++k) {
@@ -296,13 +294,13 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &scan_out = local.Get(body.output()[1 + n_carried + k].name());
-    OptimShape stacked;
+    const SymTensor &scan_out = local.Get(body.output()[1 + n_carried + k].name());
+    SymShape stacked;
     stacked.PushBack(trip_dim);
     for (std::size_t d = 0; d < scan_out.Shape().Rank(); ++d) {
       stacked.PushBack(scan_out.Shape()[d]);
     }
-    ctx.Set(node_out, OptimTensor(nullptr, scan_out.Dtype(), std::move(stacked)));
+    ctx.Set(node_out, SymTensor(nullptr, scan_out.Dtype(), std::move(stacked)));
   }
 
   // Retain the body's child context so its internals stay inspectable
@@ -411,8 +409,8 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
     if (name.empty() || local.Has(name)) {
       continue;
     }
-    OptimTensor tensor;
-    if (OptimTensorFromTensorProto(init, tensor)) {
+    SymTensor tensor;
+    if (SymTensorFromTensorProto(init, tensor)) {
       local.Set(name, std::move(tensor));
     }
   }
@@ -424,13 +422,13 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   const std::string &scan8_anchor =
       is_scan8 ? node.input(scan8_offset < node.input_size() ? scan8_offset : 0)
                : utils::String::empty_string();
-  OptimDim batch_dim(std::string("Scan8_") + scan8_anchor + "_batch");
+  SymDim batch_dim(std::string("Scan8_") + scan8_anchor + "_batch");
 
   for (int i = 0; i < n_state; ++i) {
     const std::string state_in_name = node.input(scan8_offset + i);
     EXT_ENFORCE_INVALID(local.Has(state_in_name), "ComputeShapeScan: state input '", state_in_name,
                         "' is missing from the inferred context.");
-    const OptimTensor &state_in = local.Get(state_in_name);
+    const SymTensor &state_in = local.Get(state_in_name);
     if (is_scan8) {
       // Strip leading batch dimension; body sees [D...].
       EXT_ENFORCE_INVALID(state_in.Shape().Rank() >= 1,
@@ -439,30 +437,30 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
       if (i == 0) {
         batch_dim = state_in.Shape()[0];
       }
-      OptimShape body_state_shape;
+      SymShape body_state_shape;
       for (std::size_t d = 1; d < state_in.Shape().Rank(); ++d) {
         body_state_shape.PushBack(state_in.Shape()[d]);
       }
       local.Set(body.input()[i].name(),
-                OptimTensor(nullptr, state_in.Dtype(), std::move(body_state_shape)));
+                SymTensor(nullptr, state_in.Dtype(), std::move(body_state_shape)));
     } else {
-      local.Set(body.input()[i].name(), OptimTensor(state_in));
+      local.Set(body.input()[i].name(), SymTensor(state_in));
     }
   }
 
   // The trip count is taken from the first scan input's scan axis.
-  OptimDim trip_count_dim(std::string("Scan_") + node.output(0) + "_trip_count");
+  SymDim trip_count_dim(std::string("Scan_") + node.output(0) + "_trip_count");
   bool trip_count_known = false;
 
   for (int m = 0; m < num_scan_inputs; ++m) {
     const std::string scan_in_name = node.input(scan8_offset + n_state + m);
     EXT_ENFORCE_INVALID(local.Has(scan_in_name), "ComputeShapeScan: scan input '", scan_in_name,
                         "' is missing from the inferred context.");
-    const OptimTensor &scan_in = local.Get(scan_in_name);
+    const SymTensor &scan_in = local.Get(scan_in_name);
     EXT_ENFORCE_INVALID(scan_in.Shape().Rank() >= 1, "ComputeShapeScan: scan input '", scan_in_name,
                         "' must have rank >= 1.");
 
-    OptimShape body_in_shape;
+    SymShape body_in_shape;
     if (is_scan8) {
       // Scan opset 8: input shape is [B, T, D...]. Strip both B (axis 0) and
       // T (axis 1); body input sees [D...]. Trip count = T = axis 1.
@@ -497,7 +495,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
       }
     }
     local.Set(body.input()[n_state + m].name(),
-              OptimTensor(nullptr, scan_in.Dtype(), std::move(body_in_shape)));
+              SymTensor(nullptr, scan_in.Dtype(), std::move(body_in_shape)));
   }
 
   const size_t events_before_scan = local.Events().size();
@@ -523,24 +521,24 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &state_in = ctx.Get(node.input(scan8_offset + i));
-    const OptimTensor &v_out = local.Get(body.output()[i].name());
+    const SymTensor &state_in = ctx.Get(node.input(scan8_offset + i));
+    const SymTensor &v_out = local.Get(body.output()[i].name());
     EXT_ENFORCE_INVALID(v_out.Dtype() == state_in.Dtype(), "ComputeShapeScan: body output #",
                         std::to_string(i),
                         " has a different element type than the matching state input.");
     if (is_scan8) {
       // Output shape = [B, D...] where D... is the body output shape.
-      OptimShape out_shape;
+      SymShape out_shape;
       out_shape.PushBack(batch_dim);
       for (std::size_t d = 0; d < v_out.Shape().Rank(); ++d) {
         out_shape.PushBack(v_out.Shape()[d]);
       }
-      ctx.Set(node_out, OptimTensor(nullptr, state_in.Dtype(), std::move(out_shape)));
+      ctx.Set(node_out, SymTensor(nullptr, state_in.Dtype(), std::move(out_shape)));
     } else {
-      OptimShape out_shape = (v_out.Shape() == state_in.Shape())
-                                 ? state_in.Shape()
-                                 : SymbolicShape(v_out.Shape().Rank(), "Scan_" + node_out);
-      ctx.Set(node_out, OptimTensor(nullptr, state_in.Dtype(), std::move(out_shape)));
+      SymShape out_shape = (v_out.Shape() == state_in.Shape())
+                               ? state_in.Shape()
+                               : SymbolicShape(v_out.Shape().Rank(), "Scan_" + node_out);
+      ctx.Set(node_out, SymTensor(nullptr, state_in.Dtype(), std::move(out_shape)));
     }
   }
 
@@ -555,25 +553,25 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &scan_out_elt = local.Get(body.output()[n_state + k].name());
-    const OptimDim trip_dim =
-        trip_count_known ? trip_count_dim : OptimDim(std::string("Scan_") + node_out + "_trip");
+    const SymTensor &scan_out_elt = local.Get(body.output()[n_state + k].name());
+    const SymDim trip_dim =
+        trip_count_known ? trip_count_dim : SymDim(std::string("Scan_") + node_out + "_trip");
 
     if (is_scan8) {
       // Output shape = [B, T, D...].
-      OptimShape stacked;
+      SymShape stacked;
       stacked.PushBack(batch_dim);
       stacked.PushBack(trip_dim);
       for (std::size_t d = 0; d < scan_out_elt.Shape().Rank(); ++d) {
         stacked.PushBack(scan_out_elt.Shape()[d]);
       }
-      ctx.Set(node_out, OptimTensor(nullptr, scan_out_elt.Dtype(), std::move(stacked)));
+      ctx.Set(node_out, SymTensor(nullptr, scan_out_elt.Dtype(), std::move(stacked)));
     } else {
       const int64_t axis_raw = scan_output_axes.empty() ? 0 : scan_output_axes[k];
       // Output rank = elt rank + 1.
       const int64_t axis =
           NormalizeAxis(axis_raw, scan_out_elt.Shape().Rank() + 1, "scan_output_axes");
-      OptimShape stacked;
+      SymShape stacked;
       for (std::size_t d = 0; d <= scan_out_elt.Shape().Rank(); ++d) {
         if (static_cast<int64_t>(d) == axis) {
           stacked.PushBack(trip_dim);
@@ -582,7 +580,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
           stacked.PushBack(scan_out_elt.Shape()[d]);
         }
       }
-      ctx.Set(node_out, OptimTensor(nullptr, scan_out_elt.Dtype(), std::move(stacked)));
+      ctx.Set(node_out, SymTensor(nullptr, scan_out_elt.Dtype(), std::move(stacked)));
     }
   }
 

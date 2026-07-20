@@ -19,7 +19,7 @@ namespace shapes {
 namespace quantization {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``QuantizeLinear``
+ * Computes the output :cpp:class:`SymTensor` of a ``QuantizeLinear``
  * node and stores it in ``ctx``.
  *
  * ``QuantizeLinear`` produces an output ``y`` that always has the same
@@ -63,7 +63,7 @@ void ComputeShapeQuantizeLinear(ShapesContext &ctx, const NodeProto &node, const
                                 const char *y_zero_point);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``DequantizeLinear``
+ * Computes the output :cpp:class:`SymTensor` of a ``DequantizeLinear``
  * node and stores it in ``ctx``.
  *
  * ``DequantizeLinear`` produces an output ``y`` that always has the same
@@ -102,7 +102,7 @@ void ComputeShapeDequantizeLinear(ShapesContext &ctx, const NodeProto &node, con
                                   const char *x_scale);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` entries of a
+ * Computes the output :cpp:class:`SymTensor` entries of a
  * ``DynamicQuantizeLinear`` node and stores them in ``ctx``.
  *
  * ``DynamicQuantizeLinear`` produces three outputs (since opset 11 in the
@@ -131,7 +131,7 @@ void ComputeShapeDequantizeLinear(ShapesContext &ctx, const NodeProto &node, con
 void ComputeShapeDynamicQuantizeLinear(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``QLinearConv`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``QLinearConv`` node and
  * stores it in ``ctx``.
  *
  * The output shape rule matches :cpp:func:`ComputeShapeConv` applied to the
@@ -160,7 +160,7 @@ void ComputeShapeQLinearConv(ShapesContext &ctx, const NodeProto &node, const ch
                              const char *w, const char *y_zero_point);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``QLinearMatMul`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``QLinearMatMul`` node
  * and stores it in ``ctx``.
  *
  * The output shape rule matches :cpp:func:`ComputeShapeMatMul` applied to

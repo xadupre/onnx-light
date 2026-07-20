@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_core/symbolic/symbolic_helper.h"
 #include "onnx_kernels/kernels/auto_pad.h"
-#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -26,12 +26,12 @@ using onnx_kernels::kernel::AutoPadFromString;
 namespace {
 
 // Converts an ``expressions::DimType`` produced by the symbolic dimension
-// helpers back into an ``OptimDim``.
-OptimDim FromDimType(const expressions::DimType &d) {
+// helpers back into an ``SymDim``.
+SymDim FromDimType(const expressions::DimType &d) {
   if (std::holds_alternative<int64_t>(d)) {
-    return OptimDim(std::get<int64_t>(d));
+    return SymDim(std::get<int64_t>(d));
   }
-  return OptimDim(std::get<std::string>(d));
+  return SymDim(std::get<std::string>(d));
 }
 
 // Computes one spatial output dimension following the upstream
@@ -39,33 +39,33 @@ OptimDim FromDimType(const expressions::DimType &d) {
 // When the input dim is symbolic the formula is evaluated symbolically so the
 // result is an expression (e.g. ``H`` for a reflect-padded image that a 3×3
 // VALID convolution shrinks back), never a fresh opaque dimension name.
-OptimDim ComputeConvSpatialDim(const OptimDim &in_dim, int64_t kernel, int64_t stride,
-                               int64_t pad_begin, int64_t pad_end, int64_t dilation,
-                               AutoPad auto_pad, const std::string &op_name,
-                               const std::string &x_name, size_t spatial_axis) {
+SymDim ComputeConvSpatialDim(const SymDim &in_dim, int64_t kernel, int64_t stride,
+                             int64_t pad_begin, int64_t pad_end, int64_t dilation, AutoPad auto_pad,
+                             const std::string &op_name, const std::string &x_name,
+                             size_t spatial_axis) {
   const std::string symbolic = op_name + "." + x_name + ":" + std::to_string(spatial_axis);
   if (stride <= 0 || kernel <= 0) {
-    return OptimDim(symbolic);
+    return SymDim(symbolic);
   }
   const int64_t eff_k = dilation * (kernel - 1) + 1;
 
   if (in_dim.IsInt()) {
     const int64_t iD = in_dim.AsInt();
     if (auto_pad == AutoPad::kSameUpper || auto_pad == AutoPad::kSameLower) {
-      return OptimDim((iD + stride - 1) / stride);
+      return SymDim((iD + stride - 1) / stride);
     }
     if (auto_pad == AutoPad::kValid) {
       const int64_t numer = iD - eff_k;
       if (numer < 0) {
-        return OptimDim(symbolic);
+        return SymDim(symbolic);
       }
-      return OptimDim(numer / stride + 1);
+      return SymDim(numer / stride + 1);
     }
     const int64_t numer = iD + pad_begin + pad_end - eff_k;
     if (numer < 0) {
-      return OptimDim(symbolic);
+      return SymDim(symbolic);
     }
-    return OptimDim(numer / stride + 1);
+    return SymDim(numer / stride + 1);
   }
 
   // Symbolic input dimension: evaluate the spatial formula with the symbolic
@@ -91,10 +91,10 @@ OptimDim ComputeConvSpatialDim(const OptimDim &in_dim, int64_t kernel, int64_t s
 // is provided by the caller (``X.dtype`` for Conv, ``int32`` for ConvInteger).
 void ComputeShapeConvLike(ShapesContext &ctx, const NodeProto &node, const char *x, const char *w,
                           const char *op_name, TensorType out_dtype) {
-  const OptimTensor &x_tensor = ctx.Get(x);
-  const OptimTensor &w_tensor = ctx.Get(w);
-  const OptimShape &x_shape = x_tensor.Shape();
-  const OptimShape &w_shape = w_tensor.Shape();
+  const SymTensor &x_tensor = ctx.Get(x);
+  const SymTensor &w_tensor = ctx.Get(w);
+  const SymShape &x_shape = x_tensor.Shape();
+  const SymShape &w_shape = w_tensor.Shape();
 
   EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShape", op_name, ": input '", x,
                       "' must have rank >= 3 (N, C, D1, ...).");
@@ -110,7 +110,7 @@ void ComputeShapeConvLike(ShapesContext &ctx, const NodeProto &node, const char 
   if (kernel_shape.empty()) {
     kernel_shape.reserve(n_spatial);
     for (size_t i = 0; i < n_spatial; ++i) {
-      const OptimDim &kd = w_shape[i + 2];
+      const SymDim &kd = w_shape[i + 2];
       kernel_shape.push_back(kd.IsInt() ? kd.AsInt() : -1);
     }
   } else if (kernel_shape.size() != n_spatial) {
@@ -144,12 +144,12 @@ void ComputeShapeConvLike(ShapesContext &ctx, const NodeProto &node, const char 
     EXT_THROW_INVALID("ComputeShape", op_name, ": 'pads' size must be 2 * spatial rank.");
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(x_shape[0]); // N
   out_shape.PushBack(w_shape[0]); // M
   for (size_t i = 0; i < n_spatial; ++i) {
     if (kernel_shape[i] <= 0) {
-      out_shape.PushBack(OptimDim(std::string(op_name) + "." + x + ":" + std::to_string(i)));
+      out_shape.PushBack(SymDim(std::string(op_name) + "." + x + ":" + std::to_string(i)));
       continue;
     }
     out_shape.PushBack(ComputeConvSpatialDim(x_shape[i + 2], kernel_shape[i], strides[i], pads[i],
@@ -157,7 +157,7 @@ void ComputeShapeConvLike(ShapesContext &ctx, const NodeProto &node, const char 
                                              x, i));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 
 } // namespace

@@ -82,10 +82,10 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         for inp in test.model.graph.input:
             tt = inp.type.tensor_type
             dims = [d.dim_value if d.dim_value else d.dim_param for d in tt.shape.dim]
-            t = si.OptimTensor(tt.elem_type, dims)
+            t = si.SymTensor(tt.elem_type, dims)
             ctx.set(inp.name, t)
         for init in test.model.graph.initializer:
-            t = si.OptimTensor(init.data_type, list(init.dims))
+            t = si.SymTensor(init.data_type, list(init.dims))
             a = onh.to_array(init)
             t.set_value_as_shape([int(i) for i in a])
             ctx.set(init.name, t)

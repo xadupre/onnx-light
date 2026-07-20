@@ -8,32 +8,32 @@ class TestOnnxOptimDependency(unittest.TestCase):
     def setUp(self):
         self.root = Path(__file__).resolve().parents[2]
 
-    def test_optim_tensor_includes_onnx_core_not_onnx_op(self):
-        header = self.root / "onnx_light" / "onnx_optim" / "optim_tensor.h"
+    def test_sym_tensor_includes_onnx_core_not_onnx_op(self):
+        header = self.root / "onnx_light" / "onnx_core" / "symbolic" / "sym_tensor.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
             "onnx_proto/type_helper.h",
             content,
-            "optim_tensor.h must include onnx_proto/type_helper.h",
+            "sym_tensor.h must include onnx_proto/type_helper.h",
         )
         self.assertNotIn(
             "onnx_op/light_op_schema.h",
             content,
-            "optim_tensor.h must not include onnx_op/light_op_schema.h",
+            "sym_tensor.h must not include onnx_op/light_op_schema.h",
         )
 
-    def test_optim_tensor_type_alias_uses_onnx_core(self):
-        header = self.root / "onnx_light" / "onnx_optim" / "optim_tensor.h"
+    def test_sym_tensor_type_alias_uses_onnx_core(self):
+        header = self.root / "onnx_light" / "onnx_core" / "symbolic" / "sym_tensor.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
             "onnx_proto::TensorType",
             content,
-            "TensorType alias in optim_tensor.h must reference onnx_proto::TensorType",
+            "TensorType alias in sym_tensor.h must reference onnx_proto::TensorType",
         )
         self.assertNotIn(
             "onnx_op::TensorType",
             content,
-            "TensorType alias in optim_tensor.h must not reference onnx_op::TensorType",
+            "TensorType alias in sym_tensor.h must not reference onnx_op::TensorType",
         )
 
     def test_cmake_optim_links_onnx_core(self):

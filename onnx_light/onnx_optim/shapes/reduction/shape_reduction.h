@@ -19,7 +19,7 @@ namespace shapes {
 namespace reduction {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReduceSum`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``ReduceSum`` node
  * and stores it in ``ctx``.
  *
  * ``ReduceSum`` reduces the input tensor along a set of axes. The
@@ -38,7 +38,7 @@ namespace reduction {
  *     reduce all axes, ``1`` means identity (no axes reduced).
  *
  *     When the ``axes`` input is provided this function looks at the
- *     :cpp:func:`OptimTensor::ValueAsShape` annotation of ``axes`` to
+ *     :cpp:func:`SymTensor::ValueAsShape` annotation of ``axes`` to
  *     identify the reduced axes. If the annotation is missing the
  *     output rank can still be inferred when ``keepdims=1`` (same
  *     rank as the input, with each previously-known dimension kept
@@ -72,7 +72,7 @@ void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char
                            const char *axes);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReduceMax`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``ReduceMax`` node.
  * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
  * and the output dtype matches the input dtype.
  */
@@ -80,7 +80,7 @@ void ComputeShapeReduceMax(ShapesContext &ctx, const NodeProto &node, const char
                            const char *axes);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReduceMin`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``ReduceMin`` node.
  * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
  * and the output dtype matches the input dtype.
  */
@@ -88,7 +88,7 @@ void ComputeShapeReduceMin(ShapesContext &ctx, const NodeProto &node, const char
                            const char *axes);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReduceL1`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``ReduceL1`` node.
  * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
  * and the output dtype matches the input dtype.
  */
@@ -96,7 +96,7 @@ void ComputeShapeReduceL1(ShapesContext &ctx, const NodeProto &node, const char 
                           const char *axes);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReduceL2`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``ReduceL2`` node.
  * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
  * and the output dtype matches the input dtype.
  */
@@ -104,7 +104,7 @@ void ComputeShapeReduceL2(ShapesContext &ctx, const NodeProto &node, const char 
                           const char *axes);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReduceSumSquare`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``ReduceSumSquare`` node.
  * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
  * and the output dtype matches the input dtype.
  */
@@ -112,7 +112,7 @@ void ComputeShapeReduceSumSquare(ShapesContext &ctx, const NodeProto &node, cons
                                  const char *axes);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReduceLogSum`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``ReduceLogSum`` node.
  * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
  * and the output dtype matches the input dtype.
  */
@@ -120,7 +120,7 @@ void ComputeShapeReduceLogSum(ShapesContext &ctx, const NodeProto &node, const c
                               const char *axes);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReduceLogSumExp`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``ReduceLogSumExp`` node.
  * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
  * and the output dtype matches the input dtype.
  */
@@ -128,7 +128,7 @@ void ComputeShapeReduceLogSumExp(ShapesContext &ctx, const NodeProto &node, cons
                                  const char *axes);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReduceProd`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``ReduceProd`` node.
  * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
  * and the output dtype matches the input dtype.
  */
@@ -136,7 +136,7 @@ void ComputeShapeReduceProd(ShapesContext &ctx, const NodeProto &node, const cha
                             const char *axes);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReduceMean`` node.
+ * Computes the output :cpp:class:`SymTensor` of a ``ReduceMean`` node.
  * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
  * and the output dtype matches the input dtype.
  */
@@ -144,7 +144,7 @@ void ComputeShapeReduceMean(ShapesContext &ctx, const NodeProto &node, const cha
                             const char *axes);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``ArgMax`` or
+ * Computes the output :cpp:class:`SymTensor` of an ``ArgMax`` or
  * ``ArgMin`` node and stores it in ``ctx``.
  *
  * ``ArgMax``/``ArgMin`` reduce the input tensor along a single ``axis``

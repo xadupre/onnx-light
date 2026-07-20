@@ -13,27 +13,27 @@ nested graphs are handled.
 Sequence values
 ---------------
 
-A tensor descriptor (:cpp:class:`OptimTensor`) cannot represent the
+A tensor descriptor (:cpp:class:`SymTensor`) cannot represent the
 output of ``SequenceConstruct``, ``SequenceEmpty``,
 ``SplitToSequence`` and the other sequence operators, because those
 values are *sequences of tensors* rather than tensors. They are described
-by a separate :cpp:class:`OptimSequence` descriptor (see
-``onnx_light/onnx_optim/optim_sequence.h``), the sequence analogue of
-:cpp:class:`OptimTensor`. It records:
+by a separate :cpp:class:`SymSequence` descriptor (see
+``onnx_light/onnx_core/symbolic/sym_sequence.h``), the sequence analogue of
+:cpp:class:`SymTensor`. It records:
 
 * the common **element dtype** shared by every tensor of the sequence
   (``kUndefined`` when unknown, e.g. for an empty ``SequenceConstruct``);
-* either one :cpp:class:`OptimShape` **per element** (when the per-element
+* either one :cpp:class:`SymShape` **per element** (when the per-element
   shapes are known) or a single, possibly symbolic, **length**
-  :cpp:class:`OptimDim` (e.g. for ``SplitToSequence`` whose length depends
+  :cpp:class:`SymDim` (e.g. for ``SplitToSequence`` whose length depends
   on a runtime ``split`` value).
 
-:cpp:func:`OptimSequence::HasElemDtype` and
-:cpp:func:`OptimSequence::HasElemShapes` distinguish *unknown* from
+:cpp:func:`SymSequence::HasElemDtype` and
+:cpp:func:`SymSequence::HasElemShapes` distinguish *unknown* from
 *empty sequence* (length 0).
 
 :cpp:class:`ShapesContext` therefore keeps **two** parallel maps: the
-``name → OptimTensor`` map for tensors and a ``name → OptimSequence`` map
+``name → SymTensor`` map for tensors and a ``name → SymSequence`` map
 for sequences. The sequence map has its own C++ accessors
 (``SetSequence`` / ``HasSequence`` / ``GetSequence`` /
 :cpp:func:`ShapesContext::Sequences`); the Python bindings expose the
@@ -49,7 +49,7 @@ ONNX *map* values (``map(K, V)``) and *sequences of maps*
 (``seq(map(K, V))``) are produced by the traditional-ML operators
 (``ZipMap``, ``CastMap``, ``DictVectorizer``, ...). They are
 not given a dedicated descriptor; instead they reuse
-:cpp:class:`OptimTensor` with a map-valued :cpp:enum:`TensorType`
+:cpp:class:`SymTensor` with a map-valued :cpp:enum:`TensorType`
 enumerator (see ``onnx_light/onnx_core/light_op_schema/light_op_schema.h``):
 
 * ``kMapStringInt64`` / ``kMapInt64String`` / ``kMapInt64Float`` / ... —
@@ -113,8 +113,8 @@ a function body does **not** capture outer-scope values, so it runs in a
 * receives a copy of the parent's local-function map, so nested local
   calls are dispatched too;
 * binds the call-site inputs to the function's formal input names
-  **positionally** (carrying either an :cpp:class:`OptimTensor` or an
-  :cpp:class:`OptimSequence` descriptor);
+  **positionally** (carrying either an :cpp:class:`SymTensor` or an
+  :cpp:class:`SymSequence` descriptor);
 * resolves ``ref_attr_name`` attribute references in the body against the
   call-site node's attributes before inference.
 
@@ -136,8 +136,8 @@ caller-visible output names.
 API reference
 -------------
 
-* **C++ API**: :cpp:class:`OptimSequence`
-  (:doc:`/api/cpp/onnx_optim/optim_sequence`),
+* **C++ API**: :cpp:class:`SymSequence`
+  (:doc:`/api/cpp/onnx_core/sym_sequence`),
   :cpp:class:`ShapesContext`
   (:doc:`/api/cpp/onnx_optim/shapes/shapes_context`) and
   :doc:`/api/cpp/onnx_optim/shapes/shape_inference`.

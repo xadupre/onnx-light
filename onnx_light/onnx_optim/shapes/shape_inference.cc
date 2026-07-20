@@ -135,9 +135,9 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
       continue;
     }
     if (ctx.Has(caller_name)) {
-      sub_ctx.Set(callee_name, OptimTensor(ctx.Get(caller_name)));
+      sub_ctx.Set(callee_name, SymTensor(ctx.Get(caller_name)));
     } else if (ctx.HasSequence(caller_name)) {
-      sub_ctx.SetSequence(callee_name, OptimSequence(ctx.GetSequence(caller_name)));
+      sub_ctx.SetSequence(callee_name, SymSequence(ctx.GetSequence(caller_name)));
     }
   }
   // Resolve linked attributes (``ref_attr_name``) in the function body
@@ -165,14 +165,14 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
       continue;
     }
     if (sub_ctx.Has(callee_name)) {
-      ctx.Set(caller_name, OptimTensor(sub_ctx.Get(callee_name)));
+      ctx.Set(caller_name, SymTensor(sub_ctx.Get(callee_name)));
     } else if (sub_ctx.HasSequence(callee_name)) {
-      ctx.SetSequence(caller_name, OptimSequence(sub_ctx.GetSequence(callee_name)));
+      ctx.SetSequence(caller_name, SymSequence(sub_ctx.GetSequence(callee_name)));
     }
   }
 }
 
-using AnchorMap = std::unordered_map<std::string, OptimTensor>;
+using AnchorMap = std::unordered_map<std::string, SymTensor>;
 
 // Records ``a == b`` (a constraint between two symbolic expressions) and,
 // when their algebraic difference reduces to ``c*x - c*y`` (a coefficient
@@ -216,7 +216,7 @@ void AddSymbolicConstraintWithLeafDerivation(ShapesContext &ctx, const std::stri
 
 // Returns ``true`` when ``vi`` carries a tensor type with a non-empty
 // ``shape`` field. ValueInfo entries that only declare an element type
-// (no shape annotation at all) produce a rank-0 ``OptimTensor`` which
+// (no shape annotation at all) produce a rank-0 ``SymTensor`` which
 // would conflict with every non-scalar inferred shape, so they must be
 // skipped when building the anchor set.
 bool ValueInfoHasTensorShape(const ValueInfoProto &vi) {
@@ -231,8 +231,8 @@ bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
   if (name.empty() || ctx.Has(name) || ctx.HasSequence(name)) {
     return false;
   }
-  OptimTensor tensor;
-  if (OptimTensorFromValueInfo(vi, tensor)) {
+  SymTensor tensor;
+  if (SymTensorFromValueInfo(vi, tensor)) {
     ctx.Set(name, std::move(tensor));
     return true;
   }
@@ -248,7 +248,7 @@ bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
   // availability checks succeed and traditional-ML shape functions can still
   // inspect the map value dtype when needed. The rank stays unknown because the
   // map cardinality is a runtime property, not a static tensor shape.
-  ctx.Set(name, OptimTensor(nullptr, dtype, OptimShape{}));
+  ctx.Set(name, SymTensor(nullptr, dtype, SymShape{}));
   return true;
 }
 
@@ -257,8 +257,8 @@ void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
   if (name.empty() || !ValueInfoHasTensorShape(vi)) {
     return;
   }
-  OptimTensor tensor;
-  if (!OptimTensorFromValueInfo(vi, tensor)) {
+  SymTensor tensor;
+  if (!SymTensorFromValueInfo(vi, tensor)) {
     return;
   }
   anchors.try_emplace(name, std::move(tensor));
@@ -289,7 +289,7 @@ AnchorMap CollectGraphAnchors(const GraphProto &graph) {
 
 // Merges ``anchor`` into ``inferred`` while privileging anchor information.
 //
-// The function returns the merged :cpp:class:`OptimTensor` and, as a
+// The function returns the merged :cpp:class:`SymTensor` and, as a
 // side effect, records any symbolic-dimension equality (``inferred``
 // symbol ↔ ``anchor`` symbol) into ``ctx.AddConstraint``. It throws
 // ``std::invalid_argument`` when the two descriptors are provably
@@ -316,9 +316,9 @@ AnchorMap CollectGraphAnchors(const GraphProto &graph) {
 // to it. Callers that require strict merging can promote the failure
 // into an exception themselves; this function never throws on
 // conflicts.
-std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string &name,
-                                           const OptimTensor &inferred, const OptimTensor &anchor,
-                                           std::string *error_out = nullptr) {
+std::optional<SymTensor> MergeWithAnchor(ShapesContext &ctx, const std::string &name,
+                                         const SymTensor &inferred, const SymTensor &anchor,
+                                         std::string *error_out = nullptr) {
   // dtype: both known and different → conflict.
   if (inferred.Dtype() != TensorType::kUndefined && anchor.Dtype() != TensorType::kUndefined &&
       inferred.Dtype() != anchor.Dtype()) {
@@ -339,10 +339,10 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
     return std::nullopt;
   }
   // Per-dim merge.
-  OptimShape merged_shape;
+  SymShape merged_shape;
   for (std::size_t i = 0; i < inferred.Shape().Rank(); ++i) {
-    const OptimDim &di = inferred.Shape()[i];
-    const OptimDim &da = anchor.Shape()[i];
+    const SymDim &di = inferred.Shape()[i];
+    const SymDim &da = anchor.Shape()[i];
     // An empty-string symbolic anchor dim means the ValueInfoProto did
     // not declare a name nor a value for this position, so it carries
     // no constraint: keep the inferred dim.
@@ -384,7 +384,7 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
   if (anchor.Dtype() != TensorType::kUndefined) {
     merged_dtype = anchor.Dtype();
   }
-  OptimTensor out(inferred.Data(), merged_dtype, std::move(merged_shape));
+  SymTensor out(inferred.Data(), merged_dtype, std::move(merged_shape));
   Device merged_device = inferred.GetDevice();
   if (anchor.GetDevice() != Device::kUndefined) {
     if (inferred.GetDevice() != Device::kUndefined && inferred.GetDevice() != anchor.GetDevice()) {
@@ -400,18 +400,18 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
   }
   // value_as_shape: merge per-dim with the same rules.
   if (inferred.HasValueAsShape() && anchor.HasValueAsShape()) {
-    const OptimShape &a = inferred.ValueAsShape();
-    const OptimShape &b = anchor.ValueAsShape();
+    const SymShape &a = inferred.ValueAsShape();
+    const SymShape &b = anchor.ValueAsShape();
     if (a.Rank() != b.Rank()) {
       if (error_out != nullptr) {
         *error_out = "MergeWithAnchor: incompatible value_as_shape rank for '" + name + "'.";
       }
       return std::nullopt;
     }
-    OptimShape merged_vas;
+    SymShape merged_vas;
     for (std::size_t i = 0; i < a.Rank(); ++i) {
-      const OptimDim &di = a[i];
-      const OptimDim &da = b[i];
+      const SymDim &di = a[i];
+      const SymDim &da = b[i];
       if (da.IsExpr() && da.AsExpr().empty()) {
         merged_vas.PushBack(di);
         continue;
@@ -479,13 +479,13 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
 void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors, bool strict = true) {
   for (const auto &kv : anchors) {
     const std::string &name = kv.first;
-    const OptimTensor &anchor = kv.second;
+    const SymTensor &anchor = kv.second;
     if (!ctx.Has(name)) {
-      ctx.Set(name, OptimTensor(anchor));
+      ctx.Set(name, SymTensor(anchor));
       continue;
     }
     std::string error;
-    std::optional<OptimTensor> merged = MergeWithAnchor(ctx, name, ctx.Get(name), anchor, &error);
+    std::optional<SymTensor> merged = MergeWithAnchor(ctx, name, ctx.Get(name), anchor, &error);
     if (merged.has_value()) {
       if (*merged != ctx.Get(name)) {
         ctx.Set(name, std::move(*merged));
@@ -513,7 +513,7 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors, bool 
 // its leaf tokens (``s0`` and ``seq_len``) registered as "preferred"
 // names so that ``rename_dynamic_dimensions`` can reuse them when
 // canonicalising symbols inferred elsewhere in the graph.
-void AddDimAnchorSymbols(const OptimDim &dim, std::unordered_set<std::string> &symbols) {
+void AddDimAnchorSymbols(const SymDim &dim, std::unordered_set<std::string> &symbols) {
   if (!dim.IsExpr()) {
     return;
   }
@@ -533,7 +533,7 @@ void AddDimAnchorSymbols(const OptimDim &dim, std::unordered_set<std::string> &s
 std::unordered_set<std::string> CollectAnchorSymbols(const AnchorMap &anchors) {
   std::unordered_set<std::string> symbols;
   for (const auto &kv : anchors) {
-    const OptimTensor &tensor = kv.second;
+    const SymTensor &tensor = kv.second;
     for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
       AddDimAnchorSymbols(tensor.Shape()[i], symbols);
     }
@@ -607,12 +607,12 @@ void AddGraphInputSymbols(const GraphProto &graph, std::unordered_set<std::strin
   }
 }
 
-OptimShape
-RenameShapeWithReplacements(const OptimShape &shape,
+SymShape
+RenameShapeWithReplacements(const SymShape &shape,
                             const std::unordered_map<std::string, std::string> &replacements) {
-  OptimShape renamed;
+  SymShape renamed;
   for (std::size_t i = 0; i < shape.Rank(); ++i) {
-    const OptimDim &dim = shape[i];
+    const SymDim &dim = shape[i];
     if (dim.IsInt()) {
       renamed.PushBack(dim.AsInt());
       continue;
@@ -699,18 +699,18 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
   }
 
   for (const std::string &name : names) {
-    const OptimTensor &tensor = ctx.Get(name);
-    OptimTensor updated(tensor);
+    const SymTensor &tensor = ctx.Get(name);
+    SymTensor updated(tensor);
     bool changed = false;
 
-    OptimShape renamed_shape = RenameShapeWithReplacements(tensor.Shape(), replacements);
+    SymShape renamed_shape = RenameShapeWithReplacements(tensor.Shape(), replacements);
     if (renamed_shape != tensor.Shape()) {
       updated.Shape() = std::move(renamed_shape);
       changed = true;
     }
 
     if (tensor.HasValueAsShape()) {
-      OptimShape renamed_value_shape =
+      SymShape renamed_value_shape =
           RenameShapeWithReplacements(tensor.ValueAsShape(), replacements);
       if (renamed_value_shape != tensor.ValueAsShape()) {
         updated.SetValueAsShape(std::move(renamed_value_shape));
@@ -737,16 +737,16 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
   while (dirty && max_iters-- > 0) {
     dirty = false;
     for (const std::string &name : names) {
-      const OptimTensor &tensor = ctx.Get(name);
-      OptimTensor updated(tensor);
+      const SymTensor &tensor = ctx.Get(name);
+      SymTensor updated(tensor);
       bool changed = false;
-      OptimShape renamed_shape = RenameShapeWithReplacements(tensor.Shape(), replacements);
+      SymShape renamed_shape = RenameShapeWithReplacements(tensor.Shape(), replacements);
       if (renamed_shape != tensor.Shape()) {
         updated.Shape() = std::move(renamed_shape);
         changed = true;
       }
       if (tensor.HasValueAsShape()) {
-        OptimShape renamed_value_shape =
+        SymShape renamed_value_shape =
             RenameShapeWithReplacements(tensor.ValueAsShape(), replacements);
         if (renamed_value_shape != tensor.ValueAsShape()) {
           updated.SetValueAsShape(std::move(renamed_value_shape));
@@ -805,7 +805,7 @@ void ShapesContext::RegisterSubgraphContext(int64_t node_index, const std::strin
       std::make_shared<ShapesContext>(std::move(context));
 }
 
-void ShapesContext::LogSetEvent(const std::string &name, const OptimTensor &tensor) {
+void ShapesContext::LogSetEvent(const std::string &name, const SymTensor &tensor) {
   ShapeEvent ev;
   ev.action = Has(name) ? ShapeEventAction::kReplace : ShapeEventAction::kAdd;
   ev.name = name;
@@ -813,10 +813,10 @@ void ShapesContext::LogSetEvent(const std::string &name, const OptimTensor &tens
   ev.node_index = current_node_index_;
   ev.subgraph_node_index = current_subgraph_node_index_;
   ev.subgraph_attr_name = current_subgraph_attr_name_;
-  const OptimShape &shape = tensor.Shape();
+  const SymShape &shape = tensor.Shape();
   ev.shape.reserve(shape.Rank());
   for (std::size_t i = 0; i < shape.Rank(); ++i) {
-    const OptimDim &d = shape[i];
+    const SymDim &d = shape[i];
     ev.shape.push_back(d.IsInt() ? std::to_string(d.AsInt()) : d.AsExpr());
   }
   events_.push_back(std::move(ev));
@@ -912,8 +912,8 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
     if (name.empty() || Has(name)) {
       continue;
     }
-    OptimTensor tensor;
-    if (OptimTensorFromTensorProto(init, tensor)) {
+    SymTensor tensor;
+    if (SymTensorFromTensorProto(init, tensor)) {
       Set(name, std::move(tensor));
     }
   }
@@ -977,7 +977,7 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
     const std::string name = vi.name();
     output_names.insert(name);
     if (!name.empty() && Has(name)) {
-      OptimTensorToValueInfo(Get(name), vi);
+      SymTensorToValueInfo(Get(name), vi);
     }
   }
   // Track existing value_info entries to avoid creating duplicates;
@@ -988,7 +988,7 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
     const std::string name = vi.name();
     existing_value_info.insert(name);
     if (!name.empty() && Has(name)) {
-      OptimTensorToValueInfo(Get(name), vi);
+      SymTensorToValueInfo(Get(name), vi);
     }
   }
   // Append a new value_info entry for every other inferred tensor.
@@ -1006,13 +1006,13 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   }
   std::sort(new_names.begin(), new_names.end());
   for (const std::string &name : new_names) {
-    const OptimTensor &tensor = Get(name);
+    const SymTensor &tensor = Get(name);
     if (TensorTypeToDataType(tensor.Dtype()) == TensorProto::DataType::UNDEFINED) {
       continue;
     }
     ValueInfoProto *vi = graph.add_value_info();
     vi->set_name(name);
-    OptimTensorToValueInfo(tensor, *vi);
+    SymTensorToValueInfo(tensor, *vi);
   }
 }
 

@@ -17,7 +17,7 @@ void ComputeShapeCategoryMapper(ShapesContext &ctx, const NodeProto &node, const
   // CategoryMapper is a one-to-one mapping between strings and integers.
   // The output shape matches the input shape; the dtype flips between
   // STRING and INT64 based on the input dtype.
-  const OptimTensor &input = ctx.Get(x);
+  const SymTensor &input = ctx.Get(x);
   TensorType output_dtype;
   if (input.Dtype() == TensorType::kString) {
     output_dtype = TensorType::kInt64;
@@ -28,7 +28,7 @@ void ComputeShapeCategoryMapper(ShapesContext &ctx, const NodeProto &node, const
         "ComputeShapeCategoryMapper: CategoryMapper input must be a tensor of strings or "
         "int64s.");
   }
-  ctx.Set(node.output(0), OptimTensor(nullptr, output_dtype, input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, output_dtype, input.Shape()));
 }
 
 } // namespace traditionalml

@@ -33,18 +33,18 @@ NodeProto MakeQuantizeLinearNode(bool with_zero_point, int64_t output_dtype_attr
   return node;
 }
 
-void SetX(onnx_optim::shapes::ShapesContext &ctx, const onnx_optim::OptimShape &shape,
-          onnx_optim::TensorType dtype = onnx_optim::TensorType::kFloat) {
-  ctx.Set("x", onnx_optim::OptimTensor(nullptr, dtype, shape));
+void SetX(onnx_optim::shapes::ShapesContext &ctx, const core::symbolic::SymShape &shape,
+          core::symbolic::TensorType dtype = core::symbolic::TensorType::kFloat) {
+  ctx.Set("x", core::symbolic::SymTensor(nullptr, dtype, shape));
 }
 
 void SetScale(onnx_optim::shapes::ShapesContext &ctx,
-              onnx_optim::TensorType dtype = onnx_optim::TensorType::kFloat) {
-  ctx.Set("y_scale", onnx_optim::OptimTensor(nullptr, dtype, onnx_optim::OptimShape{}));
+              core::symbolic::TensorType dtype = core::symbolic::TensorType::kFloat) {
+  ctx.Set("y_scale", core::symbolic::SymTensor(nullptr, dtype, core::symbolic::SymShape{}));
 }
 
-void SetZeroPoint(onnx_optim::shapes::ShapesContext &ctx, onnx_optim::TensorType dtype) {
-  ctx.Set("y_zero_point", onnx_optim::OptimTensor(nullptr, dtype, onnx_optim::OptimShape{}));
+void SetZeroPoint(onnx_optim::shapes::ShapesContext &ctx, core::symbolic::TensorType dtype) {
+  ctx.Set("y_zero_point", core::symbolic::SymTensor(nullptr, dtype, core::symbolic::SymShape{}));
 }
 
 } // namespace
@@ -54,16 +54,16 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, DefaultsToUint8WhenZeroPointOmit
   // ``y_zero_point`` input, so the output element type defaults to uint8.
   NodeProto node = MakeQuantizeLinearNode(/*with_zero_point=*/false);
   onnx_optim::shapes::ShapesContext ctx;
-  SetX(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(6)});
+  SetX(ctx, core::symbolic::SymShape{core::symbolic::SymDim(6)});
   SetScale(ctx);
 
   onnx_optim::shapes::quantization::ComputeShapeQuantizeLinear(ctx, node, "x", nullptr);
 
   ASSERT_TRUE(ctx.Has("y"));
-  const onnx_optim::OptimTensor &out = ctx.Get("y");
+  const core::symbolic::SymTensor &out = ctx.Get("y");
   ASSERT_EQ(out.Shape().Rank(), 1u);
   EXPECT_EQ(out.Shape()[0].AsInt(), 6);
-  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kUint8);
+  EXPECT_EQ(out.Dtype(), core::symbolic::TensorType::kUint8);
 }
 
 TEST(OnnxOptimShapesQuantizationQuantizeLinear, FollowsZeroPointDtypeInt8) {
@@ -71,13 +71,13 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, FollowsZeroPointDtypeInt8) {
   // forces an INT8 output.
   NodeProto node = MakeQuantizeLinearNode(/*with_zero_point=*/true);
   onnx_optim::shapes::ShapesContext ctx;
-  SetX(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(6)});
+  SetX(ctx, core::symbolic::SymShape{core::symbolic::SymDim(6)});
   SetScale(ctx);
-  SetZeroPoint(ctx, onnx_optim::TensorType::kInt8);
+  SetZeroPoint(ctx, core::symbolic::TensorType::kInt8);
 
   onnx_optim::shapes::quantization::ComputeShapeQuantizeLinear(ctx, node, "x", "y_zero_point");
 
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt8);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kInt8);
   EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 6);
 }
 
@@ -86,13 +86,13 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, FollowsZeroPointDtypeFloat8) {
   // a FLOAT8E4M3FN output.
   NodeProto node = MakeQuantizeLinearNode(/*with_zero_point=*/true);
   onnx_optim::shapes::ShapesContext ctx;
-  SetX(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  SetX(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
   SetScale(ctx);
-  SetZeroPoint(ctx, onnx_optim::TensorType::kFloat8e4m3fn);
+  SetZeroPoint(ctx, core::symbolic::TensorType::kFloat8e4m3fn);
 
   onnx_optim::shapes::quantization::ComputeShapeQuantizeLinear(ctx, node, "x", "y_zero_point");
 
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat8e4m3fn);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kFloat8e4m3fn);
   ASSERT_EQ(ctx.Get("y").Shape().Rank(), 2u);
   EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 2);
   EXPECT_EQ(ctx.Get("y").Shape()[1].AsInt(), 3);
@@ -102,13 +102,13 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, FollowsZeroPointDtypeInt4) {
   // Mirrors ``test_quantizelinear_int4``: INT4 zero point yields INT4 output.
   NodeProto node = MakeQuantizeLinearNode(/*with_zero_point=*/true);
   onnx_optim::shapes::ShapesContext ctx;
-  SetX(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
+  SetX(ctx, core::symbolic::SymShape{core::symbolic::SymDim(5)});
   SetScale(ctx);
-  SetZeroPoint(ctx, onnx_optim::TensorType::kInt4);
+  SetZeroPoint(ctx, core::symbolic::TensorType::kInt4);
 
   onnx_optim::shapes::quantization::ComputeShapeQuantizeLinear(ctx, node, "x", "y_zero_point");
 
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt4);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kInt4);
 }
 
 TEST(OnnxOptimShapesQuantizationQuantizeLinear, UsesOutputDtypeAttribute) {
@@ -118,12 +118,12 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, UsesOutputDtypeAttribute) {
       /*with_zero_point=*/false,
       /*output_dtype_attr=*/static_cast<int64_t>(TensorProto::DataType::INT16));
   onnx_optim::shapes::ShapesContext ctx;
-  SetX(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)});
+  SetX(ctx, core::symbolic::SymShape{core::symbolic::SymDim(3), core::symbolic::SymDim(4)});
   SetScale(ctx);
 
   onnx_optim::shapes::quantization::ComputeShapeQuantizeLinear(ctx, node, "x", nullptr);
 
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt16);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kInt16);
 }
 
 TEST(OnnxOptimShapesQuantizationQuantizeLinear, PropagatesSymbolicShape) {
@@ -131,14 +131,14 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, PropagatesSymbolicShape) {
   // ``y_scale``/``y_zero_point`` rank.
   NodeProto node = MakeQuantizeLinearNode(/*with_zero_point=*/true);
   onnx_optim::shapes::ShapesContext ctx;
-  SetX(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(8),
-                                   onnx_optim::OptimDim("H"), onnx_optim::OptimDim("W")});
+  SetX(ctx, core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(8),
+                                     core::symbolic::SymDim("H"), core::symbolic::SymDim("W")});
   SetScale(ctx);
-  SetZeroPoint(ctx, onnx_optim::TensorType::kUint8);
+  SetZeroPoint(ctx, core::symbolic::TensorType::kUint8);
 
   onnx_optim::shapes::quantization::ComputeShapeQuantizeLinear(ctx, node, "x", "y_zero_point");
 
-  const onnx_optim::OptimShape &out = ctx.Get("y").Shape();
+  const core::symbolic::SymShape &out = ctx.Get("y").Shape();
   ASSERT_EQ(out.Rank(), 4u);
   EXPECT_TRUE(out[0].IsExpr());
   EXPECT_EQ(out[0].AsExpr(), "N");
@@ -156,7 +156,7 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, RejectsWrongOpType) {
   node.add_input("y_scale");
   node.add_output("y");
   onnx_optim::shapes::ShapesContext ctx;
-  SetX(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  SetX(ctx, core::symbolic::SymShape{core::symbolic::SymDim(1)});
   SetScale(ctx);
   EXPECT_THROW(
       onnx_optim::shapes::quantization::ComputeShapeQuantizeLinear(ctx, node, "x", nullptr),
@@ -166,7 +166,7 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, RejectsWrongOpType) {
 TEST(OnnxOptimShapesQuantizationQuantizeLinear, RejectsInvalidOutputDtype) {
   NodeProto node = MakeQuantizeLinearNode(/*with_zero_point=*/false, /*output_dtype_attr=*/9999);
   onnx_optim::shapes::ShapesContext ctx;
-  SetX(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  SetX(ctx, core::symbolic::SymShape{core::symbolic::SymDim(1)});
   SetScale(ctx);
   EXPECT_THROW(
       onnx_optim::shapes::quantization::ComputeShapeQuantizeLinear(ctx, node, "x", nullptr),
@@ -178,14 +178,14 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, DispatchesViaComputeShapeNode) {
   // dispatch table to the per-op trampoline.
   NodeProto node = MakeQuantizeLinearNode(/*with_zero_point=*/true);
   onnx_optim::shapes::ShapesContext ctx;
-  SetX(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
+  SetX(ctx, core::symbolic::SymShape{core::symbolic::SymDim(4)});
   SetScale(ctx);
-  SetZeroPoint(ctx, onnx_optim::TensorType::kUint16);
+  SetZeroPoint(ctx, core::symbolic::TensorType::kUint16);
 
   ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kUint16);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kUint16);
   EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 4);
 }
 
@@ -206,18 +206,18 @@ NodeProto MakeDequantizeLinearNode(bool with_zero_point, int64_t output_dtype_at
   return node;
 }
 
-void SetXDeq(onnx_optim::shapes::ShapesContext &ctx, const onnx_optim::OptimShape &shape,
-             onnx_optim::TensorType dtype = onnx_optim::TensorType::kUint8) {
-  ctx.Set("x", onnx_optim::OptimTensor(nullptr, dtype, shape));
+void SetXDeq(onnx_optim::shapes::ShapesContext &ctx, const core::symbolic::SymShape &shape,
+             core::symbolic::TensorType dtype = core::symbolic::TensorType::kUint8) {
+  ctx.Set("x", core::symbolic::SymTensor(nullptr, dtype, shape));
 }
 
 void SetScaleDeq(onnx_optim::shapes::ShapesContext &ctx,
-                 onnx_optim::TensorType dtype = onnx_optim::TensorType::kFloat) {
-  ctx.Set("x_scale", onnx_optim::OptimTensor(nullptr, dtype, onnx_optim::OptimShape{}));
+                 core::symbolic::TensorType dtype = core::symbolic::TensorType::kFloat) {
+  ctx.Set("x_scale", core::symbolic::SymTensor(nullptr, dtype, core::symbolic::SymShape{}));
 }
 
-void SetZeroPointDeq(onnx_optim::shapes::ShapesContext &ctx, onnx_optim::TensorType dtype) {
-  ctx.Set("x_zero_point", onnx_optim::OptimTensor(nullptr, dtype, onnx_optim::OptimShape{}));
+void SetZeroPointDeq(onnx_optim::shapes::ShapesContext &ctx, core::symbolic::TensorType dtype) {
+  ctx.Set("x_zero_point", core::symbolic::SymTensor(nullptr, dtype, core::symbolic::SymShape{}));
 }
 
 } // namespace
@@ -227,29 +227,29 @@ TEST(OnnxOptimShapesQuantizationDequantizeLinear, DefaultsToScaleDtypeWhenZeroPo
   // mirrors the ``x_scale`` dtype.
   NodeProto node = MakeDequantizeLinearNode(/*with_zero_point=*/false);
   onnx_optim::shapes::ShapesContext ctx;
-  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(6)});
+  SetXDeq(ctx, core::symbolic::SymShape{core::symbolic::SymDim(6)});
   SetScaleDeq(ctx);
 
   onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale");
 
   ASSERT_TRUE(ctx.Has("y"));
-  const onnx_optim::OptimTensor &out = ctx.Get("y");
+  const core::symbolic::SymTensor &out = ctx.Get("y");
   ASSERT_EQ(out.Shape().Rank(), 1u);
   EXPECT_EQ(out.Shape()[0].AsInt(), 6);
-  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(out.Dtype(), core::symbolic::TensorType::kFloat);
 }
 
 TEST(OnnxOptimShapesQuantizationDequantizeLinear, FollowsScaleDtypeFloat16) {
   NodeProto node = MakeDequantizeLinearNode(/*with_zero_point=*/true);
   onnx_optim::shapes::ShapesContext ctx;
-  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)},
-          onnx_optim::TensorType::kInt8);
-  SetScaleDeq(ctx, onnx_optim::TensorType::kFloat16);
-  SetZeroPointDeq(ctx, onnx_optim::TensorType::kInt8);
+  SetXDeq(ctx, core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)},
+          core::symbolic::TensorType::kInt8);
+  SetScaleDeq(ctx, core::symbolic::TensorType::kFloat16);
+  SetZeroPointDeq(ctx, core::symbolic::TensorType::kInt8);
 
   onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale");
 
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat16);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kFloat16);
   ASSERT_EQ(ctx.Get("y").Shape().Rank(), 2u);
   EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 2);
   EXPECT_EQ(ctx.Get("y").Shape()[1].AsInt(), 3);
@@ -261,25 +261,25 @@ TEST(OnnxOptimShapesQuantizationDequantizeLinear, UsesOutputDtypeAttribute) {
       /*with_zero_point=*/false,
       /*output_dtype_attr=*/static_cast<int64_t>(TensorProto::DataType::BFLOAT16));
   onnx_optim::shapes::ShapesContext ctx;
-  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)});
+  SetXDeq(ctx, core::symbolic::SymShape{core::symbolic::SymDim(3), core::symbolic::SymDim(4)});
   SetScaleDeq(ctx);
 
   onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale");
 
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kBfloat16);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kBfloat16);
 }
 
 TEST(OnnxOptimShapesQuantizationDequantizeLinear, PropagatesSymbolicShape) {
   NodeProto node = MakeDequantizeLinearNode(/*with_zero_point=*/true);
   onnx_optim::shapes::ShapesContext ctx;
-  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(8),
-                                      onnx_optim::OptimDim("H"), onnx_optim::OptimDim("W")});
+  SetXDeq(ctx, core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(8),
+                                        core::symbolic::SymDim("H"), core::symbolic::SymDim("W")});
   SetScaleDeq(ctx);
-  SetZeroPointDeq(ctx, onnx_optim::TensorType::kUint8);
+  SetZeroPointDeq(ctx, core::symbolic::TensorType::kUint8);
 
   onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale");
 
-  const onnx_optim::OptimShape &out = ctx.Get("y").Shape();
+  const core::symbolic::SymShape &out = ctx.Get("y").Shape();
   ASSERT_EQ(out.Rank(), 4u);
   EXPECT_TRUE(out[0].IsExpr());
   EXPECT_EQ(out[0].AsExpr(), "N");
@@ -297,7 +297,7 @@ TEST(OnnxOptimShapesQuantizationDequantizeLinear, RejectsWrongOpType) {
   node.add_input("x_scale");
   node.add_output("y");
   onnx_optim::shapes::ShapesContext ctx;
-  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  SetXDeq(ctx, core::symbolic::SymShape{core::symbolic::SymDim(1)});
   SetScaleDeq(ctx);
   EXPECT_THROW(
       onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale"),
@@ -307,7 +307,7 @@ TEST(OnnxOptimShapesQuantizationDequantizeLinear, RejectsWrongOpType) {
 TEST(OnnxOptimShapesQuantizationDequantizeLinear, RejectsInvalidOutputDtype) {
   NodeProto node = MakeDequantizeLinearNode(/*with_zero_point=*/false, /*output_dtype_attr=*/9999);
   onnx_optim::shapes::ShapesContext ctx;
-  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  SetXDeq(ctx, core::symbolic::SymShape{core::symbolic::SymDim(1)});
   SetScaleDeq(ctx);
   EXPECT_THROW(
       onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale"),
@@ -319,14 +319,15 @@ TEST(OnnxOptimShapesQuantizationDequantizeLinear, DispatchesViaComputeShapeNode)
   // dispatch table to the per-op trampoline.
   NodeProto node = MakeDequantizeLinearNode(/*with_zero_point=*/true);
   onnx_optim::shapes::ShapesContext ctx;
-  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(4)}, onnx_optim::TensorType::kUint8);
+  SetXDeq(ctx, core::symbolic::SymShape{core::symbolic::SymDim(4)},
+          core::symbolic::TensorType::kUint8);
   SetScaleDeq(ctx);
-  SetZeroPointDeq(ctx, onnx_optim::TensorType::kUint8);
+  SetZeroPointDeq(ctx, core::symbolic::TensorType::kUint8);
 
   ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 4);
 }
 
@@ -343,25 +344,25 @@ TEST(OnnxOptimShapesQuantizationDynamicQuantizeLinear, AllThreeOutputsTypedAndSh
   node.add_output("y_zero_point");
 
   onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("x", onnx_optim::OptimTensor(
-                   nullptr, onnx_optim::TensorType::kFloat,
-                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)}));
+  ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim("N"),
+                                                                  core::symbolic::SymDim(4)}));
 
   onnx_optim::shapes::quantization::ComputeShapeDynamicQuantizeLinear(ctx, node, "x");
 
   ASSERT_TRUE(ctx.Has("y"));
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kUint8);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kUint8);
   ASSERT_EQ(ctx.Get("y").Shape().Rank(), 2u);
   EXPECT_TRUE(ctx.Get("y").Shape()[0].IsExpr());
   EXPECT_EQ(ctx.Get("y").Shape()[0].AsExpr(), "N");
   EXPECT_EQ(ctx.Get("y").Shape()[1].AsInt(), 4);
 
   ASSERT_TRUE(ctx.Has("y_scale"));
-  EXPECT_EQ(ctx.Get("y_scale").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y_scale").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y_scale").Shape().Rank(), 0u);
 
   ASSERT_TRUE(ctx.Has("y_zero_point"));
-  EXPECT_EQ(ctx.Get("y_zero_point").Dtype(), onnx_optim::TensorType::kUint8);
+  EXPECT_EQ(ctx.Get("y_zero_point").Dtype(), core::symbolic::TensorType::kUint8);
   EXPECT_EQ(ctx.Get("y_zero_point").Shape().Rank(), 0u);
 }
 
@@ -374,8 +375,8 @@ TEST(OnnxOptimShapesQuantizationDynamicQuantizeLinear, RejectsWrongOpType) {
   node.add_output("y_zero_point");
 
   onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+  ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(1)}));
   EXPECT_THROW(onnx_optim::shapes::quantization::ComputeShapeDynamicQuantizeLinear(ctx, node, "x"),
                std::invalid_argument);
 }

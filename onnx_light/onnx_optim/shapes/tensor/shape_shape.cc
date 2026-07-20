@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <utility>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -40,7 +40,7 @@ void ComputeShapeShape(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Shape", "ComputeShapeShape");
   EXT_ENFORCE_INVALID(node.input_size() >= 1, "ComputeShapeShape: Shape requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
+  const SymTensor &input = ctx.Get(node.input(0));
   const int64_t rank = static_cast<int64_t>(input.Shape().Rank());
 
   const int64_t start = ClampAxis(GetAttributeOr(node, "start", static_cast<int64_t>(0)), rank);
@@ -50,17 +50,17 @@ void ComputeShapeShape(ShapesContext &ctx, const NodeProto &node) {
 
   // The output is always a 1-D INT64 tensor whose single dimension is the
   // number of axes selected by ``[start, end)`` (a concrete value because
-  // the rank of any registered ``OptimTensor`` is known).
-  OptimShape out_shape;
-  out_shape.PushBack(OptimDim(length));
+  // the rank of any registered ``SymTensor`` is known).
+  SymShape out_shape;
+  out_shape.PushBack(SymDim(length));
 
-  OptimTensor out_tensor(nullptr, TensorType::kInt64, std::move(out_shape));
+  SymTensor out_tensor(nullptr, TensorType::kInt64, std::move(out_shape));
 
   // The values produced by ``Shape`` are exactly the input's selected
   // dimensions; record them as ``ValueAsShape`` so that downstream
   // operators (``Concat``, ``Expand``, ``Reshape``, …) can propagate
   // the data even when the input shape carries symbolic dims.
-  OptimShape value_as_shape;
+  SymShape value_as_shape;
   for (int64_t i = start; i < end; ++i) {
     value_as_shape.PushBack(input.Shape()[static_cast<std::size_t>(i)]);
   }

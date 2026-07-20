@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <utility>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -20,7 +20,7 @@ namespace {
 
 // Merges two dims: if both concrete and equal, keep; concrete wins over
 // symbolic; symbolic + symbolic keeps the first one.
-OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *axis_name) {
+SymDim MergeDim(const SymDim &a, const SymDim &b, const char *axis_name) {
   if (a.IsInt() && b.IsInt()) {
     EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), "ComputeShapeGridSample: ", axis_name,
                         " dimensions disagree (", a.AsInt(), " vs ", b.AsInt(), ").");
@@ -43,19 +43,19 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeGridSample: GridSample requires two inputs (X, grid).");
 
-  const OptimTensor &x = ctx.Get(node.input(0));
-  const OptimTensor &grid = ctx.Get(node.input(1));
+  const SymTensor &x = ctx.Get(node.input(0));
+  const SymTensor &grid = ctx.Get(node.input(1));
 
-  const OptimShape &x_shape = x.Shape();
-  const OptimShape &grid_shape = grid.Shape();
+  const SymShape &x_shape = x.Shape();
+  const SymShape &grid_shape = grid.Shape();
 
   // If either rank is unknown (Rank() == 0 in this codebase represents an
   // unranked tensor in our shape lattice), produce a best-effort output of
   // unknown rank.
   if (x_shape.Rank() == 0 || grid_shape.Rank() == 0) {
-    OptimShape out;
-    out.PushBack(OptimDim("GridSample_dim0"));
-    ctx.Set(node.output(0), OptimTensor(nullptr, x.Dtype(), std::move(out)));
+    SymShape out;
+    out.PushBack(SymDim("GridSample_dim0"));
+    ctx.Set(node.output(0), SymTensor(nullptr, x.Dtype(), std::move(out)));
     return;
   }
 
@@ -70,14 +70,14 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node) {
   const size_t rank = x_shape.Rank();
 
   // Validate that the trailing dim of grid (when known) equals rank - 2.
-  const OptimDim &grid_last = grid_shape[rank - 1];
+  const SymDim &grid_last = grid_shape[rank - 1];
   EXT_ENFORCE_INVALID(
       !(grid_last.IsInt() && grid_last.AsInt() != static_cast<int64_t>(rank) - 2),
       "ComputeShapeGridSample: the last dimension of grid must equal the number of spatial "
       "dimensions (rank - 2 = ",
       rank - 2, "). Got ", grid_last.AsInt(), ".");
 
-  OptimShape out;
+  SymShape out;
   // N: merged dim between X[0] and grid[0].
   out.PushBack(MergeDim(x_shape[0], grid_shape[0], "N"));
   // C: taken from X[1].
@@ -87,7 +87,7 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node) {
     out.PushBack(grid_shape[i]);
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, x.Dtype(), std::move(out)));
+  ctx.Set(node.output(0), SymTensor(nullptr, x.Dtype(), std::move(out)));
 }
 
 } // namespace tensor

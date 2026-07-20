@@ -22,7 +22,7 @@ namespace onnx_kernels {
  * tensor value, ``Sequence`` carries an ordered list of tensors that
  * share a common element type. ``Sequence`` is intentionally separate
  * from ``TensorProto`` / ``SequenceProto`` and from
- * :cpp:class:`onnx_optim::OptimSequence`: it is the *runtime* value of
+ * :cpp:class:`core::symbolic::SymSequence`: it is the *runtime* value of
  * a sequence-typed graph edge (analogous to ``Tensor`` being the
  * runtime value of a tensor-typed edge), without any protobuf
  * dependency.

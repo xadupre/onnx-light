@@ -16,10 +16,10 @@ namespace traditionalml {
 
 namespace {
 
-OptimDim BatchDimFromInput(const OptimTensor &input, const char *caller) {
+SymDim BatchDimFromInput(const SymTensor &input, const char *caller) {
   EXT_ENFORCE_INVALID(!(input.Shape().Empty()), caller, ": input rank must be 1 or 2 when known.");
   if (input.Shape().Rank() == 1) {
-    return OptimDim(1);
+    return SymDim(1);
   }
   if (input.Shape().Rank() == 2) {
     return input.Shape()[0];
@@ -60,26 +60,26 @@ int64_t ResolveClassCount(const NodeProto &node, bool &using_strings) {
 void ComputeShapeLinearClassifier(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "LinearClassifier", "ComputeShapeLinearClassifier");
 
-  const OptimTensor &input = ctx.Get(x);
-  OptimDim batch_dim = BatchDimFromInput(input, "ComputeShapeLinearClassifier");
+  const SymTensor &input = ctx.Get(x);
+  SymDim batch_dim = BatchDimFromInput(input, "ComputeShapeLinearClassifier");
 
   bool using_strings = false;
   const int64_t class_count = ResolveClassCount(node, using_strings);
   const TensorType label_type = using_strings ? TensorType::kString : TensorType::kInt64;
 
-  OptimShape y_shape;
+  SymShape y_shape;
   y_shape.PushBack(batch_dim);
-  ctx.Set(node.output(0), OptimTensor(nullptr, label_type, std::move(y_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, label_type, std::move(y_shape)));
 
   if (node.output_size() >= 2 && !node.output(1).empty()) {
-    OptimShape z_shape;
+    SymShape z_shape;
     z_shape.PushBack(batch_dim);
     if (class_count > 0) {
-      z_shape.PushBack(OptimDim(class_count));
+      z_shape.PushBack(SymDim(class_count));
     } else {
-      z_shape.PushBack(OptimDim("E"));
+      z_shape.PushBack(SymDim("E"));
     }
-    ctx.Set(node.output(1), OptimTensor(nullptr, TensorType::kFloat, std::move(z_shape)));
+    ctx.Set(node.output(1), SymTensor(nullptr, TensorType::kFloat, std::move(z_shape)));
   }
 }
 

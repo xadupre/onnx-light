@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
@@ -22,7 +22,7 @@ namespace onnx_optim {
 namespace shapes {
 
 /**
- * Computes the broadcast result shape of two :cpp:class:`OptimShape`
+ * Computes the broadcast result shape of two :cpp:class:`SymShape`
  * operands following the ONNX (numpy-style) multidirectional
  * broadcasting rules.
  *
@@ -50,7 +50,7 @@ namespace shapes {
  * @throws std::invalid_argument when two concrete integer dimensions
  *         are incompatible under broadcasting.
  */
-OptimShape BroadcastShapes(const OptimShape &a, const OptimShape &b);
+SymShape BroadcastShapes(const SymShape &a, const SymShape &b);
 
 /**
  * Generic shape-inference helper for binary ONNX operators that
@@ -77,7 +77,7 @@ void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node, cons
 
 /**
  * Kind of elementwise arithmetic to apply when propagating
- * :cpp:func:`OptimTensor::ValueAsShape` through a numpy-broadcasting
+ * :cpp:func:`SymTensor::ValueAsShape` through a numpy-broadcasting
  * binary operator with :cpp:func:`PropagateValueAsShapeArithmetic`.
  */
 enum class BroadcastDimOp { kAdd, kSub };

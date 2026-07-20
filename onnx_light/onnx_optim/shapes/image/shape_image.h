@@ -19,7 +19,7 @@ namespace shapes {
 namespace image {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``ImageDecoder``
+ * Computes the output :cpp:class:`SymTensor` of an ``ImageDecoder``
  * node and stores it in ``ctx``.
  *
  * ``ImageDecoder`` (since opset 20 in the ``ai.onnx`` domain) takes a
@@ -32,7 +32,7 @@ namespace image {
  * ``"RGB"``/``"BGR"`` ⇒ 3, defaulting to ``"RGB"`` when omitted).
  *
  * @param ctx   In/out context. Must already contain an
- *              :cpp:class:`OptimTensor` entry for ``a``; on return it
+ *              :cpp:class:`SymTensor` entry for ``a``; on return it
  *              also contains an entry for ``node.output(0)``.
  * @param node  The ``ImageDecoder`` ``NodeProto`` whose output should
  *              be described. ``node.op_type()`` must be

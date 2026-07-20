@@ -16,13 +16,13 @@ namespace traditionalml {
 
 namespace {
 
-int64_t BatchSizeFromInput(const OptimTensor &input, const char *caller) {
+int64_t BatchSizeFromInput(const SymTensor &input, const char *caller) {
   EXT_ENFORCE_INVALID(!(input.Shape().Empty()), caller, ": input rank must be 1 or 2 when known.");
   if (input.Shape().Rank() == 1) {
     return 1;
   }
   if (input.Shape().Rank() == 2) {
-    const OptimDim &batch = input.Shape()[0];
+    const SymDim &batch = input.Shape()[0];
     if (batch.IsInt()) {
       return batch.AsInt();
     }
@@ -54,27 +54,27 @@ int64_t ClassCount(const NodeProto &node, bool &using_strings) {
 void ComputeShapeSVMClassifier(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "SVMClassifier", "ComputeShapeSVMClassifier");
 
-  const OptimTensor &input = ctx.Get(x);
+  const SymTensor &input = ctx.Get(x);
   const int64_t batch_size = BatchSizeFromInput(input, "ComputeShapeSVMClassifier");
 
   bool using_strings = false;
   const int64_t class_count = ClassCount(node, using_strings);
   const TensorType label_type = using_strings ? TensorType::kString : TensorType::kInt64;
 
-  OptimShape y_shape;
-  y_shape.PushBack(batch_size >= 0 ? OptimDim(batch_size) : OptimDim("N"));
-  ctx.Set(node.output(0), OptimTensor(nullptr, label_type, std::move(y_shape)));
+  SymShape y_shape;
+  y_shape.PushBack(batch_size >= 0 ? SymDim(batch_size) : SymDim("N"));
+  ctx.Set(node.output(0), SymTensor(nullptr, label_type, std::move(y_shape)));
 
   if (node.output_size() >= 2 && !node.output(1).empty()) {
-    OptimShape z_shape;
-    z_shape.PushBack(batch_size >= 0 ? OptimDim(batch_size) : OptimDim("N"));
+    SymShape z_shape;
+    z_shape.PushBack(batch_size >= 0 ? SymDim(batch_size) : SymDim("N"));
     if (class_count > 0) {
       // One score per class per sample (ONNX spec: "one per class per example").
-      z_shape.PushBack(OptimDim(class_count));
+      z_shape.PushBack(SymDim(class_count));
     } else {
-      z_shape.PushBack(OptimDim("S"));
+      z_shape.PushBack(SymDim("S"));
     }
-    ctx.Set(node.output(1), OptimTensor(nullptr, TensorType::kFloat, std::move(z_shape)));
+    ctx.Set(node.output(1), SymTensor(nullptr, TensorType::kFloat, std::move(z_shape)));
   }
 }
 

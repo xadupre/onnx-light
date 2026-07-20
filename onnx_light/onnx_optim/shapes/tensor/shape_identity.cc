@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/tensor/shape_tensor.h"
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -21,14 +21,14 @@ void ComputeShapeIdentity(ShapesContext &ctx, const NodeProto &node) {
 
   if (ctx.HasSequence(input_name)) {
     // Sequence input: propagate the sequence descriptor to the output.
-    ctx.SetSequence(node.output(0), OptimSequence(ctx.GetSequence(input_name)));
+    ctx.SetSequence(node.output(0), SymSequence(ctx.GetSequence(input_name)));
     return;
   }
 
-  const OptimTensor &input = ctx.Get(input_name);
+  const SymTensor &input = ctx.Get(input_name);
   // Identity simply propagates the input dtype and shape (including any
   // symbolic dims) to the output unchanged.
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace tensor

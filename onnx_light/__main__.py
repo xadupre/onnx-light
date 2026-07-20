@@ -209,7 +209,7 @@ def _seed_context_with_token_ranges(
         token_ranges: Mapping from symbolic dim name to ``(low, high)``
             where *low* is used as the concrete substitute value.
     """
-    from .onnx_optim.shape_inference import OptimTensor
+    from .onnx_optim.shape_inference import SymTensor
 
     initializer_names = {init.name for init in model.graph.initializer}
     for vi in model.graph.input:
@@ -235,7 +235,7 @@ def _seed_context_with_token_ranges(
             else:
                 # Fully dynamic (no name, no value): leave as 0.
                 dims.append(0)
-        ctx.set(vi_name, OptimTensor(dtype, dims))
+        ctx.set(vi_name, SymTensor(dtype, dims))
 
 
 def _remove_node_metadata_key(graph: Any, key: str) -> None:

@@ -5,8 +5,8 @@
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
 #include "onnx_backend_test/cases_for_shapes/inference/inference_random_weights.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_optim/annotations/inplace_reuse.h"
-#include "onnx_optim/annotations/value_tags.h"
+#include "onnx_core/annotations/inplace_reuse.h"
+#include "onnx_core/annotations/value_tags.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cmath>
@@ -225,7 +225,7 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMod
   // backward tags mask_float "weight".  Cast backward (Cast propagates from its
   // first input) then tags attention_mask "weight".
   {
-    namespace ann = onnx_optim::annotations;
+    namespace ann = core::annotations;
 
     // Graph-level value-tags JSON (all tagged tensors sorted alphabetically;
     // DumpValueTagsAsJson uses strict ASCII order).
@@ -801,7 +801,7 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry, 
   // "weight" tag when at least one input is "weight" (key_heads/value_heads).
   // The 52 nodes are indexed 0-51 in AddNode insertion order.
   {
-    namespace ann = onnx_optim::annotations;
+    namespace ann = core::annotations;
 
     // Graph-level value-tags JSON (all tagged tensors sorted alphabetically).
     // Notes:

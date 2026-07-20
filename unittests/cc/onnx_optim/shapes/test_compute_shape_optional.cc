@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/optional/shape_optional.h"
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -60,26 +60,27 @@ AttributeProto *AddTypeAttr(NodeProto &node, TensorProto::DataType dtype,
 TEST(OnnxOptimShapeOptional, WithInputCopiesDtypeAndShape) {
   NodeProto node = MakeOptionalNode(/*with_input=*/true);
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(), shape);
 }
 
 TEST(OnnxOptimShapeOptional, WithInputPreservesSymbolicDims) {
   NodeProto node = MakeOptionalNode(/*with_input=*/true);
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(std::string("N")), onnx_optim::OptimDim(4)};
-  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim(std::string("N")),
+                                 core::symbolic::SymDim(4)};
+  ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, shape));
 
   ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kInt64);
   EXPECT_EQ(ctx.Get("y").Shape(), shape);
 }
 
@@ -91,9 +92,9 @@ TEST(OnnxOptimShapeOptional, NoInputWithOptionalOfTensorTypeAttribute) {
   ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(),
-            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+            (core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
 }
 
 TEST(OnnxOptimShapeOptional, NoInputWithBareTensorTypeAttribute) {
@@ -104,8 +105,8 @@ TEST(OnnxOptimShapeOptional, NoInputWithBareTensorTypeAttribute) {
   ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt32);
-  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  EXPECT_EQ(ctx.Get("y").Dtype(), core::symbolic::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("y").Shape(), (core::symbolic::SymShape{core::symbolic::SymDim(4)}));
 }
 
 TEST(OnnxOptimShapeOptional, NoInputNoTypeAttributeThrows) {
@@ -148,8 +149,8 @@ TEST(OnnxOptimShapeOptional, RejectsTooManyInputs) {
   node.add_input("b");
   node.add_output("y");
   onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("a", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  ctx.Set("b", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  ctx.Set("a", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
+  ctx.Set("b", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, {}));
   EXPECT_THROW(onnx_optim::shapes::optional::ComputeShapeOptional(ctx, node),
                std::invalid_argument);
 }

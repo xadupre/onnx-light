@@ -13,10 +13,10 @@ namespace logical {
 
 void ComputeShapeIsNaN(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "IsNaN", "ComputeShapeIsNaN");
-  const OptimTensor &input = ctx.Get(x);
+  const SymTensor &input = ctx.Get(x);
   // IsNaN is element-wise on a floating-point tensor: the output dtype
   // is always BOOL and the output shape matches the input shape.
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kBool, input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kBool, input.Shape()));
 }
 
 } // namespace logical

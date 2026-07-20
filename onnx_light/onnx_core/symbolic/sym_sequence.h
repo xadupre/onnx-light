@@ -9,31 +9,31 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 
 /**
- * @file optim_sequence.h
+ * @file sym_sequence.h
  * @brief Lightweight description of an ONNX tensor sequence value used
  *        by ``onnx_optim`` shape-inference passes.
  *
- * The ``onnx_optim`` stack already exposes :cpp:class:`OptimTensor` to
+ * The ``onnx_optim`` stack already exposes :cpp:class:`SymTensor` to
  * describe tensor-typed values flowing through a graph. Operators such
  * as ``SequenceConstruct``, ``SequenceInsert``, ``SplitToSequence`` or
  * ``SequenceEmpty`` produce *sequence* values rather than tensors, so a
  * matching descriptor is needed.
  *
- * :cpp:class:`OptimSequence` is the analogue of :cpp:class:`OptimTensor`
+ * :cpp:class:`SymSequence` is the analogue of :cpp:class:`SymTensor`
  * for sequence values. It records the common element dtype and one
- * :cpp:class:`OptimShape` per element of the sequence (the ONNX
+ * :cpp:class:`SymShape` per element of the sequence (the ONNX
  * ``SequenceConstruct`` operator only requires that elements share the
  * same dtype, not the same shape). The sequence length is itself an
- * :cpp:class:`OptimDim` so it can be either a concrete integer (e.g. for
+ * :cpp:class:`SymDim` so it can be either a concrete integer (e.g. for
  * a ``SequenceConstruct`` node with ``N`` known inputs) or a symbolic
  * expression (e.g. for the output of ``SplitToSequence`` whose length
  * depends on a runtime ``split`` value). When the per-element shapes
  * are known, the length is implicitly :cpp:func:`ElemShapes().size()`.
  *
- * Like :cpp:class:`OptimTensor` it is a small, value-typed, non-owning
+ * Like :cpp:class:`SymTensor` it is a small, value-typed, non-owning
  * descriptor: it never allocates the underlying data.
  */
 
@@ -43,8 +43,8 @@ namespace symbolic {
 
 /**
  * Descriptor for an ONNX tensor-sequence value. A sequence carries a
- * common element :cpp:type:`TensorType` and one :cpp:class:`OptimShape`
- * per element. The sequence length is itself an :cpp:class:`OptimDim`
+ * common element :cpp:type:`TensorType` and one :cpp:class:`SymShape`
+ * per element. The sequence length is itself an :cpp:class:`SymDim`
  * so it can be either a concrete integer (e.g. for a
  * ``SequenceConstruct`` node with ``N`` known inputs) or a symbolic
  * expression (e.g. for the output of ``SplitToSequence`` whose length
@@ -60,23 +60,23 @@ namespace symbolic {
  * Callers can use :cpp:func:`HasElemDtype` and :cpp:func:`HasElemShapes`
  * to distinguish "unknown" from "empty sequence" (length 0).
  */
-class OptimSequence {
+class SymSequence {
 public:
   /// Default constructs an empty sequence descriptor with unknown
   /// element dtype, no per-element shapes recorded, and a zero length.
-  OptimSequence() = default;
+  SymSequence() = default;
 
   /// Constructs a sequence descriptor from a known element dtype and a
   /// vector of per-element shapes. The sequence length is set to the
   /// number of supplied shapes.
-  OptimSequence(TensorType elem_dtype, std::vector<OptimShape> elem_shapes)
+  SymSequence(TensorType elem_dtype, std::vector<SymShape> elem_shapes)
       : elem_dtype_(elem_dtype), elem_shapes_(std::move(elem_shapes)),
         length_(static_cast<int64_t>(elem_shapes_.size())),
         has_elem_dtype_(elem_dtype != TensorType::kUndefined), has_elem_shapes_(true) {}
 
   /// Constructs a sequence descriptor from a known element dtype and a
   /// (possibly symbolic) length. No per-element shape is recorded.
-  OptimSequence(TensorType elem_dtype, OptimDim length)
+  SymSequence(TensorType elem_dtype, SymDim length)
       : elem_dtype_(elem_dtype), length_(std::move(length)),
         has_elem_dtype_(elem_dtype != TensorType::kUndefined), has_elem_shapes_(false) {}
 
@@ -89,14 +89,14 @@ public:
   /// when :cpp:func:`HasElemShapes` is ``false``; otherwise its size is
   /// the (concrete) sequence length and ``ElemShapes()[i]`` is the
   /// shape of the ``i``-th tensor in the sequence.
-  const std::vector<OptimShape> &ElemShapes() const noexcept { return elem_shapes_; }
-  std::vector<OptimShape> &ElemShapes() noexcept { return elem_shapes_; }
+  const std::vector<SymShape> &ElemShapes() const noexcept { return elem_shapes_; }
+  std::vector<SymShape> &ElemShapes() noexcept { return elem_shapes_; }
 
   /// Sequence length, possibly symbolic. When
   /// :cpp:func:`HasElemShapes` is ``true``, the length equals
   /// ``ElemShapes().size()``.
-  const OptimDim &Length() const noexcept { return length_; }
-  OptimDim &Length() noexcept { return length_; }
+  const SymDim &Length() const noexcept { return length_; }
+  SymDim &Length() noexcept { return length_; }
 
   /// ``true`` when an element dtype has been recorded for this sequence.
   bool HasElemDtype() const noexcept { return has_elem_dtype_; }
@@ -115,10 +115,10 @@ public:
 
   /// Replaces the recorded per-element shapes. Also synchronises the
   /// sequence length with the number of supplied shapes.
-  void SetElemShapes(std::vector<OptimShape> shapes) {
+  void SetElemShapes(std::vector<SymShape> shapes) {
     elem_shapes_ = std::move(shapes);
     has_elem_shapes_ = true;
-    length_ = OptimDim(static_cast<int64_t>(elem_shapes_.size()));
+    length_ = SymDim(static_cast<int64_t>(elem_shapes_.size()));
   }
 
   /// Clears the recorded per-element shapes. The sequence length is
@@ -131,21 +131,21 @@ public:
   /// Replaces the sequence length. Callers are responsible for keeping
   /// the length consistent with :cpp:func:`ElemShapes` when both are
   /// recorded.
-  void SetLength(OptimDim length) noexcept { length_ = std::move(length); }
+  void SetLength(SymDim length) noexcept { length_ = std::move(length); }
 
   /// Equality compares the element dtype, the per-element shapes, the
   /// sequence length, and the "known" flags.
-  bool operator==(const OptimSequence &other) const noexcept {
+  bool operator==(const SymSequence &other) const noexcept {
     return has_elem_dtype_ == other.has_elem_dtype_ && has_elem_shapes_ == other.has_elem_shapes_ &&
            elem_dtype_ == other.elem_dtype_ && elem_shapes_ == other.elem_shapes_ &&
            length_ == other.length_;
   }
-  bool operator!=(const OptimSequence &other) const noexcept { return !(*this == other); }
+  bool operator!=(const SymSequence &other) const noexcept { return !(*this == other); }
 
 private:
   TensorType elem_dtype_ = TensorType::kUndefined;
-  std::vector<OptimShape> elem_shapes_{};
-  OptimDim length_{static_cast<int64_t>(0)};
+  std::vector<SymShape> elem_shapes_{};
+  SymDim length_{static_cast<int64_t>(0)};
   bool has_elem_dtype_ = false;
   bool has_elem_shapes_ = false;
 };

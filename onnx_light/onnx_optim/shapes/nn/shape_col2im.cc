@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <string>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -20,10 +20,10 @@ void ComputeShapeCol2Im(ShapesContext &ctx, const NodeProto &node, const char *i
                         const char *image_shape, const char *block_shape) {
   CheckNodeOpAndOutput(node, "Col2Im", "ComputeShapeCol2Im");
 
-  const OptimTensor &input_tensor = ctx.Get(input);
-  const OptimTensor &image_shape_tensor = ctx.Get(image_shape);
-  const OptimTensor &block_shape_tensor = ctx.Get(block_shape);
-  const OptimShape &input_shape = input_tensor.Shape();
+  const SymTensor &input_tensor = ctx.Get(input);
+  const SymTensor &image_shape_tensor = ctx.Get(image_shape);
+  const SymTensor &block_shape_tensor = ctx.Get(block_shape);
+  const SymShape &input_shape = input_tensor.Shape();
 
   EXT_ENFORCE_INVALID(input_shape.Rank() == 3, "ComputeShapeCol2Im: input '", input,
                       "' must have rank 3 (N, C * product(block_shape), L).");
@@ -45,7 +45,7 @@ void ComputeShapeCol2Im(ShapesContext &ctx, const NodeProto &node, const char *i
   // ``C`` can only be computed when the product of the block shape is known.
   int64_t block_product = -1;
   if (block_shape_tensor.HasValueAsShape()) {
-    const OptimShape &bs = block_shape_tensor.ValueAsShape();
+    const SymShape &bs = block_shape_tensor.ValueAsShape();
     block_product = 1;
     for (size_t i = 0; i < bs.Rank(); ++i) {
       if (!bs[i].IsInt()) {
@@ -56,36 +56,36 @@ void ComputeShapeCol2Im(ShapesContext &ctx, const NodeProto &node, const char *i
     }
   }
 
-  OptimShape out_shape;
+  SymShape out_shape;
   // Dim 0: N (batch).
   out_shape.PushBack(input_shape[0]);
 
   // Dim 1: C = input.shape[1] / product(block_shape).
   if (block_product > 0 && input_shape[1].IsInt()) {
-    out_shape.PushBack(OptimDim(input_shape[1].AsInt() / block_product));
+    out_shape.PushBack(SymDim(input_shape[1].AsInt() / block_product));
   } else {
-    out_shape.PushBack(OptimDim(std::string("Col2Im.") + input + ":1"));
+    out_shape.PushBack(SymDim(std::string("Col2Im.") + input + ":1"));
   }
 
   // Spatial dims: copy from ``image_shape`` initializer when known,
   // otherwise emit symbolic dims.
-  const OptimShape *image_shape_values =
+  const SymShape *image_shape_values =
       image_shape_tensor.HasValueAsShape() ? &image_shape_tensor.ValueAsShape() : nullptr;
   if (n_spatial < 0) {
     // Number of spatial dims unknown — append a single symbolic placeholder.
-    out_shape.PushBack(OptimDim(std::string("Col2Im.") + input + ":2"));
+    out_shape.PushBack(SymDim(std::string("Col2Im.") + input + ":2"));
   } else {
     for (int64_t i = 0; i < n_spatial; ++i) {
       if (image_shape_values != nullptr && static_cast<size_t>(i) < image_shape_values->Rank() &&
           (*image_shape_values)[static_cast<size_t>(i)].IsInt()) {
         out_shape.PushBack((*image_shape_values)[static_cast<size_t>(i)]);
       } else {
-        out_shape.PushBack(OptimDim(std::string("Col2Im.") + input + ":" + std::to_string(2 + i)));
+        out_shape.PushBack(SymDim(std::string("Col2Im.") + input + ":" + std::to_string(2 + i)));
       }
     }
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input_tensor.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input_tensor.Dtype(), std::move(out_shape)));
 }
 
 } // namespace nn

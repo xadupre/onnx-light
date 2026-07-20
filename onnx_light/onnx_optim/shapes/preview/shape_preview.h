@@ -22,7 +22,7 @@ namespace preview {
 inline constexpr const char *kOnnxPreviewDomain = "ai.onnx.preview";
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``FlexAttention``
+ * Computes the output :cpp:class:`SymTensor` of a ``FlexAttention``
  * node and stores it in ``ctx``.
  *
  * ``FlexAttention`` expects three rank-4 inputs:

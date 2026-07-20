@@ -19,7 +19,7 @@ namespace shapes {
 namespace text {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``StringConcat`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``StringConcat`` node
  * and stores it in ``ctx``.
  *
  * ``StringConcat`` concatenates two string tensors element-wise with
@@ -48,7 +48,7 @@ void ComputeShapeStringConcat(ShapesContext &ctx, const NodeProto &node, const c
                               const char *b);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` descriptors of a
+ * Computes the output :cpp:class:`SymTensor` descriptors of a
  * ``StringSplit`` node and stores them in ``ctx``.
  *
  * ``StringSplit`` preserves the input rank for its ``Z`` output
@@ -73,7 +73,7 @@ void ComputeShapeStringConcat(ShapesContext &ctx, const NodeProto &node, const c
 void ComputeShapeStringSplit(ShapesContext &ctx, const NodeProto &node, const char *a);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``StringNormalizer``
+ * Computes the output :cpp:class:`SymTensor` of a ``StringNormalizer``
  * node and stores it in ``ctx``.
  *
  * ``StringNormalizer`` only accepts ``[C]``- or ``[1, C]``-shaped
@@ -100,7 +100,7 @@ void ComputeShapeStringSplit(ShapesContext &ctx, const NodeProto &node, const ch
 void ComputeShapeStringNormalizer(ShapesContext &ctx, const NodeProto &node, const char *a);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``RegexFullMatch``
+ * Computes the output :cpp:class:`SymTensor` of a ``RegexFullMatch``
  * node and stores it in ``ctx``.
  *
  * ``RegexFullMatch`` (since opset 20 in the ``ai.onnx`` domain) performs an
@@ -123,7 +123,7 @@ void ComputeShapeStringNormalizer(ShapesContext &ctx, const NodeProto &node, con
 void ComputeShapeRegexFullMatch(ShapesContext &ctx, const NodeProto &node, const char *a);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``TfIdfVectorizer``
+ * Computes the output :cpp:class:`SymTensor` of a ``TfIdfVectorizer``
  * node and stores it in ``ctx``.
  *
  * ``TfIdfVectorizer`` (since opset 9 in the ``ai.onnx`` domain) extracts

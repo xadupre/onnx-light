@@ -18,7 +18,7 @@ namespace {
 // Merges two dimensions: if both are static they must agree, otherwise
 // the static one (if any) wins; if both are symbolic the first one is
 // kept.
-OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
+SymDim MergeDim(const SymDim &a, const SymDim &b, const char *what) {
   if (a.IsInt() && b.IsInt()) {
     EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), "ComputeShapeFlexAttention: ", what,
                         " mismatch: ", a.AsInt(), " vs ", b.AsInt(), ".");
@@ -33,7 +33,7 @@ OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
   return a;
 }
 
-void RequireRank4(const OptimShape &shape, const char *name) {
+void RequireRank4(const SymShape &shape, const char *name) {
   EXT_ENFORCE_INVALID(shape.Rank() == 4, "ComputeShapeFlexAttention: input '", name,
                       "' must have rank 4, got ", shape.Rank(), ".");
 }
@@ -44,22 +44,22 @@ void ComputeShapeFlexAttention(ShapesContext &ctx, const NodeProto &node, const 
                                const char *k, const char *v) {
   CheckNodeOpAndOutput(node, "FlexAttention", "ComputeShapeFlexAttention");
 
-  const OptimTensor &Q = ctx.Get(q);
-  const OptimTensor &K = ctx.Get(k);
-  const OptimTensor &V = ctx.Get(v);
+  const SymTensor &Q = ctx.Get(q);
+  const SymTensor &K = ctx.Get(k);
+  const SymTensor &V = ctx.Get(v);
 
   EXT_ENFORCE_INVALID(!(Q.Dtype() != K.Dtype() || Q.Dtype() != V.Dtype()),
                       "ComputeShapeFlexAttention: Q, K, and V must share the same element type.");
 
-  const OptimShape &q_shape = Q.Shape();
-  const OptimShape &k_shape = K.Shape();
-  const OptimShape &v_shape = V.Shape();
+  const SymShape &q_shape = Q.Shape();
+  const SymShape &k_shape = K.Shape();
+  const SymShape &v_shape = V.Shape();
   RequireRank4(q_shape, q);
   RequireRank4(k_shape, k);
   RequireRank4(v_shape, v);
 
   // Batch: Q[0] == K[0] == V[0] (when static).
-  OptimDim batch = MergeDim(q_shape[0], k_shape[0], "batch");
+  SymDim batch = MergeDim(q_shape[0], k_shape[0], "batch");
   batch = MergeDim(batch, v_shape[0], "batch");
 
   // K and V share the same number of heads.
@@ -90,13 +90,13 @@ void ComputeShapeFlexAttention(ShapesContext &ctx, const NodeProto &node, const 
   }
 
   // Output: (batch, q_num_heads, q_seq_len, v_head_size).
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(batch);
   out_shape.PushBack(q_shape[1]);
   out_shape.PushBack(q_shape[2]);
   out_shape.PushBack(v_shape[3]);
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, Q.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, Q.Dtype(), std::move(out_shape)));
 }
 
 } // namespace preview

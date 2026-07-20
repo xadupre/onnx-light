@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -19,9 +19,9 @@ namespace math {
 
 namespace {
 
-// Reads a 0-D INT32/INT64 OptimTensor value if it has a backing constant
+// Reads a 0-D INT32/INT64 SymTensor value if it has a backing constant
 // buffer; returns ``true`` when a value was extracted.
-bool ReadScalarInt(const OptimTensor &t, int64_t &out) {
+bool ReadScalarInt(const SymTensor &t, int64_t &out) {
   if (t.Data() == nullptr) {
     return false;
   }
@@ -48,9 +48,9 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "ComputeShapeSTFT: STFT requires at least two inputs (signal, frame_step).");
 
-  const OptimTensor &signal = ctx.Get(node.input(0));
+  const SymTensor &signal = ctx.Get(node.input(0));
   const TensorType dtype = signal.Dtype();
-  const OptimShape &in_shape = signal.Shape();
+  const SymShape &in_shape = signal.Shape();
 
   const AttributeProto *onesided_attr = FindAttribute(node, "onesided");
   // STFT spec: default for onesided is 1 (real input).
@@ -81,7 +81,7 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   }
   if (!frame_length_known && node.input_size() >= 3 && !node.input(2).empty() &&
       ctx.Has(node.input(2))) {
-    const OptimTensor &window = ctx.Get(node.input(2));
+    const SymTensor &window = ctx.Get(node.input(2));
     if (window.Shape().Rank() == 1 && window.Shape()[0].IsInt()) {
       frame_length_value = window.Shape()[0].AsInt();
       frame_length_known = true;
@@ -90,12 +90,12 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
 
   // Compute output shape: [batch_size, n_frames, dft_unique_bins, 2].
   const std::string sym = "STFT_" + node.output(0);
-  OptimShape out_shape;
+  SymShape out_shape;
   // batch_size from signal input.
   if (in_shape.Rank() >= 1) {
     out_shape.PushBack(in_shape[0]);
   } else {
-    out_shape.PushBack(OptimDim(sym + "_batch"));
+    out_shape.PushBack(SymDim(sym + "_batch"));
   }
 
   // n_frames: derive from signal_length, frame_length, frame_step when known.
@@ -109,24 +109,24 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
     }
   }
   if (n_frames_known) {
-    out_shape.PushBack(OptimDim(n_frames_value));
+    out_shape.PushBack(SymDim(n_frames_value));
   } else {
-    out_shape.PushBack(OptimDim(sym + "_frames"));
+    out_shape.PushBack(SymDim(sym + "_frames"));
   }
 
   // dft_unique_bins.
   if (frame_length_known) {
     if (onesided) {
-      out_shape.PushBack(OptimDim((frame_length_value / 2) + 1));
+      out_shape.PushBack(SymDim((frame_length_value / 2) + 1));
     } else {
-      out_shape.PushBack(OptimDim(frame_length_value));
+      out_shape.PushBack(SymDim(frame_length_value));
     }
   } else {
-    out_shape.PushBack(OptimDim(sym + "_bins"));
+    out_shape.PushBack(SymDim(sym + "_bins"));
   }
 
-  out_shape.PushBack(OptimDim(2));
-  ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+  out_shape.PushBack(SymDim(2));
+  ctx.Set(node.output(0), SymTensor(nullptr, dtype, std::move(out_shape)));
 }
 
 } // namespace math

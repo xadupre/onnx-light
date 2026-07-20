@@ -11,7 +11,7 @@
 #include <variant>
 
 #include "onnx_core/expressions/expressions.h"
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -31,11 +31,11 @@ namespace {
 // data-propagated shape representation a known scalar constant is encoded
 // as a rank-1 shape with a single integer dim holding the value. Rank-0
 // shapes carry no extractable integer value here and are rejected.
-bool TryReadKnownIntScalar(const OptimTensor &input, int64_t *out) {
+bool TryReadKnownIntScalar(const SymTensor &input, int64_t *out) {
   if (!input.HasValueAsShape()) {
     return false;
   }
-  const OptimShape &v = input.ValueAsShape();
+  const SymShape &v = input.ValueAsShape();
   if (v.Rank() == 0) {
     // A scalar value has no shape dim, so its integer value is unknown
     // from ``ValueAsShape`` alone.
@@ -53,11 +53,11 @@ bool TryReadKnownIntScalar(const OptimTensor &input, int64_t *out) {
 // when the dim is a symbolic expression string, allowing extraction of the
 // symbolic bound of a Range input even when the concrete integer value is
 // not statically known.
-bool TryReadOptimDimScalar(const OptimTensor &input, OptimDim *out) {
+bool TryReadOptimDimScalar(const SymTensor &input, SymDim *out) {
   if (!input.HasValueAsShape()) {
     return false;
   }
-  const OptimShape &v = input.ValueAsShape();
+  const SymShape &v = input.ValueAsShape();
   if (v.Rank() == 1) {
     *out = v[0];
     return true;
@@ -65,21 +65,21 @@ bool TryReadOptimDimScalar(const OptimTensor &input, OptimDim *out) {
   return false;
 }
 
-// Converts an ``OptimDim`` to the ``expressions::DimType`` variant used by
+// Converts an ``SymDim`` to the ``expressions::DimType`` variant used by
 // the symbolic dimension arithmetic helpers (``dim_add``, ``dim_sub``, …).
-expressions::DimType DimToDimType(const OptimDim &d) {
+expressions::DimType DimToDimType(const SymDim &d) {
   if (d.IsInt()) {
     return expressions::DimType{d.AsInt()};
   }
   return expressions::DimType{d.AsExpr()};
 }
 
-// Converts an ``expressions::DimType`` back to an ``OptimDim``.
-OptimDim DimTypeToOptimDim(const expressions::DimType &d) {
+// Converts an ``expressions::DimType`` back to an ``SymDim``.
+SymDim DimTypeToOptimDim(const expressions::DimType &d) {
   if (std::holds_alternative<int64_t>(d)) {
-    return OptimDim(std::get<int64_t>(d));
+    return SymDim(std::get<int64_t>(d));
   }
-  return OptimDim(std::get<std::string>(d));
+  return SymDim(std::get<std::string>(d));
 }
 
 } // namespace
@@ -89,13 +89,13 @@ void ComputeShapeRange(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 3,
                       "ComputeShapeRange: Range requires three inputs (start, limit, delta).");
 
-  const OptimTensor &start = ctx.Get(node.input(0));
-  const OptimTensor &limit = ctx.Get(node.input(1));
-  const OptimTensor &delta = ctx.Get(node.input(2));
+  const SymTensor &start = ctx.Get(node.input(0));
+  const SymTensor &limit = ctx.Get(node.input(1));
+  const SymTensor &delta = ctx.Get(node.input(2));
 
   const TensorType out_dtype = start.Dtype();
 
-  OptimShape out_shape;
+  SymShape out_shape;
   int64_t s = 0;
   int64_t l = 0;
   int64_t d = 0;
@@ -106,7 +106,7 @@ void ComputeShapeRange(ShapesContext &ctx, const NodeProto &node) {
     int64_t n = static_cast<int64_t>(
         std::ceil((static_cast<double>(l) - static_cast<double>(s)) / static_cast<double>(d)));
     n = std::max<int64_t>(n, 0);
-    out_shape.PushBack(OptimDim(n));
+    out_shape.PushBack(SymDim(n));
   } else {
     // Try to build a symbolic expression from the inputs when at least one
     // dim is unknown. Reading the dim (integer or symbolic) from each
@@ -114,7 +114,7 @@ void ComputeShapeRange(ShapesContext &ctx, const NodeProto &node) {
     // expression like ``limit_sym - start_sym`` instead of introducing a
     // fresh ``"Range_dim0"`` token that is disconnected from all existing
     // symbolic dimensions.
-    OptimDim start_dim, limit_dim, delta_dim;
+    SymDim start_dim, limit_dim, delta_dim;
     const bool has_dims =
         IsIntegerTensorType(out_dtype) && TryReadOptimDimScalar(start, &start_dim) &&
         TryReadOptimDimScalar(limit, &limit_dim) && TryReadOptimDimScalar(delta, &delta_dim) &&
@@ -135,11 +135,11 @@ void ComputeShapeRange(ShapesContext &ctx, const NodeProto &node) {
       out_shape.PushBack(DimTypeToOptimDim(l_expr));
     } else {
       // Unknown output length: produce a single symbolic dim.
-      out_shape.PushBack(OptimDim("Range_dim0"));
+      out_shape.PushBack(SymDim("Range_dim0"));
     }
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 
 } // namespace generator

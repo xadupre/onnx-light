@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/training/shape_training.h"
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -54,13 +54,13 @@ NodeProto MakeAdamNode(int n) {
 }
 
 void SeedScalar(onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
-                onnx_optim::TensorType dtype) {
-  ctx.Set(name, onnx_optim::OptimTensor(nullptr, dtype, onnx_optim::OptimShape{}));
+                core::symbolic::TensorType dtype) {
+  ctx.Set(name, core::symbolic::SymTensor(nullptr, dtype, core::symbolic::SymShape{}));
 }
 
 void SeedTensor(onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
-                onnx_optim::TensorType dtype, onnx_optim::OptimShape shape) {
-  ctx.Set(name, onnx_optim::OptimTensor(nullptr, dtype, std::move(shape)));
+                core::symbolic::TensorType dtype, core::symbolic::SymShape shape) {
+  ctx.Set(name, core::symbolic::SymTensor(nullptr, dtype, std::move(shape)));
 }
 
 } // namespace
@@ -69,20 +69,20 @@ TEST(OnnxOptimShapeAdam, PropagatesShapesForSingleOptimizedTensor) {
   NodeProto node = MakeAdamNode(1);
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
-  const onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
+  const core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  SeedTensor(ctx, "X1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "G1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "V1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "H1", core::symbolic::TensorType::kFloat, shape);
 
   ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("X1_new"));
   ASSERT_TRUE(ctx.Has("V1_new"));
   ASSERT_TRUE(ctx.Has("H1_new"));
-  EXPECT_EQ(ctx.Get("X1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X1_new").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("X1_new").Shape(), shape);
   EXPECT_EQ(ctx.Get("V1_new").Shape(), shape);
   EXPECT_EQ(ctx.Get("H1_new").Shape(), shape);
@@ -92,34 +92,34 @@ TEST(OnnxOptimShapeAdam, PropagatesShapesForMultipleOptimizedTensors) {
   NodeProto node = MakeAdamNode(2);
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
-  const onnx_optim::OptimShape shape_x1{onnx_optim::OptimDim(4)};
-  const onnx_optim::OptimShape shape_x2{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)};
-  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape_x1);
-  SeedTensor(ctx, "X2", onnx_optim::TensorType::kDouble, shape_x2);
-  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape_x1);
-  SeedTensor(ctx, "G2", onnx_optim::TensorType::kDouble, shape_x2);
-  SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape_x1);
-  SeedTensor(ctx, "V2", onnx_optim::TensorType::kDouble, shape_x2);
-  SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape_x1);
-  SeedTensor(ctx, "H2", onnx_optim::TensorType::kDouble, shape_x2);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
+  const core::symbolic::SymShape shape_x1{core::symbolic::SymDim(4)};
+  const core::symbolic::SymShape shape_x2{core::symbolic::SymDim(2), core::symbolic::SymDim(5)};
+  SeedTensor(ctx, "X1", core::symbolic::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "X2", core::symbolic::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "G1", core::symbolic::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "G2", core::symbolic::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "V1", core::symbolic::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "V2", core::symbolic::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "H1", core::symbolic::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "H2", core::symbolic::TensorType::kDouble, shape_x2);
 
   ctx.ComputeShapeNode(node);
 
   // Outputs are laid out as [X1_new, X2_new, V1_new, V2_new, H1_new, H2_new]
   // and each output mirrors the dtype and shape of its corresponding input.
-  EXPECT_EQ(ctx.Get("X1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X1_new").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("X1_new").Shape(), shape_x1);
-  EXPECT_EQ(ctx.Get("X2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("X2_new").Dtype(), core::symbolic::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("X2_new").Shape(), shape_x2);
-  EXPECT_EQ(ctx.Get("V1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("V1_new").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("V1_new").Shape(), shape_x1);
-  EXPECT_EQ(ctx.Get("V2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("V2_new").Dtype(), core::symbolic::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("V2_new").Shape(), shape_x2);
-  EXPECT_EQ(ctx.Get("H1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("H1_new").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("H1_new").Shape(), shape_x1);
-  EXPECT_EQ(ctx.Get("H2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("H2_new").Dtype(), core::symbolic::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("H2_new").Shape(), shape_x2);
 }
 
@@ -138,11 +138,11 @@ TEST(OnnxOptimShapeAdam, RejectsInputCountNotMultipleOfFour) {
   node.add_output("Y2");
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   for (int i = 0; i < 5; ++i) {
-    SeedTensor(ctx, "V" + std::to_string(i), onnx_optim::TensorType::kFloat,
-               onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+    SeedTensor(ctx, "V" + std::to_string(i), core::symbolic::TensorType::kFloat,
+               core::symbolic::SymShape{core::symbolic::SymDim(1)});
   }
 
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
@@ -164,13 +164,13 @@ TEST(OnnxOptimShapeAdam, RejectsWrongOutputCount) {
   node.add_output("V1_new");
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
-  const onnx_optim::OptimShape shape{onnx_optim::OptimDim(3)};
-  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
+  const core::symbolic::SymShape shape{core::symbolic::SymDim(3)};
+  SeedTensor(ctx, "X1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "G1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "V1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "H1", core::symbolic::TensorType::kFloat, shape);
 
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
@@ -246,18 +246,18 @@ TEST(OnnxOptimShapeAdagrad, PropagatesShapesForSingleOptimizedTensor) {
   NodeProto node = MakeAdagradNode(1);
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
-  const onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
+  const core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  SeedTensor(ctx, "X1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "G1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "H1", core::symbolic::TensorType::kFloat, shape);
 
   ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("X1_new"));
   ASSERT_TRUE(ctx.Has("H1_new"));
-  EXPECT_EQ(ctx.Get("X1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X1_new").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("X1_new").Shape(), shape);
   EXPECT_EQ(ctx.Get("H1_new").Shape(), shape);
 }
@@ -266,28 +266,28 @@ TEST(OnnxOptimShapeAdagrad, PropagatesShapesForMultipleOptimizedTensors) {
   NodeProto node = MakeAdagradNode(2);
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
-  const onnx_optim::OptimShape shape_x1{onnx_optim::OptimDim(4)};
-  const onnx_optim::OptimShape shape_x2{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)};
-  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape_x1);
-  SeedTensor(ctx, "X2", onnx_optim::TensorType::kDouble, shape_x2);
-  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape_x1);
-  SeedTensor(ctx, "G2", onnx_optim::TensorType::kDouble, shape_x2);
-  SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape_x1);
-  SeedTensor(ctx, "H2", onnx_optim::TensorType::kDouble, shape_x2);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
+  const core::symbolic::SymShape shape_x1{core::symbolic::SymDim(4)};
+  const core::symbolic::SymShape shape_x2{core::symbolic::SymDim(2), core::symbolic::SymDim(5)};
+  SeedTensor(ctx, "X1", core::symbolic::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "X2", core::symbolic::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "G1", core::symbolic::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "G2", core::symbolic::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "H1", core::symbolic::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "H2", core::symbolic::TensorType::kDouble, shape_x2);
 
   ctx.ComputeShapeNode(node);
 
   // Outputs are laid out as [X1_new, X2_new, H1_new, H2_new] and each output
   // mirrors the dtype and shape of its corresponding input.
-  EXPECT_EQ(ctx.Get("X1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X1_new").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("X1_new").Shape(), shape_x1);
-  EXPECT_EQ(ctx.Get("X2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("X2_new").Dtype(), core::symbolic::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("X2_new").Shape(), shape_x2);
-  EXPECT_EQ(ctx.Get("H1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("H1_new").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("H1_new").Shape(), shape_x1);
-  EXPECT_EQ(ctx.Get("H2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("H2_new").Dtype(), core::symbolic::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("H2_new").Shape(), shape_x2);
 }
 
@@ -305,11 +305,11 @@ TEST(OnnxOptimShapeAdagrad, RejectsInputCountNotMultipleOfThree) {
   node.add_output("Y1");
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   for (int i = 0; i < 4; ++i) {
-    SeedTensor(ctx, "V" + std::to_string(i), onnx_optim::TensorType::kFloat,
-               onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+    SeedTensor(ctx, "V" + std::to_string(i), core::symbolic::TensorType::kFloat,
+               core::symbolic::SymShape{core::symbolic::SymDim(1)});
   }
 
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
@@ -329,12 +329,12 @@ TEST(OnnxOptimShapeAdagrad, RejectsWrongOutputCount) {
   node.add_output("X1_new");
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
-  const onnx_optim::OptimShape shape{onnx_optim::OptimDim(3)};
-  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
+  const core::symbolic::SymShape shape{core::symbolic::SymDim(3)};
+  SeedTensor(ctx, "X1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "G1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "H1", core::symbolic::TensorType::kFloat, shape);
 
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
@@ -352,18 +352,18 @@ TEST(OnnxOptimShapeMomentum, PropagatesShapesForSingleOptimizedTensor) {
   NodeProto node = MakeMomentumNode(1);
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
-  const onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
+  const core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  SeedTensor(ctx, "X1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "G1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "V1", core::symbolic::TensorType::kFloat, shape);
 
   ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("X1_new"));
   ASSERT_TRUE(ctx.Has("V1_new"));
-  EXPECT_EQ(ctx.Get("X1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X1_new").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("X1_new").Shape(), shape);
   EXPECT_EQ(ctx.Get("V1_new").Shape(), shape);
 }
@@ -372,28 +372,28 @@ TEST(OnnxOptimShapeMomentum, PropagatesShapesForMultipleOptimizedTensors) {
   NodeProto node = MakeMomentumNode(2);
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
-  const onnx_optim::OptimShape shape_x1{onnx_optim::OptimDim(4)};
-  const onnx_optim::OptimShape shape_x2{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)};
-  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape_x1);
-  SeedTensor(ctx, "X2", onnx_optim::TensorType::kDouble, shape_x2);
-  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape_x1);
-  SeedTensor(ctx, "G2", onnx_optim::TensorType::kDouble, shape_x2);
-  SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape_x1);
-  SeedTensor(ctx, "V2", onnx_optim::TensorType::kDouble, shape_x2);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
+  const core::symbolic::SymShape shape_x1{core::symbolic::SymDim(4)};
+  const core::symbolic::SymShape shape_x2{core::symbolic::SymDim(2), core::symbolic::SymDim(5)};
+  SeedTensor(ctx, "X1", core::symbolic::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "X2", core::symbolic::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "G1", core::symbolic::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "G2", core::symbolic::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "V1", core::symbolic::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "V2", core::symbolic::TensorType::kDouble, shape_x2);
 
   ctx.ComputeShapeNode(node);
 
   // Outputs are laid out as [X1_new, X2_new, V1_new, V2_new] and each output
   // mirrors the dtype and shape of its corresponding input.
-  EXPECT_EQ(ctx.Get("X1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X1_new").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("X1_new").Shape(), shape_x1);
-  EXPECT_EQ(ctx.Get("X2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("X2_new").Dtype(), core::symbolic::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("X2_new").Shape(), shape_x2);
-  EXPECT_EQ(ctx.Get("V1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("V1_new").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("V1_new").Shape(), shape_x1);
-  EXPECT_EQ(ctx.Get("V2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("V2_new").Dtype(), core::symbolic::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("V2_new").Shape(), shape_x2);
 }
 
@@ -411,11 +411,11 @@ TEST(OnnxOptimShapeMomentum, RejectsInputCountNotMultipleOfThree) {
   node.add_output("Y1");
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
   for (int i = 0; i < 4; ++i) {
-    SeedTensor(ctx, "V" + std::to_string(i), onnx_optim::TensorType::kFloat,
-               onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+    SeedTensor(ctx, "V" + std::to_string(i), core::symbolic::TensorType::kFloat,
+               core::symbolic::SymShape{core::symbolic::SymDim(1)});
   }
 
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
@@ -435,12 +435,12 @@ TEST(OnnxOptimShapeMomentum, RejectsWrongOutputCount) {
   node.add_output("X1_new");
 
   onnx_optim::shapes::ShapesContext ctx;
-  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
-  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
-  const onnx_optim::OptimShape shape{onnx_optim::OptimDim(3)};
-  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
-  SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape);
+  SeedScalar(ctx, "R", core::symbolic::TensorType::kFloat);
+  SeedScalar(ctx, "T", core::symbolic::TensorType::kInt64);
+  const core::symbolic::SymShape shape{core::symbolic::SymDim(3)};
+  SeedTensor(ctx, "X1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "G1", core::symbolic::TensorType::kFloat, shape);
+  SeedTensor(ctx, "V1", core::symbolic::TensorType::kFloat, shape);
 
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }

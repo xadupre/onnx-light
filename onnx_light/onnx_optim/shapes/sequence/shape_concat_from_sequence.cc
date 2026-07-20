@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_optim/optim_sequence.h"
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -25,7 +25,7 @@ namespace {
 // Merges ``in`` into ``out``. Two concrete integer dimensions must be
 // equal. A concrete integer wins over a symbolic dimension. Two
 // symbolic dimensions keep the previously-merged ``out`` value.
-void MergeDim(OptimDim &out, const OptimDim &in, std::size_t axis, std::size_t input_index) {
+void MergeDim(SymDim &out, const SymDim &in, std::size_t axis, std::size_t input_index) {
   if (out.IsInt() && in.IsInt()) {
     EXT_ENFORCE_INVALID(out.AsInt() == in.AsInt(), "ComputeShapeConcatFromSequence: element ",
                         std::to_string(input_index), " dimension ", std::to_string(axis), " (",
@@ -46,7 +46,7 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
                       "ComputeShapeConcatFromSequence: ConcatFromSequence requires one input.");
 
   const std::string seq_name = node.input(0);
-  const OptimSequence &seq = ctx.GetSequence(seq_name);
+  const SymSequence &seq = ctx.GetSequence(seq_name);
   const TensorType elem_dtype = seq.ElemDtype();
 
   // Resolve attributes. ``axis`` is required; ``new_axis`` defaults to 0.
@@ -60,11 +60,11 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
 
   // Without per-element shapes we can only forward the element dtype.
   if (!seq.HasElemShapes() || seq.ElemShapes().empty()) {
-    ctx.Set(node.output(0), OptimTensor(nullptr, elem_dtype, OptimShape{}));
+    ctx.Set(node.output(0), SymTensor(nullptr, elem_dtype, SymShape{}));
     return;
   }
 
-  const std::vector<OptimShape> &elem_shapes = seq.ElemShapes();
+  const std::vector<SymShape> &elem_shapes = seq.ElemShapes();
   const std::size_t n = elem_shapes.size();
   const int rank = static_cast<int>(elem_shapes[0].Rank());
 
@@ -86,12 +86,12 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
   const int resolved_axis =
       static_cast<int>(axis_attr < 0 ? axis_attr + upper_bound + 1 : axis_attr);
 
-  OptimShape out_shape;
+  SymShape out_shape;
   if (new_axis == 1) {
     // Stack along a new axis at position ``resolved_axis``. The new
     // dimension is the sequence length (n); every other dimension is
     // merged across elements.
-    OptimShape merged = elem_shapes[0];
+    SymShape merged = elem_shapes[0];
     for (std::size_t i = 1; i < n; ++i) {
       for (std::size_t d = 0; d < static_cast<std::size_t>(rank); ++d) {
         MergeDim(merged[d], elem_shapes[i][d], d, i);
@@ -99,7 +99,7 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
     }
     for (int i = 0; i <= upper_bound; ++i) {
       if (i == resolved_axis) {
-        out_shape.PushBack(OptimDim(static_cast<int64_t>(n)));
+        out_shape.PushBack(SymDim(static_cast<int64_t>(n)));
       } else {
         // Index into ``merged`` skipping over the new axis.
         const std::size_t src = static_cast<std::size_t>(i > resolved_axis ? i - 1 : i);
@@ -111,12 +111,12 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
     // sum of per-element dimensions along ``axis`` when all are
     // concrete; otherwise a fresh symbolic name. Every other dimension
     // is merged across elements.
-    OptimShape merged = elem_shapes[0];
+    SymShape merged = elem_shapes[0];
     bool axis_dim_known = merged[resolved_axis].IsInt();
     int64_t axis_dim_total = axis_dim_known ? merged[resolved_axis].AsInt() : 0;
 
     for (std::size_t i = 1; i < n; ++i) {
-      const OptimShape &shape = elem_shapes[i];
+      const SymShape &shape = elem_shapes[i];
       for (std::size_t d = 0; d < static_cast<std::size_t>(rank); ++d) {
         if (static_cast<int>(d) == resolved_axis) {
           if (axis_dim_known && shape[d].IsInt()) {
@@ -131,17 +131,17 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
     }
 
     if (axis_dim_known) {
-      merged[resolved_axis] = OptimDim(axis_dim_total);
+      merged[resolved_axis] = SymDim(axis_dim_total);
     } else {
       // Disambiguate the synthetic symbolic dim by output name so multiple
       // ConcatFromSequence nodes in the same graph do not collide.
-      merged[resolved_axis] = OptimDim("ConcatFromSequence_" + node.output(0) + "_axis" +
-                                       std::to_string(resolved_axis));
+      merged[resolved_axis] =
+          SymDim("ConcatFromSequence_" + node.output(0) + "_axis" + std::to_string(resolved_axis));
     }
     out_shape = std::move(merged);
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, elem_dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, elem_dtype, std::move(out_shape)));
 }
 
 } // namespace sequence

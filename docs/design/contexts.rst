@@ -38,7 +38,7 @@ See also
 * :doc:`../api/cpp/onnx_kernels/kernels/kernel_context`
 * :doc:`../api/cpp/onnx_kernels/runtime_context`
 * :doc:`../api/cpp/onnx_optim/shapes/shapes_context`
-* :doc:`../api/cpp/onnx_optim/annotations/inplace_reuse`
+* :doc:`../api/cpp/onnx_core/annotations/inplace_reuse`
 * :doc:`../api/python/onnx/reference`
 * :doc:`../api/python/onnx_optim/shape_inference`
 * :doc:`../api/python/onnx_optim/compute_context`

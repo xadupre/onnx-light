@@ -11,8 +11,8 @@
 
 #include "onnx_proto/onnx_helper.h"
 
-#include "onnx_optim/optim_sequence.h"
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_optim/shapes/shape_inference.h"
 
@@ -27,14 +27,14 @@ namespace {
 // per-element shape is identical; otherwise returns an empty (unknown)
 // shape. When the input sequence has no per-element shapes recorded, an
 // empty shape is returned as well.
-OptimShape CommonElemShape(const OptimSequence &seq) {
+SymShape CommonElemShape(const SymSequence &seq) {
   if (!seq.HasElemShapes() || seq.ElemShapes().empty()) {
-    return OptimShape{};
+    return SymShape{};
   }
-  const std::vector<OptimShape> &shapes = seq.ElemShapes();
+  const std::vector<SymShape> &shapes = seq.ElemShapes();
   for (std::size_t i = 1; i < shapes.size(); ++i) {
     if (shapes[i] != shapes[0]) {
-      return OptimShape{};
+      return SymShape{};
     }
   }
   return shapes[0];
@@ -69,10 +69,10 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   ShapesContext local = ctx;
 
   const std::string input_seq_name = node.input(0);
-  const OptimSequence &input_seq = ctx.GetSequence(input_seq_name);
+  const SymSequence &input_seq = ctx.GetSequence(input_seq_name);
   const TensorType elem_dtype = input_seq.ElemDtype();
-  const OptimShape elem_shape = CommonElemShape(input_seq);
-  local.Set(body.input()[0].name(), OptimTensor(nullptr, elem_dtype, elem_shape));
+  const SymShape elem_shape = CommonElemShape(input_seq);
+  local.Set(body.input()[0].name(), SymTensor(nullptr, elem_dtype, elem_shape));
 
   for (int i = 1; i < node.input_size(); ++i) {
     const std::string outer_name = node.input(i);
@@ -81,12 +81,12 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
       // Additional inputs that are sequences contribute one element per
       // iteration; bind the body input to a per-element tensor descriptor,
       // not to the whole sequence.
-      const OptimSequence &add_seq = ctx.GetSequence(outer_name);
-      local.Set(body_in_name, OptimTensor(nullptr, add_seq.ElemDtype(), CommonElemShape(add_seq)));
+      const SymSequence &add_seq = ctx.GetSequence(outer_name);
+      local.Set(body_in_name, SymTensor(nullptr, add_seq.ElemDtype(), CommonElemShape(add_seq)));
     } else {
       EXT_ENFORCE_INVALID(ctx.Has(outer_name), "ComputeShapeSequenceMap: additional input '",
                           outer_name, "' is missing from the inferred context.");
-      local.Set(body_in_name, OptimTensor(ctx.Get(outer_name)));
+      local.Set(body_in_name, SymTensor(ctx.Get(outer_name)));
     }
   }
 
@@ -108,10 +108,10 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &body_out = local.Get(body.output()[i].name());
-    OptimDim out_length = input_seq.Length().IsInt() ? OptimDim(input_seq.Length().AsInt())
-                                                     : OptimDim("SequenceMap_" + node_out + "_len");
-    ctx.SetSequence(node_out, OptimSequence(body_out.Dtype(), std::move(out_length)));
+    const SymTensor &body_out = local.Get(body.output()[i].name());
+    SymDim out_length = input_seq.Length().IsInt() ? SymDim(input_seq.Length().AsInt())
+                                                   : SymDim("SequenceMap_" + node_out + "_len");
+    ctx.SetSequence(node_out, SymSequence(body_out.Dtype(), std::move(out_length)));
   }
 }
 

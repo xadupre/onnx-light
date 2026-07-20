@@ -33,10 +33,10 @@ void ComputeShapeBitwiseXor(ShapesContext &ctx, const NodeProto &node, const cha
 
 void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "BitwiseNot", "ComputeShapeBitwiseNot");
-  const OptimTensor &input = ctx.Get(x);
+  const SymTensor &input = ctx.Get(x);
   // BitwiseNot (opset 18) is element-wise: the output dtype and shape
   // match the input.
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 void ComputeShapeBitShift(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b) {

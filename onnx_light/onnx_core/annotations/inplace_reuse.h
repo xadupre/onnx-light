@@ -72,6 +72,14 @@ namespace annotations {
 
 using ::onnx_light::onnx_optim::shapes::ShapesContext;
 
+// The symbolic value descriptors live in ``core::symbolic``; bring them
+// into ``core::annotations`` so this file can keep referring to them
+// unqualified.
+using ::onnx_light::core::symbolic::SymDim;
+using ::onnx_light::core::symbolic::SymShape;
+using ::onnx_light::core::symbolic::SymTensor;
+using ::onnx_light::core::symbolic::TensorType;
+
 /**
  * Classifies how an input buffer compares in size with the output that
  * reuses it:
@@ -545,7 +553,7 @@ public:
 
 private:
   static std::string NormalizeDomain(const std::string &domain) {
-    return domain.empty() ? std::string(shapes::kOnnxDomain) : domain;
+    return domain.empty() ? std::string(::onnx_light::onnx_optim::shapes::kOnnxDomain) : domain;
   }
 
   static std::string MakeCustomValueTagKey(const std::string &domain, const std::string &op_type) {

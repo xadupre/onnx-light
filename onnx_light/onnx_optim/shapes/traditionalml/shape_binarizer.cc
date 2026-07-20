@@ -15,8 +15,8 @@ void ComputeShapeBinarizer(ShapesContext &ctx, const NodeProto &node, const char
   CheckNodeOpAndOutput(node, "Binarizer", "ComputeShapeBinarizer");
 
   // Binarizer is element-wise: the output has the same dtype and shape as the input.
-  const OptimTensor &input = ctx.Get(x);
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  const SymTensor &input = ctx.Get(x);
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace traditionalml

@@ -40,17 +40,17 @@ void ComputeShapeCastMap(ShapesContext &ctx, const NodeProto &node, const char *
   const TensorType output_dtype = ResolveOutputDtype(node);
 
   const std::string map_form = GetAttributeOr<std::string>(node, "map_form", std::string("DENSE"));
-  OptimShape output_shape;
+  SymShape output_shape;
   if (map_form == "SPARSE") {
     const int64_t max_map = GetAttributeOr<int64_t>(node, "max_map", static_cast<int64_t>(1));
-    output_shape.PushBack(OptimDim(max_map));
+    output_shape.PushBack(SymDim(max_map));
   } else {
     // DENSE: output length equals the number of keys in the input map, which is
     // a runtime quantity. Represent it as a symbolic dimension.
-    output_shape.PushBack(OptimDim(std::string("CastMap_dense_n")));
+    output_shape.PushBack(SymDim(std::string("CastMap_dense_n")));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, output_dtype, std::move(output_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, output_dtype, std::move(output_shape)));
 }
 
 } // namespace traditionalml

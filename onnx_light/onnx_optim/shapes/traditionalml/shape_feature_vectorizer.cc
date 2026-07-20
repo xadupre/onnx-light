@@ -39,11 +39,11 @@ std::vector<int64_t> ResolveInputDims(const NodeProto &node, const ShapesContext
     if (!ctx.Has(inputs[i])) {
       continue;
     }
-    const OptimShape &shape = ctx.Get(inputs[i]).Shape();
+    const SymShape &shape = ctx.Get(inputs[i]).Shape();
     if (shape.Empty()) {
       continue;
     }
-    const OptimDim &last = shape[shape.Rank() - 1];
+    const SymDim &last = shape[shape.Rank() - 1];
     if (last.IsInt()) {
       dims[i] = last.AsInt();
     }
@@ -53,18 +53,18 @@ std::vector<int64_t> ResolveInputDims(const NodeProto &node, const ShapesContext
 
 // Returns the batch dimension shared by every input, falling back to a
 // symbolic ``"N"`` dimension when any input's batch dimension is unknown.
-OptimDim ResolveBatchDim(const ShapesContext &ctx, const std::vector<std::string> &inputs) {
-  OptimDim resolved(static_cast<int64_t>(1));
+SymDim ResolveBatchDim(const ShapesContext &ctx, const std::vector<std::string> &inputs) {
+  SymDim resolved(static_cast<int64_t>(1));
   bool seen = false;
   for (const std::string &name : inputs) {
     if (!ctx.Has(name)) {
-      return OptimDim(std::string("N"));
+      return SymDim(std::string("N"));
     }
-    const OptimShape &shape = ctx.Get(name).Shape();
+    const SymShape &shape = ctx.Get(name).Shape();
     if (shape.Empty()) {
-      return OptimDim(std::string("N"));
+      return SymDim(std::string("N"));
     }
-    OptimDim batch = shape.Rank() == 1 ? OptimDim(static_cast<int64_t>(1)) : shape[0];
+    SymDim batch = shape.Rank() == 1 ? SymDim(static_cast<int64_t>(1)) : shape[0];
     if (!seen) {
       resolved = batch;
       seen = true;
@@ -78,7 +78,7 @@ OptimDim ResolveBatchDim(const ShapesContext &ctx, const std::vector<std::string
       continue;
     }
     // Mixed/symbolic: fall back to a symbolic dimension.
-    return OptimDim(std::string("N"));
+    return SymDim(std::string("N"));
   }
   return resolved;
 }
@@ -102,14 +102,14 @@ void ComputeShapeFeatureVectorizer(ShapesContext &ctx, const NodeProto &node,
     total += d;
   }
 
-  OptimShape output_shape;
+  SymShape output_shape;
   output_shape.PushBack(ResolveBatchDim(ctx, inputs));
   if (all_known) {
-    output_shape.PushBack(OptimDim(total));
+    output_shape.PushBack(SymDim(total));
   } else {
-    output_shape.PushBack(OptimDim(std::string("F")));
+    output_shape.PushBack(SymDim(std::string("F")));
   }
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kFloat, std::move(output_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kFloat, std::move(output_shape)));
 }
 
 } // namespace traditionalml

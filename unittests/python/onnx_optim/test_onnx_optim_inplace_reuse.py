@@ -131,9 +131,9 @@ class TestInPlaceReuse(ExtTestCase):
         model = self._build_model(nodes, [x], [y])
 
         ctx = si.ShapesContext()
-        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, ["batch", 4, 4]))
-        ctx.set("A", si.OptimTensor(onnxl.TensorProto.FLOAT, ["batch", 4, 4]))
-        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, [4, "batch", 4]))
+        ctx.set("X", si.SymTensor(onnxl.TensorProto.FLOAT, ["batch", 4, 4]))
+        ctx.set("A", si.SymTensor(onnxl.TensorProto.FLOAT, ["batch", 4, 4]))
+        ctx.set("Y", si.SymTensor(onnxl.TensorProto.FLOAT, [4, "batch", 4]))
 
         raw = si.compute_inplace_reuse(ctx, model.graph)
         reuse = self._reuse_pairs(raw)
@@ -418,11 +418,11 @@ class TestInPlaceReuse(ExtTestCase):
         model.ir_version = 8
 
         ctx = si.ShapesContext()
-        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [4]))
-        ctx.set("S", si.OptimTensor(onnxl.TensorProto.INT64, [1]))
-        ctx.set("A", si.OptimTensor(onnxl.TensorProto.FLOAT, [4]))
-        ctx.set("B", si.OptimTensor(onnxl.TensorProto.INT64, [4]))
-        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.INT32, [4]))
+        ctx.set("X", si.SymTensor(onnxl.TensorProto.FLOAT, [4]))
+        ctx.set("S", si.SymTensor(onnxl.TensorProto.INT64, [1]))
+        ctx.set("A", si.SymTensor(onnxl.TensorProto.FLOAT, [4]))
+        ctx.set("B", si.SymTensor(onnxl.TensorProto.INT64, [4]))
+        ctx.set("Y", si.SymTensor(onnxl.TensorProto.INT32, [4]))
 
         inplace = si.ComputeContext()
         inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
@@ -488,10 +488,10 @@ class TestInPlaceReuse(ExtTestCase):
         model.ir_version = 8
 
         ctx = si.ShapesContext()
-        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
-        ctx.set("S", si.OptimTensor(onnxl.TensorProto.INT64, [1]))
-        ctx.set("A", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
-        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.INT32, ["N"]))
+        ctx.set("X", si.SymTensor(onnxl.TensorProto.FLOAT, ["N"]))
+        ctx.set("S", si.SymTensor(onnxl.TensorProto.INT64, [1]))
+        ctx.set("A", si.SymTensor(onnxl.TensorProto.FLOAT, ["N"]))
+        ctx.set("Y", si.SymTensor(onnxl.TensorProto.INT32, ["N"]))
 
         inplace = si.ComputeContext()
         inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
@@ -527,10 +527,10 @@ class TestInPlaceReuse(ExtTestCase):
         model.ir_version = 8
 
         ctx = si.ShapesContext()
-        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
+        ctx.set("X", si.SymTensor(onnxl.TensorProto.FLOAT, ["N"]))
         for i in range(5):
-            ctx.set(f"A{i}", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
-        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
+            ctx.set(f"A{i}", si.SymTensor(onnxl.TensorProto.FLOAT, ["N"]))
+        ctx.set("Y", si.SymTensor(onnxl.TensorProto.FLOAT, ["N"]))
 
         inplace = si.ComputeContext()
         inplace.compute_inplace_reuse_graph(model.graph, ctx)
@@ -582,10 +582,10 @@ class TestInPlaceReuse(ExtTestCase):
         )
 
         ctx = si.ShapesContext()
-        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [3, 4]))
-        ctx.set("A", si.OptimTensor(onnxl.TensorProto.FLOAT, [3, 4]))
-        ctx.set("B", si.OptimTensor(onnxl.TensorProto.FLOAT, [3, 4]))
-        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, [3, 4]))
+        ctx.set("X", si.SymTensor(onnxl.TensorProto.FLOAT, [3, 4]))
+        ctx.set("A", si.SymTensor(onnxl.TensorProto.FLOAT, [3, 4]))
+        ctx.set("B", si.SymTensor(onnxl.TensorProto.FLOAT, [3, 4]))
+        ctx.set("Y", si.SymTensor(onnxl.TensorProto.FLOAT, [3, 4]))
 
         inplace = si.ComputeContext()
         inplace.compute_inplace_reuse_graph(model.graph, ctx)
@@ -769,9 +769,9 @@ class TestInPlaceReuse(ExtTestCase):
         ctx = si.ShapesContext()
         # Keeps the symbolic byte-size expression intentionally large so the test
         # exercises the caching path added for expensive simplification work.
-        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [self._LONG_SYMBOLIC_DIM_NAME]))
-        ctx.set("S", si.OptimTensor(onnxl.TensorProto.INT64, [1]))
-        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, [self._LONG_SYMBOLIC_DIM_NAME]))
+        ctx.set("X", si.SymTensor(onnxl.TensorProto.FLOAT, [self._LONG_SYMBOLIC_DIM_NAME]))
+        ctx.set("S", si.SymTensor(onnxl.TensorProto.INT64, [1]))
+        ctx.set("Y", si.SymTensor(onnxl.TensorProto.FLOAT, [self._LONG_SYMBOLIC_DIM_NAME]))
 
         inplace = si.ComputeContext()
         inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})

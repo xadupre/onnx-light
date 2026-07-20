@@ -22,7 +22,7 @@ namespace training {
 inline constexpr const char *kOnnxPreviewTrainingDomain = "ai.onnx.preview.training";
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Adam`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Adam`` node and
  * stores it in ``ctx``.
  *
  * ``Adam`` (``ai.onnx.preview.training``) updates ``N`` optimised
@@ -55,7 +55,7 @@ inline constexpr const char *kOnnxPreviewTrainingDomain = "ai.onnx.preview.train
 void ComputeShapeAdam(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Adagrad`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Adagrad`` node and
  * stores it in ``ctx``.
  *
  * ``Adagrad`` (``ai.onnx.preview.training``) updates ``N`` optimised
@@ -87,7 +87,7 @@ void ComputeShapeAdam(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeAdagrad(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Momentum`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Momentum`` node and
  * stores it in ``ctx``.
  *
  * ``Momentum`` (``ai.onnx.preview.training``) updates ``N`` optimised

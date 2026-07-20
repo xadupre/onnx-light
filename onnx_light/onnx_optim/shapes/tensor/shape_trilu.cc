@@ -4,7 +4,7 @@
 
 #include "onnx_optim/shapes/tensor/shape_tensor.h"
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -16,10 +16,10 @@ void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Trilu", "ComputeShapeTrilu");
   EXT_ENFORCE_INVALID(!(node.input_size() < 1), "ComputeShapeTrilu: Trilu requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0));
+  const SymTensor &input = ctx.Get(node.input(0));
   EXT_ENFORCE_INVALID(!(input.Shape().Rank() < 2), "ComputeShapeTrilu: input rank must be >= 2.");
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace tensor

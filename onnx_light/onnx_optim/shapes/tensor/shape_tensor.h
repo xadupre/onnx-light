@@ -19,7 +19,7 @@ namespace shapes {
 namespace tensor {
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Concat`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``Concat`` node
  * and stores it in ``ctx``.
  *
  * ``Concat`` concatenates a variadic list of input tensors along the
@@ -59,7 +59,7 @@ namespace tensor {
 void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Cast`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Cast`` node and
  * stores it in ``ctx``.
  *
  * ``Cast`` produces an output whose shape is identical to the shape of
@@ -88,7 +88,7 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeCast(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``BitCast`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``BitCast`` node
  * (opset 26) and stores it in ``ctx``.
  *
  * ``BitCast`` reinterprets the bit pattern of its input as the data type
@@ -115,7 +115,7 @@ void ComputeShapeCast(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeBitCast(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``CastLike`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``CastLike`` node and
  * stores it in ``ctx``.
  *
  * ``CastLike`` produces an output whose shape is identical to the shape of
@@ -140,7 +140,7 @@ void ComputeShapeBitCast(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeCastLike(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Reshape`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``Reshape`` node
  * and stores it in ``ctx``.
  *
  * ``Reshape`` takes a ``data`` tensor and a 1-D int64 ``shape`` tensor
@@ -158,7 +158,7 @@ void ComputeShapeCastLike(ShapesContext &ctx, const NodeProto &node);
  *   - symbolic target dims are forwarded as symbolic output dims.
  *
  * Shape values are read from the ``shape`` input's
- * :cpp:func:`OptimTensor::ValueAsShape` annotation (populated for
+ * :cpp:func:`SymTensor::ValueAsShape` annotation (populated for
  * small constants, e.g. by :cpp:func:`ComputeShapeConstant`). When
  * that annotation is missing the output rank is taken from the static
  * shape of the ``shape`` input (its single dimension, when concrete)
@@ -187,18 +187,18 @@ void ComputeShapeCastLike(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Slice`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Slice`` node and stores
  * it in ``ctx``.
  *
  * ``Slice`` preserves input rank and dtype. When ``starts``/``ends`` (and
  * optional ``axes``/``steps``) values are known through
- * :cpp:func:`OptimTensor::ValueAsShape`, concrete output lengths are inferred
+ * :cpp:func:`SymTensor::ValueAsShape`, concrete output lengths are inferred
  * per sliced axis; otherwise sliced axes are left symbolic.
  */
 void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Expand`` node
+ * Computes the output :cpp:class:`SymTensor` of an ``Expand`` node
  * and stores it in ``ctx``.
  *
  * ``Expand`` broadcasts its first input (``input``) to the shape
@@ -207,7 +207,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node);
  * of ``input`` (type constraint ``T``).
  *
  * Shape values are read from the ``shape`` input's
- * :cpp:func:`OptimTensor::ValueAsShape` annotation (populated for
+ * :cpp:func:`SymTensor::ValueAsShape` annotation (populated for
  * small constants). When that annotation is present the output shape
  * is computed as ``BroadcastShapes(input.shape, target)``. When it is
  * absent the output rank is taken from the static shape of the
@@ -232,7 +232,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeExpand(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Squeeze`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Squeeze`` node and
  * stores it in ``ctx``.
  *
  * ``Squeeze`` removes dimensions of size 1 from the input shape. When the
@@ -243,7 +243,7 @@ void ComputeShapeExpand(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Unsqueeze`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Unsqueeze`` node and
  * stores it in ``ctx``.
  *
  * ``Unsqueeze`` inserts dimensions of size 1 at the indices given by the
@@ -252,7 +252,7 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Transpose`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``Transpose`` node
  * and stores it in ``ctx``.
  *
  * ``Transpose`` permutes the axes of its input tensor according to the
@@ -273,7 +273,7 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node);
  * @throws std::out_of_range     if the input name is missing from ``ctx``.
  */
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Tile`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Tile`` node and
  * stores it in ``ctx``.
  *
  * ``Tile`` constructs a tensor by repeating its first input (``input``)
@@ -282,7 +282,7 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node);
  * constraint ``T``); its dimension ``i`` is ``input.shape[i] * repeats[i]``.
  *
  * Repeats values are read from the ``repeats`` input's
- * :cpp:func:`OptimTensor::ValueAsShape` annotation (populated for small
+ * :cpp:func:`SymTensor::ValueAsShape` annotation (populated for small
  * constants). When that annotation is present each output dim is computed
  * as ``input.shape[i] * repeats[i]`` (the multiplication is performed
  * symbolically when ``input.shape[i]`` is not a concrete integer; when
@@ -308,7 +308,7 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Pad`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Pad`` node and stores
  * it in ``ctx``. Supports the full Pad history (opsets 1, 2, 11, 13, 18,
  * 19, 21, 23, 24, 25):
  *
@@ -340,7 +340,7 @@ void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapePad(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Upsample`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Upsample`` node and
  * stores it in ``ctx``. Supports Upsample opsets 1, 7, 9 and 10:
  *
  * - v1: the per-spatial-axis ``width_scale`` and ``height_scale`` FLOAT
@@ -358,7 +358,7 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Resize`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Resize`` node and stores
  * it in ``ctx``.
  *
  * ``Resize`` (since opset 10 in the ``ai.onnx`` domain) accepts a runtime
@@ -384,7 +384,7 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``DepthToSpace`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``DepthToSpace`` node and
  * stores it in ``ctx``.
  *
  * ``DepthToSpace`` requires a rank-4 input of shape ``(N, C, H, W)`` and a
@@ -409,7 +409,7 @@ void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeDepthToSpace(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``SpaceToDepth`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``SpaceToDepth`` node and
  * stores it in ``ctx``.
  *
  * ``SpaceToDepth`` requires a rank-4 input of shape ``(N, C, H, W)`` and a
@@ -434,7 +434,7 @@ void ComputeShapeDepthToSpace(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSpaceToDepth(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``AffineGrid`` node
+ * Computes the output :cpp:class:`SymTensor` of an ``AffineGrid`` node
  * and stores it in ``ctx``.
  *
  * ``AffineGrid`` produces a flow field of sampling coordinates from a
@@ -443,7 +443,7 @@ void ComputeShapeSpaceToDepth(ShapesContext &ctx, const NodeProto &node);
  *
  * The output shape is derived as follows:
  *
- *   - If ``size`` exposes a value via :cpp:func:`OptimTensor::ValueAsShape`
+ *   - If ``size`` exposes a value via :cpp:func:`SymTensor::ValueAsShape`
  *     (typically because it is a Constant), the spatial output dims
  *     ``(H, W)`` for 2-D / ``(D, H, W)`` for 3-D are taken verbatim from
  *     ``size`` and the rank of the output is fully known. ``size`` must
@@ -474,7 +474,7 @@ void ComputeShapeSpaceToDepth(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``GridSample`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``GridSample`` node and
  * stores it in ``ctx``.
  *
  * ``GridSample`` samples an input tensor ``X`` of rank ``r+2`` and shape
@@ -506,7 +506,7 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``NonZero`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``NonZero`` node and
  * stores it in ``ctx``.
  *
  * ``NonZero`` returns the indices of the non-zero elements of its single input
@@ -534,7 +534,7 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeNonZero(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``OneHot`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``OneHot`` node and
  * stores it in ``ctx``.
  *
  * ``OneHot`` (since opset 9 in the ``ai.onnx`` domain) produces a tensor of
@@ -560,7 +560,7 @@ void ComputeShapeNonZero(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeOneHot(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` entries of a ``Unique`` node
+ * Computes the output :cpp:class:`SymTensor` entries of a ``Unique`` node
  * and stores them in ``ctx``.
  *
  * ``Unique`` (opset 11) returns up to four outputs (``Y``, ``indices``,
@@ -590,7 +590,7 @@ void ComputeShapeOneHot(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Shape`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Shape`` node and stores
  * it in ``ctx``.
  *
  * ``Shape`` returns a 1-D :cpp:enum:`TensorType::kInt64` tensor whose entries
@@ -601,7 +601,7 @@ void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node);
  * normalisation) the output is empty.
  *
  * The output dimension is concrete when the input rank is known (which is
- * always the case when an :cpp:class:`OptimTensor` is available in
+ * always the case when an :cpp:class:`SymTensor` is available in
  * ``ctx``). The data buffer of the input is never inspected.
  *
  * @param ctx   In/out context. Must already contain an entry for
@@ -618,7 +618,7 @@ void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeShape(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Size`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Size`` node and stores
  * it in ``ctx``.
  *
  * ``Size`` returns a 0-D (scalar) INT64 tensor whose single value is the
@@ -642,7 +642,7 @@ void ComputeShapeShape(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSize(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of an ``Identity`` node and
+ * Computes the output :cpp:class:`SymTensor` of an ``Identity`` node and
  * stores it in ``ctx``.
  *
  * ``Identity`` copies its single input verbatim, so the output has the same
@@ -655,7 +655,7 @@ void ComputeShapeSize(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeIdentity(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Gather`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Gather`` node and stores
  * it in ``ctx``.
  *
  * ``Gather`` indexes the ``data`` tensor along ``axis`` using the integer
@@ -667,7 +667,7 @@ void ComputeShapeIdentity(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeGather(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``GatherElements`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``GatherElements`` node
  * and stores it in ``ctx``.
  *
  * The output has the same shape as ``indices`` and the same dtype as ``data``.
@@ -675,7 +675,7 @@ void ComputeShapeGather(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeGatherElements(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``GatherND`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``GatherND`` node and
  * stores it in ``ctx``.
  *
  * The output has rank ``q + r - indices_shape[-1] - 1 - b`` where ``b`` is
@@ -685,7 +685,7 @@ void ComputeShapeGatherElements(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ScatterElements`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``ScatterElements`` node
  * and stores it in ``ctx``.
  *
  * The output has the same shape and dtype as ``data``.
@@ -693,7 +693,7 @@ void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeScatterElements(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a deprecated ``Scatter``
+ * Computes the output :cpp:class:`SymTensor` of a deprecated ``Scatter``
  * node and stores it in ``ctx``.
  *
  * The output has the same shape and dtype as ``data``.
@@ -701,7 +701,7 @@ void ComputeShapeScatterElements(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeScatter(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ScatterND`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``ScatterND`` node and
  * stores it in ``ctx``.
  *
  * The output has the same shape and dtype as ``data``.
@@ -709,7 +709,7 @@ void ComputeShapeScatter(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeScatterND(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``TensorScatter`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``TensorScatter`` node
  * and stores it in ``ctx``.
  *
  * ``TensorScatter`` writes slices of ``update`` into a copy of
@@ -739,7 +739,7 @@ void ComputeShapeScatterND(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeTensorScatter(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Trilu`` node and stores
+ * Computes the output :cpp:class:`SymTensor` of a ``Trilu`` node and stores
  * it in ``ctx``.
  *
  * ``Trilu`` returns the upper (``upper`` attribute = 1, the default) or lower
@@ -763,7 +763,7 @@ void ComputeShapeTensorScatter(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``CenterCropPad`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``CenterCropPad`` node
  * (since opset 18) and stores it in ``ctx``.
  *
  * The output has the same dtype as ``node.input(0)`` and the same rank as
@@ -789,7 +789,7 @@ void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``ReverseSequence`` node
+ * Computes the output :cpp:class:`SymTensor` of a ``ReverseSequence`` node
  * and stores it in ``ctx``.
  *
  * ``ReverseSequence`` reverses the first ``sequence_lens[i]`` elements of
@@ -815,7 +815,7 @@ void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeReverseSequence(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``Compress`` node and
+ * Computes the output :cpp:class:`SymTensor` of a ``Compress`` node and
  * stores it in ``ctx``.
  *
  * When the ``axis`` attribute is present the output has the same rank and
@@ -838,7 +838,7 @@ void ComputeShapeReverseSequence(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the per-output :cpp:class:`OptimTensor` of a ``Split`` node and
+ * Computes the per-output :cpp:class:`SymTensor` of a ``Split`` node and
  * stores them in ``ctx``.
  *
  * ``Split`` divides ``input`` along ``axis`` into ``node.output_size()``

@@ -58,8 +58,8 @@ void ComputeShapeLabelEncoder(ShapesContext &ctx, const NodeProto &node, const c
   // LabelEncoder is a one-to-one mapping: the output shape always
   // matches the input shape, only the dtype is determined by the
   // selected ``values_*`` attribute.
-  const OptimTensor &input = ctx.Get(x);
-  ctx.Set(node.output(0), OptimTensor(nullptr, value_types[0], input.Shape()));
+  const SymTensor &input = ctx.Get(x);
+  ctx.Set(node.output(0), SymTensor(nullptr, value_types[0], input.Shape()));
 }
 
 } // namespace traditionalml

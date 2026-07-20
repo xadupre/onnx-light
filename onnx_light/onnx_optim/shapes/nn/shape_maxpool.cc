@@ -58,8 +58,8 @@ int64_t AutoPadOutputDim(AutoPad auto_pad, int64_t in_dim, int64_t kernel, int64
 void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "MaxPool", "ComputeShapeMaxPool");
 
-  const OptimTensor &input = ctx.Get(x);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(x);
+  const SymShape &in_shape = input.Shape();
   EXT_ENFORCE_INVALID(in_shape.Rank() >= 2,
                       "ComputeShapeMaxPool: input must have rank >= 2 (N, C, D1, ...).");
   const size_t n_input_dims = in_shape.Rank() - 2;
@@ -108,11 +108,11 @@ void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *
 
   const bool ceil_mode = GetAttributeOr<int64_t>(node, "ceil_mode", 0) != 0;
 
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(in_shape[0]);
   out_shape.PushBack(in_shape[1]);
   for (size_t i = 0; i < n_input_dims; ++i) {
-    const OptimDim &d = in_shape[i + 2];
+    const SymDim &d = in_shape[i + 2];
     if (d.IsInt()) {
       int64_t out_d;
       if (use_auto_pad) {
@@ -121,7 +121,7 @@ void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *
         out_d = OutputDim(d.AsInt(), kernel_shape[i], strides[i], pads[i], pads[i + n_input_dims],
                           ceil_mode, dilations[i]);
       }
-      out_shape.PushBack(OptimDim(out_d));
+      out_shape.PushBack(SymDim(out_d));
     } else {
       std::string expr = "MaxPool(" + d.AsExpr() + ",k=" + std::to_string(kernel_shape[i]) +
                          ",s=" + std::to_string(strides[i]) + ",d=" + std::to_string(dilations[i]);
@@ -132,16 +132,16 @@ void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *
                 ",ceil=" + (ceil_mode ? "1" : "0");
       }
       expr += ")";
-      out_shape.PushBack(OptimDim(expr));
+      out_shape.PushBack(SymDim(expr));
     }
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), out_shape));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), out_shape));
 
   // Optional second output ``Indices`` (added in opset 8). Only register an
   // entry when the node actually declares a non-empty second output name.
   if (node.output_size() >= 2 && !node.output(1).empty()) {
-    ctx.Set(node.output(1), OptimTensor(nullptr, TensorType::kInt64, std::move(out_shape)));
+    ctx.Set(node.output(1), SymTensor(nullptr, TensorType::kInt64, std::move(out_shape)));
   }
 }
 

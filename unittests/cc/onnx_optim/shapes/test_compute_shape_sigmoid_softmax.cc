@@ -30,35 +30,36 @@ NodeProto MakeUnaryNode(const std::string &op_type, const std::string &input_nam
 TEST(OnnxOptimShapesMathSigmoid, PropagatesTypeAndShape) {
   NodeProto node = MakeUnaryNode("Sigmoid");
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)};
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   onnx_optim::shapes::math::ComputeShapeSigmoid(ctx, node, "X");
 
   ASSERT_TRUE(ctx.Has("Y"));
-  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  EXPECT_EQ(ctx.Get("Y"),
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 }
 
 TEST(OnnxOptimShapesMathSoftmax, PropagatesTypeAndShapeWithDefaultAxisOpset13) {
   NodeProto node = MakeUnaryNode("Softmax", "input", "output");
   onnx_optim::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("ai.onnx", 13);
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("input", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("input", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
 
   onnx_optim::shapes::math::ComputeShapeSoftmax(ctx, node, "input");
 
   ASSERT_TRUE(ctx.Has("output"));
   EXPECT_EQ(ctx.Get("output"),
-            onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
 }
 
 TEST(OnnxOptimShapesMathSoftmax, UsesOpsetDependentDefaultAxis) {
   NodeProto node = MakeUnaryNode("Softmax");
   onnx_optim::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("ai.onnx", 11);
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(5)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim(5)};
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeSoftmax(ctx, node, "X"),
                std::invalid_argument);
@@ -72,8 +73,8 @@ TEST(OnnxOptimShapesMathSoftmax, RejectsOutOfRangeAxis) {
   axis->set_i(2);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeSoftmax(ctx, node, "X"),
                std::invalid_argument);
@@ -83,22 +84,22 @@ TEST(OnnxOptimShapesMathLogSoftmax, PropagatesTypeAndShapeWithDefaultAxisOpset13
   NodeProto node = MakeUnaryNode("LogSoftmax", "input", "output");
   onnx_optim::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("ai.onnx", 13);
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("input", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("input", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
 
   onnx_optim::shapes::math::ComputeShapeLogSoftmax(ctx, node, "input");
 
   ASSERT_TRUE(ctx.Has("output"));
   EXPECT_EQ(ctx.Get("output"),
-            onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kDouble, shape));
 }
 
 TEST(OnnxOptimShapesMathLogSoftmax, UsesOpsetDependentDefaultAxis) {
   NodeProto node = MakeUnaryNode("LogSoftmax");
   onnx_optim::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("ai.onnx", 11);
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(5)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim(5)};
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   // Under opset 11 the default axis is 1, which is out of range for a rank-1 input.
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeLogSoftmax(ctx, node, "X"),
@@ -113,8 +114,8 @@ TEST(OnnxOptimShapesMathLogSoftmax, RejectsOutOfRangeAxis) {
   axis->set_i(2);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeLogSoftmax(ctx, node, "X"),
                std::invalid_argument);

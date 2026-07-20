@@ -16,8 +16,8 @@ namespace image {
 
 void ComputeShapeImageDecoder(ShapesContext &ctx, const NodeProto &node, const char *a) {
   CheckNodeOpAndOutput(node, "ImageDecoder", "ComputeShapeImageDecoder");
-  const OptimTensor &input = ctx.Get(a);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(a);
+  const SymShape &in_shape = input.Shape();
 
   // ImageDecoder requires a 1-D ``tensor(uint8)`` input carrying the
   // encoded bytestream.
@@ -41,12 +41,12 @@ void ComputeShapeImageDecoder(ShapesContext &ctx, const NodeProto &node, const c
   // The spatial extent of the decoded image is only known at runtime,
   // so the H and W dimensions are kept symbolic and unique per output.
   const std::string output_name = node.output(0);
-  OptimShape out_shape{
-      OptimDim("ImageDecoder(" + output_name + ").H"),
-      OptimDim("ImageDecoder(" + output_name + ").W"),
-      OptimDim(channels),
+  SymShape out_shape{
+      SymDim("ImageDecoder(" + output_name + ").H"),
+      SymDim("ImageDecoder(" + output_name + ").W"),
+      SymDim(channels),
   };
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kUint8, std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kUint8, std::move(out_shape)));
 }
 
 } // namespace image

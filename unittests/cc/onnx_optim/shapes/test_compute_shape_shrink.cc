@@ -29,27 +29,27 @@ NodeProto MakeShrinkNode(const std::string &input_name = "input",
 TEST(OnnxOptimShapesMathShrink, PropagatesTypeAndShape) {
   NodeProto node = MakeShrinkNode();
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
-  ctx.Set("input", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4)};
+  ctx.Set("input", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   onnx_optim::shapes::math::ComputeShapeShrink(ctx, node, "input");
 
   ASSERT_TRUE(ctx.Has("output"));
   EXPECT_EQ(ctx.Get("output"),
-            onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 }
 
 TEST(OnnxOptimShapesMathShrink, PropagatesIntegerType) {
   NodeProto node = MakeShrinkNode();
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::OptimShape shape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(2)};
-  ctx.Set("input", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape));
+  core::symbolic::SymShape shape{core::symbolic::SymDim(3), core::symbolic::SymDim(2)};
+  ctx.Set("input", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape));
 
   onnx_optim::shapes::math::ComputeShapeShrink(ctx, node, "input");
 
   ASSERT_TRUE(ctx.Has("output"));
   EXPECT_EQ(ctx.Get("output"),
-            onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape));
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape));
 }
 
 } // namespace Test

@@ -17,8 +17,8 @@ void ComputeShapeScaler(ShapesContext &ctx, const NodeProto &node, const char *x
   // Scaler is element-wise: the output has the same shape as the input.
   // The output dtype is always float per the ONNX schema, regardless of
   // the input dtype.
-  const OptimTensor &input = ctx.Get(x);
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kFloat, input.Shape()));
+  const SymTensor &input = ctx.Get(x);
+  ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kFloat, input.Shape()));
 }
 
 } // namespace traditionalml

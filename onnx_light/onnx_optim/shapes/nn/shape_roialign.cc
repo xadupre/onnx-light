@@ -20,12 +20,12 @@ namespace {
 // Returns dim 0 of ``rois`` if it is static, otherwise dim 0 of
 // ``batch_indices`` if static, otherwise the symbolic rois dim. The
 // inputs are required to have ranks 2 and 1 respectively.
-OptimDim PickNumRois(const OptimShape &rois_shape, const OptimShape &batch_indices_shape) {
-  const OptimDim &from_rois = rois_shape[0];
+SymDim PickNumRois(const SymShape &rois_shape, const SymShape &batch_indices_shape) {
+  const SymDim &from_rois = rois_shape[0];
   if (from_rois.IsInt()) {
     return from_rois;
   }
-  const OptimDim &from_batch = batch_indices_shape[0];
+  const SymDim &from_batch = batch_indices_shape[0];
   if (from_batch.IsInt()) {
     return from_batch;
   }
@@ -38,16 +38,16 @@ void ComputeShapeRoiAlign(ShapesContext &ctx, const NodeProto &node, const char 
                           const char *rois, const char *batch_indices) {
   CheckNodeOpAndOutput(node, "RoiAlign", "ComputeShapeRoiAlign");
 
-  const OptimTensor &input = ctx.Get(x);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(x);
+  const SymShape &in_shape = input.Shape();
   EXT_ENFORCE_INVALID(in_shape.Rank() == 4, "ComputeShapeRoiAlign: input '", x,
                       "' must have rank 4 (N, C, H, W).");
 
-  const OptimShape &rois_shape = ctx.Get(rois).Shape();
+  const SymShape &rois_shape = ctx.Get(rois).Shape();
   EXT_ENFORCE_INVALID(rois_shape.Rank() == 2, "ComputeShapeRoiAlign: input '", rois,
                       "' must have rank 2 (num_rois, 4).");
 
-  const OptimShape &batch_indices_shape = ctx.Get(batch_indices).Shape();
+  const SymShape &batch_indices_shape = ctx.Get(batch_indices).Shape();
   EXT_ENFORCE_INVALID(batch_indices_shape.Rank() == 1, "ComputeShapeRoiAlign: input '",
                       batch_indices, "' must have rank 1 (num_rois,).");
 
@@ -57,13 +57,13 @@ void ComputeShapeRoiAlign(ShapesContext &ctx, const NodeProto &node, const char 
       !(output_height <= 0 || output_width <= 0),
       "ComputeShapeRoiAlign: attributes 'output_height' and 'output_width' must be positive.");
 
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(PickNumRois(rois_shape, batch_indices_shape));
   out_shape.PushBack(in_shape[1]);
-  out_shape.PushBack(OptimDim(output_height));
-  out_shape.PushBack(OptimDim(output_width));
+  out_shape.PushBack(SymDim(output_height));
+  out_shape.PushBack(SymDim(output_width));
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
 }
 
 } // namespace nn

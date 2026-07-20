@@ -14,7 +14,7 @@
 
 #include "onnx_optim/shapes/shape_inference.h"
 
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/onnx_helper.h"
@@ -107,10 +107,10 @@ void AddFloatOutput(GraphProto &graph, const std::string &name, const std::vecto
 }
 
 // Checks that ``ctx`` contains ``name``, that its dtype matches ``expected``,
-// and that every dimension in ``shape`` equals the corresponding ``OptimDim``.
+// and that every dimension in ``shape`` equals the corresponding ``SymDim``.
 void CheckShape(const onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
-                const onnx_optim::OptimShape &expected_shape,
-                onnx_optim::TensorType expected_dtype) {
+                const core::symbolic::SymShape &expected_shape,
+                core::symbolic::TensorType expected_dtype) {
   ASSERT_TRUE(ctx.Has(name)) << "missing tensor: " << name;
   EXPECT_EQ(ctx.Get(name).Dtype(), expected_dtype) << "dtype mismatch for " << name;
   ASSERT_EQ(ctx.Get(name).Shape().Rank(), expected_shape.Rank()) << "rank mismatch for " << name;
@@ -125,7 +125,7 @@ void CheckShape(const onnx_optim::shapes::ShapesContext &ctx, const std::string 
 void CheckConcreteDim(const onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
                       std::size_t idx, int64_t value) {
   ASSERT_TRUE(ctx.Has(name)) << "missing tensor: " << name;
-  const onnx_optim::OptimShape &s = ctx.Get(name).Shape();
+  const core::symbolic::SymShape &s = ctx.Get(name).Shape();
   ASSERT_LT(idx, s.Rank()) << "dim index out of range for " << name;
   ASSERT_TRUE(s[idx].IsInt()) << "dim[" << idx << "] of " << name << " is not concrete";
   EXPECT_EQ(s[idx].AsInt(), value) << "dim[" << idx << "] of " << name;
@@ -136,7 +136,7 @@ void CheckConcreteDim(const onnx_optim::shapes::ShapesContext &ctx, const std::s
 void CheckSymbolicDim(const onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
                       std::size_t idx, const std::string &expr) {
   ASSERT_TRUE(ctx.Has(name)) << "missing tensor: " << name;
-  const onnx_optim::OptimShape &s = ctx.Get(name).Shape();
+  const core::symbolic::SymShape &s = ctx.Get(name).Shape();
   ASSERT_LT(idx, s.Rank()) << "dim index out of range for " << name;
   ASSERT_TRUE(s[idx].IsExpr()) << "dim[" << idx << "] of " << name << " is not symbolic";
   EXPECT_EQ(s[idx].AsExpr(), expr) << "dim[" << idx << "] of " << name;
@@ -147,7 +147,7 @@ void CheckSymbolicDim(const onnx_optim::shapes::ShapesContext &ctx, const std::s
 void CheckIsSymbolic(const onnx_optim::shapes::ShapesContext &ctx, const std::string &name,
                      std::size_t idx) {
   ASSERT_TRUE(ctx.Has(name)) << "missing tensor: " << name;
-  const onnx_optim::OptimShape &s = ctx.Get(name).Shape();
+  const core::symbolic::SymShape &s = ctx.Get(name).Shape();
   ASSERT_LT(idx, s.Rank()) << "dim index out of range for " << name;
   EXPECT_TRUE(s[idx].IsExpr()) << "dim[" << idx << "] of " << name << " should be symbolic";
 }
@@ -213,62 +213,62 @@ TEST(OnnxOptimShapeBuilder, CheckShapeComputesExpectedRankTypesAndConcreteDims) 
   ctx.ComputeShapeModel(model);
 
   // ── initializer ranks / types ────────────────────────────────────────────
-  CheckShape(ctx, "zero", {onnx_optim::OptimDim(1)}, onnx_optim::TensorType::kInt64);
-  CheckShape(ctx, "un", {onnx_optim::OptimDim(1)}, onnx_optim::TensorType::kInt64);
-  CheckShape(ctx, "shape1", {onnx_optim::OptimDim(3)}, onnx_optim::TensorType::kInt64);
-  CheckShape(ctx, "shape2", {onnx_optim::OptimDim(3)}, onnx_optim::TensorType::kInt64);
-  CheckShape(ctx, "shape3", {onnx_optim::OptimDim(4)}, onnx_optim::TensorType::kInt64);
+  CheckShape(ctx, "zero", {core::symbolic::SymDim(1)}, core::symbolic::TensorType::kInt64);
+  CheckShape(ctx, "un", {core::symbolic::SymDim(1)}, core::symbolic::TensorType::kInt64);
+  CheckShape(ctx, "shape1", {core::symbolic::SymDim(3)}, core::symbolic::TensorType::kInt64);
+  CheckShape(ctx, "shape2", {core::symbolic::SymDim(3)}, core::symbolic::TensorType::kInt64);
+  CheckShape(ctx, "shape3", {core::symbolic::SymDim(4)}, core::symbolic::TensorType::kInt64);
 
   // ── initializer ValueAsShape ─────────────────────────────────────────────
   // int64 1-D initializers with < 8 elements get a ValueAsShape annotation.
   ASSERT_TRUE(ctx.Get("zero").HasValueAsShape());
   ASSERT_EQ(ctx.Get("zero").ValueAsShape().Rank(), 1u);
-  EXPECT_EQ(ctx.Get("zero").ValueAsShape()[0], onnx_optim::OptimDim(int64_t{0}));
+  EXPECT_EQ(ctx.Get("zero").ValueAsShape()[0], core::symbolic::SymDim(int64_t{0}));
 
   ASSERT_TRUE(ctx.Get("un").HasValueAsShape());
   ASSERT_EQ(ctx.Get("un").ValueAsShape().Rank(), 1u);
-  EXPECT_EQ(ctx.Get("un").ValueAsShape()[0], onnx_optim::OptimDim(1));
+  EXPECT_EQ(ctx.Get("un").ValueAsShape()[0], core::symbolic::SymDim(1));
 
   ASSERT_TRUE(ctx.Get("shape1").HasValueAsShape());
   {
-    const onnx_optim::OptimShape &vas = ctx.Get("shape1").ValueAsShape();
+    const core::symbolic::SymShape &vas = ctx.Get("shape1").ValueAsShape();
     ASSERT_EQ(vas.Rank(), 3u);
-    EXPECT_EQ(vas[0], onnx_optim::OptimDim(1));
-    EXPECT_EQ(vas[1], onnx_optim::OptimDim(32));
-    EXPECT_EQ(vas[2], onnx_optim::OptimDim(128));
+    EXPECT_EQ(vas[0], core::symbolic::SymDim(1));
+    EXPECT_EQ(vas[1], core::symbolic::SymDim(32));
+    EXPECT_EQ(vas[2], core::symbolic::SymDim(128));
   }
 
   ASSERT_TRUE(ctx.Get("shape2").HasValueAsShape());
   {
-    const onnx_optim::OptimShape &vas = ctx.Get("shape2").ValueAsShape();
+    const core::symbolic::SymShape &vas = ctx.Get("shape2").ValueAsShape();
     ASSERT_EQ(vas.Rank(), 3u);
-    EXPECT_EQ(vas[0], onnx_optim::OptimDim(15));
-    EXPECT_EQ(vas[1], onnx_optim::OptimDim(128));
-    EXPECT_EQ(vas[2], onnx_optim::OptimDim(64));
+    EXPECT_EQ(vas[0], core::symbolic::SymDim(15));
+    EXPECT_EQ(vas[1], core::symbolic::SymDim(128));
+    EXPECT_EQ(vas[2], core::symbolic::SymDim(64));
   }
 
   ASSERT_TRUE(ctx.Get("shape3").HasValueAsShape());
   {
-    const onnx_optim::OptimShape &vas = ctx.Get("shape3").ValueAsShape();
+    const core::symbolic::SymShape &vas = ctx.Get("shape3").ValueAsShape();
     ASSERT_EQ(vas.Rank(), 4u);
-    EXPECT_EQ(vas[0], onnx_optim::OptimDim(3));
-    EXPECT_EQ(vas[1], onnx_optim::OptimDim(5));
-    EXPECT_EQ(vas[2], onnx_optim::OptimDim(32));
-    EXPECT_EQ(vas[3], onnx_optim::OptimDim(64));
+    EXPECT_EQ(vas[0], core::symbolic::SymDim(3));
+    EXPECT_EQ(vas[1], core::symbolic::SymDim(5));
+    EXPECT_EQ(vas[2], core::symbolic::SymDim(32));
+    EXPECT_EQ(vas[3], core::symbolic::SymDim(64));
   }
 
   // ── input shapes ─────────────────────────────────────────────────────────
   // X: float[D32, D128]
   ASSERT_TRUE(ctx.Has("X"));
   ASSERT_EQ(ctx.Get("X").Shape().Rank(), 2u);
-  EXPECT_EQ(ctx.Get("X").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X").Dtype(), core::symbolic::TensorType::kFloat);
   CheckSymbolicDim(ctx, "X", 0, "D32");
   CheckSymbolicDim(ctx, "X", 1, "D128");
 
   // Y: float[batch, channel, D128, D64]
   ASSERT_TRUE(ctx.Has("Y"));
   ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 4u);
-  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kFloat);
   CheckSymbolicDim(ctx, "Y", 0, "batch");
   CheckSymbolicDim(ctx, "Y", 1, "channel");
   CheckSymbolicDim(ctx, "Y", 2, "D128");
@@ -278,7 +278,7 @@ TEST(OnnxOptimShapeBuilder, CheckShapeComputesExpectedRankTypesAndConcreteDims) 
   // xu1 = Unsqueeze(X, zero=0) → (1, D32, D128)
   ASSERT_TRUE(ctx.Has("xu1"));
   ASSERT_EQ(ctx.Get("xu1").Shape().Rank(), 3u);
-  EXPECT_EQ(ctx.Get("xu1").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("xu1").Dtype(), core::symbolic::TensorType::kFloat);
   CheckConcreteDim(ctx, "xu1", 0, 1);
   CheckSymbolicDim(ctx, "xu1", 1, "D32");
   CheckSymbolicDim(ctx, "xu1", 2, "D128");
@@ -286,7 +286,7 @@ TEST(OnnxOptimShapeBuilder, CheckShapeComputesExpectedRankTypesAndConcreteDims) 
   // xu2 = Unsqueeze(xu1, un=1) → (1, 1, D32, D128)
   ASSERT_TRUE(ctx.Has("xu2"));
   ASSERT_EQ(ctx.Get("xu2").Shape().Rank(), 4u);
-  EXPECT_EQ(ctx.Get("xu2").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("xu2").Dtype(), core::symbolic::TensorType::kFloat);
   CheckConcreteDim(ctx, "xu2", 0, 1);
   CheckConcreteDim(ctx, "xu2", 1, 1);
   CheckSymbolicDim(ctx, "xu2", 2, "D32");
@@ -294,29 +294,29 @@ TEST(OnnxOptimShapeBuilder, CheckShapeComputesExpectedRankTypesAndConcreteDims) 
 
   // xm1 = Reshape(xu2, shape1=[1,32,128]) → (1, 32, 128)
   CheckShape(ctx, "xm1",
-             {onnx_optim::OptimDim(1), onnx_optim::OptimDim(32), onnx_optim::OptimDim(128)},
-             onnx_optim::TensorType::kFloat);
+             {core::symbolic::SymDim(1), core::symbolic::SymDim(32), core::symbolic::SymDim(128)},
+             core::symbolic::TensorType::kFloat);
 
   // xm2c = Reshape(Y, shape2=[15,128,64]) → (15, 128, 64)
   CheckShape(ctx, "xm2c",
-             {onnx_optim::OptimDim(15), onnx_optim::OptimDim(128), onnx_optim::OptimDim(64)},
-             onnx_optim::TensorType::kFloat);
+             {core::symbolic::SymDim(15), core::symbolic::SymDim(128), core::symbolic::SymDim(64)},
+             core::symbolic::TensorType::kFloat);
 
   // xm2 = Cast(xm2c, to=float) → (15, 128, 64), float
   CheckShape(ctx, "xm2",
-             {onnx_optim::OptimDim(15), onnx_optim::OptimDim(128), onnx_optim::OptimDim(64)},
-             onnx_optim::TensorType::kFloat);
+             {core::symbolic::SymDim(15), core::symbolic::SymDim(128), core::symbolic::SymDim(64)},
+             core::symbolic::TensorType::kFloat);
 
   // xm = MatMul(xm1=(1,32,128), xm2=(15,128,64)) → (15, 32, 64)
   CheckShape(ctx, "xm",
-             {onnx_optim::OptimDim(15), onnx_optim::OptimDim(32), onnx_optim::OptimDim(64)},
-             onnx_optim::TensorType::kFloat);
+             {core::symbolic::SymDim(15), core::symbolic::SymDim(32), core::symbolic::SymDim(64)},
+             core::symbolic::TensorType::kFloat);
 
   // Z = Reshape(xm, shape3=[3,5,32,64]) → (3, 5, 32, 64)
   CheckShape(ctx, "Z",
-             {onnx_optim::OptimDim(3), onnx_optim::OptimDim(5), onnx_optim::OptimDim(32),
-              onnx_optim::OptimDim(64)},
-             onnx_optim::TensorType::kFloat);
+             {core::symbolic::SymDim(3), core::symbolic::SymDim(5), core::symbolic::SymDim(32),
+              core::symbolic::SymDim(64)},
+             core::symbolic::TensorType::kFloat);
 }
 
 // ── test_reshape_reshape ────────────────────────────────────────────────────
@@ -376,12 +376,12 @@ TEST(OnnxOptimShapeBuilder, ReshapeReshapePreservesRankAndPartialDims) {
 
   // X: float[a, b, c]
   ASSERT_EQ(ctx.Get("X").Shape().Rank(), 3u);
-  EXPECT_EQ(ctx.Get("X").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X").Dtype(), core::symbolic::TensorType::kFloat);
 
   // xr = Reshape(X, [0,0,2,-1]) → rank 4; dim[2]=2, dim[3] is symbolic
   ASSERT_TRUE(ctx.Has("xr"));
   ASSERT_EQ(ctx.Get("xr").Shape().Rank(), 4u);
-  EXPECT_EQ(ctx.Get("xr").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("xr").Dtype(), core::symbolic::TensorType::kFloat);
   // dim 0 and 1 copy from input: symbolic "a" and "b"
   CheckSymbolicDim(ctx, "xr", 0, "a");
   CheckSymbolicDim(ctx, "xr", 1, "b");
@@ -393,7 +393,7 @@ TEST(OnnxOptimShapeBuilder, ReshapeReshapePreservesRankAndPartialDims) {
   // xrr = Reshape(xr, [0,0,-1]) → rank 3; first two dims copy from xr
   ASSERT_TRUE(ctx.Has("xrr"));
   ASSERT_EQ(ctx.Get("xrr").Shape().Rank(), 3u);
-  EXPECT_EQ(ctx.Get("xrr").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("xrr").Dtype(), core::symbolic::TensorType::kFloat);
   CheckSymbolicDim(ctx, "xrr", 0, "a");
   CheckSymbolicDim(ctx, "xrr", 1, "b");
   // dim 2 is the -1 placeholder — symbolic
@@ -402,12 +402,12 @@ TEST(OnnxOptimShapeBuilder, ReshapeReshapePreservesRankAndPartialDims) {
   // Y = Add(xrr, one) — broadcast; shape matches xrr's shape
   ASSERT_TRUE(ctx.Has("Y"));
   ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 3u);
-  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kFloat);
 
   // initializer shapes and types
-  CheckShape(ctx, "shape1", {onnx_optim::OptimDim(4)}, onnx_optim::TensorType::kInt64);
-  CheckShape(ctx, "shape2", {onnx_optim::OptimDim(3)}, onnx_optim::TensorType::kInt64);
-  CheckShape(ctx, "one", {onnx_optim::OptimDim(1)}, onnx_optim::TensorType::kFloat);
+  CheckShape(ctx, "shape1", {core::symbolic::SymDim(4)}, core::symbolic::TensorType::kInt64);
+  CheckShape(ctx, "shape2", {core::symbolic::SymDim(3)}, core::symbolic::TensorType::kInt64);
+  CheckShape(ctx, "one", {core::symbolic::SymDim(1)}, core::symbolic::TensorType::kFloat);
 }
 
 // ── test_value_as_shape (ids_weight model) ──────────────────────────────────
@@ -495,21 +495,21 @@ TEST(OnnxOptimShapeBuilder, ValueAsShapeFromShapeConcatMatMulReshapeTranspose) {
   ASSERT_TRUE(ctx.Has("init328"));
   ASSERT_TRUE(ctx.Get("init328").HasValueAsShape());
   {
-    const onnx_optim::OptimShape &vas = ctx.Get("init328").ValueAsShape();
+    const core::symbolic::SymShape &vas = ctx.Get("init328").ValueAsShape();
     ASSERT_EQ(vas.Rank(), 2u);
-    EXPECT_EQ(vas[0], onnx_optim::OptimDim(32));
-    EXPECT_EQ(vas[1], onnx_optim::OptimDim(8));
+    EXPECT_EQ(vas[0], core::symbolic::SymDim(32));
+    EXPECT_EQ(vas[1], core::symbolic::SymDim(8));
   }
 
   // ── shape = Shape(ids_weight, start=0, end=2) ────────────────────────────
   // Output: int64[2], ValueAsShape = (batch, seq)
   ASSERT_TRUE(ctx.Has("shape"));
-  EXPECT_EQ(ctx.Get("shape").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("shape").Dtype(), core::symbolic::TensorType::kInt64);
   ASSERT_EQ(ctx.Get("shape").Shape().Rank(), 1u);
   CheckConcreteDim(ctx, "shape", 0, 2);
   ASSERT_TRUE(ctx.Get("shape").HasValueAsShape());
   {
-    const onnx_optim::OptimShape &vas = ctx.Get("shape").ValueAsShape();
+    const core::symbolic::SymShape &vas = ctx.Get("shape").ValueAsShape();
     ASSERT_EQ(vas.Rank(), 2u);
     EXPECT_TRUE(vas[0].IsExpr());
     EXPECT_EQ(vas[0].AsExpr(), "batch");
@@ -520,19 +520,19 @@ TEST(OnnxOptimShapeBuilder, ValueAsShapeFromShapeConcatMatMulReshapeTranspose) {
   // ── new_shape = Concat([shape, init328], axis=0) ─────────────────────────
   // Output: int64[4], ValueAsShape = (batch, seq, 32, 8)
   ASSERT_TRUE(ctx.Has("new_shape"));
-  EXPECT_EQ(ctx.Get("new_shape").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("new_shape").Dtype(), core::symbolic::TensorType::kInt64);
   ASSERT_EQ(ctx.Get("new_shape").Shape().Rank(), 1u);
   CheckConcreteDim(ctx, "new_shape", 0, 4);
   ASSERT_TRUE(ctx.Get("new_shape").HasValueAsShape());
   {
-    const onnx_optim::OptimShape &vas = ctx.Get("new_shape").ValueAsShape();
+    const core::symbolic::SymShape &vas = ctx.Get("new_shape").ValueAsShape();
     ASSERT_EQ(vas.Rank(), 4u);
     EXPECT_TRUE(vas[0].IsExpr());
     EXPECT_EQ(vas[0].AsExpr(), "batch");
     EXPECT_TRUE(vas[1].IsExpr());
     EXPECT_EQ(vas[1].AsExpr(), "seq");
-    EXPECT_EQ(vas[2], onnx_optim::OptimDim(32));
-    EXPECT_EQ(vas[3], onnx_optim::OptimDim(8));
+    EXPECT_EQ(vas[2], core::symbolic::SymDim(32));
+    EXPECT_EQ(vas[3], core::symbolic::SymDim(8));
   }
 
   // ── MatMul outputs ───────────────────────────────────────────────────────
@@ -540,7 +540,7 @@ TEST(OnnxOptimShapeBuilder, ValueAsShapeFromShapeConcatMatMulReshapeTranspose) {
   for (const std::string &name : {"A1", "B1", "C1"}) {
     ASSERT_TRUE(ctx.Has(name)) << "missing: " << name;
     ASSERT_EQ(ctx.Get(name).Shape().Rank(), 3u) << name;
-    EXPECT_EQ(ctx.Get(name).Dtype(), onnx_optim::TensorType::kFloat) << name;
+    EXPECT_EQ(ctx.Get(name).Dtype(), core::symbolic::TensorType::kFloat) << name;
     CheckSymbolicDim(ctx, name, 0, "batch");
     CheckSymbolicDim(ctx, name, 1, "seq");
     CheckConcreteDim(ctx, name, 2, 256);
@@ -552,7 +552,7 @@ TEST(OnnxOptimShapeBuilder, ValueAsShapeFromShapeConcatMatMulReshapeTranspose) {
   for (const std::string &name : {"Areshaped", "Breshaped", "Creshaped"}) {
     ASSERT_TRUE(ctx.Has(name)) << "missing: " << name;
     ASSERT_EQ(ctx.Get(name).Shape().Rank(), 4u) << name;
-    EXPECT_EQ(ctx.Get(name).Dtype(), onnx_optim::TensorType::kFloat) << name;
+    EXPECT_EQ(ctx.Get(name).Dtype(), core::symbolic::TensorType::kFloat) << name;
     CheckSymbolicDim(ctx, name, 0, "batch");
     CheckSymbolicDim(ctx, name, 1, "seq");
     CheckConcreteDim(ctx, name, 2, 32);
@@ -564,7 +564,7 @@ TEST(OnnxOptimShapeBuilder, ValueAsShapeFromShapeConcatMatMulReshapeTranspose) {
   for (const std::string &name : {"At", "Bt", "Ct"}) {
     ASSERT_TRUE(ctx.Has(name)) << "missing: " << name;
     ASSERT_EQ(ctx.Get(name).Shape().Rank(), 4u) << name;
-    EXPECT_EQ(ctx.Get(name).Dtype(), onnx_optim::TensorType::kFloat) << name;
+    EXPECT_EQ(ctx.Get(name).Dtype(), core::symbolic::TensorType::kFloat) << name;
     CheckSymbolicDim(ctx, name, 0, "batch");
     CheckConcreteDim(ctx, name, 1, 32);
     CheckSymbolicDim(ctx, name, 2, "seq");
@@ -608,7 +608,7 @@ TEST(OnnxOptimShapeBuilder, ConcatProducesSymbolicAxisDimAndAppliedToGraph) {
   // Z has rank 2
   ASSERT_TRUE(ctx.Has("Z"));
   ASSERT_EQ(ctx.Get("Z").Shape().Rank(), 2u);
-  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Z").Dtype(), core::symbolic::TensorType::kFloat);
 
   // dim 0: non-concat axis; X has "batch" and Y has "batch" → "batch"
   // (MergeDim: first symbolic wins when both are symbolic and equal)
@@ -688,7 +688,7 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
   // xy = Concat(X, Y, axis=1): rank 2
   ASSERT_TRUE(ctx.Has("xy"));
   ASSERT_EQ(ctx.Get("xy").Shape().Rank(), 2u);
-  EXPECT_EQ(ctx.Get("xy").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("xy").Dtype(), core::symbolic::TensorType::kFloat);
   // non-concat dim (axis=0) comes from both X and Y which both have "a"
   CheckSymbolicDim(ctx, "xy", 0, "a");
   // concat axis: symbolic — ComputeShapeConcat sums the symbolic
@@ -700,7 +700,7 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
   for (const std::string &name : {"S1", "S2"}) {
     ASSERT_TRUE(ctx.Has(name)) << "missing: " << name;
     ASSERT_EQ(ctx.Get(name).Shape().Rank(), 2u) << name;
-    EXPECT_EQ(ctx.Get(name).Dtype(), onnx_optim::TensorType::kFloat) << name;
+    EXPECT_EQ(ctx.Get(name).Dtype(), core::symbolic::TensorType::kFloat) << name;
     CheckSymbolicDim(ctx, name, 0, "a");
     CheckIsSymbolic(ctx, name, 1);
   }

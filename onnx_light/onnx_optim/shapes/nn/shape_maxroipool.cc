@@ -20,12 +20,12 @@ void ComputeShapeMaxRoiPool(ShapesContext &ctx, const NodeProto &node, const cha
                             const char *rois) {
   CheckNodeOpAndOutput(node, "MaxRoiPool", "ComputeShapeMaxRoiPool");
 
-  const OptimTensor &input = ctx.Get(x);
-  const OptimShape &in_shape = input.Shape();
+  const SymTensor &input = ctx.Get(x);
+  const SymShape &in_shape = input.Shape();
   EXT_ENFORCE_INVALID(in_shape.Rank() == 4, "ComputeShapeMaxRoiPool: input '", x,
                       "' must have rank 4 (N, C, H, W).");
 
-  const OptimShape &rois_shape = ctx.Get(rois).Shape();
+  const SymShape &rois_shape = ctx.Get(rois).Shape();
   EXT_ENFORCE_INVALID(rois_shape.Rank() == 2, "ComputeShapeMaxRoiPool: input '", rois,
                       "' must have rank 2 (num_rois, 5).");
 
@@ -36,13 +36,13 @@ void ComputeShapeMaxRoiPool(ShapesContext &ctx, const NodeProto &node, const cha
                       "ComputeShapeMaxRoiPool: attribute 'pooled_shape' must contain two positive "
                       "values (height, width).");
 
-  OptimShape out_shape;
+  SymShape out_shape;
   out_shape.PushBack(rois_shape[0]);
   out_shape.PushBack(in_shape[1]);
-  out_shape.PushBack(OptimDim(pooled_shape[0]));
-  out_shape.PushBack(OptimDim(pooled_shape[1]));
+  out_shape.PushBack(SymDim(pooled_shape[0]));
+  out_shape.PushBack(SymDim(pooled_shape[1]));
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+  ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
 }
 
 } // namespace nn

@@ -25,8 +25,8 @@ exactly.
 
 The ``value_as_shape`` annotation is ``onnx_optim``'s mechanism to do exactly
 that: it is an optional secondary shape stored on an
-:cpp:class:`OptimTensor` that records the **symbolic content** of the
-tensor as an :cpp:class:`OptimShape`.  When a consumer like ``Reshape``
+:cpp:class:`SymTensor` that records the **symbolic content** of the
+tensor as an :cpp:class:`SymShape`.  When a consumer like ``Reshape``
 sees that its shape input carries a ``value_as_shape``, it uses those
 symbolic dimension expressions instead of falling back to a fully generic
 output shape.
@@ -36,7 +36,7 @@ output shape.
 Representation
 --------------
 
-:cpp:class:`OptimTensor` carries two independent shape structures:
+:cpp:class:`SymTensor` carries two independent shape structures:
 
 ``shape``
     The *storage shape* of the tensor — its rank and the size of each
@@ -64,7 +64,7 @@ Seeding the annotation
 The annotation is seeded from two sources.
 
 **Initializer literals**
-    :cpp:func:`OptimTensorFromTensorProto` reads an integer tensor
+    :cpp:func:`SymTensorFromTensorProto` reads an integer tensor
     initializer and, when its element count is below
     :cpp:var:`kOptimValueAsShapeMaxElements`
     (``kMaxOptimRank + 1``), stores its concrete integer values as a
@@ -265,7 +265,7 @@ output shape ``[N, 1]``.
 Interaction with symbolic expressions and constraints
 -----------------------------------------------------
 
-The ``value_as_shape`` entries are :cpp:class:`OptimDim` values — the same
+The ``value_as_shape`` entries are :cpp:class:`SymDim` values — the same
 type used for ordinary shape dimensions.  Each entry may therefore be a
 concrete integer *or* a symbolic expression string such as ``"N"`` or
 ``"1+N"``.
@@ -289,11 +289,11 @@ boundary.
 API reference
 -------------
 
-* **C++ API**: :cpp:class:`OptimTensor`
-  (:doc:`/api/cpp/onnx_optim/optim_tensor`),
+* **C++ API**: :cpp:class:`SymTensor`
+  (:doc:`/api/cpp/onnx_core/sym_tensor`),
   :cpp:func:`PropagateValueAsShapeArithmetic`
   (:doc:`/api/cpp/onnx_optim/shapes/shape_broadcast`).
-* **Python API**: :class:`OptimTensor`
+* **Python API**: :class:`SymTensor`
   (:doc:`/api/python/onnx_optim/shape_inference`).
 * **Expression library**: :ref:`l-design-expressions`.
 * **Constraint mechanism**: :ref:`l-design-shape-constraints`.

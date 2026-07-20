@@ -12,3 +12,7 @@ libraries depending on the other.
     expressions
     graph_manipulations
     light_op_schema
+    sym_tensor
+    sym_sequence
+    sym_map
+    annotations/index

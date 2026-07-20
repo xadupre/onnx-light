@@ -1,7 +1,7 @@
+#include "onnx_core/annotations/inplace_reuse.h"
+#include "onnx_core/annotations/value_tags.h"
 #include "onnx_core/expressions/expressions.h"
-#include "onnx_optim/annotations/inplace_reuse.h"
-#include "onnx_optim/annotations/value_tags.h"
-#include "onnx_optim/optim_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include <algorithm>
@@ -22,21 +22,21 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
 
-const char *InPlaceReuseKindName(onnx_optim::annotations::InPlaceReuseKind kind) {
+const char *InPlaceReuseKindName(core::annotations::InPlaceReuseKind kind) {
   switch (kind) {
-  case onnx_optim::annotations::InPlaceReuseKind::kEqual:
+  case core::annotations::InPlaceReuseKind::kEqual:
     return "equal";
-  case onnx_optim::annotations::InPlaceReuseKind::kGreater:
+  case core::annotations::InPlaceReuseKind::kGreater:
     return "greater";
   }
   return "unknown";
 }
 
-const char *InPlaceReuseKindEnumName(onnx_optim::annotations::InPlaceReuseKind kind) {
+const char *InPlaceReuseKindEnumName(core::annotations::InPlaceReuseKind kind) {
   switch (kind) {
-  case onnx_optim::annotations::InPlaceReuseKind::kEqual:
+  case core::annotations::InPlaceReuseKind::kEqual:
     return "kEqual";
-  case onnx_optim::annotations::InPlaceReuseKind::kGreater:
+  case core::annotations::InPlaceReuseKind::kGreater:
     return "kGreater";
   }
   return "kUnknown";
@@ -357,40 +357,40 @@ void AddOnnxPyExpressions(nb::module_ &m) {
 }
 
 void AddOnnxPyShapeInference(nb::module_ &m) {
-  namespace onnx_annotations = ::onnx_light::onnx_optim::annotations;
+  namespace onnx_annotations = ::onnx_light::core::annotations;
   namespace expr = ::onnx_light::core::expressions;
   namespace onnx_shapes = ::onnx_light::onnx_optim::shapes;
-  using ::onnx_light::onnx_optim::DataTypeToTensorType;
-  using ::onnx_light::onnx_optim::OptimDim;
-  using ::onnx_light::onnx_optim::OptimShape;
-  using ::onnx_light::onnx_optim::OptimTensor;
-  using ::onnx_light::onnx_optim::TensorTypeToDataType;
+  using ::onnx_light::core::symbolic::DataTypeToTensorType;
+  using ::onnx_light::core::symbolic::SymDim;
+  using ::onnx_light::core::symbolic::SymShape;
+  using ::onnx_light::core::symbolic::SymTensor;
+  using ::onnx_light::core::symbolic::TensorTypeToDataType;
   using ::onnx_light::onnx_proto::TensorType;
 
   auto shape_mod = m.def_submodule("shape_inference");
   shape_mod.doc() = "Shape-inference bindings backed by ``onnx_optim``: exposes ``ShapesContext``, "
                     "``ComputeShapeNode`` and the related ``ComputeShape{Graph,Model}`` / "
                     "``ApplyInferredShapesTo{Graph,Model}`` helpers, together with the value "
-                    "types (``OptimDim``, ``OptimShape``, ``OptimTensor``) used to describe "
+                    "types (``SymDim``, ``SymShape``, ``SymTensor``) used to describe "
                     "tensor descriptors stored in the context.";
 
-  // Convert an OptimDim to a Python object (int when concrete, str otherwise).
-  auto dim_to_object = [](const OptimDim &d) -> nb::object {
+  // Convert an SymDim to a Python object (int when concrete, str otherwise).
+  auto dim_to_object = [](const SymDim &d) -> nb::object {
     if (d.IsInt())
       return nb::cast(d.AsInt());
     return nb::cast(d.AsExpr());
   };
 
-  // Convert a Python object (int | str) to an OptimDim.
-  auto object_to_dim = [](nb::handle h) -> OptimDim {
+  // Convert a Python object (int | str) to an SymDim.
+  auto object_to_dim = [](nb::handle h) -> SymDim {
     if (nb::isinstance<nb::int_>(h))
-      return OptimDim(nb::cast<int64_t>(h));
-    return OptimDim(nb::cast<std::string>(h));
+      return SymDim(nb::cast<int64_t>(h));
+    return SymDim(nb::cast<std::string>(h));
   };
 
-  // Convert an iterable of int|str into an OptimShape.
-  auto iterable_to_shape = [object_to_dim](nb::handle dims) -> OptimShape {
-    OptimShape shape;
+  // Convert an iterable of int|str into an SymShape.
+  auto iterable_to_shape = [object_to_dim](nb::handle dims) -> SymShape {
+    SymShape shape;
     nb::iterator it = nb::iter(dims);
     nb::iterator end = nb::iterator::sentinel();
     for (; it != end; ++it)
@@ -398,8 +398,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
     return shape;
   };
 
-  // Convert an OptimShape to a Python list of int|str.
-  auto shape_to_list = [dim_to_object](const OptimShape &s) -> nb::list {
+  // Convert an SymShape to a Python list of int|str.
+  auto shape_to_list = [dim_to_object](const SymShape &s) -> nb::list {
     nb::list out;
     for (const auto &d : s.Dims())
       out.append(dim_to_object(d));
@@ -407,69 +407,69 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   };
 
   // -----------------------------------------------------------------------
-  // OptimDim
+  // SymDim
   // -----------------------------------------------------------------------
-  nb::class_<OptimDim>(shape_mod, "OptimDim",
-                       "A single shape dimension that is either a concrete integer or a "
-                       "symbolic string expression.")
+  nb::class_<SymDim>(shape_mod, "SymDim",
+                     "A single shape dimension that is either a concrete integer or a "
+                     "symbolic string expression.")
       .def(nb::init<>())
       .def(nb::init<int64_t>(), nb::arg("value"))
       .def(nb::init<std::string>(), nb::arg("expr"))
-      .def("is_int", &OptimDim::IsInt,
+      .def("is_int", &SymDim::IsInt,
            "Returns True when the dimension holds a concrete integer value.")
-      .def("is_expr", &OptimDim::IsExpr,
+      .def("is_expr", &SymDim::IsExpr,
            "Returns True when the dimension holds a symbolic string expression.")
-      .def("as_int", &OptimDim::AsInt,
+      .def("as_int", &SymDim::AsInt,
            "Returns the integer value. Raises if the dimension is symbolic.")
       .def(
-          "as_expr", [](const OptimDim &d) -> std::string { return d.AsExpr(); },
+          "as_expr", [](const SymDim &d) -> std::string { return d.AsExpr(); },
           "Returns the symbolic expression. Raises if the dimension is an integer.")
       .def(
-          "value", [dim_to_object](const OptimDim &d) -> nb::object { return dim_to_object(d); },
+          "value", [dim_to_object](const SymDim &d) -> nb::object { return dim_to_object(d); },
           "Returns the underlying value as either ``int`` or ``str``.")
-      .def("__str__", &OptimDim::ToString)
+      .def("__str__", &SymDim::ToString)
       .def("__repr__",
-           [](const OptimDim &d) {
+           [](const SymDim &d) {
              if (d.IsInt()) {
-               return std::string("OptimDim(") + std::to_string(d.AsInt()) + ")";
+               return std::string("SymDim(") + std::to_string(d.AsInt()) + ")";
              }
-             return std::string("OptimDim('") + d.AsExpr() + "')";
+             return std::string("SymDim('") + d.AsExpr() + "')";
            })
       .def(nb::self == nb::self)
       .def(nb::self != nb::self);
 
   // -----------------------------------------------------------------------
-  // OptimShape
+  // SymShape
   // -----------------------------------------------------------------------
-  nb::class_<OptimShape>(
-      shape_mod, "OptimShape",
-      "Ordered, bounded-rank collection of OptimDim entries describing a tensor shape.")
+  nb::class_<SymShape>(
+      shape_mod, "SymShape",
+      "Ordered, bounded-rank collection of SymDim entries describing a tensor shape.")
       .def(nb::init<>())
       .def(
           "__init__",
-          [iterable_to_shape](OptimShape *self, nb::handle dims) {
-            new (self) OptimShape(iterable_to_shape(dims));
+          [iterable_to_shape](SymShape *self, nb::handle dims) {
+            new (self) SymShape(iterable_to_shape(dims));
           },
           nb::arg("dims"), "Constructs a shape from an iterable of ``int`` or ``str`` dimensions.")
-      .def("rank", &OptimShape::Rank, "Number of dimensions.")
-      .def("empty", &OptimShape::Empty, "True when the shape is rank-0.")
-      .def("is_fully_known", &OptimShape::IsFullyKnown,
+      .def("rank", &SymShape::Rank, "Number of dimensions.")
+      .def("empty", &SymShape::Empty, "True when the shape is rank-0.")
+      .def("is_fully_known", &SymShape::IsFullyKnown,
            "True when every dimension is a concrete integer.")
       .def(
-          "dims", [shape_to_list](const OptimShape &s) -> nb::list { return shape_to_list(s); },
+          "dims", [shape_to_list](const SymShape &s) -> nb::list { return shape_to_list(s); },
           "Returns the dimensions as a list of ``int`` or ``str``.")
-      .def("__len__", &OptimShape::Rank)
+      .def("__len__", &SymShape::Rank)
       .def(
           "__getitem__",
-          [dim_to_object](const OptimShape &s, std::size_t i) -> nb::object {
+          [dim_to_object](const SymShape &s, std::size_t i) -> nb::object {
             return dim_to_object(s[i]);
           },
           nb::arg("i"))
-      .def("__iter__", [shape_to_list](const OptimShape &s) { return nb::iter(shape_to_list(s)); })
-      .def("__str__", &OptimShape::ToString)
+      .def("__iter__", [shape_to_list](const SymShape &s) { return nb::iter(shape_to_list(s)); })
+      .def("__str__", &SymShape::ToString)
       .def("__repr__",
-           [](const OptimShape &s) {
-             std::string out = "OptimShape([";
+           [](const SymShape &s) {
+             std::string out = "SymShape([";
              for (std::size_t i = 0; i < s.Rank(); ++i) {
                if (i > 0) {
                  out += ", ";
@@ -489,70 +489,70 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def(nb::self != nb::self);
 
   // -----------------------------------------------------------------------
-  // OptimTensor
+  // SymTensor
   // -----------------------------------------------------------------------
-  nb::class_<OptimTensor>(
-      shape_mod, "OptimTensor",
+  nb::class_<SymTensor>(
+      shape_mod, "SymTensor",
       "Lightweight (non-owning) tensor descriptor with an element type and an "
-      "OptimShape, optionally annotated with a value-as-shape and value bounds. "
+      "SymShape, optionally annotated with a value-as-shape and value bounds. "
       "The Python binding never references a buffer; only the descriptor metadata "
       "is carried.")
       .def(nb::init<>())
       .def(
           "__init__",
-          [iterable_to_shape](OptimTensor *self, int dtype, nb::handle dims) {
+          [iterable_to_shape](SymTensor *self, int dtype, nb::handle dims) {
             TensorType t = DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype));
-            new (self) OptimTensor(nullptr, t, iterable_to_shape(dims));
+            new (self) SymTensor(nullptr, t, iterable_to_shape(dims));
           },
           nb::arg("dtype"), nb::arg("shape"),
-          "Constructs an OptimTensor from a ``TensorProto.DataType`` integer and an "
+          "Constructs an SymTensor from a ``TensorProto.DataType`` integer and an "
           "iterable of ``int`` or ``str`` dimensions.")
       .def_prop_ro(
           "dtype",
-          [](const OptimTensor &t) -> int {
+          [](const SymTensor &t) -> int {
             return static_cast<int>(TensorTypeToDataType(t.Dtype()));
           },
           "Element type as a ``TensorProto.DataType`` integer.")
       .def_prop_ro(
-          "shape", [](const OptimTensor &t) -> OptimShape { return t.Shape(); },
-          "Shape (a copy of the underlying OptimShape).")
-      .def("is_null", &OptimTensor::IsNull, "True when no data buffer is attached.")
-      .def("has_min", &OptimTensor::HasMin)
-      .def("has_max", &OptimTensor::HasMax)
-      .def("min", &OptimTensor::Min)
-      .def("max", &OptimTensor::Max)
-      .def("set_min", &OptimTensor::SetMin, nb::arg("value"))
-      .def("set_max", &OptimTensor::SetMax, nb::arg("value"))
-      .def("clear_min", &OptimTensor::ClearMin)
-      .def("clear_max", &OptimTensor::ClearMax)
-      .def("has_value_as_shape", &OptimTensor::HasValueAsShape,
+          "shape", [](const SymTensor &t) -> SymShape { return t.Shape(); },
+          "Shape (a copy of the underlying SymShape).")
+      .def("is_null", &SymTensor::IsNull, "True when no data buffer is attached.")
+      .def("has_min", &SymTensor::HasMin)
+      .def("has_max", &SymTensor::HasMax)
+      .def("min", &SymTensor::Min)
+      .def("max", &SymTensor::Max)
+      .def("set_min", &SymTensor::SetMin, nb::arg("value"))
+      .def("set_max", &SymTensor::SetMax, nb::arg("value"))
+      .def("clear_min", &SymTensor::ClearMin)
+      .def("clear_max", &SymTensor::ClearMax)
+      .def("has_value_as_shape", &SymTensor::HasValueAsShape,
            "True when the tensor's value is interpreted as a shape.")
       .def(
-          "value_as_shape", [](const OptimTensor &t) -> OptimShape { return t.ValueAsShape(); },
+          "value_as_shape", [](const SymTensor &t) -> SymShape { return t.ValueAsShape(); },
           "Returns the value-as-shape annotation. Raises if not set.")
       .def(
           "set_value_as_shape",
-          [iterable_to_shape](OptimTensor &t, nb::handle dims) {
+          [iterable_to_shape](SymTensor &t, nb::handle dims) {
             t.SetValueAsShape(iterable_to_shape(dims));
           },
           nb::arg("shape"),
           "Tags the tensor as carrying a shape value (e.g. the ``shape`` input of "
           "``Reshape``) and stores that shape.")
-      .def("clear_value_as_shape", &OptimTensor::ClearValueAsShape)
-      .def("__str__", &OptimTensor::ToString)
-      .def("__repr__", &OptimTensor::ToString)
+      .def("clear_value_as_shape", &SymTensor::ClearValueAsShape)
+      .def("__str__", &SymTensor::ToString)
+      .def("__repr__", &SymTensor::ToString)
       .def(nb::self == nb::self)
       .def(nb::self != nb::self)
       .def(
           "__eq__",
-          [](const OptimTensor &t, const ValueInfoProto &vi) {
-            OptimTensor vi_tensor;
-            return ::onnx_light::onnx_optim::OptimTensorFromValueInfo(vi, vi_tensor) &&
+          [](const SymTensor &t, const ValueInfoProto &vi) {
+            SymTensor vi_tensor;
+            return ::onnx_light::core::symbolic::SymTensorFromValueInfo(vi, vi_tensor) &&
                    t == vi_tensor;
           },
           nb::arg("other"),
           "Compares this descriptor against a ``ValueInfoProto`` by converting the "
-          "value-info tensor type/shape into an ``OptimTensor`` and checking "
+          "value-info tensor type/shape into an ``SymTensor`` and checking "
           "descriptor equality.");
 
   // -----------------------------------------------------------------------
@@ -662,13 +662,13 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   nb::class_<onnx_shapes::ShapesContext>(
       shape_mod, "ShapesContext",
       "In/out container shared by the per-operator ``ComputeShape*`` shape-inference "
-      "functions. Holds a ``name -> OptimTensor`` map, a ``name -> OptimSequence`` map "
+      "functions. Holds a ``name -> SymTensor`` map, a ``name -> SymSequence`` map "
       "and a ``domain -> opset_version`` map mirroring ``opset_import``.")
       .def(nb::init<>())
       // Tensor descriptors
       .def(
           "set",
-          [](onnx_shapes::ShapesContext &c, const std::string &name, OptimTensor t) {
+          [](onnx_shapes::ShapesContext &c, const std::string &name, SymTensor t) {
             c.Set(name, std::move(t));
           },
           nb::arg("name"), nb::arg("tensor"),
@@ -679,7 +679,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           nb::arg("name"), "True when a tensor descriptor is stored under ``name``.")
       .def(
           "get",
-          [](const onnx_shapes::ShapesContext &c, const std::string &name) -> OptimTensor {
+          [](const onnx_shapes::ShapesContext &c, const std::string &name) -> SymTensor {
             return c.Get(name);
           },
           nb::arg("name"),

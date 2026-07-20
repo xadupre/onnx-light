@@ -35,10 +35,32 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace backend_test {
 
-// The per-category Collect* functions are defined in
-// ``onnx_backend_test`` (they are registered there by the case files).
-// Bring them into scope so CollectTestCases can call them unqualified.
-using namespace ::onnx_light::onnx_backend_test; // NOLINT(google-build-using-namespace)
+// The per-category Collect* functions are defined in ``onnx_backend_test``
+// (they are declared by the case include headers and defined in the case
+// translation units).  Import them explicitly so CollectTestCases can
+// call them without qualified names.
+using ::onnx_light::onnx_backend_test::CollectControlflowTestCases;
+using ::onnx_light::onnx_backend_test::CollectEmptyShapeTestCases;
+using ::onnx_light::onnx_backend_test::CollectGeneratorTestCases;
+using ::onnx_light::onnx_backend_test::CollectImageTestCases;
+using ::onnx_light::onnx_backend_test::CollectInPlaceTestCases;
+using ::onnx_light::onnx_backend_test::CollectLogicalTestCases;
+using ::onnx_light::onnx_backend_test::CollectMathTestCases;
+using ::onnx_light::onnx_backend_test::CollectNanInfTestCases;
+using ::onnx_light::onnx_backend_test::CollectNNTestCases;
+using ::onnx_light::onnx_backend_test::CollectObjectDetectionTestCases;
+using ::onnx_light::onnx_backend_test::CollectOptionalTestCases;
+using ::onnx_light::onnx_backend_test::CollectPreviewTestCases;
+using ::onnx_light::onnx_backend_test::CollectQuantizationTestCases;
+using ::onnx_light::onnx_backend_test::CollectReductionTestCases;
+using ::onnx_light::onnx_backend_test::CollectReleaseTestCases;
+using ::onnx_light::onnx_backend_test::CollectSequenceTestCases;
+using ::onnx_light::onnx_backend_test::CollectShapeInferenceTestCases;
+using ::onnx_light::onnx_backend_test::CollectShapeTagTestCases;
+using ::onnx_light::onnx_backend_test::CollectTensorTestCases;
+using ::onnx_light::onnx_backend_test::CollectTextTestCases;
+using ::onnx_light::onnx_backend_test::CollectTraditionalMLTestCases;
+using ::onnx_light::onnx_backend_test::CollectTrainingTestCases;
 
 namespace {
 

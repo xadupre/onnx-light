@@ -5,7 +5,7 @@ import unittest
 
 def _plot_threads_example_has_xlim_left_zero() -> bool:
     root = pathlib.Path(__file__).resolve().parents[2]
-    source_path = root / "docs" / "examples" / "core" / "plot_threads_load_save.py"
+    source_path = root / "docs" / "examples" / "proto" / "plot_threads_load_save.py"
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):

@@ -32,6 +32,7 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::DefaultOpset;
 using core::runtime::DataType;
 using core::runtime::KernelDispatchTable;
 using core::runtime::RunFunction;
@@ -45,7 +46,6 @@ using core::runtime::SliceTensorAlongAxis;
 using core::runtime::Tensor;
 using core::runtime::TensorFromProto;
 using core::runtime::TensorMap;
-using onnx_backend_test::DefaultOpset;
 using onnx_kernels::kernel::KernelContext;
 
 static_assert(std::string_view(core::runtime::RuntimeEventActionName(

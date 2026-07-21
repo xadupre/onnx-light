@@ -25,8 +25,8 @@
 #include <string>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::DefaultOpset;
 using core::runtime::If;
-using onnx_backend_test::DefaultOpset;
 using onnx_kernels::kernel::Abs;
 using onnx_kernels::kernel::Adagrad;
 using onnx_kernels::kernel::Adam;

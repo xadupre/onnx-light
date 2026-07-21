@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/annotations/inplace_reuse.h"
 #include "onnx_core/annotations/value_tags.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_lib/checker.h"
@@ -18,9 +18,9 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::CollectTestCases;
-using onnx_backend_test::DataSet;
-using onnx_backend_test::TestCase;
+using core::backend_test::CollectTestCases;
+using core::backend_test::DataSet;
+using core::backend_test::TestCase;
 using DataTensor = core::runtime::Tensor;
 
 namespace Test {

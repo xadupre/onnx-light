@@ -11,8 +11,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::TestCase;
 using onnx_backend_test::CollectEmptyShapeTestCases;
-using onnx_backend_test::TestCase;
 
 namespace {
 

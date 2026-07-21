@@ -18,6 +18,7 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::DefaultOpset;
 using core::runtime::If;
 using core::runtime::Loop;
 using core::runtime::RuntimeContext;
@@ -26,7 +27,6 @@ using core::runtime::Sequence;
 using core::runtime::Shape;
 using core::runtime::SimpleRawBufferAllocator;
 using core::runtime::Tensor;
-using onnx_backend_test::DefaultOpset;
 using onnx_kernels::kernel::KernelContext;
 
 namespace Test {

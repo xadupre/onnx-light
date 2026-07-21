@@ -14,8 +14,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::OpsetId;
 using core::runtime::Tensor;
-using onnx_backend_test::OpsetId;
 using onnx_kernels::kernel::FlexAttention;
 using onnx_kernels::kernel::KernelContext;
 

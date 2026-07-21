@@ -15,14 +15,14 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTrainingTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_backend_test::TestCase> registry;
+std::vector<core::backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<core::backend_test::TestCase> registry;
   CollectTrainingTestCases(registry, op_type);
   return registry;
 }
 } // namespace
+using core::backend_test::TestCase;
 using core::runtime::Tensor;
-using onnx_backend_test::TestCase;
 
 namespace Test {
 

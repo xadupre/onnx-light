@@ -18,9 +18,9 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::DefaultOpset;
 using core::runtime::RuntimeContext;
 using core::runtime::Tensor;
-using onnx_backend_test::DefaultOpset;
 using onnx_kernels::RawBuffer;
 using onnx_kernels::RawBufferAllocator;
 using onnx_kernels::SimpleRawBufferAllocator;

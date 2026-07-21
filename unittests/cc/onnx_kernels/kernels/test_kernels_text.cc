@@ -13,8 +13,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::DefaultOpset;
 using core::runtime::Tensor;
-using onnx_backend_test::DefaultOpset;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::RegexFullMatch;
 using onnx_kernels::kernel::StringConcat;

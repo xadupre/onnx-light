@@ -10,6 +10,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
+using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-namespace)
 
 // ---------------------------------------------------------------------------
 // Backend test cases that exercise the release-after metadata written by

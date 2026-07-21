@@ -13,7 +13,7 @@ kernels.
 ``onnx_core`` never depends on ``onnx_kernels``, so the kernel dispatch
 table starts out empty: it is a mutable registry
 (:cpp:func:`RegisterKernelFn`) that ``onnx_kernels`` populates with its
-per-operator trampolines (see :doc:`../../onnx_kernels/kernel_dispatch_table`)
+per-operator trampolines (see :doc:`../../onnx_extensions/kernels/kernel_dispatch_table`)
 via :cpp:func:`onnx_light::onnx_kernels::RegisterKernelFunctions`. Any
 consumer of the runtime (Python bindings, tests, examples, ...) must call
 that function once before using :cpp:func:`RunNode` / :cpp:func:`RunModel`

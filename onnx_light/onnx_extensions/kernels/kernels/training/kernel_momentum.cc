@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/training/include_training_kernels.h"
+#include "onnx_extensions/kernels/kernels/training/include_training_kernels.h"
 
 #include <cstddef>
 #include <cstdint>

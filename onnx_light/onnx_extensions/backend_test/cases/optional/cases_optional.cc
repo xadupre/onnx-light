@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/cases/optional/include_optional_cases.h"
 #include "onnx_core/backend_test/test_case.h"
-#include "onnx_kernels/kernels/optional/include_optional_kernels.h"
+#include "onnx_extensions/backend_test/cases/optional/include_optional_cases.h"
+#include "onnx_extensions/kernels/kernels/optional/include_optional_kernels.h"
 
 #include <cstdint>
 #include <vector>

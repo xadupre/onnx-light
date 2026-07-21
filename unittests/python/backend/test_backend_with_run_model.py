@@ -7,7 +7,7 @@ backend test case whose top-level graph contains a single node of an op
 registered in ``KernelDispatchTable``.
 
 This is the Python counterpart of
-``unittests/cc/onnx_backend_test/test_backend_run_model.cc``: both walk the
+``unittests/cc/onnx_extensions/backend_test/test_backend_run_model.cc``: both walk the
 same C++-generated backend test registry and validate that ``RunModel``
 reproduces the expected outputs without discrepancies.
 """

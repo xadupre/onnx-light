@@ -15,6 +15,6 @@ headers via :epkg:`Doxygen` and rendered by :epkg:`Breathe`.
     onnx_op/index
     onnx_extensions/onnx_shapes/index
     onnx_extensions/onnx_gradient/index
-    onnx_kernels/index
-    onnx_backend_test/index
+    onnx_extensions/kernels/index
+    onnx_extensions/backend_test/index
     onnx_proto/index

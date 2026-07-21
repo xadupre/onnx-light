@@ -5,7 +5,7 @@ The ``backend_test`` sub-namespace of ``onnx_core``
 (``core::backend_test``) contains the :cpp:struct:`TestCase` definition
 and the :cpp:func:`CollectTestCases` / :cpp:func:`CollectTestCasesByName`
 aggregator functions that assemble the full set of backend test cases from
-the per-operator registries in ``onnx_backend_test/cases/``.
+the per-operator registries in ``onnx_extensions/backend_test/cases/``.
 
 .. toctree::
     :maxdepth: 1

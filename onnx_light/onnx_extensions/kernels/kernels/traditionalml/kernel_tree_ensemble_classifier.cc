@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
-#include "onnx_kernels/kernels/traditionalml/kernel_svm_common.h"
-#include "onnx_kernels/kernels/traditionalml/kernel_tree_ensemble_common.h"
+#include "onnx_extensions/kernels/kernels/traditionalml/kernel_svm_common.h"
+#include "onnx_extensions/kernels/kernels/traditionalml/kernel_tree_ensemble_common.h"
 
 #include <algorithm>
 #include <cstdint>

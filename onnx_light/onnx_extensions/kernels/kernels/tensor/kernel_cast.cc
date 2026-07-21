@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_core/runtime/cast_float8.h"
 #include "onnx_core/runtime/cast_helper.h"

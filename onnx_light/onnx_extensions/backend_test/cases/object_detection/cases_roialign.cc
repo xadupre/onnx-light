@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/cases/object_detection/include_object_detection_cases.h"
 #include "onnx_core/backend_test/test_case.h"
-#include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
+#include "onnx_extensions/backend_test/cases/object_detection/include_object_detection_cases.h"
+#include "onnx_extensions/kernels/kernels/object_detection/include_object_detection_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>

@@ -8,7 +8,7 @@
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
-#include "onnx_kernels/kernels/auto_pad.h"
+#include "onnx_extensions/kernels/kernels/auto_pad.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

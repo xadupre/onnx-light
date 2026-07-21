@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/generator/include_generator_kernels.h"
+#include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>

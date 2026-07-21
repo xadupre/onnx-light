@@ -229,11 +229,11 @@ To evaluate ONNX nodes / graphs / models in-process using the bundled C++
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_kernels)
 
-The kernels live under ``onnx_light/onnx_kernels/kernels/<group>/`` and
+The kernels live under ``onnx_light/onnx_extensions/kernels/kernels/<group>/`` and
 form a self-contained runtime that depends on
 ``onnx_light::lib_onnx_proto`` and ``onnx_light::lib_onnx_manipulations``
 (for the graph-manipulation helpers).  See
-:doc:`../api/cpp/onnx_kernels/index` for the full C++ API reference.
+:doc:`../api/cpp/onnx_extensions/kernels/index` for the full C++ API reference.
 
 To additionally pull in the backend-test infrastructure
 (``struct TestCase``, ``Expect()`` helper, per-operator

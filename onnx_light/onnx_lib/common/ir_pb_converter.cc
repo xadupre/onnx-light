@@ -302,6 +302,9 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
     if (!vip.type().has_tensor_type()) {
       v->type() = std::make_unique<TypeProto>(vip.type());
     }
+    if (vip.has_doc_string()) {
+      v->setDocString(vip.doc_string());
+    }
     v->setUniqueName(vip.name());
     value_by_name_of[vip.name()] = v;
   }
@@ -397,6 +400,9 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
     if (!output.type().has_tensor_type()) {
       output_value->type() = std::make_unique<TypeProto>(output.type());
     }
+    if (output.has_doc_string()) {
+      output_value->setDocString(output.doc_string());
+    }
     g->registerOutput(output_value);
   }
 
@@ -417,6 +423,9 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
     }
     if (!gp.value_info()[i].type().has_tensor_type()) {
       v->type() = std::make_unique<TypeProto>(gp.value_info()[i].type());
+    }
+    if (gp.value_info()[i].has_doc_string()) {
+      v->setDocString(gp.value_info()[i].doc_string());
     }
   }
 
@@ -639,6 +648,9 @@ static void encodeValueInfo(ValueInfoProto &v, Value &n) {
     encodeTypeProtoTensorType(*tensor_type, n);
   } else if (n.type()) {
     v.add_type()->CopyFrom(*n.type());
+  }
+  if (n.has_doc_string()) {
+    v.set_doc_string(n.docString());
   }
 }
 

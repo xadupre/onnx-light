@@ -258,7 +258,7 @@ NodeProto MakeScanNodeWithBody(const std::vector<std::string> &inputs,
 // ---------------------------------------------------------------------------
 void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const Scan scan_kernel{ctx};
 
   auto register_case = [&](const std::string &test_name, int64_t trip_count) {

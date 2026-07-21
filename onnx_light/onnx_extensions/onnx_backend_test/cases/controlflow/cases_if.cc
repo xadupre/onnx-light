@@ -76,7 +76,7 @@ void BuildConstantBranch(GraphProto &g, const std::string &graph_name,
 // ---------------------------------------------------------------------------
 void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const If if_kernel{ctx};
 
   const Tensor then_value = Tensor::FromFloat("", {2}, {1.0f, 2.0f});

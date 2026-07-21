@@ -260,7 +260,7 @@ static void RegisterLoop11Case(std::vector<TestCase> &registry) {
   // ONNX's ``test_loop11`` model imports opset 11 — match that here so the
   // case can be located by substring against ONNX's test name.
   const OpsetId opset = DefaultOpset(11);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const Loop loop_kernel{ctx};
 
   // Build the Loop node: 3 inputs (M, cond, y) and 2 outputs (res_y, res_scan).
@@ -316,7 +316,7 @@ namespace {
 // ---------------------------------------------------------------------------
 void RegisterTripCountVariants(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const Loop loop_kernel{ctx};
 
   const Tensor per_iter_value("", DataType::INT64, {1}, Int64Bytes(42));
@@ -446,7 +446,7 @@ GraphProto BuildMultiCarriedBody() {
 
 void RegisterMultiCarriedCase(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const Loop loop_kernel{ctx};
 
   NodeProto node;

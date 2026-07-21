@@ -27,7 +27,7 @@ using TestCasesCollectorFn =
 
 /**
  * Registers a collector function into the global per-category registry.
- * Called once per category at static-initialisation time (typically via a
+ * Called once per category at static-initialization time (typically via a
  * ``static int kRegXxx = RegisterTestCasesCollector(...)`` variable in each
  * ``collect_*_cases.cc`` translation unit).
  *

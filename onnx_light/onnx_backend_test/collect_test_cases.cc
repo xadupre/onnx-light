@@ -44,11 +44,11 @@ namespace backend_test {
 namespace {
 
 // All 22 per-category collector functions are registered here in a single
-// static initialiser.  Because this variable is in the same translation unit
+// static initializer.  Because this variable is in the same translation unit
 // as CollectTestCases / CollectTestCasesByName, C++ guarantees that it is
 // fully initialized before either function body executes (namespace-scope
 // statics within a TU are initialized in declaration order).  All
-// registrations happen sequentially from this one initialiser, so no mutex
+// registrations happen sequentially from this one initializer, so no mutex
 // is needed.
 // clang-format off
 [[maybe_unused]] const int kRegisterAllCollectors = []() {

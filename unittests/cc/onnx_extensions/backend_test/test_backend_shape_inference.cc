@@ -2162,6 +2162,13 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagToOutputWhenOutputIsS
   ASSERT_TRUE(found) << "test_cc_shape_tag_output_is_shape case not registered";
 }
 
+// Guards two invariants for every ``test_cc_shape_tag_*`` fixture:
+//   * WriteValueAndNodeTagsToMetadata stamps ``onnx_light.value_tag`` on every
+//     graph input, output, and initializer (always-known values), and
+//   * each fixture pre-embeds the *expected* value_tag on those same values
+//     with a value that matches what is recomputed.
+// The second check catches fixtures that forget the expected shape tags on
+// inputs, outputs, or initializers (which would otherwise pass silently).
 TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInShapeTagCases) {
   const std::vector<TestCase> cases = CollectTestCases("shape_tag");
   bool found = false;
@@ -2225,11 +2232,37 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
       }
     };
 
+    const auto value_tag_of = [&](const auto &value) {
+      return MetadataOf(value).at(core::annotations::kValueTagMetadataKey);
+    };
+    // Inputs, outputs, and initializers must carry a *pre-embedded* (expected)
+    // value_tag whose value matches what WriteValueAndNodeTagsToMetadata
+    // recomputes. This guards against fixtures that forget to embed the
+    // expected shape tags on these always-known graph values.
+    const auto expect_matching_value_tag_values =
+        [&](const auto &values, const auto &expected_values, const char *kind) {
+          ASSERT_EQ(values.size(), expected_values.size())
+              << "size mismatch on " << kind << " in case " << tc.name;
+          for (size_t idx = 0; idx < values.size(); ++idx) {
+            ASSERT_TRUE(has_value_tag(expected_values[idx]))
+                << "missing expected value_tag on " << kind << "[" << idx << "] in case "
+                << tc.name;
+            EXPECT_EQ(value_tag_of(values[idx]), value_tag_of(expected_values[idx]))
+                << "value_tag mismatch on " << kind << "[" << idx << "] in case " << tc.name;
+          }
+        };
+
     expect_matching_node_tags(graph->ref_node(), original_graph.ref_node());
     // Every input, output, and initializer must have a value_tag (always known).
     expect_all_have_value_tag(graph->ref_input(), "input");
     expect_all_have_value_tag(graph->ref_output(), "output");
     expect_all_have_value_tag(graph->ref_initializer(), "initializer");
+    // The pre-embedded (expected) tags on those values must be present and equal
+    // to the recomputed ones.
+    expect_matching_value_tag_values(graph->ref_input(), original_graph.ref_input(), "input");
+    expect_matching_value_tag_values(graph->ref_output(), original_graph.ref_output(), "output");
+    expect_matching_value_tag_values(graph->ref_initializer(), original_graph.ref_initializer(),
+                                     "initializer");
     // For intermediate value_info, check that presence matches the pre-embedded data.
     expect_matching_value_tags(graph->ref_value_info(), original_graph.ref_value_info(),
                                "value_info");

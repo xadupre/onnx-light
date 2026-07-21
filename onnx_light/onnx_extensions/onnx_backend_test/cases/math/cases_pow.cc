@@ -14,7 +14,7 @@ namespace onnx_backend_test {
 
 void RegisterPowCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Pow pow_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

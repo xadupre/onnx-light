@@ -36,7 +36,7 @@ void RegisterConcatFromSequenceCase(const std::string &name, const std::vector<i
                                     const Tensor &a, const Tensor &b, const Tensor &c, int64_t axis,
                                     int64_t new_axis, const OpsetId &opset,
                                     std::vector<TestCase> &registry) {
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   Tensor expected = kernel::ConcatFromSequence(ctx)({a, b, c}, axis, new_axis);
   expected.name = "concat_result";
 

@@ -162,7 +162,7 @@ void RegisterReduceL1L2OnnxCases(std::vector<TestCase> &registry, const std::str
 } // namespace
 
 void RegisterReduceL1Cases(std::vector<TestCase> &registry, TestMode mode) {
-  const kernel::KernelContext ctx{DefaultOpset(18)};
+  const KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceL1 reduce_l1_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
@@ -187,7 +187,7 @@ void RegisterReduceL1Cases(std::vector<TestCase> &registry, TestMode mode) {
 }
 
 void RegisterReduceL2Cases(std::vector<TestCase> &registry, TestMode mode) {
-  const kernel::KernelContext ctx{DefaultOpset(18)};
+  const KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceL2 reduce_l2_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

@@ -27,7 +27,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterMaxUnpoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::MaxUnpool maxunpool_kernel{ctx};
 
   // Three-input form: ``output_shape = [1, 1, 5, 5]`` overrides the

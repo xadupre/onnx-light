@@ -30,7 +30,7 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
   // y[1] = 3.0 + 4.0 = 7.0   (both trees follow false branch)
 
   const OpsetId opset("ai.onnx.ml", 1);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::TreeEnsembleRegressor reg{ctx};
 

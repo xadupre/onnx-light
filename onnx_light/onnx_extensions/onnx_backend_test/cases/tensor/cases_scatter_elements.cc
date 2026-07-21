@@ -36,7 +36,7 @@ NodeProto MakeScatterElementsNode(int64_t axis, const std::string &reduction, bo
 
 void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::ScatterElements se_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

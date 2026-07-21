@@ -40,7 +40,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     t->set_raw_data(utils::ByteSpan(value.data));
 
     const OpsetId opset = DefaultOpset(13);
-    const kernel::KernelContext ctx{opset};
+    const KernelContext ctx{opset};
     const kernel::Constant constant_kernel{ctx};
 
     Expect(registry, std::move(node), "test_cc_constant_benchmark", {opset},
@@ -71,7 +71,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
   t->set_raw_data(utils::ByteSpan(value.data));
 
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   Expect(registry, std::move(node), "test_cc_constant", {opset},
          [ctx, value = std::move(value)]() mutable -> IoData {

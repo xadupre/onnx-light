@@ -114,7 +114,7 @@ std::vector<int64_t> MakeLabelRange(int64_t count, int64_t n_classes) {
 
 void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::SoftmaxCrossEntropyLoss sce_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

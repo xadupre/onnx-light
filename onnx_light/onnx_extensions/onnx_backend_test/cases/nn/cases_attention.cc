@@ -149,7 +149,7 @@ Tensor MakeQ_1_4_2_2_gqa() {
 
 void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Attention attention{ctx};
 
   if (mode == TestMode::BENCHMARK) {

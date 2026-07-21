@@ -16,7 +16,7 @@ namespace onnx_backend_test {
 void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::ZipMap zipmap{ctx};
 
   // int64-key variant.

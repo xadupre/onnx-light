@@ -81,7 +81,7 @@ Tensor MakeUpstreamFeatureMap() {
 // ---------------------------------------------------------------------------
 void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::RoiAlign roialign_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

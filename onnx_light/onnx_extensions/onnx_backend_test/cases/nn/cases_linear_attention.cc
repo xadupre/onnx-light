@@ -34,7 +34,7 @@ NodeProto MakeLinearAttentionNode(const std::vector<std::string> &inputs,
 
 void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(27);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::LinearAttention kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

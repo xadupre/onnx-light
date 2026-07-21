@@ -33,7 +33,7 @@ NodeProto MakeSpaceToDepthNode(int64_t blocksize) {
 // ---------------------------------------------------------------------------
 void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::SpaceToDepth s2d{ctx};
 
   if (mode == TestMode::BENCHMARK) {

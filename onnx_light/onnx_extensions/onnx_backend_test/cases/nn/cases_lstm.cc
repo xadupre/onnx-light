@@ -31,7 +31,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::LSTM lstm_kernel{ctx};
 
   constexpr int64_t kNumGates = 4;

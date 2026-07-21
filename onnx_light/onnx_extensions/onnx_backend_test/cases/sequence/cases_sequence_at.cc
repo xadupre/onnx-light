@@ -29,7 +29,7 @@ constexpr int64_t kDefaultIrVersion = 13;
 void RegisterSequenceAtCase(const std::string &name, const std::vector<Tensor> &inputs,
                             int64_t position, const OpsetId &opset,
                             std::vector<TestCase> &registry) {
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   // Compute expected output with the reference kernel.
   const Sequence seq = kernel::SequenceConstruct(ctx).AsSequence(inputs);

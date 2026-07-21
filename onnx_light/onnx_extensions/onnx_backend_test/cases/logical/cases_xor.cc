@@ -41,7 +41,7 @@ void RegisterXorOnnxCase(const std::string &name, const std::vector<int64_t> &x_
 // ---------------------------------------------------------------------------
 void RegisterXorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(7);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Xor xor_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

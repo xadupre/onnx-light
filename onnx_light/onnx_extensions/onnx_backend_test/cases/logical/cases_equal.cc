@@ -23,7 +23,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(19);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Equal equal_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

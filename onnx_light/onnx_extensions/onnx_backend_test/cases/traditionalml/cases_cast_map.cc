@@ -44,7 +44,7 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::CastMap cast_map{ctx};
 
   // DENSE map(int64, float) -> tensor(float). Keys are not sorted on input;

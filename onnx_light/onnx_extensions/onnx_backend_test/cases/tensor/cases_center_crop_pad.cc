@@ -37,7 +37,7 @@ NodeProto MakeCenterCropPadNode(const std::vector<int64_t> &axes) {
 // ---------------------------------------------------------------------------
 void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::CenterCropPad op{ctx};
 
   if (mode == TestMode::BENCHMARK) {

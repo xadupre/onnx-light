@@ -27,7 +27,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::LpNormalization kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

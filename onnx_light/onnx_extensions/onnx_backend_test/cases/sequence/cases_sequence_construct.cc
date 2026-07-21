@@ -32,7 +32,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   // Case 1: three FLOAT tensors of shape [2, 3].
   {

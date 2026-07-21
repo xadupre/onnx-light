@@ -31,7 +31,7 @@ constexpr int64_t kDefaultIrVersion = 13;
 // the empty sequence's element dtype.
 void RegisterSequenceEmptyCase(const std::string &name, bool has_dtype, int64_t dtype,
                                const OpsetId &opset, std::vector<TestCase> &registry) {
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   // Compute the expected output: SequenceLength of an empty sequence
   // is always 0.

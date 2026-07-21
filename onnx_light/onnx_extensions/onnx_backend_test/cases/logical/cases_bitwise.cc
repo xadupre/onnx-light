@@ -139,7 +139,7 @@ void RegisterBitwiseBinUint32Case(const std::string &name, const char *op,
 // ---------------------------------------------------------------------------
 void RegisterBitwiseAndCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::BitwiseAnd k{ctx};
 
   if (mode == TestMode::BENCHMARK) {
@@ -191,7 +191,7 @@ void RegisterBitwiseAndCases(std::vector<TestCase> &registry, TestMode mode) {
 // ---------------------------------------------------------------------------
 void RegisterBitwiseOrCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::BitwiseOr k{ctx};
 
   if (mode == TestMode::BENCHMARK) {
@@ -242,7 +242,7 @@ void RegisterBitwiseOrCases(std::vector<TestCase> &registry, TestMode mode) {
 // ---------------------------------------------------------------------------
 void RegisterBitwiseXorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::BitwiseXor k{ctx};
 
   if (mode == TestMode::BENCHMARK) {
@@ -295,7 +295,7 @@ void RegisterBitwiseXorCases(std::vector<TestCase> &registry, TestMode mode) {
 // ---------------------------------------------------------------------------
 void RegisterBitwiseNotCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::BitwiseNot k{ctx};
 
   if (mode == TestMode::BENCHMARK) {

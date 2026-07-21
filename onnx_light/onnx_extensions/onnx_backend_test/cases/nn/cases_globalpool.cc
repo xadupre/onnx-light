@@ -23,7 +23,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::GlobalAveragePool kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
@@ -89,7 +89,7 @@ void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mo
 // ---------------------------------------------------------------------------
 void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::GlobalMaxPool kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
@@ -156,7 +156,7 @@ void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) 
 // ---------------------------------------------------------------------------
 void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::GlobalLpPool kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

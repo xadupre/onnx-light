@@ -104,7 +104,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry);
 void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset13 = DefaultOpset(13);
   const OpsetId opset18 = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset13};
+  const KernelContext ctx{opset13};
   const kernel::Resize resize_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

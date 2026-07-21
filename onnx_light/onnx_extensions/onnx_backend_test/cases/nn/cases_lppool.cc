@@ -42,7 +42,7 @@ using onnx_kernels::kernel::AutoPad;
 // ---------------------------------------------------------------------------
 void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::LpPool lp_pool_kernel{ctx};
 
   uint64_t seed = 137;

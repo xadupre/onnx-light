@@ -30,7 +30,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::QLinearConv qc{ctx};
 
   if (mode == TestMode::BENCHMARK) {

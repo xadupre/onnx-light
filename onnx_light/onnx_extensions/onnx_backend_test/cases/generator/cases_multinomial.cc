@@ -43,7 +43,7 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 // ---------------------------------------------------------------------------
 void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

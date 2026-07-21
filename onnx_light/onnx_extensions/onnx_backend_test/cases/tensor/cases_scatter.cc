@@ -36,7 +36,7 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
   // cases pin the opset to 10. Use the same opset here so the generated
   // models are valid (Scatter is not registered in opset >= 11).
   const OpsetId opset = DefaultOpset(10);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Scatter scatter_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

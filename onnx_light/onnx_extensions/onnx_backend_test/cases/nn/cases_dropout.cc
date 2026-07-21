@@ -17,7 +17,7 @@ namespace onnx_backend_test {
 
 void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Dropout dropout_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
@@ -261,7 +261,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
   // output equals the input regardless of the optional ``ratio`` attribute.
   // ---------------------------------------------------------------------------
   const OpsetId opset_old = DefaultOpset(11);
-  const kernel::KernelContext ctx_old{opset_old};
+  const KernelContext ctx_old{opset_old};
   const kernel::Dropout dropout_kernel_old{ctx_old};
 
   // Opset 11 Dropout, no ratio attribute.

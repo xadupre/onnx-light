@@ -23,7 +23,7 @@ void RegisterSequenceInsertCase(const std::string &name, const std::vector<Tenso
                                 const std::vector<int64_t> &elem_shape, bool has_position,
                                 int64_t position, const OpsetId &opset,
                                 std::vector<TestCase> &registry) {
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   const Sequence seq = kernel::SequenceConstruct(ctx).AsSequence(inputs);
   Tensor position_tensor;

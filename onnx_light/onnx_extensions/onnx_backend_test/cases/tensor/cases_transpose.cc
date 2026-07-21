@@ -32,7 +32,7 @@ NodeProto MakeTransposeNode(const std::vector<int64_t> &perm = {}) {
 
 void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Transpose transpose_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

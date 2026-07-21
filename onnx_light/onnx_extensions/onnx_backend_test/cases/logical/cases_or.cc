@@ -41,7 +41,7 @@ void RegisterOrOnnxCase(const std::string &name, const std::vector<int64_t> &x_s
 // ---------------------------------------------------------------------------
 void RegisterOrCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(7);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Or or_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

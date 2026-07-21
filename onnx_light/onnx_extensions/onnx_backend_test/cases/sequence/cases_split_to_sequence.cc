@@ -29,7 +29,7 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
                                  int64_t axis, int64_t keepdims,
                                  const std::vector<int64_t> &elem_shape, const OpsetId &opset,
                                  std::vector<TestCase> &registry) {
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   // Compute the expected output sequence with the reference kernel.
   const Sequence out_seq = kernel::SplitToSequence(ctx)(input, split, axis, keepdims);

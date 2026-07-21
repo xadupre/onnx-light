@@ -37,7 +37,7 @@ NodeProto MakeBitCastNode(int32_t to) {
 // ---------------------------------------------------------------------------
 void RegisterBitCastCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(26);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::BitCast k{ctx};
 
   if (mode == TestMode::BENCHMARK) {

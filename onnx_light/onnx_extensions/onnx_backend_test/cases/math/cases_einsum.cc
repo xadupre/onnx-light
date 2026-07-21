@@ -38,7 +38,7 @@ NodeProto MakeEinsumNode(int n_inputs, const std::string &equation) {
 // ---------------------------------------------------------------------------
 void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Einsum einsum_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

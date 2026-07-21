@@ -62,7 +62,7 @@ void AddUint8Tensor(NodeProto &node, const char *name, const std::vector<uint8_t
 
 void RegisterTreeEnsembleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 5);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::TreeEnsemble tree_ens{ctx};
 

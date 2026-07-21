@@ -20,7 +20,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::StringNormalizer string_normalizer{ctx};
 
   using CaseChangeAction = kernel::StringNormalizer::CaseChangeAction;

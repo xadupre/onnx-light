@@ -67,7 +67,7 @@ std::vector<TUInt> RandUintNonZero(int64_t high, const std::vector<int64_t> &sha
 // ---------------------------------------------------------------------------
 void RegisterDivCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Div div_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

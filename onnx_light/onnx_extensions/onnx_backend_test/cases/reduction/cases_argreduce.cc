@@ -27,7 +27,7 @@ void EmitArgReduceCase(std::vector<TestCase> &registry, const std::string &op_ty
                        const std::vector<float> &data_values, bool include_axis, int64_t axis,
                        int64_t keepdims, bool select_last_index) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::ArgReduce arg_kernel{ctx, mode};
 
   NodeProto node;
@@ -120,7 +120,7 @@ void RegisterArgReduceCases(std::vector<TestCase> &registry, const std::string &
 void RegisterArgMaxCases(std::vector<TestCase> &registry, TestMode mode) {
 
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::ArgReduce arg_kernel{ctx, kernel::ArgReduce::Mode::kMax};
 
   if (mode == TestMode::BENCHMARK) {
@@ -147,7 +147,7 @@ void RegisterArgMaxCases(std::vector<TestCase> &registry, TestMode mode) {
 void RegisterArgMinCases(std::vector<TestCase> &registry, TestMode mode) {
 
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::ArgReduce arg_kernel{ctx, kernel::ArgReduce::Mode::kMin};
 
   if (mode == TestMode::BENCHMARK) {

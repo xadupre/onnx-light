@@ -32,7 +32,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::GRU gru_kernel{ctx};
 
   constexpr int64_t kNumGates = 3;

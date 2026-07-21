@@ -148,7 +148,7 @@ void RegisterReduceMinMaxOnnxCases(std::vector<TestCase> &registry, const std::s
 } // namespace
 
 void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
-  const kernel::KernelContext ctx{DefaultOpset(18)};
+  const KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceMax reduce_max_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
@@ -200,7 +200,7 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
 }
 
 void RegisterReduceMinCases(std::vector<TestCase> &registry, TestMode mode) {
-  const kernel::KernelContext ctx{DefaultOpset(18)};
+  const KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceMin reduce_min_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

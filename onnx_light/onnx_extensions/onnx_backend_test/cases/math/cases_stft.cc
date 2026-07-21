@@ -42,7 +42,7 @@ NodeProto MakeSTFTNode(bool with_window, bool with_frame_length, int64_t oneside
 // ---------------------------------------------------------------------------
 void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v17 = DefaultOpset(17);
-  const kernel::KernelContext ctx_v17{opset_v17};
+  const KernelContext ctx_v17{opset_v17};
   const kernel::STFT stft_v17{ctx_v17};
 
   if (mode == TestMode::BENCHMARK) {

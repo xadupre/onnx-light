@@ -24,7 +24,7 @@ void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry, TestMode mode
   constexpr float kUpperEdgeHertz = 8192.0f / 2.0f;
 
   const OpsetId opset = DefaultOpset(17);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::MelWeightMatrix mel_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

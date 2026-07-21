@@ -76,7 +76,7 @@ void EmitReduceSumSquareDefaultAxesCase(std::vector<TestCase> &registry,
 // opset 18.
 // ---------------------------------------------------------------------------
 void RegisterReduceSumSquareCases(std::vector<TestCase> &registry, TestMode mode) {
-  const kernel::KernelContext ctx{DefaultOpset(18)};
+  const KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceSumSquare kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

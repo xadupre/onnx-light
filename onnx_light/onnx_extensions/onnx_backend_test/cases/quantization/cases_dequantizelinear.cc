@@ -84,7 +84,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
   const OpsetId opset_v21 = DefaultOpset(25);
   const OpsetId opset_v23 = DefaultOpset(25);
   const OpsetId opset_v25 = DefaultOpset(25);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::DequantizeLinear dequantize_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

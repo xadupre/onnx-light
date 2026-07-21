@@ -36,7 +36,7 @@ NodeProto MakeTensorScatterNode(const std::string &mode, bool set_mode_attr) {
 
 void RegisterTensorScatterCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(24);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::TensorScatter ts_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

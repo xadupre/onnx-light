@@ -82,7 +82,7 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &name, cons
 
 void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(27);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::CausalConvWithState kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

@@ -15,7 +15,7 @@ namespace onnx_backend_test {
 
 void RegisterSoftplusCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Softplus softplus_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

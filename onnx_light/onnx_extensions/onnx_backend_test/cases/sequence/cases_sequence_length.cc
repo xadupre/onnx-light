@@ -19,7 +19,7 @@ namespace {
 // regular tensor inputs.
 void RegisterSequenceLengthCase(const std::string &name, const OpsetId &opset,
                                 std::vector<TestCase> &registry) {
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const Tensor a = Tensor::FromFloat("a", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
   const Tensor b = Tensor::FromFloat("b", {2, 3}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
   const Tensor c = Tensor::FromFloat("c", {2, 3}, {6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f});

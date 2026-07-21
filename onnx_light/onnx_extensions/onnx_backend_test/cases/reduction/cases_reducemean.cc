@@ -74,7 +74,7 @@ void EmitReduceMeanDefaultAxesCase(std::vector<TestCase> &registry,
 // simple reductions added in opset 18.
 // ---------------------------------------------------------------------------
 void RegisterReduceMeanCases(std::vector<TestCase> &registry, TestMode mode) {
-  const kernel::KernelContext ctx{DefaultOpset(18)};
+  const KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceMean kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

@@ -60,8 +60,8 @@ NodeProto MakeDFTNodeV20(bool inverse, bool onesided) {
 void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v17 = DefaultOpset(17);
   const OpsetId opset_v20 = DefaultOpset(20);
-  const kernel::KernelContext ctx_v17{opset_v17};
-  const kernel::KernelContext ctx_v20{opset_v20};
+  const KernelContext ctx_v17{opset_v17};
+  const KernelContext ctx_v20{opset_v20};
   const kernel::DFT dft_v17{ctx_v17};
   const kernel::DFT dft_v20{ctx_v20};
 
@@ -173,7 +173,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry, TestMode mode) {
   }
   const Tensor x_cplx_10x10 = Tensor::FromFloat("x", {1, 10, 10, 2}, arange100_cplx);
 
-  const kernel::KernelContext ctx_v19{DefaultOpset(19)};
+  const KernelContext ctx_v19{DefaultOpset(19)};
   const kernel::DFT dft_v19{ctx_v19};
   const OpsetId opset_v19 = DefaultOpset(19);
 

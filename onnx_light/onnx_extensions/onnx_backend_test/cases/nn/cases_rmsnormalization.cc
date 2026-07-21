@@ -71,7 +71,7 @@ void RegisterCase(std::vector<TestCase> &registry, const kernel::RMSNormalizatio
 
 void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::RMSNormalization rmsnorm_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

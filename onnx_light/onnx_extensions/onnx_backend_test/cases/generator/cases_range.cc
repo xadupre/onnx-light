@@ -26,8 +26,8 @@ namespace {
 void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v11 = DefaultOpset(11);
   const OpsetId opset_v27 = DefaultOpset(27);
-  const kernel::KernelContext ctx_v11{opset_v11};
-  const kernel::KernelContext ctx_v27{opset_v27};
+  const KernelContext ctx_v11{opset_v11};
+  const KernelContext ctx_v27{opset_v27};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

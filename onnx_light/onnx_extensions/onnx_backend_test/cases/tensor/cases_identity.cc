@@ -38,7 +38,7 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
   // optional types. The default opset chosen here matches the most common
   // tensor-only usage exercised by these reference cases.
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Identity identity_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

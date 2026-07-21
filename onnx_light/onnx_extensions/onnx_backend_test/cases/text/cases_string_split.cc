@@ -16,7 +16,7 @@ namespace onnx_backend_test {
 
 void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::StringSplit string_split{ctx};
 
   if (mode == TestMode::BENCHMARK) {

@@ -47,7 +47,7 @@ void AddIntsAttr(NodeProto &node, const char *name, const std::vector<int64_t> &
 void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::DictVectorizer dict{ctx};
 
   // string -> int64 dictionary with string vocabulary.
@@ -97,7 +97,7 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode)
 void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::FeatureVectorizer fv{ctx};
 
   if (mode == TestMode::BENCHMARK) {

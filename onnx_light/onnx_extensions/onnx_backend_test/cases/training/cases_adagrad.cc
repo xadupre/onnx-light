@@ -42,7 +42,7 @@ OpsetId TrainingOpset(int64_t version) { return OpsetId(kOnnxPreviewTrainingDoma
 // ---------------------------------------------------------------------------
 void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = TrainingOpset(1);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::Adagrad adagrad{ctx};
 

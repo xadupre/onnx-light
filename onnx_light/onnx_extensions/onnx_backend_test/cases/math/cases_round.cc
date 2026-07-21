@@ -19,7 +19,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterRoundCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Round round_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

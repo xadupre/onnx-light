@@ -37,7 +37,7 @@ NodeProto MakeBitShiftNode(const char *direction) {
 // ---------------------------------------------------------------------------
 void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::BitShift k{ctx};
 
   if (mode == TestMode::BENCHMARK) {

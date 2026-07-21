@@ -42,7 +42,7 @@ NodeProto MakeDeformConvNode(const std::vector<std::string> &inputs,
 // expectations stay self-consistent with this library.
 void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::DeformConv dc{ctx};
 
   if (mode == TestMode::BENCHMARK) {

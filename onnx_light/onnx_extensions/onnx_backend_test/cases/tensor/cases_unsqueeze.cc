@@ -67,7 +67,7 @@ void RegisterUnsqueezeOneAxisCase(std::vector<TestCase> &registry, const OpsetId
 
 void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Unsqueeze unsqueeze_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

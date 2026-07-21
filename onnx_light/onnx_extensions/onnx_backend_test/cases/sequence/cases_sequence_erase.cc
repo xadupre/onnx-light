@@ -34,7 +34,7 @@ void RegisterSequenceEraseCase(const std::string &name, const std::vector<Tensor
                                const std::vector<int64_t> &elem_shape, bool has_position,
                                int64_t position, const OpsetId &opset,
                                std::vector<TestCase> &registry) {
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   // Compute the expected output sequence with the reference kernel.
   const Sequence seq = kernel::SequenceConstruct(ctx).AsSequence(inputs);

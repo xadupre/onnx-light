@@ -13,7 +13,7 @@ namespace onnx_backend_test {
 
 void RegisterLeakyReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::LeakyRelu leakyrelu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

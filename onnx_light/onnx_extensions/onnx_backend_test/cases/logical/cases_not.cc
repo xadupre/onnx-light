@@ -39,7 +39,7 @@ void RegisterNotOnnxCase(const std::string &name, const std::vector<int64_t> &sh
 // ---------------------------------------------------------------------------
 void RegisterNotCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(1);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Not not_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

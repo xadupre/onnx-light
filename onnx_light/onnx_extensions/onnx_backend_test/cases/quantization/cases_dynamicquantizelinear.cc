@@ -36,7 +36,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::DynamicQuantizeLinear dyn_quantize_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

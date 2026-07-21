@@ -75,7 +75,7 @@ std::vector<float> Range1ToN(int64_t n) {
 // ---------------------------------------------------------------------------
 void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::MaxPool maxpool_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

@@ -44,7 +44,7 @@ void RegisterOneBernoulli(const std::string &case_name, const Tensor &input, int
     attr->set_i(static_cast<int64_t>(dtype));
   }
   Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
-    const kernel::KernelContext ctx{opset};
+    const KernelContext ctx{opset};
     Tensor input_named = input;
     input_named.name = "x";
     Tensor y = kernel::Bernoulli(ctx)(input_named, seed, dtype);
@@ -79,7 +79,7 @@ void RegisterBernoulliCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
 
-    const kernel::KernelContext ctx{opset};
+    const KernelContext ctx{opset};
     const kernel::Bernoulli bernoulli_kernel{ctx};
     Expect(registry, std::move(node), "test_cc_bernoulli_benchmark", {opset},
            {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},

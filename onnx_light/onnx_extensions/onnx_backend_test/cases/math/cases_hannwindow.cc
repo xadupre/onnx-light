@@ -17,7 +17,7 @@ namespace onnx_backend_test {
 void RegisterHannWindowCases(std::vector<TestCase> &registry, TestMode mode) {
   constexpr int32_t kSize = 10;
   const OpsetId opset = DefaultOpset(17);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::HannWindow hann_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

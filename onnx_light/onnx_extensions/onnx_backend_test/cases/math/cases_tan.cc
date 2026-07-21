@@ -20,7 +20,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Tan tan_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

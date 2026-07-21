@@ -33,7 +33,7 @@ NodeProto MakeGatherNDNode(int64_t batch_dims, bool include_batch_dims) {
 
 void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::GatherND gnd_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

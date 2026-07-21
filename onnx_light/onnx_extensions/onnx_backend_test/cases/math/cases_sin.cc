@@ -20,7 +20,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterSinCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Sin sin_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

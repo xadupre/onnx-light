@@ -45,7 +45,7 @@ void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 
   const OpsetId opset = DefaultOpset(15);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   Expect(registry, std::move(node), "test_cc_optional", {opset}, [=]() -> IoData {
     Tensor input = Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});

@@ -33,7 +33,7 @@ NodeProto MakeConvIntegerNode(const std::vector<std::string> &inputs,
 
 void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::ConvInteger ci{ctx};
 
   if (mode == TestMode::BENCHMARK) {

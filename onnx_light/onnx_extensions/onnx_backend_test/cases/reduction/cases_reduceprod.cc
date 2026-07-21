@@ -74,7 +74,7 @@ void EmitReduceProdDefaultAxesCase(std::vector<TestCase> &registry,
 // simple reductions added in opset 18. The empty-set identity is ``1``.
 // ---------------------------------------------------------------------------
 void RegisterReduceProdCases(std::vector<TestCase> &registry, TestMode mode) {
-  const kernel::KernelContext ctx{DefaultOpset(18)};
+  const KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceProd kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

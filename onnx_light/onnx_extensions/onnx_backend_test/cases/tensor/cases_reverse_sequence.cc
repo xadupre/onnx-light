@@ -41,7 +41,7 @@ NodeProto MakeReverseSequenceNode(int64_t time_axis, int64_t batch_axis, bool se
 
 void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::ReverseSequence reverse_seq_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

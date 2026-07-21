@@ -59,7 +59,7 @@ std::vector<float> SequentialFloats(size_t count) {
 // ---------------------------------------------------------------------------
 void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(25);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Flatten kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

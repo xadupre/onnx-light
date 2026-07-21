@@ -39,7 +39,7 @@ NodeProto MakeOneHotNode(bool set_axis, int64_t axis) {
 
 void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::OneHot one_hot_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

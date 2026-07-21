@@ -48,7 +48,7 @@ Tensor MakeFeatureMap() {
 // ---------------------------------------------------------------------------
 void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::MaxRoiPool maxroipool_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

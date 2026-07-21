@@ -16,7 +16,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
 
   if (mode == TestMode::BENCHMARK) {
     const OpsetId opset = DefaultOpset(13);
-    const kernel::KernelContext ctx{opset};
+    const KernelContext ctx{opset};
     const kernel::MeanVarianceNormalization mvn_kernel{ctx};
 
     NodeProto node;
@@ -38,7 +38,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
   // ``mvn``: default axes [0,2,3].
   {
     const OpsetId opset = DefaultOpset(13);
-    const kernel::KernelContext ctx{opset};
+    const KernelContext ctx{opset};
     const kernel::MeanVarianceNormalization mvn_kernel{ctx};
 
     NodeProto node;
@@ -63,7 +63,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
   // ``mvn_explicit_axes``: explicit axes [0,2,3].
   {
     const OpsetId opset = DefaultOpset(13);
-    const kernel::KernelContext ctx{opset};
+    const KernelContext ctx{opset};
     const kernel::MeanVarianceNormalization mvn_kernel{ctx};
 
     NodeProto node;
@@ -89,7 +89,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
   // ``mvn_explicit_axes_ver18``: same explicit axes with opset 18 import.
   {
     const OpsetId opset = DefaultOpset(18);
-    const kernel::KernelContext ctx{opset};
+    const KernelContext ctx{opset};
     const kernel::MeanVarianceNormalization mvn_kernel{ctx};
 
     NodeProto node;

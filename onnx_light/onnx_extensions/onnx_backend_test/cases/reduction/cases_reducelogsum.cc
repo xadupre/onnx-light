@@ -185,7 +185,7 @@ void RegisterReduceLogSumOnnxCases(std::vector<TestCase> &registry,
 } // namespace
 
 void RegisterReduceLogSumCases(std::vector<TestCase> &registry, TestMode mode) {
-  const kernel::KernelContext ctx{DefaultOpset(18)};
+  const KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceLogSum kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
@@ -227,7 +227,7 @@ void RegisterReduceLogSumCases(std::vector<TestCase> &registry, TestMode mode) {
 }
 
 void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry, TestMode mode) {
-  const kernel::KernelContext ctx{DefaultOpset(18)};
+  const KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceLogSumExp kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

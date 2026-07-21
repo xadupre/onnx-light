@@ -33,7 +33,7 @@ Tensor PositiveRandFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Log log_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

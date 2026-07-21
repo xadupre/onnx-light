@@ -60,7 +60,7 @@ NodeProto MakeGemmNode(bool has_bias, float alpha = 1.0f, float beta = 1.0f, int
 
 void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Gemm gemm_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

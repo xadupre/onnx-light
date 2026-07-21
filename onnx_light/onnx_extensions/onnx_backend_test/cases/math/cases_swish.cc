@@ -13,7 +13,7 @@ namespace onnx_backend_test {
 
 void RegisterSwishCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(24);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Swish swish_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

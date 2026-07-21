@@ -58,7 +58,7 @@ Tensor MakeInt64Vector(const std::vector<int64_t> &values) {
 void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset13 = DefaultOpset(13);
   const OpsetId opset18 = DefaultOpset(18);
-  const kernel::Split split_kernel{kernel::KernelContext{opset18}};
+  const kernel::Split split_kernel{KernelContext{opset18}};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeSplitNode({"output_1", "output_2", "output_3"}, /*axis=*/0,

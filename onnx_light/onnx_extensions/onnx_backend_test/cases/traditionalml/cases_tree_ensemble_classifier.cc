@@ -26,7 +26,7 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
   //      [0.0, 1.0]]    (node 2 contributes to class 1)
 
   const OpsetId opset("ai.onnx.ml", 1);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::TreeEnsembleClassifier cls{ctx};
 

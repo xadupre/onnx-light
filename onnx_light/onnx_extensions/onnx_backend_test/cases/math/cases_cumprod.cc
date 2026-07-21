@@ -43,7 +43,7 @@ NodeProto MakeCumProdNode(bool exclusive, bool reverse) {
 // ---------------------------------------------------------------------------
 void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(26);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::CumProd cumprod_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

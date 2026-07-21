@@ -45,7 +45,7 @@ Tensor MakeScalesTensor(const std::vector<float> &scales) {
 
 void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(9);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Upsample upsample_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

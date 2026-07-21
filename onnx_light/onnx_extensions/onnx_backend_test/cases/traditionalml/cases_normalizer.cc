@@ -32,7 +32,7 @@ void AddStringAttr(NodeProto &node, const char *name, const std::string &value) 
 // ---------------------------------------------------------------------------
 void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::Normalizer normalizer{ctx};
 

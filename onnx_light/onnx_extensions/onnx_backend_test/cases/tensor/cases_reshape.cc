@@ -44,10 +44,10 @@ Tensor MakeShapeTensor(const std::vector<int64_t> &dims) {
 
 void RegisterReshapeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset13 = DefaultOpset(13);
-  const kernel::KernelContext ctx13{opset13};
+  const KernelContext ctx13{opset13};
   const kernel::Reshape reshape_kernel13{ctx13};
   const OpsetId opset14 = DefaultOpset(14);
-  const kernel::KernelContext ctx14{opset14};
+  const KernelContext ctx14{opset14};
   const kernel::Reshape reshape_kernel14{ctx14};
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeReshapeNode();

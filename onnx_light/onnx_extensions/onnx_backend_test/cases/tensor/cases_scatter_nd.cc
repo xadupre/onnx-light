@@ -45,7 +45,7 @@ Tensor MakeUpdates2x4x4() {
 
 void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::ScatterND snd_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

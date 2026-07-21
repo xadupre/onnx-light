@@ -44,7 +44,7 @@ NodeProto MakeTopKNode(int64_t axis, int64_t largest = 1, int64_t sorted_attr = 
 // ---------------------------------------------------------------------------
 void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::TopK topk_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

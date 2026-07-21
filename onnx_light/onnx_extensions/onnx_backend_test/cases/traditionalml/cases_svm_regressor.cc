@@ -13,7 +13,7 @@ namespace onnx_backend_test {
 
 void RegisterSVMRegressorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::SVMRegressor svm{ctx};
 

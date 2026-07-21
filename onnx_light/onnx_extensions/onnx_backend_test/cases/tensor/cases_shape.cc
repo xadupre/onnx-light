@@ -48,7 +48,7 @@ Tensor Rename(Tensor t, const std::string &name) {
 
 void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Shape shape_kernel{ctx};
 
   // 2-D example: mirrors ``test_shape_example`` upstream.

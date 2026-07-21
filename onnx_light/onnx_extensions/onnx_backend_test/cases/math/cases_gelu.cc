@@ -15,7 +15,7 @@ namespace onnx_backend_test {
 
 void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Gelu gelu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

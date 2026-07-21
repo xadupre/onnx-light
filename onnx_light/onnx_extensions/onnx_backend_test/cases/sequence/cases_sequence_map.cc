@@ -193,7 +193,7 @@ GraphProto BuildShapeBody(int32_t elem_type, const std::vector<int64_t> &in_elem
 void RegisterSequenceMapIdentityCase(const std::string &name, const std::vector<Tensor> &inputs,
                                      const std::vector<int64_t> &elem_shape, int32_t elem_type,
                                      const OpsetId &opset, std::vector<TestCase> &registry) {
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   // Build the input sequence and the body-output rows (identity → inputs).
   const Sequence in_seq = kernel::SequenceConstruct(ctx).AsSequence(inputs);
@@ -253,7 +253,7 @@ void RegisterSequenceMapIdentityCase(const std::string &name, const std::vector<
 void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
                                                std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_identity_2_sequences";
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const std::vector<int64_t> shape0 = {3};
   const std::vector<int64_t> shape1 = {4};
 
@@ -344,7 +344,7 @@ void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
 // single output sequence ``y0[i] == x0[i] + x1[i]``.
 void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_add_2_sequences";
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const std::vector<int64_t> elem_shape = {4};
   const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
 
@@ -435,7 +435,7 @@ void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<Test
 void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
                                                 std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_add_1_sequence_1_tensor";
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const std::vector<int64_t> elem_shape = {4};
   const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
 
@@ -511,7 +511,7 @@ void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
 // shape vectors.
 void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_extract_shapes";
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const int32_t in_elem_type = static_cast<int32_t>(DataType::FLOAT);
   const int32_t out_elem_type = static_cast<int32_t>(DataType::INT64);
   const std::vector<int64_t> out_elem_shape = {3};
@@ -591,7 +591,7 @@ void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<Test
 void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
                                                      std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_identity_1_sequence_1_tensor";
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const std::vector<int64_t> seq_elem_shape = {5};
   const std::vector<int64_t> tensor_shape = {4};
   const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);

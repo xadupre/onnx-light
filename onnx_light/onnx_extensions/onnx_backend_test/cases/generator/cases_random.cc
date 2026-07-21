@@ -53,7 +53,7 @@ void AddIntsAttr(NodeProto &node, const char *name, const std::vector<int64_t> &
 // ---------------------------------------------------------------------------
 void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const std::vector<int64_t> shape = {2, 3};
 
   if (mode == TestMode::BENCHMARK) {
@@ -123,7 +123,7 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
 // ---------------------------------------------------------------------------
 void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const std::vector<int64_t> shape = {2, 3};
 
   if (mode == TestMode::BENCHMARK) {
@@ -192,7 +192,7 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) 
 // ---------------------------------------------------------------------------
 void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -267,7 +267,7 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mod
 // ---------------------------------------------------------------------------
 void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

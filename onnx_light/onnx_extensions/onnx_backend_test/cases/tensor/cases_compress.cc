@@ -32,7 +32,7 @@ NodeProto MakeCompressNode(std::optional<int64_t> axis) {
 
 void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Compress compress_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

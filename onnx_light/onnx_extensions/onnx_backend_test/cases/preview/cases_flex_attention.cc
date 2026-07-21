@@ -486,7 +486,7 @@ Tensor ComputeFlexAttentionExpected(const Tensor &Q, const Tensor &K, const Tens
 // ---------------------------------------------------------------------------
 void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = PreviewOpset(1);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
   const kernel::FlexAttention flex{ctx};
 

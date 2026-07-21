@@ -22,7 +22,7 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterTanhCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::Tanh tanh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {

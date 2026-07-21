@@ -42,7 +42,7 @@ NodeProto MakeRotaryNode(const std::vector<std::string> &inputs,
 
 void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
-  const kernel::KernelContext ctx{opset};
+  const KernelContext ctx{opset};
   const kernel::RotaryEmbedding kernel{ctx};
 
   // 4D X = (batch=1, num_heads=2, seq=3, head_size=4); position_ids drive

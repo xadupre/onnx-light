@@ -52,6 +52,17 @@ class TestCollectTestCasesByName(ExtTestCase):
             [tc.name for tc in with_big], ["test_cc_shape_inference_big_qwen3_4_layers_like"]
         )
 
+    def test_collect_test_case_accepts_mode(self):
+        from onnx_light.onnx.backend import TestMode, collect_test_case
+
+        default_cases = collect_test_case()
+        self.assertGreater(len(default_cases), 0)
+        test_mode_cases = collect_test_case(mode=TestMode.TEST)
+        self.assertEqual(sorted(default_cases), sorted(test_mode_cases))
+        # BENCHMARK mode must also be accepted and forwarded to the C++ binding.
+        benchmark_cases = collect_test_case(mode=TestMode.BENCHMARK)
+        self.assertGreater(len(benchmark_cases), 0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

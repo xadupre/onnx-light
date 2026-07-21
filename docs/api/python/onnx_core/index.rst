@@ -5,5 +5,6 @@ onnx_light.onnx_core
     :maxdepth: 1
 
     expressions
+    gradient
 
 .. automodule:: onnx_light.onnx_core

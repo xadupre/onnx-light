@@ -8,7 +8,7 @@
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/simple_map.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_extensions/kernels/kernels/kernel_context.h"
 
 #include <cstdint>
 #include <functional>

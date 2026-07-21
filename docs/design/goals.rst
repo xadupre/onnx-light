@@ -26,7 +26,7 @@ The kernels themselves form a self-contained **reference implementation**
 of the ONNX operator set, shipped as the ``lib_onnx_kernels`` static
 library: it provides a runtime ``struct Tensor``, ``RunGraph`` /
 ``RunFunction`` / ``RunModel`` entry points and a per-operator kernel
-under ``onnx_light/onnx_kernels/kernels/``.  The same kernels are used
+under ``onnx_light/onnx_extensions/kernels/kernels/``.  The same kernels are used
 both to compute the expected outputs of every backend test case and to
 evaluate arbitrary models in C++ without pulling in a third-party
 runtime (see :doc:`backend_tests` and :doc:`runtime_coverage`).

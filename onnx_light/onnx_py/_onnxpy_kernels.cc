@@ -8,7 +8,7 @@
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_kernels/kernel_dispatch_table.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 
 #include <cstdint>
 #include <nanobind/nanobind.h>

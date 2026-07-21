@@ -117,7 +117,7 @@ Tensor Int16ZeroPoint(std::int16_t value, RawBufferAllocator *allocator = nullpt
 
 // Builds a 1-D float8 tensor from the float32 sample values in ``values``.
 // ``encode`` is the saturating ``FloatToFloat8*Bits`` encoder declared in
-// ``onnx_kernels/kernels/_helpers/cast_float8.h``. Mirrors the way upstream
+// ``onnx_extensions/kernels/kernels/_helpers/cast_float8.h``. Mirrors the way upstream
 // ``onnx.helper.make_tensor`` stores float8 scalars (one raw byte per
 // element).
 Tensor MakeFloat8Tensor(DataType dtype, const Shape &shape, const std::vector<float> &values,

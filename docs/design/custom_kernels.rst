@@ -6,7 +6,7 @@ Custom kernels for ReferenceEvaluator
 The C++ runtime in ``onnx_light/onnx_core/runtime`` dispatches every
 :class:`~onnx_light.onnx_lib.NodeProto` against a mutable
 :cpp:func:`onnx_light::core::runtime::KernelDispatchTable`, populated with
-every built-in operator kernel from ``onnx_light/onnx_kernels`` via
+every built-in operator kernel from ``onnx_light/onnx_extensions/kernels`` via
 :cpp:func:`onnx_light::onnx_kernels::RegisterKernelFunctions`.
 Any operator that is not built in — typically an operator from a
 user-defined domain, an experimental op, or a stand-in for one not yet
@@ -208,4 +208,4 @@ See also
 
 * :ref:`l-design-kernels`
 * :ref:`l-example-plot-custom-kernel`
-* :doc:`../api/cpp/onnx_kernels/index`
+* :doc:`../api/cpp/onnx_extensions/kernels/index`

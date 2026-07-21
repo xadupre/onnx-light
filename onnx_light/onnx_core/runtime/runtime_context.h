@@ -9,7 +9,7 @@
 #include "onnx_core/runtime/simple_map.h"
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_extensions/kernels/kernels/kernel_context.h"
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx.h"
 
@@ -33,7 +33,7 @@ namespace core {
 namespace runtime {
 
 // Re-exports the kernel construction context (still owned by
-// ``onnx_kernels``, see ``onnx_kernels/kernels/kernel_context.h``) so it
+// ``onnx_kernels``, see ``onnx_extensions/kernels/kernels/kernel_context.h``) so it
 // can be referred to as ``KernelContext`` here without qualification.
 //
 // Note: this is deliberately *not* re-exported through a nested

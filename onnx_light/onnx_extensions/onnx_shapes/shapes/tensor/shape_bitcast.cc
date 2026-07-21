@@ -20,7 +20,7 @@ namespace {
 // Returns the per-element bit-width supported by ``BitCast`` (opset 26).
 // Returns 0 for STRING and any unsupported value. Mirrors the table in
 // ``onnx_lib/defs/tensor/defs.cc`` (BitCast shape inference) and
-// ``onnx_kernels/kernels/tensor/kernel_bitcast.cc``.
+// ``onnx_extensions/kernels/kernels/tensor/kernel_bitcast.cc``.
 constexpr int BitCastBitSize(TensorProto::DataType dtype) {
   switch (dtype) {
   case TensorProto::FLOAT:

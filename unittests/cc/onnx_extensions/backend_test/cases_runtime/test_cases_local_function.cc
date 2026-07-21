@@ -18,11 +18,11 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
+using core::runtime::KernelContext;
 using core::runtime::RunModel;
 using core::runtime::RuntimeContext;
 using core::runtime::Tensor;
 using onnx_backend_test::CollectLocalFunctionTestCases;
-using onnx_kernels::kernel::KernelContext;
 
 namespace {
 

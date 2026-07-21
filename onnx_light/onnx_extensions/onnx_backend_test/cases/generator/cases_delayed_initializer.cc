@@ -141,8 +141,7 @@ void RegisterDelayedInitializerCase(std::vector<TestCase> &registry, const std::
   offset_attr->set_type(AttributeProto::AttributeType::INT);
   offset_attr->set_i(offset);
 
-  Expect(registry, std::move(node), case_name,
-         {DefaultOpset(18), onnx_kernels::kernel::OpsetId(kAiRtDomain, 1)},
+  Expect(registry, std::move(node), case_name, {DefaultOpset(18), OpsetId(kAiRtDomain, 1)},
          [=]() -> IoData { return IoData{{}, {output}}; });
 }
 

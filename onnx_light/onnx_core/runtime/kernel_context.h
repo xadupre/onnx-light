@@ -96,6 +96,6 @@ protected:
   KernelContext ctx_;
 };
 
-}
+} // namespace runtime
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

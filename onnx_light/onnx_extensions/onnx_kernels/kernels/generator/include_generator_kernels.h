@@ -19,6 +19,10 @@ namespace onnx_kernels {
 using namespace ::onnx_light::core::runtime;
 
 namespace kernel {
+using ::onnx_light::core::runtime::DefaultOpset;
+using ::onnx_light::core::runtime::KernelBase;
+using ::onnx_light::core::runtime::KernelContext;
+using ::onnx_light::core::runtime::OpsetId;
 
 // ---------------------------------------------------------------------------
 // Reference implementations of the ``generator`` backend test kernels.

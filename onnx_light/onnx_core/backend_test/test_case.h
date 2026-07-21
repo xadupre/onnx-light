@@ -36,10 +36,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace backend_test {
 
-using namespace onnx_kernels;
 using namespace ::onnx_light::core::runtime;
-using OpsetId = onnx_kernels::kernel::OpsetId;
-using onnx_kernels::kernel::DefaultOpset;
 
 /**
  * Selects how a ``Register*Cases`` / ``Collect*`` helper generates its cases.

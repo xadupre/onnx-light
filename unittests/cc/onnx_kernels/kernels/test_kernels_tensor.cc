@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/cast_float8.h"
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/raw_buffer_allocator.h"
@@ -20,9 +20,9 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::DefaultOpset;
 using core::runtime::RuntimeContext;
 using core::runtime::Tensor;
-using onnx_backend_test::DefaultOpset;
 using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::kernel::Cast;
 using onnx_kernels::kernel::CastLike;

@@ -4,8 +4,10 @@
 
 #include "onnx_extensions/onnx_shapes/shapes/nn/shape_nn.h"
 
+#include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "onnx_core/shapes/shape_check.h"
 
@@ -295,6 +297,36 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
     qk_shape.PushBack(total_seq_len);
     ctx.Set(node.output(3), SymTensor(nullptr, Q.Dtype(), std::move(qk_shape)));
   }
+}
+
+int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes) {
+  // The score buffer accumulation type; scores are held in float32.
+  constexpr int64_t kScoreElementBytes = 4;
+
+  // Q and K carry the dimensions needed for the QK^T score buffer. Without
+  // both, or without the rank-4 (batch, num_heads, sequence, head_size)
+  // layout, no concrete estimate can be produced.
+  (void)device;
+  if (input_shapes.size() < 2) {
+    return 0;
+  }
+  const SymShape &q_shape = input_shapes[0];
+  const SymShape &k_shape = input_shapes[1];
+  if (q_shape.Rank() != 4 || k_shape.Rank() != 4) {
+    return 0;
+  }
+
+  // Score buffer: (batch, q_num_heads, q_sequence_length, kv_sequence_length).
+  const SymDim &batch = q_shape[0];
+  const SymDim &q_num_heads = q_shape[1];
+  const SymDim &q_seq_len = q_shape[2];
+  const SymDim &kv_seq_len = k_shape[2];
+  if (!batch.IsInt() || !q_num_heads.IsInt() || !q_seq_len.IsInt() || !kv_seq_len.IsInt()) {
+    return 0;
+  }
+
+  return batch.AsInt() * q_num_heads.AsInt() * q_seq_len.AsInt() * kv_seq_len.AsInt() *
+         kScoreElementBytes;
 }
 
 } // namespace nn

@@ -40,7 +40,7 @@ namespace runtime {
 // ``core::runtime::kernel`` namespace: ``onnx_kernels::kernel`` is itself
 // a namespace, and a translation unit that brings both ``onnx_kernels``
 // and ``core::runtime`` into unqualified scope (as
-// ``onnx_backend_test/test_case.h`` does) would then see two candidate
+// ``onnx_core/backend_test/test_case.h`` does) would then see two candidate
 // namespaces named ``kernel`` and every ``kernel::X`` reference would be
 // ambiguous.
 using ::onnx_light::onnx_kernels::kernel::KernelContext;

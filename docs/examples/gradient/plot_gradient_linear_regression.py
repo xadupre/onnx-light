@@ -4,11 +4,11 @@
 Gradient and training loop for linear regression
 =================================================
 
-This example shows how to use :mod:`onnx_light.onnx_gradient` to:
+This example shows how to use :mod:`onnx_light.onnx_core.gradient` to:
 
 1. Build a simple linear-regression forward model as a list of ONNX nodes.
 2. Compute its gradient with respect to the trainable parameters (weights
-   and bias) using :func:`~onnx_light.onnx_gradient.gradient_of_nodes`.
+   and bias) using :func:`~onnx_light.onnx_core.gradient.gradient_of_nodes`.
 3. Run a plain gradient-descent training loop entirely in NumPy — the
    gradient FunctionProto tells *which* ONNX operations to execute
    backward, but the numerical evaluation is done by hand here to keep
@@ -28,7 +28,7 @@ For the MSE loss ``L`` and prediction ``y_pred = X @ W + b``:
 * ``dL/db = (2/N) * sum(y_pred - y_true)``
 
 The gradient FunctionProto produced by
-:func:`~onnx_light.onnx_gradient.gradient_of_nodes` captures exactly this
+:func:`~onnx_light.onnx_core.gradient.gradient_of_nodes` captures exactly this
 backward computation as a reusable ONNX function.
 """
 
@@ -58,7 +58,7 @@ for n in forward_nodes:
 # Compute the gradient FunctionProto
 # -----------------------------------
 #
-# :func:`~onnx_light.onnx_gradient.gradient_of_nodes` performs reverse-mode
+# :func:`~onnx_light.onnx_core.gradient.gradient_of_nodes` performs reverse-mode
 # automatic differentiation over the forward nodes and returns a
 # :class:`~onnx_light.onnx_proto._helper.FunctionProto` that encodes the
 # backward computation.
@@ -67,7 +67,7 @@ for n in forward_nodes:
 # * ``y`` — the scalar (or tensor) output whose gradient is propagated back.
 # * ``zs`` — non-differentiable inputs (the feature matrix ``X``).
 
-from onnx_light.onnx_gradient import gradient_of_nodes  # noqa: E402
+from onnx_light.onnx_core.gradient import gradient_of_nodes  # noqa: E402
 
 grad_fn = gradient_of_nodes(
     nodes=forward_nodes,

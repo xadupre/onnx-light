@@ -16,7 +16,7 @@ from onnx_light.onnx_proto._helper import make_node
 
 # The gradient bindings are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_GRADIENT=OFF).
-_gradient_mod = import_or_skip("onnx_light.onnx_gradient")
+_gradient_mod = import_or_skip("onnx_light.onnx_core.gradient")
 gradient_of_nodes = _gradient_mod.gradient_of_nodes
 gradient_of_function = _gradient_mod.gradient_of_function
 GradRegistry = _gradient_mod.GradRegistry

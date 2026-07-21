@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/float16_promote.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
@@ -14,8 +14,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::OpsetId;
 using core::runtime::Tensor;
-using onnx_backend_test::OpsetId;
 using onnx_kernels::kernel::FlexAttention;
 using onnx_kernels::kernel::KernelContext;
 

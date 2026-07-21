@@ -143,7 +143,7 @@ of the default registry, then pass that registry to
 ``GradientOfNodes`` / ``GradientOfFunction``::
 
     # Python example
-    from onnx_light.onnx_gradient import GradRegistry, register_gradient_function
+    from onnx_light.onnx_core.gradient import GradRegistry, register_gradient_function
 
     registry = GradRegistry.default()
 
@@ -162,6 +162,6 @@ of the default registry, then pass that registry to
 References
 ----------
 
-* Python API: :doc:`/api/python/onnx_extensions/onnx_gradient/index`
+* Python API: :doc:`/api/python/onnx_core/gradient`
 * C++ API: :doc:`/api/cpp/onnx_extensions/onnx_gradient/index`
 * Gallery example: :ref:`l-example-gradient-linear-regression`

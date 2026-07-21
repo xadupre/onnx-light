@@ -1,6 +1,7 @@
 #include "onnx_core/annotations/inplace_reuse.h"
 #include "onnx_core/annotations/value_tags.h"
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
@@ -364,11 +365,13 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // resolve an operator. Idempotent and cheap if this module init function
   // ever ran more than once.
   ::onnx_light::onnx_shapes::RegisterShapeFunctions();
+  ::onnx_light::onnx_shapes::RegisterPeakMemoryFunctions();
 
   namespace onnx_annotations = ::onnx_light::core::annotations;
   namespace expr = ::onnx_light::core::expressions;
   namespace onnx_shapes = ::onnx_light::core::shapes;
   using ::onnx_light::core::symbolic::DataTypeToTensorType;
+  using ::onnx_light::core::symbolic::Device;
   using ::onnx_light::core::symbolic::SymDim;
   using ::onnx_light::core::symbolic::SymShape;
   using ::onnx_light::core::symbolic::SymTensor;
@@ -1091,6 +1094,40 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "back into ``model.graph.output`` and ``model.graph.value_info``. The ModelProto is "
       "mutated in place. When ``prefill_with_value_info_output`` is true, existing "
       "``value_info``/``output`` tensor descriptors are used as anchors.");
+
+  // -----------------------------------------------------------------------
+  // Peak-memory estimation
+  // -----------------------------------------------------------------------
+  nb::enum_<Device>(shape_mod, "Device", nb::is_arithmetic(),
+                    "Logical device an operator executes on, passed as the first argument to a "
+                    "peak-memory function. ``kUndefined`` is the \"no information\" default, "
+                    "``kCPU`` is the host CPU and ``kGPU0`` is the first GPU device.")
+      .value("kUndefined", Device::kUndefined, "No device information.")
+      .value("kCPU", Device::kCPU, "The host CPU.")
+      .value("kGPU0", Device::kGPU0, "The first GPU device.");
+
+  shape_mod.def(
+      "compute_peak_memory",
+      [](const std::string &domain, const std::string &op_type, Device device,
+         const std::vector<SymShape> &input_shapes) -> int64_t {
+        return onnx_shapes::ComputePeakMemory(domain, op_type, device, input_shapes);
+      },
+      nb::arg("domain"), nb::arg("op_type"), nb::arg("device"), nb::arg("input_shapes"),
+      "Returns the estimated peak scratch memory (in bytes) for ``(domain, op_type)`` executed "
+      "on ``device`` with inputs of shape ``input_shapes``. Operators without a registered "
+      "peak-memory function return ``0``. Built-in ``onnx_shapes`` operators (e.g. "
+      "``Attention``) are registered from C++ via ``RegisterPeakMemoryFunctions``.");
+
+  shape_mod.def(
+      "peak_memory_dispatch_table_keys",
+      []() -> nb::list {
+        nb::list out;
+        for (const auto &kv : onnx_shapes::PeakMemoryDispatchTable())
+          out.append(kv.first);
+        return out;
+      },
+      "Returns the ``\"<domain>:<op_type>\"`` keys currently registered in the peak-memory "
+      "dispatch table.");
 
   // -----------------------------------------------------------------------
   // In-place reuse analysis

@@ -33,7 +33,8 @@
 #endif
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace core {
+namespace backend_test {
 
 using namespace onnx_kernels;
 using namespace ::onnx_light::core::runtime;
@@ -573,6 +574,10 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
  * deterministic and independent: the result owns its ``ModelProto``s and
  * ``Tensor`` data.
  *
+ * Iterates the collector functions registered via
+ * :func:`RegisterTestCasesCollector` (typically every ``Collect*TestCases``
+ * category in ``lib_onnx_backend_test``).
+ *
  * @param op_type    Optional operator type filter. When non-empty, only test
  *                   cases whose top-level graph contains a node with this
  *                   ``op_type`` are returned.
@@ -617,5 +622,6 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
                                              bool include_big = false,
                                              TestMode mode = TestMode::TEST);
 
-} // namespace onnx_backend_test
+} // namespace backend_test
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

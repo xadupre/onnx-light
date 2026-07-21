@@ -7,7 +7,7 @@
 
 #include "onnx_extensions/onnx_gradient/gradient.h"
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_extensions/onnx_gradient/gradient/grad_dispatcher.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/onnx_helper.h"
@@ -434,7 +434,7 @@ TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
 
   for (const std::string &op_type : grad_op_types) {
     // Collect all standard backend test cases for this operator.
-    const auto cases = onnx_backend_test::CollectTestCases(op_type);
+    const auto cases = core::backend_test::CollectTestCases(op_type);
 
     // Every operator with a gradient should have at least one backend test case.
     EXPECT_FALSE(cases.empty()) << "No backend test cases found for op_type=" << op_type;

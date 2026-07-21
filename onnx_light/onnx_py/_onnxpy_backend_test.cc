@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
@@ -20,11 +20,11 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::DataSet;
+using core::backend_test::TestCase;
+using core::backend_test::TestMode;
 using core::runtime::Map;
 using core::runtime::Tensor;
-using onnx_backend_test::DataSet;
-using onnx_backend_test::TestCase;
-using onnx_backend_test::TestMode;
 
 void AddOnnxPyBackend(nb::module_ &m);
 void AddOnnxPyBackendTest(nb::module_ &m);
@@ -260,7 +260,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
   bt_mod.def(
       "collect_test_cases",
       [](const std::string &op_type_or_cat, bool include_big, TestMode mode) {
-        return onnx_backend_test::CollectTestCases(op_type_or_cat, include_big, mode);
+        return core::backend_test::CollectTestCases(op_type_or_cat, include_big, mode);
       },
       nb::arg("op_type_or_cat") = std::string(), nb::arg("include_big") = false,
       nb::arg("mode") = TestMode::TEST,
@@ -278,7 +278,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       "collect_test_cases_by_name",
       [](const std::string &name_regex, bool include_big, TestMode mode) {
         try {
-          return onnx_backend_test::CollectTestCasesByName(name_regex, include_big, mode);
+          return core::backend_test::CollectTestCasesByName(name_regex, include_big, mode);
         } catch (const std::regex_error &e) {
           throw nb::value_error(e.what());
         }

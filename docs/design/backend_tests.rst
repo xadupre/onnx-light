@@ -273,7 +273,7 @@ A minimal C++ runtime evaluator therefore looks like:
 
 .. code-block:: cpp
 
-    #include "onnx_backend_test/test_case.h"
+    #include "onnx_core/backend_test/test_case.h"
 
     using namespace onnx::onnx_kernels;
 

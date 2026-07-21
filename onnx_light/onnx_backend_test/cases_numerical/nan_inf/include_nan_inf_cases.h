@@ -4,13 +4,14 @@
 
 #pragma once
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 
 #include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
+using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-namespace)
 
 // ---------------------------------------------------------------------------
 // Backend test cases that exercise operators on tensors containing the

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/text/include_text_kernels.h"
 
@@ -13,8 +13,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::DefaultOpset;
 using core::runtime::Tensor;
-using onnx_backend_test::DefaultOpset;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::RegexFullMatch;
 using onnx_kernels::kernel::StringConcat;

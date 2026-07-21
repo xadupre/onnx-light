@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Implements CollectTestCases and CollectTestCasesByName (declared in
-// onnx_core/backend_test/test_case.h) by delegating to the per-category
-// Collect* helpers that live in onnx_backend_test/cases/.  This file must be
-// compiled as part of lib_onnx_backend_test (not lib_onnx_core) because it
-// takes a direct dependency on every onnx_backend_test case category.
+// Defines CollectTestCases and CollectTestCasesByName (declared in
+// onnx_core/backend_test/test_case.h) and registers all per-category
+// collector functions into the global registry defined in
+// onnx_core/backend_test/test_case.cc.  This file must be compiled as part of
+// lib_onnx_backend_test (not lib_onnx_core) because it takes a direct
+// dependency on every onnx_backend_test case category.
 
 #include "onnx_core/backend_test/test_case.h"
 
@@ -39,54 +40,89 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace backend_test {
 
-using ::onnx_light::onnx_backend_test::CollectControlflowTestCases;
-using ::onnx_light::onnx_backend_test::CollectEmptyShapeTestCases;
-using ::onnx_light::onnx_backend_test::CollectGeneratorTestCases;
-using ::onnx_light::onnx_backend_test::CollectImageTestCases;
-using ::onnx_light::onnx_backend_test::CollectInPlaceTestCases;
-using ::onnx_light::onnx_backend_test::CollectLogicalTestCases;
-using ::onnx_light::onnx_backend_test::CollectMathTestCases;
-using ::onnx_light::onnx_backend_test::CollectNanInfTestCases;
-using ::onnx_light::onnx_backend_test::CollectNNTestCases;
-using ::onnx_light::onnx_backend_test::CollectObjectDetectionTestCases;
-using ::onnx_light::onnx_backend_test::CollectOptionalTestCases;
-using ::onnx_light::onnx_backend_test::CollectPreviewTestCases;
-using ::onnx_light::onnx_backend_test::CollectQuantizationTestCases;
-using ::onnx_light::onnx_backend_test::CollectReductionTestCases;
-using ::onnx_light::onnx_backend_test::CollectReleaseTestCases;
-using ::onnx_light::onnx_backend_test::CollectSequenceTestCases;
-using ::onnx_light::onnx_backend_test::CollectShapeInferenceTestCases;
-using ::onnx_light::onnx_backend_test::CollectShapeTagTestCases;
-using ::onnx_light::onnx_backend_test::CollectTensorTestCases;
-using ::onnx_light::onnx_backend_test::CollectTextTestCases;
-using ::onnx_light::onnx_backend_test::CollectTraditionalMLTestCases;
-using ::onnx_light::onnx_backend_test::CollectTrainingTestCases;
+namespace {
+
+// clang-format off
+const int kRegisterAllCollectors = []() {
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectControlflowTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectGeneratorTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectImageTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectLogicalTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectMathTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectNNTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectObjectDetectionTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectOptionalTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectPreviewTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectQuantizationTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectReductionTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectSequenceTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectTensorTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectTextTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectTraditionalMLTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectTrainingTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool big, TestMode m) {
+    onnx_backend_test::CollectShapeInferenceTestCases(r, op, big, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectEmptyShapeTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectInPlaceTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectReleaseTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectShapeTagTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectNanInfTestCases(r, op, m);
+  });
+  return 0;
+}();
+// clang-format on
+
+} // namespace
 
 std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_big,
                                        TestMode mode) {
+  (void)kRegisterAllCollectors;
   std::vector<TestCase> registry;
-  CollectControlflowTestCases(registry, op_type, mode);
-  CollectGeneratorTestCases(registry, op_type, mode);
-  CollectImageTestCases(registry, op_type, mode);
-  CollectLogicalTestCases(registry, op_type, mode);
-  CollectMathTestCases(registry, op_type, mode);
-  CollectNNTestCases(registry, op_type, mode);
-  CollectObjectDetectionTestCases(registry, op_type, mode);
-  CollectOptionalTestCases(registry, op_type, mode);
-  CollectPreviewTestCases(registry, op_type, mode);
-  CollectQuantizationTestCases(registry, op_type, mode);
-  CollectReductionTestCases(registry, op_type, mode);
-  CollectSequenceTestCases(registry, op_type, mode);
-  CollectTensorTestCases(registry, op_type, mode);
-  CollectTextTestCases(registry, op_type, mode);
-  CollectTraditionalMLTestCases(registry, op_type, mode);
-  CollectTrainingTestCases(registry, op_type, mode);
-  CollectShapeInferenceTestCases(registry, op_type, include_big, mode);
-  CollectEmptyShapeTestCases(registry, op_type, mode);
-  CollectInPlaceTestCases(registry, op_type, mode);
-  CollectReleaseTestCases(registry, op_type, mode);
-  CollectShapeTagTestCases(registry, op_type, mode);
-  CollectNanInfTestCases(registry, op_type, mode);
+  for (const auto &fn : GetRegisteredCollectors()) {
+    fn(registry, op_type, include_big, mode);
+  }
   if (include_big) {
     return registry;
   }

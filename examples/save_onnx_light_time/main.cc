@@ -178,7 +178,7 @@ int main(int argc, char *argv[]) {
 
   // Run one unmeasured warm-up iteration so the first (cold) save does not
   // skew the average/median. This mirrors the Python ``measure()`` helper in
-  // ``docs/examples/core/plot_onnx_time.py`` which discards a warmup run
+  // ``docs/examples/proto/plot_onnx_time.py`` which discards a warmup run
   // before timing, keeping the C++ and Python benchmarks comparable.
   const int total_iterations = iterations + 1;
   for (int i = 0; i < total_iterations; ++i) {

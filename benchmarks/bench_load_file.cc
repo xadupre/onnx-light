@@ -43,7 +43,7 @@
  *     -s <stream>   onnx_light stream class to time: "mmap" (default,
  *                   matches Python's onnx_light.onnx.load() and the
  *                   load_onnx_light_time example driven by
- *                   docs/examples/core/plot_onnx_time.py) or "file"
+ *                   docs/examples/proto/plot_onnx_time.py) or "file"
  *                   (legacy buffered std::ifstream-based FileStream).
  *
  * Why the stream choice matters
@@ -51,7 +51,7 @@
  *
  * The default Python entry point onnx_light.onnx.load() loads single-file
  * models through MmapFileStream, and so does the load_onnx_light_time
- * standalone example driven by docs/examples/core/plot_onnx_time.py.
+ * standalone example driven by docs/examples/proto/plot_onnx_time.py.
  * Historically this benchmark used FileStream instead, which meant that on
  * Linux the side-by-side numbers reported here against upstream onnx could
  * disagree with plot_onnx_time.py: MmapFileStream resolves bytes through

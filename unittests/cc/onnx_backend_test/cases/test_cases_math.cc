@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -16,13 +16,13 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectMathTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_backend_test::TestCase> registry;
+std::vector<core::backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<core::backend_test::TestCase> registry;
   CollectMathTestCases(registry, op_type);
   return registry;
 }
 } // namespace
-using onnx_backend_test::TestCase;
+using core::backend_test::TestCase;
 
 namespace Test {
 
@@ -1254,7 +1254,7 @@ TEST(BackendTestCase, BenchmarkModeProducesLargeInputCases) {
   // ``ModelProto`` nor the (multi-million-element) input/output tensors are
   // built here. We validate the declared element counts instead of
   // materializing the cases.
-  CollectMathTestCases(registry, "", onnx_backend_test::TestMode::BENCHMARK);
+  CollectMathTestCases(registry, "", core::backend_test::TestMode::BENCHMARK);
   ASSERT_FALSE(registry.empty());
   size_t benchmark_cases = 0;
   for (const auto &c : registry) {

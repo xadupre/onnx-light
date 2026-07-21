@@ -179,10 +179,12 @@ file(GLOB_RECURSE ONNX_SHAPE_SOURCES CONFIGURE_DEPENDS "${ONNX_SHAPE_PATH}/*.cc"
 # of the surrounding backend-test cases.
 file(GLOB_RECURSE ONNX_KERNELS_SOURCES CONFIGURE_DEPENDS "${ONNX_KERNELS_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_GRADIENT_SOURCES CONFIGURE_DEPENDS "${ONNX_GRADIENT_PATH}/*.cc")
-# ``lib_onnx_backend_test`` only contains the test-case registries
-# (``cases/``, ``cases_for_shapes/``, ``cases_numerical/``) and depends
-# publicly on ``lib_onnx_kernels`` for ``TestCase`` / ``Tensor`` / kernel
-# headers.
+# ``lib_onnx_backend_test`` contains the test-case registries
+# (``cases/``, ``cases_for_shapes/``, ``cases_numerical/``) and
+# ``collect_test_cases.cc`` which implements CollectTestCases /
+# CollectTestCasesByName by delegating to the per-category Collect* helpers.
+# It depends publicly on ``lib_onnx_kernels`` for ``TestCase`` / ``Tensor`` /
+# kernel headers, and on ``lib_onnx_core`` for the TestCase definition itself.
 file(GLOB_RECURSE ONNX_BACKEND_TEST_SOURCES CONFIGURE_DEPENDS "${ONNX_BACKEND_TEST_PATH}/*.cc")
 set(ONNX_INLINER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/inliner/inliner.cc")
 file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/*.cc")
@@ -405,7 +407,7 @@ endif()
 # units all pull in ``test_case.h`` (via ``kernel_context.h``) and the
 # usual standard-library headers.
 target_precompile_headers(lib_onnx_kernels PRIVATE
-    "${ONNX_BACKEND_TEST_PATH}/test_case.h"
+    "${ONNX_CORE_PATH}/backend_test/test_case.h"
     <algorithm>
     <cmath>
     <cstdint>
@@ -447,8 +449,8 @@ target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto lib_onnx_kerne
 # Speed up the build of lib_onnx_backend_test by precompiling the small set
 # of headers that virtually every one of the case source files in
 # onnx_light/onnx_backend_test/cases/ ends up parsing. The common base is
-# ``onnx_backend_test/test_case.h`` (which transitively brings in ``onnx.h`` and
-# ``simple_tensor.h``) and a handful of widely used C++ standard headers
+# ``onnx_core/backend_test/test_case.h`` (which transitively brings in ``onnx.h``
+# and ``simple_tensor.h``) and a handful of widely used C++ standard headers
 # (``<vector>``, ``<string>``, ``<cstdint>``, ``<stdexcept>``). Without a
 # PCH each translation unit re-parses tens of thousands of lines; with a
 # PCH that work is done once for the target.
@@ -457,7 +459,8 @@ target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto lib_onnx_kerne
 # only affects targets that opt in. Other targets that link against
 # ``lib_onnx_backend_test`` still see the regular public headers.
 target_precompile_headers(lib_onnx_backend_test PRIVATE
-    "${ONNX_BACKEND_TEST_PATH}/test_case.h"
+    "${ONNX_CORE_PATH}/backend_test/test_case.h"
+    "${ONNX_CORE_PATH}/backend_test/test_case_registry.h"
     <algorithm>
     <cmath>
     <cstdint>

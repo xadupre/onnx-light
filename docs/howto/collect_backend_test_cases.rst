@@ -32,9 +32,9 @@ List every test case
 
       .. code-block:: cpp
 
-          #include "onnx_backend_test/test_case.h"
+          #include "onnx_core/backend_test/test_case.h"
 
-          auto cases = onnx_backend_test::CollectTestCases();
+          auto cases = core::backend_test::CollectTestCases();
           for (const auto &tc : cases) {
               std::cout << tc.name << " " << tc.kind << " " << tc.tag << "\n";
           }
@@ -63,16 +63,16 @@ Filter by operator type or category
 
       .. code-block:: cpp
 
-          #include "onnx_backend_test/test_case.h"
+          #include "onnx_core/backend_test/test_case.h"
 
-          auto add_cases = onnx_backend_test::CollectTestCases("Add");
-          auto shape_cases = onnx_backend_test::CollectTestCases("shape");
+          auto add_cases = core::backend_test::CollectTestCases("Add");
+          auto shape_cases = core::backend_test::CollectTestCases("shape");
 
 Collect a test case by name
 ---------------------------
 
 Use :func:`onnx_light.onnx.backend.collect_test_cases_by_name` (or
-:cpp:func:`onnx_light::onnx_backend_test::CollectTestCasesByName` in C++) to
+:cpp:func:`onnx_light::core::backend_test::CollectTestCasesByName` in C++) to
 look up one or more cases by their ``name``.  The pattern is matched with
 ``std::regex_search`` ECMAScript semantics, so a plain string acts as a
 substring match; anchor it with ``^...$`` for a full match.
@@ -104,13 +104,13 @@ substring match; anchor it with ``^...$`` for a full match.
 
       .. code-block:: cpp
 
-          #include "onnx_backend_test/test_case.h"
+          #include "onnx_core/backend_test/test_case.h"
 
           // Substring match
-          auto cases = onnx_backend_test::CollectTestCasesByName("abs");
+          auto cases = core::backend_test::CollectTestCasesByName("abs");
 
           // Full regex
-          auto cc_add = onnx_backend_test::CollectTestCasesByName(
+          auto cc_add = core::backend_test::CollectTestCasesByName(
               "^test_cc_add(_|$)");
 
           for (const auto &tc : cases) {
@@ -128,7 +128,7 @@ Notes
 * The C++ overload throws ``std::regex_error`` for an invalid pattern.
 * An empty ``name_regex`` matches every case and is equivalent to
   calling :func:`~onnx_light.onnx.backend.collect_test_cases` /
-  :cpp:func:`onnx_light::onnx_backend_test::CollectTestCases` with no
+  :cpp:func:`onnx_light::core::backend_test::CollectTestCases` with no
   arguments.
 * :class:`TestCase` exposes ``name``, ``kind``, ``tag``, ``rtol``,
   ``atol``, ``data_sets``, and a lazily resolved ``model``

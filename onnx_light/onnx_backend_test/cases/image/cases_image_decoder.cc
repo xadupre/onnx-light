@@ -14,7 +14,7 @@
 // refreshes the reference data.
 
 #include "onnx_backend_test/cases/image/include_image_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>

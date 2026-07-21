@@ -15,7 +15,7 @@
 //   * ``RegisterConcatSplitShapeInferenceCases``        — ``test_concat_split``
 
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"

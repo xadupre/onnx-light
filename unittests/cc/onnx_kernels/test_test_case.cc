@@ -24,7 +24,7 @@
 #include "onnx_backend_test/cases_for_shapes/release/include_release_cases.h"
 #include "onnx_backend_test/cases_for_shapes/shape_tag/include_shape_tag_cases.h"
 #include "onnx_backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -38,13 +38,13 @@
 #include <utility>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::CollectTestCases;
+using core::backend_test::CollectTestCasesByName;
+using core::backend_test::DefaultOpset;
+using core::backend_test::Expect;
+using core::backend_test::OpsetId;
+using core::backend_test::TestCase;
 using core::runtime::Tensor;
-using onnx_backend_test::CollectTestCases;
-using onnx_backend_test::CollectTestCasesByName;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Expect;
-using onnx_backend_test::OpsetId;
-using onnx_backend_test::TestCase;
 
 namespace Test {
 
@@ -648,7 +648,7 @@ TEST(BackendTestCase, DISABLED_BenchmarkModeCollectsAllCategories) {
   // ``--gtest_also_run_disabled_tests --gtest_filter=*BenchmarkModeCollectsAll*``
   // to validate that every category's benchmark branch is runnable and to time
   // each category so pathologically-sized benchmark shapes can be found.
-  using onnx_backend_test::TestMode;
+  using core::backend_test::TestMode;
   const std::vector<
       std::pair<std::string, void (*)(std::vector<TestCase> &, const std::string &, TestMode)>>
       collectors = {
@@ -701,7 +701,7 @@ TEST(BackendTestCase, DISABLED_BenchmarkModeMaterializesAllCategories) {
   // ``--gtest_also_run_disabled_tests --gtest_filter=*BenchmarkModeMaterializesAll*``.
   // Validates that every lazy benchmark builder is runnable and that the tensors
   // it produces have the element counts declared at collection time.
-  using onnx_backend_test::TestMode;
+  using core::backend_test::TestMode;
   const std::vector<
       std::pair<std::string, void (*)(std::vector<TestCase> &, const std::string &, TestMode)>>
       collectors = {

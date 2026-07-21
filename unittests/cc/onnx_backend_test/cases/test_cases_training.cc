@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/training/include_training_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_lib/shape_inference/implementation.h"
 
 #include <gtest/gtest.h>
@@ -15,14 +15,14 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTrainingTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_backend_test::TestCase> registry;
+std::vector<core::backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<core::backend_test::TestCase> registry;
   CollectTrainingTestCases(registry, op_type);
   return registry;
 }
 } // namespace
+using core::backend_test::TestCase;
 using core::runtime::Tensor;
-using onnx_backend_test::TestCase;
 
 namespace Test {
 

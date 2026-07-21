@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/raw_buffer_allocator.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_kernels/kernels/image/include_image_kernels.h"
@@ -17,10 +17,10 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::DefaultOpset;
 using core::runtime::DataType;
 using core::runtime::RuntimeContext;
 using core::runtime::Tensor;
-using onnx_backend_test::DefaultOpset;
 using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::kernel::ImageDecoder;
 using onnx_kernels::kernel::KernelContext;
@@ -521,7 +521,7 @@ TEST(KernelClass, ImageDecoderDecodesWebpRgbWhenRuntimeAvailable) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
   const auto cases =
-      onnx_backend_test::CollectTestCasesByName("^test_cc_image_decoder_decode_webp_rgb$");
+      core::backend_test::CollectTestCasesByName("^test_cc_image_decoder_decode_webp_rgb$");
   ASSERT_EQ(cases.size(), 1u);
   ASSERT_EQ(cases[0].data_sets().size(), 1u);
   ASSERT_EQ(cases[0].data_sets()[0].inputs.size(), 1u);
@@ -545,7 +545,7 @@ TEST(KernelClass, ImageDecoderDecodesJpeg2000RgbWhenRuntimeAvailable) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
   const auto cases =
-      onnx_backend_test::CollectTestCasesByName("^test_cc_image_decoder_decode_jpeg2k_rgb$");
+      core::backend_test::CollectTestCasesByName("^test_cc_image_decoder_decode_jpeg2k_rgb$");
   ASSERT_EQ(cases.size(), 1u);
   ASSERT_EQ(cases[0].data_sets().size(), 1u);
   ASSERT_EQ(cases[0].data_sets()[0].inputs.size(), 1u);
@@ -570,7 +570,7 @@ TEST(KernelClass, ImageDecoderDecodesPnmRgb) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
   const auto cases =
-      onnx_backend_test::CollectTestCasesByName("^test_cc_image_decoder_decode_pnm_rgb$");
+      core::backend_test::CollectTestCasesByName("^test_cc_image_decoder_decode_pnm_rgb$");
   ASSERT_EQ(cases.size(), 1u);
   ASSERT_EQ(cases[0].data_sets().size(), 1u);
   ASSERT_EQ(cases[0].data_sets()[0].inputs.size(), 1u);

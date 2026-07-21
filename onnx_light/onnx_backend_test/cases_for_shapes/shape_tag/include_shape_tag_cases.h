@@ -4,12 +4,13 @@
 
 #pragma once
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
+using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-namespace)
 
 // ---------------------------------------------------------------------------
 // Backend test cases that exercise the shape-tag annotation metadata stored

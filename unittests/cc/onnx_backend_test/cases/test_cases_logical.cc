@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/random.h"
 
 #include <gtest/gtest.h>
@@ -14,15 +14,15 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectLogicalTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase>
+std::vector<core::backend_test::TestCase>
 CollectTestCases(const std::string &op_type = "",
-                 onnx_backend_test::TestMode mode = onnx_backend_test::TestMode::TEST) {
-  std::vector<onnx_backend_test::TestCase> registry;
+                 core::backend_test::TestMode mode = core::backend_test::TestMode::TEST) {
+  std::vector<core::backend_test::TestCase> registry;
   CollectLogicalTestCases(registry, op_type, mode);
   return registry;
 }
 } // namespace
-using onnx_backend_test::TestCase;
+using core::backend_test::TestCase;
 
 namespace Test {
 
@@ -221,7 +221,7 @@ TEST(BackendTestCase, OrXorBroadcastCasesHaveBroadcastShapes) {
 }
 
 TEST(BackendTestCase, AndBenchmarkInputsUseRandBool) {
-  auto cases = CollectTestCases("And", onnx_backend_test::TestMode::BENCHMARK);
+  auto cases = CollectTestCases("And", core::backend_test::TestMode::BENCHMARK);
   const TestCase *tc = FindLogicalCase(cases, "test_cc_and_benchmark");
   ASSERT_NE(tc, nullptr);
   ASSERT_EQ(tc->data_sets().size(), 1u);

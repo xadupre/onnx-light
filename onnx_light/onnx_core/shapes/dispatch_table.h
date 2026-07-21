@@ -4,9 +4,11 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -63,6 +65,64 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable();
  */
 void RegisterComputeShapeFn(const std::string &domain, const std::string &op_type,
                             ComputeShapeFn fn);
+
+/**
+ * Signature of every per-operator peak-memory function registered in
+ * :cpp:func:`PeakMemoryDispatchTable`. Mirroring :cpp:type:`ComputeShapeFn`,
+ * but for memory rather than shapes, it estimates the peak amount of
+ * scratch/working memory (in bytes) an operator's computation needs, in
+ * addition to its declared inputs and outputs.
+ *
+ * The function takes the :cpp:enum:`Device` on which the operator executes
+ * followed by the :cpp:class:`SymShape` of each of its inputs, and returns
+ * the estimated peak memory as an ``int64_t``. When no function is
+ * registered for an operator the default is to return ``0`` (see
+ * :cpp:func:`ComputePeakMemory`).
+ */
+using ComputePeakMemoryFn = std::function<int64_t(Device, const std::vector<SymShape> &)>;
+
+/**
+ * Returns the ``(normalised_domain, op_type) -> ComputePeakMemory*``
+ * dispatch table. Empty until libraries populate it via
+ * :cpp:func:`RegisterComputePeakMemoryFn`; operators without an entry
+ * report a peak memory of ``0`` through :cpp:func:`ComputePeakMemory`.
+ */
+const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTable();
+
+/**
+ * Registers (or replaces) the peak-memory function for
+ * (@p domain, @p op_type) in the shared :cpp:func:`PeakMemoryDispatchTable`.
+ *
+ * Use an empty string for @p domain to denote the default ONNX domain
+ * (normalised to :cpp:var:`kOnnxDomain`). Mirrors
+ * :cpp:func:`RegisterComputeShapeFn` so that libraries that must not be
+ * linked into ``onnx_core`` can contribute their per-operator memory
+ * estimators.
+ *
+ * @param domain  The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
+ * @param op_type The ONNX operator type name (e.g. ``"Abs"``).
+ * @param fn      The peak-memory function implementing the estimation rule.
+ */
+void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
+                                 ComputePeakMemoryFn fn);
+
+/**
+ * Returns the estimated peak memory (in bytes) for (@p domain, @p op_type)
+ * executed on @p device with inputs of shape @p input_shapes.
+ *
+ * Looks the operator up in the shared :cpp:func:`PeakMemoryDispatchTable`
+ * and forwards to its registered :cpp:type:`ComputePeakMemoryFn`. When no
+ * function is registered for the operator the default is to return ``0``.
+ *
+ * @param domain       The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
+ * @param op_type      The ONNX operator type name (e.g. ``"Abs"``).
+ * @param device       The device on which the operator executes.
+ * @param input_shapes The shapes of the operator's inputs, in order.
+ * @returns The estimated peak memory in bytes, or ``0`` when the operator
+ *          has no registered peak-memory function.
+ */
+int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type, Device device,
+                          const std::vector<SymShape> &input_shapes);
 
 } // namespace shapes
 } // namespace core

@@ -9,7 +9,6 @@
 #include "onnx_core/runtime/simple_map.h"
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_extensions/kernels/kernels/kernel_context.h"
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx.h"
 
@@ -31,19 +30,6 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace runtime {
-
-// Re-exports the kernel construction context (still owned by
-// ``onnx_kernels``, see ``onnx_extensions/kernels/kernels/kernel_context.h``) so it
-// can be referred to as ``KernelContext`` here without qualification.
-//
-// Note: this is deliberately *not* re-exported through a nested
-// ``core::runtime::kernel`` namespace: ``onnx_kernels::kernel`` is itself
-// a namespace, and a translation unit that brings both ``onnx_kernels``
-// and ``core::runtime`` into unqualified scope (as
-// ``onnx_core/backend_test/test_case.h`` does) would then see two candidate
-// namespaces named ``kernel`` and every ``kernel::X`` reference would be
-// ambiguous.
-using ::onnx_light::onnx_kernels::kernel::KernelContext;
 
 /**
  * Name-keyed map of tensors carrying both the graph inputs/initializers

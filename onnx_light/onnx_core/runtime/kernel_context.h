@@ -17,11 +17,10 @@
 #include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace core {
+namespace runtime {
 
 using ::onnx_light::core::runtime::RawBufferAllocator;
-
-namespace kernel {
 
 /**
  * Lightweight opset identifier used by the backend test library.
@@ -97,6 +96,6 @@ protected:
   KernelContext ctx_;
 };
 
-} // namespace kernel
-} // namespace onnx_kernels
+}
+} // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

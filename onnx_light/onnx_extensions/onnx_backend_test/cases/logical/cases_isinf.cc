@@ -29,7 +29,7 @@ namespace onnx_backend_test {
 void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
   const KernelContext ctx{opset};
-  const kernel::IsInf isinf_kernel{ctx};
+  const onnx_kernels::kernel::IsInf isinf_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});

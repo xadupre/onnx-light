@@ -15,7 +15,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::Softmax softmax_kernel{ctx};
+    const onnx_kernels::kernel::Softmax softmax_kernel{ctx};
     NodeProto node;
     node.set_op_type("Softmax");
     node.add_input("input");
@@ -38,7 +38,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::Softmax softmax_kernel{ctx};
+    const onnx_kernels::kernel::Softmax softmax_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("Softmax");
@@ -60,7 +60,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::Softmax softmax_kernel{ctx};
+    const onnx_kernels::kernel::Softmax softmax_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("Softmax");

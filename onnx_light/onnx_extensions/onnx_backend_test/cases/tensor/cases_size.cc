@@ -35,7 +35,7 @@ Tensor Rename(Tensor t, const std::string &name) {
 void RegisterSizeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Size size_kernel{ctx};
+  const onnx_kernels::kernel::Size size_kernel{ctx};
 
   // test_cc_size_example — mirrors upstream ``test_size_example`` (2-D
   // float input of shape [2, 3]).

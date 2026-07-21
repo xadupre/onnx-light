@@ -38,7 +38,7 @@ NodeProto MakeDepthToSpaceNode(int64_t blocksize, const std::string &mode) {
 void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::DepthToSpace d2s{ctx};
+  const onnx_kernels::kernel::DepthToSpace d2s{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeDepthToSpaceNode(2, "DCR");
@@ -46,7 +46,7 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
            {1 * 8 * 512 * 1024}, {1 * 8 * 512 * 1024}, [d2s]() -> IoData {
              Tensor input =
                  Tensor::FromFloat("", {1, 8, 512, 1024}, Randn<float>({1, 8, 512, 1024}, 2001));
-             kernel::DepthToSpace::Attributes attrs;
+             onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "DCR";
              Tensor output = d2s(input, attrs);
@@ -66,7 +66,7 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
                values[static_cast<std::size_t>(i)] = static_cast<float>(i);
              }
              const Tensor input = Tensor::FromFloat("", {1, 8, 2, 3}, values);
-             kernel::DepthToSpace::Attributes attrs;
+             onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "DCR";
              const Tensor output = d2s(input, attrs);
@@ -83,7 +83,7 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
                values[static_cast<std::size_t>(i)] = static_cast<float>(i);
              }
              const Tensor input = Tensor::FromFloat("", {1, 8, 2, 3}, values);
-             kernel::DepthToSpace::Attributes attrs;
+             onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "CRD";
              const Tensor output = d2s(input, attrs);
@@ -101,7 +101,7 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
                values[static_cast<std::size_t>(i)] = static_cast<float>(i);
              }
              const Tensor input = Tensor::FromFloat("", {1, 4, 2, 2}, values);
-             kernel::DepthToSpace::Attributes attrs;
+             onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "DCR";
              const Tensor output = d2s(input, attrs);
@@ -122,7 +122,7 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
                   29.0f, 30.0f, 31.0f, 32.0f, 36.0f, 37.0f, 38.0f, 39.0f, 40.0f, 41.0f,
                   45.0f, 46.0f, 47.0f, 48.0f, 49.0f, 50.0f, 54.0f, 55.0f, 56.0f, 57.0f,
                   58.0f, 59.0f, 63.0f, 64.0f, 65.0f, 66.0f, 67.0f, 68.0f});
-             kernel::DepthToSpace::Attributes attrs;
+             onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "DCR";
              const Tensor output = d2s(input, attrs);
@@ -142,7 +142,7 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
                   29.0f, 30.0f, 31.0f, 32.0f, 36.0f, 37.0f, 38.0f, 39.0f, 40.0f, 41.0f,
                   45.0f, 46.0f, 47.0f, 48.0f, 49.0f, 50.0f, 54.0f, 55.0f, 56.0f, 57.0f,
                   58.0f, 59.0f, 63.0f, 64.0f, 65.0f, 66.0f, 67.0f, 68.0f});
-             kernel::DepthToSpace::Attributes attrs;
+             onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "CRD";
              const Tensor output = d2s(input, attrs);

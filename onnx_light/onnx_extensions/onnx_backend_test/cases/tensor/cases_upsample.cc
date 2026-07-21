@@ -46,7 +46,7 @@ Tensor MakeScalesTensor(const std::vector<float> &scales) {
 void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(9);
   const KernelContext ctx{opset};
-  const kernel::Upsample upsample_kernel{ctx};
+  const onnx_kernels::kernel::Upsample upsample_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeUpsampleNode("nearest");
@@ -55,7 +55,7 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor X =
                  Tensor::FromFloat("", {1, 1, 1024, 1024}, Randn<float>({1, 1, 1024, 1024}, 2001));
              Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
-             kernel::Upsample::Attributes attrs;
+             onnx_kernels::kernel::Upsample::Attributes attrs;
              attrs.mode = "nearest";
              Tensor Y = upsample_kernel(X, scales, attrs);
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
@@ -71,7 +71,7 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
-             kernel::Upsample::Attributes attrs;
+             onnx_kernels::kernel::Upsample::Attributes attrs;
              attrs.mode = "nearest";
              const Tensor Y = upsample_kernel(X, scales, attrs);
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
@@ -85,7 +85,7 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 2.0f});
-             kernel::Upsample::Attributes attrs;
+             onnx_kernels::kernel::Upsample::Attributes attrs;
              attrs.mode = "nearest";
              const Tensor Y = upsample_kernel(X, scales, attrs);
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
@@ -99,7 +99,7 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {3}, {10.0f, 20.0f, 30.0f});
              const Tensor scales = MakeScalesTensor({2.0f});
-             kernel::Upsample::Attributes attrs;
+             onnx_kernels::kernel::Upsample::Attributes attrs;
              attrs.mode = "nearest";
              const Tensor Y = upsample_kernel(X, scales, attrs);
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
@@ -115,7 +115,7 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 2.0f});
-             kernel::Upsample::Attributes attrs;
+             onnx_kernels::kernel::Upsample::Attributes attrs;
              attrs.mode = "linear";
              const Tensor Y = upsample_kernel(X, scales, attrs);
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};

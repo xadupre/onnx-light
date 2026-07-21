@@ -37,7 +37,7 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
   // models are valid (Scatter is not registered in opset >= 11).
   const OpsetId opset = DefaultOpset(10);
   const KernelContext ctx{opset};
-  const kernel::Scatter scatter_kernel{ctx};
+  const onnx_kernels::kernel::Scatter scatter_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeScatterNode(0, /*set_axis_attr=*/false);
@@ -51,7 +51,7 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
              }
              Tensor indices = Tensor::FromInt64("", {4096, 1024}, index_values);
              Tensor updates = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
-             kernel::Scatter::Attributes attrs;
+             onnx_kernels::kernel::Scatter::Attributes attrs;
              Tensor output = scatter_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
@@ -66,7 +66,7 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor data = Tensor::FromFloat("", {3, 3}, {0, 0, 0, 0, 0, 0, 0, 0, 0});
              Tensor indices = Tensor::FromInt64("", {2, 3}, {1, 0, 2, 0, 2, 1});
              Tensor updates = Tensor::FromFloat("", {2, 3}, {1.0f, 1.1f, 1.2f, 2.0f, 2.1f, 2.2f});
-             kernel::Scatter::Attributes attrs;
+             onnx_kernels::kernel::Scatter::Attributes attrs;
              Tensor output = scatter_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
@@ -80,7 +80,7 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 3});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
-             kernel::Scatter::Attributes attrs;
+             onnx_kernels::kernel::Scatter::Attributes attrs;
              attrs.axis = 1;
              Tensor output = scatter_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},

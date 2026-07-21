@@ -51,7 +51,7 @@ constexpr const char *kFuncRangeName = "func_range";
 // ---------------------------------------------------------------------------
 void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext kctx{opset};
+  const onnx_kernels::kernel::KernelContext kctx{opset};
 
   const std::string name = "test_cc_shape_inference_local_function_add";
 
@@ -116,8 +116,8 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
   }
   Tensor x = Tensor::FromFloat("X", data_shape, x_values);
   Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
-  Tensor z_pre_abs = kernel::Add(kctx)(x, y);
-  Tensor z = kernel::Abs(kctx)(z_pre_abs);
+  Tensor z_pre_abs = onnx_kernels::kernel::Add(kctx)(x, y);
+  Tensor z = onnx_kernels::kernel::Abs(kctx)(z_pre_abs);
   z.name = "Z";
 
   AppendDataSet(tc, {x, y}, {z});
@@ -160,7 +160,7 @@ void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &regist
   constexpr int64_t kRangeDelta = 1;
   constexpr int64_t kRangeLimit = 5;
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext kctx{opset};
+  const onnx_kernels::kernel::KernelContext kctx{opset};
 
   const std::string name = "test_cc_shape_inference_local_function_range";
 
@@ -227,8 +227,8 @@ void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &regist
   Tensor limit_t = Tensor::FromInt64("", {}, {kRangeLimit});
   Tensor zero_t = Tensor::FromInt64("", {}, {kRangeStart});
   Tensor one_t = Tensor::FromInt64("", {}, {kRangeDelta});
-  Tensor r_t = kernel::Range(kctx)(zero_t, limit_t, one_t);
-  Tensor out_t = kernel::Abs(kctx)(r_t);
+  Tensor r_t = onnx_kernels::kernel::Range(kctx)(zero_t, limit_t, one_t);
+  Tensor out_t = onnx_kernels::kernel::Abs(kctx)(r_t);
   out_t.name = "out";
 
   AppendDataSet(tc, {}, {out_t});

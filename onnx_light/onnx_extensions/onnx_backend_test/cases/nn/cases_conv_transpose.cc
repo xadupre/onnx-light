@@ -36,7 +36,7 @@ NodeProto MakeConvTransposeNode(const std::vector<std::string> &inputs,
 void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::ConvTranspose ct{ctx};
+  const onnx_kernels::kernel::ConvTranspose ct{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
@@ -50,7 +50,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
                  Tensor::FromFloat("X", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1401));
              Tensor W = Tensor::FromFloat("W", {32, 32, 3, 3}, Randn<float>({32, 32, 3, 3}, 1402));
              Tensor B;
-             kernel::ConvTranspose::Attributes attrs;
+             onnx_kernels::kernel::ConvTranspose::Attributes attrs;
              attrs.kernel_shape = {3, 3};
              Tensor Y = ct(X, W, B, attrs);
              Y.name = "Y";
@@ -69,7 +69,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3}, std::vector<float>(18, 1.0f));
     Tensor B;
-    kernel::ConvTranspose::Attributes attrs;
+    onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     Tensor Y = ct(X, W, B, attrs);
     Y.name = "Y";
@@ -89,7 +89,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3}, std::vector<float>(18, 1.0f));
     Tensor B;
-    kernel::ConvTranspose::Attributes attrs;
+    onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 2, 1, 2};
     attrs.strides = {3, 2};
@@ -113,7 +113,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
     Tensor B = Tensor::FromFloat("B", {1}, {0.5f});
-    kernel::ConvTranspose::Attributes attrs;
+    onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     Tensor Y = ct(X, W, B, attrs);
     Y.name = "Y";
@@ -131,7 +131,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor X = Tensor::FromFloat("X", {1, 1, 3}, {0.0f, 1.0f, 2.0f});
     Tensor W = Tensor::FromFloat("W", {1, 2, 3}, std::vector<float>(6, 1.0f));
     Tensor B;
-    kernel::ConvTranspose::Attributes attrs;
+    onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     Tensor Y = ct(X, W, B, attrs);
     Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
@@ -149,7 +149,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor X = Tensor::FromFloat("X", {1, 1, 3, 4, 5}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3, 3}, std::vector<float>(54, 1.0f));
     Tensor B;
-    kernel::ConvTranspose::Attributes attrs;
+    onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     Tensor Y = ct(X, W, B, attrs);
     Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
@@ -168,7 +168,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3}, std::vector<float>(18, 1.0f));
     Tensor B;
-    kernel::ConvTranspose::Attributes attrs;
+    onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.auto_pad = AutoPad::kSameUpper;
     attrs.strides = {2, 2};
     Tensor Y = ct(X, W, B, attrs);
@@ -187,7 +187,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
                                  {3.0f, 8.0f, 1.0f, 9.0f, 5.0f, 7.0f, 3.0f, 2.0f, 6.0f});
     Tensor W = Tensor::FromFloat("W", {1, 1, 2, 2}, {7.0f, 2.0f, 1.0f, 9.0f});
     Tensor B;
-    kernel::ConvTranspose::Attributes attrs;
+    onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.dilations = {2, 2};
     Tensor Y = ct(X, W, B, attrs);
     Y.name = "Y";
@@ -207,7 +207,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor X = Tensor::FromFloat("X", {1, 2, 3, 3}, Xv);
     Tensor W = Tensor::FromFloat("W", {2, 1, 3, 3}, std::vector<float>(18, 1.0f));
     Tensor B;
-    kernel::ConvTranspose::Attributes attrs;
+    onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.group = 2;
     Tensor Y = ct(X, W, B, attrs);
     Y.name = "Y";
@@ -230,7 +230,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
                                   9.0f,  10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f});
     Tensor W = Tensor::FromFloat("W", {2, 1, 3, 3}, std::vector<float>(18, 1.0f));
     Tensor B;
-    kernel::ConvTranspose::Attributes attrs;
+    onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.group = 2;
     Tensor Y = ct(X, W, B, attrs);
     Y.name = "Y";
@@ -254,7 +254,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor B;
 
     {
-      kernel::ConvTranspose::Attributes attrs;
+      onnx_kernels::kernel::ConvTranspose::Attributes attrs;
       attrs.strides = {3, 2};
       attrs.output_shape = {10, 8};
       Tensor Y = ct(X, W, B, attrs);
@@ -267,7 +267,7 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     }
 
     {
-      kernel::ConvTranspose::Attributes attrs;
+      onnx_kernels::kernel::ConvTranspose::Attributes attrs;
       attrs.strides = {3, 2};
       attrs.output_shape = {10, 8};
       attrs.kernel_shape = {3, 3};

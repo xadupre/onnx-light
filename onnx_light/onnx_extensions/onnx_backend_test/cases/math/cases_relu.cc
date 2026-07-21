@@ -15,7 +15,7 @@ namespace onnx_backend_test {
 void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
   const KernelContext ctx{opset};
-  const kernel::Relu relu_kernel{ctx};
+  const onnx_kernels::kernel::Relu relu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Relu", relu_kernel, "test_cc_relu_benchmark", opset, registry);

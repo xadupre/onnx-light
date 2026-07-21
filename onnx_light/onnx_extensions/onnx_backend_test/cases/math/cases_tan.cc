@@ -21,7 +21,7 @@ namespace onnx_backend_test {
 void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::Tan tan_kernel{ctx};
+  const onnx_kernels::kernel::Tan tan_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Tan", tan_kernel, "test_cc_tan_benchmark", opset, registry);

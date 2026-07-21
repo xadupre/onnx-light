@@ -45,7 +45,7 @@ Tensor MakeFloatTensor(const std::string &name, const std::vector<int64_t> &shap
 
 // Registers a single LayerNormalization case named ``test_cc_<base>`` with
 // inputs ``[X, W, B]`` and outputs ``[Y, Mean, InvStdDev]``.
-void RegisterCase(std::vector<TestCase> &registry, const kernel::LayerNormalization &kernel,
+void RegisterCase(std::vector<TestCase> &registry, const onnx_kernels::kernel::LayerNormalization &kernel,
                   const OpsetId &opset, const std::string &base,
                   const std::vector<int64_t> &x_shape, int64_t axis, bool include_axis_attr,
                   float epsilon, bool include_epsilon_attr) {
@@ -83,7 +83,7 @@ void RegisterCase(std::vector<TestCase> &registry, const kernel::LayerNormalizat
 void RegisterLayerNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(17);
   const KernelContext ctx{opset};
-  const kernel::LayerNormalization layernorm_kernel{ctx};
+  const onnx_kernels::kernel::LayerNormalization layernorm_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     constexpr float kDefaultEpsilon = 1e-5f;

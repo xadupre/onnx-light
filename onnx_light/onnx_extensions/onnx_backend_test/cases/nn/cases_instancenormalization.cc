@@ -22,7 +22,7 @@ namespace onnx_backend_test {
 void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::InstanceNormalization instancenorm_kernel{ctx};
+  const onnx_kernels::kernel::InstanceNormalization instancenorm_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

@@ -32,7 +32,7 @@ namespace onnx_backend_test {
 void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::RNN rnn_kernel{ctx};
+  const onnx_kernels::kernel::RNN rnn_kernel{ctx};
 
   // ``simple_rnn_defaults``: seq_length=2, batch_size=3, input_size=2,
   // hidden_size=4. No bias, no initial_h.

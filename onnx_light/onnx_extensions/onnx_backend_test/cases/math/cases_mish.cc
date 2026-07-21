@@ -14,7 +14,7 @@ namespace onnx_backend_test {
 void RegisterMishCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::Mish mish_kernel{ctx};
+  const onnx_kernels::kernel::Mish mish_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Mish", mish_kernel, "test_cc_mish_benchmark", opset, registry);

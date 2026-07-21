@@ -15,7 +15,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
     NodeProto node;
     node.set_op_type("LogSoftmax");
     node.add_input("input");
@@ -38,7 +38,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -60,7 +60,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -76,7 +76,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -98,7 +98,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -120,7 +120,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -142,7 +142,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -166,7 +166,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("LogSoftmax");

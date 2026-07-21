@@ -16,7 +16,7 @@ namespace onnx_backend_test {
 void RegisterSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Sigmoid sigmoid_kernel{ctx};
+  const onnx_kernels::kernel::Sigmoid sigmoid_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Sigmoid", sigmoid_kernel, "test_cc_sigmoid_benchmark", opset,

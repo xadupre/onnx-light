@@ -32,9 +32,9 @@ void RegisterSequenceAtCase(const std::string &name, const std::vector<Tensor> &
   const KernelContext ctx{opset};
 
   // Compute expected output with the reference kernel.
-  const Sequence seq = kernel::SequenceConstruct(ctx).AsSequence(inputs);
+  const Sequence seq = onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(inputs);
   Tensor position_tensor = Tensor::FromInt64("position", {}, {position});
-  Tensor expected = kernel::SequenceAt(ctx)(seq, position_tensor);
+  Tensor expected = onnx_kernels::kernel::SequenceAt(ctx)(seq, position_tensor);
   expected.name = "output_tensor";
 
   TestCase tc(name, name);

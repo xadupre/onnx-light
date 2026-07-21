@@ -142,7 +142,7 @@ void RegisterOptionalGetElementSequenceCase(const std::string &name, bool with_o
   const KernelContext ctx{opset};
 
   // The expected sequence equals the constructed sequence (passthrough).
-  Tensor stacked = kernel::SequenceConstruct(ctx)(inputs);
+  Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(inputs);
   stacked.name = "output_sequence";
 
   TestCase tc(name, name);
@@ -235,7 +235,7 @@ void RegisterOptionalGetElementSequenceCase(const std::string &name, bool with_o
 void RegisterOptionalHasElementEmptyCase(const std::string &name, bool with_empty_input_name,
                                          const OpsetId &opset, std::vector<TestCase> &registry) {
   const KernelContext ctx{opset};
-  Tensor expected = kernel::OptionalHasElement(ctx)();
+  Tensor expected = onnx_kernels::kernel::OptionalHasElement(ctx)();
   expected.name = "output";
 
   TestCase tc(name, name);
@@ -297,7 +297,7 @@ void RegisterOptionalGetElementCases(std::vector<TestCase> &registry, TestMode m
   {
     const OpsetId opset = DefaultOpset(15);
     const KernelContext ctx{opset};
-    Tensor output = kernel::OptionalGetElement(ctx)(input);
+    Tensor output = onnx_kernels::kernel::OptionalGetElement(ctx)(input);
     RegisterOptionalInputCase("test_cc_optional_get_element_optional_tensor", "OptionalGetElement",
                               input, output, shape, static_cast<int32_t>(DataType::FLOAT), opset,
                               registry);
@@ -307,7 +307,7 @@ void RegisterOptionalGetElementCases(std::vector<TestCase> &registry, TestMode m
   {
     const OpsetId opset = DefaultOpset(18);
     const KernelContext ctx{opset};
-    Tensor output = kernel::OptionalGetElement(ctx)(input);
+    Tensor output = onnx_kernels::kernel::OptionalGetElement(ctx)(input);
     RegisterTensorInputCase("test_cc_optional_get_element_tensor", "OptionalGetElement", input,
                             output, opset, registry);
   }
@@ -367,7 +367,7 @@ void RegisterOptionalHasElementCases(std::vector<TestCase> &registry, TestMode m
   {
     const OpsetId opset = DefaultOpset(15);
     const KernelContext ctx{opset};
-    Tensor output = kernel::OptionalHasElement(ctx)(input);
+    Tensor output = onnx_kernels::kernel::OptionalHasElement(ctx)(input);
     RegisterOptionalInputCase("test_cc_optional_has_element_optional_input", "OptionalHasElement",
                               input, output, shape, static_cast<int32_t>(DataType::FLOAT), opset,
                               registry);
@@ -377,7 +377,7 @@ void RegisterOptionalHasElementCases(std::vector<TestCase> &registry, TestMode m
   {
     const OpsetId opset = DefaultOpset(18);
     const KernelContext ctx{opset};
-    Tensor output = kernel::OptionalHasElement(ctx)(input);
+    Tensor output = onnx_kernels::kernel::OptionalHasElement(ctx)(input);
     RegisterTensorInputCase("test_cc_optional_has_element_tensor_input", "OptionalHasElement",
                             input, output, opset, registry);
   }

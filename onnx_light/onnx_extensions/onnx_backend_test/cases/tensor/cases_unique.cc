@@ -47,7 +47,7 @@ NodeProto MakeUniqueNode(std::optional<int64_t> sorted_attr, std::optional<int64
 void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const KernelContext ctx{opset};
-  const kernel::Unique unique_kernel{ctx};
+  const onnx_kernels::kernel::Unique unique_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/0, /*axis_attr=*/std::nullopt);
@@ -65,7 +65,7 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
                values[static_cast<std::size_t>(i)] = static_cast<float>(i % kDistinctValues);
              }
              Tensor x = Tensor::FromFloat("X", {kUniqueBenchmarkSize}, values);
-             kernel::Unique::Attributes attrs;
+             onnx_kernels::kernel::Unique::Attributes attrs;
              attrs.sorted = false;
              auto out = unique_kernel(x, attrs);
              return IoData{{std::move(x)},
@@ -81,7 +81,7 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_unique_not_sorted_without_axis", {opset},
            [=]() -> IoData {
              const Tensor x = Tensor::FromFloat("X", {6}, {2.f, 1.f, 1.f, 3.f, 4.f, 3.f});
-             kernel::Unique::Attributes attrs;
+             onnx_kernels::kernel::Unique::Attributes attrs;
              attrs.sorted = false;
              auto out = unique_kernel(x, attrs);
              return IoData{{std::move(x)},
@@ -121,7 +121,7 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_unique_sorted_with_axis", {opset}, [=]() -> IoData {
       const Tensor x =
           Tensor::FromFloat("X", {3, 3}, {1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 2.f, 3.f, 4.f});
-      kernel::Unique::Attributes attrs;
+      onnx_kernels::kernel::Unique::Attributes attrs;
       attrs.sorted = true;
       attrs.axis = 0;
       auto out = unique_kernel(x, attrs);
@@ -139,7 +139,7 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              const Tensor x =
                  Tensor::FromFloat("X", {2, 4}, {1.f, 1.f, 0.f, 2.f, 1.f, 1.f, 0.f, 2.f});
-             kernel::Unique::Attributes attrs;
+             onnx_kernels::kernel::Unique::Attributes attrs;
              attrs.sorted = true;
              attrs.axis = -1;
              auto out = unique_kernel(x, attrs);
@@ -157,7 +157,7 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromFloat(
                  "X", {2, 4, 2},
                  {1.f, 1.f, 0.f, 1.f, 2.f, 1.f, 0.f, 1.f, 1.f, 1.f, 0.f, 1.f, 2.f, 1.f, 0.f, 1.f});
-             kernel::Unique::Attributes attrs;
+             onnx_kernels::kernel::Unique::Attributes attrs;
              attrs.sorted = true;
              attrs.axis = 1;
              auto out = unique_kernel(x, attrs);

@@ -17,7 +17,7 @@ namespace onnx_backend_test {
 
 namespace {
 
-void EmitReduceSumSquareCase(std::vector<TestCase> &registry, const kernel::ReduceSumSquare &kernel,
+void EmitReduceSumSquareCase(std::vector<TestCase> &registry, const onnx_kernels::kernel::ReduceSumSquare &kernel,
                              const std::string &case_name, const std::vector<int64_t> &data_shape,
                              const std::vector<float> &data_values,
                              const std::vector<int64_t> &axes_values, bool keepdims,
@@ -46,7 +46,7 @@ void EmitReduceSumSquareCase(std::vector<TestCase> &registry, const kernel::Redu
 // "data" input). With ``noop_with_empty_axes`` default-false this reduces
 // over every dimension of ``data``.
 void EmitReduceSumSquareDefaultAxesCase(std::vector<TestCase> &registry,
-                                        const kernel::ReduceSumSquare &kernel,
+                                        const onnx_kernels::kernel::ReduceSumSquare &kernel,
                                         const std::string &case_name,
                                         const std::vector<int64_t> &data_shape,
                                         const std::vector<float> &data_values, bool keepdims) {
@@ -77,7 +77,7 @@ void EmitReduceSumSquareDefaultAxesCase(std::vector<TestCase> &registry,
 // ---------------------------------------------------------------------------
 void RegisterReduceSumSquareCases(std::vector<TestCase> &registry, TestMode mode) {
   const KernelContext ctx{DefaultOpset(18)};
-  const kernel::ReduceSumSquare kernel{ctx};
+  const onnx_kernels::kernel::ReduceSumSquare kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

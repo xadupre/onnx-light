@@ -28,7 +28,7 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
   const OpsetId opset("ai.onnx.ml", 1);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::TreeEnsembleClassifier cls{ctx};
+  const onnx_kernels::kernel::TreeEnsembleClassifier cls{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

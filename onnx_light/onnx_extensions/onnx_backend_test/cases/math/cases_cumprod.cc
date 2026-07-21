@@ -44,7 +44,7 @@ NodeProto MakeCumProdNode(bool exclusive, bool reverse) {
 void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(26);
   const KernelContext ctx{opset};
-  const kernel::CumProd cumprod_kernel{ctx};
+  const onnx_kernels::kernel::CumProd cumprod_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);

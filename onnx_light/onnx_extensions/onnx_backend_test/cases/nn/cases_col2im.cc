@@ -39,7 +39,7 @@ NodeProto MakeCol2ImNode(const std::vector<std::string> &inputs,
 void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const KernelContext ctx{opset};
-  const kernel::Col2Im op{ctx};
+  const onnx_kernels::kernel::Col2Im op{ctx};
 
   // ---------------------------------------------------------------------
   // Case 1: 2-D, no padding, default stride/dilation. Mirrors upstream
@@ -52,7 +52,7 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor input = Tensor::FromFloat("input", {1, 5, 5}, in_v);
     Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {5, 5});
     Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {1, 5});
-    kernel::Col2Im::Attributes attrs;
+    onnx_kernels::kernel::Col2Im::Attributes attrs;
     Tensor output = op(input, image_shape, block_shape, attrs);
     output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
@@ -72,7 +72,7 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor input = Tensor::FromFloat("input", {1, 5, 15}, in_v);
     Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {5, 5});
     Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {1, 5});
-    kernel::Col2Im::Attributes attrs;
+    onnx_kernels::kernel::Col2Im::Attributes attrs;
     attrs.pads = {0, 1, 0, 1};
     Tensor output = op(input, image_shape, block_shape, attrs);
     output.name = "output";
@@ -94,7 +94,7 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor input = Tensor::FromFloat("input", {1, 9, 4}, in_v);
     Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {5, 5});
     Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {3, 3});
-    kernel::Col2Im::Attributes attrs;
+    onnx_kernels::kernel::Col2Im::Attributes attrs;
     attrs.strides = {2, 2};
     Tensor output = op(input, image_shape, block_shape, attrs);
     output.name = "output";
@@ -116,7 +116,7 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor input = Tensor::FromFloat("input", {1, 4, 5}, in_v);
     Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {6, 6});
     Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {2, 2});
-    kernel::Col2Im::Attributes attrs;
+    onnx_kernels::kernel::Col2Im::Attributes attrs;
     attrs.dilations = {1, 5};
     Tensor output = op(input, image_shape, block_shape, attrs);
     output.name = "output";
@@ -139,7 +139,7 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor input = Tensor::FromFloat("input", {1, 10, 12}, in_v);
     Tensor image_shape = Tensor::FromInt64("image_shape", {3}, {3, 4, 5});
     Tensor block_shape = Tensor::FromInt64("block_shape", {3}, {1, 1, 5});
-    kernel::Col2Im::Attributes attrs;
+    onnx_kernels::kernel::Col2Im::Attributes attrs;
     Tensor output = op(input, image_shape, block_shape, attrs);
     output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});

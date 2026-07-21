@@ -16,8 +16,8 @@ namespace onnx_backend_test {
 
 void RegisterWhereNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
-  const kernel::KernelContext ctx{opset};
-  const kernel::Where where_kernel{ctx};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::Where where_kernel{ctx};
 
   constexpr float kNan = std::numeric_limits<float>::quiet_NaN();
   constexpr float kPosInf = std::numeric_limits<float>::infinity();

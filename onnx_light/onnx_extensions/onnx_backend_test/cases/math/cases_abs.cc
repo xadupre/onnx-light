@@ -17,7 +17,7 @@ namespace onnx_backend_test {
 void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Abs abs_kernel{ctx};
+  const onnx_kernels::kernel::Abs abs_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Abs", abs_kernel, "test_cc_abs_benchmark", opset, registry);

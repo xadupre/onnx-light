@@ -49,7 +49,7 @@ NodeProto BuildSCENode(bool has_weights, bool with_log_prob, const std::string &
 // covered. The expected outputs are produced by the kernel itself; since the
 // backend invokes the same kernel, this acts as a self-consistency check
 // across every supported reduction / ignore_index / weights / rank combination.
-void RegisterSCEVariants(const kernel::SoftmaxCrossEntropyLoss &sce_kernel, const OpsetId &opset,
+void RegisterSCEVariants(const onnx_kernels::kernel::SoftmaxCrossEntropyLoss &sce_kernel, const OpsetId &opset,
                          const std::string &base, const Tensor &scores, const Tensor &labels,
                          const Tensor *weights, const std::string &reduction, bool has_ignore_index,
                          int64_t ignore_index, std::vector<TestCase> &registry) {
@@ -115,7 +115,7 @@ std::vector<int64_t> MakeLabelRange(int64_t count, int64_t n_classes) {
 void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::SoftmaxCrossEntropyLoss sce_kernel{ctx};
+  const onnx_kernels::kernel::SoftmaxCrossEntropyLoss sce_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

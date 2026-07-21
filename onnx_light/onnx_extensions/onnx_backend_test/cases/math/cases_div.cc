@@ -68,7 +68,7 @@ std::vector<TUInt> RandUintNonZero(int64_t high, const std::vector<int64_t> &sha
 void RegisterDivCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
   const KernelContext ctx{opset};
-  const kernel::Div div_kernel{ctx};
+  const onnx_kernels::kernel::Div div_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkBinaryFloat("Div", div_kernel, "test_cc_div_benchmark", opset, registry);

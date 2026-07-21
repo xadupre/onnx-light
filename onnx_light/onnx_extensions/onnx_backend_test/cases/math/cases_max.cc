@@ -23,7 +23,7 @@ namespace onnx_backend_test {
 void RegisterMaxCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Max max_kernel{ctx};
+  const onnx_kernels::kernel::Max max_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

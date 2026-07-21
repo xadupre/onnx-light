@@ -39,7 +39,7 @@ NodeProto MakeEinsumNode(int n_inputs, const std::string &equation) {
 void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Einsum einsum_kernel{ctx};
+  const onnx_kernels::kernel::Einsum einsum_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     const std::string eq = "ij,jk->ik";

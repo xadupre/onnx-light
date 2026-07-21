@@ -64,7 +64,7 @@ void RegisterTreeEnsembleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 5);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::TreeEnsemble tree_ens{ctx};
+  const onnx_kernels::kernel::TreeEnsemble tree_ens{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

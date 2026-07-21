@@ -25,7 +25,7 @@ void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry, TestMode mode
 
   const OpsetId opset = DefaultOpset(17);
   const KernelContext ctx{opset};
-  const kernel::MelWeightMatrix mel_kernel{ctx};
+  const onnx_kernels::kernel::MelWeightMatrix mel_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto bench_node;

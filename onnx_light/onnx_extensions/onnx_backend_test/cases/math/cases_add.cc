@@ -31,7 +31,7 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
   const KernelContext ctx{opset};
-  const kernel::Add add_kernel{ctx};
+  const onnx_kernels::kernel::Add add_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkBinaryFloat("Add", add_kernel, "test_cc_add_benchmark", opset, registry);

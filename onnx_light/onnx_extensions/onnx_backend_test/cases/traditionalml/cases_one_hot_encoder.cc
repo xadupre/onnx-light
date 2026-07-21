@@ -24,7 +24,7 @@ void RegisterOneHotEncoderCases(std::vector<TestCase> &registry, TestMode mode) 
   const OpsetId opset("ai.onnx.ml", 1);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::OneHotEncoder one_hot{ctx};
+  const onnx_kernels::kernel::OneHotEncoder one_hot{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

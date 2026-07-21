@@ -29,7 +29,7 @@ namespace onnx_backend_test {
 void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
   const KernelContext ctx{opset};
-  const kernel::BatchNormalization batchnorm_kernel{ctx};
+  const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

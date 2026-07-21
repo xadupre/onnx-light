@@ -47,10 +47,10 @@ NodeProto MakeCausalConvNode(const std::vector<std::string> &inputs,
 // Convenience: registers one case from the provided inputs / kernel attrs.
 // The node template carries the activation attribute when it is non-default.
 void RegisterCase(std::vector<TestCase> &registry, const std::string &name, const OpsetId &opset,
-                  const kernel::CausalConvWithState &kernel, const Tensor &input,
+                  const onnx_kernels::kernel::CausalConvWithState &kernel, const Tensor &input,
                   const Tensor &weight, const Tensor *bias, const Tensor *past_state,
                   const std::string &activation) {
-  kernel::CausalConvWithState::Attributes attrs;
+  onnx_kernels::kernel::CausalConvWithState::Attributes attrs;
   attrs.activation = activation;
   auto [output, present_state] = kernel(input, weight, bias != nullptr ? *bias : Tensor{},
                                         past_state != nullptr ? *past_state : Tensor{}, attrs);
@@ -83,7 +83,7 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &name, cons
 void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(27);
   const KernelContext ctx{opset};
-  const kernel::CausalConvWithState kernel{ctx};
+  const onnx_kernels::kernel::CausalConvWithState kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCausalConvNode({"input", "weight"}, {"output", "present_state"});
@@ -97,7 +97,7 @@ void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry, TestMode 
              Tensor W = Tensor::FromFloat("weight", {32, 1, 3}, Randn<float>({32, 1, 3}, 2602));
              Tensor bias;
              Tensor past_state;
-             kernel::CausalConvWithState::Attributes attrs;
+             onnx_kernels::kernel::CausalConvWithState::Attributes attrs;
              auto [output, present_state] = kernel(X, W, bias, past_state, attrs);
              return IoData{{std::move(X), std::move(W)},
                            {std::move(output), std::move(present_state)}};

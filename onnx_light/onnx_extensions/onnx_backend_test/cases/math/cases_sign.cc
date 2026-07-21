@@ -21,7 +21,7 @@ namespace onnx_backend_test {
 void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Sign sign_kernel{ctx};
+  const onnx_kernels::kernel::Sign sign_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Sign", sign_kernel, "test_cc_sign_benchmark", opset, registry);

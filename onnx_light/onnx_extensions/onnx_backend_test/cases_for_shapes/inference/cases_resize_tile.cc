@@ -62,7 +62,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_resize_tile";
 
@@ -127,20 +127,20 @@ void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry, Test
   // Resize with scales=[0.5, 0.5], asymmetric + nearest:
   //   floor(H * 0.5) = 5, floor(W * 0.5) = 3  →  resized_out shape [5, 3].
   const Tensor scales_tensor = Tensor::FromFloat("", {2}, {0.5f, 0.5f});
-  kernel::Resize::Attributes resize_attrs;
+  onnx_kernels::kernel::Resize::Attributes resize_attrs;
   resize_attrs.mode = "nearest";
   resize_attrs.coordinate_transformation_mode = "asymmetric";
-  Tensor resized_out = kernel::Resize{ctx}(x, scales_tensor, resize_attrs);
+  Tensor resized_out = onnx_kernels::kernel::Resize{ctx}(x, scales_tensor, resize_attrs);
   resized_out.name = "resized_out";
 
   // Tile with repeats=[2, 2]:  [5, 3] → [10, 6].
   const Tensor repeats_tensor = Tensor::FromInt64("", {2}, {int64_t{2}, int64_t{2}});
-  Tensor tile_out = kernel::Tile{ctx}(resized_out, repeats_tensor);
+  Tensor tile_out = onnx_kernels::kernel::Tile{ctx}(resized_out, repeats_tensor);
   tile_out.name = "tile_out";
 
   // Max(tile_out, zeros_scalar): all x_values > 0 so Max is identity → [10, 6].
   const Tensor zeros_scalar = Tensor::FromFloat("zeros_scalar", {}, {0.0f});
-  const kernel::Max max_kernel{ctx};
+  const onnx_kernels::kernel::Max max_kernel{ctx};
   Tensor output = max_kernel({tile_out, zeros_scalar});
   output.name = "output";
 

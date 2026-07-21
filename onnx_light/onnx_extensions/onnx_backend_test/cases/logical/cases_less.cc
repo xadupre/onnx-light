@@ -31,7 +31,7 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Less less_kernel{ctx};
+  const onnx_kernels::kernel::Less less_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

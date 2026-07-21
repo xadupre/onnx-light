@@ -45,7 +45,7 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = TrainingOpset(1);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::Adam adam{ctx};
+  const onnx_kernels::kernel::Adam adam{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

@@ -44,7 +44,7 @@ Tensor MakeFloatTensor(const std::string &name, const std::vector<int64_t> &shap
 }
 
 // Registers a single RMSNormalization case named ``test_cc_<base>``.
-void RegisterCase(std::vector<TestCase> &registry, const kernel::RMSNormalization &kernel,
+void RegisterCase(std::vector<TestCase> &registry, const onnx_kernels::kernel::RMSNormalization &kernel,
                   const OpsetId &opset, const std::string &base,
                   const std::vector<int64_t> &x_shape, const std::vector<int64_t> &scale_shape,
                   int64_t axis, bool include_axis_attr, float epsilon, bool include_epsilon_attr) {
@@ -72,7 +72,7 @@ void RegisterCase(std::vector<TestCase> &registry, const kernel::RMSNormalizatio
 void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
   const KernelContext ctx{opset};
-  const kernel::RMSNormalization rmsnorm_kernel{ctx};
+  const onnx_kernels::kernel::RMSNormalization rmsnorm_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     constexpr float kDefaultEpsilon = 1e-5f;

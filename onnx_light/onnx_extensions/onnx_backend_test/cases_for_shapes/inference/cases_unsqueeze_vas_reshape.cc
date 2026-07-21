@@ -58,7 +58,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &registry,
                                                     TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_unsqueeze_vas_reshape";
 
@@ -152,31 +152,31 @@ void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &regis
   const Tensor idx_t = Tensor::FromInt64("idx", {}, {int64_t{1}});
   const std::vector<int64_t> axes0 = {0};
 
-  Tensor shape_y = kernel::Shape(ctx)(y, kernel::Shape::Attributes{});
+  Tensor shape_y = onnx_kernels::kernel::Shape(ctx)(y, onnx_kernels::kernel::Shape::Attributes{});
   shape_y.name = "shape_y";
 
-  Tensor shape_z = kernel::Shape(ctx)(z, kernel::Shape::Attributes{});
+  Tensor shape_z = onnx_kernels::kernel::Shape(ctx)(z, onnx_kernels::kernel::Shape::Attributes{});
   shape_z.name = "shape_z";
 
-  Tensor d1 = kernel::Gather(ctx)(shape_y, idx_t, 0);
+  Tensor d1 = onnx_kernels::kernel::Gather(ctx)(shape_y, idx_t, 0);
   d1.name = "d1";
 
-  Tensor d2 = kernel::Gather(ctx)(shape_z, idx_t, 0);
+  Tensor d2 = onnx_kernels::kernel::Gather(ctx)(shape_z, idx_t, 0);
   d2.name = "d2";
 
-  Tensor u1 = kernel::Unsqueeze(ctx)(d1, axes0);
+  Tensor u1 = onnx_kernels::kernel::Unsqueeze(ctx)(d1, axes0);
   u1.name = "u1";
 
-  Tensor u2 = kernel::Unsqueeze(ctx)(d2, axes0);
+  Tensor u2 = onnx_kernels::kernel::Unsqueeze(ctx)(d2, axes0);
   u2.name = "u2";
 
-  Tensor new_shape_t = kernel::Concat(ctx)({u1, u2}, 0);
+  Tensor new_shape_t = onnx_kernels::kernel::Concat(ctx)({u1, u2}, 0);
   new_shape_t.name = "new_shape";
 
-  Tensor reshaped = kernel::Reshape(ctx)(x, new_shape_t);
+  Tensor reshaped = onnx_kernels::kernel::Reshape(ctx)(x, new_shape_t);
   reshaped.name = "reshaped";
 
-  Tensor out = kernel::Abs(ctx)(reshaped);
+  Tensor out = onnx_kernels::kernel::Abs(ctx)(reshaped);
   out.name = "out";
 
   AppendDataSet(tc, {std::move(x), std::move(y), std::move(z)}, {std::move(out)});

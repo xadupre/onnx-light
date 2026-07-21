@@ -31,7 +31,7 @@ void RegisterOneBernoulli(const std::string &case_name, const Tensor &input, int
   node.add_input("x");
   node.add_output("y");
 
-  if (seed != kernel::Bernoulli::kNoSeed) {
+  if (seed != onnx_kernels::kernel::Bernoulli::kNoSeed) {
     AttributeProto *attr = node.add_attribute();
     attr->set_name("seed");
     attr->set_type(AttributeProto::AttributeType::FLOAT);
@@ -47,7 +47,7 @@ void RegisterOneBernoulli(const std::string &case_name, const Tensor &input, int
     const KernelContext ctx{opset};
     Tensor input_named = input;
     input_named.name = "x";
-    Tensor y = kernel::Bernoulli(ctx)(input_named, seed, dtype);
+    Tensor y = onnx_kernels::kernel::Bernoulli(ctx)(input_named, seed, dtype);
 
     return IoData{{std::move(input_named)}, {std::move(y)}};
   });
@@ -80,13 +80,13 @@ void RegisterBernoulliCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
 
     const KernelContext ctx{opset};
-    const kernel::Bernoulli bernoulli_kernel{ctx};
+    const onnx_kernels::kernel::Bernoulli bernoulli_kernel{ctx};
     Expect(registry, std::move(node), "test_cc_bernoulli_benchmark", {opset},
            {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
            [bernoulli_kernel]() -> IoData {
              Tensor x = Tensor::FromFloat("x", /*shape=*/{kBenchmarkElementwiseSize},
                                           std::vector<float>(kBenchmarkElementwiseSize, 0.5f));
-             Tensor y = bernoulli_kernel(x, kernel::Bernoulli::kNoSeed, /*dtype=*/0);
+             Tensor y = bernoulli_kernel(x, onnx_kernels::kernel::Bernoulli::kNoSeed, /*dtype=*/0);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -95,14 +95,14 @@ void RegisterBernoulliCases(std::vector<TestCase> &registry, TestMode mode) {
   // Default attributes: no seed, dtype matches input (FLOAT).
   {
     const Tensor x = Tensor::FromFloat("", /*shape=*/{static_cast<int64_t>(probs.size())}, probs);
-    RegisterOneBernoulli("test_cc_bernoulli", x, kernel::Bernoulli::kNoSeed, /*dtype=*/0, registry,
+    RegisterOneBernoulli("test_cc_bernoulli", x, onnx_kernels::kernel::Bernoulli::kNoSeed, /*dtype=*/0, registry,
                          opset);
   }
 
   // dtype = DOUBLE: output element type is overridden by the attribute.
   {
     const Tensor x = Tensor::FromFloat("", /*shape=*/{static_cast<int64_t>(probs.size())}, probs);
-    RegisterOneBernoulli("test_cc_bernoulli_double", x, kernel::Bernoulli::kNoSeed,
+    RegisterOneBernoulli("test_cc_bernoulli_double", x, onnx_kernels::kernel::Bernoulli::kNoSeed,
                          /*dtype=*/static_cast<int32_t>(DataType::DOUBLE), registry, opset);
   }
 

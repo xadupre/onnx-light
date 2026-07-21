@@ -50,7 +50,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
              Tensor b = Tensor::FromFloat("", elem_shape, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor c = Tensor::FromFloat("", elem_shape, {6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f});
 
-             Tensor output = kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a, b, c});
+             Tensor output = onnx_kernels::kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a, b, c});
 
              return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(output)}};
            },
@@ -69,7 +69,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
            [=]() -> IoData {
              Tensor a = Tensor::FromInt64("", elem_shape, {-1, 0, 1, 2});
 
-             Tensor output = kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a});
+             Tensor output = onnx_kernels::kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a});
 
              return IoData{{std::move(a)}, {std::move(output)}};
            },

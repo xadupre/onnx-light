@@ -38,7 +38,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_release_shape_reshape";
 
@@ -72,9 +72,9 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // Build the reference DataSet so the case is executable end-to-end.
   const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-  Tensor s = kernel::Shape(ctx)(x, kernel::Shape::Attributes{});
+  Tensor s = onnx_kernels::kernel::Shape(ctx)(x, onnx_kernels::kernel::Shape::Attributes{});
   s.name = "S";
-  Tensor y = kernel::Reshape(ctx)(x, s);
+  Tensor y = onnx_kernels::kernel::Reshape(ctx)(x, s);
   y.name = "Y";
 
   AppendDataSet(tc, {x}, {y});

@@ -42,7 +42,7 @@ NodeProto MakeReverseSequenceNode(int64_t time_axis, int64_t batch_axis, bool se
 void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const KernelContext ctx{opset};
-  const kernel::ReverseSequence reverse_seq_kernel{ctx};
+  const onnx_kernels::kernel::ReverseSequence reverse_seq_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeReverseSequenceNode(0, 1, /*set_time_attr=*/true, /*set_batch_attr=*/true);
@@ -51,7 +51,7 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
              Tensor x = Tensor::FromFloat("X", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
              Tensor seq =
                  Tensor::FromInt64("sequence_lens", {1024}, std::vector<int64_t>(1024, 4096));
-             kernel::ReverseSequence::Attributes attrs;
+             onnx_kernels::kernel::ReverseSequence::Attributes attrs;
              attrs.time_axis = 0;
              attrs.batch_axis = 1;
              Tensor y = reverse_seq_kernel(x, seq, attrs);
@@ -70,7 +70,7 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
                                    {0.0f, 4.0f, 8.0f, 12.0f, 1.0f, 5.0f, 9.0f, 13.0f, 2.0f, 6.0f,
                                     10.0f, 14.0f, 3.0f, 7.0f, 11.0f, 15.0f});
              const Tensor seq = Tensor::FromInt64("sequence_lens", {4}, {4, 3, 2, 1});
-             kernel::ReverseSequence::Attributes attrs;
+             onnx_kernels::kernel::ReverseSequence::Attributes attrs;
              attrs.time_axis = 0;
              attrs.batch_axis = 1;
              const Tensor y = reverse_seq_kernel(x, seq, attrs);
@@ -88,7 +88,7 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
                                    {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f,
                                     10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f});
              const Tensor seq = Tensor::FromInt64("sequence_lens", {4}, {1, 2, 3, 4});
-             kernel::ReverseSequence::Attributes attrs;
+             onnx_kernels::kernel::ReverseSequence::Attributes attrs;
              attrs.time_axis = 1;
              attrs.batch_axis = 0;
              const Tensor y = reverse_seq_kernel(x, seq, attrs);
@@ -103,7 +103,7 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
            "test_cc_reversesequence_default_attrs", {opset}, [=]() -> IoData {
              const Tensor x = Tensor::FromFloat("X", {3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              const Tensor seq = Tensor::FromInt64("sequence_lens", {2}, {3, 2});
-             kernel::ReverseSequence::Attributes attrs;
+             onnx_kernels::kernel::ReverseSequence::Attributes attrs;
              const Tensor y = reverse_seq_kernel(x, seq, attrs);
              return IoData{{std::move(x), std::move(seq)}, {std::move(y)}};
            });
@@ -119,7 +119,7 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
                  "X", {3, 2, 2},
                  {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f});
              const Tensor seq = Tensor::FromInt64("sequence_lens", {2}, {3, 1});
-             kernel::ReverseSequence::Attributes attrs;
+             onnx_kernels::kernel::ReverseSequence::Attributes attrs;
              attrs.time_axis = 0;
              attrs.batch_axis = 1;
              const Tensor y = reverse_seq_kernel(x, seq, attrs);

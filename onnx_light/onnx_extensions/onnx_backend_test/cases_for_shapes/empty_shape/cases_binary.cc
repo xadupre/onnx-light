@@ -46,7 +46,7 @@ void RegisterBinaryEmptyShape(std::vector<TestCase> &registry, const char *op_ty
                               int opset_version, const std::string &test_name_stem,
                               int second_input_kind = kSecondInputDefault) {
   const OpsetId opset = DefaultOpset(opset_version);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
   const Kernel kk{ctx};
 
   const char *second_input_name = (second_input_kind == kSecondInputSlope) ? "slope" : "y";
@@ -82,23 +82,23 @@ void RegisterBinaryEmptyShape(std::vector<TestCase> &registry, const char *op_ty
 } // namespace
 
 void RegisterAddEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
-  RegisterBinaryEmptyShape<kernel::Add>(registry, "Add", 14, "add");
+  RegisterBinaryEmptyShape <onnx_kernels::kernel::Add>(registry, "Add", 14, "add");
 }
 
 void RegisterSubEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
-  RegisterBinaryEmptyShape<kernel::Sub>(registry, "Sub", 14, "sub");
+  RegisterBinaryEmptyShape <onnx_kernels::kernel::Sub>(registry, "Sub", 14, "sub");
 }
 
 void RegisterMulEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
-  RegisterBinaryEmptyShape<kernel::Mul>(registry, "Mul", 14, "mul");
+  RegisterBinaryEmptyShape <onnx_kernels::kernel::Mul>(registry, "Mul", 14, "mul");
 }
 
 void RegisterDivEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
-  RegisterBinaryEmptyShape<kernel::Div>(registry, "Div", 14, "div");
+  RegisterBinaryEmptyShape <onnx_kernels::kernel::Div>(registry, "Div", 14, "div");
 }
 
 void RegisterPReluEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
-  RegisterBinaryEmptyShape<kernel::PRelu>(registry, "PRelu", 16, "prelu", kSecondInputSlope);
+  RegisterBinaryEmptyShape <onnx_kernels::kernel::PRelu>(registry, "PRelu", 16, "prelu", kSecondInputSlope);
 }
 
 } // namespace onnx_backend_test

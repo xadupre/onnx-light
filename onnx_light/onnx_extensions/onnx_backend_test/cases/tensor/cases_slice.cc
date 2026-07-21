@@ -60,7 +60,7 @@ Tensor MakeRangeTensor20x10x5() {
 void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Slice slice_kernel{ctx};
+  const onnx_kernels::kernel::Slice slice_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true);

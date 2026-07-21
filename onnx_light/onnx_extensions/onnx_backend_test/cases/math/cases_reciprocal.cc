@@ -40,7 +40,7 @@ Tensor PositiveRandFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Reciprocal reciprocal_kernel{ctx};
+  const onnx_kernels::kernel::Reciprocal reciprocal_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Reciprocal", reciprocal_kernel, "test_cc_reciprocal_benchmark",

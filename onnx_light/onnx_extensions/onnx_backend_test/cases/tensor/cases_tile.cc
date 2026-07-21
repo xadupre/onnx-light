@@ -47,7 +47,7 @@ Tensor MakeRepeatsTensor(const std::vector<int64_t> &repeats) {
 void RegisterTileCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Tile tile_kernel{ctx};
+  const onnx_kernels::kernel::Tile tile_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeTileNode();

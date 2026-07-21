@@ -48,7 +48,7 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode)
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::DictVectorizer dict{ctx};
+  const onnx_kernels::kernel::DictVectorizer dict{ctx};
 
   // string -> int64 dictionary with string vocabulary.
   {
@@ -98,7 +98,7 @@ void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mo
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::FeatureVectorizer fv{ctx};
+  const onnx_kernels::kernel::FeatureVectorizer fv{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

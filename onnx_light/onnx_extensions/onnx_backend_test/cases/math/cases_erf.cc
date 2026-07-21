@@ -22,7 +22,7 @@ namespace onnx_backend_test {
 void RegisterErfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Erf erf_kernel{ctx};
+  const onnx_kernels::kernel::Erf erf_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Erf", erf_kernel, "test_cc_erf_benchmark", opset, registry);

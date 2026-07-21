@@ -22,7 +22,7 @@ namespace {
 
 // Tensor builders and bit packing helpers are provided by
 // ``onnx_core/runtime/cast_helper.h`` (Uint16ZeroPoint,
-// Int16ZeroPoint, MakeFloat8Tensor, kernel::Pack2Bit,
+// Int16ZeroPoint, MakeFloat8Tensor, onnx_kernels::kernel::Pack2Bit,
 // kernel::Pack4Bit, MakeSubByteTensor,
 // kernel::FloatToFloat4E2M1Nibble, MakeFloat4E2M1Tensor,
 // FloatToFloat16Bits, MakeFloat16Tensor).
@@ -85,7 +85,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
   const OpsetId opset_v23 = DefaultOpset(25);
   const OpsetId opset_v25 = DefaultOpset(25);
   const KernelContext ctx{opset};
-  const kernel::DequantizeLinear dequantize_kernel{ctx};
+  const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

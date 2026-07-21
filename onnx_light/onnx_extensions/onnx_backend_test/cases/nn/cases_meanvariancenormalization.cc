@@ -17,7 +17,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
   if (mode == TestMode::BENCHMARK) {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::MeanVarianceNormalization mvn_kernel{ctx};
+    const onnx_kernels::kernel::MeanVarianceNormalization mvn_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("MeanVarianceNormalization");
@@ -39,7 +39,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::MeanVarianceNormalization mvn_kernel{ctx};
+    const onnx_kernels::kernel::MeanVarianceNormalization mvn_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("MeanVarianceNormalization");
@@ -64,7 +64,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
   {
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::MeanVarianceNormalization mvn_kernel{ctx};
+    const onnx_kernels::kernel::MeanVarianceNormalization mvn_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("MeanVarianceNormalization");
@@ -90,7 +90,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
   {
     const OpsetId opset = DefaultOpset(18);
     const KernelContext ctx{opset};
-    const kernel::MeanVarianceNormalization mvn_kernel{ctx};
+    const onnx_kernels::kernel::MeanVarianceNormalization mvn_kernel{ctx};
 
     NodeProto node;
     node.set_op_type("MeanVarianceNormalization");

@@ -46,7 +46,7 @@ NodeProto MakeConcatNode(int64_t axis) {
 void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Concat concat_kernel{ctx};
+  const onnx_kernels::kernel::Concat concat_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> shape = {kBenchmarkElementwiseSize / 2};

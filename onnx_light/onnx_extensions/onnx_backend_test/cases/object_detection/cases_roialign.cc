@@ -82,7 +82,7 @@ Tensor MakeUpstreamFeatureMap() {
 void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
   const KernelContext ctx{opset};
-  const kernel::RoiAlign roialign_kernel{ctx};
+  const onnx_kernels::kernel::RoiAlign roialign_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -134,7 +134,7 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor batch_indices =
                  Tensor::FromInt64("", {roi_count}, std::vector<int64_t>(roi_count, 0));
 
-             kernel::RoiAlign::Attributes attrs;
+             onnx_kernels::kernel::RoiAlign::Attributes attrs;
              attrs.mode = "avg";
              attrs.output_height = 5;
              attrs.output_width = 5;
@@ -195,7 +195,7 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
       Tensor batch_indices = Tensor::FromInt64("", {2}, batch_indices_values);
 
-      kernel::RoiAlign::Attributes attrs;
+      onnx_kernels::kernel::RoiAlign::Attributes attrs;
       attrs.mode = "avg";
       attrs.output_height = 5;
       attrs.output_width = 5;
@@ -252,7 +252,7 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
       Tensor batch_indices = Tensor::FromInt64("", {2}, batch_indices_values);
 
-      kernel::RoiAlign::Attributes attrs;
+      onnx_kernels::kernel::RoiAlign::Attributes attrs;
       attrs.mode = "max";
       attrs.output_height = 5;
       attrs.output_width = 5;
@@ -302,7 +302,7 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor rois = Tensor::FromFloat("", upstream_rois_shape, upstream_rois_values);
       Tensor batch_indices = Tensor::FromInt64("", {3}, upstream_batch_indices_values);
 
-      kernel::RoiAlign::Attributes attrs;
+      onnx_kernels::kernel::RoiAlign::Attributes attrs;
       attrs.mode = mode.empty() ? "avg" : mode;
       attrs.output_height = 5;
       attrs.output_width = 5;

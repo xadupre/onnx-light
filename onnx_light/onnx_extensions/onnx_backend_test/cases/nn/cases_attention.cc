@@ -150,7 +150,7 @@ Tensor MakeQ_1_4_2_2_gqa() {
 void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
   const KernelContext ctx{opset};
-  const kernel::Attention attention{ctx};
+  const onnx_kernels::kernel::Attention attention{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
@@ -198,7 +198,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_2_2_2_basic();
     Tensor K = MakeKV_basic_K();
     Tensor V = MakeKV_basic_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 1e-2f;
     Tensor Y = attention(Q, K, V, attrs).Y;
@@ -232,7 +232,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
                                   -1.0f, 1.0f, 1.0f, -1.0f, 0.25f, 0.5f}); // head 1
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
     Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
@@ -299,7 +299,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
                                    {1, 1, 0, 1, 0, 1,   // head 0
                                     1, 0, 1, 1, 1, 0}); // head 1
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     Tensor Y = attention(Q, K, V, attrs, &mask).Y;
@@ -319,7 +319,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
@@ -345,7 +345,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
                                            0.0f, 0.5f, 0.5f, -0.5f}); // head 1
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
@@ -363,7 +363,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 0;
     auto r = attention(Q, K, V, attrs);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y", "", "", "qk_matmul_output"});
@@ -380,7 +380,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
     Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.qk_matmul_output_mode = 1;
@@ -401,7 +401,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
@@ -423,7 +423,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
     auto r = attention(Q, K, V, attrs);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y", "", "", "qk_matmul_output"});
@@ -465,7 +465,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = rank3_inputs();
     Tensor K = rank3_K();
     Tensor V = rank3_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     Tensor Y = attention(Q, K, V, attrs).Y;
@@ -489,7 +489,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
          0.3f, 0.4f, 0.2f, -0.3f, 0.0f, 1.0f, 0.5f, -0.5f});
     Tensor K = rank3_K();
     Tensor V = rank3_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
     Tensor Y = attention(Q, K, V, attrs).Y;
@@ -507,7 +507,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         "", {1, 3, 4}, {1.0f, 0.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, -1.0f, 0.5f, 0.5f, 0.25f, 0.5f});
     Tensor K = rank3_K();
     Tensor V = rank3_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.is_causal = true;
@@ -533,7 +533,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor past_value = Tensor::FromFloat("", {1, 2, 2, 2},
                                           {0.5f, 0.5f, -1.0f, 0.0f,   // head 0
                                            0.0f, 0.5f, 0.5f, -0.5f}); // head 1
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
@@ -558,7 +558,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = rank3_inputs();
     Tensor K = rank3_K();
     Tensor V = rank3_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -578,7 +578,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = rank3_inputs();
     Tensor K = rank3_K();
     Tensor V = rank3_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -601,7 +601,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = rank3_K();
     Tensor V = rank3_V();
     Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -624,7 +624,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor V = Tensor::FromFloat("", {1, 3, 6},
                                  {1.0f, 0.0f, -1.0f, 2.0f, -2.0f, 1.0f, 0.0f, 1.0f, 2.0f, 0.5f,
                                   0.25f, -0.25f, -1.0f, 1.0f, 0.5f, -0.5f, 0.0f, 1.0f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     Tensor Y = attention(Q, K, V, attrs).Y;
@@ -644,7 +644,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
                                   0.2f, -0.3f, 0.0f, 1.0f, 0.5f, -0.5f});
     Tensor K = rank3_K();
     Tensor V = rank3_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -666,7 +666,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
                                   0.2f, -0.3f, 0.0f, 1.0f, 0.5f, -0.5f});
     Tensor K = rank3_K();
     Tensor V = rank3_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -691,7 +691,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = rank3_K();
     Tensor V = rank3_V();
     Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -716,7 +716,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
                                           0.2f, -0.1f, 0.25f, 0.0f,  0.5f, 0.5f, -1.0f, 1.0f});
     Tensor K = rank3_K();
     Tensor V = rank3_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
     attrs.is_causal = true;
@@ -741,7 +741,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
     Tensor past_value =
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
     auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
@@ -766,7 +766,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
     Tensor past_value =
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.qk_matmul_output_mode = 0;
@@ -795,7 +795,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
     Tensor mask = Tensor::FromFloat(
         "", {2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -826,7 +826,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
     Tensor past_value =
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -860,7 +860,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
     Tensor past_value =
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.qk_matmul_output_mode = 3;
@@ -889,7 +889,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_4_2_2_gqa();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 1e-2f;
     Tensor Y = attention(Q, K, V, attrs).Y;
@@ -905,7 +905,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_4_2_2_gqa();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
@@ -924,7 +924,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
     Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     Tensor Y = attention(Q, K, V, attrs, &mask).Y;
@@ -950,7 +950,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         "", {1, 2, 3, 2},
         {1.0f, 0.0f, 0.5f, 0.5f, 0.0f, 1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.25f, -0.5f});
     Tensor V = MakeV_1_2_3_2();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
     Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
@@ -969,7 +969,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
     Tensor past_value =
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
@@ -992,7 +992,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 3, 3},
                           {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, -0.1f, 0.5f, -0.2f, 0.0f,  // head 0
                            -0.2f, 0.3f, 0.0f, 0.0f, -0.1f, 0.4f, 0.1f, 0.0f, -0.3f}); // head 1
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.is_causal = true;
@@ -1016,7 +1016,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor V = MakeV_1_2_3_2();
     Tensor mask =
         Tensor::FromFloat("", {1, 3, 3}, {0.0f, -1.0f, 0.5f, 0.2f, 0.0f, -0.4f, 0.1f, -0.3f, 0.0f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.is_causal = true;
@@ -1039,7 +1039,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
                                    {1, 1, 0, 1, 0, 1,   // head 0
                                     1, 0, 1, 1, 1, 0}); // head 1
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     Tensor Y = attention(Q, K, V, attrs, &mask).Y;
@@ -1061,7 +1061,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
     Tensor past_value =
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 0;
     auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
@@ -1086,7 +1086,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
     Tensor mask = Tensor::FromFloat(
         "", {2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.qk_matmul_output_mode = 1;
@@ -1115,7 +1115,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
     Tensor mask = Tensor::FromFloat(
         "", {1, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.qk_matmul_output_mode = 1;
@@ -1146,7 +1146,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor mask = Tensor::FromFloat(
         "", {1, 2, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f,  0.0f, -0.2f, -0.1f, 0.0f,
                            0.1f, 0.2f,  -0.3f, 0.0f, 0.4f, -0.4f, 0.0f, 0.3f,  -0.2f, 0.1f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.qk_matmul_output_mode = 1;
@@ -1176,7 +1176,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
     Tensor mask = Tensor::FromFloat(
         "", {1, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.is_causal = true;
@@ -1209,7 +1209,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor mask = Tensor::FromFloat(
         "", {1, 2, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f,  0.0f, -0.2f, -0.1f, 0.0f,
                            0.1f, 0.2f,  -0.3f, 0.0f, 0.4f, -0.4f, 0.0f, 0.3f,  -0.2f, 0.1f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.is_causal = true;
@@ -1235,7 +1235,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_3();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 1e-2f;
     Tensor Y = attention(Q, K, V, attrs).Y;
@@ -1252,7 +1252,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_3();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
@@ -1289,7 +1289,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         {1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.5f, -1.0f, 1.0f, 1.0f, -1.0f, 0.25f, 0.5f});
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_3();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
     Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
@@ -1309,7 +1309,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
     Tensor past_value =
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
@@ -1332,7 +1332,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
     Tensor mask = Tensor::FromFloat(
         "", {1, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
@@ -1360,7 +1360,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     // Broadcastable over the head axis (1 vs 4) and batch.
     Tensor mask = Tensor::FromFloat(
         "", {1, 1, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
@@ -1384,7 +1384,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     // Mask is broadcastable over heads; final column is -inf-like (-1e4)
     // to emulate KV-padding suppression on the trailing position.
     Tensor mask = Tensor::FromFloat("", {1, 1, 2, 3}, {0.0f, 0.0f, -1.0e4f, 0.0f, 0.0f, -1.0e4f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     Tensor Y = attention(Q, K, V, attrs, &mask).Y;
@@ -1418,7 +1418,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
                                              -0.1f, 0.0f,  -0.3f, 0.1f,  0.0f, 0.0f,  0.0f, -0.4f,
                                              -0.2f, 0.0f,  0.1f,  -0.1f, 0.2f, 0.0f,  0.0f, -0.5f});
     Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {2}, {2, 3});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     Tensor Y = attention(Q, K, V, attrs, &mask, /*past_key=*/nullptr, /*past_value=*/nullptr,
@@ -1448,7 +1448,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = MakeDeterministicFloatTensor({2, 2, 4, 2}, 0x51a2u, 0.0f, 1.0f);
     Tensor V = MakeDeterministicFloatTensor({2, 2, 4, 2}, 0x51a3u, 0.0f, 1.0f);
     Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {2}, {4, 3});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
     Tensor Y = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
                          /*past_value=*/nullptr, &nonpad_kv_seqlen)
@@ -1470,7 +1470,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor bool_mask = Tensor::FromBool("", {1, 2, 2, 3},
                                         {0, 0, 0, 1, 1, 1,   // head 0
                                          0, 0, 0, 1, 1, 1}); // head 1
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     Tensor Y = attention(Q, K, V, attrs, &bool_mask).Y;
@@ -1491,7 +1491,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor bool_mask = Tensor::FromBool("", {1, 2, 2, 3},
                                         {0, 0, 0, 1, 1, 1,   // head 0
                                          0, 0, 0, 1, 1, 1}); // head 1
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.is_causal = true;
@@ -1513,7 +1513,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor bool_mask = Tensor::FromBool("", {1, 2, 2, 3},
                                         {0, 0, 0, 0, 0, 0,   // head 0
                                          0, 0, 0, 0, 0, 0}); // head 1
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
     auto r = attention(Q, K, V, attrs, &bool_mask);
     NodeProto node =
@@ -1535,7 +1535,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor bool_mask = Tensor::FromBool("", {1, 2, 2, 3},
                                         {0, 0, 0, 0, 0, 0,   // head 0
                                          0, 0, 0, 0, 0, 0}); // head 1
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
     auto r = attention(Q, K, V, attrs, &bool_mask);
     NodeProto node =
@@ -1557,7 +1557,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeDeterministicFloatTensor({1, 2, 2, 4}, kSoftmaxPrecisionQSeed, 0.0f, 1.0f);
     Tensor K = MakeDeterministicFloatTensor({1, 2, 3, 4}, kSoftmaxPrecisionKSeed, 0.0f, 1.0f);
     Tensor V = MakeDeterministicFloatTensor({1, 2, 3, 4}, kSoftmaxPrecisionVSeed, 0.0f, 1.0f);
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
     auto r = attention(Q, K, V, attrs);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y", "", "", "qk_matmul_output"});
@@ -1582,7 +1582,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
                                     {0.0f, 0.0f, -2.0f, -4.0f, 0.0f, 0.0f, -1.0f, -2.0f, 0.0f,
                                      -0.5f, -2.0f, -4.0f, 0.0f, -0.5f, -1.5f, -3.0f});
     Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {2}, {4, 3});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
     auto r = attention(Q, K, V, attrs, &mask, /*past_key=*/nullptr, /*past_value=*/nullptr,
                        &nonpad_kv_seqlen);
@@ -1615,7 +1615,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
     Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {1}, {3});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
     Tensor Y = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
                          /*past_value=*/nullptr, &nonpad_kv_seqlen)
@@ -1637,7 +1637,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
     auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
@@ -1669,7 +1669,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
       mask_data[static_cast<size_t>(i * 6 + 5)] = neg_inf;
     }
     Tensor mask = Tensor::FromFloat("", {4, 6}, mask_data);
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.softcap = 0.5f;
     Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
@@ -1703,7 +1703,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
       mask_data[static_cast<size_t>(i * 6 + 5)] = neg_inf;
     }
     Tensor mask = Tensor::FromFloat("", {4, 6}, mask_data);
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.softcap = 0.5f;
     Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
@@ -1736,7 +1736,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = rank3_inputs();
     Tensor K = rank3_K();
     Tensor V = rank3_diff_heads_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -1757,7 +1757,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = rank3_inputs();
     Tensor K = rank3_K();
     Tensor V = rank3_diff_heads_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -1781,7 +1781,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = rank3_K();
     Tensor V = rank3_diff_heads_V();
     Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -1804,7 +1804,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         "", {1, 3, 4}, {1.0f, 0.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, -1.0f, 0.5f, 0.5f, 0.25f, 0.5f});
     Tensor K = rank3_K();
     Tensor V = rank3_diff_heads_V();
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.is_causal = true;
@@ -1836,7 +1836,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor mask = Tensor::FromFloat("", {2, 5},
                                     {0.0f, -0.5f, -1.0f, 0.2f, 0.0f,   // q=0
                                      0.5f, 0.0f, -0.2f, -0.1f, 0.0f}); // q=1
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
@@ -1885,7 +1885,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor V = Tensor::FromFloat(
         "", {batch, kv_seq, kv_hidden},
         std::vector<float>(static_cast<size_t>(batch * kv_seq * kv_hidden), 0.1f));
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = q_num_heads;
     attrs.kv_num_heads = kv_num_heads;
     Tensor Y = attention(Q, K, V, attrs).Y;
@@ -1939,7 +1939,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor mask_in = RoundToFloat16(mask32);
     Tensor pk_in = RoundToFloat16(pk32);
     Tensor pv_in = RoundToFloat16(pv32);
-    kernel::Attention::Attributes attrs;
+    onnx_kernels::kernel::Attention::Attributes attrs;
     auto r = attention(Q_in, K_in, V_in, attrs, &mask_in, &pk_in, &pv_in);
     Tensor Q = FloatToFloat16Tensor("", Q_in);
     Tensor K = FloatToFloat16Tensor("", K_in);
@@ -1962,7 +1962,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     registry.back().rtol = 5e-3;
 
     Tensor nonpad_kv_seqlen = Tensor::FromInt64("nonpad_kv_seqlen", {2}, {6, 5});
-    kernel::Attention::Attributes decode_attrs;
+    onnx_kernels::kernel::Attention::Attributes decode_attrs;
     decode_attrs.is_causal = true;
     Tensor decode_y =
         attention(Q_in, K_in, V_in, decode_attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,

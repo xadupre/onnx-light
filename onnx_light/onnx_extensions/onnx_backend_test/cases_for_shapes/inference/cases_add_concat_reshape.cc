@@ -43,7 +43,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   Tensor reshape_shape = Tensor::FromInt64("reshape_shape", {3}, {0, 0, -1});
 
@@ -111,8 +111,8 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
   const Tensor new_shape = Tensor::FromInt64("", {3}, {0, 0, -1});
   Tensor z_pre_abs =
-      kernel::Reshape(ctx)(kernel::Concat(ctx)({kernel::Add(ctx)(x, y), x}, /*axis=*/2), new_shape);
-  Tensor z = kernel::Abs(ctx)(z_pre_abs);
+      onnx_kernels::kernel::Reshape(ctx)(onnx_kernels::kernel::Concat(ctx)({onnx_kernels::kernel::Add(ctx)(x, y), x}, /*axis=*/2), new_shape);
+  Tensor z = onnx_kernels::kernel::Abs(ctx)(z_pre_abs);
   z.name = "Z";
 
   AppendDataSet(tc, {x, y}, {z});

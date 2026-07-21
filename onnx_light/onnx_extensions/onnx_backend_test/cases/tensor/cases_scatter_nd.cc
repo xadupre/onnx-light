@@ -46,7 +46,7 @@ Tensor MakeUpdates2x4x4() {
 void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const KernelContext ctx{opset};
-  const kernel::ScatterND snd_kernel{ctx};
+  const onnx_kernels::kernel::ScatterND snd_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeScatterNDNode("none");
@@ -61,7 +61,7 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor indices = Tensor::FromInt64("", {256, 1}, index_values);
              Tensor updates =
                  Tensor::FromFloat("", {256, 128, 128}, Randn<float>({256, 128, 128}, 2002));
-             kernel::ScatterND::Attributes attrs;
+             onnx_kernels::kernel::ScatterND::Attributes attrs;
              Tensor output = snd_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
@@ -75,7 +75,7 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor data = MakeData4x4x4();
       Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 2});
       Tensor updates = MakeUpdates2x4x4();
-      kernel::ScatterND::Attributes attrs;
+      onnx_kernels::kernel::ScatterND::Attributes attrs;
       Tensor output = snd_kernel(data, indices, updates, attrs);
       return IoData{{std::move(data), std::move(indices), std::move(updates)}, {std::move(output)}};
     });
@@ -87,7 +87,7 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor data = MakeData4x4x4();
       Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
       Tensor updates = MakeUpdates2x4x4();
-      kernel::ScatterND::Attributes attrs;
+      onnx_kernels::kernel::ScatterND::Attributes attrs;
       attrs.reduction = "add";
       Tensor output = snd_kernel(data, indices, updates, attrs);
       return IoData{{std::move(data), std::move(indices), std::move(updates)}, {std::move(output)}};
@@ -101,7 +101,7 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor data = MakeData4x4x4();
              Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
              Tensor updates = MakeUpdates2x4x4();
-             kernel::ScatterND::Attributes attrs;
+             onnx_kernels::kernel::ScatterND::Attributes attrs;
              attrs.reduction = "mul";
              Tensor output = snd_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
@@ -115,7 +115,7 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor data = MakeData4x4x4();
       Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
       Tensor updates = MakeUpdates2x4x4();
-      kernel::ScatterND::Attributes attrs;
+      onnx_kernels::kernel::ScatterND::Attributes attrs;
       attrs.reduction = "max";
       Tensor output = snd_kernel(data, indices, updates, attrs);
       return IoData{{std::move(data), std::move(indices), std::move(updates)}, {std::move(output)}};
@@ -128,7 +128,7 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor data = MakeData4x4x4();
       Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
       Tensor updates = MakeUpdates2x4x4();
-      kernel::ScatterND::Attributes attrs;
+      onnx_kernels::kernel::ScatterND::Attributes attrs;
       attrs.reduction = "min";
       Tensor output = snd_kernel(data, indices, updates, attrs);
       return IoData{{std::move(data), std::move(indices), std::move(updates)}, {std::move(output)}};
@@ -145,7 +145,7 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor data = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
              Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
              Tensor updates = Tensor::FromFloat("", {2}, {5, 1});
-             kernel::ScatterND::Attributes attrs;
+             onnx_kernels::kernel::ScatterND::Attributes attrs;
              attrs.reduction = "max";
              Tensor output = snd_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
@@ -161,7 +161,7 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor data = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
              Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
              Tensor updates = Tensor::FromFloat("", {2}, {5, 1});
-             kernel::ScatterND::Attributes attrs;
+             onnx_kernels::kernel::ScatterND::Attributes attrs;
              attrs.reduction = "min";
              Tensor output = snd_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},

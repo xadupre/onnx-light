@@ -32,7 +32,7 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
   const KernelContext ctx{opset};
-  const kernel::PRelu prelu_kernel{ctx};
+  const onnx_kernels::kernel::PRelu prelu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkBinaryFloat("PRelu", prelu_kernel, "test_cc_prelu_benchmark", opset, registry);

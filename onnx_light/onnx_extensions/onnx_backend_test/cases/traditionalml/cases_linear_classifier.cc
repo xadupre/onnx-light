@@ -16,7 +16,7 @@ void RegisterLinearClassifierCases(std::vector<TestCase> &registry, TestMode mod
   const OpsetId opset("ai.onnx.ml", 1);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::LinearClassifier cls{ctx};
+  const onnx_kernels::kernel::LinearClassifier cls{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

@@ -52,7 +52,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_value_as_shape";
 
@@ -148,13 +148,13 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry, Te
 
   // shape2 evaluates to [N, 1] = [3, 1].
   const Tensor shape2 = Tensor::FromInt64("", {2}, {kN, 1});
-  Tensor expanded = kernel::Expand(ctx)(x, shape2);
-  Tensor z1 = kernel::Add(ctx)(expanded, y1);
-  Tensor z2 = kernel::Add(ctx)(expanded, y2);
-  Tensor z3 = kernel::Add(ctx)(expanded, y3);
-  Tensor z12 = kernel::Add(ctx)(z1, z2);
-  Tensor z_pre_abs = kernel::Add(ctx)(z12, z3);
-  Tensor z = kernel::Abs(ctx)(z_pre_abs);
+  Tensor expanded = onnx_kernels::kernel::Expand(ctx)(x, shape2);
+  Tensor z1 = onnx_kernels::kernel::Add(ctx)(expanded, y1);
+  Tensor z2 = onnx_kernels::kernel::Add(ctx)(expanded, y2);
+  Tensor z3 = onnx_kernels::kernel::Add(ctx)(expanded, y3);
+  Tensor z12 = onnx_kernels::kernel::Add(ctx)(z1, z2);
+  Tensor z_pre_abs = onnx_kernels::kernel::Add(ctx)(z12, z3);
+  Tensor z = onnx_kernels::kernel::Abs(ctx)(z_pre_abs);
   z.name = "z";
 
   AppendDataSet(tc, {std::move(x), std::move(y1), std::move(y2), std::move(y3)}, {std::move(z)});

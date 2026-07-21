@@ -140,7 +140,7 @@ void RegisterBitwiseBinUint32Case(const std::string &name, const char *op,
 void RegisterBitwiseAndCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const KernelContext ctx{opset};
-  const kernel::BitwiseAnd k{ctx};
+  const onnx_kernels::kernel::BitwiseAnd k{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("BitwiseAnd", {"x", "y"}, {"z"});
@@ -192,7 +192,7 @@ void RegisterBitwiseAndCases(std::vector<TestCase> &registry, TestMode mode) {
 void RegisterBitwiseOrCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const KernelContext ctx{opset};
-  const kernel::BitwiseOr k{ctx};
+  const onnx_kernels::kernel::BitwiseOr k{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("BitwiseOr", {"x", "y"}, {"z"});
@@ -243,7 +243,7 @@ void RegisterBitwiseOrCases(std::vector<TestCase> &registry, TestMode mode) {
 void RegisterBitwiseXorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const KernelContext ctx{opset};
-  const kernel::BitwiseXor k{ctx};
+  const onnx_kernels::kernel::BitwiseXor k{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("BitwiseXor", {"x", "y"}, {"z"});
@@ -296,7 +296,7 @@ void RegisterBitwiseXorCases(std::vector<TestCase> &registry, TestMode mode) {
 void RegisterBitwiseNotCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const KernelContext ctx{opset};
-  const kernel::BitwiseNot k{ctx};
+  const onnx_kernels::kernel::BitwiseNot k{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("BitwiseNot", {"x"}, {"y"});

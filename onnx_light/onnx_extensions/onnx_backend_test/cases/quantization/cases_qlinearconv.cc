@@ -31,7 +31,7 @@ namespace onnx_backend_test {
 void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const KernelContext ctx{opset};
-  const kernel::QLinearConv qc{ctx};
+  const onnx_kernels::kernel::QLinearConv qc{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -63,7 +63,7 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
                                  std::vector<uint8_t>{123});
              Tensor B;
 
-             kernel::QLinearConv::Attributes attrs;
+             onnx_kernels::kernel::QLinearConv::Attributes attrs;
              Tensor y = qc(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale,
                            y_zero_point, B, attrs);
              y.name = "y";
@@ -96,7 +96,7 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
                         std::vector<uint8_t>{123});
     Tensor B;
 
-    kernel::QLinearConv::Attributes attrs;
+    onnx_kernels::kernel::QLinearConv::Attributes attrs;
     Tensor y =
         qc(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point, B, attrs);
     y.name = "y";

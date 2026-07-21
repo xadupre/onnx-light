@@ -18,7 +18,7 @@ namespace {
 
 // Registers one ``test_not*`` upstream-ONNX case: x and y = NOT x.
 void RegisterNotOnnxCase(const std::string &name, const std::vector<int64_t> &shape, uint64_t seed,
-                         const kernel::Not &not_kernel, const OpsetId &opset,
+                         const onnx_kernels::kernel::Not &not_kernel, const OpsetId &opset,
                          std::vector<TestCase> &registry) {
   NodeProto node = MakeNode("Not", {"x"}, {"not"});
   Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
@@ -40,7 +40,7 @@ void RegisterNotOnnxCase(const std::string &name, const std::vector<int64_t> &sh
 void RegisterNotCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(1);
   const KernelContext ctx{opset};
-  const kernel::Not not_kernel{ctx};
+  const onnx_kernels::kernel::Not not_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("Not", {"x"}, {"y"});

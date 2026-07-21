@@ -60,7 +60,7 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::Imputer imputer{ctx};
+  const onnx_kernels::kernel::Imputer imputer{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

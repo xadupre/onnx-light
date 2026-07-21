@@ -14,7 +14,7 @@ namespace onnx_backend_test {
 void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const KernelContext ctx{opset};
-  const kernel::Det det_kernel{ctx};
+  const onnx_kernels::kernel::Det det_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

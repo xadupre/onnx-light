@@ -15,7 +15,7 @@ void RegisterLinearRegressorCases(std::vector<TestCase> &registry, TestMode mode
   const OpsetId opset("ai.onnx.ml", 1);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::LinearRegressor reg{ctx};
+  const onnx_kernels::kernel::LinearRegressor reg{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

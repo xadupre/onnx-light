@@ -65,7 +65,7 @@ std::vector<int8_t> ToInt8(const std::vector<float> &v) {
 void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Clip clip_kernel{ctx};
+  const onnx_kernels::kernel::Clip clip_kernel{ctx};
 
   // Deterministic onnx-light-specific case (``test_cc_*``).
   {
@@ -190,7 +190,7 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   // int8 variants: opset 12 widened ``T`` to all numeric tensors.
   const OpsetId opset12 = DefaultOpset(12);
   const KernelContext ctx12{opset12};
-  const kernel::Clip clip_kernel12{ctx12};
+  const onnx_kernels::kernel::Clip clip_kernel12{ctx12};
   {
     // Inputs: ``["x", "min"]`` — trailing optional ``max`` omitted entirely.
     NodeProto node;

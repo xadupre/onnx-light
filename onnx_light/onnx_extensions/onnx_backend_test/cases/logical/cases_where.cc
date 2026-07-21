@@ -13,7 +13,7 @@ namespace onnx_backend_test {
 void RegisterWhereCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
   const KernelContext ctx{opset};
-  const kernel::Where where_kernel{ctx};
+  const onnx_kernels::kernel::Where where_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});

@@ -44,7 +44,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 void RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_gather_value_as_shape";
 
@@ -101,19 +101,19 @@ void RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &regist
   const Tensor idx = Tensor::FromInt64("idx", {1}, {0});
 
   // shape_x = Shape(x) = [3, 4]
-  Tensor shape_x = kernel::Shape(ctx)(x, kernel::Shape::Attributes{});
+  Tensor shape_x = onnx_kernels::kernel::Shape(ctx)(x, onnx_kernels::kernel::Shape::Attributes{});
   shape_x.name = "shape_x";
 
   // n_vec = Gather(shape_x, idx, axis=0) = int64[1] = [3]
-  Tensor n_vec = kernel::Gather(ctx)(shape_x, idx, 0);
+  Tensor n_vec = onnx_kernels::kernel::Gather(ctx)(shape_x, idx, 0);
   n_vec.name = "n_vec";
 
   // expanded = Expand(y, n_vec) = float[3] = [2.0, 2.0, 2.0]
-  Tensor expanded = kernel::Expand(ctx)(y, n_vec);
+  Tensor expanded = onnx_kernels::kernel::Expand(ctx)(y, n_vec);
   expanded.name = "expanded";
 
   // z = Abs(expanded) = float[3] = [2.0, 2.0, 2.0]
-  Tensor z = kernel::Abs(ctx)(expanded);
+  Tensor z = onnx_kernels::kernel::Abs(ctx)(expanded);
   z.name = "z";
 
   AppendDataSet(tc, {std::move(x), std::move(y)}, {std::move(z)});

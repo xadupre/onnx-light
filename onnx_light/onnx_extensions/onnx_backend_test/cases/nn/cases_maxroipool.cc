@@ -49,7 +49,7 @@ Tensor MakeFeatureMap() {
 void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::MaxRoiPool maxroipool_kernel{ctx};
+  const onnx_kernels::kernel::MaxRoiPool maxroipool_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -75,7 +75,7 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
                                   {0.0f, start, start, start + 63.0f, start + 63.0f});
              }
              Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
-             kernel::MaxRoiPool::Attributes attrs;
+             onnx_kernels::kernel::MaxRoiPool::Attributes attrs;
              attrs.pooled_shape = {2, 2};
              attrs.spatial_scale = 1.0f;
              Tensor y = maxroipool_kernel(x, rois, attrs);
@@ -101,7 +101,7 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
       };
       Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
 
-      kernel::MaxRoiPool::Attributes attrs;
+      onnx_kernels::kernel::MaxRoiPool::Attributes attrs;
       attrs.pooled_shape = {2, 2};
       attrs.spatial_scale = 1.0f;
       Tensor y = maxroipool_kernel(x, rois, attrs);
@@ -126,7 +126,7 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
       const std::vector<float> rois_values = {0.0f, 0.0f, 0.0f, 10.0f, 10.0f};
       Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
 
-      kernel::MaxRoiPool::Attributes attrs;
+      onnx_kernels::kernel::MaxRoiPool::Attributes attrs;
       attrs.pooled_shape = {3, 3};
       attrs.spatial_scale = 0.5f;
       Tensor y = maxroipool_kernel(x, rois, attrs);

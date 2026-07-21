@@ -126,7 +126,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v23 = DefaultOpset(23); // For FLOAT4E2M1
   const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
   const KernelContext ctx{opset};
-  const kernel::CastLike castlike_kernel{ctx};
+  const onnx_kernels::kernel::CastLike castlike_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCastLikeNode();
@@ -214,7 +214,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const std::vector<int64_t> e8m0_shape = {2, 4};
   const std::vector<float> e8m0_fp32_values = {0.0f, 0.124f, 0.25f, 0.5f, 1.1f, 2.0f, 4.0f, 8.0f};
 
-  const kernel::Cast cast_kernel{ctx};
+  const onnx_kernels::kernel::Cast cast_kernel{ctx};
 
   // FLOAT8 variants (opset 21)
   const std::vector<LowPrecisionVariant> kFloat8Variants = {
@@ -520,7 +520,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
         {DataType::FLOAT8E5M2, "FLOAT8E5M2"},
         {DataType::FLOAT8E5M2FNUZ, "FLOAT8E5M2FNUZ"},
     };
-    const kernel::Cast cast_k{ctx};
+    const onnx_kernels::kernel::Cast cast_k{ctx};
     for (const auto &v : kFloat8Variants) {
       Tensor low_target("target_type", static_cast<int32_t>(v.dtype), {1},
                         std::vector<uint8_t>(1, 0u));

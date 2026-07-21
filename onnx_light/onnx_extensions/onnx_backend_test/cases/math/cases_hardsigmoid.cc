@@ -14,7 +14,7 @@ namespace onnx_backend_test {
 void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::HardSigmoid hard_sigmoid_kernel{ctx};
+  const onnx_kernels::kernel::HardSigmoid hard_sigmoid_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

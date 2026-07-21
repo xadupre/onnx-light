@@ -37,18 +37,18 @@ void RegisterSequenceEraseCase(const std::string &name, const std::vector<Tensor
   const KernelContext ctx{opset};
 
   // Compute the expected output sequence with the reference kernel.
-  const Sequence seq = kernel::SequenceConstruct(ctx).AsSequence(inputs);
+  const Sequence seq = onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(inputs);
   Tensor position_tensor;
   const Tensor *pos_ptr = nullptr;
   if (has_position) {
     position_tensor = Tensor::FromInt64("position", {}, {position});
     pos_ptr = &position_tensor;
   }
-  const Sequence out_seq = kernel::SequenceErase(ctx)(seq, pos_ptr);
+  const Sequence out_seq = onnx_kernels::kernel::SequenceErase(ctx)(seq, pos_ptr);
 
   // Materialise the output sequence as a stacked tensor.
   std::vector<Tensor> remaining(out_seq.values.begin(), out_seq.values.end());
-  Tensor stacked = kernel::SequenceConstruct(ctx)(remaining);
+  Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(remaining);
   stacked.name = "output_sequence";
 
   TestCase tc(name, name);

@@ -43,7 +43,7 @@ NodeProto MakeDeformConvNode(const std::vector<std::string> &inputs,
 void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::DeformConv dc{ctx};
+  const onnx_kernels::kernel::DeformConv dc{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeDeformConvNode({"X", "W", "offset"}, {"Y"});
@@ -62,7 +62,7 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
                                                Randn<float>({1, 8, 127, 127}, 1503));
              Tensor B;
              Tensor mask;
-             kernel::DeformConv::Attributes attrs;
+             onnx_kernels::kernel::DeformConv::Attributes attrs;
              attrs.kernel_shape = {2, 2};
              attrs.pads = {0, 0, 0, 0};
              Tensor Y = dc(X, W, offset, B, mask, attrs);
@@ -84,7 +84,7 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor offset = Tensor::FromFloat("offset", {1, 8, 2, 2}, off);
     Tensor B;
     Tensor mask;
-    kernel::DeformConv::Attributes attrs;
+    onnx_kernels::kernel::DeformConv::Attributes attrs;
     attrs.kernel_shape = {2, 2};
     attrs.pads = {0, 0, 0, 0};
     Tensor Y = dc(X, W, offset, B, mask, attrs);
@@ -110,7 +110,7 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor offset = Tensor::FromFloat("offset", {1, 8, 4, 4}, off);
     Tensor B;
     Tensor mask;
-    kernel::DeformConv::Attributes attrs;
+    onnx_kernels::kernel::DeformConv::Attributes attrs;
     attrs.kernel_shape = {2, 2};
     attrs.pads = {1, 1, 1, 1};
     Tensor Y = dc(X, W, offset, B, mask, attrs);
@@ -138,7 +138,7 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     std::vector<float> mvec(1 * 4 * 2 * 2, 1.0f);
     mvec[(2 * 2 + 1) * 2 + 1] = 0.2f;
     Tensor mask = Tensor::FromFloat("mask", {1, 4, 2, 2}, mvec);
-    kernel::DeformConv::Attributes attrs;
+    onnx_kernels::kernel::DeformConv::Attributes attrs;
     attrs.kernel_shape = {2, 2};
     attrs.pads = {0, 0, 0, 0};
     Tensor Y = dc(X, W, offset, B, mask, attrs);
@@ -171,7 +171,7 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor offset = Tensor::FromFloat("offset", {1, 16, 2, 2}, off);
     Tensor B;
     Tensor mask;
-    kernel::DeformConv::Attributes attrs;
+    onnx_kernels::kernel::DeformConv::Attributes attrs;
     attrs.kernel_shape = {2, 2};
     attrs.pads = {0, 0, 0, 0};
     attrs.offset_group = 2;

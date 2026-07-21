@@ -21,7 +21,7 @@ namespace onnx_backend_test {
 void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
   const KernelContext ctx{opset};
-  const kernel::StringConcat string_concat{ctx};
+  const onnx_kernels::kernel::StringConcat string_concat{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

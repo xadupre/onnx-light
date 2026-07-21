@@ -37,7 +37,7 @@ NodeProto MakeScatterElementsNode(int64_t axis, const std::string &reduction, bo
 void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const KernelContext ctx{opset};
-  const kernel::ScatterElements se_kernel{ctx};
+  const onnx_kernels::kernel::ScatterElements se_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeScatterElementsNode(0, "none", /*set_axis_attr=*/false);
@@ -51,7 +51,7 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
              }
              Tensor indices = Tensor::FromInt64("", {4096, 1024}, index_values);
              Tensor updates = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
-             kernel::ScatterElements::Attributes attrs;
+             onnx_kernels::kernel::ScatterElements::Attributes attrs;
              Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
@@ -67,7 +67,7 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
              Tensor data = Tensor::FromFloat("", {3, 3}, {0, 0, 0, 0, 0, 0, 0, 0, 0});
              Tensor indices = Tensor::FromInt64("", {2, 3}, {1, 0, 2, 0, 2, 1});
              Tensor updates = Tensor::FromFloat("", {2, 3}, {1.0f, 1.1f, 1.2f, 2.0f, 2.1f, 2.2f});
-             kernel::ScatterElements::Attributes attrs;
+             onnx_kernels::kernel::ScatterElements::Attributes attrs;
              Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
@@ -82,7 +82,7 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 3});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
-             kernel::ScatterElements::Attributes attrs;
+             onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
              Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
@@ -98,7 +98,7 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, -3});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
-             kernel::ScatterElements::Attributes attrs;
+             onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
              Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
@@ -114,7 +114,7 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 1});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
-             kernel::ScatterElements::Attributes attrs;
+             onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
              attrs.reduction = "add";
              Tensor output = se_kernel(data, indices, updates, attrs);
@@ -131,7 +131,7 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 1});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
-             kernel::ScatterElements::Attributes attrs;
+             onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
              attrs.reduction = "max";
              Tensor output = se_kernel(data, indices, updates, attrs);
@@ -148,7 +148,7 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 1});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
-             kernel::ScatterElements::Attributes attrs;
+             onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
              attrs.reduction = "min";
              Tensor output = se_kernel(data, indices, updates, attrs);
@@ -165,7 +165,7 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 1});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
-             kernel::ScatterElements::Attributes attrs;
+             onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
              attrs.reduction = "mul";
              Tensor output = se_kernel(data, indices, updates, attrs);

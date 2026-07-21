@@ -60,7 +60,7 @@ std::vector<float> SequentialFloats(size_t count) {
 void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(25);
   const KernelContext ctx{opset};
-  const kernel::Flatten kernel{ctx};
+  const onnx_kernels::kernel::Flatten kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeFlattenNode(/*axis=*/1, /*include_axis=*/false);

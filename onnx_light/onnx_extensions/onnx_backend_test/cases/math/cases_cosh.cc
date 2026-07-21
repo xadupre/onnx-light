@@ -34,7 +34,7 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 void RegisterCoshCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::Cosh cosh_kernel{ctx};
+  const onnx_kernels::kernel::Cosh cosh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Cosh", cosh_kernel, "test_cc_cosh_benchmark", opset, registry);

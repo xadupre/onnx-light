@@ -30,7 +30,7 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 void RegisterExpCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Exp exp_kernel{ctx};
+  const onnx_kernels::kernel::Exp exp_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Exp", exp_kernel, "test_cc_exp_benchmark", opset, registry);

@@ -40,7 +40,7 @@ void RegisterOneConstantOfShape(const std::string &case_name,
         Tensor::FromInt64("x", {static_cast<int64_t>(shape_values.size())}, shape_values);
 
     const KernelContext ctx{opset};
-    Tensor y = kernel::ConstantOfShape(ctx)(shape_input, value);
+    Tensor y = onnx_kernels::kernel::ConstantOfShape(ctx)(shape_input, value);
 
     return IoData{{std::move(shape_input)}, {std::move(y)}};
   });
@@ -78,7 +78,7 @@ void RegisterConstantOfShapeCases(std::vector<TestCase> &registry, TestMode mode
     t->set_raw_data(utils::ByteSpan(value.data));
 
     const KernelContext ctx{opset};
-    const kernel::ConstantOfShape constant_of_shape_kernel{ctx};
+    const onnx_kernels::kernel::ConstantOfShape constant_of_shape_kernel{ctx};
     Expect(registry, std::move(node), "test_constantofshape_float_ones_benchmark", {opset}, {1},
            {kBenchmarkElementwiseSize},
            [constant_of_shape_kernel, shape_values, value]() -> IoData {

@@ -111,7 +111,7 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v23 = DefaultOpset(23); // For FLOAT4E2M1
   const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
   const KernelContext ctx{opset};
-  const kernel::Cast cast_kernel{ctx};
+  const onnx_kernels::kernel::Cast cast_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     const int64_t to_attr = static_cast<int64_t>(DataType::DOUBLE);

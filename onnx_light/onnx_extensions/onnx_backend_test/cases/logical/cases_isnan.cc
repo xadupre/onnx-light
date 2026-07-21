@@ -27,7 +27,7 @@ namespace onnx_backend_test {
 void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
   const KernelContext ctx{opset};
-  const kernel::IsNaN isnan_kernel{ctx};
+  const onnx_kernels::kernel::IsNaN isnan_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});

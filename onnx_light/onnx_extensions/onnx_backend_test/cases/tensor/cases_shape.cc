@@ -49,7 +49,7 @@ Tensor Rename(Tensor t, const std::string &name) {
 void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
   const KernelContext ctx{opset};
-  const kernel::Shape shape_kernel{ctx};
+  const onnx_kernels::kernel::Shape shape_kernel{ctx};
 
   // 2-D example: mirrors ``test_shape_example`` upstream.
   const Tensor x2d = Tensor::FromFloat("x", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -61,7 +61,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/std::nullopt),
            "test_cc_shape_example", {opset}, [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              const Tensor y = Rename(shape_kernel(x2d, attrs), "y");
              return IoData{{std::move(x2d)}, {std::move(y)}};
            });
@@ -71,7 +71,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/std::nullopt), "test_cc_shape",
            {opset}, [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
@@ -81,7 +81,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/1, /*end=*/std::nullopt), "test_cc_shape_start_1",
            {opset}, [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = 1;
              const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
@@ -92,7 +92,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/1), "test_cc_shape_end_1",
            {opset}, [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.end = 1;
              const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
@@ -103,7 +103,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/-1, /*end=*/std::nullopt),
            "test_cc_shape_start_negative_1", {opset}, [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = -1;
              const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
@@ -114,7 +114,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/-1),
            "test_cc_shape_end_negative_1", {opset}, [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.end = -1;
              const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
@@ -125,7 +125,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/1, /*end=*/-1), "test_cc_shape_start_1_end_negative_1",
            {opset}, [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = 1;
              attrs.end = -1;
              const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
@@ -137,7 +137,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/1, /*end=*/2), "test_cc_shape_start_1_end_2", {opset},
            [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = 1;
              attrs.end = 2;
              const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
@@ -149,7 +149,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/-10, /*end=*/std::nullopt), "test_cc_shape_clip_start",
            {opset}, [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = -10;
              const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
@@ -160,7 +160,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/10), "test_cc_shape_clip_end",
            {opset}, [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.end = 10;
              const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
@@ -171,7 +171,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeShapeNode(/*start=*/2, /*end=*/1), "test_cc_shape_start_greater_than_end",
            {opset}, [=]() -> IoData {
-             kernel::Shape::Attributes attrs;
+             onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = 2;
              attrs.end = 1;
              const Tensor y = Rename(shape_kernel(x3d, attrs), "y");

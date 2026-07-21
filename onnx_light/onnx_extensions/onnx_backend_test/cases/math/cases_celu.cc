@@ -15,7 +15,7 @@ namespace onnx_backend_test {
 void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(12);
   const KernelContext ctx{opset};
-  const kernel::Celu celu_kernel{ctx};
+  const onnx_kernels::kernel::Celu celu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Celu", celu_kernel, "test_cc_celu_benchmark", opset, registry);

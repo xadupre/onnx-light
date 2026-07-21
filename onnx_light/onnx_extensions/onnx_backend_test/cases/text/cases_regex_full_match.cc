@@ -21,7 +21,7 @@ namespace onnx_backend_test {
 void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
   const KernelContext ctx{opset};
-  const kernel::RegexFullMatch regex_full_match{ctx};
+  const onnx_kernels::kernel::RegexFullMatch regex_full_match{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

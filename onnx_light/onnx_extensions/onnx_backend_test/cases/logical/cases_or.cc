@@ -21,7 +21,7 @@ namespace {
 // shape to keep the data deterministic across runs.
 void RegisterOrOnnxCase(const std::string &name, const std::vector<int64_t> &x_shape,
                         uint64_t x_seed, const std::vector<int64_t> &y_shape, uint64_t y_seed,
-                        const kernel::Or &or_kernel, const OpsetId &opset,
+                        const onnx_kernels::kernel::Or &or_kernel, const OpsetId &opset,
                         std::vector<TestCase> &registry) {
   NodeProto node = MakeNode("Or", {"x", "y"}, {"or"});
   Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
@@ -42,7 +42,7 @@ void RegisterOrOnnxCase(const std::string &name, const std::vector<int64_t> &x_s
 void RegisterOrCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(7);
   const KernelContext ctx{opset};
-  const kernel::Or or_kernel{ctx};
+  const onnx_kernels::kernel::Or or_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("Or", {"x", "y"}, {"z"});

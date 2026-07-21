@@ -84,10 +84,10 @@ using onnx_kernels::kernel::AutoPad;
 void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset18 = DefaultOpset(18);
   const KernelContext ctx18{opset18};
-  const kernel::AveragePool average_pool_kernel18{ctx18};
+  const onnx_kernels::kernel::AveragePool average_pool_kernel18{ctx18};
   const OpsetId opset = DefaultOpset(19);
   const KernelContext ctx{opset};
-  const kernel::AveragePool average_pool_kernel{ctx};
+  const onnx_kernels::kernel::AveragePool average_pool_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

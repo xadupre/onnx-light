@@ -16,7 +16,7 @@ namespace onnx_backend_test {
 void RegisterSoftsignCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::Softsign softsign_kernel{ctx};
+  const onnx_kernels::kernel::Softsign softsign_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Softsign", softsign_kernel, "test_cc_softsign_benchmark", opset,

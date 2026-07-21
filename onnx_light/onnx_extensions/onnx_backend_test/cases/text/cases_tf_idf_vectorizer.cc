@@ -46,9 +46,9 @@ NodeProto MakeTfIdfNode(int64_t min_gram_length, int64_t max_gram_length, int64_
 void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(9);
   const KernelContext ctx{opset};
-  const kernel::TfIdfVectorizer tf_idf{ctx};
+  const onnx_kernels::kernel::TfIdfVectorizer tf_idf{ctx};
 
-  using Mode = kernel::TfIdfVectorizer::Mode;
+  using Mode = onnx_kernels::kernel::TfIdfVectorizer::Mode;
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> default_pool{2, 3, 5, 4, 5, 6, 7, 8, 6, 7};

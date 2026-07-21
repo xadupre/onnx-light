@@ -18,7 +18,7 @@ namespace onnx_backend_test {
 void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::Dropout dropout_kernel{ctx};
+  const onnx_kernels::kernel::Dropout dropout_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -34,7 +34,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
                          std::vector<uint8_t>(static_cast<size_t>(kBenchmarkElementwiseSize), 1));
              Tensor output =
                  dropout_kernel(data, /*ratio=*/0.5f,
-                                /*training_mode=*/false, mask, kernel::Dropout::kNoSeed);
+                                /*training_mode=*/false, mask, onnx_kernels::kernel::Dropout::kNoSeed);
              return IoData{{std::move(data)}, {std::move(output)}};
            });
     return;
@@ -52,7 +52,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
                          std::vector<uint8_t>(6, 1));
              Tensor output = dropout_kernel(data, /*ratio=*/0.5f, /*training_mode=*/false, mask,
-                                            kernel::Dropout::kNoSeed);
+                                            onnx_kernels::kernel::Dropout::kNoSeed);
              return IoData{{std::move(data)}, {std::move(output)}};
            });
   }
@@ -262,7 +262,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
   // ---------------------------------------------------------------------------
   const OpsetId opset_old = DefaultOpset(11);
   const KernelContext ctx_old{opset_old};
-  const kernel::Dropout dropout_kernel_old{ctx_old};
+  const onnx_kernels::kernel::Dropout dropout_kernel_old{ctx_old};
 
   // Opset 11 Dropout, no ratio attribute.
   {

@@ -23,7 +23,7 @@ namespace onnx_backend_test {
 void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(21);
   const KernelContext ctx{opset};
-  const kernel::GroupNormalization groupnorm_kernel{ctx};
+  const onnx_kernels::kernel::GroupNormalization groupnorm_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

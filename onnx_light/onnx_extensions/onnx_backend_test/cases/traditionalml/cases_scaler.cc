@@ -35,7 +35,7 @@ void RegisterScalerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::Scaler scaler{ctx};
+  const onnx_kernels::kernel::Scaler scaler{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

@@ -16,7 +16,7 @@ namespace onnx_backend_test {
 void RegisterSoftplusCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::Softplus softplus_kernel{ctx};
+  const onnx_kernels::kernel::Softplus softplus_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Softplus", softplus_kernel, "test_cc_softplus_benchmark", opset,

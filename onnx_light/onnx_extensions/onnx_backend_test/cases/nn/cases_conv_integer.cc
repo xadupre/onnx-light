@@ -34,7 +34,7 @@ NodeProto MakeConvIntegerNode(const std::vector<std::string> &inputs,
 void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const KernelContext ctx{opset};
-  const kernel::ConvInteger ci{ctx};
+  const onnx_kernels::kernel::ConvInteger ci{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeConvIntegerNode({"X", "W", "x_zero_point"}, {"Y"});
@@ -50,7 +50,7 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
                  Tensor::FromUint8("W", {32, 32, 2, 2}, RandUint<uint8_t>(8, {32, 32, 2, 2}, 1302));
              Tensor xzp = Tensor::FromUint8("x_zero_point", {}, {1});
              Tensor wzp;
-             kernel::ConvInteger::Attributes attrs;
+             onnx_kernels::kernel::ConvInteger::Attributes attrs;
              attrs.kernel_shape = {2, 2};
              Tensor Y = ci(X, W, xzp, wzp, attrs);
              Y.name = "Y";
@@ -66,7 +66,7 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor W = Tensor::FromUint8("W", {1, 1, 2, 2}, {1, 1, 1, 1});
     Tensor xzp = Tensor::FromUint8("x_zero_point", {}, {1});
     Tensor wzp;
-    kernel::ConvInteger::Attributes attrs;
+    onnx_kernels::kernel::ConvInteger::Attributes attrs;
     attrs.kernel_shape = {2, 2};
     Tensor Y = ci(X, W, xzp, wzp, attrs);
     Y.name = "Y";
@@ -84,7 +84,7 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor W = Tensor::FromUint8("W", {1, 1, 2, 2}, {1, 1, 1, 1});
     Tensor xzp = Tensor::FromUint8("x_zero_point", {}, {1});
     Tensor wzp;
-    kernel::ConvInteger::Attributes attrs;
+    onnx_kernels::kernel::ConvInteger::Attributes attrs;
     attrs.kernel_shape = {2, 2};
     attrs.pads = {1, 1, 1, 1};
     Tensor Y = ci(X, W, xzp, wzp, attrs);
@@ -105,7 +105,7 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor W = Tensor::FromUint8("W", {1, 1, 2, 2}, {1, 1, 1, 1});
     Tensor xzp = Tensor::FromUint8("x_zero_point", {}, {1});
     Tensor wzp;
-    kernel::ConvInteger::Attributes attrs;
+    onnx_kernels::kernel::ConvInteger::Attributes attrs;
     Tensor Y = ci(X, W, xzp, wzp, attrs);
     Y.name = "Y";
     NodeProto node = MakeConvIntegerNode({"X", "W", "x_zero_point"}, {"Y"});

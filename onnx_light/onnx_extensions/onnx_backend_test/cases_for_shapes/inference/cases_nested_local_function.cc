@@ -53,7 +53,7 @@ constexpr const char *kFuncOuterName = "func_outer_add";
 void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry,
                                                        TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext kctx{opset};
+  const onnx_kernels::kernel::KernelContext kctx{opset};
 
   const std::string name = "test_cc_shape_inference_nested_local_function_add";
 
@@ -137,8 +137,8 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
   }
   Tensor x = Tensor::FromFloat("X", data_shape, x_values);
   Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
-  Tensor z_pre_abs = kernel::Add(kctx)(x, y);
-  Tensor z = kernel::Abs(kctx)(z_pre_abs);
+  Tensor z_pre_abs = onnx_kernels::kernel::Add(kctx)(x, y);
+  Tensor z = onnx_kernels::kernel::Abs(kctx)(z_pre_abs);
   z.name = "Z";
 
   AppendDataSet(tc, {x, y}, {z});

@@ -35,7 +35,7 @@ NodeProto MakeLinearAttentionNode(const std::vector<std::string> &inputs,
 void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(27);
   const KernelContext ctx{opset};
-  const kernel::LinearAttention kernel{ctx};
+  const onnx_kernels::kernel::LinearAttention kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node =
@@ -51,7 +51,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
              Tensor query = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2701));
              Tensor key = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2702));
              Tensor value = Tensor::FromFloat("", {1, 512, 512}, Randn<float>({1, 512, 512}, 2703));
-             kernel::LinearAttention::Attributes attrs;
+             onnx_kernels::kernel::LinearAttention::Attributes attrs;
              attrs.update_rule = "linear";
              attrs.q_num_heads = 8;
              attrs.kv_num_heads = 8;
@@ -74,7 +74,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
 
   // Case 1: linear update rule
   {
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "linear";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -95,7 +95,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     Tensor decay = Tensor::FromFloat("", {1, 2, 2},
                                      {-0.1f, -0.2f,    // t=0: h0=-0.1, h1=-0.2
                                       -0.3f, -0.05f}); // t=1
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -114,7 +114,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
   // Case 3: delta update rule
   {
     Tensor beta_t = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -134,7 +134,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
   {
     Tensor decay = Tensor::FromFloat("", {1, 2, 2}, {-0.1f, -0.2f, -0.3f, -0.05f});
     Tensor beta_t = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -157,7 +157,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     Tensor past_state = Tensor::FromFloat("", {1, 2, 2, 2},
                                           {0.5f, -0.5f, 0.0f, 0.5f,   // h0
                                            1.0f, 0.0f, -0.5f, 1.0f}); // h1
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "linear";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -182,7 +182,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
                                      {1.0f, 0.0f, 0.5f, 0.5f, -1.0f, 1.0f, 0.2f, 0.3f, 0.0f, 1.0f,
                                       1.0f, -1.0f, 0.5f, 0.5f, -0.5f, 0.5f});
     // value: (1, 2, 4) = 2 heads * d_v=2
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "linear";
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
@@ -202,7 +202,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
   {
     Tensor decay_perdim = Tensor::FromFloat(
         "", {1, 2, 4}, {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -222,7 +222,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
 
   // Case 8: explicit scale attribute
   {
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "linear";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -251,7 +251,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
   // Case 9: gated_per_head_decay — gated rule with per-head scalar decay (last dim = H_kv).
   {
     Tensor decay_perhead = Tensor::FromFloat("", {1, 2, 2}, {-0.1f, -0.2f, -0.3f, -0.05f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -274,7 +274,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     Tensor decay = Tensor::FromFloat("", {1, 2, 4},
                                      {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
     Tensor beta_scalar = Tensor::FromFloat("", {1, 2, 1}, {0.8f, 0.7f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -300,7 +300,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     Tensor decay = Tensor::FromFloat("", {1, 2, 4},
                                      {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
     Tensor beta = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
@@ -327,7 +327,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     Tensor v_mqa = Tensor::FromFloat("", {1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
     Tensor decay = Tensor::FromFloat("", {1, 2, 2}, {-0.1f, -0.2f, -0.05f, -0.1f});
     Tensor beta = Tensor::FromFloat("", {1, 2, 1}, {0.8f, 0.7f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 1;
@@ -354,7 +354,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
     Tensor decay = Tensor::FromFloat("", {1, 1, 4}, {-0.1f, -0.2f, -0.3f, -0.4f});
     Tensor beta = Tensor::FromFloat("", {1, 1, 2}, {0.8f, 0.9f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -379,7 +379,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     Tensor decay = Tensor::FromFloat("", {1, 2, 4},
                                      {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
     Tensor beta = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -404,7 +404,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     Tensor decay = Tensor::FromFloat("", {1, 2, 4},
                                      {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
     Tensor beta = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -427,7 +427,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     Tensor q1 = Tensor::FromFloat("", {1, 1, 4}, {1.0f, 0.0f, 0.5f, 0.5f});
     Tensor k1 = Tensor::FromFloat("", {1, 1, 4}, {1.0f, 0.0f, 0.5f, 0.5f});
     Tensor v1 = Tensor::FromFloat("", {1, 1, 4}, {1.0f, 2.0f, 0.5f, -0.5f});
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "linear";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
@@ -457,7 +457,7 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     Tensor beta32 = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
     Tensor decay16 = RoundToFloat16(decay32);
     Tensor beta16 = RoundToFloat16(beta32);
-    kernel::LinearAttention::Attributes attrs;
+    onnx_kernels::kernel::LinearAttention::Attributes attrs;
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;

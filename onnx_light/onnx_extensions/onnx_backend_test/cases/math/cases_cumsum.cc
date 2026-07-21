@@ -44,7 +44,7 @@ NodeProto MakeCumSumNode(bool exclusive, bool reverse) {
 void RegisterCumSumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
   const KernelContext ctx{opset};
-  const kernel::CumSum cumsum_kernel{ctx};
+  const onnx_kernels::kernel::CumSum cumsum_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCumSumNode(/*exclusive=*/false, /*reverse=*/false);

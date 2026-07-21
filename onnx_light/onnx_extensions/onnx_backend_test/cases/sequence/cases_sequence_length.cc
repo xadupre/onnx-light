@@ -23,8 +23,8 @@ void RegisterSequenceLengthCase(const std::string &name, const OpsetId &opset,
   const Tensor a = Tensor::FromFloat("a", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
   const Tensor b = Tensor::FromFloat("b", {2, 3}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
   const Tensor c = Tensor::FromFloat("c", {2, 3}, {6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f});
-  const Sequence seq = kernel::SequenceConstruct(ctx).AsSequence({a, b, c});
-  Tensor expected = kernel::SequenceLength(ctx)(seq);
+  const Sequence seq = onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence({a, b, c});
+  Tensor expected = onnx_kernels::kernel::SequenceLength(ctx)(seq);
   expected.name = "length";
 
   ModelProto model;

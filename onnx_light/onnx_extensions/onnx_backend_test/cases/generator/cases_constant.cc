@@ -41,7 +41,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const OpsetId opset = DefaultOpset(13);
     const KernelContext ctx{opset};
-    const kernel::Constant constant_kernel{ctx};
+    const onnx_kernels::kernel::Constant constant_kernel{ctx};
 
     Expect(registry, std::move(node), "test_cc_constant_benchmark", {opset},
            /*in_counts=*/{}, {kBenchmarkElementwiseSize},
@@ -75,7 +75,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
 
   Expect(registry, std::move(node), "test_cc_constant", {opset},
          [ctx, value = std::move(value)]() mutable -> IoData {
-           Tensor y = kernel::Constant(ctx)(std::move(value));
+           Tensor y = onnx_kernels::kernel::Constant(ctx)(std::move(value));
            return IoData{/*inputs=*/{}, {std::move(y)}};
          });
 
@@ -122,7 +122,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     }
 
     Expect(registry, std::move(upstream_node), "test_constant", {opset}, [=]() -> IoData {
-      Tensor y_upstream = kernel::Constant(ctx)(std::move(values));
+      Tensor y_upstream = onnx_kernels::kernel::Constant(ctx)(std::move(values));
       return IoData{{}, {std::move(y_upstream)}};
     });
   }

@@ -32,7 +32,7 @@ NodeProto MakeHardmaxNode(int64_t axis, bool include_axis = true) {
 void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Hardmax hardmax_kernel{ctx};
+  const onnx_kernels::kernel::Hardmax hardmax_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeHardmaxNode(/*axis=*/1);

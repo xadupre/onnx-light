@@ -24,8 +24,8 @@ constexpr int64_t kDefaultIrVersion = 10;
 void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry) {
   const std::string name("test_cc_shape_inference_floordiv_offset_expression");
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
-  const kernel::MaxPool maxpool_kernel{ctx};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::MaxPool maxpool_kernel{ctx};
 
   TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
   ModelProto &model = tc.emplace_model();

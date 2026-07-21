@@ -14,7 +14,7 @@ namespace onnx_backend_test {
 void RegisterThresholdedReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const KernelContext ctx{opset};
-  const kernel::ThresholdedRelu thresholdedrelu_kernel{ctx};
+  const onnx_kernels::kernel::ThresholdedRelu thresholdedrelu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

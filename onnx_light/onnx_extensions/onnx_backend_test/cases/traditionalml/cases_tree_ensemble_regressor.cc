@@ -32,7 +32,7 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
   const OpsetId opset("ai.onnx.ml", 1);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::TreeEnsembleRegressor reg{ctx};
+  const onnx_kernels::kernel::TreeEnsembleRegressor reg{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

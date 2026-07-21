@@ -23,7 +23,7 @@ namespace onnx_backend_test {
 void RegisterAtanhCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::Atanh atanh_kernel{ctx};
+  const onnx_kernels::kernel::Atanh atanh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Atanh", atanh_kernel, "test_cc_atanh_benchmark", opset, registry);

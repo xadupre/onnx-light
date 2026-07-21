@@ -23,7 +23,7 @@ namespace onnx_backend_test {
 void RegisterCeilCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Ceil ceil_kernel{ctx};
+  const onnx_kernels::kernel::Ceil ceil_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Ceil", ceil_kernel, "test_cc_ceil_benchmark", opset, registry);

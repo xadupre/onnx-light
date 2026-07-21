@@ -30,7 +30,7 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
   const KernelContext ctx{opset};
-  const kernel::Mul mul_kernel{ctx};
+  const onnx_kernels::kernel::Mul mul_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkBinaryFloat("Mul", mul_kernel, "test_cc_mul_benchmark", opset, registry);

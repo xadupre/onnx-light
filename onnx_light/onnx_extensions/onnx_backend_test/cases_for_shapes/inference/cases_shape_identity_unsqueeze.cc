@@ -43,7 +43,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registry,
                                                        TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   // Use rank 15 (one less than the upstream regression model, which used
   // ``axis_count = 16``). The upstream test exercised a memcpy buffer
@@ -137,12 +137,12 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
   Tensor input_tensor = Tensor::FromFloat("input", input_shape, input_values);
 
   // Shape(input) -> [1, 1, ..., 1] (kAxisCount INT64 entries)
-  Tensor shape_out = kernel::Shape(ctx)(input_tensor, kernel::Shape::Attributes{});
+  Tensor shape_out = onnx_kernels::kernel::Shape(ctx)(input_tensor, onnx_kernels::kernel::Shape::Attributes{});
   // Identity is a no-op other than renaming the output.
   Tensor identity_out = shape_out;
   identity_out.name = "identity_out";
   // Unsqueeze along all axes => shape becomes ``[1] * kAxisCount + [kAxisCount]``.
-  Tensor output_tensor = kernel::Unsqueeze(ctx)(identity_out, axes_values);
+  Tensor output_tensor = onnx_kernels::kernel::Unsqueeze(ctx)(identity_out, axes_values);
   output_tensor.name = "output";
 
   AppendDataSet(tc, {input_tensor}, {output_tensor});

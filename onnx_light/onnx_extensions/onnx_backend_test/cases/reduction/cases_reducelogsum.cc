@@ -18,7 +18,7 @@ namespace onnx_backend_test {
 namespace {
 
 void EmitReduceLogSumCase(std::vector<TestCase> &registry, const std::string &op_type,
-                          const kernel::ReduceLogSumOp &kernel, const std::string &case_name,
+                          const onnx_kernels::kernel::ReduceLogSumOp &kernel, const std::string &case_name,
                           const std::vector<int64_t> &data_shape,
                           const std::vector<float> &data_values,
                           const std::vector<int64_t> &axes_values, bool keepdims,
@@ -47,7 +47,7 @@ void EmitReduceLogSumCase(std::vector<TestCase> &registry, const std::string &op
 // "data" input). With ``noop_with_empty_axes`` default-false this reduces
 // over every dimension of ``data``.
 void EmitReduceLogSumDefaultAxesCase(std::vector<TestCase> &registry, const std::string &op_type,
-                                     const kernel::ReduceLogSumOp &kernel,
+                                     const onnx_kernels::kernel::ReduceLogSumOp &kernel,
                                      const std::string &case_name,
                                      const std::vector<int64_t> &data_shape,
                                      const std::vector<float> &data_values, bool keepdims) {
@@ -67,7 +67,7 @@ void EmitReduceLogSumDefaultAxesCase(std::vector<TestCase> &registry, const std:
 }
 
 void RegisterReduceLogSumOpCases(std::vector<TestCase> &registry, const std::string &op_type,
-                                 const kernel::ReduceLogSumOp &kernel,
+                                 const onnx_kernels::kernel::ReduceLogSumOp &kernel,
                                  const std::string &name_prefix) {
   const std::vector<int64_t> shape = {3, 2, 2};
   // Same ``[3, 2, 2]`` ``arange(1, 13)`` payload used by the sibling
@@ -109,7 +109,7 @@ void RegisterReduceLogSumOpCases(std::vector<TestCase> &registry, const std::str
 // bit-match the upstream fixture.
 // ---------------------------------------------------------------------------
 void RegisterReduceLogSumExpOnnxCases(std::vector<TestCase> &registry,
-                                      const kernel::ReduceLogSumOp &kernel) {
+                                      const onnx_kernels::kernel::ReduceLogSumOp &kernel) {
   const std::vector<int64_t> shape = {3, 2, 2};
   const std::vector<float> example_values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
                                              7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
@@ -156,7 +156,7 @@ void RegisterReduceLogSumExpOnnxCases(std::vector<TestCase> &registry,
 // reductions. Outputs are computed by the reference kernel.
 // ---------------------------------------------------------------------------
 void RegisterReduceLogSumOnnxCases(std::vector<TestCase> &registry,
-                                   const kernel::ReduceLogSumOp &kernel) {
+                                   const onnx_kernels::kernel::ReduceLogSumOp &kernel) {
   // Multi-axis cases use the upstream ``[3, 4, 5]`` shape.
   const std::vector<int64_t> shape_3_4_5 = {3, 4, 5};
   std::vector<float> data_3_4_5(3 * 4 * 5);
@@ -186,7 +186,7 @@ void RegisterReduceLogSumOnnxCases(std::vector<TestCase> &registry,
 
 void RegisterReduceLogSumCases(std::vector<TestCase> &registry, TestMode mode) {
   const KernelContext ctx{DefaultOpset(18)};
-  const kernel::ReduceLogSum kernel{ctx};
+  const onnx_kernels::kernel::ReduceLogSum kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -228,7 +228,7 @@ void RegisterReduceLogSumCases(std::vector<TestCase> &registry, TestMode mode) {
 
 void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry, TestMode mode) {
   const KernelContext ctx{DefaultOpset(18)};
-  const kernel::ReduceLogSumExp kernel{ctx};
+  const onnx_kernels::kernel::ReduceLogSumExp kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

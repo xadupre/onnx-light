@@ -23,7 +23,7 @@ namespace onnx_backend_test {
 void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Floor floor_kernel{ctx};
+  const onnx_kernels::kernel::Floor floor_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Floor", floor_kernel, "test_cc_floor_benchmark", opset, registry);

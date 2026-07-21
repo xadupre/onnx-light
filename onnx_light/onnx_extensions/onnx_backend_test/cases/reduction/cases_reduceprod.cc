@@ -17,7 +17,7 @@ namespace onnx_backend_test {
 
 namespace {
 
-void EmitReduceProdCase(std::vector<TestCase> &registry, const kernel::ReduceProd &kernel,
+void EmitReduceProdCase(std::vector<TestCase> &registry, const onnx_kernels::kernel::ReduceProd &kernel,
                         const std::string &case_name, const std::vector<int64_t> &data_shape,
                         const std::vector<float> &data_values,
                         const std::vector<int64_t> &axes_values, bool keepdims,
@@ -46,7 +46,7 @@ void EmitReduceProdCase(std::vector<TestCase> &registry, const kernel::ReducePro
 // "data" input). With ``noop_with_empty_axes`` default-false this reduces
 // over every dimension of ``data``.
 void EmitReduceProdDefaultAxesCase(std::vector<TestCase> &registry,
-                                   const kernel::ReduceProd &kernel, const std::string &case_name,
+                                   const onnx_kernels::kernel::ReduceProd &kernel, const std::string &case_name,
                                    const std::vector<int64_t> &data_shape,
                                    const std::vector<float> &data_values, bool keepdims) {
   const OpsetId opset = DefaultOpset(18);
@@ -75,7 +75,7 @@ void EmitReduceProdDefaultAxesCase(std::vector<TestCase> &registry,
 // ---------------------------------------------------------------------------
 void RegisterReduceProdCases(std::vector<TestCase> &registry, TestMode mode) {
   const KernelContext ctx{DefaultOpset(18)};
-  const kernel::ReduceProd kernel{ctx};
+  const onnx_kernels::kernel::ReduceProd kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

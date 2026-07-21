@@ -15,7 +15,7 @@ namespace onnx_backend_test {
 void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(6);
   const KernelContext ctx{opset};
-  const kernel::Elu elu_kernel{ctx};
+  const onnx_kernels::kernel::Elu elu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Elu", elu_kernel, "test_cc_elu_benchmark", opset, registry);

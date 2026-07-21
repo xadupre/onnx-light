@@ -14,7 +14,7 @@ namespace onnx_backend_test {
 void RegisterHardSwishCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::HardSwish hard_swish_kernel{ctx};
+  const onnx_kernels::kernel::HardSwish hard_swish_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("HardSwish", hard_swish_kernel, "test_cc_hardswish_benchmark", opset,

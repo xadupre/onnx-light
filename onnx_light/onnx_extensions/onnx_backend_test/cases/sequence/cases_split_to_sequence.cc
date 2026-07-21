@@ -32,11 +32,11 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
   const KernelContext ctx{opset};
 
   // Compute the expected output sequence with the reference kernel.
-  const Sequence out_seq = kernel::SplitToSequence(ctx)(input, split, axis, keepdims);
+  const Sequence out_seq = onnx_kernels::kernel::SplitToSequence(ctx)(input, split, axis, keepdims);
 
   // Materialise the output sequence as a single stacked tensor.
   std::vector<Tensor> chunks(out_seq.values.begin(), out_seq.values.end());
-  Tensor stacked = kernel::SequenceConstruct(ctx)(chunks);
+  Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(chunks);
   stacked.name = "output_sequence";
 
   TestCase tc(name, name);

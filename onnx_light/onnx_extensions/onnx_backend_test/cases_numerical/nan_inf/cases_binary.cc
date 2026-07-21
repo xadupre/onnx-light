@@ -46,7 +46,7 @@ template <typename Kernel>
 void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, int opset_version,
                           const std::string &test_name_stem) {
   const OpsetId opset = DefaultOpset(opset_version);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
   const Kernel kk{ctx};
 
   // Element-wise case using the shared NaN/Inf operand vectors.
@@ -92,19 +92,19 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
 } // namespace
 
 void RegisterAddNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
-  RegisterBinaryNanInf<kernel::Add>(registry, "Add", 14, "add");
+  RegisterBinaryNanInf <onnx_kernels::kernel::Add>(registry, "Add", 14, "add");
 }
 
 void RegisterSubNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
-  RegisterBinaryNanInf<kernel::Sub>(registry, "Sub", 14, "sub");
+  RegisterBinaryNanInf <onnx_kernels::kernel::Sub>(registry, "Sub", 14, "sub");
 }
 
 void RegisterMulNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
-  RegisterBinaryNanInf<kernel::Mul>(registry, "Mul", 14, "mul");
+  RegisterBinaryNanInf <onnx_kernels::kernel::Mul>(registry, "Mul", 14, "mul");
 }
 
 void RegisterDivNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
-  RegisterBinaryNanInf<kernel::Div>(registry, "Div", 14, "div");
+  RegisterBinaryNanInf <onnx_kernels::kernel::Div>(registry, "Div", 14, "div");
 }
 
 } // namespace onnx_backend_test

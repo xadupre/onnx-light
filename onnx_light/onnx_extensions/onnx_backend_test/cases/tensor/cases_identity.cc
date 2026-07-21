@@ -39,7 +39,7 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
   // tensor-only usage exercised by these reference cases.
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Identity identity_kernel{ctx};
+  const onnx_kernels::kernel::Identity identity_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeIdentityNode();

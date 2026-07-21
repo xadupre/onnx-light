@@ -61,7 +61,7 @@ NodeProto MakeMatMulIntegerNodeNoBZP() {
 void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const KernelContext ctx{opset};
-  const kernel::MatMulInteger mmi{ctx};
+  const onnx_kernels::kernel::MatMulInteger mmi{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> shape = {512, 512};

@@ -72,7 +72,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_pad_canny_average";
 
@@ -148,7 +148,7 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
   const Tensor pads_tensor = Tensor::FromInt64("", {8},
                                                {int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1},
                                                 int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1}});
-  Tensor padded = kernel::Pad{ctx}(x_tensor, pads_tensor, /*constant_value=*/nullptr,
+  Tensor padded = onnx_kernels::kernel::Pad{ctx}(x_tensor, pads_tensor, /*constant_value=*/nullptr,
                                    /*axes=*/nullptr, "reflect");
   padded.name = "padded";
 
@@ -156,21 +156,21 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
   const Tensor w_tensor = Tensor::FromFloat(
       "W", {1, 1, 3, 3}, {0.0f, -1.0f, 0.0f, -1.0f, 4.0f, -1.0f, 0.0f, -1.0f, 0.0f});
   const Tensor bias; // empty → optional bias absent
-  kernel::Conv::Attributes conv_attrs;
+  onnx_kernels::kernel::Conv::Attributes conv_attrs;
   conv_attrs.kernel_shape = {3, 3};
   conv_attrs.pads = {0, 0, 0, 0};
-  Tensor filtered = kernel::Conv{ctx}(padded, w_tensor, bias, conv_attrs);
+  Tensor filtered = onnx_kernels::kernel::Conv{ctx}(padded, w_tensor, bias, conv_attrs);
   filtered.name = "filtered";
 
   // ReduceMean over every axis (keepdims): [2, 1, 5, 7] → [1, 1, 1, 1].
   const Tensor axes_tensor =
       Tensor::FromInt64("", {4}, {int64_t{0}, int64_t{1}, int64_t{2}, int64_t{3}});
-  Tensor avg = kernel::ReduceMean{ctx}(filtered, axes_tensor, /*keepdims=*/true,
+  Tensor avg = onnx_kernels::kernel::ReduceMean{ctx}(filtered, axes_tensor, /*keepdims=*/true,
                                        /*noop_with_empty_axes=*/false);
   avg.name = "avg";
 
   // Sub(filtered, avg): broadcasts the scalar mean back to the filtered shape.
-  Tensor y = kernel::Sub{ctx}(filtered, avg);
+  Tensor y = onnx_kernels::kernel::Sub{ctx}(filtered, avg);
   y.name = "Y";
 
   AppendDataSet(tc, {std::move(x_tensor)}, {std::move(y)});

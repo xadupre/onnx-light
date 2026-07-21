@@ -45,7 +45,7 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::CastMap cast_map{ctx};
+  const onnx_kernels::kernel::CastMap cast_map{ctx};
 
   // DENSE map(int64, float) -> tensor(float). Keys are not sorted on input;
   // the operator must sort them ascending in the output.

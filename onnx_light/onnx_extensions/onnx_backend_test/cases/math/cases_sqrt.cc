@@ -37,7 +37,7 @@ Tensor NonNegativeRandFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Sqrt sqrt_kernel{ctx};
+  const onnx_kernels::kernel::Sqrt sqrt_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Sqrt", sqrt_kernel, "test_cc_sqrt_benchmark", opset, registry);

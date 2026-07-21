@@ -49,7 +49,7 @@ void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
 
   Expect(registry, std::move(node), "test_cc_optional", {opset}, [=]() -> IoData {
     Tensor input = Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
-    Tensor output = kernel::Optional(ctx)(input);
+    Tensor output = onnx_kernels::kernel::Optional(ctx)(input);
     return IoData{{std::move(input)}, {std::move(output)}};
   });
 

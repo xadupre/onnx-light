@@ -38,8 +38,8 @@ NodeProto MakeCompressNode(std::optional<int64_t> axis) {
 // ---------------------------------------------------------------------------
 void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const kernel::KernelContext ctx{opset};
-  const kernel::Compress compress_kernel{ctx};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::Compress compress_kernel{ctx};
 
   // test_cc_compress_empty_shape_no_axis_all_false — flatten mode, condition
   // selects nothing; output is a 1-D empty tensor with shape {0}.

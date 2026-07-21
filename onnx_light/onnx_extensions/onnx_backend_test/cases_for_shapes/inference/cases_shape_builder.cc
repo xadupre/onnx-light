@@ -73,7 +73,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_check_shape";
 
@@ -185,13 +185,13 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, Test
   const Tensor shape1 = Tensor::FromInt64("", {3}, {1, kD32, kD64});
   const Tensor shape2 = Tensor::FromInt64("", {3}, {kBatch * kChannel, kD64, kD128});
   const Tensor shape3 = Tensor::FromInt64("", {4}, {kBatch, kChannel, kD64, kD64});
-  Tensor xu1 = kernel::Unsqueeze(ctx)(x, /*axes=*/{0});
-  Tensor xu2 = kernel::Unsqueeze(ctx)(xu1, /*axes=*/{1});
-  Tensor xm1 = kernel::Reshape(ctx)(xu2, shape1);
-  Tensor xm2c = kernel::Reshape(ctx)(y, shape2);
-  Tensor xm2 = kernel::Cast(ctx)(xm2c, static_cast<int32_t>(DataType::FLOAT));
-  Tensor xm = kernel::MatMul(ctx)(xm1, xm2);
-  Tensor z = kernel::Reshape(ctx)(xm, shape3);
+  Tensor xu1 = onnx_kernels::kernel::Unsqueeze(ctx)(x, /*axes=*/{0});
+  Tensor xu2 = onnx_kernels::kernel::Unsqueeze(ctx)(xu1, /*axes=*/{1});
+  Tensor xm1 = onnx_kernels::kernel::Reshape(ctx)(xu2, shape1);
+  Tensor xm2c = onnx_kernels::kernel::Reshape(ctx)(y, shape2);
+  Tensor xm2 = onnx_kernels::kernel::Cast(ctx)(xm2c, static_cast<int32_t>(DataType::FLOAT));
+  Tensor xm = onnx_kernels::kernel::MatMul(ctx)(xm1, xm2);
+  Tensor z = onnx_kernels::kernel::Reshape(ctx)(xm, shape3);
   z.name = "Z";
 
   AppendDataSet(tc, {std::move(x), std::move(y)}, {std::move(z)});
@@ -223,7 +223,7 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, Test
 // ---------------------------------------------------------------------------
 void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_reshape_reshape";
 
@@ -261,9 +261,9 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, 
   const Tensor shape1 = Tensor::FromInt64("", {4}, {0, 0, 2, -1});
   const Tensor shape2 = Tensor::FromInt64("", {3}, {0, 0, -1});
   const Tensor one = Tensor::FromFloat("", {1}, {1.0f});
-  Tensor xr = kernel::Reshape(ctx)(x, shape1);
-  Tensor xrr = kernel::Reshape(ctx)(xr, shape2);
-  Tensor y = kernel::Add(ctx)(xrr, one);
+  Tensor xr = onnx_kernels::kernel::Reshape(ctx)(x, shape1);
+  Tensor xrr = onnx_kernels::kernel::Reshape(ctx)(xr, shape2);
+  Tensor y = onnx_kernels::kernel::Add(ctx)(xrr, one);
   y.name = "Y";
 
   AppendDataSet(tc, {std::move(x)}, {std::move(y)});
@@ -297,7 +297,7 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, 
 void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &registry,
                                                     TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_value_as_shape_builder";
 
@@ -393,9 +393,9 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
 
   const Tensor new_shape = Tensor::FromInt64("", {4}, {kBatch, kSeq, 32, 8});
   auto build_branch = [&](const Tensor &mat, const std::string &out_name) {
-    Tensor m1 = kernel::MatMul(ctx)(ids_weight, mat);
-    Tensor reshaped = kernel::Reshape(ctx)(m1, new_shape);
-    Tensor t = kernel::Transpose(ctx)(reshaped, /*perm=*/{0, 2, 1, 3});
+    Tensor m1 = onnx_kernels::kernel::MatMul(ctx)(ids_weight, mat);
+    Tensor reshaped = onnx_kernels::kernel::Reshape(ctx)(m1, new_shape);
+    Tensor t = onnx_kernels::kernel::Transpose(ctx)(reshaped, /*perm=*/{0, 2, 1, 3});
     t.name = out_name;
     return t;
   };
@@ -433,7 +433,7 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
   // IR version 9 used in the original split-out file remains compatible.
   constexpr int64_t kConcatSplitIrVersion = 9;
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = even ? "test_cc_shape_inference_concat_split_even"
                                 : "test_cc_shape_inference_concat_split_odd";
@@ -505,10 +505,10 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
   Tensor x = Tensor::FromFloat("X", {kA, kB}, x_values);
   Tensor y = Tensor::FromFloat("Y", {kA, kC}, y_values);
 
-  Tensor xy = kernel::Concat(ctx)({x, y}, /*axis=*/1);
-  std::vector<Tensor> splits = kernel::Split(ctx)(xy, /*axis=*/1, /*split=*/{}, /*num_outputs=*/2);
-  Tensor zs = kernel::Concat(ctx)({splits[1], splits[0]}, /*axis=*/1);
-  Tensor z = kernel::Relu(ctx)(zs);
+  Tensor xy = onnx_kernels::kernel::Concat(ctx)({x, y}, /*axis=*/1);
+  std::vector<Tensor> splits = onnx_kernels::kernel::Split(ctx)(xy, /*axis=*/1, /*split=*/{}, /*num_outputs=*/2);
+  Tensor zs = onnx_kernels::kernel::Concat(ctx)({splits[1], splits[0]}, /*axis=*/1);
+  Tensor z = onnx_kernels::kernel::Relu(ctx)(zs);
   z.name = "Z";
 
   AppendDataSet(tc, {std::move(x), std::move(y)}, {std::move(z)});

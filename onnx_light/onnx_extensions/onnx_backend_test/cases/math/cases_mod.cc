@@ -57,7 +57,7 @@ std::vector<int32_t> Arange30() {
 void RegisterModCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Mod mod_kernel{ctx};
+  const onnx_kernels::kernel::Mod mod_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeModNode(/*fmod=*/1);

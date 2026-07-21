@@ -18,7 +18,7 @@ void RegisterHammingWindowCases(std::vector<TestCase> &registry, TestMode mode) 
   constexpr int32_t kSize = 10;
   const OpsetId opset = DefaultOpset(17);
   const KernelContext ctx{opset};
-  const kernel::HammingWindow hamming_kernel{ctx};
+  const onnx_kernels::kernel::HammingWindow hamming_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

@@ -23,7 +23,7 @@ namespace onnx_backend_test {
 void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Neg neg_kernel{ctx};
+  const onnx_kernels::kernel::Neg neg_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Neg", neg_kernel, "test_cc_neg_benchmark", opset, registry);

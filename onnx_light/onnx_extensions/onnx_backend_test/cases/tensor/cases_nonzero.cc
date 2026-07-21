@@ -28,7 +28,7 @@ NodeProto MakeNonZeroNode() {
 void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::NonZero nonzero_kernel{ctx};
+  const onnx_kernels::kernel::NonZero nonzero_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNonZeroNode();

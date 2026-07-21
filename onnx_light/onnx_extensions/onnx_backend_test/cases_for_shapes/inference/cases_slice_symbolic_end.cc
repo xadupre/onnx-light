@@ -24,7 +24,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 
 void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
   const std::string name("test_cc_shape_inference_slice_symbolic_end");
   TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
 
@@ -56,8 +56,8 @@ void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry
   const Tensor starts = Tensor::FromInt64("", {1}, {0});
   const Tensor ends = Tensor::FromInt64("", {1}, {-1});
   const Tensor axes = Tensor::FromInt64("", {1}, {2});
-  Tensor sliced = kernel::Slice{ctx}(x, starts, ends, &axes, nullptr);
-  Tensor y = kernel::Abs{ctx}(sliced);
+  Tensor sliced = onnx_kernels::kernel::Slice{ctx}(x, starts, ends, &axes, nullptr);
+  Tensor y = onnx_kernels::kernel::Abs{ctx}(sliced);
   y.name = "Y";
   AppendDataSet(tc, {x}, {std::move(y)});
 

@@ -17,7 +17,7 @@ namespace onnx_backend_test {
 
 namespace {
 
-void EmitReduceSumOnnxCase(std::vector<TestCase> &registry, const kernel::ReduceSum &kernel,
+void EmitReduceSumOnnxCase(std::vector<TestCase> &registry, const onnx_kernels::kernel::ReduceSum &kernel,
                            const std::string &case_name, const std::vector<int64_t> &data_shape,
                            const std::vector<float> &data_values,
                            const std::vector<int64_t> &axes_values, bool keepdims,
@@ -50,7 +50,7 @@ void EmitReduceSumOnnxCase(std::vector<TestCase> &registry, const kernel::Reduce
 // the reference kernel so the data does not need to bit-match the upstream
 // ``np.random.seed(0); np.random.uniform(-10, 10, ...)`` fixture.
 // ---------------------------------------------------------------------------
-void RegisterReduceSumOnnxCases(std::vector<TestCase> &registry, const kernel::ReduceSum &kernel) {
+void RegisterReduceSumOnnxCases(std::vector<TestCase> &registry, const onnx_kernels::kernel::ReduceSum &kernel) {
   const std::vector<int64_t> shape = {3, 2, 2};
   const std::vector<float> example_values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
                                              7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
@@ -144,7 +144,7 @@ void RegisterReduceSumOnnxCases(std::vector<TestCase> &registry, const kernel::R
 void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::ReduceSum reduce_sum_kernel{ctx};
+  const onnx_kernels::kernel::ReduceSum reduce_sum_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

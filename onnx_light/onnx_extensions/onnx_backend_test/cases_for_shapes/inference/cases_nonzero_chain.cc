@@ -37,7 +37,7 @@ enum class NonZeroOutputAnnotation { kAnonymousDims, kNamedDims };
 // ``NonZero`` produces a deterministic ``(rank, nnz)`` index tensor.
 void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
-  const kernel::KernelContext ctx{opset};
+  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   // Input contains a deterministic mix of zero and positive entries so that
   // ``NonZero`` returns a non-trivial number of indices.
@@ -57,18 +57,18 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
   //   transposed_nz   = Transpose(nz)      shape (nnz, 2)
   //   nz_float_pre_abs= Cast(transposed_nz, FLOAT)
   //   nz_float        = Abs(nz_float_pre_abs)
-  Tensor abs_out = kernel::Abs(ctx)(x);
+  Tensor abs_out = onnx_kernels::kernel::Abs(ctx)(x);
   Tensor relu_out = abs_out;
   relu_out.name = "";
-  Tensor double_out = kernel::Add(ctx)(relu_out, relu_out);
-  Tensor mul_out = kernel::Mul(ctx)(double_out, relu_out);
+  Tensor double_out = onnx_kernels::kernel::Add(ctx)(relu_out, relu_out);
+  Tensor mul_out = onnx_kernels::kernel::Mul(ctx)(double_out, relu_out);
   // NonZero output is non-negative, so Abs is identity on it; reuse the same
   // tensor under the post-Abs name ``nz`` directly.
-  Tensor nz = kernel::NonZero(ctx)(mul_out);
+  Tensor nz = onnx_kernels::kernel::NonZero(ctx)(mul_out);
   nz.name = "nz";
-  Tensor transposed_nz = kernel::Transpose(ctx)(nz, /*perm=*/{});
-  Tensor nz_float_pre_abs = kernel::Cast(ctx)(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
-  Tensor nz_float = kernel::Abs(ctx)(nz_float_pre_abs);
+  Tensor transposed_nz = onnx_kernels::kernel::Transpose(ctx)(nz, /*perm=*/{});
+  Tensor nz_float_pre_abs = onnx_kernels::kernel::Cast(ctx)(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
+  Tensor nz_float = onnx_kernels::kernel::Abs(ctx)(nz_float_pre_abs);
   nz_float.name = "nz_float";
 
   TestCase tc(name, name, "model", "inference");

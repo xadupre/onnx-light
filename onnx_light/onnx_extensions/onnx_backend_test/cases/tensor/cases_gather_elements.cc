@@ -32,7 +32,7 @@ NodeProto MakeGatherElementsNode(int64_t axis) {
 void RegisterGatherElementsCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::GatherElements ge_kernel{ctx};
+  const onnx_kernels::kernel::GatherElements ge_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeGatherElementsNode(1);

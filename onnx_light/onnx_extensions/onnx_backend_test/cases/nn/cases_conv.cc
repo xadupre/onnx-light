@@ -37,7 +37,7 @@ NodeProto MakeConvNode(const std::vector<std::string> &inputs,
 void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::Conv conv{ctx};
+  const onnx_kernels::kernel::Conv conv{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
@@ -51,7 +51,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
                  Tensor::FromFloat("X", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1001));
              Tensor W = Tensor::FromFloat("W", {32, 32, 3, 3}, Randn<float>({32, 32, 3, 3}, 1002));
              Tensor B;
-             kernel::Conv::Attributes attrs;
+             onnx_kernels::kernel::Conv::Attributes attrs;
              attrs.kernel_shape = {3, 3};
              Tensor Y = conv(X, W, B, attrs);
              Y.name = "Y";
@@ -71,7 +71,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor X = Tensor::FromFloat("X", {1, 1, 5, 5}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
     Tensor B;
-    kernel::Conv::Attributes attrs;
+    onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     Tensor Y = conv(X, W, B, attrs);
     Y.name = "Y";
@@ -91,7 +91,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor X = Tensor::FromFloat("X", {1, 1, 5, 5}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
     Tensor B;
-    kernel::Conv::Attributes attrs;
+    onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 1, 1, 1};
     Tensor Y = conv(X, W, B, attrs);
@@ -114,7 +114,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor X = Tensor::FromFloat("X", {1, 1, 7, 5}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
     Tensor B;
-    kernel::Conv::Attributes attrs;
+    onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 1, 1, 1};
     attrs.strides = {2, 2};
@@ -138,7 +138,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor X = Tensor::FromFloat("X", {1, 1, 4, 4}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
     Tensor B = Tensor::FromFloat("B", {1}, {0.5f});
-    kernel::Conv::Attributes attrs;
+    onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.auto_pad = AutoPad::kSameUpper;
     Tensor Y = conv(X, W, B, attrs);
@@ -162,7 +162,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor X = Tensor::FromFloat("X", {1, 1, 7, 5}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
     Tensor B;
-    kernel::Conv::Attributes attrs;
+    onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.strides = {2, 2};
     Tensor Y = conv(X, W, B, attrs);
@@ -185,7 +185,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor X = Tensor::FromFloat("X", {1, 1, 7, 5}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
     Tensor B;
-    kernel::Conv::Attributes attrs;
+    onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 0, 1, 0};
     attrs.strides = {2, 2};
@@ -213,7 +213,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor X = Tensor::FromFloat("X", {1, 1, 4, 4}, Xv);
     Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
     Tensor B;
-    kernel::Conv::Attributes attrs;
+    onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.auto_pad = AutoPad::kSameUpper;
     attrs.strides = {2, 2};
@@ -239,7 +239,7 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor X = MakeFloat16Tensor("X", {1, 1, 4, 4}, Xv);
     Tensor W = MakeFloat16Tensor("W", {1, 1, 3, 3}, std::vector<float>(9, 0.25f));
     Tensor B = MakeFloat16Tensor("B", {1}, {0.5f});
-    kernel::Conv::Attributes attrs;
+    onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 1, 1, 1};
     Tensor Y = conv(X, W, B, attrs);

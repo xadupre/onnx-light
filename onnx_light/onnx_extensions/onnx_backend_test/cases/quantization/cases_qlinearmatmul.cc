@@ -84,7 +84,7 @@ Tensor MakeQuantTensor(const std::string &name, DataType dtype, const std::vecto
 void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
   const KernelContext ctx{opset};
-  const kernel::QLinearMatMul ql{ctx};
+  const onnx_kernels::kernel::QLinearMatMul ql{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> a_shape{512, 512};

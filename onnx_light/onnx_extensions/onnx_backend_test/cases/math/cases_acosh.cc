@@ -39,7 +39,7 @@ Tensor RandFloatInRange(const std::vector<int64_t> &shape, float low, float high
 void RegisterAcoshCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::Acosh acosh_kernel{ctx};
+  const onnx_kernels::kernel::Acosh acosh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Acosh", acosh_kernel, "test_cc_acosh_benchmark", opset, registry);

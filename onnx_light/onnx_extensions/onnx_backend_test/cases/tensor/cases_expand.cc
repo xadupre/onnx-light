@@ -44,7 +44,7 @@ Tensor MakeShapeTensor(const std::vector<int64_t> &dims) {
 void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const kernel::Expand expand_kernel{ctx};
+  const onnx_kernels::kernel::Expand expand_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeExpandNode();

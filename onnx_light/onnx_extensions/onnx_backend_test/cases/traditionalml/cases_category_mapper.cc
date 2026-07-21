@@ -27,7 +27,7 @@ void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode)
   const OpsetId opset("ai.onnx.ml", 1);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::CategoryMapper category_mapper{ctx};
+  const onnx_kernels::kernel::CategoryMapper category_mapper{ctx};
 
   const std::vector<std::string> cats_strings{"hello", "world", "good morning"};
   const std::vector<int64_t> cats_int64s{1, 2, 3};

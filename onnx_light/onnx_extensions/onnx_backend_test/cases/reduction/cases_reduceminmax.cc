@@ -18,7 +18,7 @@ namespace onnx_backend_test {
 namespace {
 
 void EmitReduceMinMaxCase(std::vector<TestCase> &registry, const std::string &op_type,
-                          const kernel::ReduceMinMax &kernel, const std::string &case_name,
+                          const onnx_kernels::kernel::ReduceMinMax &kernel, const std::string &case_name,
                           const std::vector<int64_t> &data_shape,
                           const std::vector<float> &data_values,
                           const std::vector<int64_t> &axes_values, bool keepdims,
@@ -47,7 +47,7 @@ void EmitReduceMinMaxCase(std::vector<TestCase> &registry, const std::string &op
 // "data" input). With ``noop_with_empty_axes`` default-false this reduces
 // over every dimension of ``data``.
 void EmitReduceMinMaxDefaultAxesCase(std::vector<TestCase> &registry, const std::string &op_type,
-                                     const kernel::ReduceMinMax &kernel,
+                                     const onnx_kernels::kernel::ReduceMinMax &kernel,
                                      const std::string &case_name,
                                      const std::vector<int64_t> &data_shape,
                                      const std::vector<float> &data_values, bool keepdims) {
@@ -67,7 +67,7 @@ void EmitReduceMinMaxDefaultAxesCase(std::vector<TestCase> &registry, const std:
 }
 
 void RegisterReduceMinMaxCases(std::vector<TestCase> &registry, const std::string &op_type,
-                               const kernel::ReduceMinMax &kernel, const std::string &name_prefix) {
+                               const onnx_kernels::kernel::ReduceMinMax &kernel, const std::string &name_prefix) {
   const std::vector<int64_t> shape = {3, 2, 2};
   const std::vector<float> values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
                                      7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
@@ -109,7 +109,7 @@ void RegisterReduceMinMaxCases(std::vector<TestCase> &registry, const std::strin
 // bit-match the upstream fixture.
 // ---------------------------------------------------------------------------
 void RegisterReduceMinMaxOnnxCases(std::vector<TestCase> &registry, const std::string &op_type,
-                                   const kernel::ReduceMinMax &kernel,
+                                   const onnx_kernels::kernel::ReduceMinMax &kernel,
                                    const std::string &onnx_prefix) {
   const std::vector<int64_t> shape = {3, 2, 2};
   const std::vector<float> example_values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
@@ -149,7 +149,7 @@ void RegisterReduceMinMaxOnnxCases(std::vector<TestCase> &registry, const std::s
 
 void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
   const KernelContext ctx{DefaultOpset(18)};
-  const kernel::ReduceMax reduce_max_kernel{ctx};
+  const onnx_kernels::kernel::ReduceMax reduce_max_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -201,7 +201,7 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
 
 void RegisterReduceMinCases(std::vector<TestCase> &registry, TestMode mode) {
   const KernelContext ctx{DefaultOpset(18)};
-  const kernel::ReduceMin reduce_min_kernel{ctx};
+  const onnx_kernels::kernel::ReduceMin reduce_min_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

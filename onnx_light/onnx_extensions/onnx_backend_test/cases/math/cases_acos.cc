@@ -22,7 +22,7 @@ namespace onnx_backend_test {
 void RegisterAcosCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
-  const kernel::Acos acos_kernel{ctx};
+  const onnx_kernels::kernel::Acos acos_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("Acos", acos_kernel, "test_cc_acos_benchmark", opset, registry);

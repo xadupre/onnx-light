@@ -1,4 +1,5 @@
 #include "onnx_core/annotations/inplace_reuse.h"
+#include "onnx_core/annotations/peak_memory.h"
 #include "onnx_core/annotations/value_tags.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/dispatch_table.h"

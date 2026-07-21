@@ -171,6 +171,32 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             inferred = computed[name]
             self.assertEqual(expected, inferred, f"{name!r} failed\n{expected=}\n--\n{inferred=}")
 
+    def test_peak_memory_backend_case_metadata(self):
+        """Checks that the backend peak-memory cases reproduce their pre-embedded node metadata."""
+        tests = list(collect_test_cases("peak_memory"))
+        self.assertNotEmpty(tests)
+
+        for test in tests:
+            with self.subTest(name=test.name):
+                expected_node_meta = [
+                    {entry.key: entry.value for entry in node.metadata_props}
+                    for node in test.model.graph.node
+                ]
+
+                model_copy = onnxl.ModelProto()
+                model_copy.CopyFrom(test.model)
+                for node in model_copy.graph.node:
+                    node.metadata_props.clear()
+
+                ctx = si.ShapesContext()
+                si.compute_shape_model(ctx, model_copy)
+                si.write_peak_memory_to_metadata(ctx, model_copy.graph, si.Device.kCPU)
+
+                self.assertEqual(len(model_copy.graph.node), len(expected_node_meta))
+                for node, expected_meta in zip(model_copy.graph.node, expected_node_meta):
+                    got_meta = {entry.key: entry.value for entry in node.metadata_props}
+                    self.assertEqual(got_meta, expected_meta)
+
     def test_inference_shape_backend_floordiv_offset_expression(self):
         tests = [
             test

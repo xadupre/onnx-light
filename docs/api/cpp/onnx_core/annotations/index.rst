@@ -8,4 +8,5 @@ inference and value lifetimes.
     :maxdepth: 1
 
     inplace_reuse
+    peak_memory
     value_tags

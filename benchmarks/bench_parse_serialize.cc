@@ -20,7 +20,7 @@
  *     -i <tensors>  Number of initializer tensors          (default: 40)
  *     -d <dim>      Tensor side length in floats           (default: 512)
  *
- * Typical profiling workflow (see docs/examples/core/plot_onnx_profile.py):
+ * Typical profiling workflow (see docs/examples/proto/plot_onnx_profile.py):
  *
  *   # perf stat (counts)
  *   perf stat ./build/bench_parse_serialize -n 20

@@ -9,9 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Add `SimpleRawBufferAllocator` with virtual interface and wire into `RuntimeContext` ([#3241](https://github.com/xadupre/onnx-light/pull/3241))
 - Add `RuntimeContext*` to all kernel `operator()` signatures for allocator-backed output buffers ([#3261](https://github.com/xadupre/onnx-light/pull/3261))
+- Added a symbolic gradient framework: reverse-mode gradients for `Conv` ([#3554](https://github.com/xadupre/onnx-light/pull/3554)) and normalization operators ([#3556](https://github.com/xadupre/onnx-light/pull/3556)), backend-test gradient verification across all registered ops ([#3566](https://github.com/xadupre/onnx-light/pull/3566)), and a gradient gallery/API/design documentation page ([#3523](https://github.com/xadupre/onnx-light/pull/3523)).
+- Added a peak-memory dispatch registry to `onnx_core/shapes` ([#3604](https://github.com/xadupre/onnx-light/pull/3604)).
+- Added `SaveToFileDescriptor` and `SerializeToOstream` to the Python API ([#3590](https://github.com/xadupre/onnx-light/pull/3590)).
+- Added custom-op `shape_tag` registration hooks to `ComputeContext` ([#3560](https://github.com/xadupre/onnx-light/pull/3560)).
+- Added `cp313`/`cp314` standard wheel targets to the release and weekly builds ([#3579](https://github.com/xadupre/onnx-light/pull/3579)).
 
 ### Improvements
 
+- Introduced an intermediate `lib_onnx_core` library between `lib_onnx_proto` and the higher-level libraries ([#3575](https://github.com/xadupre/onnx-light/pull/3575)).
+- Reorganized the C++ tree under `onnx_extensions`: moved `onnx_backend_test` and `onnx_kernels` ([#3612](https://github.com/xadupre/onnx-light/pull/3612)), and the `onnx_gradient` library ([#3602](https://github.com/xadupre/onnx-light/pull/3602)) and Python facade ([#3606](https://github.com/xadupre/onnx-light/pull/3606)); renamed the `onnx_optim` module to `onnx_shapes` and `lib_onnx_optim` to `lib_onnx_shape` ([#3596](https://github.com/xadupre/onnx-light/pull/3596)); and split `ExecutionPlan` into `execution_plan.h/.cc` ([#3608](https://github.com/xadupre/onnx-light/pull/3608)).
+- Improved allocators and preserved allocator ownership across kernels, including `Loop` INT64/BOOL scalars ([#3564](https://github.com/xadupre/onnx-light/pull/3564)), `SliceTensorAlongAxis` ([#3562](https://github.com/xadupre/onnx-light/pull/3562)), and a shared empty-tensor fallback in kernel dispatch ([#3543](https://github.com/xadupre/onnx-light/pull/3543), [#3567](https://github.com/xadupre/onnx-light/pull/3567)).
+- Reduced unnecessary `std::string` copies in the `OnnxParser::Parse(GraphProto&)` and graph-input collection paths ([#3552](https://github.com/xadupre/onnx-light/pull/3552), [#3547](https://github.com/xadupre/onnx-light/pull/3547), [#3529](https://github.com/xadupre/onnx-light/pull/3529)), migrated remaining node-list paths to `utils::RepeatedProtoField` ([#3525](https://github.com/xadupre/onnx-light/pull/3525)), and added more `constexpr` helpers ([#3530](https://github.com/xadupre/onnx-light/pull/3530)).
 - Migrated most kernels (cast, elementwise, math, tensor, sequence, reduction, pooling, `TopK`, `Einsum`, `MatMul`, `Where`, normalization, etc.) from `std::vector<int64_t>` to the dedicated `Shape` type for shape/state handling.
 - Routed kernel output allocation through the `RuntimeContext` allocator across many kernels (`Bernoulli`, `CumSum`/`CumProd`, `Min`/`Max`/`Mean`/`Sum`, `NonMaxSuppression`, `DelayedInitializer`, `QuantizeLinear`, `TopK`, image decoder, `MatMulInteger`), replacing ad-hoc or inline buffers.
 - Extended shape-tag metadata coverage to initializers and cached symbolic byte-size simplification for inplace-reuse analysis.
@@ -25,6 +34,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Propagated upstream ONNX shape-inference fixes (`Scan` `num_scan_inputs` underflow, `Range` symbolic dims).
 - Fixed several kernels (`If`, `Bernoulli`, `EyeLike`, `ConstantOfShape`, `CastLike`, `AffineGrid`, `BatchNormalization`, `MelWeightMatrix`, multi-output kernels) to use the `RuntimeContext` allocator and avoid unnecessary allocations/`memcpy`.
 - Fixed expression-simplification integer-coefficient combination and SVG barycenter crossing-minimisation edge handling.
+- Preserved `doc_string` on `Value` in the IR protobuf converter ([#3618](https://github.com/xadupre/onnx-light/pull/3618)).
+- Hardened version conversion for malformed `Scan` nodes and `ai.onnx` default-domain imports ([#3544](https://github.com/xadupre/onnx-light/pull/3544)).
+- Propagated upstream locale-independent ONNX text parser/printer fixes ([#3546](https://github.com/xadupre/onnx-light/pull/3546)) and `TopK` `sorted=0` acceptance ([#3545](https://github.com/xadupre/onnx-light/pull/3545)).
+- Fixed spelling issues across the codebase ([#3610](https://github.com/xadupre/onnx-light/pull/3610)).
 
 ### Security
 
@@ -41,6 +54,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added C++ backend coverage for pooling, local-function shape propagation, and the `qwen3_4_layers_like` case.
 - Added inplace-metadata expectations for `tiny_llm` `Unsqueeze` and more backend-test options.
 - Delayed C++ backend-test `ModelProto` construction via `TestCase::emplace_model()` across registered cases.
+- Enforced expected `onnx_light.value_tag` on inputs/outputs/initializers in `shape_tag` backend tests ([#3621](https://github.com/xadupre/onnx-light/pull/3621)).
+- Forwarded `TestMode` through the `collect_test_case` Python facade ([#3620](https://github.com/xadupre/onnx-light/pull/3620)).
+- Verified that `LightOpSchema` and the `onnx_light` `defs` `OpSchema` share the same attributes ([#3528](https://github.com/xadupre/onnx-light/pull/3528)).
+
+### Documentation
+
+- Added the changelog to the documentation ([#3569](https://github.com/xadupre/onnx-light/pull/3569)).
+- Updated the string-types documentation for proto fields ([#3541](https://github.com/xadupre/onnx-light/pull/3541)).
+
+### Build & CI
+
+- Added an intermediate build target and reorganized libraries (see Improvements), and bumped the release version to `0.1.7` across canonical metadata ([#3577](https://github.com/xadupre/onnx-light/pull/3577)).
+- Sped up CI: cached the `clang-tidy` build with `sccache` ([#3617](https://github.com/xadupre/onnx-light/pull/3617)), trimmed Windows CI ([#3527](https://github.com/xadupre/onnx-light/pull/3527), [#3542](https://github.com/xadupre/onnx-light/pull/3542)), ran the reduced and no-onnx preflights in parallel ([#3593](https://github.com/xadupre/onnx-light/pull/3593)), and skipped the C++ build in the style/typing jobs ([#3581](https://github.com/xadupre/onnx-light/pull/3581), [#3583](https://github.com/xadupre/onnx-light/pull/3583)).
 
 ## [0.1.4] – 2026-07-07
 

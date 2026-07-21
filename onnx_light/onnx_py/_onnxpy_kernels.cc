@@ -8,7 +8,7 @@
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_extensions/kernels/kernel_dispatch_table.h"
+#include "onnx_extensions/onnx_kernels/kernel_dispatch_table.h"
 
 #include <cstdint>
 #include <nanobind/nanobind.h>
@@ -24,12 +24,12 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::ExecutionPlan;
+using core::runtime::KernelContext;
 using core::runtime::Map;
+using core::runtime::OpsetId;
 using core::runtime::RuntimeContext;
 using core::runtime::Sequence;
 using core::runtime::Tensor;
-using onnx_kernels::kernel::KernelContext;
-using onnx_kernels::kernel::OpsetId;
 
 void AddOnnxPyKernels(nb::module_ &m);
 void AddOnnxPyRuntime(nb::module_ &m);
@@ -143,7 +143,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       });
 
   rt_mod.def(
-      "default_opset", [](int64_t version) { return onnx_kernels::kernel::DefaultOpset(version); },
+      "default_opset", [](int64_t version) { return core::runtime::DefaultOpset(version); },
       nb::arg("version"),
       "Returns an :class:`OpsetId` for the default ai.onnx domain at ``version``.");
 

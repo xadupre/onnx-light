@@ -4,10 +4,10 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_sequence.h"
-#include "onnx_extensions/kernels/kernels/kernel_context.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
@@ -20,6 +20,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
 using core::runtime::If;
+using core::runtime::KernelContext;
 using core::runtime::Loop;
 using core::runtime::RuntimeContext;
 using core::runtime::Scan;
@@ -27,7 +28,6 @@ using core::runtime::Sequence;
 using core::runtime::Shape;
 using core::runtime::SimpleRawBufferAllocator;
 using core::runtime::Tensor;
-using onnx_kernels::kernel::KernelContext;
 
 namespace Test {
 

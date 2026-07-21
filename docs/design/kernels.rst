@@ -16,9 +16,9 @@ The kernel layer is split across two libraries:
   :cpp:func:`onnx_light::core::runtime::RunModel`,
   :cpp:func:`onnx_light::core::runtime::RunSubgraph`), the kernel
   dispatch table, and the control-flow kernels (``If``, ``Loop``, ``Scan``).
-* :epkg:`onnx_light/onnx_extensions/kernels` (built as :epkg:`lib_onnx_kernels`)
+* :epkg:`onnx_light/onnx_extensions/onnx_kernels` (built as :epkg:`lib_onnx_kernels`)
   contains every other per-operator kernel implementation, grouped under
-  :epkg:`onnx_light/onnx_extensions/kernels/kernels`\ ``/<domain>/``.
+  :epkg:`onnx_light/onnx_extensions/onnx_kernels/kernels`\ ``/<domain>/``.
 
 Control-flow operators are the one exception to "all kernels live in
 ``onnx_kernels``": running their subgraphs recursively calls
@@ -91,7 +91,7 @@ How backend tests use kernels
 -----------------------------
 
 Backend test cases in
-:epkg:`onnx_light/onnx_extensions/backend_test/cases`
+:epkg:`onnx_light/onnx_extensions/onnx_backend_test/cases`
 create ONNX nodes
 and compute expected outputs with C++ kernels, then register them with
 :cpp:func:`onnx_light::onnx_backend_test::Expect`.
@@ -106,18 +106,18 @@ Adding or extending a kernel
 Typical workflow:
 
 #. Implement/extend the kernel class in
-   :epkg:`onnx_light/onnx_extensions/kernels/kernels`\ ``/<family>/`` and export it from the
+   :epkg:`onnx_light/onnx_extensions/onnx_kernels/kernels`\ ``/<family>/`` and export it from the
    corresponding ``include_<family>_kernels.h`` (or, for control-flow
    style operators, under
    :epkg:`onnx_light/onnx_core/runtime/controlflow`).
 #. Add or update C++ backend test cases in
-   :epkg:`onnx_light/onnx_extensions/backend_test/cases`\ ``/<family>/``; compute expected outputs
+   :epkg:`onnx_light/onnx_extensions/onnx_backend_test/cases`\ ``/<family>/``; compute expected outputs
    through the kernel and register them with
    :cpp:func:`onnx_light::onnx_backend_test::Expect`.
 #. If the operator should be executable through
    :cpp:func:`~onnx_light::core::runtime::RunNode`/:cpp:func:`~onnx_light::core::runtime::RunModel`,
    add a trampoline entry to the built-in table in
-   :epkg:`onnx_light/onnx_extensions/kernels/kernel_dispatch_table.cc`
+   :epkg:`onnx_light/onnx_extensions/onnx_kernels/kernel_dispatch_table.cc`
    (it is registered with ``onnx_core`` by
    :cpp:func:`onnx_light::onnx_kernels::RegisterKernelFunctions`).
 #. Run the C++ tests (for example ``ctest -R OnnxOp`` or
@@ -155,5 +155,5 @@ See also
 --------
 
 * :ref:`l-design-backend-tests`
-* :doc:`../api/cpp/onnx_extensions/kernels/index`
+* :doc:`../api/cpp/onnx_extensions/onnx_kernels/index`
 * :doc:`../api/cpp/onnx_core/runtime/index`

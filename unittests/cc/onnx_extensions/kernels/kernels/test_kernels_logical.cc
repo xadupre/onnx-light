@@ -4,10 +4,10 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/raw_buffer_allocator.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_extensions/kernels/kernels/kernel_context.h"
-#include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
+#include "onnx_extensions/onnx_kernels/kernels/logical/include_logical_kernels.h"
 
 #include <gtest/gtest.h>
 

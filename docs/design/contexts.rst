@@ -35,8 +35,8 @@ kernels, inferring shapes, and computing graph-level annotations.
 See also
 --------
 
-* :doc:`../api/cpp/onnx_extensions/kernels/kernels/kernel_context`
-* :doc:`../api/cpp/onnx_extensions/kernels/runtime_context`
+* :doc:`../api/cpp/onnx_extensions/onnx_kernels/kernels/kernel_context`
+* :doc:`../api/cpp/onnx_extensions/onnx_kernels/runtime_context`
 * :doc:`../api/cpp/onnx_core/shapes/shapes_context`
 * :doc:`../api/cpp/onnx_core/annotations/inplace_reuse`
 * :doc:`../api/python/onnx/reference`

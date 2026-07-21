@@ -3,7 +3,7 @@
 For every node-level test shipped by ``onnx.backend.test`` this module loads
 the model and its reference input/output tensors, executes the model through
 :class:`onnx_light.onnx.reference.ReferenceEvaluator` (which wraps the C++
-``RunModel`` dispatcher exercised by ``onnx_light/onnx_extensions/backend_test``) and
+``RunModel`` dispatcher exercised by ``onnx_light/onnx_extensions/onnx_backend_test``) and
 compares the produced outputs with the reference outputs computed by ONNX.
 
 This is the ``onnx`` vs ``onnx_light`` runtime counterpart of the serialization

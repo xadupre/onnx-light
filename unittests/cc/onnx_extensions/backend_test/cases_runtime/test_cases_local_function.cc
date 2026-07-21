@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_extensions/backend_test/cases_runtime/local_function/include_local_function_cases.h"
-#include "onnx_extensions/kernels/kernels/kernel_context.h"
+#include "onnx_extensions/onnx_backend_test/cases_runtime/local_function/include_local_function_cases.h"
 
 #include <gtest/gtest.h>
 
@@ -18,11 +18,11 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
+using core::runtime::KernelContext;
 using core::runtime::RunModel;
 using core::runtime::RuntimeContext;
 using core::runtime::Tensor;
 using onnx_backend_test::CollectLocalFunctionTestCases;
-using onnx_kernels::kernel::KernelContext;
 
 namespace {
 

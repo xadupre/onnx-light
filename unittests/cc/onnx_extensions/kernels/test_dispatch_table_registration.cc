@@ -5,7 +5,7 @@
 #include "onnx_proto/onnx.h"
 
 #include "onnx_core/runtime/kernel_dispatch_table.h"
-#include "onnx_extensions/kernels/kernel_dispatch_table.h"
+#include "onnx_extensions/onnx_kernels/kernel_dispatch_table.h"
 
 #include <gtest/gtest.h>
 

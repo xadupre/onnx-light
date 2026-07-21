@@ -5,10 +5,10 @@
 #pragma once
 
 #include "onnx.h"
+#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/simple_map.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_extensions/kernels/kernels/kernel_context.h"
 
 #include <cstdint>
 #include <functional>
@@ -36,10 +36,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace backend_test {
 
-using namespace onnx_kernels;
 using namespace ::onnx_light::core::runtime;
-using OpsetId = onnx_kernels::kernel::OpsetId;
-using onnx_kernels::kernel::DefaultOpset;
 
 /**
  * Selects how a ``Register*Cases`` / ``Collect*`` helper generates its cases.

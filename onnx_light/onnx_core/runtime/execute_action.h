@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "onnx_core/annotations/inplace_reuse.h"
 #include "onnx_core/runtime/raw_buffer_allocator.h"
 #include "onnx_light_helpers.h"
 
@@ -122,12 +123,19 @@ public:
    * @param size       Number of bytes for buffer allocations; ``0`` when
    *                   unknown or not applicable.
    * @param target     Destination named result for
-   *                   :cpp:enumerator:`kTransfer`; empty otherwise.
+   *                   :cpp:enumerator:`kTransfer`, or the input buffer reused
+   *                   by an in-place :cpp:enumerator:`kAllocateBuffer`; empty
+   *                   otherwise.
+   * @param inplace    In-place reuse decision backing an
+   *                   :cpp:enumerator:`kAllocateBuffer` action. The default
+   *                   (``output_index < 0``) means the allocation is a fresh
+   *                   allocation rather than an in-place reuse.
    */
   ExecuteAction(ExecuteActionKind kind, std::string name, RawBufferAllocator *allocator = nullptr,
-                size_t node_index = 0, size_t size = 0, std::string target = std::string())
+                size_t node_index = 0, size_t size = 0, std::string target = std::string(),
+                annotations::InPlaceReuse inplace = annotations::InPlaceReuse{})
       : kind_(kind), name_(std::move(name)), target_(std::move(target)), allocator_(allocator),
-        node_index_(node_index), size_(size) {}
+        node_index_(node_index), size_(size), inplace_(inplace) {}
 
   /// Returns the kind of the action.
   ExecuteActionKind kind() const noexcept { return kind_; }
@@ -155,6 +163,16 @@ public:
   /// or not applicable).
   size_t size() const noexcept { return size_; }
 
+  /// Returns ``true`` when this action reuses an input buffer in place rather
+  /// than allocating fresh memory (only meaningful for
+  /// :cpp:enumerator:`ExecuteActionKind::kAllocateBuffer`).
+  bool is_inplace() const noexcept { return inplace_.output_index >= 0; }
+
+  /// Returns the in-place reuse decision backing this action. When
+  /// :cpp:func:`is_inplace` is ``false`` the returned value has
+  /// ``output_index == -1``.
+  const annotations::InPlaceReuse &inplace() const noexcept { return inplace_; }
+
 private:
   ExecuteActionKind kind_ = ExecuteActionKind::kExecuteNode;
   std::string name_;
@@ -162,6 +180,7 @@ private:
   RawBufferAllocator *allocator_ = nullptr;
   size_t node_index_ = 0;
   size_t size_ = 0;
+  annotations::InPlaceReuse inplace_;
 };
 
 } // namespace runtime

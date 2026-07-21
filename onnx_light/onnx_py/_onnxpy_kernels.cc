@@ -373,7 +373,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "Primary named result / input / initializer the action operates on.")
       .def_prop_ro(
           "target", [](const ExecuteAction &a) { return a.target(); },
-          "Destination named result of a ``kTransfer`` action (empty otherwise).")
+          "Destination named result of a ``kTransfer`` action, or the input "
+          "buffer reused by an in-place ``kAllocateBuffer`` (empty otherwise).")
       .def_prop_ro(
           "node_index", [](const ExecuteAction &a) { return a.node_index(); },
           "Index of the node for a ``kExecuteNode`` action (``0`` otherwise).")
@@ -384,11 +385,23 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "has_allocator", [](const ExecuteAction &a) { return a.allocator() != nullptr; },
           "Whether the action references a raw buffer allocator (true for "
           "allocation / deallocation actions backed by an allocator).")
+      .def_prop_ro(
+          "is_inplace", [](const ExecuteAction &a) { return a.is_inplace(); },
+          "Whether a ``kAllocateBuffer`` action reuses an input buffer in place "
+          "instead of allocating fresh memory.")
+      .def_prop_ro(
+          "inplace_output_index",
+          [](const ExecuteAction &a) { return a.inplace().output_index; },
+          "Output index of the in-place reuse decision (``-1`` when not in place).")
+      .def_prop_ro(
+          "inplace_input_index", [](const ExecuteAction &a) { return a.inplace().input_index; },
+          "Input index reused in place (``-1`` when not in place).")
       .def("__repr__", [](const ExecuteAction &a) {
         return std::string("ExecuteAction(kind='") + a.kind_name() + "', name='" + a.name() +
                "', target='" + a.target() + "', node_index=" + std::to_string(a.node_index()) +
                ", size=" + std::to_string(a.size()) +
-               ", has_allocator=" + (a.allocator() != nullptr ? "True" : "False") + ")";
+               ", has_allocator=" + (a.allocator() != nullptr ? "True" : "False") +
+               ", is_inplace=" + (a.is_inplace() ? "True" : "False") + ")";
       });
 
   // ExecutionPlan — precomputed per-graph release schedule.

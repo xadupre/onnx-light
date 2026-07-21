@@ -453,19 +453,42 @@ class TestExecutionPlanBindings(ExtTestCase):
 
     def test_execution_plan_actions_from_graph(self):
         model = parser.parse_model(self._PLAN_SRC)
+        # BuildActions is metadata-driven, so annotate the nodes with the
+        # in-place / lifetime metadata the in-place reuse pass would write.
+        node = model.graph.node
+        # Add(x, x) reuses input 0 ("x") in place for its output "t0".
+        node[0].add_metadata("onnx_light.inplace_reuse", "0:0:equal")
+        node[0].add_metadata("onnx_light.not_used_after", "x")
+        # "t0" and "t1" reach their last use at the final Sub node.
+        node[2].add_metadata("onnx_light.release_after", "t1;t0")
         plan = rt.ExecutionPlan(model.graph)
         kinds = [(a.kind_name, a.name) for a in plan.actions()]
         # The single input is locked first and unlocked last.
         self.assertEqual(kinds[0], ("LockInput", "x"))
         self.assertEqual(kinds[-1], ("UnlockInput", "x"))
-        # Every node produces an allocate + create-shape + execute triple, and
-        # there is exactly one ExecuteNode action per node, in order.
+        # Exactly one ExecuteNode action per node, in order.
         execute_indices = [a.node_index for a in plan.actions() if a.kind_name == "ExecuteNode"]
         self.assertEqual(execute_indices, [0, 1, 2])
-        # The intermediates are freed (buffer + shape); the output ``y`` is kept.
+        # The intermediates are freed; the output ``y`` is kept.
         deleted = {a.name for a in plan.actions() if a.kind_name == "DeleteBuffer"}
         self.assertEqual(deleted, {"t0", "t1"})
         self.assertNotIn("y", deleted)
+        # "t0" is produced in place from "x": its allocation carries the reuse
+        # information and does not reference an allocator.
+        t0_alloc = [
+            a for a in plan.actions() if a.kind_name == "AllocateBuffer" and a.name == "t0"
+        ]
+        self.assertEqual(len(t0_alloc), 1)
+        self.assertTrue(t0_alloc[0].is_inplace)
+        self.assertEqual(t0_alloc[0].target, "x")
+        self.assertEqual(t0_alloc[0].inplace_output_index, 0)
+        self.assertEqual(t0_alloc[0].inplace_input_index, 0)
+        # "t1" has no reuse opportunity: it is allocated fresh.
+        t1_alloc = [
+            a for a in plan.actions() if a.kind_name == "AllocateBuffer" and a.name == "t1"
+        ]
+        self.assertEqual(len(t1_alloc), 1)
+        self.assertFalse(t1_alloc[0].is_inplace)
 
 
 class TestTensorToProto(ExtTestCase):

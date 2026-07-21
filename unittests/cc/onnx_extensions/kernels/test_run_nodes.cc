@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/annotations/inplace_reuse.h"
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/kernel_dispatch_table.h"
@@ -4045,9 +4046,10 @@ TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
 }
 
 TEST(RunNodes, ExecutionPlanBuildsActions) {
-  // The plan schedules an ordered list of ExecuteAction steps: lock the
-  // input, allocate/create-shape/execute per node, delete the intermediates
-  // that fall out of use, then unlock the input.
+  // BuildActions is metadata-driven: it locks the input on first use, allocates
+  // a result (or reuses one in place) per output, executes each node, then frees
+  // intermediates and unlocks inputs based on the in-place / lifetime
+  // annotations carried by each node's metadata_props.
   GraphProto graph;
   ValueInfoProto vi_x;
   vi_x.set_name("x");
@@ -4058,6 +4060,14 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
   graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
   graph.ref_node().push_back(MakeNode("Neg", {"t"}, {"y"}));
 
+  // Node 0 (Abs) reuses input "x" in place for its output "t"; node 1 (Neg)
+  // releases the intermediate "t" (its last use) and marks "x" as not used
+  // after it.
+  (*graph.mutable_node())[0].add_metadata(core::annotations::kInPlaceReuseMetadataKey,
+                                          "0:0:equal");
+  (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "t");
+  (*graph.mutable_node())[1].add_metadata(core::annotations::kNotUsedAfterMetadataKey, "x");
+
   core::runtime::SimpleRawBufferAllocator allocator(8);
   core::runtime::ExecutionPlan plan(graph, &allocator);
   EXPECT_EQ(plan.allocator(), &allocator);
@@ -4065,6 +4075,8 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
   const std::vector<core::runtime::ExecuteAction> &actions = plan.actions();
   ASSERT_FALSE(actions.empty());
   using core::runtime::ExecuteActionKind;
+  // The input is locked on first use (before the Abs node) and unlocked on last
+  // use (after the Neg node).
   EXPECT_EQ(actions.front().kind(), ExecuteActionKind::kLockInput);
   EXPECT_EQ(actions.front().name(), "x");
   EXPECT_EQ(actions.back().kind(), ExecuteActionKind::kUnlockInput);
@@ -4073,9 +4085,25 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
   // Exactly one ExecuteNode action per node, in order.
   std::vector<size_t> execute_indices;
   bool t_deleted = false;
+  bool t_inplace = false;
+  bool y_allocated = false;
   for (const auto &action : actions) {
     if (action.kind() == ExecuteActionKind::kExecuteNode) {
       execute_indices.push_back(action.node_index());
+    }
+    if (action.kind() == ExecuteActionKind::kAllocateBuffer && action.name() == "t") {
+      // "t" is produced in place from input "x": no fresh allocation.
+      t_inplace = action.is_inplace();
+      EXPECT_EQ(action.allocator(), nullptr);
+      EXPECT_EQ(action.target(), "x");
+      EXPECT_EQ(action.inplace().output_index, 0);
+      EXPECT_EQ(action.inplace().input_index, 0);
+    }
+    if (action.kind() == ExecuteActionKind::kAllocateBuffer && action.name() == "y") {
+      // "y" has no reuse opportunity: it is allocated from the allocator.
+      y_allocated = true;
+      EXPECT_FALSE(action.is_inplace());
+      EXPECT_EQ(action.allocator(), &allocator);
     }
     if (action.kind() == ExecuteActionKind::kDeleteBuffer && action.name() == "t") {
       t_deleted = true;
@@ -4086,6 +4114,8 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
   ASSERT_EQ(execute_indices.size(), 2u);
   EXPECT_EQ(execute_indices[0], 0u);
   EXPECT_EQ(execute_indices[1], 1u);
+  EXPECT_TRUE(t_inplace);
+  EXPECT_TRUE(y_allocated);
   EXPECT_TRUE(t_deleted);
 }
 

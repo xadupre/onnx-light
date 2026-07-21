@@ -115,8 +115,16 @@ public:
   RawBufferAllocator *allocator() const noexcept { return allocator_; }
 
 protected:
-  /// Populates :cpp:func:`actions` from the seeded members
-  /// (``inputs_``, ``initializers_``, ``nodes_`` and ``releasable_``).
+  /// Populates :cpp:func:`actions` from the seeded members (``inputs_``,
+  /// ``initializers_``, ``nodes_``) and the in-place / lifetime annotations
+  /// carried by each node's ``metadata_props`` (written by the in-place reuse
+  /// pass): :cpp:var:`annotations::kInPlaceReuseMetadataKey`,
+  /// :cpp:var:`annotations::kReleaseAfterMetadataKey`,
+  /// :cpp:var:`annotations::kNotUsedAfterMetadataKey` and
+  /// :cpp:var:`annotations::kReleaseAfterShapeTagMetadataKey`. Inputs and
+  /// initializers are locked on first use and unlocked on last use; each output
+  /// is either allocated as a result (or reused in place per the in-place
+  /// annotation) or created as a shape when value-tagged ``"shape"``.
   /// Every constructor calls this once, after seeding, so derived plans can
   /// override the action schedule. Overrides run against the base-class
   /// members only, since virtual dispatch during construction resolves to

@@ -4024,10 +4024,7 @@ TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
   const core::runtime::ExecutionPlan &plan2 = rt.GetExecutionPlan(graph);
   EXPECT_EQ(&plan1, &plan2);
   EXPECT_EQ(plan1.num_nodes(), 2u);
-  // "t" is releasable after node 1, "x" / "y" are in keep (input/output).
-  EXPECT_TRUE(plan1.releasable()[0].empty());
-  ASSERT_EQ(plan1.releasable()[1].size(), 1u);
-  EXPECT_EQ(plan1.releasable()[1][0], "t");
+  // "x" / "y" are kept (declared input / output); "t" is an intermediate.
   EXPECT_TRUE(plan1.keep().count("x"));
   EXPECT_TRUE(plan1.keep().count("y"));
 
@@ -4131,9 +4128,11 @@ TEST(RunNodes, ExecutionPlanShapeTagActions) {
   graph.ref_node().push_back(MakeNode("Shape", {"x"}, {"s"}));
   graph.ref_node().push_back(MakeNode("Reshape", {"x", "s"}, {"y"}));
 
-  // "s" is released at node 1 and is value-tagged as a shape.
+  // "s" is released at node 1 and is value-tagged as a shape; the input "x"
+  // reaches its last use at node 1 and is unlocked there.
   (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "s");
   (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterShapeTagMetadataKey, "s");
+  (*graph.mutable_node())[1].add_metadata(core::annotations::kNotUsedAfterMetadataKey, "x");
 
   core::runtime::SimpleRawBufferAllocator allocator(8);
   core::runtime::ExecutionPlan plan(graph, &allocator);

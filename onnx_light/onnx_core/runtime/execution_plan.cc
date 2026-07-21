@@ -83,8 +83,7 @@ ExecutionPlan::ExecutionPlan(RawBufferAllocator *allocator) : allocator_(allocat
 
 ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
                              std::unordered_set<std::string> keep, RawBufferAllocator *allocator)
-    : allocator_(allocator), keep_(std::move(keep)),
-      releasable_(RuntimeContext::ComputeReleasableInputs(nodes, keep_)) {
+    : allocator_(allocator), keep_(std::move(keep)) {
   nodes_.reserve(nodes.size());
   for (size_t i = 0; i < nodes.size(); ++i) {
     nodes_.push_back(&nodes[i]);
@@ -113,9 +112,9 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph, RawBufferAllocator *alloca
     const std::string name = graph.output()[i].name();
     if (!name.empty()) {
       keep_.insert(name);
+      outputs_.push_back(name);
     }
   }
-  releasable_ = RuntimeContext::ComputeReleasableInputs(graph.node(), keep_);
   nodes_.reserve(graph.node().size());
   for (size_t i = 0; i < graph.node().size(); ++i) {
     nodes_.push_back(&graph.node()[i]);
@@ -137,9 +136,9 @@ ExecutionPlan::ExecutionPlan(const FunctionProto &func, RawBufferAllocator *allo
     const std::string name = func.output(i);
     if (!name.empty()) {
       keep_.insert(name);
+      outputs_.push_back(name);
     }
   }
-  releasable_ = RuntimeContext::ComputeReleasableInputs(func.node(), keep_);
   nodes_.reserve(func.node().size());
   for (size_t i = 0; i < func.node().size(); ++i) {
     nodes_.push_back(&func.node()[i]);
@@ -150,9 +149,41 @@ ExecutionPlan::ExecutionPlan(const FunctionProto &func, RawBufferAllocator *allo
 
 void ExecutionPlan::BuildActions() {
   actions_.clear();
+  annotated_ = false;
+  fallback_releasable_.clear();
+  fallback_ready_ = false;
+  if (nodes_.empty()) {
+    return;
+  }
 
   const std::unordered_set<std::string> input_set(inputs_.begin(), inputs_.end());
   const std::unordered_set<std::string> initializer_set(initializers_.begin(), initializers_.end());
+  const std::unordered_set<std::string> output_set(outputs_.begin(), outputs_.end());
+
+  // The memory-management schedule is metadata-driven. Two independent signals
+  // are read from the node metadata written by :cpp:class:`annotations::
+  // ComputeContext`:
+  //
+  //   * ``annotated_`` (any ``release_after`` entry) selects the source used by
+  //     :cpp:func:`ReleaseAfter`: the per-node release metadata when present, or
+  //     a topology fallback for un-annotated node ranges.
+  //   * ``strict`` (any ``not_used_after`` entry) means the node range carries
+  //     explicit lock-lifetime information; the plan then enforces that the
+  //     metadata fully covers the schedule (every consumed result is released,
+  //     every input / initializer is unlocked at its last use, every released
+  //     shape was created) and unlocks at last use instead of at the very end.
+  //     Node ranges without lifetime metadata (e.g. a model run without the
+  //     in-place reuse pass, or annotated only for memory profiling) are built
+  //     best-effort and the completeness checks are skipped.
+  bool strict = false;
+  for (const NodeProto *node_ptr : nodes_) {
+    if (!ReadNodeMetadata(*node_ptr, annotations::kReleaseAfterMetadataKey).empty()) {
+      annotated_ = true;
+    }
+    if (!ReadNodeMetadata(*node_ptr, annotations::kNotUsedAfterMetadataKey).empty()) {
+      strict = true;
+    }
+  }
 
   // Collect the names classified as "shape" by value tagging across the whole
   // node range (via the per-node release_after_shape_tag annotation). A value in
@@ -182,6 +213,11 @@ void ExecutionPlan::BuildActions() {
     }
   };
 
+  // Names for which a shape was created / a buffer was released, used by the
+  // completeness checks in annotated mode.
+  std::unordered_set<std::string> created_shapes;
+  std::unordered_set<std::string> released;
+
   for (size_t i = 0; i < nodes_.size(); ++i) {
     const NodeProto &node = *nodes_[i];
 
@@ -208,6 +244,7 @@ void ExecutionPlan::BuildActions() {
       if (shape_tagged.count(out) != 0) {
         // A shape is created (metadata only, no data buffer).
         actions_.emplace_back(ExecuteActionKind::kCreateShape, out);
+        created_shapes.insert(out);
         continue;
       }
       const annotations::InPlaceReuse *match = nullptr;
@@ -243,10 +280,14 @@ void ExecutionPlan::BuildActions() {
     for (const std::string &name :
          SplitNames(ReadNodeMetadata(node, annotations::kReleaseAfterMetadataKey))) {
       if (shape_tagged.count(name) != 0) {
+        // A shape is destroyed: it must have been created earlier.
+        EXT_ENFORCE(!strict || created_shapes.count(name) != 0, "ExecutionPlan: shape '", name,
+                    "' is released but was never created (missing shape metadata).");
         actions_.emplace_back(ExecuteActionKind::kDeleteShape, name);
       } else {
         actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, allocator_);
       }
+      released.insert(name);
     }
     for (const std::string &name :
          SplitNames(ReadNodeMetadata(node, annotations::kNotUsedAfterMetadataKey))) {
@@ -260,19 +301,87 @@ void ExecutionPlan::BuildActions() {
     }
   }
 
-  // Unlock anything still locked once the whole sequence has run (e.g. inputs
-  // that are also graph outputs, or when last-use metadata is unavailable).
-  // Iterate in declared order for a deterministic schedule.
-  for (const std::string &name : inputs_) {
-    if (locked.erase(name) != 0) {
-      actions_.emplace_back(ExecuteActionKind::kUnlockInput, name);
+  if (strict) {
+    // The node range carries explicit lock-lifetime metadata, so the metadata
+    // must fully cover the schedule: every intermediate result that is consumed
+    // by a later node must be released, and every input / initializer that
+    // reaches its last use must be unlocked. Anything left unresolved means the
+    // ComputeContext annotation is incomplete.
+    std::unordered_set<std::string> consumed;
+    for (const NodeProto *node_ptr : nodes_) {
+      for (int in = 0; in < node_ptr->input_size(); ++in) {
+        const std::string name = node_ptr->input(in);
+        if (!name.empty()) {
+          consumed.insert(name);
+        }
+      }
+    }
+    for (const NodeProto *node_ptr : nodes_) {
+      for (int o = 0; o < node_ptr->output_size(); ++o) {
+        const std::string out = node_ptr->output(o);
+        if (out.empty() || output_set.count(out) != 0) {
+          // Empty or declared graph / function output: kept, never released.
+          continue;
+        }
+        if (consumed.count(out) == 0) {
+          // Dead result never referenced again: the ComputeContext does not
+          // schedule a release for it, so neither does the plan.
+          continue;
+        }
+        EXT_ENFORCE(released.count(out) != 0, "ExecutionPlan: result '", out,
+                    "' is never released or unlocked (missing release metadata).");
+      }
+    }
+    for (const std::string &name : locked) {
+      // An input / initializer that is also a declared output stays locked for
+      // the caller; anything else must have been unlocked at its last use.
+      EXT_ENFORCE(output_set.count(name) != 0, "ExecutionPlan: input or initializer '", name,
+                  "' is never unlocked (missing not_used_after metadata).");
+    }
+  } else {
+    // No lifetime metadata: unlock anything still locked once the whole
+    // sequence has run. Iterate in declared order for determinism.
+    for (const std::string &name : inputs_) {
+      if (locked.erase(name) != 0) {
+        actions_.emplace_back(ExecuteActionKind::kUnlockInput, name);
+      }
+    }
+    for (const std::string &name : initializers_) {
+      if (locked.erase(name) != 0) {
+        actions_.emplace_back(ExecuteActionKind::kUnlockInitializer, name);
+      }
     }
   }
-  for (const std::string &name : initializers_) {
-    if (locked.erase(name) != 0) {
-      actions_.emplace_back(ExecuteActionKind::kUnlockInitializer, name);
+}
+
+void ExecutionPlan::EnsureFallbackReleasable() const {
+  if (fallback_ready_) {
+    return;
+  }
+  const size_t n = nodes_.size();
+  std::vector<std::vector<std::string>> per_node_inputs;
+  per_node_inputs.reserve(n);
+  std::unordered_map<std::string, size_t> last_use;
+  for (size_t i = 0; i < n; ++i) {
+    std::vector<std::string> inputs = RuntimeContext::CollectNodeInputs(*nodes_[i]);
+    for (const std::string &name : inputs) {
+      last_use[name] = i;
+    }
+    per_node_inputs.push_back(std::move(inputs));
+  }
+  fallback_releasable_.assign(n, {});
+  for (size_t i = 0; i < n; ++i) {
+    for (const std::string &name : per_node_inputs[i]) {
+      if (keep_.count(name) != 0) {
+        continue;
+      }
+      auto it = last_use.find(name);
+      if (it != last_use.end() && it->second == i) {
+        fallback_releasable_[i].push_back(name);
+      }
     }
   }
+  fallback_ready_ = true;
 }
 
 void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) const {
@@ -280,7 +389,19 @@ void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) cons
   if (it == node_index_.end()) {
     return;
   }
-  for (const auto &name : releasable_[it->second]) {
+  if (annotated_) {
+    // Metadata-driven: the ComputeContext records, per node, the names whose
+    // last use falls here and can be released.
+    for (const std::string &name :
+         SplitNames(ReadNodeMetadata(node, annotations::kReleaseAfterMetadataKey))) {
+      rt.Remove(name);
+      rt.RemoveSequence(name);
+    }
+    return;
+  }
+  // Un-annotated fallback: derive the releasable intermediates from topology.
+  EnsureFallbackReleasable();
+  for (const std::string &name : fallback_releasable_[it->second]) {
     rt.Remove(name);
     rt.RemoveSequence(name);
   }

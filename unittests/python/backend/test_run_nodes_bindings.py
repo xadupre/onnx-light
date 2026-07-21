@@ -405,15 +405,15 @@ class TestExecutionPlanBindings(ExtTestCase):
         plan = rt.ExecutionPlan(model.graph)
         self.assertEqual(plan.num_nodes, 3)
         self.assertEqual(sorted(plan.keep()), ["x", "y"])
-        # t0 and t1 are intermediates whose last reference falls at the last
-        # (Sub) node; nothing is releasable earlier.
-        self.assertEqual(plan.releasable(), [[], [], ["t1", "t0"]])
+        # An unannotated graph still yields an execute step per node.
+        execute_indices = [a.node_index for a in plan.actions() if a.kind_name == "ExecuteNode"]
+        self.assertEqual(execute_indices, [0, 1, 2])
 
     def test_default_execution_plan_is_empty(self):
         plan = rt.ExecutionPlan()
         self.assertEqual(plan.num_nodes, 0)
         self.assertEqual(plan.keep(), set())
-        self.assertEqual(plan.releasable(), [])
+        self.assertEqual(plan.actions(), [])
 
     def test_get_execution_plan_is_cached(self):
         model = parser.parse_model(self._PLAN_SRC)
@@ -422,7 +422,7 @@ class TestExecutionPlanBindings(ExtTestCase):
         self.assertEqual(plan.num_nodes, 3)
         # Same graph object -> same cached plan contents.
         plan_again = ctx.get_execution_plan(model.graph)
-        self.assertEqual(plan_again.releasable(), plan.releasable())
+        self.assertEqual(plan_again.num_nodes, plan.num_nodes)
         ctx.clear_execution_plans()
 
     def test_release_after_frees_intermediates(self):
@@ -451,7 +451,9 @@ class TestExecutionPlanBindings(ExtTestCase):
         model = parser.parse_model(self._PLAN_SRC)
         node = model.graph.node
         # "t1" is released at the final node and value-tagged as a shape; "t0" is
-        # a regular data result also released there.
+        # a regular data result also released there. The input "x" reaches its
+        # last use at the first node.
+        node[0].add_metadata("onnx_light.not_used_after", "x")
         node[2].add_metadata("onnx_light.release_after", "t1;t0")
         node[2].add_metadata("onnx_light.release_after_shape_tag", "t1")
         plan = rt.ExecutionPlan(model.graph)

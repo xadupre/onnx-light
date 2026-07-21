@@ -405,16 +405,17 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                ", is_inplace=" + (a.is_inplace() ? "True" : "False") + ")";
       });
 
-  // ExecutionPlan — precomputed per-graph release schedule.
+  // ExecutionPlan — precomputed per-graph execution / release schedule.
   nb::class_<ExecutionPlan>(
       rt_mod, "ExecutionPlan",
-      "Precomputed per-graph release schedule used by :func:`run_graph` / "
+      "Precomputed per-graph execution schedule used by :func:`run_graph` / "
       ":func:`run_function` / :func:`run_nodes` when "
       ":attr:`RuntimeContext.release_intermediates` is enabled. Captures the "
-      "structural set of names that must never be released (:func:`keep`) and, "
-      "for every node, the intermediates whose last reference falls at that node "
-      "(:func:`releasable`). Depends only on graph topology, so a single plan can "
-      "be reused across every invocation of the same model.")
+      "structural set of names that must never be released (:func:`keep`) and "
+      "the ordered list of :class:`ExecuteAction` steps (:func:`actions`) "
+      "derived from the in-place / lifetime metadata written to each node by "
+      "the in-place reuse pass. Depends only on graph topology / metadata, so a "
+      "single plan can be reused across every invocation of the same model.")
       .def(nb::init<>())
       .def(nb::init<const GraphProto &>(), nb::arg("graph"),
            "Builds the plan for ``graph``. ``keep`` is seeded with the graph's "
@@ -425,13 +426,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "keep", [](const ExecutionPlan &plan) { return plan.keep(); },
           "Returns the structural set of names that must never be released.")
-      .def(
-          "releasable", [](const ExecutionPlan &plan) { return plan.releasable(); },
-          "Returns, for each node ``i``, the list of names whose last reference "
-          "falls at ``i`` and that are not in :func:`keep`.")
       .def_prop_ro(
           "num_nodes", [](const ExecutionPlan &plan) { return plan.num_nodes(); },
-          "Number of nodes covered by this plan (``len(releasable())``).")
+          "Number of nodes covered by this plan.")
       .def(
           "actions", [](const ExecutionPlan &plan) { return plan.actions(); },
           "Returns the ordered list of :class:`ExecuteAction` steps the runtime "
@@ -442,8 +439,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             plan.ReleaseAfter(node, rt);
           },
           nb::arg("node"), nb::arg("rt"),
-          "Releases from ``rt`` every name in the :func:`releasable` slot associated "
-          "with ``node``. ``node`` must be one of the nodes the plan was built from "
+          "Releases from ``rt`` every intermediate whose last use falls at "
+          "``node``. ``node`` must be one of the nodes the plan was built from "
           "(lookup is by identity); otherwise this is a no-op.");
 
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.

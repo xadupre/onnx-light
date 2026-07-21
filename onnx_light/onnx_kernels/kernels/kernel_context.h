@@ -5,7 +5,7 @@
 #pragma once
 
 // Note: this header intentionally does NOT include
-// ``onnx_backend_test/test_case.h``, even though that header also needs
+// ``onnx_core/backend_test/test_case.h``, even though that header also needs
 // ``KernelContext``/``OpsetId``: ``test_case.h`` itself includes this
 // file, and pulling it in here would create a circular ``#include`` that
 // silently truncates whichever of the two happens to be entered first

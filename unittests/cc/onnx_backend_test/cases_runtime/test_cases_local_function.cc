@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases_runtime/local_function/include_local_function_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_kernels/kernels/kernel_context.h"

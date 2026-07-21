@@ -12,9 +12,10 @@ under ``onnx_backend_test/cases/``.
 The :cpp:struct:`TestCase` definition and its registration helpers
 (:cpp:func:`CollectTestCases`, :cpp:func:`CollectTestCasesByName`) live in
 ``onnx_core/backend_test`` (namespace ``core::backend_test``); see
-:doc:`../onnx_core/backend_test/index`. The header
-``onnx_backend_test/test_case.h`` re-exports those names into the
-``onnx_backend_test`` namespace for backward compatibility.
+:doc:`../onnx_core/backend_test/index`. The canonical header
+``onnx_core/backend_test/test_case.h`` also injects those names into the
+``onnx_backend_test`` namespace so that case source files and callers
+using the ``onnx_backend_test::`` qualifier compile unchanged.
 
 See the :doc:`../onnx_kernels/index` module for the runtime data model
 and the kernel implementations used by these test cases.
@@ -26,4 +27,3 @@ and the kernel implementations used by these test cases.
     cases_for_shapes/index
     cases_numerical/index
     cases_runtime/index
-    test_case

@@ -28,7 +28,7 @@ namespace runtime {
 // namespace: see the comment next to the ``KernelContext`` re-export in
 // ``runtime_context.h`` for why that would make every unqualified
 // ``kernel::X`` reference ambiguous in translation units that also bring
-// ``onnx_kernels`` into scope (e.g. ``onnx_backend_test/test_case.h``).
+// ``onnx_kernels`` into scope (e.g. ``onnx_core/backend_test/test_case.h``).
 using ::onnx_light::onnx_kernels::kernel::KernelBase;
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 
 #include <string>
 #include <vector>

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases_for_shapes/shape_tag/include_shape_tag_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/annotations/inplace_reuse.h"
 #include "onnx_core/annotations/value_tags.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"

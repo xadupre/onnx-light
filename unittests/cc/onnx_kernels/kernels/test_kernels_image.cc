@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/raw_buffer_allocator.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_kernels/kernels/image/include_image_kernels.h"

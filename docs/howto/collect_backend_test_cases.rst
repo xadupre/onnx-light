@@ -32,7 +32,7 @@ List every test case
 
       .. code-block:: cpp
 
-          #include "onnx_backend_test/test_case.h"
+          #include "onnx_core/backend_test/test_case.h"
 
           auto cases = onnx_backend_test::CollectTestCases();
           for (const auto &tc : cases) {
@@ -63,7 +63,7 @@ Filter by operator type or category
 
       .. code-block:: cpp
 
-          #include "onnx_backend_test/test_case.h"
+          #include "onnx_core/backend_test/test_case.h"
 
           auto add_cases = onnx_backend_test::CollectTestCases("Add");
           auto shape_cases = onnx_backend_test::CollectTestCases("shape");
@@ -104,7 +104,7 @@ substring match; anchor it with ``^...$`` for a full match.
 
       .. code-block:: cpp
 
-          #include "onnx_backend_test/test_case.h"
+          #include "onnx_core/backend_test/test_case.h"
 
           // Substring match
           auto cases = onnx_backend_test::CollectTestCasesByName("abs");

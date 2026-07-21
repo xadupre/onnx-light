@@ -4,8 +4,10 @@
 
 #include "onnx_extensions/onnx_shapes/dispatch_table.h"
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_helper.h"
@@ -1324,6 +1326,20 @@ const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
   return table;
 }
 
+using ::onnx_light::core::shapes::ComputePeakMemoryFn;
+
+// Built-in table of every ``onnx_shapes`` peak-memory function, keyed by
+// ``"<domain>:<op_type>"``. Mirrors :cpp:func:`BuiltinShapeFunctions`; only
+// used to populate the shared ``core::shapes`` peak-memory dispatch table via
+// :cpp:func:`RegisterPeakMemoryFunctions`. Operators without an entry report a
+// peak memory of ``0`` through :cpp:func:`core::shapes::ComputePeakMemory`.
+const std::unordered_map<std::string, ComputePeakMemoryFn> &BuiltinPeakMemoryFunctions() {
+  static const std::unordered_map<std::string, ComputePeakMemoryFn> table = {
+      {"ai.onnx:Attention", nn::ComputePeakMemoryAttention},
+  };
+  return table;
+}
+
 } // namespace
 } // namespace shapes
 
@@ -1343,6 +1359,22 @@ void RegisterShapeFunctions() {
       const std::size_t sep = key.find(':');
       ::onnx_light::core::shapes::RegisterComputeShapeFn(key.substr(0, sep), key.substr(sep + 1),
                                                          entry.second);
+    }
+    return true;
+  }();
+  (void)kRegistered;
+}
+
+void RegisterPeakMemoryFunctions() {
+  // Mirrors :cpp:func:`RegisterShapeFunctions` for the peak-memory dispatch
+  // table. Idempotent: the registration work runs once, guarded by a
+  // function-local static, so repeated or multi-entry-point calls are safe.
+  static const bool kRegistered = [] {
+    for (const auto &entry : shapes::BuiltinPeakMemoryFunctions()) {
+      const std::string &key = entry.first;
+      const std::size_t sep = key.find(':');
+      ::onnx_light::core::shapes::RegisterComputePeakMemoryFn(key.substr(0, sep),
+                                                              key.substr(sep + 1), entry.second);
     }
     return true;
   }();

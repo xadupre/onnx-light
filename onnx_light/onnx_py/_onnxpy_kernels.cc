@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_core/runtime/execution_plan.h"
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -16,11 +17,13 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
 #include <stdexcept>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::ExecutionPlan;
 using core::runtime::Map;
 using core::runtime::RuntimeContext;
 using core::runtime::Sequence;
@@ -317,6 +320,43 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                ", subgraph_attr_name='" + ev.subgraph_attr_name + "')";
       });
 
+  // ExecutionPlan — precomputed per-graph release schedule.
+  nb::class_<ExecutionPlan>(
+      rt_mod, "ExecutionPlan",
+      "Precomputed per-graph release schedule used by :func:`run_graph` / "
+      ":func:`run_function` / :func:`run_nodes` when "
+      ":attr:`RuntimeContext.release_intermediates` is enabled. Captures the "
+      "structural set of names that must never be released (:func:`keep`) and, "
+      "for every node, the intermediates whose last reference falls at that node "
+      "(:func:`releasable`). Depends only on graph topology, so a single plan can "
+      "be reused across every invocation of the same model.")
+      .def(nb::init<>())
+      .def(nb::init<const GraphProto &>(), nb::arg("graph"),
+           "Builds the plan for ``graph``. ``keep`` is seeded with the graph's "
+           "declared inputs, initializers and declared outputs.")
+      .def(nb::init<const FunctionProto &>(), nb::arg("func"),
+           "Builds the plan for ``func``. ``keep`` is seeded with the function's "
+           "declared inputs and outputs.")
+      .def(
+          "keep", [](const ExecutionPlan &plan) { return plan.keep(); },
+          "Returns the structural set of names that must never be released.")
+      .def(
+          "releasable", [](const ExecutionPlan &plan) { return plan.releasable(); },
+          "Returns, for each node ``i``, the list of names whose last reference "
+          "falls at ``i`` and that are not in :func:`keep`.")
+      .def_prop_ro(
+          "num_nodes", [](const ExecutionPlan &plan) { return plan.num_nodes(); },
+          "Number of nodes covered by this plan (``len(releasable())``).")
+      .def(
+          "release_after",
+          [](const ExecutionPlan &plan, const NodeProto &node, RuntimeContext &rt) {
+            plan.ReleaseAfter(node, rt);
+          },
+          nb::arg("node"), nb::arg("rt"),
+          "Releases from ``rt`` every name in the :func:`releasable` slot associated "
+          "with ``node``. ``node`` must be one of the nodes the plan was built from "
+          "(lookup is by identity); otherwise this is a no-op.");
+
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.
   nb::class_<RuntimeContext>(
       rt_mod, "RuntimeContext",
@@ -586,6 +626,28 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "when an entry was removed.")
       .def("clear_custom_kernels", &RuntimeContext::ClearCustomKernels,
            "Removes every custom kernel registration from the runtime context.")
+      .def(
+          "get_execution_plan",
+          [](RuntimeContext &rt, const GraphProto &graph) -> const ExecutionPlan & {
+            return rt.GetExecutionPlan(graph);
+          },
+          nb::arg("graph"), nb::rv_policy::reference_internal,
+          "Returns the cached :class:`ExecutionPlan` for ``graph``, building it on "
+          "first use. The plan is keyed by the identity of ``graph`` and reused "
+          "across subsequent runs of the same model, so the analysis is paid only "
+          "once for the lifetime of this :class:`RuntimeContext`.")
+      .def(
+          "get_execution_plan",
+          [](RuntimeContext &rt, const FunctionProto &func) -> const ExecutionPlan & {
+            return rt.GetExecutionPlan(func);
+          },
+          nb::arg("func"), nb::rv_policy::reference_internal,
+          "Returns the cached :class:`ExecutionPlan` for ``func``, building it on "
+          "first use. Same caching semantics as the ``GraphProto`` overload — the "
+          "structural keep set consists of the function's declared inputs and outputs.")
+      .def("clear_execution_plans", &RuntimeContext::ClearExecutionPlans,
+           "Clears every cached :class:`ExecutionPlan`. Useful when the owning model "
+           "has been mutated in place (rare).")
       .def_static(
           "collect_external_inputs",
           [](const std::vector<NodeProto> &nodes) {

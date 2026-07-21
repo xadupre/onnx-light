@@ -454,6 +454,8 @@ private:
   use_list uses_in_current_graph_;
   bool has_unique_name_{false};
   std::string unique_name_;
+  bool has_doc_string_{false};
+  std::string doc_string_;
   int32_t elem_type_{TensorProto::DataType::UNDEFINED};
   bool has_sizes_{false};
   std::vector<Dimension> sizes_;
@@ -514,6 +516,19 @@ public:
    *                             subgraphs.
    */
   Value *setUniqueName(const std::string &name, bool update_related_names = true);
+  /** @brief Returns true if a doc_string has been assigned. */
+  bool has_doc_string() const { return has_doc_string_; }
+  /** @brief Returns the doc_string of this value. */
+  const std::string &docString() const { return doc_string_; }
+  /**
+   * @brief Sets the doc_string of this value and returns @c this for chaining.
+   * @param doc_string New doc_string for this value.
+   */
+  Value *setDocString(std::string doc_string) {
+    has_doc_string_ = true;
+    doc_string_ = std::move(doc_string);
+    return this;
+  }
   /**
    * @brief Sets the stage index (forward=0, backward=1, …) and returns @c this.
    * @param s New stage index.
@@ -567,6 +582,9 @@ public:
     setSizes(from->sizes());
     if (from->has_unique_name()) {
       setUniqueName(from->uniqueName());
+    }
+    if (from->has_doc_string()) {
+      setDocString(from->docString());
     }
     return this;
   }

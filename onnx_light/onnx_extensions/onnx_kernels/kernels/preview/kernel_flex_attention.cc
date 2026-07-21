@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_extensions/kernels/kernels/preview/include_preview_kernels.h"
+#include "onnx_extensions/onnx_kernels/kernels/preview/include_preview_kernels.h"
 
 #include "onnx_core/runtime/float16_promote.h"
 

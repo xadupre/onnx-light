@@ -4,8 +4,8 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/cast_helper.h"
-#include "onnx_extensions/backend_test/cases/preview/include_preview_cases.h"
-#include "onnx_extensions/kernels/kernels/preview/include_preview_kernels.h"
+#include "onnx_extensions/onnx_backend_test/cases/preview/include_preview_cases.h"
+#include "onnx_extensions/onnx_kernels/kernels/preview/include_preview_kernels.h"
 
 #include <cmath>
 #include <cstring>

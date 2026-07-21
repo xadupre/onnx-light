@@ -263,10 +263,10 @@ and reference kernel implementations. Together they expose:
   ``onnx_light.onnx_py._onnxpybackend.backend_test``).
 
 Per-operator cases are organised under
-:epkg:`onnx_light/onnx_extensions/backend_test/cases`\ ``/<group>/`` (``math``, ``logical``,
+:epkg:`onnx_light/onnx_extensions/onnx_backend_test/cases`\ ``/<group>/`` (``math``, ``logical``,
 ``nn``, ``tensor``, …) and the expected outputs are computed with the
 reference kernels under
-:epkg:`onnx_light/onnx_extensions/kernels/kernels`\ ``/<group>/`` so the registry is
+:epkg:`onnx_light/onnx_extensions/onnx_kernels/kernels`\ ``/<group>/`` so the registry is
 fully self-contained and deterministic.
 
 A minimal C++ runtime evaluator therefore looks like:
@@ -287,8 +287,8 @@ A minimal C++ runtime evaluator therefore looks like:
     }
 
 The library ships its own GoogleTest-based unit tests under
-:epkg:`unittests/cc/onnx_extensions/kernels` and
-:epkg:`unittests/cc/onnx_extensions/backend_test`.
+:epkg:`unittests/cc/onnx_extensions/onnx_kernels` and
+:epkg:`unittests/cc/onnx_extensions/onnx_backend_test`.
 To build and run them, configure
 the project with ``ONNX_LIGHT_BUILD_TESTS=ON`` and use ``ctest``:
 
@@ -308,8 +308,8 @@ See also
 
 * :ref:`l-cpp-run-backend-test-ort-example` — standalone C++ example that
   runs the same registry against ONNXRuntime.
-* :doc:`../api/cpp/onnx_extensions/kernels/index` — C++ API reference for the
+* :doc:`../api/cpp/onnx_extensions/onnx_kernels/index` — C++ API reference for the
   :epkg:`lib_onnx_kernels` library (kernels and runtime data model).
-* :doc:`../api/cpp/onnx_extensions/backend_test/index` — C++ API reference for
+* :doc:`../api/cpp/onnx_extensions/onnx_backend_test/index` — C++ API reference for
   the :epkg:`lib_onnx_backend_test` library (per-operator test-case
   registries).

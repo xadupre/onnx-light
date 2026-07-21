@@ -4,8 +4,8 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/random.h"
-#include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
-#include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_extensions/onnx_backend_test/cases/nn/include_nn_cases.h"
+#include "onnx_extensions/onnx_kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_proto/onnx_helper.h"
 

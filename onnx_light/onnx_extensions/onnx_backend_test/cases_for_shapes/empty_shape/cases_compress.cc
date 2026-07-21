@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
-#include "onnx_extensions/backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
-#include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_extensions/onnx_backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
+#include "onnx_extensions/onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <optional>

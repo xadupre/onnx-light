@@ -6,8 +6,8 @@
 
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_extensions/kernels/kernels/auto_pad.h"
-#include "onnx_extensions/kernels/kernels/kernel_context.h"
+#include "onnx_extensions/onnx_kernels/kernels/auto_pad.h"
+#include "onnx_core/runtime/kernel_context.h"
 
 #include <cstdint>
 #include <string>

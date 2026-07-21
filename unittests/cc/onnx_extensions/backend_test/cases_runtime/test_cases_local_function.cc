@@ -5,8 +5,8 @@
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_extensions/backend_test/cases_runtime/local_function/include_local_function_cases.h"
-#include "onnx_extensions/kernels/kernels/kernel_context.h"
+#include "onnx_extensions/onnx_backend_test/cases_runtime/local_function/include_local_function_cases.h"
+#include "onnx_core/runtime/kernel_context.h"
 
 #include <gtest/gtest.h>
 

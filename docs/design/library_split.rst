@@ -139,12 +139,12 @@ Summary of each library
         (and transitively on ``lib_onnx_proto``).  Does **not** depend
         on ``lib_onnx_op``.
     * - ``onnx_light::lib_onnx_kernels`` (in-tree target ``lib_onnx_kernels``):
-        ``onnx_light/onnx_extensions/kernels/``
+        ``onnx_light/onnx_extensions/onnx_kernels/``
       - C++ **reference implementation** of the ONNX operators used to
         evaluate models in-process.  Contains the runtime data model
         (``struct Tensor``, ``struct Sequence``, :class:`~onnx_light.onnx.reference.RuntimeContext`,
         ``RunGraph`` / ``RunFunction`` / ``RunModel``) and a kernel for
-        each supported operator under ``onnx_extensions/kernels/kernels/<group>/``
+        each supported operator under ``onnx_extensions/onnx_kernels/kernels/<group>/``
         (``math``, ``logical``, ``nn``, ``tensor``, ``sequence``,
         ``controlflow``, ``traditionalml``, ...).  Together with the
         ``SplitMix64``-based deterministic pseudo-random helpers it
@@ -155,7 +155,7 @@ Summary of each library
         (and transitively on ``lib_onnx_proto``).
     * - ``onnx_light::lib_onnx_backend_test`` (in-tree target
         ``lib_onnx_backend_test``):
-        ``onnx_light/onnx_extensions/backend_test/``
+        ``onnx_light/onnx_extensions/onnx_backend_test/``
       - Backend test infrastructure (``struct TestCase``, the
         ``Expect`` helper and the ``CollectTestCases`` registry) plus
         the per-operator ``RegisterXxxCases`` functions that build

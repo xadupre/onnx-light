@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_extensions/backend_test/cases/object_detection/include_object_detection_cases.h"
+#include "onnx_extensions/onnx_backend_test/cases/object_detection/include_object_detection_cases.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {

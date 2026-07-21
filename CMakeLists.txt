@@ -140,8 +140,8 @@ set(ONNX_CORE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_core")
 set(ONNX_MANIPULATIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_manipulations")
 set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
 set(ONNX_SHAPE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/onnx_shapes")
-set(ONNX_BACKEND_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/backend_test")
-set(ONNX_KERNELS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/kernels")
+set(ONNX_BACKEND_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/onnx_backend_test")
+set(ONNX_KERNELS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/onnx_kernels")
 set(ONNX_GRADIENT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/onnx_gradient")
 
 # List all files to be built.
@@ -173,7 +173,7 @@ file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_SHAPE_SOURCES CONFIGURE_DEPENDS "${ONNX_SHAPE_PATH}/*.cc")
 # Kernel sources (operator implementations) and the small runtime
 # infrastructure they rely on (``TestCase``, ``Tensor``, ``RunNodes``,
-# pseudo-random helpers, ...) live in their own ``onnx_light/onnx_extensions/kernels``
+# pseudo-random helpers, ...) live in their own ``onnx_light/onnx_extensions/onnx_kernels``
 # tree and are compiled into the dedicated ``lib_onnx_kernels`` library so
 # that consumers can take a dependency on the kernels alone, independent
 # of the surrounding backend-test cases.
@@ -427,7 +427,7 @@ target_precompile_headers(lib_onnx_kernels PRIVATE
 # expect()) and a registry of C++-implemented backend test node cases.
 #
 # The operator kernel implementations themselves live in the separate
-# ``lib_onnx_kernels`` target (built from ``onnx_extensions/kernels/kernels``)
+# ``lib_onnx_kernels`` target (built from ``onnx_extensions/onnx_kernels/kernels``)
 # which ``lib_onnx_backend_test`` PUBLIC-links so existing consumers
 # transparently keep getting both the test infrastructure and the
 # kernels.
@@ -448,7 +448,7 @@ target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto lib_onnx_kerne
 
 # Speed up the build of lib_onnx_backend_test by precompiling the small set
 # of headers that virtually every one of the case source files in
-# onnx_light/onnx_extensions/backend_test/cases/ ends up parsing. The common base is
+# onnx_light/onnx_extensions/onnx_backend_test/cases/ ends up parsing. The common base is
 # ``onnx_core/backend_test/test_case.h`` (which transitively brings in ``onnx.h``
 # and ``simple_tensor.h``) and a handful of widely used C++ standard headers
 # (``<vector>``, ``<string>``, ``<cstdint>``, ``<stdexcept>``). Without a
@@ -1048,16 +1048,16 @@ if(ONNX_LIGHT_INSTALL)
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
-  # Install public headers from onnx_light/onnx_extensions/backend_test
+  # Install public headers from onnx_light/onnx_extensions/onnx_backend_test
   if(ONNX_LIGHT_BUILD_KERNELS)
     install(DIRECTORY "${ONNX_BACKEND_TEST_PATH}/"
-      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_extensions/backend_test"
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_extensions/onnx_backend_test"
       FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     )
 
-    # Install public headers from onnx_light/onnx_extensions/kernels
+    # Install public headers from onnx_light/onnx_extensions/onnx_kernels
     install(DIRECTORY "${ONNX_KERNELS_PATH}/"
-      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_extensions/kernels"
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_extensions/onnx_kernels"
       FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     )
   endif()

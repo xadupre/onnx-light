@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "onnx_core/shapes/shape_check.h"
-#include "onnx_extensions/kernels/kernels/auto_pad.h"
+#include "onnx_extensions/onnx_kernels/kernels/auto_pad.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

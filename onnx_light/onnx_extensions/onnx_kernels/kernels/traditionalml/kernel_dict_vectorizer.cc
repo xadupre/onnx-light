@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_extensions/onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>

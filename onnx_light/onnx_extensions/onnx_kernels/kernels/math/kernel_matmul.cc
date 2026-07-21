@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
-#include "onnx_extensions/kernels/kernels/math/matmul_shape_utils.h"
+#include "onnx_extensions/onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_extensions/onnx_kernels/kernels/math/matmul_shape_utils.h"
 
 #include "onnx_core/runtime/float16_promote.h"
 

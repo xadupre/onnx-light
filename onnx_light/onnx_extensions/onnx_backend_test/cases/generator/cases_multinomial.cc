@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
-#include "onnx_extensions/backend_test/cases/generator/include_generator_cases.h"
-#include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
+#include "onnx_extensions/onnx_backend_test/cases/generator/include_generator_cases.h"
+#include "onnx_extensions/onnx_kernels/kernels/generator/include_generator_kernels.h"
 
 #include <cstdint>
 #include <string>

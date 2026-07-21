@@ -4,9 +4,9 @@
 
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
 #include "onnx_backend_test/cases_for_shapes/inference/inference_random_weights.h"
-#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/annotations/inplace_reuse.h"
 #include "onnx_core/annotations/value_tags.h"
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cmath>

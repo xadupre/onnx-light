@@ -152,8 +152,7 @@ void ExecutionPlan::BuildActions() {
   actions_.clear();
 
   const std::unordered_set<std::string> input_set(inputs_.begin(), inputs_.end());
-  const std::unordered_set<std::string> initializer_set(initializers_.begin(),
-                                                        initializers_.end());
+  const std::unordered_set<std::string> initializer_set(initializers_.begin(), initializers_.end());
 
   // Collect the names classified as "shape" by value tagging across the whole
   // node range (via the per-node release_after_shape_tag annotation). A value in
@@ -197,8 +196,8 @@ void ExecutionPlan::BuildActions() {
     // Read the in-place reuse decisions attached to this node so that an output
     // covered by a reuse opportunity reuses an input buffer instead of being
     // freshly allocated.
-    const std::vector<annotations::InPlaceReuse> reuse = ParseInPlaceReuse(
-        ReadNodeMetadata(node, annotations::kInPlaceReuseMetadataKey));
+    const std::vector<annotations::InPlaceReuse> reuse =
+        ParseInPlaceReuse(ReadNodeMetadata(node, annotations::kInPlaceReuseMetadataKey));
 
     // Allocate a result (or create a shape) for each named output.
     for (int o = 0; o < node.output_size(); ++o) {

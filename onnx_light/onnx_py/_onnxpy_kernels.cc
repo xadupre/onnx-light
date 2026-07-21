@@ -390,8 +390,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "Whether a ``kAllocateBuffer`` action reuses an input buffer in place "
           "instead of allocating fresh memory.")
       .def_prop_ro(
-          "inplace_output_index",
-          [](const ExecuteAction &a) { return a.inplace().output_index; },
+          "inplace_output_index", [](const ExecuteAction &a) { return a.inplace().output_index; },
           "Output index of the in-place reuse decision (``-1`` when not in place).")
       .def_prop_ro(
           "inplace_input_index", [](const ExecuteAction &a) { return a.inplace().input_index; },

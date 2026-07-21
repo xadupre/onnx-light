@@ -447,6 +447,25 @@ class TestExecutionPlanBindings(ExtTestCase):
         self.assertFalse(action.has_allocator)
         self.assertIn("LockInput", repr(action))
 
+    def test_execution_plan_actions_shape_tag(self):
+        model = parser.parse_model(self._PLAN_SRC)
+        node = model.graph.node
+        # "t1" is released at the final node and value-tagged as a shape; "t0" is
+        # a regular data result also released there.
+        node[2].add_metadata("onnx_light.release_after", "t1;t0")
+        node[2].add_metadata("onnx_light.release_after_shape_tag", "t1")
+        plan = rt.ExecutionPlan(model.graph)
+        actions = plan.actions()
+        # A shape is created for "t1" (no data buffer) and destroyed on release.
+        self.assertIn(("CreateShape", "t1"), [(a.kind_name, a.name) for a in actions])
+        self.assertIn(("DeleteShape", "t1"), [(a.kind_name, a.name) for a in actions])
+        # "t0" is a result: it is allocated and freed as a buffer.
+        self.assertIn(("AllocateBuffer", "t0"), [(a.kind_name, a.name) for a in actions])
+        self.assertIn(("DeleteBuffer", "t0"), [(a.kind_name, a.name) for a in actions])
+        # The shape value is never allocated / freed as a buffer.
+        self.assertNotIn(("AllocateBuffer", "t1"), [(a.kind_name, a.name) for a in actions])
+        self.assertNotIn(("DeleteBuffer", "t1"), [(a.kind_name, a.name) for a in actions])
+
     def test_default_execution_plan_has_no_actions(self):
         plan = rt.ExecutionPlan()
         self.assertEqual(plan.actions(), [])
@@ -463,9 +482,12 @@ class TestExecutionPlanBindings(ExtTestCase):
         node[2].add_metadata("onnx_light.release_after", "t1;t0")
         plan = rt.ExecutionPlan(model.graph)
         kinds = [(a.kind_name, a.name) for a in plan.actions()]
-        # The single input is locked first and unlocked last.
+        # The single input is locked first and, since it is only read by the
+        # first node, unlocked right after that node runs.
         self.assertEqual(kinds[0], ("LockInput", "x"))
-        self.assertEqual(kinds[-1], ("UnlockInput", "x"))
+        self.assertIn(("UnlockInput", "x"), kinds)
+        first_execute = kinds.index(("ExecuteNode", ""))
+        self.assertGreater(kinds.index(("UnlockInput", "x")), first_execute)
         # Exactly one ExecuteNode action per node, in order.
         execute_indices = [a.node_index for a in plan.actions() if a.kind_name == "ExecuteNode"]
         self.assertEqual(execute_indices, [0, 1, 2])

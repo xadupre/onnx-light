@@ -4063,8 +4063,7 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
   // Node 0 (Abs) reuses input "x" in place for its output "t"; node 1 (Neg)
   // releases the intermediate "t" (its last use) and marks "x" as not used
   // after it.
-  (*graph.mutable_node())[0].add_metadata(core::annotations::kInPlaceReuseMetadataKey,
-                                          "0:0:equal");
+  (*graph.mutable_node())[0].add_metadata(core::annotations::kInPlaceReuseMetadataKey, "0:0:equal");
   (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "t");
   (*graph.mutable_node())[1].add_metadata(core::annotations::kNotUsedAfterMetadataKey, "x");
 
@@ -4117,6 +4116,50 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
   EXPECT_TRUE(t_inplace);
   EXPECT_TRUE(y_allocated);
   EXPECT_TRUE(t_deleted);
+}
+
+TEST(RunNodes, ExecutionPlanShapeTagActions) {
+  // A value tagged "shape" gets its shape created / destroyed (no data buffer),
+  // while a regular result gets its buffer allocated / freed.
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Shape", {"x"}, {"s"}));
+  graph.ref_node().push_back(MakeNode("Reshape", {"x", "s"}, {"y"}));
+
+  // "s" is released at node 1 and is value-tagged as a shape.
+  (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "s");
+  (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterShapeTagMetadataKey, "s");
+
+  core::runtime::SimpleRawBufferAllocator allocator(8);
+  core::runtime::ExecutionPlan plan(graph, &allocator);
+
+  using core::runtime::ExecuteActionKind;
+  bool s_shape_created = false;
+  bool s_shape_deleted = false;
+  bool s_buffer_touched = false;
+  for (const auto &action : plan.actions()) {
+    if (action.name() != "s") {
+      continue;
+    }
+    if (action.kind() == ExecuteActionKind::kCreateShape) {
+      s_shape_created = true;
+    }
+    if (action.kind() == ExecuteActionKind::kDeleteShape) {
+      s_shape_deleted = true;
+    }
+    if (action.kind() == ExecuteActionKind::kAllocateBuffer ||
+        action.kind() == ExecuteActionKind::kDeleteBuffer) {
+      s_buffer_touched = true;
+    }
+  }
+  EXPECT_TRUE(s_shape_created);
+  EXPECT_TRUE(s_shape_deleted);
+  EXPECT_FALSE(s_buffer_touched);
 }
 
 // ---------------------------------------------------------------------------

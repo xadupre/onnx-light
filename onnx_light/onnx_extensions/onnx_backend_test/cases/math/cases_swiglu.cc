@@ -1,0 +1,67 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_core/backend_test/test_case.h"
+#include "onnx_extensions/onnx_backend_test/cases/math/include_math_cases.h"
+#include "onnx_extensions/onnx_kernels/kernels/math/include_math_kernels.h"
+
+#include <vector>
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_backend_test {
+
+// ---------------------------------------------------------------------------
+// SwiGLU — gated activation Y = Swish_alpha(A) * B with
+// Swish_alpha(a) = a * sigmoid(alpha * a). Inputs A (gate) and B (value) must
+// have identical shapes (no broadcasting). ``alpha`` defaults to 1.0.
+// ---------------------------------------------------------------------------
+void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
+  const OpsetId opset = DefaultOpset(28);
+  const KernelContext ctx{opset};
+  const onnx_kernels::kernel::SwiGLU swiglu_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    ExpectBenchmarkBinaryFloat("SwiGLU", swiglu_kernel, "test_cc_swiglu_benchmark", opset,
+                               registry);
+    return;
+  }
+
+  {
+    NodeProto node;
+    node.set_op_type("SwiGLU");
+    node.add_input("A");
+    node.add_input("B");
+    node.add_output("Y");
+    Expect(registry, std::move(node), "test_cc_swiglu", {opset}, [=]() -> IoData {
+      // No alpha attribute: defaults to 1.0.
+      Tensor a = Tensor::FromFloat("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
+      Tensor b = Tensor::FromFloat("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
+      Tensor y = swiglu_kernel(a, b);
+      return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
+    });
+  }
+
+  {
+    NodeProto node;
+    node.set_op_type("SwiGLU");
+    node.add_input("A");
+    node.add_input("B");
+    node.add_output("Y");
+
+    AttributeProto *alpha = node.add_attribute();
+    alpha->set_name("alpha");
+    alpha->set_type(AttributeProto::FLOAT);
+    Expect(registry, std::move(node), "test_cc_swiglu_alpha", {opset}, [=]() -> IoData {
+      alpha->set_f(0.5f);
+
+      Tensor a = Tensor::FromFloat("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
+      Tensor b = Tensor::FromFloat("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
+      Tensor y = swiglu_kernel(a, b, 0.5f);
+      return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
+    });
+  }
+}
+
+} // namespace onnx_backend_test
+} // namespace ONNX_LIGHT_NAMESPACE

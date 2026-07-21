@@ -575,6 +575,10 @@ void ComputeShapeSigmoid(ShapesContext &ctx, const NodeProto &node, const char *
 /// Swish is element-wise unary: output dtype and shape match the input.
 void ComputeShapeSwish(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// SwiGLU requires A and B to share the same shape: output dtype and shape
+/// match the gate input A (no broadcasting).
+void ComputeShapeSwiGLU(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
 /// Softmax preserves dtype/shape and validates the axis attribute.
 void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x);
 

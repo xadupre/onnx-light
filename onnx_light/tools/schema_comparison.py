@@ -230,6 +230,7 @@ ONNX_SHAPES_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Sqrt"),
         ("ai.onnx", "STFT"),
         ("ai.onnx", "Sum"),
+        ("ai.onnx", "SwiGLU"),
         ("ai.onnx", "Swish"),
         ("ai.onnx", "StringConcat"),
         ("ai.onnx", "StringSplit"),

@@ -840,7 +840,7 @@ void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx,
 void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Device device) {
   for (NodeProto &node : *graph.mutable_node()) {
     std::vector<SymShape> input_shapes;
-    input_shapes.reserve(static_cast<std::size_t>(node.input().size()));
+    input_shapes.reserve(node.input().size());
     for (const auto &input_name : node.input()) {
       if (!input_name.empty() && ctx.Has(input_name)) {
         input_shapes.push_back(ctx.Get(input_name).Shape());

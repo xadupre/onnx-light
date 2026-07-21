@@ -5,10 +5,10 @@
 // C++ unit tests for onnx_gradient::GradientOfNodes and
 // onnx_gradient::GradientOfFunction.
 
-#include "onnx_gradient/gradient.h"
+#include "onnx_extensions/onnx_gradient/gradient.h"
 
 #include "onnx_core/backend_test/test_case.h"
-#include "onnx_gradient/gradient/grad_dispatcher.h"
+#include "onnx_extensions/onnx_gradient/gradient/grad_dispatcher.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/onnx_helper.h"
 #include <algorithm>

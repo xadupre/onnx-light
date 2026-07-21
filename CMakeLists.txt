@@ -142,7 +142,7 @@ set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
 set(ONNX_SHAPE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/onnx_shapes")
 set(ONNX_BACKEND_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_backend_test")
 set(ONNX_KERNELS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_kernels")
-set(ONNX_GRADIENT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_gradient")
+set(ONNX_GRADIENT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/onnx_gradient")
 
 # List all files to be built.
 file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS
@@ -680,7 +680,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   file(GLOB_RECURSE ONNX_CPP_SHAPE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/onnx_shapes/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test/test_*.cc")
-  file(GLOB_RECURSE ONNX_CPP_GRADIENT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_gradient/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_GRADIENT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/onnx_gradient/test_*.cc")
   set(ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST
       "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_stream_class_print.cc")
   list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
@@ -780,7 +780,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
                  FILES ${ONNX_CPP_KERNELS_TEST_SOURCES})
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test" PREFIX "Source Files/cc/onnx_backend_test"
                  FILES ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES})
-    source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_gradient" PREFIX "Source Files/cc/onnx_gradient"
+    source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/onnx_gradient" PREFIX "Source Files/cc/onnx_gradient"
                  FILES ${ONNX_CPP_GRADIENT_TEST_SOURCES})
   endif()
 endif()

@@ -2,22 +2,22 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_gradient/gradient/grad_common.h"
-#include "onnx_gradient/gradient/tensor/include_tensor_grads.h"
+#include "onnx_extensions/onnx_gradient/gradient/grad_dispatcher.h"
+#include "onnx_extensions/onnx_gradient/gradient/reduction/include_reduction_grads.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_gradient {
 
-bool GradReshape(const NodeProto &node, const std::string &output_grad,
-                 std::unordered_map<std::string, std::string> &grad_accum, int &counter,
-                 FunctionProto &func) {
+bool GradReduceSum(const NodeProto &node, const std::string &output_grad,
+                   std::unordered_map<std::string, std::string> &grad_accum, int &counter,
+                   FunctionProto &func) {
   const auto &inputs = node.input();
   if (inputs.size() >= 1 && !inputs[0].empty()) {
     const std::string &A = inputs[0];
     std::string shape_A = NewGradName("shape_A", counter);
     func.add_node("Shape", {A}, {shape_A});
     std::string dA = NewGradName("dA", counter);
-    func.add_node("Reshape", {output_grad, shape_A}, {dA});
+    func.add_node("Expand", {output_grad, shape_A}, {dA});
     AccumulateGrad(dA, grad_accum[A], counter, func);
   }
   return true;

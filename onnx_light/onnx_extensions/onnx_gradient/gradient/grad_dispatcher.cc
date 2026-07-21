@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_gradient/gradient/grad_dispatcher.h"
-#include "onnx_gradient/gradient/math/include_math_grads.h"
-#include "onnx_gradient/gradient/nn/include_nn_grads.h"
-#include "onnx_gradient/gradient/reduction/include_reduction_grads.h"
-#include "onnx_gradient/gradient/tensor/include_tensor_grads.h"
+#include "onnx_extensions/onnx_gradient/gradient/grad_dispatcher.h"
+#include "onnx_extensions/onnx_gradient/gradient/math/include_math_grads.h"
+#include "onnx_extensions/onnx_gradient/gradient/nn/include_nn_grads.h"
+#include "onnx_extensions/onnx_gradient/gradient/reduction/include_reduction_grads.h"
+#include "onnx_extensions/onnx_gradient/gradient/tensor/include_tensor_grads.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_gradient {

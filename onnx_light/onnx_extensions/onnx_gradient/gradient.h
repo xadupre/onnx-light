@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "onnx_gradient/gradient/grad_dispatcher.h"
+#include "onnx_extensions/onnx_gradient/gradient/grad_dispatcher.h"
 #include "onnx_proto/onnx.h"
 #include <span>
 #include <string>

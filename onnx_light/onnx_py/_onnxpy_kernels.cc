@@ -382,8 +382,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "Number of bytes for buffer allocations (``0`` when unknown).")
       .def_prop_ro(
           "has_allocator", [](const ExecuteAction &a) { return a.allocator() != nullptr; },
-          "Whether the action references a :cpp:class:`RawBufferAllocator` "
-          "(true for allocation / deallocation actions backed by an allocator).")
+          "Whether the action references a raw buffer allocator (true for "
+          "allocation / deallocation actions backed by an allocator).")
       .def("__repr__", [](const ExecuteAction &a) {
         return std::string("ExecuteAction(kind='") + a.kind_name() + "', name='" + a.name() +
                "', target='" + a.target() + "', node_index=" + std::to_string(a.node_index()) +

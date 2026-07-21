@@ -5,11 +5,12 @@
 // Defines CollectTestCases and CollectTestCasesByName (declared in
 // onnx_core/backend_test/test_case.h) and registers all per-category
 // collector functions into the global registry defined in
-// onnx_core/backend_test/test_case.cc.  This file must be compiled as part of
+// onnx_core/backend_test/test_case_registry.cc.  This file must be compiled as part of
 // lib_onnx_backend_test (not lib_onnx_core) because it takes a direct
 // dependency on every onnx_backend_test case category.
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case_registry.h"
 
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"

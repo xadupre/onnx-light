@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case_registry.h"
 
 #include <stdexcept>
 #include <unordered_set>
@@ -369,20 +370,6 @@ void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string
   if (it != entries.end()) {
     it->second(registry, mode);
   }
-}
-
-std::vector<TestCasesCollectorFn> &GetRegisteredCollectorsMutable() {
-  static std::vector<TestCasesCollectorFn> registry;
-  return registry;
-}
-
-int RegisterTestCasesCollector(TestCasesCollectorFn fn) {
-  GetRegisteredCollectorsMutable().push_back(std::move(fn));
-  return 0;
-}
-
-const std::vector<TestCasesCollectorFn> &GetRegisteredCollectors() {
-  return GetRegisteredCollectorsMutable();
 }
 
 } // namespace backend_test

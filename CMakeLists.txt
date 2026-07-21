@@ -460,6 +460,7 @@ target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto lib_onnx_kerne
 # ``lib_onnx_backend_test`` still see the regular public headers.
 target_precompile_headers(lib_onnx_backend_test PRIVATE
     "${ONNX_CORE_PATH}/backend_test/test_case.h"
+    "${ONNX_CORE_PATH}/backend_test/test_case_registry.h"
     <algorithm>
     <cmath>
     <cstdint>

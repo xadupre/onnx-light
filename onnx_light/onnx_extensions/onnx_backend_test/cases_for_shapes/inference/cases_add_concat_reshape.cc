@@ -110,8 +110,9 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   Tensor x = Tensor::FromFloat("X", data_shape, x_values);
   Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
   const Tensor new_shape = Tensor::FromInt64("", {3}, {0, 0, -1});
-  Tensor z_pre_abs =
-      onnx_kernels::kernel::Reshape(ctx)(onnx_kernels::kernel::Concat(ctx)({onnx_kernels::kernel::Add(ctx)(x, y), x}, /*axis=*/2), new_shape);
+  Tensor z_pre_abs = onnx_kernels::kernel::Reshape(ctx)(
+      onnx_kernels::kernel::Concat(ctx)({onnx_kernels::kernel::Add(ctx)(x, y), x}, /*axis=*/2),
+      new_shape);
   Tensor z = onnx_kernels::kernel::Abs(ctx)(z_pre_abs);
   z.name = "Z";
 

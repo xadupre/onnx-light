@@ -189,7 +189,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_resize_upsample_scales_nearest", {opset13}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
-             onnx_kernels::kernel::Resize::Attributes attrs; // defaults: half_pixel + round_prefer_floor
+             onnx_kernels::kernel::Resize::Attributes
+                 attrs; // defaults: half_pixel + round_prefer_floor
              const Tensor Y = resize_kernel(X, scales, attrs);
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });

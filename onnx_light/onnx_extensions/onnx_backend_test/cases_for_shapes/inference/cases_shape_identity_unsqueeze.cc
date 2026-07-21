@@ -137,7 +137,8 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
   Tensor input_tensor = Tensor::FromFloat("input", input_shape, input_values);
 
   // Shape(input) -> [1, 1, ..., 1] (kAxisCount INT64 entries)
-  Tensor shape_out = onnx_kernels::kernel::Shape(ctx)(input_tensor, onnx_kernels::kernel::Shape::Attributes{});
+  Tensor shape_out =
+      onnx_kernels::kernel::Shape(ctx)(input_tensor, onnx_kernels::kernel::Shape::Attributes{});
   // Identity is a no-op other than renaming the output.
   Tensor identity_out = shape_out;
   identity_out.name = "identity_out";

@@ -60,7 +60,8 @@ void EmitArgReduceCase(std::vector<TestCase> &registry, const std::string &op_ty
 // for the substring check, but the larger shape also adds meaningful
 // behavioural coverage beyond the 2x2 example.
 void RegisterArgReduceCases(std::vector<TestCase> &registry, const std::string &op_type,
-                            onnx_kernels::kernel::ArgReduce::Mode mode, const std::string &name_prefix) {
+                            onnx_kernels::kernel::ArgReduce::Mode mode,
+                            const std::string &name_prefix) {
   // The upstream example input shared across every ``_example`` variant.
   const std::vector<int64_t> example_shape = {2, 2};
   const std::vector<float> example_values = {2.0f, 2.0f, 3.0f, 10.0f};
@@ -121,7 +122,8 @@ void RegisterArgMaxCases(std::vector<TestCase> &registry, TestMode mode) {
 
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ArgReduce arg_kernel{ctx, onnx_kernels::kernel::ArgReduce::Mode::kMax};
+  const onnx_kernels::kernel::ArgReduce arg_kernel{ctx,
+                                                   onnx_kernels::kernel::ArgReduce::Mode::kMax};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -148,7 +150,8 @@ void RegisterArgMinCases(std::vector<TestCase> &registry, TestMode mode) {
 
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ArgReduce arg_kernel{ctx, onnx_kernels::kernel::ArgReduce::Mode::kMin};
+  const onnx_kernels::kernel::ArgReduce arg_kernel{ctx,
+                                                   onnx_kernels::kernel::ArgReduce::Mode::kMin};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;

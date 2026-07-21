@@ -95,8 +95,8 @@ void RegisterBernoulliCases(std::vector<TestCase> &registry, TestMode mode) {
   // Default attributes: no seed, dtype matches input (FLOAT).
   {
     const Tensor x = Tensor::FromFloat("", /*shape=*/{static_cast<int64_t>(probs.size())}, probs);
-    RegisterOneBernoulli("test_cc_bernoulli", x, onnx_kernels::kernel::Bernoulli::kNoSeed, /*dtype=*/0, registry,
-                         opset);
+    RegisterOneBernoulli("test_cc_bernoulli", x, onnx_kernels::kernel::Bernoulli::kNoSeed,
+                         /*dtype=*/0, registry, opset);
   }
 
   // dtype = DOUBLE: output element type is overridden by the attribute.

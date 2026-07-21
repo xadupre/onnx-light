@@ -32,7 +32,8 @@ void RegisterSequenceInsertCase(const std::string &name, const std::vector<Tenso
     position_tensor = Tensor::FromInt64("position", {}, {position});
     pos_ptr = &position_tensor;
   }
-  const Sequence out_seq = onnx_kernels::kernel::SequenceInsert(ctx)(seq, tensor_to_insert, pos_ptr);
+  const Sequence out_seq =
+      onnx_kernels::kernel::SequenceInsert(ctx)(seq, tensor_to_insert, pos_ptr);
 
   std::vector<Tensor> out_values(out_seq.values.begin(), out_seq.values.end());
   Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(out_values);

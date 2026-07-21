@@ -149,7 +149,7 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
                                                {int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1},
                                                 int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1}});
   Tensor padded = onnx_kernels::kernel::Pad{ctx}(x_tensor, pads_tensor, /*constant_value=*/nullptr,
-                                   /*axes=*/nullptr, "reflect");
+                                                 /*axes=*/nullptr, "reflect");
   padded.name = "padded";
 
   // Conv with the 3×3 Laplacian kernel, no padding: [2, 1, 7, 9] → [2, 1, 5, 7].
@@ -166,7 +166,7 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
   const Tensor axes_tensor =
       Tensor::FromInt64("", {4}, {int64_t{0}, int64_t{1}, int64_t{2}, int64_t{3}});
   Tensor avg = onnx_kernels::kernel::ReduceMean{ctx}(filtered, axes_tensor, /*keepdims=*/true,
-                                       /*noop_with_empty_axes=*/false);
+                                                     /*noop_with_empty_axes=*/false);
   avg.name = "avg";
 
   // Sub(filtered, avg): broadcasts the scalar mean back to the filtered shape.

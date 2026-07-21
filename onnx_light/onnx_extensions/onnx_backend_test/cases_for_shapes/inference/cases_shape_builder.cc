@@ -506,7 +506,8 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
   Tensor y = Tensor::FromFloat("Y", {kA, kC}, y_values);
 
   Tensor xy = onnx_kernels::kernel::Concat(ctx)({x, y}, /*axis=*/1);
-  std::vector<Tensor> splits = onnx_kernels::kernel::Split(ctx)(xy, /*axis=*/1, /*split=*/{}, /*num_outputs=*/2);
+  std::vector<Tensor> splits =
+      onnx_kernels::kernel::Split(ctx)(xy, /*axis=*/1, /*split=*/{}, /*num_outputs=*/2);
   Tensor zs = onnx_kernels::kernel::Concat(ctx)({splits[1], splits[0]}, /*axis=*/1);
   Tensor z = onnx_kernels::kernel::Relu(ctx)(zs);
   z.name = "Z";

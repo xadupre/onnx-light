@@ -67,7 +67,8 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
   Tensor nz = onnx_kernels::kernel::NonZero(ctx)(mul_out);
   nz.name = "nz";
   Tensor transposed_nz = onnx_kernels::kernel::Transpose(ctx)(nz, /*perm=*/{});
-  Tensor nz_float_pre_abs = onnx_kernels::kernel::Cast(ctx)(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
+  Tensor nz_float_pre_abs =
+      onnx_kernels::kernel::Cast(ctx)(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
   Tensor nz_float = onnx_kernels::kernel::Abs(ctx)(nz_float_pre_abs);
   nz_float.name = "nz_float";
 

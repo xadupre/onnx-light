@@ -18,8 +18,8 @@ namespace onnx_backend_test {
 namespace {
 
 void EmitReduceMinMaxCase(std::vector<TestCase> &registry, const std::string &op_type,
-                          const onnx_kernels::kernel::ReduceMinMax &kernel, const std::string &case_name,
-                          const std::vector<int64_t> &data_shape,
+                          const onnx_kernels::kernel::ReduceMinMax &kernel,
+                          const std::string &case_name, const std::vector<int64_t> &data_shape,
                           const std::vector<float> &data_values,
                           const std::vector<int64_t> &axes_values, bool keepdims,
                           bool noop_with_empty_axes) {
@@ -67,7 +67,8 @@ void EmitReduceMinMaxDefaultAxesCase(std::vector<TestCase> &registry, const std:
 }
 
 void RegisterReduceMinMaxCases(std::vector<TestCase> &registry, const std::string &op_type,
-                               const onnx_kernels::kernel::ReduceMinMax &kernel, const std::string &name_prefix) {
+                               const onnx_kernels::kernel::ReduceMinMax &kernel,
+                               const std::string &name_prefix) {
   const std::vector<int64_t> shape = {3, 2, 2};
   const std::vector<float> values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
                                      7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};

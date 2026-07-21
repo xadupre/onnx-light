@@ -52,8 +52,8 @@ std::vector<float> Iota(int64_t n) {
 }
 
 void RegisterUnsqueezeOneAxisCase(std::vector<TestCase> &registry, const OpsetId &opset,
-                                  const onnx_kernels::kernel::Unsqueeze &unsqueeze_kernel, int64_t axis,
-                                  const std::string &name) {
+                                  const onnx_kernels::kernel::Unsqueeze &unsqueeze_kernel,
+                                  int64_t axis, const std::string &name) {
   Expect(registry, MakeUnsqueezeNodeXY(), name, {opset}, [=]() -> IoData {
     const Tensor x = Tensor::FromFloat("", {3, 4, 5}, Iota(60));
     const std::vector<int64_t> axes{axis};

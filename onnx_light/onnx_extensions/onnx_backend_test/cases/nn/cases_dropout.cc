@@ -32,9 +32,9 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
                                              Randn<float>({kBenchmarkElementwiseSize}, 1601));
              Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
                          std::vector<uint8_t>(static_cast<size_t>(kBenchmarkElementwiseSize), 1));
-             Tensor output =
-                 dropout_kernel(data, /*ratio=*/0.5f,
-                                /*training_mode=*/false, mask, onnx_kernels::kernel::Dropout::kNoSeed);
+             Tensor output = dropout_kernel(data, /*ratio=*/0.5f,
+                                            /*training_mode=*/false, mask,
+                                            onnx_kernels::kernel::Dropout::kNoSeed);
              return IoData{{std::move(data)}, {std::move(output)}};
            });
     return;

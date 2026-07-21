@@ -49,10 +49,11 @@ NodeProto BuildSCENode(bool has_weights, bool with_log_prob, const std::string &
 // covered. The expected outputs are produced by the kernel itself; since the
 // backend invokes the same kernel, this acts as a self-consistency check
 // across every supported reduction / ignore_index / weights / rank combination.
-void RegisterSCEVariants(const onnx_kernels::kernel::SoftmaxCrossEntropyLoss &sce_kernel, const OpsetId &opset,
-                         const std::string &base, const Tensor &scores, const Tensor &labels,
-                         const Tensor *weights, const std::string &reduction, bool has_ignore_index,
-                         int64_t ignore_index, std::vector<TestCase> &registry) {
+void RegisterSCEVariants(const onnx_kernels::kernel::SoftmaxCrossEntropyLoss &sce_kernel,
+                         const OpsetId &opset, const std::string &base, const Tensor &scores,
+                         const Tensor &labels, const Tensor *weights, const std::string &reduction,
+                         bool has_ignore_index, int64_t ignore_index,
+                         std::vector<TestCase> &registry) {
   auto [loss, log_prob] =
       sce_kernel(scores, labels, weights, reduction, has_ignore_index, ignore_index);
 

@@ -568,7 +568,8 @@ inline PoolCommonAttrs ParsePoolCommonAttrs(const NodeProto &node) {
   a.pads = GetAttributeShapeOrDefault(node, "pads", Shape{});
   a.dilations = GetAttributeShapeOrDefault(node, "dilations", Shape{});
   a.ceil_mode = GetAttributeIntOrDefault(node, "ceil_mode", 0) != 0;
-  a.auto_pad = onnx_kernels::kernel::AutoPadFromString(GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
+  a.auto_pad = onnx_kernels::kernel::AutoPadFromString(
+      GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
   return a;
 }
 

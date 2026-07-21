@@ -35,8 +35,9 @@ void RegisterSequenceEmptyCase(const std::string &name, bool has_dtype, int64_t 
 
   // Compute the expected output: SequenceLength of an empty sequence
   // is always 0.
-  const Sequence empty_seq = has_dtype ? onnx_kernels::kernel::SequenceEmpty(ctx)(static_cast<int32_t>(dtype))
-                                       : onnx_kernels::kernel::SequenceEmpty(ctx)();
+  const Sequence empty_seq =
+      has_dtype ? onnx_kernels::kernel::SequenceEmpty(ctx)(static_cast<int32_t>(dtype))
+                : onnx_kernels::kernel::SequenceEmpty(ctx)();
   Tensor expected = onnx_kernels::kernel::SequenceLength(ctx)(empty_seq);
   expected.name = "length";
 

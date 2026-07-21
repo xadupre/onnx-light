@@ -63,7 +63,8 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
 
       const Tensor x =
           Tensor::FromFloat("x", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
-      const Tensor y = onnx_kernels::kernel::EyeLike(ctx)(x, /*k=*/1, static_cast<int32_t>(DataType::INT64));
+      const Tensor y =
+          onnx_kernels::kernel::EyeLike(ctx)(x, /*k=*/1, static_cast<int32_t>(DataType::INT64));
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -88,8 +89,8 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromFloat(
                  "x", {4, 5}, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
-             const Tensor y =
-                 onnx_kernels::kernel::EyeLike(ctx)(x, /*k=*/1, static_cast<int32_t>(DataType::FLOAT));
+             const Tensor y = onnx_kernels::kernel::EyeLike(ctx)(
+                 x, /*k=*/1, static_cast<int32_t>(DataType::FLOAT));
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }

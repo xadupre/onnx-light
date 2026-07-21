@@ -17,7 +17,8 @@ namespace onnx_backend_test {
 
 namespace {
 
-void EmitReduceSumSquareCase(std::vector<TestCase> &registry, const onnx_kernels::kernel::ReduceSumSquare &kernel,
+void EmitReduceSumSquareCase(std::vector<TestCase> &registry,
+                             const onnx_kernels::kernel::ReduceSumSquare &kernel,
                              const std::string &case_name, const std::vector<int64_t> &data_shape,
                              const std::vector<float> &data_values,
                              const std::vector<int64_t> &axes_values, bool keepdims,

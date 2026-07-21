@@ -18,8 +18,8 @@ namespace onnx_backend_test {
 namespace {
 
 void EmitReduceLogSumCase(std::vector<TestCase> &registry, const std::string &op_type,
-                          const onnx_kernels::kernel::ReduceLogSumOp &kernel, const std::string &case_name,
-                          const std::vector<int64_t> &data_shape,
+                          const onnx_kernels::kernel::ReduceLogSumOp &kernel,
+                          const std::string &case_name, const std::vector<int64_t> &data_shape,
                           const std::vector<float> &data_values,
                           const std::vector<int64_t> &axes_values, bool keepdims,
                           bool noop_with_empty_axes) {

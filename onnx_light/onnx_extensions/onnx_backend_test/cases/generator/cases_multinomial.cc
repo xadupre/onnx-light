@@ -90,7 +90,8 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
     AddIntAttr(node, "sample_size", 5);
     AddFloatAttr(node, "seed", 42.0f);
     Expect(registry, std::move(node), "test_cc_multinomial_seeded", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::Multinomial(ctx)(x, /*sample_size=*/5, /*seed=*/42, /*dtype=*/0);
+      Tensor y =
+          onnx_kernels::kernel::Multinomial(ctx)(x, /*sample_size=*/5, /*seed=*/42, /*dtype=*/0);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -106,8 +107,9 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
     AddIntAttr(node, "sample_size", 4);
     AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::INT64));
     Expect(registry, std::move(node), "test_cc_multinomial_int64", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::Multinomial(ctx)(x, /*sample_size=*/4, onnx_kernels::kernel::Multinomial::kNoSeed,
-                                          /*dtype=*/static_cast<int32_t>(DataType::INT64));
+      Tensor y = onnx_kernels::kernel::Multinomial(ctx)(
+          x, /*sample_size=*/4, onnx_kernels::kernel::Multinomial::kNoSeed,
+          /*dtype=*/static_cast<int32_t>(DataType::INT64));
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

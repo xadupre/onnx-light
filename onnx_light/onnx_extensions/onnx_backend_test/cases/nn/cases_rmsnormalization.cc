@@ -44,10 +44,11 @@ Tensor MakeFloatTensor(const std::string &name, const std::vector<int64_t> &shap
 }
 
 // Registers a single RMSNormalization case named ``test_cc_<base>``.
-void RegisterCase(std::vector<TestCase> &registry, const onnx_kernels::kernel::RMSNormalization &kernel,
-                  const OpsetId &opset, const std::string &base,
-                  const std::vector<int64_t> &x_shape, const std::vector<int64_t> &scale_shape,
-                  int64_t axis, bool include_axis_attr, float epsilon, bool include_epsilon_attr) {
+void RegisterCase(std::vector<TestCase> &registry,
+                  const onnx_kernels::kernel::RMSNormalization &kernel, const OpsetId &opset,
+                  const std::string &base, const std::vector<int64_t> &x_shape,
+                  const std::vector<int64_t> &scale_shape, int64_t axis, bool include_axis_attr,
+                  float epsilon, bool include_epsilon_attr) {
   NodeProto node;
   node.set_op_type("RMSNormalization");
   node.add_input("x");

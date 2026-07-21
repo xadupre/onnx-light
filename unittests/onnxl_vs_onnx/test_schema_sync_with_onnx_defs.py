@@ -6,6 +6,10 @@ import onnx_light.onnx
 
 
 class TestSchemaSyncWithOnnxDefs(ExtTestCase):
+    # SwiGLU (onnx#8202) may not yet be present in the installed onnx; the empty
+    # domain string is the default ai.onnx domain used by the registered schemas.
+    SWIGLU_KEY = ("", "SwiGLU", 28)
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -30,6 +34,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
 
         if flex_attention_key not in onnx_schema_keys:
             onnx_light_schema_keys.discard(flex_attention_key)
+        if self.SWIGLU_KEY not in onnx_schema_keys:
+            onnx_light_schema_keys.discard(self.SWIGLU_KEY)
 
         self.assertEqual(onnx_light_schema_keys, onnx_schema_keys)
 
@@ -38,6 +44,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         hist = onnx.defs.get_all_schemas_with_history()
         light_dict = {(s.domain, s.name, s.since_version): s for s in light_hist}
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
+        if self.SWIGLU_KEY not in onnx_dict:
+            light_dict.pop(self.SWIGLU_KEY, None)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, schema in light_dict.items():
             with self.subTest(key=key):
@@ -65,6 +73,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         hist = onnx.defs.get_all_schemas_with_history()
         light_dict = {(s.domain, s.name, s.since_version): s for s in light_hist}
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
+        if self.SWIGLU_KEY not in onnx_dict:
+            light_dict.pop(self.SWIGLU_KEY, None)
         self.assertEqual(set(light_dict), set(onnx_dict))
 
         def _normalize(text):
@@ -94,6 +104,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         hist = onnx.defs.get_all_schemas_with_history()
         light_dict = {(s.domain, s.name, s.since_version): s for s in light_hist}
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
+        if self.SWIGLU_KEY not in onnx_dict:
+            light_dict.pop(self.SWIGLU_KEY, None)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, lights in light_dict.items():
             schema = onnx_dict[key]

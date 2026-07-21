@@ -558,6 +558,18 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Gated SwiGLU activation: ``Y = Swish_alpha(A) * B`` where
+/// ``Swish_alpha(a) = a * sigmoid(alpha * a)``. Inputs ``A`` (gate) and ``B``
+/// (value) must have identical shapes and dtypes: broadcasting is not applied.
+/// ``alpha`` defaults to 1.0 to match the ONNX schema (opset 28).
+class SwiGLU : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &a, const Tensor &b, float alpha = 1.0f,
+                    RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensor &a, const Tensor &b, float alpha, Tensor &output) const;
+};
+
 /// Element-wise thresholded rectified linear unit: y = x for x > alpha, y = 0
 /// otherwise. ``alpha`` defaults to 1.0 to match the ONNX schema.
 class ThresholdedRelu : public KernelBase {

@@ -115,7 +115,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> mean_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mean");
 
-  EXPECT_EQ(schemas.size(), 181u);
+  EXPECT_EQ(schemas.size(), 182u);
 
   // Neg has three versioned schemas (v1, v6, v13).
   ASSERT_EQ(neg_schemas.size(), 3u);

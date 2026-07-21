@@ -284,7 +284,9 @@ def expect(
     )
 
 
-def _collect_cc_test_cases(include_big: bool = False, mode: Any = None) -> dict[str, TestCase]:
+def _collect_cc_test_cases(
+    include_big: bool = False, mode: "_backend_test_cc.TestMode | None" = None
+) -> dict[str, TestCase]:
     """Collects backend test cases produced by the C++ ``lib_onnx_backend_test``.
 
     The C++ library implements the same data model as the Python infrastructure
@@ -298,10 +300,10 @@ def _collect_cc_test_cases(include_big: bool = False, mode: Any = None) -> dict[
         include_big: When ``True``, includes backend test cases whose name
             contains ``"_big_"``. Defaults to ``False``, which keeps these
             big cases excluded.
-        mode: Selects the generation mode (a ``TestMode`` value). ``TestMode.TEST``
-            (the default when ``None``) yields the standard correctness cases;
-            ``TestMode.BENCHMARK`` yields large benchmark-sized cases where
-            supported.
+        mode: The generation mode (a ``TestMode`` value). When ``None``
+            (default), defaults to ``TestMode.TEST`` which yields the standard
+            correctness cases. ``TestMode.BENCHMARK`` yields large benchmark-sized
+            cases where supported.
 
     Returns:
         A dictionary mapping test case names to TestCase instances.
@@ -464,7 +466,9 @@ def _collect_cc_test_cases(include_big: bool = False, mode: Any = None) -> dict[
     return result
 
 
-def collect_test_case(include_big: bool = False, mode: Any = None) -> dict[str, TestCase]:
+def collect_test_case(
+    include_big: bool = False, mode: "_backend_test_cc.TestMode | None" = None
+) -> dict[str, TestCase]:
     """
     Collects all backend test cases.
 
@@ -480,10 +484,10 @@ def collect_test_case(include_big: bool = False, mode: Any = None) -> dict[str, 
         include_big: When ``True``, includes backend test cases whose name
             contains ``"_big_"``. Defaults to ``False``, which keeps these
             big cases excluded.
-        mode: Selects the generation mode (a ``TestMode`` value). ``TestMode.TEST``
-            (the default when ``None``) yields the standard correctness cases;
-            ``TestMode.BENCHMARK`` yields large benchmark-sized cases where
-            supported.
+        mode: The generation mode (a ``TestMode`` value). When ``None``
+            (default), defaults to ``TestMode.TEST`` which yields the standard
+            correctness cases. ``TestMode.BENCHMARK`` yields large benchmark-sized
+            cases where supported.
 
     Returns:
         A dictionary mapping test case names to TestCase instances.

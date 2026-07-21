@@ -42,8 +42,15 @@ namespace backend_test {
 
 namespace {
 
+// All 22 per-category collector functions are registered here in a single
+// static initialiser.  Because this variable is in the same translation unit
+// as CollectTestCases / CollectTestCasesByName, C++ guarantees that it is
+// fully initialized before either function body executes (namespace-scope
+// statics within a TU are initialized in declaration order).  All
+// registrations happen sequentially from this one initialiser, so no mutex
+// is needed.
 // clang-format off
-const int kRegisterAllCollectors = []() {
+[[maybe_unused]] const int kRegisterAllCollectors = []() {
   RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
     onnx_backend_test::CollectControlflowTestCases(r, op, m);
   });
@@ -118,7 +125,6 @@ const int kRegisterAllCollectors = []() {
 
 std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_big,
                                        TestMode mode) {
-  (void)kRegisterAllCollectors;
   std::vector<TestCase> registry;
   for (const auto &fn : GetRegisteredCollectors()) {
     fn(registry, op_type, include_big, mode);

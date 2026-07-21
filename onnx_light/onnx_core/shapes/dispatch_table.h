@@ -75,14 +75,16 @@ void RegisterComputeShapeFn(const std::string &domain, const std::string &op_typ
  *
  * The function takes the :cpp:enum:`Device` on which the operator executes
  * followed by the :cpp:class:`SymShape` of each of its inputs, and returns
- * the estimated peak memory as an ``int64_t``. When no function is
- * registered for an operator the default is to return ``0`` (see
+ * the estimated peak memory as an ``int64_t``. The returned value is the
+ * extra scratch/working memory the computation allocates; it excludes the
+ * memory already accounted for by the operator's inputs and outputs. When no
+ * function is registered for an operator the default is to return ``0`` (see
  * :cpp:func:`ComputePeakMemory`).
  */
 using ComputePeakMemoryFn = std::function<int64_t(Device, const std::vector<SymShape> &)>;
 
 /**
- * Returns the ``(normalised_domain, op_type) -> ComputePeakMemory*``
+ * Returns the ``(normalised_domain, op_type) -> ComputePeakMemoryFn``
  * dispatch table. Empty until libraries populate it via
  * :cpp:func:`RegisterComputePeakMemoryFn`; operators without an entry
  * report a peak memory of ``0`` through :cpp:func:`ComputePeakMemory`.

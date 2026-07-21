@@ -87,12 +87,14 @@ ExecutionPlan::ExecutionPlan(const FunctionProto &func, RawBufferAllocator *allo
 
 void ExecutionPlan::BuildActions() {
   actions_.clear();
-  // Lock initializers and inputs before any node runs.
+  // Lock initializers and inputs before any node runs. Locking is a
+  // reference-counting operation, not an allocation, so it carries no
+  // allocator.
   for (const std::string &name : initializers_) {
-    actions_.emplace_back(ExecuteActionKind::kLockInitializer, name, allocator_);
+    actions_.emplace_back(ExecuteActionKind::kLockInitializer, name);
   }
   for (const std::string &name : inputs_) {
-    actions_.emplace_back(ExecuteActionKind::kLockInput, name, allocator_);
+    actions_.emplace_back(ExecuteActionKind::kLockInput, name);
   }
   // For every node, allocate a buffer and create the shape for each named
   // output, execute the node, then delete the shape and free the buffer of
@@ -107,6 +109,8 @@ void ExecutionPlan::BuildActions() {
       actions_.emplace_back(ExecuteActionKind::kAllocateBuffer, out, allocator_);
       actions_.emplace_back(ExecuteActionKind::kCreateShape, out);
     }
+    // A node execution does not target a named result, so its name is empty;
+    // the node it runs is identified by ``node_index``.
     actions_.emplace_back(ExecuteActionKind::kExecuteNode, std::string(), nullptr, i);
     if (i < releasable_.size()) {
       for (const std::string &name : releasable_[i]) {

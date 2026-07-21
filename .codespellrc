@@ -1,4 +1,4 @@
 [codespell]
-ignore-words-list = afe,numer,vas,clens,paeth,abd,cann
+ignore-words-list = afe,numer,vas,clens,paeth,abd,cann,statics
 ignore-regex = (?<![A-Za-z'])[A-Za-z]{1,2}(?![A-Za-z'])
 skip = .git,docs/build,*/compound.xsd,*.svg

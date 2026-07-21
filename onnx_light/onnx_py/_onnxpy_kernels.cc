@@ -391,10 +391,12 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "instead of allocating fresh memory.")
       .def_prop_ro(
           "inplace_output_index", [](const ExecuteAction &a) { return a.inplace().output_index; },
-          "Output index of the in-place reuse decision (``-1`` when not in place).")
+          "Output index of the in-place reuse decision (negative when the action "
+          "is not an in-place allocation).")
       .def_prop_ro(
           "inplace_input_index", [](const ExecuteAction &a) { return a.inplace().input_index; },
-          "Input index reused in place (``-1`` when not in place).")
+          "Input index reused in place (negative when the action is not an "
+          "in-place allocation).")
       .def("__repr__", [](const ExecuteAction &a) {
         return std::string("ExecuteAction(kind='") + a.kind_name() + "', name='" + a.name() +
                "', target='" + a.target() + "', node_index=" + std::to_string(a.node_index()) +

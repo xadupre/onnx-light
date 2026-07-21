@@ -221,7 +221,8 @@ void ExecutionPlan::BuildActions() {
         // The result reuses an input buffer in place: no fresh allocation, the
         // action carries the in-place decision and the reused input name.
         std::string target;
-        if (match->input_index >= 0 && match->input_index < node.input_size()) {
+        if (match->input_index >= 0 &&
+            match->input_index < static_cast<int64_t>(node.input_size())) {
           target = node.input(static_cast<int>(match->input_index));
         }
         actions_.emplace_back(ExecuteActionKind::kAllocateBuffer, out, nullptr, 0, 0,

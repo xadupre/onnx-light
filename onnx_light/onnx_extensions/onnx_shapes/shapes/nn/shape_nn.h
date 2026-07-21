@@ -14,6 +14,9 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
+#include <cstdint>
+#include <vector>
+
 /**
  * @file shape_nn.h
  * @brief Shape-inference functions for ONNX operators in the ``nn`` family.
@@ -538,6 +541,31 @@ void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, c
 void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char *q, const char *k,
                            const char *v, const char *past_key = nullptr,
                            const char *past_value = nullptr);
+
+/**
+ * Estimates the peak scratch memory (in bytes) required to evaluate an
+ * ``Attention`` node, following the
+ * :cpp:type:`core::shapes::ComputePeakMemoryFn` convention: it takes the
+ * :cpp:enum:`Device` the operator runs on followed by the shapes of the
+ * node's inputs.
+ *
+ * The estimate is dominated by the ``QK^T`` attention-score buffer, whose
+ * logical shape is ``(batch, q_num_heads, q_sequence_length,
+ * total_sequence_length)``. The number of elements in that buffer is
+ * multiplied by 4 bytes (the ``float32`` accumulation type used for the
+ * scores). Only the rank-4 ``(batch, num_heads, sequence, head_size)`` form
+ * of ``Q``/``K`` is handled; when fewer than three inputs are provided, when
+ * either input is not rank 4, or when any contributing dimension is symbolic,
+ * the function returns ``0`` (no concrete estimate available).
+ *
+ * @param device       Device on which the operator executes (currently does
+ *                     not affect the estimate).
+ * @param input_shapes Shapes of the node's inputs, in order; ``input_shapes[0]``
+ *                     is ``Q`` and ``input_shapes[1]`` is ``K``.
+ * @returns The estimated peak scratch memory in bytes, or ``0`` when no
+ *          concrete estimate can be produced.
+ */
+int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes);
 
 /**
  * Computes the output :cpp:class:`SymTensor`(s) of a ``LinearAttention``

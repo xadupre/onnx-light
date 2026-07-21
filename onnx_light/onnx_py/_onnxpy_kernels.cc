@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/execute_action.h"
 #include "onnx_core/runtime/execution_plan.h"
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/run_nodes.h"
@@ -23,6 +24,8 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::ExecuteAction;
+using core::runtime::ExecuteActionKind;
 using core::runtime::ExecutionPlan;
 using core::runtime::KernelContext;
 using core::runtime::Map;
@@ -320,6 +323,74 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                ", subgraph_attr_name='" + ev.subgraph_attr_name + "')";
       });
 
+  // ExecuteActionKind — kind of a single ExecuteAction.
+  nb::enum_<ExecuteActionKind>(rt_mod, "ExecuteActionKind", nb::is_arithmetic(),
+                               "Kind of a single :class:`ExecuteAction` scheduled by an "
+                               ":class:`ExecutionPlan`.")
+      .value("kLockInitializer", ExecuteActionKind::kLockInitializer,
+             "Locks an initializer so it stays alive while still referenced.")
+      .value("kUnlockInitializer", ExecuteActionKind::kUnlockInitializer,
+             "Unlocks an initializer once no remaining node references it.")
+      .value("kLockInput", ExecuteActionKind::kLockInput,
+             "Locks an input so it stays alive while still referenced.")
+      .value("kUnlockInput", ExecuteActionKind::kUnlockInput,
+             "Unlocks an input once no remaining node references it.")
+      .value("kAllocateBuffer", ExecuteActionKind::kAllocateBuffer,
+             "Allocates a buffer for a named result.")
+      .value("kDeleteBuffer", ExecuteActionKind::kDeleteBuffer,
+             "Deletes a named result (frees its buffer).")
+      .value("kTransfer", ExecuteActionKind::kTransfer,
+             "Transfers a named result to another named result.")
+      .value("kExecuteNode", ExecuteActionKind::kExecuteNode, "Executes a node.")
+      .value("kCreateShape", ExecuteActionKind::kCreateShape,
+             "Creates the shape of a named result.")
+      .value("kDeleteShape", ExecuteActionKind::kDeleteShape,
+             "Deletes the shape of a named result.")
+      .value("kAllocateTemporaryBuffer", ExecuteActionKind::kAllocateTemporaryBuffer,
+             "Allocates a temporary buffer to handle a kernel memory peak.")
+      .value("kDeleteTemporaryBuffer", ExecuteActionKind::kDeleteTemporaryBuffer,
+             "Deallocates a temporary buffer once the kernel(s) are done.");
+
+  // ExecuteAction — single step of an ExecutionPlan.
+  nb::class_<ExecuteAction>(
+      rt_mod, "ExecuteAction",
+      "Single step of an :class:`ExecutionPlan`: one memory-management or "
+      "node-execution operation (lock / unlock an input or initializer, "
+      "allocate / delete a named result or temporary buffer, create / delete a "
+      "shape, transfer a named result, or execute a node). Every allocation or "
+      "deallocation references the allocator that owns the memory.")
+      .def(nb::init<>())
+      .def(nb::init<ExecuteActionKind, std::string>(), nb::arg("kind"), nb::arg("name"),
+           "Builds an action of ``kind`` targeting ``name``.")
+      .def_prop_ro(
+          "kind", [](const ExecuteAction &a) { return a.kind(); },
+          "Kind of the action (:class:`ExecuteActionKind`).")
+      .def_prop_ro(
+          "kind_name", [](const ExecuteAction &a) { return std::string(a.kind_name()); },
+          "Stable, human-readable name of :attr:`kind`.")
+      .def_prop_ro(
+          "name", [](const ExecuteAction &a) { return a.name(); },
+          "Primary named result / input / initializer the action operates on.")
+      .def_prop_ro(
+          "target", [](const ExecuteAction &a) { return a.target(); },
+          "Destination named result of a ``kTransfer`` action (empty otherwise).")
+      .def_prop_ro(
+          "node_index", [](const ExecuteAction &a) { return a.node_index(); },
+          "Index of the node for a ``kExecuteNode`` action (``0`` otherwise).")
+      .def_prop_ro(
+          "size", [](const ExecuteAction &a) { return a.size(); },
+          "Number of bytes for buffer allocations (``0`` when unknown).")
+      .def_prop_ro(
+          "has_allocator", [](const ExecuteAction &a) { return a.allocator() != nullptr; },
+          "Whether the action references a :cpp:class:`RawBufferAllocator` "
+          "(true for allocation / deallocation actions backed by an allocator).")
+      .def("__repr__", [](const ExecuteAction &a) {
+        return std::string("ExecuteAction(kind='") + a.kind_name() + "', name='" + a.name() +
+               "', target='" + a.target() + "', node_index=" + std::to_string(a.node_index()) +
+               ", size=" + std::to_string(a.size()) +
+               ", has_allocator=" + (a.allocator() != nullptr ? "True" : "False") + ")";
+      });
+
   // ExecutionPlan — precomputed per-graph release schedule.
   nb::class_<ExecutionPlan>(
       rt_mod, "ExecutionPlan",
@@ -347,6 +418,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_prop_ro(
           "num_nodes", [](const ExecutionPlan &plan) { return plan.num_nodes(); },
           "Number of nodes covered by this plan (``len(releasable())``).")
+      .def(
+          "actions", [](const ExecutionPlan &plan) { return plan.actions(); },
+          "Returns the ordered list of :class:`ExecuteAction` steps the runtime "
+          "performs while executing the underlying node sequence.")
       .def(
           "release_after",
           [](const ExecutionPlan &plan, const NodeProto &node, RuntimeContext &rt) {

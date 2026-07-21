@@ -4044,6 +4044,51 @@ TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
   EXPECT_EQ(&rt.GetExecutionPlan(graph), &plan1);
 }
 
+TEST(RunNodes, ExecutionPlanBuildsActions) {
+  // The plan schedules an ordered list of ExecuteAction steps: lock the
+  // input, allocate/create-shape/execute per node, delete the intermediates
+  // that fall out of use, then unlock the input.
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Neg", {"t"}, {"y"}));
+
+  core::runtime::SimpleRawBufferAllocator allocator(8);
+  core::runtime::ExecutionPlan plan(graph, &allocator);
+  EXPECT_EQ(plan.allocator(), &allocator);
+
+  const std::vector<core::runtime::ExecuteAction> &actions = plan.actions();
+  ASSERT_FALSE(actions.empty());
+  using core::runtime::ExecuteActionKind;
+  EXPECT_EQ(actions.front().kind(), ExecuteActionKind::kLockInput);
+  EXPECT_EQ(actions.front().name(), "x");
+  EXPECT_EQ(actions.back().kind(), ExecuteActionKind::kUnlockInput);
+  EXPECT_EQ(actions.back().name(), "x");
+
+  // Exactly one ExecuteNode action per node, in order.
+  std::vector<size_t> execute_indices;
+  bool t_deleted = false;
+  for (const auto &action : actions) {
+    if (action.kind() == ExecuteActionKind::kExecuteNode) {
+      execute_indices.push_back(action.node_index());
+    }
+    if (action.kind() == ExecuteActionKind::kDeleteBuffer && action.name() == "t") {
+      t_deleted = true;
+      // Deletion actions reference the allocator that owns the memory.
+      EXPECT_EQ(action.allocator(), &allocator);
+    }
+  }
+  ASSERT_EQ(execute_indices.size(), 2u);
+  EXPECT_EQ(execute_indices[0], 0u);
+  EXPECT_EQ(execute_indices[1], 1u);
+  EXPECT_TRUE(t_deleted);
+}
+
 // ---------------------------------------------------------------------------
 // SubgraphEventGraphName tests
 // Verify that events produced inside subgraphs carry the correct

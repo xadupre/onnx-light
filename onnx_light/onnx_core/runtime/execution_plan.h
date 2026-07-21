@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "onnx_core/runtime/execute_action.h"
+#include "onnx_core/runtime/raw_buffer_allocator.h"
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx.h"
 
@@ -55,23 +57,30 @@ class RuntimeContext;
  */
 class ExecutionPlan {
 public:
-  ExecutionPlan() = default;
+  /// Builds an empty plan. ``allocator`` is referenced by every allocation
+  /// and deallocation action the plan schedules (may be ``nullptr``).
+  explicit ExecutionPlan(RawBufferAllocator *allocator = nullptr);
 
   /// Builds the plan for ``graph``. ``keep`` is seeded with the graph's
   /// declared inputs, initializers and declared outputs; ``releasable``
   /// is computed by :cpp:func:`RuntimeContext::ComputeReleasableInputs`.
-  explicit ExecutionPlan(const GraphProto &graph);
+  /// ``allocator`` is referenced by every allocation / deallocation action.
+  explicit ExecutionPlan(const GraphProto &graph, RawBufferAllocator *allocator = nullptr);
 
   /// Builds the plan for ``func``. ``keep`` is seeded with the
-  /// function's declared inputs and outputs.
-  explicit ExecutionPlan(const FunctionProto &func);
+  /// function's declared inputs and outputs. ``allocator`` is referenced by
+  /// every allocation / deallocation action.
+  explicit ExecutionPlan(const FunctionProto &func, RawBufferAllocator *allocator = nullptr);
 
   /// Builds the plan for a free-standing node range. ``keep`` is the
   /// user-supplied set of names that must never be released (typically
   /// the names already populated in the runtime context at run start
-  /// plus any graph / function outputs).
+  /// plus any graph / function outputs). ``allocator`` is referenced by
+  /// every allocation / deallocation action.
   ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
-                std::unordered_set<std::string> keep);
+                std::unordered_set<std::string> keep, RawBufferAllocator *allocator = nullptr);
+
+  virtual ~ExecutionPlan() = default;
 
   /// Structural set of names that must never be released. See the
   /// class-level documentation for the exact contents.
@@ -96,10 +105,36 @@ public:
   /// events (sequence values live outside the tensor event stream).
   void ReleaseAfter(const NodeProto &node, RuntimeContext &rt) const;
 
+  /// Ordered list of :cpp:class:`ExecuteAction` steps the runtime performs
+  /// while executing the underlying node sequence. Built once at
+  /// construction by :cpp:func:`BuildActions`.
+  const std::vector<ExecuteAction> &actions() const noexcept { return actions_; }
+
+  /// Returns the allocator referenced by every allocation / deallocation
+  /// action, or ``nullptr`` when no allocator was supplied.
+  RawBufferAllocator *allocator() const noexcept { return allocator_; }
+
+protected:
+  /// Populates :cpp:func:`actions` from the seeded members
+  /// (``inputs_``, ``initializers_``, ``nodes_`` and ``releasable_``).
+  /// Every constructor calls this once, after seeding, so derived plans can
+  /// override the action schedule. Overrides run against the base-class
+  /// members only, since virtual dispatch during construction resolves to
+  /// :cpp:class:`ExecutionPlan`.
+  virtual void BuildActions();
+
 private:
+  RawBufferAllocator *allocator_ = nullptr;
   std::unordered_set<std::string> keep_;
   std::vector<std::vector<std::string>> releasable_;
   std::unordered_map<const NodeProto *, size_t> node_index_;
+  /// Declared inputs (in order) used to schedule lock / unlock actions.
+  std::vector<std::string> inputs_;
+  /// Declared initializers (in order) used to schedule lock / unlock actions.
+  std::vector<std::string> initializers_;
+  /// Nodes (in order) whose outputs drive allocation / shape actions.
+  std::vector<const NodeProto *> nodes_;
+  std::vector<ExecuteAction> actions_;
 };
 
 } // namespace runtime

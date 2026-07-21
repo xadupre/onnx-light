@@ -436,6 +436,37 @@ class TestExecutionPlanBindings(ExtTestCase):
         self.assertFalse(ctx.has("t0"))
         self.assertFalse(ctx.has("t1"))
 
+    def test_execute_action_construction(self):
+        action = rt.ExecuteAction(rt.ExecuteActionKind.kLockInput, "x")
+        self.assertEqual(action.kind, rt.ExecuteActionKind.kLockInput)
+        self.assertEqual(action.kind_name, "LockInput")
+        self.assertEqual(action.name, "x")
+        self.assertEqual(action.target, "")
+        self.assertEqual(action.node_index, 0)
+        self.assertEqual(action.size, 0)
+        self.assertFalse(action.has_allocator)
+        self.assertIn("LockInput", repr(action))
+
+    def test_default_execution_plan_has_no_actions(self):
+        plan = rt.ExecutionPlan()
+        self.assertEqual(plan.actions(), [])
+
+    def test_execution_plan_actions_from_graph(self):
+        model = parser.parse_model(self._PLAN_SRC)
+        plan = rt.ExecutionPlan(model.graph)
+        kinds = [(a.kind_name, a.name) for a in plan.actions()]
+        # The single input is locked first and unlocked last.
+        self.assertEqual(kinds[0], ("LockInput", "x"))
+        self.assertEqual(kinds[-1], ("UnlockInput", "x"))
+        # Every node produces an allocate + create-shape + execute triple, and
+        # there is exactly one ExecuteNode action per node, in order.
+        execute_indices = [a.node_index for a in plan.actions() if a.kind_name == "ExecuteNode"]
+        self.assertEqual(execute_indices, [0, 1, 2])
+        # The intermediates are freed (buffer + shape); the output ``y`` is kept.
+        deleted = {a.name for a in plan.actions() if a.kind_name == "DeleteBuffer"}
+        self.assertEqual(deleted, {"t0", "t1"})
+        self.assertNotIn("y", deleted)
+
 
 class TestTensorToProto(ExtTestCase):
     def test_tensor_to_proto_numeric_roundtrip(self):

@@ -32,6 +32,7 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     simple_sequence
     simple_map
     runtime_context
+    execution_plan
     run_nodes
     kernel_dispatch_table
     node_helpers

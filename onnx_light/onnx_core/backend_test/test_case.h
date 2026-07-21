@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx.h"
+#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/simple_map.h"
 #include "onnx_core/runtime/simple_tensor.h"

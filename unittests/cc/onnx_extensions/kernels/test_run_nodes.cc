@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/raw_buffer_allocator.h"
@@ -10,7 +11,6 @@
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/onnx_kernels/kernel_dispatch_table.h"
-#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_extensions/onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_extensions/onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_extensions/onnx_kernels/kernels/rt/include_rt_kernels.h"

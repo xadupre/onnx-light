@@ -4,10 +4,10 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_sequence.h"
-#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>

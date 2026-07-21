@@ -125,6 +125,40 @@ inspect or mutate the runtime context beyond their declared inputs and
 outputs (for example to read sequences or to participate in the event
 log).
 
+Execution plans
+~~~~~~~~~~~~~~~
+
+When :attr:`RuntimeContext.release_intermediates` is enabled, the runtime
+uses a precomputed per-graph release schedule — an :class:`ExecutionPlan`
+— to drop intermediate tensors as soon as their last reference has been
+consumed. The plan depends only on the graph topology, so it is built once
+and reused across every run of the same model. It is exposed on the
+low-level Python binding too:
+
+.. code-block:: python
+
+  from onnx_light.onnx_py._onnxpykernels import runtime as rt
+
+  # Build a plan directly from a GraphProto (or FunctionProto)...
+  plan = rt.ExecutionPlan(model.graph)
+  plan.num_nodes          # nodes covered by the plan
+  plan.keep()             # names that must never be released
+  plan.releasable()       # per-node names whose last use falls at that node
+
+  # ...or let a RuntimeContext build and cache it on first use.
+  ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+  plan = ctx.get_execution_plan(model.graph)
+  ctx.clear_execution_plans()   # drop the cache if the model was mutated
+
+:func:`ExecutionPlan.keep` returns the structural set of names seeded from
+the graph's inputs, initializers and outputs (for a function, its declared
+inputs and outputs), while :func:`ExecutionPlan.releasable` returns, for
+each node, the intermediates whose last reference falls at that node.
+:func:`ExecutionPlan.release_after` removes those names from a
+:class:`RuntimeContext`. :func:`RuntimeContext.get_execution_plan` caches
+one plan per ``GraphProto`` / ``FunctionProto`` identity, so the analysis
+is paid only once for the lifetime of the context.
+
 High-level Python API
 ---------------------
 

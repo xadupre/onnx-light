@@ -73,6 +73,7 @@ class TestRunNodesBindings(ExtTestCase):
             "RuntimeContext",
             "RuntimeEvent",
             "RuntimeEventAction",
+            "ExecutionPlan",
             "default_opset",
             "tensor_from_proto",
             "tensor_to_proto",
@@ -387,6 +388,53 @@ class TestRunNodesBindings(ExtTestCase):
         del custom
         gc.collect()
         self.assertIsNone(custom_ref())
+
+
+class TestExecutionPlanBindings(ExtTestCase):
+    _PLAN_SRC = (
+        '<ir_version: 10, opset_import: ["" : 18]>\n'
+        "agraph (float[3] x) => (float[3] y) {\n"
+        "  t0 = Add(x, x)\n"
+        "  t1 = Mul(t0, t0)\n"
+        "  y = Sub(t1, t0)\n"
+        "}\n"
+    )
+
+    def test_execution_plan_from_graph(self):
+        model = parser.parse_model(self._PLAN_SRC)
+        plan = rt.ExecutionPlan(model.graph)
+        self.assertEqual(plan.num_nodes, 3)
+        self.assertEqual(sorted(plan.keep()), ["x", "y"])
+        # t0 and t1 are intermediates whose last reference falls at the last
+        # (Sub) node; nothing is releasable earlier.
+        self.assertEqual(plan.releasable(), [[], [], ["t1", "t0"]])
+
+    def test_default_execution_plan_is_empty(self):
+        plan = rt.ExecutionPlan()
+        self.assertEqual(plan.num_nodes, 0)
+        self.assertEqual(plan.keep(), set())
+        self.assertEqual(plan.releasable(), [])
+
+    def test_get_execution_plan_is_cached(self):
+        model = parser.parse_model(self._PLAN_SRC)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        plan = ctx.get_execution_plan(model.graph)
+        self.assertEqual(plan.num_nodes, 3)
+        # Same graph object -> same cached plan contents.
+        plan_again = ctx.get_execution_plan(model.graph)
+        self.assertEqual(plan_again.releasable(), plan.releasable())
+        ctx.clear_execution_plans()
+
+    def test_release_after_frees_intermediates(self):
+        model = parser.parse_model(self._PLAN_SRC)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        plan = ctx.get_execution_plan(model.graph)
+        for name in ("t0", "t1"):
+            ctx.set(name, _make_float_tensor(name, [1.0, 2.0, 3.0]))
+        last_node = model.graph.node[2]
+        plan.release_after(last_node, ctx)
+        self.assertFalse(ctx.has("t0"))
+        self.assertFalse(ctx.has("t1"))
 
 
 class TestTensorToProto(ExtTestCase):

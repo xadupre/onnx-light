@@ -20,16 +20,6 @@ class GraphProto;
 namespace core {
 namespace runtime {
 
-// Re-exports the kernel base class (still owned by ``onnx_kernels``) so
-// it can be referred to as ``KernelBase`` here without qualification.
-//
-// Note: deliberately *not* wrapped in a nested ``core::runtime::kernel``
-// namespace: see the comment next to the ``KernelContext`` re-export in
-// ``runtime_context.h`` for why that would make every unqualified
-// ``kernel::X`` reference ambiguous in translation units that also bring
-// ``onnx_kernels`` into scope (e.g. ``onnx_core/backend_test/test_case.h``).
-using ::onnx_light::onnx_kernels::kernel::KernelBase;
-
 // ---------------------------------------------------------------------------
 // Reference implementations of the ``controlflow`` backend test kernels.
 //

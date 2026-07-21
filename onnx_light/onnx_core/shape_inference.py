@@ -49,6 +49,7 @@ NODE_MEMORY_INPUTS_KEY = _C.NODE_MEMORY_INPUTS_KEY
 NODE_MEMORY_INITIALIZERS_KEY = _C.NODE_MEMORY_INITIALIZERS_KEY
 NODE_MEMORY_INTERMEDIATES_KEY = _C.NODE_MEMORY_INTERMEDIATES_KEY
 NODE_MEMORY_OUTPUTS_KEY = _C.NODE_MEMORY_OUTPUTS_KEY
+NODE_PEAK_MEMORY_KEY = _C.NODE_PEAK_MEMORY_KEY
 NodeMemoryProfile: TypeAlias = dict[str, int | str | dict[str, int | str]]
 ComputeContext = _C.ComputeContext
 ComputeEvent = _C.ComputeEvent
@@ -60,6 +61,7 @@ ShapeEvent = _C.ShapeEvent
 ShapeEventAction = _C.ShapeEventAction
 ShapesContext = _C.ShapesContext
 write_inplace_reuse_to_metadata = _C.write_inplace_reuse_to_metadata
+write_peak_memory_to_metadata = _C.write_peak_memory_to_metadata
 write_value_and_node_tags_to_metadata = _C.write_value_and_node_tags_to_metadata
 
 

@@ -71,6 +71,7 @@ using ::onnx_light::core::shapes::ShapesContext;
 // The symbolic value descriptors live in ``core::symbolic``; bring them
 // into ``core::annotations`` so this file can keep referring to them
 // unqualified.
+using ::onnx_light::core::symbolic::Device;
 using ::onnx_light::core::symbolic::SymDim;
 using ::onnx_light::core::symbolic::SymShape;
 using ::onnx_light::core::symbolic::SymTensor;
@@ -607,6 +608,31 @@ std::vector<std::vector<InPlaceReuse>> ComputeInPlaceReuse(const GraphProto &gra
 void WriteInPlaceReuseToMetadata(
     GraphProto &graph, const ShapesContext &ctx,
     const std::unordered_map<std::string, std::string> &value_tags = {});
+
+/**
+ * Metadata key under which :cpp:func:`WritePeakMemoryToMetadata` records,
+ * for every node with a non-zero peak-memory estimate, the estimated peak
+ * scratch memory in bytes. The associated value is the decimal string
+ * representation of the ``int64_t`` byte count.
+ */
+constexpr const char *kNodePeakMemoryMetadataKey = "onnx_light.peak_memory";
+
+/**
+ * Convenience wrapper that computes the estimated peak scratch memory for
+ * every node of ``graph`` and records the result in each node's
+ * ``metadata_props`` under :cpp:var:`kNodePeakMemoryMetadataKey`. Nodes
+ * whose estimated peak memory is zero (either the operator has no registered
+ * peak-memory function or all relevant input shapes are symbolic) are left
+ * untouched.
+ *
+ * @param graph   Graph whose nodes are analysed and mutated in place.
+ * @param ctx     Shapes context already populated with the inferred
+ *                descriptors for ``graph``.
+ * @param device  The device on which the graph executes. Defaults to
+ *                :cpp:enumerator:`Device::kUndefined` (no device information).
+ */
+void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx,
+                               Device device = Device::kUndefined);
 
 } // namespace annotations
 } // namespace core

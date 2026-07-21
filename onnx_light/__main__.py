@@ -263,10 +263,12 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     from .onnx_lib.external_data_helper import uses_external_data
     from .onnx_core.shape_inference import (
         ComputeContext,
+        Device,
         ShapesContext,
         apply_inferred_shapes_to_model,
         compute_shape_model,
         infer_shapes_model,
+        write_peak_memory_to_metadata,
         write_value_and_node_tags_to_metadata,
     )
     from .tools.pretty_print import pretty_onnx
@@ -276,6 +278,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     keep: bool = args.keep
     inplace_info: bool = args.inplace_info
     release_info: bool = args.release_info
+    peak_memory: bool = args.peak_memory
     shape_tag: bool = args.shape_tag
     show: bool = args.show
     verbose: int = args.verbose
@@ -306,10 +309,10 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     # (must happen before the tiny-tensor step, which inlines small tensors).
     has_external_data = any(uses_external_data(init) for init in model.graph.initializer)
 
-    if inplace_info or release_info or verbose > 0 or token_ranges:
-        # Retains the ShapesContext so in-place reuse analysis, verbose
-        # event logging, and token-range substitution can reuse the already-
-        # inferred shape data.
+    if inplace_info or release_info or peak_memory or verbose > 0 or token_ranges:
+        # Retains the ShapesContext so in-place reuse analysis, peak memory
+        # estimation, verbose event logging, and token-range substitution can
+        # reuse the already-inferred shape data.
         ctx = ShapesContext()
         ctx.events_enabled = verbose > 0
         if token_ranges:
@@ -341,6 +344,10 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
             inplace_context.write_to_metadata(model.graph)
             if release_info and not inplace_info:
                 _remove_node_metadata_key(model.graph, "onnx_light.inplace_reuse")
+        if peak_memory:
+            if verbose:
+                print("[fillshape] write peak memory info in the model")
+            write_peak_memory_to_metadata(ctx, model.graph, Device.kUndefined)
     else:
         if verbose:
             print("[fillshape] shape inference only")
@@ -739,6 +746,19 @@ def _build_parser() -> argparse.ArgumentParser:
             "Also compute last-use release hints and record them in each "
             "node's metadata_props under the keys "
             "``onnx_light.release_after`` and ``onnx_light.not_used_after``."
+        ),
+    )
+    fillshape_parser.add_argument(
+        "--peak-memory",
+        action="store_true",
+        default=False,
+        dest="peak_memory",
+        help=(
+            "Also compute the estimated peak scratch memory for each node and "
+            "record it in each node's metadata_props under the key "
+            "``onnx_light.peak_memory``. Only nodes with a registered "
+            "peak-memory function and fully concrete input shapes produce a "
+            "non-zero entry; all other nodes are left untouched."
         ),
     )
     fillshape_parser.add_argument(

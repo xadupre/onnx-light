@@ -1240,6 +1240,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.attr("NODE_MEMORY_INITIALIZERS_KEY") = onnx_annotations::kNodeMemoryInitializersKey;
   shape_mod.attr("NODE_MEMORY_INTERMEDIATES_KEY") = onnx_annotations::kNodeMemoryIntermediatesKey;
   shape_mod.attr("NODE_MEMORY_OUTPUTS_KEY") = onnx_annotations::kNodeMemoryOutputsKey;
+  shape_mod.attr("NODE_PEAK_MEMORY_KEY") = onnx_annotations::kNodePeakMemoryMetadataKey;
 
   auto with_node_list = [](nb::handle nodes, auto &&fn) {
     if (nb::isinstance<utils::RepeatedProtoField<NodeProto>>(nodes)) {
@@ -1512,6 +1513,21 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "When ``value_tags`` is provided (a ``{name: tag}`` dict such as the one returned by "
       ":func:`compute_value_and_node_tags`), released values that carry the ``\"shape\"`` tag are "
       "also written under ``onnx_light.release_after_shape_tag``.");
+
+  shape_mod.def(
+      "write_peak_memory_to_metadata",
+      [](const onnx_shapes::ShapesContext &ctx, GraphProto &graph, Device device) {
+        onnx_annotations::WritePeakMemoryToMetadata(graph, ctx, device);
+      },
+      nb::arg("ctx"), nb::arg("graph"), nb::arg("device") = Device::kUndefined,
+      "Computes the estimated peak scratch memory for every node of ``graph`` using the "
+      "shapes already inferred into ``ctx``, and records the result in each node's "
+      "``metadata_props`` under the key ``onnx_light.peak_memory``. Nodes whose estimated "
+      "peak memory is zero (either the operator has no registered peak-memory function or "
+      "all relevant input shapes are symbolic) are left untouched.\n\n"
+      "The peak memory accounts only for the extra scratch/working memory an operator's "
+      "computation allocates, not the memory already accounted for by its inputs and outputs.\n\n"
+      "``device`` defaults to :attr:`Device.kUndefined` (no device information).");
 
   shape_mod.def(
       "compute_value_and_node_tags",

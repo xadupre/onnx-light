@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
 

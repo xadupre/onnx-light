@@ -4,18 +4,22 @@
 
 #pragma once
 
+#include "onnx_core/gradient/grad_common.h"
 #include "onnx_core/gradient/grad_dispatcher.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_gradient {
 
-// Import the core gradient types into the onnx_gradient namespace so that
-// existing callers and gradient-implementation files can use the unqualified
-// names GradFn, GradRegistry, PairStringHash, RegisterGradientFunction and
-// ApplyBackward without changing their source.
+// Import the core gradient types and helpers into the onnx_gradient namespace so
+// that existing callers and gradient-implementation files can use the
+// unqualified names GradFn, GradRegistry, PairStringHash,
+// RegisterGradientFunction, ApplyBackward, AccumulateGrad and NewGradName
+// without changing their source.
+using core::gradient::AccumulateGrad;
 using core::gradient::ApplyBackward;
 using core::gradient::GradFn;
 using core::gradient::GradRegistry;
+using core::gradient::NewGradName;
 using core::gradient::PairStringHash;
 using core::gradient::RegisterGradientFunction;
 

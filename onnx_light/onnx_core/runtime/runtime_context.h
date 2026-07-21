@@ -32,7 +32,7 @@ namespace core {
 namespace runtime {
 
 // Re-exports the kernel construction context (still owned by
-// ``onnx_kernels``, see ``onnx_kernels/kernels/kernel_context.h``) so it
+// ``onnx_kernels``, see ``onnx_extensions/kernels/kernels/kernel_context.h``) so it
 // can be referred to as ``KernelContext`` here without qualification.
 //
 // Note: this is deliberately *not* re-exported through a nested

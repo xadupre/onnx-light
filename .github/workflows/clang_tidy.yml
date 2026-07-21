@@ -43,12 +43,21 @@ jobs:
       - name: Install Python build dependencies
         run: pip install nanobind scikit-build-core
 
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
       - name: Set parallel build level
         run: |
           CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
 
+      # sccache caches compiled objects in the GitHub Actions cache so that the
+      # build required to generate compile_commands.json and generated headers is
+      # near-instant on runs that do not touch C++ sources, which is the main cost
+      # of this workflow.
       - name: Configure CMake
+        env:
+          SCCACHE_GHA_ENABLED: "true"
         run: |
           cmake -B build \
             -G Ninja \
@@ -56,9 +65,13 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DCMAKE_C_COMPILER=clang \
             -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
             -DPython3_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
       - name: Build
+        env:
+          SCCACHE_GHA_ENABLED: "true"
         run: cmake --build build
 
       - name: Collect files for clang-tidy

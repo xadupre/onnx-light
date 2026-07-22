@@ -1079,6 +1079,13 @@ void RuntimeSession::Run() {
     case ExecuteActionKind::kExecuteNode: {
       const size_t index = action.node_index();
       const PreparedKernel &prepared = kernels_[index];
+      // Every kExecuteNode index is resolved by InitializeKernels (which
+      // walks the same plan), so a missing kernel here means the plan was
+      // mutated after construction — surface it as a clear error instead of
+      // invoking an empty std::function.
+      EXT_ENFORCE_INVALID(static_cast<bool>(prepared.kernel),
+                          "RuntimeSession: kernel for node index ", index,
+                          " was not initialized before Run().");
       rt_.set_current_node_index(static_cast<int64_t>(index));
       InvokeResolvedKernel(nodes_[index], rt_, prepared.domain, prepared.op_type, prepared.kernel);
       break;

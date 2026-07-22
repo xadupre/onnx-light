@@ -1850,6 +1850,61 @@ TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
   ASSERT_TRUE(found) << "test_cc_release_shape_reshape case not registered";
 }
 
+// Verifies that ``ComputeInPlaceReuseGraph`` correctly reports both a declared
+// graph input and a graph initializer under ``kNotUsedAfterMetadataKey`` at
+// the node where they reach their last use.
+//
+// In ``test_cc_release_initializer_add`` the graph is:
+//   ``Add(X, W) → Relu``, where ``W`` is an initializer.
+// Both ``X`` and ``W`` are consumed only by ``Add`` (node 0), so node 0 must
+// carry ``onnx_light.not_used_after = "X;W"``.  ``T`` (the Add output) is
+// the sole input to ``Relu`` (node 1) and must be released there.
+TEST(BackendTestCaseShapeInference, ReleaseInitializerNotUsedAfterMetadataForBackendCase) {
+  const std::vector<TestCase> cases = CollectTestCases("release");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_release_initializer_add") {
+      continue;
+    }
+    found = true;
+
+    core::shapes::ShapesContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
+
+    core::annotations::ComputeContext inplace;
+    inplace.set_events_enabled(true);
+    ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(tc.model().ref_graph(), ctx, false, {}))
+        << "case: " << tc.name;
+
+    // Exactly one kRelease event must be emitted, for "T" at node 1 (Relu).
+    using core::annotations::ComputeEventAction;
+    int release_count = 0;
+    for (const auto &ev : inplace.Events()) {
+      if (ev.action == ComputeEventAction::kRelease) {
+        ++release_count;
+        EXPECT_EQ(ev.name, "T") << "release event must name 'T'";
+        EXPECT_EQ(ev.node_index, 1u) << "release event must fire at node 1 (Relu)";
+      }
+    }
+    EXPECT_EQ(release_count, 1) << "expected exactly one kRelease event";
+
+    // Verify that the pre-embedded node metadata matches what WriteToMetadata
+    // would produce: node 0 (Add) carries kNotUsedAfterMetadataKey for both
+    // the graph input "X" and the initializer "W"; node 1 (Relu) carries
+    // kReleaseAfterMetadataKey for "T".
+    const std::vector<MetadataMap> expected_node_meta = {
+        {{std::string(core::annotations::kNotUsedAfterMetadataKey), "X;W"}},
+        {{std::string(core::annotations::kReleaseAfterMetadataKey), "T"}}};
+    const auto &nodes = tc.model().ref_graph().ref_node();
+    ASSERT_EQ(nodes.size(), expected_node_meta.size());
+    for (size_t i = 0; i < nodes.size(); ++i) {
+      EXPECT_EQ(MetadataOf(nodes[i]), expected_node_meta[i])
+          << "node " << i << " metadata mismatch in case " << tc.name;
+    }
+  }
+  ASSERT_TRUE(found) << "test_cc_release_initializer_add case not registered";
+}
+
 // Verifies that WriteValueAndNodeTagsToMetadata applied to a clean copy of
 // the shape-tag backend test case (Constant→Reshape) produces metadata that
 // matches the expected values pre-embedded in the model.  Specifically it

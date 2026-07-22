@@ -48,7 +48,7 @@ inline AutoPad AutoPadFromString(const std::string &s) {
 
 /// Returns the ONNX ``auto_pad`` attribute string for an ``AutoPad``
 /// enumerator.
-inline const char *AutoPadToString(AutoPad ap) {
+inline constexpr const char *AutoPadToString(AutoPad ap) {
   switch (ap) {
   case AutoPad::kSameUpper:
     return "SAME_UPPER";

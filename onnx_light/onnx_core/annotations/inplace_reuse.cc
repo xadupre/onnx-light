@@ -12,7 +12,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -835,25 +834,6 @@ void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx,
   ComputeContext inplace;
   inplace.ComputeInPlaceReuseGraph(graph, ctx, false, value_tags);
   inplace.WriteToMetadata(graph);
-}
-
-void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Device device) {
-  for (NodeProto &node : *graph.mutable_node()) {
-    std::vector<SymShape> input_shapes;
-    input_shapes.reserve(node.input().size());
-    for (const auto &input_name : node.input()) {
-      if (!input_name.empty() && ctx.Has(input_name)) {
-        input_shapes.push_back(ctx.Get(input_name).Shape());
-      } else {
-        input_shapes.emplace_back();
-      }
-    }
-    const int64_t peak =
-        shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
-    if (peak > 0) {
-      node.add_metadata(kNodePeakMemoryMetadataKey, std::to_string(peak));
-    }
-  }
 }
 
 } // namespace annotations

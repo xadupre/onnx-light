@@ -164,9 +164,6 @@ ExecutionPlan::ExecutionPlan(const FunctionProto &func, RawBufferAllocator *allo
 
 void ExecutionPlan::BuildActions() {
   actions_.clear();
-  annotated_ = false;
-  fallback_releasable_.clear();
-  fallback_ready_ = false;
   if (nodes_.empty()) {
     return;
   }
@@ -179,9 +176,14 @@ void ExecutionPlan::BuildActions() {
   // are read from the node metadata written by :cpp:class:`annotations::
   // ComputeContext`:
   //
-  //   * ``annotated_`` (any ``release_after`` entry) selects the source used by
-  //     :cpp:func:`ReleaseAfter`: the per-node release metadata when present, or
-  //     a topology fallback for un-annotated node ranges.
+  //   * ``annotated`` (any ``release_after`` entry) selects the source of the
+  //     per-node release schedule: the ``release_after`` metadata when present,
+  //     or a topology fallback (each intermediate freed after its last use) for
+  //     un-annotated node ranges. Either way the schedule is materialised as
+  //     :cpp:enumerator:`ExecuteActionKind::kDeleteBuffer` /
+  //     :cpp:enumerator:`ExecuteActionKind::kDeleteShape` actions tagged with
+  //     the releasing node index, so :cpp:func:`ReleaseAfter` reads it back
+  //     from :cpp:func:`actions` alone.
   //   * ``strict`` (any ``not_used_after`` entry) means the node range carries
   //     explicit lock-lifetime information; the plan then enforces that the
   //     metadata fully covers the schedule (every consumed result is released,
@@ -190,13 +192,44 @@ void ExecutionPlan::BuildActions() {
   //     Node ranges without lifetime metadata (e.g. a model run without the
   //     in-place reuse pass, or annotated only for memory profiling) are built
   //     best-effort and the completeness checks are skipped.
+  bool annotated = false;
   bool strict = false;
   for (const NodeProto *node_ptr : nodes_) {
     if (!ReadNodeMetadata(*node_ptr, annotations::kReleaseAfterMetadataKey).empty()) {
-      annotated_ = true;
+      annotated = true;
     }
     if (!ReadNodeMetadata(*node_ptr, annotations::kNotUsedAfterMetadataKey).empty()) {
       strict = true;
+    }
+  }
+
+  // When the node range is not annotated with ``release_after`` metadata, the
+  // per-node release schedule is derived from graph topology: each intermediate
+  // is freed after its last use, excluding the structural ``keep`` names.
+  std::vector<std::vector<std::string>> topology_releases;
+  if (!annotated) {
+    const size_t n = nodes_.size();
+    std::vector<std::vector<std::string>> per_node_inputs;
+    per_node_inputs.reserve(n);
+    std::unordered_map<std::string, size_t> last_use;
+    for (size_t i = 0; i < n; ++i) {
+      std::vector<std::string> node_inputs = RuntimeContext::CollectNodeInputs(*nodes_[i]);
+      for (const std::string &name : node_inputs) {
+        last_use[name] = i;
+      }
+      per_node_inputs.push_back(std::move(node_inputs));
+    }
+    topology_releases.assign(n, {});
+    for (size_t i = 0; i < n; ++i) {
+      for (const std::string &name : per_node_inputs[i]) {
+        if (keep_.count(name) != 0) {
+          continue;
+        }
+        auto it = last_use.find(name);
+        if (it != last_use.end() && it->second == i) {
+          topology_releases[i].push_back(name);
+        }
+      }
     }
   }
 
@@ -306,20 +339,31 @@ void ExecutionPlan::BuildActions() {
                             peak_memory);
     }
 
-    // Free the intermediates whose last use falls at this node (release_after)
-    // and unlock the inputs / initializers reaching their last use here
-    // (not_used_after) — both are read from the node metadata.
-    for (const std::string &name :
-         SplitNames(ReadNodeMetadata(node, annotations::kReleaseAfterMetadataKey))) {
-      if (shape_tagged.count(name) != 0) {
-        // A shape is destroyed: it must have been created earlier.
-        EXT_ENFORCE(!strict || created_shapes.count(name) != 0, "ExecutionPlan: shape '", name,
-                    "' is released but was never created (missing shape metadata).");
-        actions_.emplace_back(ExecuteActionKind::kDeleteShape, name);
-      } else {
-        actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, allocator_);
+    // Free the intermediates whose last use falls at this node and unlock the
+    // inputs / initializers reaching their last use here (not_used_after). When
+    // the node range is annotated, the releases come from the per-node
+    // ``release_after`` metadata; otherwise they come from the topology
+    // fallback computed above. Both are emitted as delete actions tagged with
+    // the releasing node index ``i`` so :cpp:func:`ReleaseAfter` can read them
+    // back from :cpp:func:`actions`.
+    if (annotated) {
+      for (const std::string &name :
+           SplitNames(ReadNodeMetadata(node, annotations::kReleaseAfterMetadataKey))) {
+        if (shape_tagged.count(name) != 0) {
+          // A shape is destroyed: it must have been created earlier.
+          EXT_ENFORCE(!strict || created_shapes.count(name) != 0, "ExecutionPlan: shape '", name,
+                      "' is released but was never created (missing shape metadata).");
+          actions_.emplace_back(ExecuteActionKind::kDeleteShape, name, nullptr, i);
+        } else {
+          actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, allocator_, i);
+        }
+        released.insert(name);
       }
-      released.insert(name);
+    } else {
+      for (const std::string &name : topology_releases[i]) {
+        actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, allocator_, i);
+        released.insert(name);
+      }
     }
     for (const std::string &name :
          SplitNames(ReadNodeMetadata(node, annotations::kNotUsedAfterMetadataKey))) {
@@ -386,56 +430,22 @@ void ExecutionPlan::BuildActions() {
   }
 }
 
-void ExecutionPlan::EnsureFallbackReleasable() const {
-  if (fallback_ready_) {
-    return;
-  }
-  const size_t n = nodes_.size();
-  std::vector<std::vector<std::string>> per_node_inputs;
-  per_node_inputs.reserve(n);
-  std::unordered_map<std::string, size_t> last_use;
-  for (size_t i = 0; i < n; ++i) {
-    std::vector<std::string> inputs = RuntimeContext::CollectNodeInputs(*nodes_[i]);
-    for (const std::string &name : inputs) {
-      last_use[name] = i;
-    }
-    per_node_inputs.push_back(std::move(inputs));
-  }
-  fallback_releasable_.assign(n, {});
-  for (size_t i = 0; i < n; ++i) {
-    for (const std::string &name : per_node_inputs[i]) {
-      if (keep_.count(name) != 0) {
-        continue;
-      }
-      auto it = last_use.find(name);
-      if (it != last_use.end() && it->second == i) {
-        fallback_releasable_[i].push_back(name);
-      }
-    }
-  }
-  fallback_ready_ = true;
-}
-
 void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) const {
   auto it = node_index_.find(&node);
   if (it == node_index_.end()) {
     return;
   }
-  if (annotated_) {
-    // Metadata-driven: the ComputeContext records, per node, the names whose
-    // last use falls here and can be released.
-    for (const std::string &name :
-         SplitNames(ReadNodeMetadata(node, annotations::kReleaseAfterMetadataKey))) {
-      rt.Remove(name);
-      rt.RemoveSequence(name);
+  // The release schedule lives entirely in :cpp:func:`actions`: every
+  // intermediate whose last use falls at ``node`` is materialised as a
+  // kDeleteBuffer / kDeleteShape action tagged with this node's index.
+  const size_t index = it->second;
+  for (const ExecuteAction &action : actions_) {
+    if ((action.kind() == ExecuteActionKind::kDeleteBuffer ||
+         action.kind() == ExecuteActionKind::kDeleteShape) &&
+        action.node_index() == index) {
+      rt.Remove(action.name());
+      rt.RemoveSequence(action.name());
     }
-    return;
-  }
-  // Un-annotated fallback: derive the releasable intermediates from topology.
-  EnsureFallbackReleasable();
-  for (const std::string &name : fallback_releasable_[it->second]) {
-    rt.Remove(name);
-    rt.RemoveSequence(name);
   }
 }
 

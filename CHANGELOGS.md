@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.8] – Unreleased
 
+### Improvements
+
+- Made `ExecutionPlan` derive its per-node release schedule entirely from the `ExecuteAction` list (dropping the redundant `annotated_`/topology-fallback state) and routed `RunNodes` release through that action replay.
+
 ## [0.1.7] – 2026-07-21
 
 ### New Features

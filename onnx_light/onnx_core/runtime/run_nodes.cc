@@ -1022,15 +1022,30 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
 
 namespace {
 
-// Runs every node of ``nodes`` in order and, after each node, delegates
-// to :cpp:func:`ExecutionPlan::ReleaseAfter` to free any intermediates
-// the plan has scheduled for release at that node.
+// Runs the node sequence by replaying the plan's ordered action list: each
+// :cpp:enumerator:`ExecuteActionKind::kExecuteNode` action runs the referenced
+// node, and each kDeleteBuffer / kDeleteShape action frees the intermediate the
+// plan scheduled for release right after that node. The kernels manage their
+// own allocations, so the remaining (lock / allocate / …) actions are
+// informational and skipped here.
 template <class NodeRange>
 void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt, const ExecutionPlan &plan) {
-  for (size_t i = 0; i < nodes.size(); ++i) {
-    rt.set_current_node_index(static_cast<int64_t>(i));
-    RunNode(nodes[i], rt);
-    plan.ReleaseAfter(nodes[i], rt);
+  for (const ExecuteAction &action : plan.actions()) {
+    switch (action.kind()) {
+    case ExecuteActionKind::kExecuteNode: {
+      const size_t index = action.node_index();
+      rt.set_current_node_index(static_cast<int64_t>(index));
+      RunNode(nodes[index], rt);
+      break;
+    }
+    case ExecuteActionKind::kDeleteBuffer:
+    case ExecuteActionKind::kDeleteShape:
+      rt.Remove(action.name());
+      rt.RemoveSequence(action.name());
+      break;
+    default:
+      break;
+    }
   }
   rt.set_current_node_index(-1);
 }

@@ -388,9 +388,13 @@ def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", " ", text)
 
 
-def _format_markdown_inline(text: str) -> str:
-    """Converts inline Markdown constructs into RST equivalents."""
-    text = _MARKDOWN_LINK_RE.sub(r"`\1 <\2>`_", text)
+def _convert_markdown_inline_code(text: str) -> str:
+    """Converts single-backtick Markdown code spans in *text* into RST ``...``.
+
+    Assumes *text* does not itself contain any pre-existing RST double-backtick
+    inline code spans (callers must strip those out beforehand, e.g. via
+    :data:`_RST_INLINE_CODE_SPLIT_RE`).
+    """
 
     def replace_inline_code(match: re.Match[str]) -> str:
         code_text = match.group(1)
@@ -415,11 +419,24 @@ def _format_markdown_inline(text: str) -> str:
         trailing = "\\ " if suffix.isalnum() or suffix == "_" else ""
         return f"``{code_text}``{trailing}"
 
-    return _strip_trailing_word_underscores(
-        _escape_lone_asterisks(
-            _escape_pipe_tokens(_MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text))
-        )
-    )
+    return _MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text)
+
+
+def _format_markdown_inline(text: str) -> str:
+    """Converts inline Markdown constructs into RST equivalents."""
+    text = _MARKDOWN_LINK_RE.sub(r"`\1 <\2>`_", text)
+
+    # Some ONNX op doc strings already use RST-style double-backtick inline
+    # code (e.g. ``"cpu"``) alongside plain Markdown single-backtick spans.
+    # Leave already-converted spans untouched so they are not re-wrapped with
+    # an extra layer of backticks, which produces malformed inline literals
+    # such as ```"cpu"````.
+    parts = _RST_INLINE_CODE_SPLIT_RE.split(text)
+    for i in range(0, len(parts), 2):
+        parts[i] = _convert_markdown_inline_code(parts[i])
+    text = "".join(parts)
+
+    return _strip_trailing_word_underscores(_escape_lone_asterisks(_escape_pipe_tokens(text)))
 
 
 def _escape_lone_asterisks(text: str) -> str:

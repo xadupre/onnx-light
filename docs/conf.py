@@ -43,6 +43,11 @@ _doxygen_xml_dir = os.path.join(_doxygen_output_dir, "xml")
 breathe_projects = {"onnx-light": _doxygen_xml_dir}
 breathe_default_project = "onnx-light"
 
+# The Sphinx C++ domain parser does not know about this project's own visibility
+# macro; declare it as an "id attribute" so it is skipped instead of raising a
+# parsing error when documenting backend test case registration functions.
+cpp_id_attributes = ["ONNX_LIGHT_BACKEND_TEST_LOCAL"]
+
 sphinx_gallery_conf = {
     # path to your examples scripts
     "examples_dirs": [

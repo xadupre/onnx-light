@@ -33,6 +33,7 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     simple_map
     runtime_context
     kernel_context
+    runtime_parameters
     run_nodes
     kernel_dispatch_table
     node_helpers

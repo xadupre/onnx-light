@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-namespace btest = ONNX_LIGHT_NAMESPACE::onnx_backend_test;
+namespace btest = ONNX_LIGHT_NAMESPACE::core::backend_test;
 
 namespace {
 
@@ -64,17 +64,19 @@ bool AllClose(const std::vector<float> &actual, const float *expected, int64_t n
 /// Runs one runtime check against the given test case and prints a summary.
 /// Returns 0 on success and 1 on failure.
 int CheckOneCase(const btest::TestCase &tc) {
+  const auto &model = tc.model();
+  const auto &data_sets = tc.data_sets();
   std::cout << "Verifying test case: " << tc.name << "\n";
-  std::cout << "  model nodes : " << tc.model.ref_graph().ref_node().size() << "\n";
+  std::cout << "  model nodes : " << model.ref_graph().ref_node().size() << "\n";
   std::cout << "  op_type     : "
-            << std::string(tc.model.ref_graph().ref_node()[0].ref_op_type().data(),
-                           tc.model.ref_graph().ref_node()[0].ref_op_type().size())
+            << std::string(model.ref_graph().ref_node()[0].ref_op_type().data(),
+                           model.ref_graph().ref_node()[0].ref_op_type().size())
             << "\n";
-  if (tc.data_sets.empty()) {
+  if (data_sets.empty()) {
     std::cerr << "  ERROR: no data sets\n";
     return 1;
   }
-  const auto &ds = tc.data_sets[0];
+  const auto &ds = data_sets[0];
   if (ds.inputs.size() != 2 || ds.outputs.size() != 1) {
     std::cerr << "  ERROR: expected 2 inputs and 1 output for Add, got " << ds.inputs.size()
               << " and " << ds.outputs.size() << "\n";

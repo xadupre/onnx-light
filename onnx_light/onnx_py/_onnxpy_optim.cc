@@ -1473,6 +1473,89 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "``onnx_light.release_after_shape_tag``. The ``GraphProto`` is "
           "mutated in place and must be the same graph passed to "
           "``compute_inplace_reuse_graph``.")
+      .def(
+          "compute_shapes",
+          [](onnx_annotations::ComputeContext &self, const GraphProto &graph)
+              -> const onnx_shapes::ShapesContext & { return self.ComputeShapes(graph); },
+          nb::arg("graph"), nb::rv_policy::reference_internal,
+          "Runs shape inference on ``graph`` and stores the result in the "
+          ":class:`ShapesContext` owned by this context (also returned).")
+      .def(
+          "compute_shapes",
+          [](onnx_annotations::ComputeContext &self, const ModelProto &model,
+             bool prefill_with_value_info_output) -> const onnx_shapes::ShapesContext & {
+            return self.ComputeShapes(model, prefill_with_value_info_output);
+          },
+          nb::arg("model"), nb::arg("prefill_with_value_info_output") = false,
+          nb::rv_policy::reference_internal,
+          "Runs shape inference on ``model.graph`` (recording opset versions and local functions "
+          "from ``model``) and stores the result in the :class:`ShapesContext` owned by this "
+          "context (also returned).")
+      .def_prop_ro(
+          "shapes",
+          [](onnx_annotations::ComputeContext &self) -> const onnx_shapes::ShapesContext & {
+            return self.Shapes();
+          },
+          nb::rv_policy::reference_internal,
+          "The :class:`ShapesContext` owned by this context, populated by "
+          ":meth:`compute_shapes` / :meth:`compute`.")
+      .def(
+          "compute_peak_memory",
+          [](onnx_annotations::ComputeContext &self, const GraphProto &graph, Device device) {
+            return self.ComputePeakMemory(graph, device);
+          },
+          nb::arg("graph"), nb::arg("device") = Device::kUndefined,
+          "Computes the per-node peak scratch memory of ``graph`` using the shapes already "
+          "inferred into this context, storing (and returning) one ``int`` per node.")
+      .def_prop_ro(
+          "peak_memory",
+          [](const onnx_annotations::ComputeContext &self) { return self.PeakMemory(); },
+          "The per-node peak-memory estimates computed by :meth:`compute_peak_memory`, as a list "
+          "with one ``int`` per node. Empty before it has been called.")
+      .def(
+          "node_peak_memory",
+          [](const onnx_annotations::ComputeContext &self, std::size_t node_index) {
+            return self.NodePeakMemory(node_index);
+          },
+          nb::arg("node_index"),
+          "Returns the peak-memory estimate for the node at ``node_index``. Raises ``IndexError`` "
+          "when ``node_index`` is out of bounds.")
+      .def(
+          "compute",
+          [](onnx_annotations::ComputeContext &self, const GraphProto &graph, Device device,
+             bool allow_input_overwrite) { self.Compute(graph, device, allow_input_overwrite); },
+          nb::arg("graph"), nb::arg("device") = Device::kUndefined,
+          nb::arg("allow_input_overwrite") = false,
+          "Runs every analysis on ``graph`` in order (shape inference, value/node tagging, "
+          "in-place reuse with release-after and shape-tag classification, and per-node peak "
+          "memory) and stores all results in this context.")
+      .def(
+          "compute",
+          [](onnx_annotations::ComputeContext &self, const ModelProto &model, Device device,
+             bool allow_input_overwrite, bool prefill_with_value_info_output) {
+            self.Compute(model, device, allow_input_overwrite, prefill_with_value_info_output);
+          },
+          nb::arg("model"), nb::arg("device") = Device::kUndefined,
+          nb::arg("allow_input_overwrite") = false,
+          nb::arg("prefill_with_value_info_output") = false,
+          "Same as ``compute(graph, ...)`` but seeds shape inference from ``model`` (opset "
+          "versions and local functions) before analysing ``model.graph``.")
+      .def(
+          "write_to_graph",
+          [](const onnx_annotations::ComputeContext &self, GraphProto &graph) {
+            self.WriteToGraph(graph);
+          },
+          nb::arg("graph"),
+          "Pushes every computed result into ``graph``: the inferred shapes into "
+          "``graph.value_info`` / outputs, the in-place / release / shape-tag information into "
+          "node ``metadata_props`` (see :meth:`write_to_metadata`) and the per-node peak-memory "
+          "estimates under ``onnx_light.peak_memory``.")
+      .def(
+          "write_to_model",
+          [](const onnx_annotations::ComputeContext &self, ModelProto &model) {
+            self.WriteToModel(model);
+          },
+          nb::arg("model"), "Same as :meth:`write_to_graph` applied to ``model.graph``.")
       .def("clear", &onnx_annotations::ComputeContext::Clear, "Empties the stored result.")
       .def("__len__", [](const onnx_annotations::ComputeContext &self) { return self.Size(); });
 

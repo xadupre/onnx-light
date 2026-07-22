@@ -15,6 +15,7 @@
 #include <unordered_set>
 
 #include "onnx_core/compute/value_tags.h"
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -1207,6 +1208,83 @@ void ComputeContext::WriteToMetadata(GraphProto &graph) const {
       node.add_metadata(kReleaseAfterShapeTagMetadataKey, value.str());
     }
   }
+}
+
+const ShapesContext &ComputeContext::ComputeShapes(const GraphProto &graph) {
+  shapes_.Clear();
+  shapes_.ComputeShapeGraph(graph);
+  return shapes_;
+}
+
+const ShapesContext &ComputeContext::ComputeShapes(const ModelProto &model,
+                                                   bool prefill_with_value_info_output) {
+  shapes_.Clear();
+  shapes_.ComputeShapeModel(model, prefill_with_value_info_output);
+  return shapes_;
+}
+
+const std::vector<int64_t> &ComputeContext::ComputePeakMemory(const GraphProto &graph,
+                                                              Device device) {
+  peak_memory_.assign(static_cast<std::size_t>(graph.node().size()), 0);
+  for (int i = 0; i < graph.node().size(); ++i) {
+    const NodeProto &node = graph.node()[i];
+    std::vector<SymShape> input_shapes;
+    input_shapes.reserve(node.input().size());
+    for (const auto &input_name : node.input()) {
+      if (!input_name.empty() && shapes_.Has(input_name)) {
+        input_shapes.push_back(shapes_.Get(input_name).Shape());
+      } else {
+        input_shapes.emplace_back();
+      }
+    }
+    peak_memory_[static_cast<std::size_t>(i)] =
+        shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
+  }
+  return peak_memory_;
+}
+
+void ComputeContext::Compute(const GraphProto &graph, Device device, bool allow_input_overwrite) {
+  ComputeShapes(graph);
+  const auto tags = ComputeValueAndNodeTags(graph);
+  ComputeInPlaceReuseGraph(graph, shapes_, allow_input_overwrite, tags.first);
+  ComputePeakMemory(graph, device);
+}
+
+void ComputeContext::Compute(const ModelProto &model, Device device, bool allow_input_overwrite,
+                             bool prefill_with_value_info_output) {
+  ComputeShapes(model, prefill_with_value_info_output);
+  const GraphProto &graph = model.graph();
+  const auto tags = ComputeValueAndNodeTags(graph);
+  ComputeInPlaceReuseGraph(graph, shapes_, allow_input_overwrite, tags.first);
+  ComputePeakMemory(graph, device);
+}
+
+void ComputeContext::WriteToGraph(GraphProto &graph) const {
+  shapes_.ApplyInferredShapesToGraph(graph);
+  WriteToMetadata(graph);
+  if (peak_memory_.size() == static_cast<std::size_t>(graph.node().size())) {
+    for (int i = 0; i < graph.node().size(); ++i) {
+      const int64_t peak = peak_memory_[static_cast<std::size_t>(i)];
+      if (peak > 0) {
+        (*graph.mutable_node())[i].add_metadata(kNodePeakMemoryMetadataKey, std::to_string(peak));
+      }
+    }
+  }
+}
+
+void ComputeContext::WriteToModel(ModelProto &model) const { WriteToGraph(*model.mutable_graph()); }
+
+runtime::ExecutionPlan
+ComputeContext::BuildExecutionPlan(GraphProto &graph,
+                                   runtime::RawBufferAllocator *allocator) const {
+  WriteToGraph(graph);
+  return runtime::ExecutionPlan(graph, allocator);
+}
+
+runtime::ExecutionPlan
+ComputeContext::BuildExecutionPlan(ModelProto &model,
+                                   runtime::RawBufferAllocator *allocator) const {
+  return BuildExecutionPlan(*model.mutable_graph(), allocator);
 }
 
 } // namespace annotations

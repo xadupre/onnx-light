@@ -12,7 +12,10 @@
 #include <variant>
 #include <vector>
 
+#include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/inplace_reuse_types.h"
+#include "onnx_core/compute/peak_memory.h"
+#include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -372,6 +375,106 @@ public:
     return memory_.at(node_index);
   }
 
+  // ── Shape inference ──────────────────────────────────────────────────
+  //
+  // ComputeContext owns the ShapesContext driving every downstream
+  // analysis (in-place reuse, peak memory) so the inferred descriptors stay
+  // alive alongside the reuse / release results.
+
+  /// Runs shape inference on ``graph`` and stores the resulting descriptors in
+  /// the :cpp:class:`ShapesContext` owned by ``*this``.
+  ///
+  /// @return A reference to the owned :cpp:class:`ShapesContext`, now populated.
+  const ShapesContext &ComputeShapes(const GraphProto &graph);
+
+  /// Runs shape inference on ``model.graph()`` (also recording opset versions
+  /// and local functions from ``model``) and stores the resulting descriptors
+  /// in the :cpp:class:`ShapesContext` owned by ``*this``.
+  ///
+  /// @return A reference to the owned :cpp:class:`ShapesContext`, now populated.
+  const ShapesContext &ComputeShapes(const ModelProto &model,
+                                     bool prefill_with_value_info_output = false);
+
+  /// Read-only access to the :cpp:class:`ShapesContext` owned by ``*this``.
+  /// Empty until :cpp:func:`ComputeShapes` (or :cpp:func:`Compute`) has run.
+  const ShapesContext &Shapes() const noexcept { return shapes_; }
+
+  /// Mutable access to the owned :cpp:class:`ShapesContext`, allowing callers to
+  /// seed it (opset versions, custom inference functions, ...) before
+  /// :cpp:func:`ComputeShapes`.
+  ShapesContext &Shapes() noexcept { return shapes_; }
+
+  // ── Peak memory ──────────────────────────────────────────────────────
+
+  /// Computes the estimated peak scratch memory for every node of ``graph``
+  /// using the shapes already inferred into the owned :cpp:class:`ShapesContext`
+  /// (via :cpp:func:`ComputeShapes`), storing one entry per node in
+  /// ``graph.node()`` order. Nodes whose estimate is zero keep a ``0`` entry.
+  ///
+  /// @return A reference to the stored per-node peak-memory vector.
+  const std::vector<int64_t> &ComputePeakMemory(const GraphProto &graph,
+                                                Device device = Device::kUndefined);
+
+  /// Read-only access to the per-node peak-memory estimates computed by
+  /// :cpp:func:`ComputePeakMemory`. Empty before it has been called.
+  const std::vector<int64_t> &PeakMemory() const noexcept { return peak_memory_; }
+
+  /// Peak-memory estimate for the node at ``node_index``.
+  ///
+  /// @throws std::out_of_range when ``node_index`` is out of bounds.
+  int64_t NodePeakMemory(std::size_t node_index) const { return peak_memory_.at(node_index); }
+
+  // ── High-level orchestration ─────────────────────────────────────────
+
+  /// Runs every analysis on ``graph`` in order and stores all results in
+  /// ``*this``: shape inference (:cpp:func:`ComputeShapes`), value / node
+  /// tagging (:cpp:func:`ComputeValueAndNodeTags`), in-place reuse together
+  /// with the release-after and shape-tag classification
+  /// (:cpp:func:`ComputeInPlaceReuseGraph`) and per-node peak memory
+  /// (:cpp:func:`ComputePeakMemory`).
+  ///
+  /// @param graph  Graph whose nodes are analysed, in topological order.
+  /// @param device  Logical device passed to the peak-memory dispatch function.
+  /// @param allow_input_overwrite  Forwarded to
+  ///        :cpp:func:`ComputeInPlaceReuseGraph`.
+  void Compute(const GraphProto &graph, Device device = Device::kUndefined,
+               bool allow_input_overwrite = false);
+
+  /// Same as :cpp:func:`Compute(const GraphProto&, ...)` but seeds shape
+  /// inference from ``model`` (opset versions and local functions) before
+  /// analysing ``model.graph()``.
+  void Compute(const ModelProto &model, Device device = Device::kUndefined,
+               bool allow_input_overwrite = false, bool prefill_with_value_info_output = false);
+
+  /// Pushes every computed result into ``graph``: the inferred shapes are
+  /// written into ``graph`` (value_info / outputs, via
+  /// :cpp:func:`ShapesContext::ApplyInferredShapesToGraph`), the in-place /
+  /// release / shape-tag information into node ``metadata_props`` (via
+  /// :cpp:func:`WriteToMetadata`) and the per-node peak-memory estimates under
+  /// :cpp:var:`kNodePeakMemoryMetadataKey`.
+  ///
+  /// @param graph  Graph whose value_info and node metadata are mutated in
+  ///        place; must be the same graph passed to :cpp:func:`Compute` /
+  ///        :cpp:func:`ComputeInPlaceReuseGraph`.
+  void WriteToGraph(GraphProto &graph) const;
+
+  /// Same as :cpp:func:`WriteToGraph(GraphProto&)` applied to ``model.graph()``.
+  void WriteToModel(ModelProto &model) const;
+
+  /// Creates the :cpp:class:`runtime::ExecutionPlan` derived from every result
+  /// stored in ``*this``. It first pushes the information into ``graph`` (see
+  /// :cpp:func:`WriteToGraph`) and then builds the plan from the annotated
+  /// graph, so the schedule is driven entirely by the analyses held by this
+  /// context. ``allocator`` is referenced by every allocation / deallocation
+  /// action the plan schedules.
+  runtime::ExecutionPlan BuildExecutionPlan(GraphProto &graph,
+                                            runtime::RawBufferAllocator *allocator = nullptr) const;
+
+  /// Same as :cpp:func:`BuildExecutionPlan(GraphProto&, ...)` applied to
+  /// ``model.graph()``.
+  runtime::ExecutionPlan BuildExecutionPlan(ModelProto &model,
+                                            runtime::RawBufferAllocator *allocator = nullptr) const;
+
   // ── Optional decision logging ────────────────────────────────────────
   //
   // Mirrors the opt-in event logs of RuntimeContext and ShapesContext.
@@ -437,6 +540,8 @@ public:
     not_used_after_.clear();
     release_after_shape_tagged_.clear();
     memory_.clear();
+    peak_memory_.clear();
+    shapes_.Clear();
   }
 
 private:
@@ -457,6 +562,8 @@ private:
   std::vector<std::vector<std::string>> not_used_after_;
   std::vector<std::vector<std::string>> release_after_shape_tagged_;
   std::vector<NodeMemoryProfile> memory_;
+  ShapesContext shapes_;
+  std::vector<int64_t> peak_memory_;
   ComputeEventLog events_;
   bool events_enabled_ = false;
 };

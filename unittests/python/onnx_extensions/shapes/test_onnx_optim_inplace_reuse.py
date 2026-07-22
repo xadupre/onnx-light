@@ -904,6 +904,58 @@ class TestInPlaceReuse(ExtTestCase):
         inplace.clear_events()
         self.assertEqual(inplace.events(), [])
 
+    def test_compute_orchestration_graph(self):
+        nodes = [
+            oh.make_node("Abs", ["X"], ["A"]),
+            oh.make_node("Abs", ["A"], ["B"]),
+            oh.make_node("Abs", ["B"], ["Y"]),
+        ]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ComputeContext()
+        ctx.compute(model)
+
+        # Shape inference ran and is held alive by the context.
+        self.assertTrue(ctx.shapes.has("A"))
+        self.assertTrue(ctx.shapes.has("Y"))
+        # In-place reuse was computed for every node.
+        self.assertEqual(len(ctx), 3)
+        self.assertEqual(self._reuse_pairs(ctx.reuse), [[], [(0, 0)], [(0, 0)]])
+        # Peak memory has one entry per node (Abs has no scratch).
+        self.assertEqual(list(ctx.peak_memory), [0, 0, 0])
+        self.assertEqual(ctx.node_peak_memory(0), 0)
+
+    def test_compute_write_to_model(self):
+        nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Abs", ["A"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ComputeContext()
+        ctx.compute(model)
+        ctx.write_to_model(model)
+
+        # Inferred shape for the intermediate "A" is written into value_info.
+        self.assertIn("A", [vi.name for vi in model.graph.value_info])
+        # The release-after / in-place metadata is present on the freeing node.
+        keys = {p.key for p in model.graph.node[1].metadata_props}
+        self.assertIn(si.RELEASE_AFTER_METADATA_KEY, keys)
+        self.assertIn(si.INPLACE_REUSE_METADATA_KEY, keys)
+
+    def test_compute_shapes_and_peak_memory_separately(self):
+        nodes = [oh.make_node("Abs", ["X"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ComputeContext()
+        shapes = ctx.compute_shapes(model)
+        self.assertTrue(shapes.has("Y"))
+        peak = ctx.compute_peak_memory(model.graph)
+        self.assertEqual(list(peak), [0])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

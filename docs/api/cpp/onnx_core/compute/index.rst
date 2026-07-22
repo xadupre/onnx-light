@@ -6,6 +6,15 @@ inference and value lifetimes, and describe how a graph is executed: the
 raw-buffer allocator, the individual execution actions
 (:cpp:class:`ExecuteAction`), and the ordered :cpp:class:`ExecutionPlan`.
 
+:cpp:class:`annotations::ComputeContext` is the single entry point that ties
+these analyses together: :cpp:func:`annotations::ComputeContext::Compute` runs
+shape inference, value/node tagging, in-place reuse (with release-after and
+shape-tag classification) and per-node peak memory in one call and keeps every
+result alive; :cpp:func:`annotations::ComputeContext::WriteToModel` pushes them
+back into the model (value_info and node metadata); and
+:cpp:func:`annotations::ComputeContext::BuildExecutionPlan` derives the
+:cpp:class:`ExecutionPlan` from that information.
+
 .. toctree::
     :maxdepth: 1
 

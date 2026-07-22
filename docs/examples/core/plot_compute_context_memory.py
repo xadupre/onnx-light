@@ -12,7 +12,7 @@ symbolic, these quantities stay symbolic as well.
 This example shows how to:
 
 1. Build a small graph with one symbolic dimension ``N``.
-2. Run shape inference and memory analysis.
+2. Run every analysis at once with :meth:`ComputeContext.compute`.
 3. Print a table with the symbolic memory expressions for every node.
 4. Evaluate ``total_bytes`` for a few concrete values of ``N`` and plot the
    resulting curves.
@@ -35,9 +35,6 @@ from onnx_light.onnx_core.shape_inference import (
     NODE_MEMORY_OUTPUT_ALLOCATION_BYTES_KEY,
     NODE_MEMORY_OUTPUTS_KEY,
     NODE_MEMORY_TOTAL_BYTES_KEY,
-    ShapesContext,
-    apply_inferred_shapes_to_model,
-    compute_shape_model,
 )
 
 # Built-in operator schemas must be registered before shape inference.
@@ -94,20 +91,19 @@ print(pretty_onnx(model))
 
 
 #####################################
-# Run shape inference and memory analysis
-# +++++++++++++++++++++++++++++++++++++++
+# Run every analysis at once
+# ++++++++++++++++++++++++++
 #
-# ``ComputeContext`` consumes the symbolic shapes produced by
-# :class:`ShapesContext`. Passing ``value_tags`` lets the per-source buckets
-# keep semantic labels such as ``shape``.
-
-shape_context = ShapesContext()
-compute_shape_model(shape_context, model)
-apply_inferred_shapes_to_model(shape_context, model)
+# :meth:`ComputeContext.compute` chains shape inference, value/node tagging,
+# in-place reuse (with release-after and shape-tag classification) and per-node
+# peak memory, keeping every result alive inside the context. The symbolic
+# shapes it infers, the semantic ``shape`` tags and the reuse opportunities all
+# feed the per-node memory buckets. :meth:`ComputeContext.write_to_model` then
+# pushes the inferred shapes and annotations back into the model.
 
 compute_context = ComputeContext()
-value_tags, _ = compute_context.compute_value_and_node_tags(model.graph)
-compute_context.compute_inplace_reuse_graph(model.graph, shape_context, value_tags=value_tags)
+compute_context.compute(model)
+compute_context.write_to_model(model)
 memory_profiles = compute_context.memory
 
 
@@ -197,6 +193,21 @@ print(separator)
 for row in rows:
     print("  " + "  ".join(cell.ljust(col_widths[i]) for i, cell in enumerate(row)))
 print(separator)
+
+
+#####################################
+# Per-node peak scratch memory
+# ++++++++++++++++++++++++++++
+#
+# :meth:`ComputeContext.compute` also estimates the extra scratch memory each
+# operator needs on top of its inputs and outputs. Operators without a
+# registered peak-memory function (or whose relevant shapes stay symbolic)
+# report ``0``.
+
+print("\nPer-node peak scratch memory (bytes):")
+for node_index, node in enumerate(model.graph.node):
+    peak = compute_context.node_peak_memory(node_index)
+    print(f"  node{node_index} {node.op_type:>8}: {peak}")
 
 
 #####################################

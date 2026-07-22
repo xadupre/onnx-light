@@ -10,6 +10,8 @@
 
 #include "onnx_core/compute/inplace_reuse.h"
 
+#include "onnx_core/compute/compute_context.h"
+#include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -755,6 +757,87 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataWithShapeTags) {
     }
   }
   EXPECT_TRUE(found_shape_tag);
+}
+
+// ComputeContext::Compute runs shape inference, value tagging, in-place reuse
+// and peak memory in one call, holding every result alive in the context.
+TEST(OnnxOptimInPlaceReuse, ComputeContextComputeOrchestration) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"B"});
+  *graph.add_node() = MakeNode("Abs", {"B"}, {"Y"});
+
+  ComputeContext ctx;
+  ctx.Compute(graph);
+
+  // Shapes were inferred and are held alive by the context.
+  EXPECT_TRUE(ctx.Shapes().Has("A"));
+  EXPECT_TRUE(ctx.Shapes().Has("Y"));
+  // In-place reuse / release info was computed for every node.
+  EXPECT_EQ(ctx.Size(), 3u);
+  // Peak memory has one entry per node (Abs has no scratch, so all zero).
+  ASSERT_EQ(ctx.PeakMemory().size(), 3u);
+  EXPECT_EQ(ctx.NodePeakMemory(0), 0);
+}
+
+// ComputeContext::WriteToGraph pushes inferred shapes into value_info and the
+// reuse / release info into node metadata.
+TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToGraph) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"B"});
+  *graph.add_node() = MakeNode("Abs", {"B"}, {"Y"});
+
+  ComputeContext ctx;
+  ctx.Compute(graph);
+  ctx.WriteToGraph(graph);
+
+  // Inferred shape for the intermediate "A" is now recorded in value_info.
+  bool found_value_info = false;
+  for (const ValueInfoProto &vi : graph.value_info()) {
+    if (std::string(vi.name()) == std::string("A")) {
+      found_value_info = true;
+    }
+  }
+  EXPECT_TRUE(found_value_info);
+
+  // The release-after metadata is present on the node freeing "A".
+  bool found_release = false;
+  for (int i = 0; i < graph.node()[1].metadata_props().size(); ++i) {
+    if (std::string(graph.node()[1].metadata_props()[i].key()) ==
+        std::string(core::annotations::kReleaseAfterMetadataKey)) {
+      found_release = true;
+    }
+  }
+  EXPECT_TRUE(found_release);
+}
+
+// ComputeContext::BuildExecutionPlan derives the execution plan from the
+// results held by the context.
+TEST(OnnxOptimInPlaceReuse, ComputeContextBuildExecutionPlan) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"B"});
+  *graph.add_node() = MakeNode("Abs", {"B"}, {"Y"});
+
+  ComputeContext ctx;
+  ctx.Compute(graph);
+  core::runtime::ExecutionPlan plan = ctx.BuildExecutionPlan(graph);
+
+  EXPECT_EQ(plan.num_nodes(), 3u);
+  EXPECT_FALSE(plan.actions().empty());
+  // Declared input / output are kept and never released.
+  EXPECT_EQ(plan.keep().count("X"), 1u);
+  EXPECT_EQ(plan.keep().count("Y"), 1u);
 }
 
 } // namespace Test

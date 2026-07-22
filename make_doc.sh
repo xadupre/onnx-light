@@ -7,17 +7,17 @@ echo "--"
 echo "-- Builds cpp examples"
 echo "--"
 cd examples
-ONNX_GIT_TAG=v1.21.0 ./build.sh 
+ONNX_GIT_TAG=v1.21.0 ./build.sh || exit 1
 cd ..
 echo "--"
 echo "-- Builds inline (no protobuf in benchmarks)"
 echo "--"
-python setup.py build_ext --inplace --cpp-tests
+python setup.py build_ext --inplace --cpp-tests || exit 1
 echo "--"
 echo "-- Runs one test."
 echo "--"
-ctest --test-dir build/temp/ --output-on-failure -R MatchesOnnxLib
+ctest --test-dir build/temp/ --output-on-failure -R MatchesOnnxLib || exit 1
 echo "--"
 echo "-- Builds the documentation"
 echo "--"
-python -m sphinx docs dist/html -j 2
+python -m sphinx docs dist/html -j 2 || exit 1

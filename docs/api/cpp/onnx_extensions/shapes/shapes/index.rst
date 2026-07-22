@@ -8,7 +8,7 @@ a :cpp:class:`onnx_light::core::shapes::ShapesContext` (a name →
 values to read, and writes the descriptors of the node's outputs back into
 the context. ``ShapesContext`` itself, along with the generic
 node/graph-traversal engine and the dispatch table, lives in ``onnx_core``
-(see :doc:`../../onnx_core/shapes/index`); this module only defines the
+(see :doc:`/api/cpp/onnx_core/shapes/index`); this module only defines the
 built-in operator implementations and registers them with that engine's
 dispatch table via :doc:`../dispatch_table`.
 

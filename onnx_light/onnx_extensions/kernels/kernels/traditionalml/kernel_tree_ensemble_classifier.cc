@@ -28,9 +28,13 @@ ComputeClassifierScores(const ClassicNodeMap &node_map, const ClassicLeafMap &le
                         const std::vector<float> &base_values, const std::string &post_transform) {
   std::vector<float> scores(static_cast<size_t>(sample_count * n_classes), 0.0f);
 
+  // Reused per-sample accumulator; allocated once and reset each iteration to
+  // avoid a heap allocation per sample.
+  std::vector<float> accum(static_cast<size_t>(n_classes), 0.0f);
+
   for (int64_t n = 0; n < sample_count; ++n) {
     const double *x_row = x_values + n * feature_count;
-    std::vector<float> accum(static_cast<size_t>(n_classes), 0.0f);
+    std::fill(accum.begin(), accum.end(), 0.0f);
 
     for (int64_t tree_id : tree_ids) {
       const int64_t leaf_node_id = TraverseClassicTree(node_map, tree_id, x_row, feature_count);

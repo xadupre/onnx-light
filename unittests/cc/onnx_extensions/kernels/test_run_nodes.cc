@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/run_nodes.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"

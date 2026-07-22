@@ -35,7 +35,7 @@ Tensor ReadResizeScales(const Tensor &scales, std::size_t expected_length,
   EXT_ENFORCE_INVALID(static_cast<std::size_t>(n) == expected_length,
                       "kernel::Resize: 'scales' length must match the number of resized axes.");
   const size_t n_bytes = static_cast<size_t>(n) * sizeof(float);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {n}, n_bytes, allocator);
+  Tensor out = MakeOutputTensor(DataType::FLOAT, {n}, n_bytes, allocator);
   if (n > 0) {
     std::memcpy(out.mutable_bytes(), scales.bytes(), n_bytes);
   }
@@ -59,7 +59,7 @@ Tensor ReadResizeSizes(const Tensor &sizes, std::size_t expected_length,
   EXT_ENFORCE_INVALID(static_cast<std::size_t>(n) == expected_length,
                       "kernel::Resize: 'sizes' length must match the number of resized axes.");
   const size_t n_bytes = static_cast<size_t>(n) * sizeof(int64_t);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), {n}, n_bytes, allocator);
+  Tensor out = MakeOutputTensor(DataType::INT64, {n}, n_bytes, allocator);
   if (n > 0) {
     std::memcpy(out.mutable_bytes(), sizes.bytes(), n_bytes);
   }

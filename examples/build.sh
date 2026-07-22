@@ -31,7 +31,7 @@ for example_dir in "${SCRIPT_DIR}"/*; do
         bash "${example_dir}/build.sh" \
         "${INSTALL_PREFIX}" \
         "${LIB_BUILD_DIR}" \
-        "${example_build_dir}"
+        "${example_build_dir}" || exit 1
 
 done
 echo "Built examples in: ${EXAMPLES_BUILD_ROOT}"

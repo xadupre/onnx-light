@@ -24,7 +24,6 @@ from onnx_light.onnx_core.shape_inference import (
     ComputeContext,
     NODE_MEMORY_INITIALIZERS_KEY,
     NODE_MEMORY_TOTAL_BYTES_KEY,
-    apply_inferred_shapes_to_model,
 )
 
 TICK_INTERVAL = 10
@@ -241,19 +240,13 @@ def main() -> None:
     onnx_model = inliner.inline_local_functions(onnx_model)
     del onnx_model.graph.value_info[:]
 
-    print("-- infer shapes")
+    print("-- run every analysis (shapes, tags, in-place reuse/release, peak memory)")
     compute_context = ComputeContext()
-    shape_context = compute_context.compute_shapes(onnx_model)
-    apply_inferred_shapes_to_model(shape_context, onnx_model)
+    compute_context.compute(onnx_model)
+    print("-- write inferred shapes and annotations back to the model")
+    compute_context.write_to_model(onnx_model)
     print("-- saves the model again")
     ol_save(onnx_model, filename, save_as_external_data=True)
-
-    print("-- compute value and node tags")
-    value_tags, _ = compute_context.compute_value_and_node_tags(onnx_model.graph, verbose=10)
-    print("-- compute inplace")
-    compute_context.compute_inplace_reuse_graph(
-        onnx_model.graph, compute_context.shapes, value_tags=value_tags
-    )
 
     print("-- create export")
     plot_assignments = make_plot_assignments(args)

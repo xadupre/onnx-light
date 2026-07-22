@@ -133,43 +133,6 @@ constexpr const char *kNodeMemoryInitializersKey = "initializers";
 constexpr const char *kNodeMemoryIntermediatesKey = "intermediates";
 constexpr const char *kNodeMemoryOutputsKey = "outputs";
 
-inline expressions::DimType &NodeMemoryProfileScalar(NodeMemoryProfile &profile,
-                                                     const std::string &key) {
-  auto it = profile.find(key);
-  if (it == profile.end()) {
-    it = profile.emplace(key, expressions::DimType{int64_t{0}}).first;
-  }
-  return std::get<expressions::DimType>(it->second);
-}
-
-inline const expressions::DimType &NodeMemoryProfileScalar(const NodeMemoryProfile &profile,
-                                                           const std::string &key) {
-  static const expressions::DimType zero = int64_t{0};
-  auto it = profile.find(key);
-  if (it == profile.end()) {
-    return zero;
-  }
-  return std::get<expressions::DimType>(it->second);
-}
-
-inline TaggedMemory &NodeMemoryProfileBucket(NodeMemoryProfile &profile, const std::string &key) {
-  auto it = profile.find(key);
-  if (it == profile.end()) {
-    it = profile.emplace(key, TaggedMemory{}).first;
-  }
-  return std::get<TaggedMemory>(it->second);
-}
-
-inline const TaggedMemory &NodeMemoryProfileBucket(const NodeMemoryProfile &profile,
-                                                   const std::string &key) {
-  static const TaggedMemory empty;
-  auto it = profile.find(key);
-  if (it == profile.end()) {
-    return empty;
-  }
-  return std::get<TaggedMemory>(it->second);
-}
-
 /**
  * Holds the in-place reuse opportunities computed for a graph, mirroring the
  * way :cpp:class:`core::shapes::ShapesContext` holds the inferred

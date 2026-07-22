@@ -379,6 +379,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.sequences() = sequences_;
   child.set_verbose(verbose_);
   child.set_events_enabled(events_enabled_);
+  child.set_parameters(parameters_);
   child.set_current_subgraph(current_node_index_, attr_name);
   return child;
 }
@@ -388,6 +389,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   child.set_allocator(allocator_);
   child.functions() = functions_;
   child.set_verbose(verbose_);
+  child.set_parameters(parameters_);
   return child;
 }
 

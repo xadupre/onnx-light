@@ -31,6 +31,7 @@ using core::runtime::KernelContext;
 using core::runtime::Map;
 using core::runtime::OpsetId;
 using core::runtime::RuntimeContext;
+using core::runtime::RuntimeParameters;
 using core::runtime::Sequence;
 using core::runtime::Tensor;
 
@@ -447,6 +448,27 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "``node``. ``node`` must be one of the nodes the plan was built from "
           "(lookup is by identity); otherwise this is a no-op.");
 
+  // RuntimeParameters — model-independent execution knobs (parallelism, ...).
+  nb::class_<RuntimeParameters>(
+      rt_mod, "RuntimeParameters",
+      "Model-independent execution settings shared across the nodes of a graph "
+      "evaluated through :func:`run_node` / :func:`run_nodes`. Currently carries only "
+      "the requested degree of parallelism, :attr:`num_threads`.")
+      .def(nb::init<>())
+      .def(nb::init<int32_t>(), nb::arg("num_threads"))
+      .def_rw("num_threads", &RuntimeParameters::num_threads,
+              "Number of threads used to parallelize the execution of a graph. ``0`` "
+              "(default) uses the number of CPU cores, ``1`` disables parallelization, "
+              "``> 1`` uses exactly that many worker threads, and any negative value is "
+              "treated like ``0``.")
+      .def("effective_num_threads", &RuntimeParameters::EffectiveNumThreads,
+           "Resolves :attr:`num_threads` to a concrete count: ``0`` and negative values "
+           "become the number of CPU cores (falling back to ``1``); every other value is "
+           "returned unchanged. The result is always ``>= 1``.")
+      .def("is_parallel", &RuntimeParameters::is_parallel,
+           "Returns ``True`` when the graph should run with more than one thread, i.e. "
+           "when :meth:`effective_num_threads` is greater than ``1``.");
+
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.
   nb::class_<RuntimeContext>(
       rt_mod, "RuntimeContext",
@@ -479,6 +501,12 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "outputs and names already present in the context before the run are always "
           "preserved. Default is ``False`` so that intermediate values stay observable "
           "after the run.")
+      .def_prop_rw(
+          "parameters", [](const RuntimeContext &rt) { return rt.parameters(); },
+          [](RuntimeContext &rt, RuntimeParameters p) { rt.set_parameters(p); },
+          "Model-independent execution parameters (e.g. the requested degree of "
+          "parallelism, :attr:`RuntimeParameters.num_threads`). Inherited by subgraph "
+          "and function contexts.")
       .def_prop_rw(
           "kernel_ctx", [](RuntimeContext &rt) -> KernelContext & { return rt.kernel_ctx(); },
           [](RuntimeContext &rt, KernelContext k) { rt.kernel_ctx() = std::move(k); },

@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 
-namespace btest = ONNX_LIGHT_NAMESPACE::onnx_backend_test;
+namespace btest = ONNX_LIGHT_NAMESPACE::core::backend_test;
 using ONNX_LIGHT_NAMESPACE::TensorProto;
 
 namespace {
@@ -246,7 +246,7 @@ std::pair<bool, std::string> RunOneCase(Ort::Env &env, const btest::TestCase &tc
 #endif
       ;
 
-  ONNX_LIGHT_NAMESPACE::ModelProto &mutable_model = const_cast<btest::TestCase &>(tc).model;
+  ONNX_LIGHT_NAMESPACE::ModelProto &mutable_model = const_cast<btest::TestCase &>(tc).model();
   if (mutable_model.ref_ir_version() > kOrtMaxIrVersion) {
     mutable_model.set_ir_version(kOrtMaxIrVersion);
   }
@@ -262,11 +262,11 @@ std::pair<bool, std::string> RunOneCase(Ort::Env &env, const btest::TestCase &tc
   Ort::AllocatorWithDefaultOptions allocator;
   Ort::MemoryInfo mem_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
-  if (tc.data_sets.empty()) {
+  if (tc.data_sets().empty()) {
     return {false, "no data_sets"};
   }
-  for (size_t ds_idx = 0; ds_idx < tc.data_sets.size(); ++ds_idx) {
-    const auto &ds = tc.data_sets[ds_idx];
+  for (size_t ds_idx = 0; ds_idx < tc.data_sets().size(); ++ds_idx) {
+    const auto &ds = tc.data_sets()[ds_idx];
 
     std::vector<Ort::Value> input_values;
     std::vector<const char *> input_names;

@@ -114,15 +114,18 @@ NgramNode<Key> BuildTrie(const std::vector<Key> &pool, const std::vector<int64_t
   return root;
 }
 
-// Reads a single row's worth of tokens out of ``x``. For string
-// tensors the values are copied into a vector of ``std::string``; for
-// integer tensors they are converted to ``int64_t``.
+// Reads a single row's worth of tokens out of ``x`` into the caller
+// provided ``row`` buffer, allowing the allocation to be reused across
+// rows. For string tensors the values are copied into a vector of
+// ``std::string``; for integer tensors they are converted to
+// ``int64_t``.
 template <typename Key>
-std::vector<Key> ReadRow(const Tensor &x, int64_t row_num, int64_t row_size);
+void ReadRow(const Tensor &x, int64_t row_num, int64_t row_size, std::vector<Key> &row);
 
 template <>
-std::vector<int64_t> ReadRow<int64_t>(const Tensor &x, int64_t row_num, int64_t row_size) {
-  std::vector<int64_t> row(static_cast<size_t>(row_size));
+void ReadRow<int64_t>(const Tensor &x, int64_t row_num, int64_t row_size,
+                      std::vector<int64_t> &row) {
+  row.resize(static_cast<size_t>(row_size));
   const size_t offset = static_cast<size_t>(row_num) * static_cast<size_t>(row_size);
   if (x.data_type == static_cast<int32_t>(DataType::INT32)) {
     const int32_t *data = x.As<int32_t>();
@@ -138,19 +141,18 @@ std::vector<int64_t> ReadRow<int64_t>(const Tensor &x, int64_t row_num, int64_t 
     EXT_THROW_INVALID(
         "kernel::TfIdfVectorizer: integer pool requires an INT32 or INT64 input tensor.");
   }
-  return row;
 }
 
 template <>
-std::vector<std::string> ReadRow<std::string>(const Tensor &x, int64_t row_num, int64_t row_size) {
+void ReadRow<std::string>(const Tensor &x, int64_t row_num, int64_t row_size,
+                          std::vector<std::string> &row) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::TfIdfVectorizer: string pool requires a STRING input tensor.");
-  std::vector<std::string> row(static_cast<size_t>(row_size));
+  row.resize(static_cast<size_t>(row_size));
   const size_t offset = static_cast<size_t>(row_num) * static_cast<size_t>(row_size);
   for (int64_t i = 0; i < row_size; ++i) {
     row[static_cast<size_t>(i)] = x.string_data[offset + static_cast<size_t>(i)];
   }
-  return row;
 }
 
 // Computes the per-row n-gram frequencies for one input row and
@@ -319,8 +321,9 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
       NgramNode<int64_t> root =
           BuildTrie<int64_t>(pool_int64s, ngram_counts, min_gram_length, max_gram_length);
       if (!root.leaves.empty()) {
+        std::vector<int64_t> row;
         for (int64_t r = 0; r < num_rows; ++r) {
-          std::vector<int64_t> row = ReadRow<int64_t>(x, r, c_dim);
+          ReadRow<int64_t>(x, r, c_dim, row);
           AccumulateRow<int64_t>(row, r, output_size, min_gram_length, max_gram_length,
                                  max_skip_count, ngram_indexes, root, frequencies);
         }
@@ -329,8 +332,9 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
       NgramNode<std::string> root =
           BuildTrie<std::string>(pool_strings, ngram_counts, min_gram_length, max_gram_length);
       if (!root.leaves.empty()) {
+        std::vector<std::string> row;
         for (int64_t r = 0; r < num_rows; ++r) {
-          std::vector<std::string> row = ReadRow<std::string>(x, r, c_dim);
+          ReadRow<std::string>(x, r, c_dim, row);
           AccumulateRow<std::string>(row, r, output_size, min_gram_length, max_gram_length,
                                      max_skip_count, ngram_indexes, root, frequencies);
         }

@@ -384,6 +384,7 @@ public:
   /// Runs shape inference on ``graph`` and stores the resulting descriptors in
   /// the :cpp:class:`ShapesContext` owned by ``*this``.
   ///
+  /// @param graph  Graph whose nodes are analysed, in topological order.
   /// @return A reference to the owned :cpp:class:`ShapesContext`, now populated.
   const ShapesContext &ComputeShapes(const GraphProto &graph);
 
@@ -391,6 +392,9 @@ public:
   /// and local functions from ``model``) and stores the resulting descriptors
   /// in the :cpp:class:`ShapesContext` owned by ``*this``.
   ///
+  /// @param model  Model whose main graph is analysed.
+  /// @param prefill_with_value_info_output  Forwarded to
+  ///        :cpp:func:`ShapesContext::ComputeShapeModel`.
   /// @return A reference to the owned :cpp:class:`ShapesContext`, now populated.
   const ShapesContext &ComputeShapes(const ModelProto &model,
                                      bool prefill_with_value_info_output = false);
@@ -411,6 +415,8 @@ public:
   /// (via :cpp:func:`ComputeShapes`), storing one entry per node in
   /// ``graph.node()`` order. Nodes whose estimate is zero keep a ``0`` entry.
   ///
+  /// @param graph   Graph whose nodes are analysed, in topological order.
+  /// @param device  Logical device passed to the peak-memory dispatch function.
   /// @return A reference to the stored per-node peak-memory vector.
   const std::vector<int64_t> &ComputePeakMemory(const GraphProto &graph,
                                                 Device device = Device::kUndefined);

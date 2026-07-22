@@ -97,6 +97,14 @@ void RegisterSequenceEmptyCase(const std::string &name, bool has_dtype, int64_t 
 void RegisterSequenceEmptyCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
 
+  if (mode == TestMode::BENCHMARK) {
+    // SequenceEmpty has no inputs, so there is nothing to scale; the case
+    // exists solely for benchmark coverage of the operator.
+    RegisterSequenceEmptyCase("test_cc_sequence_empty_benchmark", /*has_dtype=*/false,
+                              /*dtype=*/0, opset, registry);
+    return;
+  }
+
   RegisterSequenceEmptyCase("test_cc_sequence_empty_default", /*has_dtype=*/false,
                             /*dtype=*/0, opset, registry);
   RegisterSequenceEmptyCase("test_cc_sequence_empty_int64", /*has_dtype=*/true,

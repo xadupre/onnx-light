@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 
 #include <algorithm>
@@ -1003,9 +1004,108 @@ void RegisterLoop16SeqNoneCase(std::vector<TestCase> &registry) {
   registry.emplace_back(std::move(tc));
 }
 
+// Builds a Loop body that carries a large FLOAT tensor unchanged (identity),
+// emitting it as the per-iteration scan output. Used by the benchmark case.
+GraphProto BuildLoopBenchmarkBody(const std::vector<int64_t> &shape) {
+  GraphProto g;
+  g.set_name("loop_benchmark_body");
+
+  AddGraphInputScalar(g, "iter_count", TensorProto::DataType::INT64);
+  AddGraphInputScalar(g, "cond_in", TensorProto::DataType::BOOL);
+  AddGraphInputTensor(g, "y_in", TensorProto::DataType::FLOAT, shape);
+
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Identity");
+    n->add_input("cond_in");
+    n->add_output("cond_out");
+  }
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Identity");
+    n->add_input("y_in");
+    n->add_output("y_out");
+  }
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Identity");
+    n->add_input("y_in");
+    n->add_output("scan_out");
+  }
+
+  AddGraphOutputTensor(g, "cond_out", TensorProto::DataType::BOOL);
+  {
+    ValueInfoProto *vi = g.add_output();
+    vi->set_name("y_out");
+    TypeProto::Tensor *tt = vi->ref_type().mutable_tensor_type();
+    tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+    TensorShapeProto &s = tt->ref_shape();
+    for (int64_t d : shape) {
+      s.add_dim()->set_dim_value(d);
+    }
+  }
+  {
+    ValueInfoProto *vi = g.add_output();
+    vi->set_name("scan_out");
+    TypeProto::Tensor *tt = vi->ref_type().mutable_tensor_type();
+    tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+    TensorShapeProto &s = tt->ref_shape();
+    for (int64_t d : shape) {
+      s.add_dim()->set_dim_value(d);
+    }
+  }
+  return g;
+}
+
+// Registers a Loop benchmark case: carries a large FLOAT tensor unchanged
+// through a handful of iterations, producing a stacked scan output.
+void RegisterLoopBenchmarkCase(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(13);
+  const KernelContext ctx{opset};
+  const Loop loop_kernel{ctx};
+
+  const std::vector<int64_t> shape = {256, 256};
+  const int64_t trip = 4;
+
+  NodeProto node;
+  node.set_op_type("Loop");
+  node.add_input("trip_count");
+  node.add_input("cond");
+  node.add_input("y");
+  node.add_output("res_y");
+  node.add_output("res_scan");
+
+  AttributeProto *body_attr = node.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = BuildLoopBenchmarkBody(shape);
+
+  Expect(registry, std::move(node), "test_cc_loop_benchmark", {opset},
+         [loop_kernel, shape, trip]() -> IoData {
+           Tensor trip_count("trip_count", DataType::INT64, {}, Int64Bytes(trip));
+           Tensor cond("cond", DataType::BOOL, {}, std::vector<uint8_t>{1});
+           Tensor y = Tensor::FromFloat("y", shape, Randn<float>(shape, 4401));
+
+           std::vector<Tensor> per_iter_scan;
+           per_iter_scan.reserve(static_cast<size_t>(trip));
+           for (int64_t i = 0; i < trip; ++i) {
+             per_iter_scan.push_back(Tensor("", DataType::FLOAT, shape, y.data));
+           }
+           const Tensor res_y("", DataType::FLOAT, shape, y.data);
+
+           std::vector<Tensor> out = loop_kernel(trip_count, cond, /*v_initial=*/{y},
+                                                 /*final_state=*/{res_y}, {per_iter_scan});
+           return IoData{{std::move(trip_count), std::move(cond), std::move(y)}, std::move(out)};
+         });
+}
+
 } // namespace
 
 void RegisterLoopCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::BENCHMARK) {
+    RegisterLoopBenchmarkCase(registry);
+    return;
+  }
   RegisterTripCountVariants(registry);
   RegisterLoop11Case(registry);
   RegisterMultiCarriedCase(registry);

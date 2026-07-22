@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/simple_map.h"
 #include "onnx_extensions/onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_extensions/onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
@@ -46,6 +47,30 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId default_opset = DefaultOpset(13);
   const KernelContext ctx{opset};
   const onnx_kernels::kernel::CastMap cast_map{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const int64_t count = 65536;
+    NodeProto node;
+    node.set_op_type("CastMap");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+    AddStringAttr(node, "cast_to", "TO_FLOAT");
+    AddStringAttr(node, "map_form", "DENSE");
+    Expect(registry, std::move(node), "test_cc_cast_map_benchmark", {default_opset, opset},
+           [cast_map, count]() -> IoData {
+             std::vector<int64_t> keys(static_cast<size_t>(count));
+             for (int64_t i = 0; i < count; ++i) {
+               keys[static_cast<size_t>(i)] = i;
+             }
+             std::vector<float> values = Randn<float>({count}, 2001);
+             Map x("x", Tensor::FromInt64("", {count}, keys),
+                   Tensor::FromFloat("", {count}, values));
+             Tensor y = cast_map.operator()<float, float>(keys, values, "TO_FLOAT", "DENSE", 0);
+             return IoData{{}, {std::move(y)}, {std::move(x)}};
+           });
+    return;
+  }
 
   // DENSE map(int64, float) -> tensor(float). Keys are not sorted on input;
   // the operator must sort them ascending in the output.

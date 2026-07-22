@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/onnx_backend_test/cases/optional/include_optional_cases.h"
 #include "onnx_extensions/onnx_kernels/kernels/optional/include_optional_kernels.h"
 
@@ -27,7 +28,10 @@ void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
   node.add_input("input");
   node.add_output("output");
 
-  const std::vector<int64_t> shape = {2, 3};
+  const bool benchmark = (mode == TestMode::BENCHMARK);
+  const std::vector<int64_t> shape =
+      benchmark ? std::vector<int64_t>{512, 512} : std::vector<int64_t>{2, 3};
+  const std::string case_name = benchmark ? "test_cc_optional_benchmark" : "test_cc_optional";
 
   // ``type`` attribute: TypeProto wrapping an Optional<Tensor<FLOAT, [2, 3]>>.
   AttributeProto *attr = node.add_attribute();
@@ -47,8 +51,10 @@ void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
   const KernelContext ctx{opset};
 
-  Expect(registry, std::move(node), "test_cc_optional", {opset}, [=]() -> IoData {
-    Tensor input = Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
+  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+    Tensor input = benchmark
+                       ? Tensor::FromFloat("", shape, Randn<float>(shape, 4001))
+                       : Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
     Tensor output = onnx_kernels::kernel::Optional(ctx)(input);
     return IoData{{std::move(input)}, {std::move(output)}};
   });

@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/onnx_backend_test/cases/object_detection/include_object_detection_cases.h"
+#include "onnx_extensions/onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -73,6 +75,42 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &case_name,
 // exactly; each case is registered under ``test_cc_<upstream_name>``).
 // ---------------------------------------------------------------------------
 void RegisterNonMaxSuppressionCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::BENCHMARK) {
+    const OpsetId opset = DefaultOpset(11);
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::NonMaxSuppression nms_kernel{ctx};
+    const int64_t num_boxes = 2000;
+    const int64_t num_classes = 10;
+    NodeProto node = MakeNmsNode();
+    Expect(registry, std::move(node), "test_cc_nonmaxsuppression_benchmark", {opset},
+           [nms_kernel, num_boxes, num_classes]() -> IoData {
+             // Corner-format [y1, x1, y2, x2] boxes with random centres and a
+             // fixed size so many boxes overlap, giving NMS real work to do.
+             const std::vector<float> centres = Randn<float>({num_boxes, 2}, 2001);
+             std::vector<float> box_values(static_cast<size_t>(num_boxes * 4));
+             for (int64_t i = 0; i < num_boxes; ++i) {
+               const float cy = centres[static_cast<size_t>(2 * i)] * 5.0f;
+               const float cx = centres[static_cast<size_t>(2 * i + 1)] * 5.0f;
+               box_values[static_cast<size_t>(4 * i + 0)] = cy - 0.5f;
+               box_values[static_cast<size_t>(4 * i + 1)] = cx - 0.5f;
+               box_values[static_cast<size_t>(4 * i + 2)] = cy + 0.5f;
+               box_values[static_cast<size_t>(4 * i + 3)] = cx + 0.5f;
+             }
+             Tensor boxes = Tensor::FromFloat("", {1, num_boxes, 4}, box_values);
+             Tensor scores = Tensor::FromFloat("", {1, num_classes, num_boxes},
+                                               Randn<float>({num_classes, num_boxes}, 2002));
+             Tensor max_out = Tensor::FromInt64("", {1}, {200});
+             Tensor iou_thr = Tensor::FromFloat("", {1}, {0.5f});
+             Tensor score_thr = Tensor::FromFloat("", {1}, {0.0f});
+             onnx_kernels::kernel::NonMaxSuppression::Attributes attrs;
+             Tensor selected = nms_kernel(boxes, scores, &max_out, &iou_thr, &score_thr, attrs);
+             return IoData{{std::move(boxes), std::move(scores), std::move(max_out),
+                            std::move(iou_thr), std::move(score_thr)},
+                           {std::move(selected)}};
+           });
+    return;
+  }
+
   // Shared boxes/scores fixtures used by the corner-format cases (1 batch, 6
   // boxes, 1 class — three "groups" of boxes, two of which overlap heavily).
   const std::vector<int64_t> kCornerBoxesShape = {1, 6, 4};

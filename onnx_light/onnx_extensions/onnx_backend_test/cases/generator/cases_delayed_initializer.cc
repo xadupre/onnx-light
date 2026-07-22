@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/onnx_backend_test/cases/generator/include_generator_cases.h"
 
 #include <algorithm>
@@ -150,6 +151,15 @@ void RegisterDelayedInitializerCase(std::vector<TestCase> &registry, const std::
 // Registers backend cases covering both supported load-device modes:
 // eager CPU loading and deferred file loading.
 void RegisterDelayedInitializerCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> big_shape = {512, 512};
+    RegisterDelayedInitializerCase(registry, "test_cc_delayedinitializer_benchmark",
+                                   "onnx_light_backend_delayedinitializer_benchmark.bin", "cpu", 0,
+                                   {},
+                                   Tensor::FromFloat("", big_shape, Randn<float>(big_shape, 4601)));
+    return;
+  }
+
   RegisterDelayedInitializerCase(
       registry, "test_cc_delayedinitializer_file", "onnx_light_backend_delayedinitializer_file.bin",
       "file", 8, std::vector<uint8_t>(8, 0), Tensor::FromFloat("", {2}, {1.5f, -2.0f}));

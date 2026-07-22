@@ -2262,6 +2262,32 @@ constexpr int64_t kImageDecoderSinceVersion = 20;
 void RegisterImageDecoderCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(kImageDecoderSinceVersion);
 
+  if (mode == TestMode::BENCHMARK) {
+    // ImageDecoder inputs are encoded bytestreams whose decoded size is fixed
+    // by the reference data (32x32). No in-tree image encoder exists to
+    // synthesize a larger input together with its expected decoded output, so
+    // the benchmark reuses the largest available reference sample (the TIFF
+    // RGB image) to provide per-operator benchmark coverage.
+    NodeProto node;
+    node.set_op_type("ImageDecoder");
+    node.add_input("data");
+    node.add_output("output");
+    AddAttribute<std::string>(node, "pixel_format", "RGB");
+
+    Expect(registry, std::move(node), "test_cc_image_decoder_benchmark", {opset}, []() -> IoData {
+      std::vector<uint8_t> in_bytes(k_image_decoder_decode_tiff_rgb_in,
+                                    k_image_decoder_decode_tiff_rgb_in + 3212);
+      Tensor in_tensor = Tensor::FromUint8("", {3212}, in_bytes);
+
+      const int64_t out_count = 32 * 32 * 3;
+      std::vector<uint8_t> out_bytes(k_image_decoder_decode_tiff_rgb_out,
+                                     k_image_decoder_decode_tiff_rgb_out + out_count);
+      Tensor out_tensor = Tensor::FromUint8("", {32, 32, 3}, out_bytes);
+      return IoData{{std::move(in_tensor)}, {std::move(out_tensor)}};
+    });
+    return;
+  }
+
   struct Entry {
     const char *name;
     const char *pixel_format;

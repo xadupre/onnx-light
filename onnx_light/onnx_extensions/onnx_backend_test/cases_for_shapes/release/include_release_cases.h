@@ -26,9 +26,9 @@ using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-n
 ///    intermediate tensor ``S`` is released at the ``Reshape`` node (its only
 ///    consumer).
 ///  - ``test_cc_release_initializer_add``: ``Add(input, initializer) → Relu``
-///    case that verifies both a graph input and a graph initializer are
-///    reported under ``onnx_light.not_used_after`` at the node where they reach
-///    their last use.
+///    case that verifies both a graph input and a graph initializer appear
+///    under ``onnx_light.not_used_after`` at the node where they reach their
+///    last use.
 ///
 /// The expected ``onnx_light.release_after`` and
 /// ``onnx_light.not_used_after`` node metadata are pre-embedded in each model

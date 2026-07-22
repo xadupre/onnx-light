@@ -1903,7 +1903,10 @@ TEST(KernelClass, TopKClassUsesAllocatorWhenRuntimeContextHasOne) {
   TopK topk_kernel{ctx};
 
   Tensor x = Tensor::FromFloat("", {1, 4}, {3.0f, 1.0f, 4.0f, 2.0f});
-  SimpleRawBufferAllocator alloc(2);
+  // Capacity 3: the two persistent outputs (values, indices) plus one transient
+  // scratch index buffer that TopK draws from the allocator and frees before
+  // returning.
+  SimpleRawBufferAllocator alloc(3);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
 
@@ -1911,6 +1914,7 @@ TEST(KernelClass, TopKClassUsesAllocatorWhenRuntimeContextHasOne) {
       topk_kernel(x, /*k=*/2, /*axis=*/-1, /*largest=*/true, /*sorted=*/true, &rt);
   EXPECT_TRUE(values.has_allocation());
   EXPECT_TRUE(indices.has_allocation());
+  // The transient scratch buffer has been freed, leaving only the two outputs.
   EXPECT_EQ(alloc.allocated_count(), 2u);
   ASSERT_EQ(values.shape, (std::vector<int64_t>{1, 2}));
   EXPECT_FLOAT_EQ(values.AsFloat()[0], 4.0f);

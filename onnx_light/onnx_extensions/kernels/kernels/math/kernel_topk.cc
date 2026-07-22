@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -47,7 +48,7 @@ void SplitTopKShape(const Shape &shape, int64_t axis, int64_t &outer, int64_t &a
 
 template <typename T>
 void TopKCompute(const Tensor &x, int64_t k, int64_t axis, bool largest, bool sorted, T *values_out,
-                 int64_t *indices_out) {
+                 int64_t *indices_out, RawBufferAllocator *allocator) {
   int64_t outer = 0;
   int64_t axis_dim = 0;
   int64_t inner = 0;
@@ -55,15 +56,18 @@ void TopKCompute(const Tensor &x, int64_t k, int64_t axis, bool largest, bool so
 
   const T *px = x.As<T>();
 
-  // Indices into ``[0, axis_dim)``; reused across slices. This is intentionally
-  // a ``std::vector`` and not a fixed-capacity ``Shape``: its length is the axis
-  // dimension ``axis_dim``, which is unbounded (e.g. 4096 in
-  // ``test_cc_top_k_benchmark``) and routinely exceeds ``Shape::kMaxRank`` (16).
-  std::vector<int64_t> idx(static_cast<std::size_t>(axis_dim));
+  // Indices into ``[0, axis_dim)``; reused across slices. This scratch buffer is
+  // sized by the axis dimension ``axis_dim``, which is unbounded (e.g. 4096 in
+  // ``test_cc_top_k_benchmark``) and routinely exceeds ``Shape::kMaxRank`` (16),
+  // so a fixed-capacity ``Shape`` cannot be used. It is drawn from the runtime
+  // allocator when one is available, falling back to a ``std::vector`` otherwise.
+  detail::TemporaryTypedBuffer<int64_t> idx_buf(static_cast<std::size_t>(axis_dim), allocator,
+                                                kTopKName);
+  int64_t *idx = idx_buf.data();
 
   for (int64_t o = 0; o < outer; ++o) {
     for (int64_t in = 0; in < inner; ++in) {
-      std::iota(idx.begin(), idx.end(), int64_t{0});
+      std::iota(idx, idx + axis_dim, int64_t{0});
       const int64_t base = (o * axis_dim) * inner + in;
 
       // Stable comparator over ``axis`` index; ties broken by smaller index
@@ -86,11 +90,11 @@ void TopKCompute(const Tensor &x, int64_t k, int64_t axis, bool largest, bool so
 
       // Partition the top-k indices to the front of ``idx``. ``nth_element``
       // gives O(N) average partitioning.
-      std::nth_element(idx.begin(), idx.begin() + k, idx.end(), less);
+      std::nth_element(idx, idx + k, idx + axis_dim, less);
       // Always sort the prefix so that output ordering is deterministic.
       // (The ONNX schema does not mandate any ordering when ``sorted`` is 0,
       // but a deterministic result keeps tests reproducible.)
-      std::sort(idx.begin(), idx.begin() + k, less);
+      std::sort(idx, idx + k, less);
       (void)sorted;
 
       const int64_t out_base = (o * k) * inner + in;
@@ -107,42 +111,42 @@ constexpr const char *kSupportedTopKTypesMsg = " only supports common numeric te
 
 template <typename T>
 void DispatchTopK(const Tensor &x, int64_t k, int64_t axis, bool largest, bool sorted,
-                  Tensor &values, Tensor &indices) {
-  TopKCompute<T>(x, k, axis, largest, sorted, values.As<T>(), indices.As<int64_t>());
+                  Tensor &values, Tensor &indices, RawBufferAllocator *allocator) {
+  TopKCompute<T>(x, k, axis, largest, sorted, values.As<T>(), indices.As<int64_t>(), allocator);
 }
 
 void RunTopK(const Tensor &x, int64_t k, int64_t axis, bool largest, bool sorted, Tensor &values,
-             Tensor &indices) {
+             Tensor &indices, RawBufferAllocator *allocator) {
   switch (x.data_type) {
   case DataType::FLOAT:
-    DispatchTopK<float>(x, k, axis, largest, sorted, values, indices);
+    DispatchTopK<float>(x, k, axis, largest, sorted, values, indices, allocator);
     return;
   case DataType::DOUBLE:
-    DispatchTopK<double>(x, k, axis, largest, sorted, values, indices);
+    DispatchTopK<double>(x, k, axis, largest, sorted, values, indices, allocator);
     return;
   case DataType::INT8:
-    DispatchTopK<int8_t>(x, k, axis, largest, sorted, values, indices);
+    DispatchTopK<int8_t>(x, k, axis, largest, sorted, values, indices, allocator);
     return;
   case DataType::INT16:
-    DispatchTopK<int16_t>(x, k, axis, largest, sorted, values, indices);
+    DispatchTopK<int16_t>(x, k, axis, largest, sorted, values, indices, allocator);
     return;
   case DataType::INT32:
-    DispatchTopK<int32_t>(x, k, axis, largest, sorted, values, indices);
+    DispatchTopK<int32_t>(x, k, axis, largest, sorted, values, indices, allocator);
     return;
   case DataType::INT64:
-    DispatchTopK<int64_t>(x, k, axis, largest, sorted, values, indices);
+    DispatchTopK<int64_t>(x, k, axis, largest, sorted, values, indices, allocator);
     return;
   case DataType::UINT8:
-    DispatchTopK<uint8_t>(x, k, axis, largest, sorted, values, indices);
+    DispatchTopK<uint8_t>(x, k, axis, largest, sorted, values, indices, allocator);
     return;
   case DataType::UINT16:
-    DispatchTopK<uint16_t>(x, k, axis, largest, sorted, values, indices);
+    DispatchTopK<uint16_t>(x, k, axis, largest, sorted, values, indices, allocator);
     return;
   case DataType::UINT32:
-    DispatchTopK<uint32_t>(x, k, axis, largest, sorted, values, indices);
+    DispatchTopK<uint32_t>(x, k, axis, largest, sorted, values, indices, allocator);
     return;
   case DataType::UINT64:
-    DispatchTopK<uint64_t>(x, k, axis, largest, sorted, values, indices);
+    DispatchTopK<uint64_t>(x, k, axis, largest, sorted, values, indices, allocator);
     return;
   default:
     EXT_THROW_INVALID(kTopKName, ": unsupported data type ", x.data_type, kSupportedTopKTypesMsg);
@@ -181,7 +185,7 @@ std::pair<Tensor, Tensor> TopK::operator()(const Tensor &x, int64_t k, int64_t a
   Tensor indices =
       MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape,
                        static_cast<std::size_t>(out_count) * sizeof(int64_t), allocator);
-  RunTopK(x, k, resolved_axis, largest, sorted, values, indices);
+  RunTopK(x, k, resolved_axis, largest, sorted, values, indices, allocator);
   return std::pair<Tensor, Tensor>(std::move(values), std::move(indices));
 }
 
@@ -203,7 +207,8 @@ void TopK::operator()(const Tensor &x, int64_t k, int64_t axis, bool largest, bo
                       " preallocated Indices output must have INT64 dtype.");
   EXT_ENFORCE_INVALID(indices.shape == out_shape, kTopKName,
                       " preallocated Indices output shape does not match expected.");
-  RunTopK(x, k, resolved_axis, largest, sorted, values, indices);
+  RawBufferAllocator *allocator = values.has_allocation() ? values.allocation_owner() : nullptr;
+  RunTopK(x, k, resolved_axis, largest, sorted, values, indices, allocator);
 }
 
 } // namespace kernel

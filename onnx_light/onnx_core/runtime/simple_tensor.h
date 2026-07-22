@@ -11,6 +11,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -185,6 +186,20 @@ struct Shape {
     size_ = count;
     for (size_t i = 0; i < count; ++i)
       dims_[i] = value;
+  }
+
+  /// Replaces the contents with the elements in the range ``[first, last)``.
+  /// Throws ``std::invalid_argument`` when the range size exceeds ``kMaxRank``.
+  template <typename InputIt, typename = std::enable_if_t<!std::is_integral<InputIt>::value>>
+  void assign(InputIt first, InputIt last) {
+    size_t n = 0;
+    for (InputIt it = first; it != last; ++it)
+      ++n;
+    EXT_ENFORCE_INVALID(n <= kMaxRank, "Shape rank ", n, " exceeds maximum of ", kMaxRank, ".");
+    size_ = n;
+    size_t i = 0;
+    for (InputIt it = first; it != last; ++it)
+      dims_[i++] = *it;
   }
 
   /// Returns a reference to the last dimension.

@@ -1610,10 +1610,9 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &indices = GetInput(node, 1, rt.tensors());
-         const std::vector<int64_t> kernel_shape =
-             GetAttributeIntsOrDefault(node, "kernel_shape", {});
-         const std::vector<int64_t> strides = GetAttributeIntsOrDefault(node, "strides", {});
-         const std::vector<int64_t> pads = GetAttributeIntsOrDefault(node, "pads", {});
+         const Shape kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+         const Shape strides = GetAttributeIntsOrDefault(node, "strides", {});
+         const Shape pads = GetAttributeIntsOrDefault(node, "pads", {});
          onnx_kernels::kernel::MaxUnpool k(rt.kernel_ctx());
          const Tensor *output_shape = GetOptionalInput(node, 2, rt.tensors());
          if (output_shape != nullptr) {

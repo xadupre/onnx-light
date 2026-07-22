@@ -117,4 +117,24 @@ TEST(KernelClass, ConvSameUpperStride2AsymmetricPadding) {
 
 TEST(KernelClass, ConvCanRunInPlaceIsFalse) { EXPECT_FALSE(Conv::CanRunInPlace()); }
 
+// When ``kernel_shape`` is omitted it is derived from ``W.shape[2:]``. This
+// exercises ``Shape::assign(first, last)`` used to copy the weight spatial
+// dimensions into the (now ``Shape``-typed) attribute.
+TEST(KernelClass, ConvDerivesKernelShapeFromWeights) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const Conv conv{ctx};
+  std::vector<float> X(25);
+  for (int i = 0; i < 25; ++i) {
+    X[i] = static_cast<float>(i);
+  }
+  Tensor x = Tensor::FromFloat("", {1, 1, 5, 5}, X);
+  Tensor w = Tensor::FromFloat("", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+  Tensor b;
+  Conv::Attributes attrs;
+  // kernel_shape intentionally left empty; derived from W.shape[2:] = {3, 3}.
+  Tensor y = conv(x, w, b, attrs);
+  ExpectNear(y, {54.f, 63.f, 72.f, 99.f, 108.f, 117.f, 144.f, 153.f, 162.f});
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 3, 3}));
+}
+
 } // namespace Test

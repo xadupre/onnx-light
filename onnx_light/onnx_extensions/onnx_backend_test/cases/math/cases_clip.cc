@@ -67,6 +67,20 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   const KernelContext ctx{opset};
   const onnx_kernels::kernel::Clip clip_kernel{ctx};
 
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeClipNode();
+    const int64_t size = kBenchmarkElementwiseSize;
+    Expect(registry, std::move(node), "test_cc_clip_benchmark", {opset}, {size, 1, 1}, {size},
+           [clip_kernel, size]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, /*seed=*/2001));
+             Tensor min_val = ScalarTensor<float>(-1.0f);
+             Tensor max_val = ScalarTensor<float>(1.0f);
+             Tensor y = clip_kernel(x, &min_val, &max_val);
+             return IoData{{std::move(x), std::move(min_val), std::move(max_val)}, {std::move(y)}};
+           });
+    return;
+  }
+
   // Deterministic onnx-light-specific case (``test_cc_*``).
   {
     NodeProto node = MakeClipNode();

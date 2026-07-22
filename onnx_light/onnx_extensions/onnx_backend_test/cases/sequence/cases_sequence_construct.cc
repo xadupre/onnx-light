@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/onnx_backend_test/cases/sequence/include_sequence_cases.h"
 #include "onnx_extensions/onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 
@@ -33,6 +34,30 @@ namespace onnx_backend_test {
 void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const KernelContext ctx{opset};
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> elem_shape = {512, 512};
+    NodeProto node;
+    node.set_op_type("SequenceConstruct");
+    for (int i = 0; i < 8; ++i) {
+      node.add_input("t" + std::to_string(i));
+    }
+    node.add_output("output_sequence");
+    Expect(registry, std::move(node), "test_cc_sequence_construct_benchmark", {opset},
+           [ctx, elem_shape]() -> IoData {
+             std::vector<Tensor> tensors;
+             tensors.reserve(8);
+             for (int i = 0; i < 8; ++i) {
+               tensors.push_back(
+                   Tensor::FromFloat("", elem_shape, Randn<float>(elem_shape, 2001 + i)));
+             }
+             Tensor output = onnx_kernels::kernel::SequenceConstruct(ctx)(tensors);
+             return IoData{std::move(tensors), {std::move(output)}};
+           },
+           "", "",
+           {SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT), elem_shape))});
+    return;
+  }
 
   // Case 1: three FLOAT tensors of shape [2, 3].
   {

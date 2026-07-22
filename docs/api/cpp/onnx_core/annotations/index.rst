@@ -7,6 +7,8 @@ inference and value lifetimes.
 .. toctree::
     :maxdepth: 1
 
+    compute_context
     inplace_reuse
+    inplace_reuse_types
     peak_memory
     value_tags

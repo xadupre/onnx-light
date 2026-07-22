@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -78,6 +79,34 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
   const If if_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> big_shape = {512, 512};
+    const Tensor then_value = Tensor::FromFloat("", big_shape, Randn<float>(big_shape, 4301));
+    const Tensor else_value = Tensor::FromFloat("", big_shape, Randn<float>(big_shape, 4302));
+
+    NodeProto node;
+    node.set_op_type("If");
+    node.add_input("cond");
+    node.add_output("res");
+
+    AttributeProto *then_attr = node.add_attribute();
+    then_attr->set_name("then_branch");
+    then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+    BuildConstantBranch(*then_attr->add_g(), "then_graph", "then_out", then_value);
+
+    AttributeProto *else_attr = node.add_attribute();
+    else_attr->set_name("else_branch");
+    else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+    BuildConstantBranch(*else_attr->add_g(), "else_graph", "else_out", else_value);
+
+    Expect(registry, std::move(node), "test_cc_if_benchmark", {opset}, [=]() -> IoData {
+      Tensor cond("", DataType::BOOL, {}, {1});
+      Tensor res = if_kernel(cond, then_value, else_value);
+      return IoData{{std::move(cond)}, {std::move(res)}};
+    });
+    return;
+  }
 
   const Tensor then_value = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   const Tensor else_value = Tensor::FromFloat("", {2}, {3.0f, 4.0f});

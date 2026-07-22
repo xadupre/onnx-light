@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 
 #include <cstdint>
@@ -260,6 +261,27 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
   const KernelContext ctx{opset};
   const Scan scan_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const int64_t trip_count = 512;
+    const int64_t row_len = 512;
+    NodeProto node = MakeSimpleScanNode("X", "Y");
+    Expect(registry, std::move(node), "test_cc_scan_benchmark", {opset}, [=]() -> IoData {
+      std::vector<float> x_values = Randn<float>({trip_count, row_len}, 4501);
+      std::vector<Tensor> per_iter;
+      per_iter.reserve(static_cast<std::size_t>(trip_count));
+      for (int64_t t = 0; t < trip_count; ++t) {
+        std::vector<float> row(x_values.begin() + t * row_len,
+                               x_values.begin() + (t + 1) * row_len);
+        per_iter.push_back(Tensor("", DataType::FLOAT, {row_len}, FloatBytes(row)));
+      }
+      const Tensor x("", DataType::FLOAT, {trip_count, row_len}, FloatBytes(x_values));
+      std::vector<Tensor> out =
+          scan_kernel(trip_count, /*initial_state=*/{}, /*final_state=*/{}, {per_iter});
+      return IoData{{std::move(x)}, std::move(out)};
+    });
+    return;
+  }
 
   auto register_case = [&](const std::string &test_name, int64_t trip_count) {
     NodeProto node = MakeSimpleScanNode("X", "Y");

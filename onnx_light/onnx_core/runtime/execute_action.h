@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "onnx_core/annotations/inplace_reuse_kind.h"
+#include "onnx_core/annotations/inplace_reuse_types.h"
 #include "onnx_core/runtime/raw_buffer_allocator.h"
 #include "onnx_light_helpers.h"
 

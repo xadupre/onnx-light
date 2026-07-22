@@ -111,6 +111,12 @@ public:
   /// :cpp:enumerator:`RuntimeEventAction::kRemove` event when event logging is
   /// on; sequence removals do not emit events (sequence values live outside the
   /// tensor event stream).
+  ///
+  /// This scans :cpp:func:`actions` for the node's delete actions, so it is
+  /// linear in the plan size per call; the runtime does not use it on the hot
+  /// path (:cpp:func:`RunNodes` replays the whole action list once instead).
+  /// It is kept as a per-node convenience for callers that drive execution
+  /// themselves.
   void ReleaseAfter(const NodeProto &node, RuntimeContext &rt) const;
 
   /// Ordered list of :cpp:class:`ExecuteAction` steps the runtime performs

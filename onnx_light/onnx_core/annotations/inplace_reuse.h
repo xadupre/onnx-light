@@ -12,6 +12,7 @@
 #include <variant>
 #include <vector>
 
+#include "onnx_core/annotations/inplace_reuse_kind.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -79,40 +80,8 @@ using ::onnx_light::core::symbolic::TensorType;
 
 /**
  * Classifies how an input buffer compares in size with the output that
- * reuses it:
- *
- *   - :cpp:enumerator:`kEqual`: the input and output buffers have the same
- *     byte size (e.g. a Transpose or a same-total-size Reshape).
- *     This is the preferred, space-optimal reuse.
- *   - :cpp:enumerator:`kGreater`: the input buffer is strictly larger in
- *     bytes than the output, so the output still fits but leaves part of
- *     the buffer unused.
+ * reuses it. See :cpp:enum:`InPlaceReuseKind` in ``inplace_reuse_kind.h``.
  */
-enum class InPlaceReuseKind {
-  kEqual,
-  kGreater,
-};
-
-/**
- * A single in-place reuse opportunity for one node: the output at
- * position :cpp:var:`output_index` may reuse the buffer of the input at
- * position :cpp:var:`input_index` (both indices refer to the node's
- * ``output()`` / ``input()`` lists). :cpp:var:`kind` records whether the
- * input buffer has the same size as the output
- * (:cpp:enumerator:`InPlaceReuseKind::kEqual`) or is strictly larger
- * (:cpp:enumerator:`InPlaceReuseKind::kGreater`).
- */
-struct InPlaceReuse {
-  int64_t output_index = -1;
-  int64_t input_index = -1;
-  InPlaceReuseKind kind = InPlaceReuseKind::kEqual;
-
-  bool operator==(const InPlaceReuse &other) const noexcept {
-    return output_index == other.output_index && input_index == other.input_index &&
-           kind == other.kind;
-  }
-  bool operator!=(const InPlaceReuse &other) const noexcept { return !(*this == other); }
-};
 
 /**
  * Metadata key under which :cpp:func:`ComputeContext::WriteToMetadata`

@@ -38,7 +38,6 @@ void RegisterPeakMemoryCases(std::vector<TestCase> &registry, TestMode mode) {
     graph->set_name(name);
 
     NodeProto &node = AddNode(*graph, "Attention", {"Q", "K", "V"}, {"Y"});
-    node.set_domain("ai.onnx");
 
     AppendValueInfo(*graph->add_input(), "Q", DataType::FLOAT,
                     {DimSpec(2), DimSpec(4), DimSpec(8), DimSpec(16)});
@@ -66,8 +65,7 @@ void RegisterPeakMemoryCases(std::vector<TestCase> &registry, TestMode mode) {
     GraphProto *graph = model.add_graph();
     graph->set_name(name);
 
-    NodeProto &node = AddNode(*graph, "Attention", {"Q", "K", "V"}, {"Y"});
-    node.set_domain("ai.onnx");
+    AddNode(*graph, "Attention", {"Q", "K", "V"}, {"Y"});
 
     AppendValueInfo(*graph->add_input(), "Q", DataType::FLOAT,
                     {DimSpec("batch"), DimSpec(4), DimSpec(8), DimSpec(16)});

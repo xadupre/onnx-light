@@ -85,5 +85,5 @@ column header to sort.
 See also
 --------
 
-* :ref:`l-design-backend-tests`
+* :doc:`/api/cpp/onnx_extensions/backend_test/index`
 * :ref:`l-design-test-coverage`

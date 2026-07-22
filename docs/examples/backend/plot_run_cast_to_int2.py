@@ -136,7 +136,7 @@ print(f"Backend test {tc.name!r} passed.")
 #
 #     # python -m pytest my_backend_tests.py -v -k cast_FLOAT_to_INT2
 #
-# See :ref:`l-design-backend-tests` for the full backend-test workflow.
+# See :doc:`/api/cpp/onnx_extensions/backend_test/index` for the full backend-test workflow.
 
 #####################################
 # Gallery thumbnail

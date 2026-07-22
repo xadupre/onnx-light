@@ -64,7 +64,7 @@ Per-case details
 See also
 --------
 
-* :ref:`l-design-backend-tests`
+* :doc:`/api/cpp/onnx_extensions/backend_test/index`
 * :ref:`l-design-runtime-coverage`
 * :func:`onnx_light.onnx_core.shape_inference.infer_shapes_model`
 * :func:`onnx_light.tools.pretty_onnx`

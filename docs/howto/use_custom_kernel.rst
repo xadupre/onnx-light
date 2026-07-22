@@ -215,6 +215,4 @@ See also
 
 * :ref:`l-example-plot-custom-kernel` - end-to-end example that builds a
   model, registers a numpy kernel, and overrides a built-in op.
-* :ref:`l-design-custom-kernels` - design notes covering dispatch
-  precedence and the matching C++ and low-level Python entry points.
 * :ref:`l-how-to` - other onnx-light how-to recipes.

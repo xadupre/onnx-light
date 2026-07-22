@@ -120,4 +120,4 @@ API reference
   (:doc:`/api/cpp/onnx_core/shapes/shapes_context`).
 * **Python API**: :class:`ShapeEvent`, :class:`ShapeEventAction` and
   :class:`ShapesContext`
-  (:doc:`/api/python/onnx_extensions/shapes/shape_inference`).
+  (:doc:`/api/python/onnx_core/shape_inference`).

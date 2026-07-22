@@ -71,4 +71,4 @@ that have zero test cases — operators partially covered (for example
 See also
 --------
 
-* :ref:`l-design-backend-tests`
+* :doc:`/api/cpp/onnx_extensions/backend_test/index`

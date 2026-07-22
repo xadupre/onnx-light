@@ -18,6 +18,29 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
+// Precomputed contraction plan (forward-declared in the kernel header so
+// :cpp:class:`Einsum` can cache it between calls).
+struct EinsumPlan {
+  // Expanded per-input label strings (with ellipsis replaced by labels).
+  std::vector<std::string> input_labels;
+  // Expanded output label string.
+  std::string output_labels;
+  // All distinct labels in iteration order: output labels first, then summed
+  // labels in the order they are first encountered.
+  std::vector<char> all_labels;
+  // Size of each label in ``all_labels``. Same length as ``all_labels``.
+  std::vector<int64_t> label_size;
+  // For each input: precomputed strides so that the contribution of label
+  // ``all_labels[k]`` (with current index ``ix[k]``) to the input's flat
+  // offset is ``ix[k] * stride[k]`` (zero when the input does not use the
+  // label).
+  std::vector<std::vector<int64_t>> input_strides;
+  // Output shape (in label order, i.e. ``output_labels``).
+  Shape output_shape;
+  // Output strides indexed by ``all_labels``. Zero for summed labels.
+  std::vector<int64_t> output_stride_per_label;
+};
+
 namespace {
 constexpr const char *kEinsumName = "kernel::Einsum";
 // Synthetic labels used to expand ``...`` live outside the printable ASCII
@@ -85,27 +108,6 @@ std::string ExpandEllipsis(const std::string &term, std::size_t ellipsis_rank,
   out.append(term, dots + 3, std::string::npos);
   return out;
 }
-
-struct EinsumPlan {
-  // Expanded per-input label strings (with ellipsis replaced by labels).
-  std::vector<std::string> input_labels;
-  // Expanded output label string.
-  std::string output_labels;
-  // All distinct labels in iteration order: output labels first, then summed
-  // labels in the order they are first encountered.
-  std::vector<char> all_labels;
-  // Size of each label in ``all_labels``. Same length as ``all_labels``.
-  std::vector<int64_t> label_size;
-  // For each input: precomputed strides so that the contribution of label
-  // ``all_labels[k]`` (with current index ``ix[k]``) to the input's flat
-  // offset is ``ix[k] * stride[k]`` (zero when the input does not use the
-  // label).
-  std::vector<std::vector<int64_t>> input_strides;
-  // Output shape (in label order, i.e. ``output_labels``).
-  Shape output_shape;
-  // Output strides indexed by ``all_labels``. Zero for summed labels.
-  std::vector<int64_t> output_stride_per_label;
-};
 
 EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_equation) {
   std::string equation = StripSpaces(raw_equation);
@@ -362,9 +364,8 @@ void RunEinsum(const std::vector<Tensor> &inputs, const EinsumPlan &plan, T *out
 }
 
 template <typename T>
-Tensor EinsumAlloc(const std::vector<Tensor> &inputs, const std::string &equation, int32_t dtype,
+Tensor EinsumAlloc(const std::vector<Tensor> &inputs, const EinsumPlan &plan, int32_t dtype,
                    RuntimeContext *rt) {
-  const EinsumPlan plan = BuildPlan(inputs, equation);
   int64_t out_count = 1;
   for (int64_t d : plan.output_shape) {
     out_count *= d;
@@ -376,9 +377,8 @@ Tensor EinsumAlloc(const std::vector<Tensor> &inputs, const std::string &equatio
 }
 
 template <typename T>
-void EinsumInPlace(const std::vector<Tensor> &inputs, const std::string &equation, int32_t dtype,
+void EinsumInPlace(const std::vector<Tensor> &inputs, const EinsumPlan &plan, int32_t dtype,
                    Tensor &output) {
-  const EinsumPlan plan = BuildPlan(inputs, equation);
   int64_t out_count = 1;
   for (int64_t d : plan.output_shape) {
     out_count *= d;
@@ -401,14 +401,30 @@ void RequireHomogeneous(const std::vector<Tensor> &inputs) {
 
 } // namespace
 
+const EinsumPlan &Einsum::EnsurePlan(const std::vector<Tensor> &inputs,
+                                     const std::string &equation) const {
+  std::vector<Shape> shapes;
+  shapes.reserve(inputs.size());
+  for (const Tensor &t : inputs) {
+    shapes.push_back(t.shape);
+  }
+  if (plan_ == nullptr || plan_equation_ != equation || plan_shapes_ != shapes) {
+    plan_ = std::make_shared<const EinsumPlan>(BuildPlan(inputs, equation));
+    plan_equation_ = equation;
+    plan_shapes_ = std::move(shapes);
+  }
+  return *plan_;
+}
+
 Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation,
                           RuntimeContext *rt) const {
   RequireHomogeneous(inputs);
+  const EinsumPlan &plan = EnsurePlan(inputs, equation);
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
-    return EinsumAlloc<float>(inputs, equation, DataType::FLOAT, rt);
+    return EinsumAlloc<float>(inputs, plan, DataType::FLOAT, rt);
   case DataType::DOUBLE:
-    return EinsumAlloc<double>(inputs, equation, DataType::DOUBLE, rt);
+    return EinsumAlloc<double>(inputs, plan, DataType::DOUBLE, rt);
   default:
     EXT_THROW_INVALID(kEinsumName, ": unsupported data type ", inputs[0].data_type,
                       ", only supports FLOAT and DOUBLE inputs.");
@@ -418,11 +434,12 @@ Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &
 void Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation,
                         Tensor &output) const {
   RequireHomogeneous(inputs);
+  const EinsumPlan &plan = EnsurePlan(inputs, equation);
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
-    return EinsumInPlace<float>(inputs, equation, DataType::FLOAT, output);
+    return EinsumInPlace<float>(inputs, plan, DataType::FLOAT, output);
   case DataType::DOUBLE:
-    return EinsumInPlace<double>(inputs, equation, DataType::DOUBLE, output);
+    return EinsumInPlace<double>(inputs, plan, DataType::DOUBLE, output);
   default:
     EXT_THROW_INVALID(kEinsumName, ": unsupported data type ", inputs[0].data_type,
                       ", only supports FLOAT and DOUBLE inputs.");

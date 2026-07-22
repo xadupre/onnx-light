@@ -59,7 +59,35 @@ enum class ExecuteActionKind : int32_t {
 };
 
 /// Returns a stable, human-readable name for ``kind``.
-const char *ExecuteActionKindName(ExecuteActionKind kind) noexcept;
+inline constexpr const char *ExecuteActionKindName(ExecuteActionKind kind) noexcept {
+  switch (kind) {
+  case ExecuteActionKind::kLockInitializer:
+    return "LockInitializer";
+  case ExecuteActionKind::kUnlockInitializer:
+    return "UnlockInitializer";
+  case ExecuteActionKind::kLockInput:
+    return "LockInput";
+  case ExecuteActionKind::kUnlockInput:
+    return "UnlockInput";
+  case ExecuteActionKind::kAllocateBuffer:
+    return "AllocateBuffer";
+  case ExecuteActionKind::kDeleteBuffer:
+    return "DeleteBuffer";
+  case ExecuteActionKind::kTransfer:
+    return "Transfer";
+  case ExecuteActionKind::kExecuteNode:
+    return "ExecuteNode";
+  case ExecuteActionKind::kCreateShape:
+    return "CreateShape";
+  case ExecuteActionKind::kDeleteShape:
+    return "DeleteShape";
+  case ExecuteActionKind::kAllocateTemporaryBuffer:
+    return "AllocateTemporaryBuffer";
+  case ExecuteActionKind::kDeleteTemporaryBuffer:
+    return "DeleteTemporaryBuffer";
+  }
+  return "Unknown";
+}
 
 /**
  * Single step of an :cpp:class:`ExecutionPlan`.

@@ -204,7 +204,9 @@ struct TypeConstraintParam {
  * @return Null-terminated string such as `"tensor(float)"` or
  *         `"seq(tensor(int64))"`.
  */
-inline const char *ToTypeString(TensorType type) { return onnx_proto::ToTypeString(type); }
+inline constexpr const char *ToTypeString(TensorType type) {
+  return onnx_proto::ToTypeString(type);
+}
 
 /// Thrown when a LightOpSchema is constructed with invalid arguments.
 class SchemaError final : public std::runtime_error {

@@ -17,25 +17,26 @@ namespace kernel {
 
 namespace {
 
-// Reads a 1-D INT64 tensor into a ``std::vector<int64_t>``.
-std::vector<int64_t> ReadInt64Vector(const Tensor &t, const std::string &name) {
+// Reads a 1-D INT64 tensor into a ``Shape``.
+onnx_kernels::Shape ReadInt64Vector(const Tensor &t, const std::string &name) {
   EXT_ENFORCE_INVALID(t.data_type == DataType::INT64, "kernel::Pad: '", name,
                       "' input must be INT64.");
   EXT_ENFORCE_INVALID(t.shape.size() == 1, "kernel::Pad: '", name, "' input must be a 1-D tensor.");
   const std::size_t n = static_cast<std::size_t>(t.shape[0]);
-  std::vector<int64_t> out(n);
+  onnx_kernels::Shape out;
+  out.assign(n, 0);
   if (n > 0) {
-    std::memcpy(out.data(), t.bytes(), n * sizeof(int64_t));
+    std::memcpy(out.begin(), t.bytes(), n * sizeof(int64_t));
   }
   return out;
 }
 
 // Resolves ``axes`` (possibly negative) and falls back to ``[0, 1, ..., rank-1]``
 // when ``axes_tensor`` is ``nullptr``.
-std::vector<int64_t> ResolveAxes(const Tensor *axes_tensor, std::size_t rank) {
-  std::vector<int64_t> axes;
+onnx_kernels::Shape ResolveAxes(const Tensor *axes_tensor, std::size_t rank) {
+  onnx_kernels::Shape axes;
   if (axes_tensor == nullptr) {
-    axes.resize(rank);
+    axes.assign(rank, 0);
     for (std::size_t i = 0; i < rank; ++i) {
       axes[i] = static_cast<int64_t>(i);
     }
@@ -44,10 +45,10 @@ std::vector<int64_t> ResolveAxes(const Tensor *axes_tensor, std::size_t rank) {
   EXT_ENFORCE_INVALID(axes_tensor->shape.size() == 1,
                       "kernel::Pad: 'axes' input must be a 1-D tensor.");
   const std::size_t n = static_cast<std::size_t>(axes_tensor->shape[0]);
-  axes.resize(n);
+  axes.assign(n, 0);
   if (axes_tensor->data_type == DataType::INT64) {
     if (n > 0) {
-      std::memcpy(axes.data(), axes_tensor->bytes(), n * sizeof(int64_t));
+      std::memcpy(axes.begin(), axes_tensor->bytes(), n * sizeof(int64_t));
     }
   } else if (axes_tensor->data_type == DataType::INT32) {
     const int32_t *p = reinterpret_cast<const int32_t *>(axes_tensor->bytes());
@@ -152,8 +153,8 @@ int64_t MapCoord(int64_t out_coord, int64_t pad_begin, int64_t input_dim, const 
 Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
                        const Tensor *axes, const std::string &mode, RuntimeContext *rt) const {
   const std::size_t rank = data.shape.size();
-  const std::vector<int64_t> axes_vec = ResolveAxes(axes, rank);
-  const std::vector<int64_t> pads_vec = ReadInt64Vector(pads, "pads");
+  const onnx_kernels::Shape axes_vec = ResolveAxes(axes, rank);
+  const onnx_kernels::Shape pads_vec = ReadInt64Vector(pads, "pads");
   const std::size_t num_axes = axes_vec.size();
   EXT_ENFORCE_INVALID(pads_vec.size() == 2 * num_axes,
                       "kernel::Pad: 'pads' must have length 2 * num_axes.");
@@ -191,8 +192,8 @@ Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *con
 void Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
                      const Tensor *axes, const std::string &mode, Tensor &output) const {
   const std::size_t rank = data.shape.size();
-  const std::vector<int64_t> axes_vec = ResolveAxes(axes, rank);
-  const std::vector<int64_t> pads_vec = ReadInt64Vector(pads, "pads");
+  const onnx_kernels::Shape axes_vec = ResolveAxes(axes, rank);
+  const onnx_kernels::Shape pads_vec = ReadInt64Vector(pads, "pads");
   const std::size_t num_axes = axes_vec.size();
   EXT_ENFORCE_INVALID(pads_vec.size() == 2 * num_axes,
                       "kernel::Pad: 'pads' must have length 2 * num_axes.");

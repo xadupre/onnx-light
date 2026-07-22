@@ -51,16 +51,17 @@ template <typename T> int64_t ComputeRangeCount(T s, T l, T d) {
 }
 
 template <typename T>
-Tensor ComputeRange(const Tensor &start, const Tensor &limit, const Tensor &delta, int32_t dtype) {
+Tensor ComputeRange(const Tensor &start, const Tensor &limit, const Tensor &delta, int32_t dtype,
+                    RawBufferAllocator *allocator) {
   const T s = ReadScalar<T>(start, "start");
   const T l = ReadScalar<T>(limit, "limit");
   const T d = ReadScalar<T>(delta, "delta");
   EXT_ENFORCE_INVALID(d != T(0), "kernel::Range: 'delta' must be non-zero.");
 
   const int64_t n = ComputeRangeCount(s, l, d);
-  std::vector<uint8_t> out_data(PackedByteSize(dtype, n));
-  FillRangeBuffer(s, d, n, reinterpret_cast<T *>(out_data.data()));
-  return Tensor("", dtype, {n}, std::move(out_data));
+  Tensor output = MakeOutputTensor(dtype, {n}, PackedByteSize(dtype, n), allocator);
+  FillRangeBuffer(s, d, n, reinterpret_cast<T *>(output.mutable_bytes()));
+  return output;
 }
 
 template <typename T>
@@ -111,16 +112,16 @@ float ReadBfloat16Scalar(const Tensor &t, const char *name) {
 // half-precision layouts.
 Tensor ComputeRangeHalf(const Tensor &start, const Tensor &limit, const Tensor &delta,
                         int32_t dtype, float (*read)(const Tensor &, const char *),
-                        uint16_t (*encode)(float)) {
+                        uint16_t (*encode)(float), RawBufferAllocator *allocator) {
   const float s = read(start, "start");
   const float l = read(limit, "limit");
   const float d = read(delta, "delta");
   EXT_ENFORCE_INVALID(d != 0.0f, "kernel::Range: 'delta' must be non-zero.");
 
   const int64_t n = ComputeRangeCount(s, l, d);
-  std::vector<uint8_t> out_data(PackedByteSize(dtype, n));
-  FillRangeHalfBuffer(s, d, n, reinterpret_cast<uint16_t *>(out_data.data()), encode);
-  return Tensor("", dtype, {n}, std::move(out_data));
+  Tensor output = MakeOutputTensor(dtype, {n}, PackedByteSize(dtype, n), allocator);
+  FillRangeHalfBuffer(s, d, n, reinterpret_cast<uint16_t *>(output.mutable_bytes()), encode);
+  return output;
 }
 
 void ComputeRangeHalfInto(const Tensor &start, const Tensor &limit, const Tensor &delta,
@@ -150,23 +151,24 @@ Tensor Range::operator()(const Tensor &start, const Tensor &limit, const Tensor 
                          RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(start.data_type == limit.data_type && start.data_type == delta.data_type,
                       "kernel::Range: 'start', 'limit' and 'delta' must share the same dtype.");
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   switch (static_cast<DataType>(start.data_type)) {
   case DataType::FLOAT:
-    return ComputeRange<float>(start, limit, delta, start.data_type);
+    return ComputeRange<float>(start, limit, delta, start.data_type, allocator);
   case DataType::DOUBLE:
-    return ComputeRange<double>(start, limit, delta, start.data_type);
+    return ComputeRange<double>(start, limit, delta, start.data_type, allocator);
   case DataType::INT16:
-    return ComputeRange<int16_t>(start, limit, delta, start.data_type);
+    return ComputeRange<int16_t>(start, limit, delta, start.data_type, allocator);
   case DataType::INT32:
-    return ComputeRange<int32_t>(start, limit, delta, start.data_type);
+    return ComputeRange<int32_t>(start, limit, delta, start.data_type, allocator);
   case DataType::INT64:
-    return ComputeRange<int64_t>(start, limit, delta, start.data_type);
+    return ComputeRange<int64_t>(start, limit, delta, start.data_type, allocator);
   case DataType::FLOAT16:
     return ComputeRangeHalf(start, limit, delta, start.data_type, &ReadFloat16Scalar,
-                            &FloatToFloat16Bits);
+                            &FloatToFloat16Bits, allocator);
   case DataType::BFLOAT16:
     return ComputeRangeHalf(start, limit, delta, start.data_type, &ReadBfloat16Scalar,
-                            &FloatToBfloat16Bits);
+                            &FloatToBfloat16Bits, allocator);
   default:
     EXT_THROW_INVALID("unsupported data type ", start.data_type, ", ",
                       "kernel::Range: unsupported input dtype.");

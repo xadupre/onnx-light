@@ -556,6 +556,26 @@ TEST(KernelClass, RangeFloat16UsesExpectedBitPatterns) {
   EXPECT_EQ(ReadUint16Element(y_in_place, 1), 0x4200);
 }
 
+TEST(KernelClass, RangeUsesAllocatorWhenRuntimeContextHasOne) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Range kernel{ctx};
+  const Tensor start = Tensor::FromFloat("", {}, {1.0f});
+  const Tensor limit = Tensor::FromFloat("", {}, {5.0f});
+  const Tensor delta = Tensor::FromFloat("", {}, {2.0f});
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+  const Tensor y = kernel(start, limit, delta, &rt);
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_EQ(y.data.size(), 0u);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 3.0f);
+}
+
 TEST(KernelClass, RangeInt32NegativeDelta) {
   const KernelContext ctx{DefaultOpset(11)};
   Range kernel{ctx};

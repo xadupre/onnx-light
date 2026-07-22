@@ -143,7 +143,7 @@ low-level Python binding too:
   plan = rt.ExecutionPlan(model.graph)
   plan.num_nodes          # nodes covered by the plan
   plan.keep()             # names that must never be released
-  plan.releasable()       # per-node names whose last use falls at that node
+  plan.actions()          # ordered ExecuteAction steps derived from metadata
 
   # ...or let a RuntimeContext build and cache it on first use.
   ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
@@ -152,9 +152,11 @@ low-level Python binding too:
 
 :func:`ExecutionPlan.keep` returns the structural set of names seeded from
 the graph's inputs, initializers and outputs (for a function, its declared
-inputs and outputs), while :func:`ExecutionPlan.releasable` returns, for
-each node, the intermediates whose last reference falls at that node.
-:func:`ExecutionPlan.release_after` removes those names from a
+inputs and outputs), while :func:`ExecutionPlan.actions` returns the ordered
+list of :class:`ExecuteAction` steps derived from the in-place / lifetime
+metadata written to each node by the in-place reuse pass.
+:func:`ExecutionPlan.release_after` removes, for a given node, the
+intermediates whose last use falls there from a
 :class:`RuntimeContext`. :func:`RuntimeContext.get_execution_plan` caches
 one plan per ``GraphProto`` / ``FunctionProto`` identity, so the analysis
 is paid only once for the lifetime of the context.

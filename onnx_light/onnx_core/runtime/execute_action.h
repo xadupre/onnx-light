@@ -1,0 +1,188 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include "onnx_core/annotations/inplace_reuse_types.h"
+#include "onnx_core/runtime/raw_buffer_allocator.h"
+#include "onnx_light_helpers.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <utility>
+
+/**
+ * @file execute_action.h
+ * @brief Single step of an :cpp:class:`ExecutionPlan`
+ *        (:cpp:class:`ExecuteAction`) describing one memory-management or
+ *        node-execution operation.
+ */
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace core {
+namespace runtime {
+
+/**
+ * Kind of a single :cpp:class:`ExecuteAction`.
+ *
+ * The values enumerate every operation an :cpp:class:`ExecutionPlan` may
+ * schedule while running a graph, function or free-standing node range.
+ */
+enum class ExecuteActionKind : int32_t {
+  /// Locks an initializer so it stays alive while it is still referenced.
+  kLockInitializer = 0,
+  /// Unlocks an initializer once no remaining node references it.
+  kUnlockInitializer = 1,
+  /// Locks an input so it stays alive while it is still referenced.
+  kLockInput = 2,
+  /// Unlocks an input once no remaining node references it.
+  kUnlockInput = 3,
+  /// Allocates a buffer for a named result.
+  kAllocateBuffer = 4,
+  /// Deletes a named result (frees its buffer).
+  kDeleteBuffer = 5,
+  /// Transfers a named result to another named result.
+  kTransfer = 6,
+  /// Executes a node.
+  kExecuteNode = 7,
+  /// Creates the shape of a named result.
+  kCreateShape = 8,
+  /// Deletes the shape of a named result.
+  kDeleteShape = 9,
+  /// Allocates a temporary buffer required for one or several kernels to
+  /// handle a memory peak.
+  kAllocateTemporaryBuffer = 10,
+  /// Deallocates a temporary buffer once the kernel(s) using it are done.
+  kDeleteTemporaryBuffer = 11,
+};
+
+/// Returns a stable, human-readable name for ``kind``.
+inline const char *ExecuteActionKindName(ExecuteActionKind kind) noexcept {
+  switch (kind) {
+  case ExecuteActionKind::kLockInitializer:
+    return "LockInitializer";
+  case ExecuteActionKind::kUnlockInitializer:
+    return "UnlockInitializer";
+  case ExecuteActionKind::kLockInput:
+    return "LockInput";
+  case ExecuteActionKind::kUnlockInput:
+    return "UnlockInput";
+  case ExecuteActionKind::kAllocateBuffer:
+    return "AllocateBuffer";
+  case ExecuteActionKind::kDeleteBuffer:
+    return "DeleteBuffer";
+  case ExecuteActionKind::kTransfer:
+    return "Transfer";
+  case ExecuteActionKind::kExecuteNode:
+    return "ExecuteNode";
+  case ExecuteActionKind::kCreateShape:
+    return "CreateShape";
+  case ExecuteActionKind::kDeleteShape:
+    return "DeleteShape";
+  case ExecuteActionKind::kAllocateTemporaryBuffer:
+    return "AllocateTemporaryBuffer";
+  case ExecuteActionKind::kDeleteTemporaryBuffer:
+    return "DeleteTemporaryBuffer";
+  }
+  return "Unknown";
+}
+
+/**
+ * Single step of an :cpp:class:`ExecutionPlan`.
+ *
+ * An action captures exactly one operation the runtime performs while
+ * executing a node sequence: locking/unlocking an input or initializer,
+ * allocating or deleting a named result (or a temporary buffer), creating
+ * or deleting the shape of a named result, transferring a named result to
+ * another one, or executing a node.
+ *
+ * Every allocation or deallocation references the
+ * :cpp:class:`RawBufferAllocator` used, so a plan can be replayed against
+ * the exact allocator that owns the memory. Non-memory actions (node
+ * execution, shape creation/deletion, lock/unlock) carry a ``nullptr``
+ * allocator.
+ */
+class ExecuteAction {
+public:
+  ExecuteAction() = default;
+
+  /**
+   * Builds an action.
+   *
+   * @param kind       Kind of the action.
+   * @param name       Primary named result / input / initializer the action
+   *                   operates on. Empty for actions that do not target a
+   *                   name (e.g. a bare node execution).
+   * @param allocator  Allocator referenced by allocation / deallocation
+   *                   actions; ``nullptr`` for actions that do not touch a
+   *                   buffer.
+   * @param node_index Index of the node for :cpp:enumerator:`kExecuteNode`;
+   *                   ``0`` otherwise.
+   * @param size       Number of bytes for buffer allocations; ``0`` when
+   *                   unknown or not applicable.
+   * @param target     Destination named result for
+   *                   :cpp:enumerator:`kTransfer`, or the input buffer reused
+   *                   by an in-place :cpp:enumerator:`kAllocateBuffer`; empty
+   *                   otherwise.
+   * @param inplace    In-place reuse decision backing an
+   *                   :cpp:enumerator:`kAllocateBuffer` action. The default
+   *                   (``output_index < 0``) means the allocation is a fresh
+   *                   allocation rather than an in-place reuse.
+   */
+  ExecuteAction(ExecuteActionKind kind, std::string name, RawBufferAllocator *allocator = nullptr,
+                size_t node_index = 0, size_t size = 0, std::string target = std::string(),
+                annotations::InPlaceReuse inplace = annotations::InPlaceReuse{})
+      : kind_(kind), name_(std::move(name)), target_(std::move(target)), allocator_(allocator),
+        node_index_(node_index), size_(size), inplace_(inplace) {}
+
+  /// Returns the kind of the action.
+  ExecuteActionKind kind() const noexcept { return kind_; }
+
+  /// Returns the stable, human-readable name of :cpp:func:`kind`.
+  const char *kind_name() const noexcept { return ExecuteActionKindName(kind_); }
+
+  /// Returns the primary named result / input / initializer the action
+  /// operates on (empty when not applicable).
+  const std::string &name() const noexcept { return name_; }
+
+  /// Returns the destination named result of a
+  /// :cpp:enumerator:`ExecuteActionKind::kTransfer` action (empty otherwise).
+  const std::string &target() const noexcept { return target_; }
+
+  /// Returns the allocator referenced by allocation / deallocation actions,
+  /// or ``nullptr`` when the action does not touch a buffer.
+  RawBufferAllocator *allocator() const noexcept { return allocator_; }
+
+  /// Returns the index of the node for
+  /// :cpp:enumerator:`ExecuteActionKind::kExecuteNode` (``0`` otherwise).
+  size_t node_index() const noexcept { return node_index_; }
+
+  /// Returns the number of bytes for buffer allocations (``0`` when unknown
+  /// or not applicable).
+  size_t size() const noexcept { return size_; }
+
+  /// Returns ``true`` when this action reuses an input buffer in place rather
+  /// than allocating fresh memory (only meaningful for
+  /// :cpp:enumerator:`ExecuteActionKind::kAllocateBuffer`).
+  bool is_inplace() const noexcept { return inplace_.output_index >= 0; }
+
+  /// Returns the in-place reuse decision backing this action. When
+  /// :cpp:func:`is_inplace` is ``false`` the returned value has
+  /// ``output_index == -1``.
+  const annotations::InPlaceReuse &inplace() const noexcept { return inplace_; }
+
+private:
+  ExecuteActionKind kind_ = ExecuteActionKind::kExecuteNode;
+  std::string name_;
+  std::string target_;
+  RawBufferAllocator *allocator_ = nullptr;
+  size_t node_index_ = 0;
+  size_t size_ = 0;
+  annotations::InPlaceReuse inplace_;
+};
+
+} // namespace runtime
+} // namespace core
+} // namespace ONNX_LIGHT_NAMESPACE

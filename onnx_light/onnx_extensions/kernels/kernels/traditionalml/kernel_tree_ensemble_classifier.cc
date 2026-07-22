@@ -30,7 +30,7 @@ ComputeClassifierScores(const ClassicNodeMap &node_map, const ClassicLeafMap &le
 
   // Reused per-sample accumulator; allocated once and reset each iteration to
   // avoid a heap allocation per sample.
-  std::vector<float> accum(static_cast<size_t>(n_classes), 0.0f);
+  std::vector<float> accum(static_cast<size_t>(n_classes));
 
   for (int64_t n = 0; n < sample_count; ++n) {
     const double *x_row = x_values + n * feature_count;

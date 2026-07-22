@@ -5,9 +5,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.8] – Unreleased
 
+### New Features
+
+- Added a `RuntimeParameters` class to control graph execution parallelism.
+- Introduced a first-class `ExecuteAction` describing every memory-management and execution step of an `ExecutionPlan` (allocate/delete buffer, lock/unlock, transfer, execute node, create/delete shape), each tied to the owning allocator and exposed through the Python bindings with a concise `summary()` helper.
+- Added peak-memory annotations to the shape-inference pipeline and a `WritePeakMemoryToMetadata` step to persist the estimate.
+- Added a `Resize` opset 18 → 17 version-converter adapter.
+
 ### Improvements
 
-- Made `ExecutionPlan` derive its per-node release schedule entirely from the `ExecuteAction` list (dropping the redundant `annotated_`/topology-fallback state) and routed `RunNodes` release through that action replay.
+- Refactored `ExecutionPlan` around the `ExecuteAction` list: every constructor now takes a `RawBufferAllocator*` and builds its actions through a single virtual extension point, and the per-node release schedule is derived entirely from that list (dropping the redundant `annotated_`/topology-fallback state) with `RunNodes` release routed through the action replay.
+- Reorganized the C++ tree: moved execution primitives and annotations into `onnx_core/compute`, split `ComputeContext` into `compute_context.h`/`compute_context.cc`, moved `ExecuteActionKindName` out of the header, and switched switch-based enum→string helpers to `inline constexpr const char *`.
+- Improved SVG readability by rendering edge labels smaller, staggered to reduce collisions, and without a highlight halo.
+
+### Fixes
+
+- Validated `int32_data` size for non-packed types in the checker (propagate onnx/onnx#8211).
+- Fixed a `run_add_node_test` compile break by aligning the backend-test namespace and `TestCase` API usage.
+
+### Testing
+
+- Extended the big Qwen3 shape-inference case with expected intermediate shapes and embedded/verified golden in-place-reuse metadata.
+- Added a `cc_release` test case covering a graph initializer in `not_used_after` metadata and per-operator benchmark coverage to the C++ backend test suite.
+
+### Documentation & CI
+
+- Synced the Python API docs with the current public modules, renamed the example galleries (`core` → `proto`, `optimization` → `core`), refreshed documentation, and bumped the release version to `0.1.8`.
 
 ## [0.1.7] – 2026-07-21
 

@@ -13,6 +13,7 @@ onnx_light.onnx
     inliner
     mapping
     numpy_helper
+    onnx_pb
     parser
     printer
     reference

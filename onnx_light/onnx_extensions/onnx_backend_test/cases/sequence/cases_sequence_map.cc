@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/onnx_backend_test/cases/sequence/include_sequence_cases.h"
 #include "onnx_extensions/onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 
@@ -710,6 +711,19 @@ void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
 // ---------------------------------------------------------------------------
 void RegisterSequenceMapCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(17);
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> big_shape = {512, 512};
+    std::vector<Tensor> inputs;
+    inputs.reserve(8);
+    for (int i = 0; i < 8; ++i) {
+      inputs.push_back(
+          Tensor::FromFloat("t" + std::to_string(i), big_shape, Randn<float>(big_shape, 2001 + i)));
+    }
+    RegisterSequenceMapIdentityCase("test_cc_sequence_map_benchmark", inputs, big_shape,
+                                    static_cast<int32_t>(DataType::FLOAT), opset, registry);
+    return;
+  }
 
   // Case 1: three FLOAT tensors of shape [2, 3] (1 seq, Identity body).
   {

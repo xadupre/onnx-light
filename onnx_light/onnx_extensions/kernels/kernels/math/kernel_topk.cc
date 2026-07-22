@@ -55,7 +55,10 @@ void TopKCompute(const Tensor &x, int64_t k, int64_t axis, bool largest, bool so
 
   const T *px = x.As<T>();
 
-  // Indices into ``[0, axis_dim)``; reused across slices.
+  // Indices into ``[0, axis_dim)``; reused across slices. This is intentionally
+  // a ``std::vector`` and not a fixed-capacity ``Shape``: its length is the axis
+  // dimension ``axis_dim``, which is unbounded (e.g. 4096 in
+  // ``test_cc_top_k_benchmark``) and routinely exceeds ``Shape::kMaxRank`` (16).
   std::vector<int64_t> idx(static_cast<std::size_t>(axis_dim));
 
   for (int64_t o = 0; o < outer; ++o) {

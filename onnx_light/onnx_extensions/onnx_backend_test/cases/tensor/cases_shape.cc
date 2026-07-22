@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/onnx_backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_extensions/onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -50,6 +51,22 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
   const KernelContext ctx{opset};
   const onnx_kernels::kernel::Shape shape_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    // Shape only reads the input's dimensions, so the case exists mainly for
+    // benchmark coverage. A large multi-dimensional input keeps the timed
+    // input materialisation representative of real graphs.
+    const std::vector<int64_t> shape = {2048, 2048};
+    Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/std::nullopt),
+           "test_cc_shape_benchmark", {opset}, {2048 * 2048}, {2},
+           [shape_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 2001));
+             onnx_kernels::kernel::Shape::Attributes attrs;
+             Tensor y = Rename(shape_kernel(x, attrs), "y");
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+    return;
+  }
 
   // 2-D example: mirrors ``test_shape_example`` upstream.
   const Tensor x2d = Tensor::FromFloat("x", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});

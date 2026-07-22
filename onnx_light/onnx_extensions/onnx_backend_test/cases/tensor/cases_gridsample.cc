@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/onnx_backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_extensions/onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -126,6 +127,31 @@ void AddCase(std::vector<TestCase> &registry, const OpsetId &opset, const std::s
 // ---------------------------------------------------------------------------
 void RegisterGridSampleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
+
+  if (mode == TestMode::BENCHMARK) {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::GridSample gridsample_kernel{ctx};
+    const std::vector<int64_t> x_shape = {1, 16, 256, 256};
+    const std::vector<int64_t> grid_shape = {1, 256, 256, 2};
+    NodeProto node;
+    node.set_op_type("GridSample");
+    node.add_input("X");
+    node.add_input("Grid");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_cc_gridsample_benchmark", {opset},
+           {1 * 16 * 256 * 256, 1 * 256 * 256 * 2}, {1 * 16 * 256 * 256},
+           [gridsample_kernel, x_shape, grid_shape]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", x_shape, Randn<float>(x_shape, 2001));
+             Tensor Grid = Tensor::FromFloat("Grid", grid_shape, Randn<float>(grid_shape, 2002));
+             onnx_kernels::kernel::GridSample::Attributes attrs;
+             attrs.mode = "linear";
+             Tensor Y = gridsample_kernel(X, Grid, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(Grid)}, {std::move(Y)}};
+           });
+    return;
+  }
 
   // ---- test_gridsample ----------------------------------------------------
   AddCase(registry, opset, "test_gridsample", "linear", "zeros", /*align_corners=*/0, MakeX_4x4(),

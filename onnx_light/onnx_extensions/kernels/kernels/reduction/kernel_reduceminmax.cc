@@ -26,8 +26,7 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
   return resolved;
 }
 
-Shape ComputeOutputShape(const Shape &input_shape, const std::vector<bool> &is_reduced,
-                         bool keepdims) {
+Shape ComputeOutputShape(const Shape &input_shape, const Shape &is_reduced, bool keepdims) {
   Shape out_shape;
   out_shape.reserve(input_shape.size());
   for (size_t d = 0; d < input_shape.size(); ++d) {
@@ -62,8 +61,8 @@ void ValidateFloatOrBool(const Tensor &t, const char *name) {
                       "kernel::ReduceMinMax: ", name, " must be a FLOAT or BOOL tensor.");
 }
 
-void MinMaxReduce(const Tensor &data, const std::vector<bool> &is_reduced,
-                  const Shape &output_shape_noreduce, ReduceMinMax::Mode mode, Tensor &output) {
+void MinMaxReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
+                  ReduceMinMax::Mode mode, Tensor &output) {
   // BOOL path: ReduceMax = OR, ReduceMin = AND.
   if (data.data_type == static_cast<int32_t>(DataType::BOOL)) {
     const Shape out_strides = RowMajorStrides(output_shape_noreduce);
@@ -77,7 +76,8 @@ void MinMaxReduce(const Tensor &data, const std::vector<bool> &is_reduced,
 
     const uint8_t *px = data.AsBool();
     const int64_t rank = static_cast<int64_t>(data.shape.size());
-    std::vector<int64_t> idx(static_cast<size_t>(rank), 0);
+    Shape idx;
+    idx.assign(static_cast<size_t>(rank), 0);
     const int64_t total = data.element_count();
     for (int64_t i = 0; i < total; ++i) {
       int64_t out_offset = 0;
@@ -116,7 +116,8 @@ void MinMaxReduce(const Tensor &data, const std::vector<bool> &is_reduced,
 
   const float *px = data.AsFloat();
   const int64_t rank = static_cast<int64_t>(data.shape.size());
-  std::vector<int64_t> idx(static_cast<size_t>(rank), 0);
+  Shape idx;
+  idx.assign(static_cast<size_t>(rank), 0);
   const int64_t total = data.element_count();
   for (int64_t i = 0; i < total; ++i) {
     int64_t out_offset = 0;
@@ -149,7 +150,8 @@ Tensor ReduceMinMax::operator()(const Tensor &data, bool keepdims, bool noop_wit
   ValidateFloatOrBool(data, "data");
   const bool is_bool = data.data_type == static_cast<int32_t>(DataType::BOOL);
   const int64_t rank = static_cast<int64_t>(data.shape.size());
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   if (!noop_with_empty_axes) {
     std::fill(is_reduced.begin(), is_reduced.end(), true);
   }
@@ -171,7 +173,8 @@ void ReduceMinMax::operator()(const Tensor &data, bool keepdims, bool noop_with_
                               Tensor &output) const {
   ValidateFloatOrBool(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   if (!noop_with_empty_axes) {
     std::fill(is_reduced.begin(), is_reduced.end(), true);
   }
@@ -195,7 +198,8 @@ Tensor ReduceMinMax::operator()(const Tensor &data, const Tensor &axes, bool kee
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceMinMax: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   const int64_t naxes = axes.element_count();
   if (naxes == 0) {
     if (!noop_with_empty_axes) {
@@ -229,7 +233,8 @@ void ReduceMinMax::operator()(const Tensor &data, const Tensor &axes, bool keepd
                       "kernel::ReduceMinMax: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
 
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   const int64_t naxes = axes.element_count();
   if (naxes == 0) {
     if (!noop_with_empty_axes) {

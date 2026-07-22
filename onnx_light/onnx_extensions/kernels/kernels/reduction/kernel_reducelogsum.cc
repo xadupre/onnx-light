@@ -27,8 +27,7 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
   return resolved;
 }
 
-Shape ComputeOutputShape(const Shape &input_shape, const std::vector<bool> &is_reduced,
-                         bool keepdims) {
+Shape ComputeOutputShape(const Shape &input_shape, const Shape &is_reduced, bool keepdims) {
   Shape out_shape;
   out_shape.reserve(input_shape.size());
   for (size_t d = 0; d < input_shape.size(); ++d) {
@@ -61,7 +60,7 @@ void ValidateFloatOrDouble(const Tensor &t, const char *name) {
 // Templated reduction core for both FLOAT and DOUBLE.
 template <typename T>
 void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t rank,
-                   const Shape &data_shape, const std::vector<bool> &is_reduced,
+                   const Shape &data_shape, const Shape &is_reduced,
                    const Shape &output_shape_noreduce, ReduceLogSumOp::Mode mode) {
   const Shape out_strides = RowMajorStrides(output_shape_noreduce);
 
@@ -83,7 +82,8 @@ void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t
     for (int64_t i = 0; i < out_count; ++i) {
       py[i] = static_cast<T>(0);
     }
-    std::vector<int64_t> idx(static_cast<size_t>(rank), 0);
+    Shape idx;
+    idx.assign(static_cast<size_t>(rank), 0);
     for (int64_t i = 0; i < total; ++i) {
       int64_t out_offset = 0;
       size_t out_dim = 0;
@@ -111,7 +111,8 @@ void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t
   // kLogSumExp: use the max-shift trick.
   const T neg_inf = -std::numeric_limits<T>::infinity();
   std::vector<T> max_vals(static_cast<size_t>(out_count), neg_inf);
-  std::vector<int64_t> idx(static_cast<size_t>(rank), 0);
+  Shape idx;
+  idx.assign(static_cast<size_t>(rank), 0);
   for (int64_t i = 0; i < total; ++i) {
     int64_t out_offset = 0;
     size_t out_dim = 0;
@@ -169,8 +170,8 @@ void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t
   }
 }
 
-void LogSumReduce(const Tensor &data, const std::vector<bool> &is_reduced,
-                  const Shape &output_shape_noreduce, ReduceLogSumOp::Mode mode, Tensor &output) {
+void LogSumReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
+                  ReduceLogSumOp::Mode mode, Tensor &output) {
   const int64_t out_count = output.element_count();
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   const int64_t total = data.element_count();
@@ -216,7 +217,8 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_w
                                   RuntimeContext *rt) const {
   ValidateFloatOrDouble(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   if (!noop_with_empty_axes) {
     std::fill(is_reduced.begin(), is_reduced.end(), true);
   }
@@ -240,7 +242,8 @@ void ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_wit
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::ReduceLogSumOp: output dtype must match data dtype.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   if (!noop_with_empty_axes) {
     std::fill(is_reduced.begin(), is_reduced.end(), true);
   }
@@ -269,7 +272,8 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool k
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceLogSumOp: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   const int64_t naxes = axes.element_count();
   if (naxes == 0) {
     if (!noop_with_empty_axes) {
@@ -305,7 +309,8 @@ void ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool kee
                       "kernel::ReduceLogSumOp: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
 
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   const int64_t naxes = axes.element_count();
   if (naxes == 0) {
     if (!noop_with_empty_axes) {

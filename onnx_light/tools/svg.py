@@ -57,7 +57,7 @@ _MARGIN = 20.0  # Outer margin around the whole drawing.
 _CROSSING_SWEEPS = 4
 _EDGE_LABEL_STAGGER = 8.0  # Per-label orthogonal offset to reduce text collisions.
 _EDGE_LABEL_HALO_COLOR = "#ffffff"
-_EDGE_LABEL_HALO_WIDTH = 3
+_EDGE_LABEL_HALO_WIDTH = 3  # SVG stroke width, in pixels.
 
 # Styling per kind of box: ``fill``, ``stroke`` and ``dashed`` flag.
 _STYLES = {

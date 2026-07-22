@@ -313,8 +313,9 @@ TEST(CHECKER_COVERAGE, TensorUnpackedInt32DataTooSmall) {
         TensorProto::UINT16, TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::FLOAT8E4M3FN,
         TensorProto::FLOAT8E4M3FNUZ, TensorProto::FLOAT8E5M2, TensorProto::FLOAT8E5M2FNUZ,
         TensorProto::FLOAT8E8M0}) {
-    // 4 int32_data entries for a 32-element tensor: the packed formula ceil(32/8)=4
-    // would incorrectly accept this, but 32 entries (one per element) are needed.
+    // 4 int32_data entries for a 32-element tensor: the 4-bit packed formula
+    // ceil(nelem/8) = ceil(32/8) = 4 would incorrectly accept this, but these
+    // types require nelem=32 entries (one per element), not the packed count.
     TensorProto t;
     t.set_name("t");
     t.set_data_type(dtype);

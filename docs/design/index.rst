@@ -26,21 +26,11 @@ a smooth replacement.
     cplusplus_linking
 
 .. toctree::
-    :caption: Kernels and Backend Tests
+    :caption: Test Coverage
     :maxdepth: 1
 
-    contexts
-    kernels
-    backend_tests
     test_coverage
     runtime_coverage
-    custom_kernels
-
-.. toctree::
-    :caption: Gradient
-    :maxdepth: 1
-
-    gradient
 
 .. toctree::
     :caption: Shape Inference

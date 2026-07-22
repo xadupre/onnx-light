@@ -1,7 +1,7 @@
 .. _l-design-inference-coverage:
 
-Shape-inference coverage (onnx_shapes)
-=====================================
+Shape-inference coverage
+========================
 
 .. role:: green
 .. role:: red

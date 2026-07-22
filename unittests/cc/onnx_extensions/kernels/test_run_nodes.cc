@@ -10,12 +10,12 @@
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_extensions/onnx_kernels/kernel_dispatch_table.h"
-#include "onnx_extensions/onnx_kernels/kernels/math/include_math_kernels.h"
-#include "onnx_extensions/onnx_kernels/kernels/nn/include_nn_kernels.h"
-#include "onnx_extensions/onnx_kernels/kernels/rt/include_rt_kernels.h"
-#include "onnx_extensions/onnx_kernels/kernels/tensor/include_tensor_kernels.h"
-#include "onnx_extensions/onnx_kernels/kernels/training/include_training_kernels.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
+#include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
+#include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_extensions/kernels/kernels/rt/include_rt_kernels.h"
+#include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_extensions/kernels/kernels/training/include_training_kernels.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>

@@ -294,6 +294,6 @@ API reference
   :cpp:func:`PropagateValueAsShapeArithmetic`
   (:doc:`/api/cpp/onnx_core/shapes/shape_broadcast`).
 * **Python API**: :class:`SymTensor`
-  (:doc:`/api/python/onnx_extensions/onnx_shapes/shape_inference`).
+  (:doc:`/api/python/onnx_extensions/shapes/shape_inference`).
 * **Expression library**: :ref:`l-design-expressions`.
 * **Constraint mechanism**: :ref:`l-design-shape-constraints`.

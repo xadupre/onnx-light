@@ -1,0 +1,1093 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_core/backend_test/test_case.h"
+#include "onnx_extensions/backend_test/cases/tensor/include_tensor_cases.h"
+#include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_proto/onnx_helper.h"
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_backend_test {
+
+// ---------------------------------------------------------------------------
+// Resize — nearest interpolation. Available since opset 10 (replaces the
+// deprecated ``Upsample``); the ``axes`` attribute and the
+// ``keep_aspect_ratio_policy`` attribute were added in opset 18. Mirrors
+// the subset of upstream resize node tests in
+// ``onnx/backend/test/case/node/resize.py`` that the reference implementation
+// supports (``nearest`` mode with the ``half_pixel`` / ``align_corners`` /
+// ``asymmetric`` coordinate transformations).
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Optional attribute helpers --------------------------------------------------
+
+void MaybeAddString(NodeProto &node, const char *name, const std::string &value) {
+  if (!value.empty()) {
+    AddAttribute<std::string>(node, name, value);
+  }
+}
+
+void MaybeAddInts(NodeProto &node, const char *name, const std::vector<int64_t> &value) {
+  if (!value.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, name, value);
+  }
+}
+
+// Builds a Resize node taking ``(X, roi, scales)`` with ``roi`` as the empty
+// input name (matching the v11+ schema for the simple "scales only" case).
+NodeProto MakeResizeNodeScales(const std::string &mode = "nearest",
+                               const std::string &coord_mode = "asymmetric",
+                               const std::string &nearest_mode = "",
+                               const std::vector<int64_t> &axes = {}) {
+  NodeProto node;
+  node.set_op_type("Resize");
+  node.add_input("X");
+  node.add_input(""); // roi (unused)
+  node.add_input("scales");
+  node.add_output("Y");
+  MaybeAddString(node, "mode", mode);
+  MaybeAddString(node, "coordinate_transformation_mode", coord_mode);
+  MaybeAddString(node, "nearest_mode", nearest_mode);
+  MaybeAddInts(node, "axes", axes);
+  return node;
+}
+
+// Builds a Resize node taking ``(X, roi, scales, sizes)`` with ``roi`` and
+// ``scales`` as empty input names (matching the v11+ schema for the "sizes
+// only" case).
+NodeProto MakeResizeNodeSizes(const std::string &mode = "nearest",
+                              const std::string &coord_mode = "asymmetric",
+                              const std::string &nearest_mode = "",
+                              const std::vector<int64_t> &axes = {},
+                              const std::string &keep_aspect_ratio_policy = "") {
+  NodeProto node;
+  node.set_op_type("Resize");
+  node.add_input("X");
+  node.add_input(""); // roi (unused)
+  node.add_input(""); // scales (unused)
+  node.add_input("sizes");
+  node.add_output("Y");
+  MaybeAddString(node, "mode", mode);
+  MaybeAddString(node, "coordinate_transformation_mode", coord_mode);
+  MaybeAddString(node, "nearest_mode", nearest_mode);
+  MaybeAddInts(node, "axes", axes);
+  MaybeAddString(node, "keep_aspect_ratio_policy", keep_aspect_ratio_policy);
+  return node;
+}
+
+Tensor MakeScalesTensor(const std::vector<float> &scales) {
+  return Tensor::FromFloat("", {static_cast<int64_t>(scales.size())}, scales);
+}
+
+Tensor MakeSizesTensor(const std::vector<int64_t> &sizes) {
+  return Tensor::FromInt64("", {static_cast<int64_t>(sizes.size())}, sizes);
+}
+
+} // namespace
+
+// Forward declaration: defined below at the bottom of the file. The body was
+// generated from the upstream ONNX node-test data sets
+// (``onnx/backend/test/data/node/test_resize_*``), so the inputs/expected
+// outputs match the upstream backend-test corpus bit-for-bit for the
+// interpolation modes (``linear``, ``cubic``, ``tf_crop_and_resize``,
+// antialias variants), most of which this reference C++ kernel also
+// reproduces.
+void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry);
+
+void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
+  const OpsetId opset13 = DefaultOpset(13);
+  const OpsetId opset18 = DefaultOpset(18);
+  const KernelContext ctx{opset13};
+  const onnx_kernels::kernel::Resize resize_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node = MakeResizeNodeScales("nearest", "asymmetric");
+    Expect(registry, std::move(node), "test_cc_resize_upsample_scales_nearest_asymmetric_benchmark",
+           {opset13}, {1048576, 4}, {6291456}, [resize_kernel]() -> IoData {
+             Tensor X =
+                 Tensor::FromFloat("", {1, 1, 1024, 1024}, Randn<float>({1, 1, 1024, 1024}, 2001));
+             Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
+             onnx_kernels::kernel::Resize::Attributes attrs;
+             attrs.mode = "nearest";
+             attrs.coordinate_transformation_mode = "asymmetric";
+             Tensor Y = resize_kernel(X, scales, attrs);
+             return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
+           });
+    return;
+  }
+
+  // test_cc_resize_upsample_scales_nearest_asymmetric — NCHW input shape
+  // [1, 1, 2, 2] upsampled by [1, 1, 2, 3] using nearest mode and the
+  // asymmetric coordinate transformation; expected output is the upstream
+  // reference for ``test_resize_upsample_scales_nearest`` rerun with
+  // coordinate_transformation_mode == "asymmetric".
+  {
+    Expect(registry, MakeResizeNodeScales("nearest", "asymmetric"),
+           "test_cc_resize_upsample_scales_nearest_asymmetric", {opset13}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
+             onnx_kernels::kernel::Resize::Attributes attrs;
+             attrs.mode = "nearest";
+             attrs.coordinate_transformation_mode = "asymmetric";
+             const Tensor Y = resize_kernel(X, scales, attrs);
+             return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
+           });
+  }
+
+  // test_cc_resize_upsample_scales_nearest_1d — minimal 1-D nearest case
+  // (asymmetric mode), exercising the strided index mapping independently
+  // of the NCHW layout.
+  {
+    Expect(registry, MakeResizeNodeScales("nearest", "asymmetric"),
+           "test_cc_resize_upsample_scales_nearest_1d", {opset13}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {3}, {10.0f, 20.0f, 30.0f});
+             const Tensor scales = MakeScalesTensor({2.0f});
+             onnx_kernels::kernel::Resize::Attributes attrs;
+             attrs.mode = "nearest";
+             attrs.coordinate_transformation_mode = "asymmetric";
+             const Tensor Y = resize_kernel(X, scales, attrs);
+             return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
+           });
+  }
+
+  // test_cc_resize_upsample_sizes_nearest_asymmetric — same NCHW input, but
+  // the target shape is given via the ``sizes`` input rather than via
+  // ``scales``. Output is [1, 1, 4, 6] matching the scales [1, 1, 2, 3].
+  {
+    Expect(registry, MakeResizeNodeSizes("nearest", "asymmetric"),
+           "test_cc_resize_upsample_sizes_nearest_asymmetric", {opset13}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor sizes = MakeSizesTensor({1, 1, 4, 6});
+             onnx_kernels::kernel::Resize::Attributes attrs;
+             attrs.mode = "nearest";
+             attrs.coordinate_transformation_mode = "asymmetric";
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // ---------------------------------------------------------------------------
+  // The cases below mirror the upstream ONNX node-level tests in
+  // ``onnx/backend/test/case/node/resize.py``. The ``mode="nearest"`` cases
+  // are all supported by the reference kernel; we omit the linear/cubic/
+  // antialias/tf_crop_and_resize cases for which only ``nearest`` interpolation
+  // is implemented here.
+  // ---------------------------------------------------------------------------
+
+  // test_resize_upsample_scales_nearest — opset 13 defaults
+  // (mode=nearest, coordinate_transformation_mode=half_pixel,
+  // nearest_mode=round_prefer_floor).
+  {
+    Expect(registry, MakeResizeNodeScales("nearest", /*coord_mode=*/""),
+           "test_resize_upsample_scales_nearest", {opset13}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
+             onnx_kernels::kernel::Resize::Attributes
+                 attrs; // defaults: half_pixel + round_prefer_floor
+             const Tensor Y = resize_kernel(X, scales, attrs);
+             return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_downsample_scales_nearest — half_pixel + round_prefer_floor.
+  {
+    Expect(registry, MakeResizeNodeScales("nearest", /*coord_mode=*/""),
+           "test_resize_downsample_scales_nearest", {opset13}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
+                                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+             const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 0.6f, 0.6f});
+             onnx_kernels::kernel::Resize::Attributes attrs;
+             const Tensor Y = resize_kernel(X, scales, attrs);
+             return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_upsample_sizes_nearest — sizes path, half_pixel default.
+  {
+    Expect(registry, MakeResizeNodeSizes("nearest", /*coord_mode=*/""),
+           "test_resize_upsample_sizes_nearest", {opset13}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor sizes = MakeSizesTensor({1, 1, 7, 8});
+             onnx_kernels::kernel::Resize::Attributes attrs;
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_downsample_sizes_nearest — sizes path, half_pixel default.
+  {
+    Expect(registry, MakeResizeNodeSizes("nearest", /*coord_mode=*/""),
+           "test_resize_downsample_sizes_nearest", {opset13}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
+                                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+             const Tensor sizes = MakeSizesTensor({1, 1, 1, 3});
+             onnx_kernels::kernel::Resize::Attributes attrs;
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_upsample_sizes_nearest_floor_align_corners — align_corners +
+  // floor.
+  {
+    Expect(registry, MakeResizeNodeSizes("nearest", "align_corners", "floor"),
+           "test_resize_upsample_sizes_nearest_floor_align_corners", {opset13}, [=]() -> IoData {
+             const Tensor X =
+                 Tensor::FromFloat("", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor sizes = MakeSizesTensor({1, 1, 8, 8});
+             onnx_kernels::kernel::Resize::Attributes attrs;
+             attrs.coordinate_transformation_mode = "align_corners";
+             attrs.nearest_mode = "floor";
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_upsample_sizes_nearest_round_prefer_ceil_asymmetric — asymmetric +
+  // round_prefer_ceil.
+  {
+    Expect(registry, MakeResizeNodeSizes("nearest", "asymmetric", "round_prefer_ceil"),
+           "test_resize_upsample_sizes_nearest_round_prefer_ceil_asymmetric", {opset13},
+           [=]() -> IoData {
+             const Tensor X =
+                 Tensor::FromFloat("", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor sizes = MakeSizesTensor({1, 1, 8, 8});
+             onnx_kernels::kernel::Resize::Attributes attrs;
+             attrs.coordinate_transformation_mode = "asymmetric";
+             attrs.nearest_mode = "round_prefer_ceil";
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_upsample_sizes_nearest_ceil_half_pixel — half_pixel + ceil.
+  {
+    Expect(registry, MakeResizeNodeSizes("nearest", "half_pixel", "ceil"),
+           "test_resize_upsample_sizes_nearest_ceil_half_pixel", {opset13}, [=]() -> IoData {
+             const Tensor X =
+                 Tensor::FromFloat("", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor sizes = MakeSizesTensor({1, 1, 8, 8});
+             onnx_kernels::kernel::Resize::Attributes attrs;
+             attrs.coordinate_transformation_mode = "half_pixel";
+             attrs.nearest_mode = "ceil";
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_upsample_scales_nearest_axes_2_3 — opset 18 ``axes`` attribute.
+  {
+    onnx_kernels::kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
+    Expect(registry,
+           MakeResizeNodeScales("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
+           "test_resize_upsample_scales_nearest_axes_2_3", {opset18}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor scales = MakeScalesTensor({2.0f, 3.0f});
+             const Tensor Y = resize_kernel(X, scales, attrs);
+             return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_upsample_scales_nearest_axes_3_2 — opset 18 ``axes`` attribute,
+  // with axes specified in non-ascending order.
+  {
+    onnx_kernels::kernel::Resize::Attributes attrs;
+    attrs.axes = {3, 2};
+    Expect(registry,
+           MakeResizeNodeScales("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
+           "test_resize_upsample_scales_nearest_axes_3_2", {opset18}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor scales = MakeScalesTensor({3.0f, 2.0f});
+             const Tensor Y = resize_kernel(X, scales, attrs);
+             return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_upsample_sizes_nearest_axes_2_3 — opset 18 sizes + axes.
+  {
+    onnx_kernels::kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
+    Expect(registry,
+           MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
+           "test_resize_upsample_sizes_nearest_axes_2_3", {opset18}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor sizes = MakeSizesTensor({7, 8});
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_upsample_sizes_nearest_axes_3_2 — opset 18 sizes + axes
+  // (non-ascending order).
+  {
+    onnx_kernels::kernel::Resize::Attributes attrs;
+    attrs.axes = {3, 2};
+    Expect(registry,
+           MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
+           "test_resize_upsample_sizes_nearest_axes_3_2", {opset18}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor sizes = MakeSizesTensor({8, 7});
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_upsample_sizes_nearest_not_larger — opset 18
+  // ``keep_aspect_ratio_policy=not_larger``: scales by min(sizes / in_size)
+  // across axes (7x7 output for a 2x2 input requested at 7x8).
+  {
+    onnx_kernels::kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
+    attrs.keep_aspect_ratio_policy = "not_larger";
+    Expect(registry,
+           MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
+                               attrs.keep_aspect_ratio_policy),
+           "test_resize_upsample_sizes_nearest_not_larger", {opset18}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor sizes = MakeSizesTensor({7, 8});
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_upsample_sizes_nearest_not_smaller — opset 18
+  // ``keep_aspect_ratio_policy=not_smaller``: scales by max(sizes / in_size)
+  // across axes (8x8 output for a 2x2 input requested at 7x8).
+  {
+    onnx_kernels::kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
+    attrs.keep_aspect_ratio_policy = "not_smaller";
+    Expect(registry,
+           MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
+                               attrs.keep_aspect_ratio_policy),
+           "test_resize_upsample_sizes_nearest_not_smaller", {opset18}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor sizes = MakeSizesTensor({7, 8});
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_downsample_sizes_nearest_not_larger — downsample variant of
+  // ``not_larger``: 2x4 input requested at 1x3 yields 1x2 output.
+  {
+    onnx_kernels::kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
+    attrs.keep_aspect_ratio_policy = "not_larger";
+    Expect(registry,
+           MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
+                               attrs.keep_aspect_ratio_policy),
+           "test_resize_downsample_sizes_nearest_not_larger", {opset18}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
+                                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+             const Tensor sizes = MakeSizesTensor({1, 3});
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // test_resize_downsample_sizes_nearest_not_smaller — downsample variant of
+  // ``not_smaller``: 2x4 input requested at 1x3 yields 2x3 output.
+  {
+    onnx_kernels::kernel::Resize::Attributes attrs;
+    attrs.axes = {2, 3};
+    attrs.keep_aspect_ratio_policy = "not_smaller";
+    Expect(registry,
+           MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
+                               attrs.keep_aspect_ratio_policy),
+           "test_resize_downsample_sizes_nearest_not_smaller", {opset18}, [=]() -> IoData {
+             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
+                                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+             const Tensor sizes = MakeSizesTensor({1, 3});
+             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
+           });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Linear / cubic / tf_crop_and_resize / antialias cases — the C++ kernel
+  // here only implements ``mode="nearest"``, so these cases are registered
+  // with inputs and expected outputs copied verbatim from the upstream ONNX
+  // backend-test data sets in ``onnx/backend/test/data/node/test_resize_*``.
+  // They give backends (notably onnxruntime) a chance to exercise the full
+  // schema surface even though the in-tree reference kernel cannot reproduce
+  // these outputs.
+  // ---------------------------------------------------------------------------
+  RegisterResizeCasesFromUpstream(registry);
+}
+
+// Each case below mirrors the upstream ONNX backend-test data in
+// onnx/backend/test/data/node/<name>/ — the NodeProto attributes, the input
+// tensor values and the expected output tensor values are copied from the
+// per-test model.onnx + input_*.pb + output_*.pb files. The values were
+// originally extracted with a one-off Python helper that loaded those data
+// sets and emitted the literals below; the file is then kept up-to-date by
+// hand if upstream changes.
+void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
+  // test_resize_upsample_scales_linear
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_upsample_scales_linear", {DefaultOpset(19)},
+           [=]() -> IoData {
+             const Tensor input_0 = Tensor::FromFloat("X", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor input_2 = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.0f, 2.0f});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 4, 4},
+                                   {1.0f, 1.25f, 1.75f, 2.0f, 1.5f, 1.75f, 2.25f, 2.5f, 2.5f, 2.75f,
+                                    3.25f, 3.5f, 3.0f, 3.25f, 3.75f, 4.0f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_upsample_scales_linear_align_corners
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "align_corners");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_upsample_scales_linear_align_corners",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 = Tensor::FromFloat("X", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor input_2 = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.0f, 2.0f});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 4, 4},
+                                   {1.0f, 1.33333337f, 1.66666663f, 2.0f, 1.66666663f, 2.0f,
+                                    2.33333325f, 2.66666675f, 2.33333325f, 2.66666675f, 3.0f,
+                                    3.33333325f, 3.0f, 3.33333325f, 3.66666675f, 4.0f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_upsample_scales_linear_half_pixel_symmetric
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "half_pixel_symmetric");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_upsample_scales_linear_half_pixel_symmetric",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 = Tensor::FromFloat("X", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor input_2 =
+                 Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.29999995f, 2.94000006f});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 4, 5},
+                                   {1.0f,        1.15986395f, 1.5f,        1.84013605f, 2.0f,
+                                    1.56521738f, 1.72508132f, 2.06521749f, 2.40535355f, 2.56521749f,
+                                    2.43478251f, 2.59464645f, 2.93478251f, 3.27491856f, 3.43478251f,
+                                    3.0f,        3.15986395f, 3.5f,        3.84013605f, 4.0f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_scales_linear
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_downsample_scales_linear", {DefaultOpset(19)},
+           [=]() -> IoData {
+             const Tensor input_0 = Tensor::FromFloat(
+                 "X", {1, 1, 2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+             const Tensor input_2 =
+                 Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.600000024f, 0.600000024f});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 1, 2}, {2.66666651f, 4.33333302f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_scales_linear_align_corners
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "align_corners");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_downsample_scales_linear_align_corners",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 = Tensor::FromFloat(
+                 "X", {1, 1, 2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+             const Tensor input_2 =
+                 Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.600000024f, 0.600000024f});
+             const Tensor output_0 = Tensor::FromFloat("Y", {1, 1, 1, 2}, {1.0f, 3.14285707f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_scales_linear_antialias
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<int64_t>(node, "antialias", 1);
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_downsample_scales_linear_antialias",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_2 =
+                 Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.600000024f, 0.600000024f});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 2, 2}, {2.875f, 4.5f, 9.375f, 11.0f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_scales_linear_half_pixel_symmetric
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "half_pixel_symmetric");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_downsample_scales_linear_half_pixel_symmetric",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 = Tensor::FromFloat("X", {1, 1, 1, 4}, {1.0f, 2.0f, 3.0f, 4.0f});
+             const Tensor input_2 =
+                 Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 1.0f, 0.600000024f});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 1, 2}, {1.66666675f, 3.33333325f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_sizes_linear_antialias
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("");
+    node.add_input("sizes");
+    node.add_output("Y");
+    AddAttribute<int64_t>(node, "antialias", 1);
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_downsample_sizes_linear_antialias",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_3 = Tensor::FromInt64("sizes", {4}, {1, 1, 3, 3});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 3, 3},
+                                   {2.36363626f, 3.590909f, 4.81818199f, 7.27272749f, 8.5f,
+                                    9.72727299f, 12.181818f, 13.409091f, 14.636364f});
+             return IoData{{std::move(input_0), std::move(input_3)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_sizes_linear_pytorch_half_pixel
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("");
+    node.add_input("sizes");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "pytorch_half_pixel");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_downsample_sizes_linear_pytorch_half_pixel",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_3 = Tensor::FromInt64("sizes", {4}, {1, 1, 3, 1});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 3, 1}, {1.66666663f, 7.0f, 12.333333f});
+             return IoData{{std::move(input_0), std::move(input_3)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_upsample_scales_cubic
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_upsample_scales_cubic", {DefaultOpset(19)},
+           [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_2 = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.0f, 2.0f});
+             const Tensor output_0 = Tensor::FromFloat(
+                 "Y", {1, 1, 8, 8},
+                 {0.47265625f, 0.76953125f, 1.24609375f, 1.875f,      2.28125f,    2.91015625f,
+                  3.38671875f, 3.68359375f, 1.66015625f, 1.95703125f, 2.43359375f, 3.0625f,
+                  3.46875f,    4.09765625f, 4.57421875f, 4.87109375f, 3.56640625f, 3.86328125f,
+                  4.33984375f, 4.96875f,    5.375f,      6.00390625f, 6.48046875f, 6.77734375f,
+                  6.08203125f, 6.37890625f, 6.85546875f, 7.484375f,   7.890625f,   8.51953125f,
+                  8.99609375f, 9.29296875f, 7.70703125f, 8.00390625f, 8.48046875f, 9.109375f,
+                  9.515625f,   10.1445312f, 10.6210938f, 10.9179688f, 10.2226562f, 10.5195312f,
+                  10.9960938f, 11.625f,     12.03125f,   12.6601562f, 13.1367188f, 13.4335938f,
+                  12.1289062f, 12.4257812f, 12.9023438f, 13.53125f,   13.9375f,    14.5664062f,
+                  15.0429688f, 15.3398438f, 13.3164062f, 13.6132812f, 14.0898438f, 14.71875f,
+                  15.125f,     15.7539062f, 16.2304688f, 16.5273438f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_upsample_scales_cubic_align_corners
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "align_corners");
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_upsample_scales_cubic_align_corners",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_2 = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.0f, 2.0f});
+             const Tensor output_0 = Tensor::FromFloat(
+                 "Y", {1, 1, 8, 8},
+                 {1.0f,        1.34110785f, 1.80029154f, 2.32944608f, 2.67055392f, 3.19970846f,
+                  3.65889215f, 4.0f,        2.36443138f, 2.70553946f, 3.16472292f, 3.69387746f,
+                  4.03498554f, 4.56413984f, 5.02332354f, 5.36443138f, 4.20116615f, 4.542274f,
+                  5.00145769f, 5.53061247f, 5.87172031f, 6.40087461f, 6.86005831f, 7.20116615f,
+                  6.31778431f, 6.65889215f, 7.11807585f, 7.64723015f, 7.98833799f, 8.51749229f,
+                  8.97667599f, 9.31778431f, 7.68221569f, 8.02332401f, 8.48250771f, 9.01166153f,
+                  9.35276985f, 9.88192463f, 10.3411083f, 10.6822157f, 9.79883385f, 10.1399412f,
+                  10.5991249f, 11.1282797f, 11.469388f,  11.9985418f, 12.4577255f, 12.7988338f,
+                  11.6355686f, 11.976676f,  12.4358597f, 12.9650145f, 13.3061228f, 13.8352766f,
+                  14.2944603f, 14.6355686f, 13.0f,       13.3411083f, 13.800292f,  14.3294458f,
+                  14.6705542f, 15.199708f,  15.6588917f, 16.0f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_upsample_scales_cubic_asymmetric
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "asymmetric");
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_upsample_scales_cubic_asymmetric",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_2 = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.0f, 2.0f});
+             const Tensor output_0 = Tensor::FromFloat(
+                 "Y", {1, 1, 8, 8},
+                 {1.0f,    1.40625f,  2.0f,    2.5f,    3.0f,    3.59375f,  4.0f,    4.09375f,
+                  2.625f,  3.03125f,  3.625f,  4.125f,  4.625f,  5.21875f,  5.625f,  5.71875f,
+                  5.0f,    5.40625f,  6.0f,    6.5f,    7.0f,    7.59375f,  8.0f,    8.09375f,
+                  7.0f,    7.40625f,  8.0f,    8.5f,    9.0f,    9.59375f,  10.0f,   10.09375f,
+                  9.0f,    9.40625f,  10.0f,   10.5f,   11.0f,   11.59375f, 12.0f,   12.09375f,
+                  11.375f, 11.78125f, 12.375f, 12.875f, 13.375f, 13.96875f, 14.375f, 14.46875f,
+                  13.0f,   13.40625f, 14.0f,   14.5f,   15.0f,   15.59375f, 16.0f,   16.09375f,
+                  13.375f, 13.78125f, 14.375f, 14.875f, 15.375f, 15.96875f, 16.375f, 16.46875f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_upsample_scales_cubic_A_n0p5_exclude_outside
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<float>(node, "cubic_coeff_a", -0.5f);
+    AddAttribute<int64_t>(node, "exclude_outside", 1);
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_upsample_scales_cubic_A_n0p5_exclude_outside",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_2 = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.0f, 2.0f});
+             const Tensor output_0 = Tensor::FromFloat(
+                 "Y", {1, 1, 8, 8},
+                 {0.558823526f, 0.814942062f, 1.35698247f, 1.89705884f, 2.39705873f, 2.93713522f,
+                  3.47917557f,  3.7352941f,   1.58329761f, 1.83941603f, 2.38145661f, 2.92153287f,
+                  3.42153287f,  3.96160913f,  4.50364971f, 4.75976801f, 3.75145936f, 4.0075779f,
+                  4.54961824f,  5.0896945f,   5.5896945f,  6.12977076f, 6.67181158f, 6.92792988f,
+                  5.91176462f,  6.1678834f,   6.70992374f, 7.25f,       7.75f,       8.29007626f,
+                  8.83211708f,  9.0882349f,   7.91176462f, 8.16788292f, 8.70992374f, 9.25f,
+                  9.75f,        10.2900763f,  10.8321171f, 11.0882349f, 10.0720701f, 10.3281889f,
+                  10.8702288f,  11.410305f,   11.910305f,  12.4503813f, 12.9924221f, 13.2485409f,
+                  12.2402315f,  12.4963503f,  13.0383911f, 13.5784674f, 14.0784674f, 14.6185436f,
+                  15.1605835f,  15.4167023f,  13.2647057f, 13.5208244f, 14.0628653f, 14.6029415f,
+                  15.1029415f,  15.6430178f,  16.1850586f, 16.4411774f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_upsample_sizes_cubic
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("");
+    node.add_input("sizes");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_upsample_sizes_cubic", {DefaultOpset(19)},
+           [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_3 = Tensor::FromInt64("sizes", {4}, {1, 1, 9, 10});
+             const Tensor output_0 = Tensor::FromFloat(
+                 "Y", {1, 1, 9, 10},
+                 {0.455079228f, 0.640579224f, 0.971579194f, 1.42257917f, 1.9073292f,  2.22332931f,
+                  2.7080791f,   3.15907931f,  3.49007916f,  3.67557931f, 1.39437962f, 1.57987964f,
+                  1.91087961f,  2.36187959f,  2.84662962f,  3.1626296f,  3.64737964f, 4.09837961f,
+                  4.42937946f,  4.61487961f,  2.95130682f,  3.13680696f, 3.46780682f, 3.91880703f,
+                  4.40355682f,  4.71955681f,  5.20430708f,  5.65530682f, 5.98630714f, 6.17180681f,
+                  5.20525074f,  5.39075089f,  5.72175074f,  6.17275047f, 6.65750074f, 6.97350073f,
+                  7.45825052f,  7.90925074f,  8.24025059f,  8.42575073f, 6.88975f,    7.07525015f,
+                  7.40625f,     7.85725021f,  8.34200001f,  8.65799999f, 9.14274979f, 9.59375f,
+                  9.92475033f,  10.1102505f,  8.57424927f,  8.75974941f, 9.09074974f, 9.541749f,
+                  10.0264997f,  10.3424997f,  10.8272495f,  11.2782497f, 11.6092491f, 11.7947493f,
+                  10.8281927f,  11.0136929f,  11.3446932f,  11.7956934f, 12.2804432f, 12.5964432f,
+                  13.081193f,   13.5321932f,  13.8631935f,  14.0486927f, 12.3851204f, 12.5706205f,
+                  12.9016199f,  13.3526201f,  13.8373699f,  14.1533699f, 14.6381207f, 15.0891199f,
+                  15.4201202f,  15.6056204f,  13.3244209f,  13.5099211f, 13.8409204f, 14.2919207f,
+                  14.7766705f,  15.0926704f,  15.5774212f,  16.0284214f, 16.3594208f, 16.54492f});
+             return IoData{{std::move(input_0), std::move(input_3)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_scales_cubic
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_downsample_scales_cubic", {DefaultOpset(19)},
+           [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_2 =
+                 Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.800000012f, 0.800000012f});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 3, 3},
+                                   {1.47119141f, 2.78125f, 4.08251953f, 6.71142578f, 8.02148438f,
+                                    9.32275391f, 11.9165039f, 13.2265625f, 14.527832f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_scales_cubic_align_corners
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "align_corners");
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_downsample_scales_cubic_align_corners",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_2 =
+                 Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.800000012f, 0.800000012f});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 3, 3},
+                                   {1.0f, 2.39519167f, 3.7903831f, 6.5807662f, 7.97595787f,
+                                    9.37114906f, 12.1615324f, 13.5567236f, 14.9519157f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_scales_cubic_antialias
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<int64_t>(node, "antialias", 1);
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_downsample_scales_cubic_antialias",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_2 =
+                 Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.600000024f, 0.600000024f});
+             const Tensor output_0 = Tensor::FromFloat(
+                 "Y", {1, 1, 2, 2}, {2.51807213f, 4.28588629f, 9.58932877f, 11.3571424f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_scales_cubic_A_n0p5_exclude_outside
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<float>(node, "cubic_coeff_a", -0.5f);
+    AddAttribute<int64_t>(node, "exclude_outside", 1);
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_downsample_scales_cubic_A_n0p5_exclude_outside",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_2 =
+                 Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.800000012f, 0.800000012f});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 3, 3},
+                                   {1.36812675f, 2.6695013f, 4.01333666f, 6.57362509f, 7.875f,
+                                    9.21883488f, 11.948966f, 13.2503414f, 14.5941763f});
+             return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_sizes_cubic
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("");
+    node.add_input("sizes");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_downsample_sizes_cubic", {DefaultOpset(19)},
+           [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_3 = Tensor::FromInt64("sizes", {4}, {1, 1, 3, 3});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 3, 3},
+                                   {1.63078701f, 3.00462961f, 4.37847233f, 7.12615728f, 8.5f,
+                                    9.87384224f, 12.6215277f, 13.9953699f, 15.3692131f});
+             return IoData{{std::move(input_0), std::move(input_3)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_downsample_sizes_cubic_antialias
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("");
+    node.add_input("");
+    node.add_input("sizes");
+    node.add_output("Y");
+    AddAttribute<int64_t>(node, "antialias", 1);
+    AddAttribute<std::string>(node, "mode", "cubic");
+    Expect(registry, std::move(node), "test_resize_downsample_sizes_cubic_antialias",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_3 = Tensor::FromInt64("sizes", {4}, {1, 1, 3, 3});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 3, 3},
+                                   {1.77500916f, 3.12000728f, 4.4650054f, 7.15500164f, 8.5f,
+                                    9.84499836f, 12.5349941f, 13.8799925f, 15.2249908f});
+             return IoData{{std::move(input_0), std::move(input_3)}, {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_tf_crop_and_resize
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("roi");
+    node.add_input("");
+    node.add_input("sizes");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "tf_crop_and_resize");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_tf_crop_and_resize", {DefaultOpset(19)},
+           [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_1 = Tensor::FromFloat(
+                 "roi", {8},
+                 {0.0f, 0.0f, 0.400000006f, 0.600000024f, 1.0f, 1.0f, 0.600000024f, 0.800000012f});
+             const Tensor input_3 = Tensor::FromInt64("sizes", {4}, {1, 1, 3, 3});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 3, 3},
+                                   {7.60000038f, 7.9000001f, 8.19999981f, 8.80000019f, 9.10000038f,
+                                    9.40000057f, 10.0f, 10.3000002f, 10.6000004f});
+             return IoData{{std::move(input_0), std::move(input_1), std::move(input_3)},
+                           {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_tf_crop_and_resize_extrapolation_value
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("roi");
+    node.add_input("");
+    node.add_input("sizes");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "tf_crop_and_resize");
+    AddAttribute<float>(node, "extrapolation_value", 10.0f);
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_tf_crop_and_resize_extrapolation_value",
+           {DefaultOpset(19)}, [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_1 = Tensor::FromFloat(
+                 "roi", {8},
+                 {0.0f, 0.0f, 0.400000006f, 0.600000024f, 1.0f, 1.0f, 1.20000005f, 1.70000005f});
+             const Tensor input_3 = Tensor::FromInt64("sizes", {4}, {1, 1, 3, 3});
+             const Tensor output_0 = Tensor::FromFloat(
+                 "Y", {1, 1, 3, 3},
+                 {7.60000038f, 10.0f, 10.0f, 12.4000006f, 10.0f, 10.0f, 10.0f, 10.0f, 10.0f});
+             return IoData{{std::move(input_0), std::move(input_1), std::move(input_3)},
+                           {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_tf_crop_and_resize_axes_2_3
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("roi");
+    node.add_input("");
+    node.add_input("sizes");
+    node.add_output("Y");
+    AddAttribute<std::vector<int64_t>>(node, "axes", {2, 3});
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "tf_crop_and_resize");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_tf_crop_and_resize_axes_2_3", {DefaultOpset(19)},
+           [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_1 = Tensor::FromFloat(
+                 "roi", {4}, {0.400000006f, 0.600000024f, 0.600000024f, 0.800000012f});
+             const Tensor input_3 = Tensor::FromInt64("sizes", {2}, {3, 3});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 3, 3},
+                                   {7.60000038f, 7.9000001f, 8.19999981f, 8.80000019f, 9.10000038f,
+                                    9.40000057f, 10.0f, 10.3000002f, 10.6000004f});
+             return IoData{{std::move(input_0), std::move(input_1), std::move(input_3)},
+                           {std::move(output_0)}};
+           });
+  }
+
+  // test_resize_tf_crop_and_resize_axes_3_2
+  {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input("roi");
+    node.add_input("");
+    node.add_input("sizes");
+    node.add_output("Y");
+    AddAttribute<std::vector<int64_t>>(node, "axes", {3, 2});
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", "tf_crop_and_resize");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_resize_tf_crop_and_resize_axes_3_2", {DefaultOpset(19)},
+           [=]() -> IoData {
+             const Tensor input_0 =
+                 Tensor::FromFloat("X", {1, 1, 4, 4},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                    11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+             const Tensor input_1 = Tensor::FromFloat(
+                 "roi", {4}, {0.600000024f, 0.400000006f, 0.800000012f, 0.600000024f});
+             const Tensor input_3 = Tensor::FromInt64("sizes", {2}, {3, 3});
+             const Tensor output_0 =
+                 Tensor::FromFloat("Y", {1, 1, 3, 3},
+                                   {7.60000038f, 7.9000001f, 8.19999981f, 8.80000019f, 9.10000038f,
+                                    9.40000057f, 10.0f, 10.3000002f, 10.6000004f});
+             return IoData{{std::move(input_0), std::move(input_1), std::move(input_3)},
+                           {std::move(output_0)}};
+           });
+  }
+}
+
+} // namespace onnx_backend_test
+} // namespace ONNX_LIGHT_NAMESPACE

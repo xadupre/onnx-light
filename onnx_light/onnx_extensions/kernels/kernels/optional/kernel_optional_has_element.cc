@@ -1,0 +1,53 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_extensions/kernels/kernels/optional/include_optional_kernels.h"
+
+#include "onnx_core/runtime/runtime_context.h"
+#include <cstdint>
+#include <stdexcept>
+#include <vector>
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_kernels {
+namespace kernel {
+
+namespace {
+
+// Materializes a scalar ``Tensor<bool, {}>`` carrying the given value, backed
+// by the runtime context allocator when one is attached.
+Tensor MakeScalarBool(bool value, RuntimeContext *rt) {
+  const size_t out_n_bytes = 1;
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), onnx_kernels::Shape{},
+                                out_n_bytes, rt ? rt->allocator() : nullptr);
+  *out.mutable_bytes() = value ? uint8_t{1} : uint8_t{0};
+  return out;
+}
+
+} // namespace
+
+Tensor OptionalHasElement::operator()(const Tensor &input, RuntimeContext *rt) const {
+  EXT_ENFORCE_INVALID(input.data_type != 0,
+                      "kernel::OptionalHasElement: input element type must be a defined DataType.");
+  // The runtime Tensor type cannot represent an "empty optional", so any
+  // concrete tensor input is treated as the present element and the
+  // operator returns true.
+  return MakeScalarBool(true, rt);
+}
+
+Tensor OptionalHasElement::operator()(const Sequence &input, RuntimeContext *rt) const {
+  EXT_ENFORCE_INVALID(
+      input.elem_type != 0,
+      "kernel::OptionalHasElement: input sequence elem_type must be a defined DataType.");
+  return MakeScalarBool(true, rt);
+}
+
+Tensor OptionalHasElement::operator()(RuntimeContext *rt) const {
+  // Opset 18: an omitted input is reported as empty.
+  return MakeScalarBool(false, rt);
+}
+
+} // namespace kernel
+} // namespace onnx_kernels
+} // namespace ONNX_LIGHT_NAMESPACE

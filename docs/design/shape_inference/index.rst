@@ -26,7 +26,7 @@ Overview
 Shape inference computes, for every value in an ONNX graph, the element
 type and (possibly symbolic) shape of the tensor it carries, without
 running the model. ``onnx-light`` implements it in C++ under
-``onnx_light/onnx_extensions/onnx_shapes/shapes/`` and exposes it through the Python entry
+``onnx_light/onnx_extensions/shapes/shapes/`` and exposes it through the Python entry
 point :func:`onnx_light.onnx_extensions.onnx_shapes.shape_inference.infer_shapes_model`.
 
 The engine keeps its working state in a :cpp:class:`ShapesContext`: a
@@ -199,4 +199,4 @@ API reference
 -------------
 
 * **Python API**: :func:`onnx_light.onnx_extensions.onnx_shapes.shape_inference.infer_shapes_model`.
-* **C++ API**: :doc:`/api/cpp/onnx_extensions/onnx_shapes/shapes/index`.
+* **C++ API**: :doc:`/api/cpp/onnx_extensions/shapes/shapes/index`.

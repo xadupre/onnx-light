@@ -9,7 +9,7 @@
 // ``onnx_light/fuzz/fuzz_optim_shape_inference.py``.
 
 #include "onnx_core/shapes/shape_inference.h"
-#include "onnx_extensions/onnx_shapes/dispatch_table.h"
+#include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_proto/onnx.h"
 
 #include <cstddef>

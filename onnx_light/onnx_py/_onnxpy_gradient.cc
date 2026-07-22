@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_extensions/onnx_gradient/gradient.h"
-#include "onnx_extensions/onnx_gradient/gradient/grad_dispatcher.h"
+#include "onnx_extensions/gradient/gradient.h"
+#include "onnx_extensions/gradient/gradient/grad_dispatcher.h"
 #include "onnx_proto/onnx.h"
 #include <algorithm>
 #include <nanobind/nanobind.h>

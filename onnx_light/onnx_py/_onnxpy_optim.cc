@@ -6,7 +6,7 @@
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
-#include "onnx_extensions/onnx_shapes/dispatch_table.h"
+#include "onnx_extensions/shapes/dispatch_table.h"
 #include <algorithm>
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>

@@ -7,6 +7,5 @@ Python API
     onnx/index
     onnx_core/index
     onnx_op/index
-    onnx_extensions/onnx_shapes/index
     tools/index
     ext_test_case

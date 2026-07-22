@@ -121,7 +121,7 @@ jobs:
           pytest --durations=10 \
             unittests/python/onnx_protos \
             unittests/python/onnx_op \
-            unittests/python/onnx_extensions/onnx_shapes \
+            unittests/python/onnx_extensions/shapes \
             unittests/python/onnx_lib \
             unittests/python/bindings
 

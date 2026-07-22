@@ -1,0 +1,135 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_core/backend_test/test_case.h"
+#include "onnx_extensions/backend_test/cases/traditionalml/include_traditionalml_cases.h"
+#include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+
+#include <cstdint>
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_backend_test {
+
+void RegisterSVMRegressorCases(std::vector<TestCase> &registry, TestMode mode) {
+  const OpsetId opset("ai.onnx.ml", 1);
+  const KernelContext ctx{opset};
+  const OpsetId default_opset = DefaultOpset(13);
+  const onnx_kernels::kernel::SVMRegressor svm{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    NodeProto node;
+    node.set_op_type("SVMRegressor");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+
+    AttributeProto *kernel_type = node.add_attribute();
+    kernel_type->set_name("kernel_type");
+    kernel_type->set_type(AttributeProto::AttributeType::STRING);
+    kernel_type->set_s("LINEAR");
+
+    AttributeProto *kernel_params = node.add_attribute();
+    kernel_params->set_name("kernel_params");
+    kernel_params->set_type(AttributeProto::AttributeType::FLOATS);
+    kernel_params->add_floats(0.0f);
+    kernel_params->add_floats(0.0f);
+    kernel_params->add_floats(0.0f);
+
+    AttributeProto *support_vectors = node.add_attribute();
+    support_vectors->set_name("support_vectors");
+    support_vectors->set_type(AttributeProto::AttributeType::FLOATS);
+    support_vectors->add_floats(1.0f);
+    support_vectors->add_floats(0.0f);
+    support_vectors->add_floats(0.0f);
+    support_vectors->add_floats(1.0f);
+
+    AttributeProto *coefficients = node.add_attribute();
+    coefficients->set_name("coefficients");
+    coefficients->set_type(AttributeProto::AttributeType::FLOATS);
+    coefficients->add_floats(2.0f);
+    coefficients->add_floats(-1.0f);
+
+    AttributeProto *rho = node.add_attribute();
+    rho->set_name("rho");
+    rho->set_type(AttributeProto::AttributeType::FLOATS);
+    rho->add_floats(0.5f);
+
+    AttributeProto *n_supports = node.add_attribute();
+    n_supports->set_name("n_supports");
+    n_supports->set_type(AttributeProto::AttributeType::INT);
+    n_supports->set_i(static_cast<int64_t>(2));
+
+    AttributeProto *post_transform = node.add_attribute();
+    post_transform->set_name("post_transform");
+    post_transform->set_type(AttributeProto::AttributeType::STRING);
+    post_transform->set_s("NONE");
+
+    Expect(registry, std::move(node), "test_cc_svmregressor_linear_benchmark",
+           {default_opset, opset}, {16384}, {8192}, [svm]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2681));
+             Tensor y = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f}, {0.5f},
+                                              "LINEAR", 0.0f, 0.0f, 0.0f);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+    return;
+  }
+
+  NodeProto node;
+  node.set_op_type("SVMRegressor");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("x");
+  node.add_output("y");
+
+  AttributeProto *kernel_type = node.add_attribute();
+  kernel_type->set_name("kernel_type");
+  kernel_type->set_type(AttributeProto::AttributeType::STRING);
+  kernel_type->set_s("LINEAR");
+
+  AttributeProto *kernel_params = node.add_attribute();
+  kernel_params->set_name("kernel_params");
+  kernel_params->set_type(AttributeProto::AttributeType::FLOATS);
+  kernel_params->add_floats(0.0f);
+  kernel_params->add_floats(0.0f);
+  kernel_params->add_floats(0.0f);
+
+  AttributeProto *support_vectors = node.add_attribute();
+  support_vectors->set_name("support_vectors");
+  support_vectors->set_type(AttributeProto::AttributeType::FLOATS);
+  support_vectors->add_floats(1.0f);
+  support_vectors->add_floats(0.0f);
+  support_vectors->add_floats(0.0f);
+  support_vectors->add_floats(1.0f);
+
+  AttributeProto *coefficients = node.add_attribute();
+  coefficients->set_name("coefficients");
+  coefficients->set_type(AttributeProto::AttributeType::FLOATS);
+  coefficients->add_floats(2.0f);
+  coefficients->add_floats(-1.0f);
+
+  AttributeProto *rho = node.add_attribute();
+  rho->set_name("rho");
+  rho->set_type(AttributeProto::AttributeType::FLOATS);
+  rho->add_floats(0.5f);
+
+  AttributeProto *n_supports = node.add_attribute();
+  n_supports->set_name("n_supports");
+  n_supports->set_type(AttributeProto::AttributeType::INT);
+  n_supports->set_i(static_cast<int64_t>(2));
+
+  AttributeProto *post_transform = node.add_attribute();
+  post_transform->set_name("post_transform");
+  post_transform->set_type(AttributeProto::AttributeType::STRING);
+  post_transform->set_s("NONE");
+
+  Expect(registry, std::move(node), "test_cc_svmregressor_linear", {default_opset, opset},
+         [=]() -> IoData {
+           Tensor x = Tensor::FromFloat("", {2, 2}, {3.0f, 1.0f, 0.0f, 2.0f});
+           Tensor y = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f}, {0.5f},
+                                            "LINEAR", 0.0f, 0.0f, 0.0f);
+           return IoData{{std::move(x)}, {std::move(y)}};
+         });
+}
+
+} // namespace onnx_backend_test
+} // namespace ONNX_LIGHT_NAMESPACE

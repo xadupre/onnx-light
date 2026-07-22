@@ -355,7 +355,6 @@ public:
   /// subgraph and function contexts created through
   /// :cpp:func:`MakeSubgraphContext` / :cpp:func:`MakeFunctionContext`.
   void set_parameters(RuntimeParameters parameters) noexcept { parameters_ = parameters; }
-  RuntimeParameters &parameters() noexcept { return parameters_; }
   const RuntimeParameters &parameters() const noexcept { return parameters_; }
 
   /// Index of the control-flow node in the parent graph currently being

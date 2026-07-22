@@ -380,9 +380,19 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
   // Upstream's _compute_attention multiplies Q and K by sqrt(scale)
   // separately and then matmuls, which is numerically equivalent to a
   // single ``* scale`` after the matmul.
-  std::vector<double> scores(static_cast<size_t>(total_kv_seq_len));
-  std::vector<double> bias(static_cast<size_t>(total_kv_seq_len));
-  std::vector<double> qkraw(static_cast<size_t>(total_kv_seq_len));
+  // The per-row scratch buffers are acquired from the runtime allocator (when
+  // one is provided) so no working memory is allocated outside it; they fall
+  // back to inline storage when ``allocator`` is null.
+  const size_t scratch_n_bytes = static_cast<size_t>(total_kv_seq_len) * sizeof(double);
+  Tensor scores_buf =
+      MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, allocator);
+  Tensor bias_buf =
+      MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, allocator);
+  Tensor qkraw_buf =
+      MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, allocator);
+  double *scores = scores_buf.AsDouble();
+  double *bias = bias_buf.AsDouble();
+  double *qkraw = qkraw_buf.AsDouble();
   for (int64_t b = 0; b < batch_size; ++b) {
     // Bottom-right / offset-aware causal frontier (mirrors onnx/onnx#8068):
     // a query at in-block index ``i`` attends key ``j`` iff ``j <= i + offset``,
@@ -501,7 +511,7 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
           }
         }
         if (row_fully_masked) {
-          std::fill(scores.begin(), scores.end(), 0.0);
+          std::fill(scores, scores + total_kv_seq_len, 0.0);
         }
         // Y[i, dv] = sum_j probs[j] * V[j, dv]
         for (int64_t dv = 0; dv < v_head_size; ++dv) {

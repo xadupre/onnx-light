@@ -567,6 +567,91 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   AddNode(*graph, "Mul", {"model.norm.weight", "final_half"}, {"final_normed"});
   AddNode(*graph, "MatMul", {"final_normed", "p_lm_head_weight::T10"}, {"output_0"});
 
+  // ---- Intermediate value_info shapes -------------------------------------
+  // Declared in forward-pass order. Only the dims that shape inference can
+  // resolve from the static initializers are concrete; symbolic
+  // batch/sequence/KV-cache dims stay symbolic.
+
+  // Token embedding produced by the initial Gather.
+  AppendValueInfo(*graph->add_value_info(), "embedding", DataType::FLOAT16,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+
+  // Per-position RoPE cosine/sine embeddings (shape [1, seq, 64] → [1, 1, seq, 128] after
+  // Unsqueeze + Concat). Computed once before the transformer stack and shared across layers.
+  AppendValueInfo(*graph->add_value_info(), "uoutput_0", DataType::FLOAT16,
+                  {DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
+  AppendValueInfo(*graph->add_value_info(), "uoutput_1", DataType::FLOAT16,
+                  {DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
+  AppendValueInfo(*graph->add_value_info(), "unsqueeze_16", DataType::FLOAT16,
+                  {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec("sequence_length"),
+                   DimSpec(INT64_C(128))});
+  AppendValueInfo(*graph->add_value_info(), "unsqueeze_17", DataType::FLOAT16,
+                  {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec("sequence_length"),
+                   DimSpec(INT64_C(128))});
+
+  // Per-transformer-layer intermediate shapes.
+  // Notation: B=batch_size, S=sequence_length, P=past_sequence_length.
+  // hidden_size=1024; Q: 16 heads × 128; KV: 8 heads × 128; MLP_intermediate=3072.
+  for (int vi_layer = 0; vi_layer < 4; ++vi_layer) {
+    const std::string vls = "layer_" + std::to_string(vi_layer) + "_";
+    const auto vln = [&vls](const char *s) { return vls + s; };
+
+    const std::vector<DimSpec> bsh = {DimSpec("batch_size"), DimSpec("sequence_length"),
+                                      DimSpec(INT64_C(1024))};
+    const std::vector<DimSpec> b_16_s_128 = {DimSpec("batch_size"), DimSpec(INT64_C(16)),
+                                             DimSpec("sequence_length"), DimSpec(INT64_C(128))};
+    const std::vector<DimSpec> b_8_s_128 = {DimSpec("batch_size"), DimSpec(INT64_C(8)),
+                                            DimSpec("sequence_length"), DimSpec(INT64_C(128))};
+    const std::vector<DimSpec> b_s_16_128 = {DimSpec("batch_size"), DimSpec("sequence_length"),
+                                             DimSpec(INT64_C(16)), DimSpec(INT64_C(128))};
+    const std::vector<DimSpec> bs_2048 = {DimSpec("batch_size"), DimSpec("sequence_length"),
+                                          DimSpec(INT64_C(2048))};
+    const std::vector<DimSpec> bsi = {DimSpec("batch_size"), DimSpec("sequence_length"),
+                                      DimSpec(INT64_C(3072))};
+
+    // Pre-attention RMSNorm output — the shared input to Q/K/V projections.
+    AppendValueInfo(*graph->add_value_info(), vln("normed"), DataType::FLOAT16, bsh);
+
+    // Q, K, V projections after transpose (head dim last in memory).
+    AppendValueInfo(*graph->add_value_info(), vln("q_T"), DataType::FLOAT16, b_16_s_128);
+    AppendValueInfo(*graph->add_value_info(), vln("k_T"), DataType::FLOAT16, b_8_s_128);
+    AppendValueInfo(*graph->add_value_info(), vln("v_T"), DataType::FLOAT16, b_8_s_128);
+
+    // Q and K after rotary position embedding (RoPE).
+    AppendValueInfo(*graph->add_value_info(), vln("q_rope"), DataType::FLOAT16, b_16_s_128);
+    AppendValueInfo(*graph->add_value_info(), vln("k_rope"), DataType::FLOAT16, b_8_s_128);
+
+    // Scaled dot-product attention output and reshape/projection steps.
+    // attn_out is [B, n_q_heads, S, head_dim] — same dims as q_T.
+    AppendValueInfo(*graph->add_value_info(), vln("attn_out"), DataType::FLOAT16, b_16_s_128);
+    // After Transpose([0,2,1,3]): [B, S, n_q_heads, head_dim].
+    AppendValueInfo(*graph->add_value_info(), vln("attn_out_T"), DataType::FLOAT16, b_s_16_128);
+    // After Reshape([0,0,2048]): [B, S, n_q_heads * head_dim].
+    AppendValueInfo(*graph->add_value_info(), vln("attn_2d"), DataType::FLOAT16, bs_2048);
+    // After output projection (o_proj): back to hidden_size.
+    AppendValueInfo(*graph->add_value_info(), vln("attn_proj"), DataType::FLOAT16, bsh);
+    // Residual connection after attention.
+    AppendValueInfo(*graph->add_value_info(), vln("resid_attn"), DataType::FLOAT16, bsh);
+
+    // Post-attention RMSNorm output — MLP input.
+    AppendValueInfo(*graph->add_value_info(), vln("mlp_in"), DataType::FLOAT16, bsh);
+
+    // SwiGLU MLP: gate/up projections → SwiGLU → down projection.
+    AppendValueInfo(*graph->add_value_info(), vln("gate"), DataType::FLOAT16, bsi);
+    AppendValueInfo(*graph->add_value_info(), vln("up"), DataType::FLOAT16, bsi);
+    AppendValueInfo(*graph->add_value_info(), vln("swiglu"), DataType::FLOAT16, bsi);
+    AppendValueInfo(*graph->add_value_info(), vln("down"), DataType::FLOAT16, bsh);
+
+    // Layer output (residual connection after MLP).
+    AppendValueInfo(*graph->add_value_info(), vln("out"), DataType::FLOAT16, bsh);
+  }
+
+  // Final RMSNorm: float32 intermediate and fp16 normalised output.
+  AppendValueInfo(*graph->add_value_info(), "final_f32", DataType::FLOAT,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+  AppendValueInfo(*graph->add_value_info(), "final_normed", DataType::FLOAT16,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+
   // ---- Graph inputs -------------------------------------------------------
   AppendValueInfo(*graph->add_input(), "input_ids", DataType::INT64,
                   {DimSpec("batch_size"), DimSpec("sequence_length")});

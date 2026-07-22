@@ -3,44 +3,43 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.7] – Unreleased
+## [0.1.8] – Unreleased
+
+## [0.1.7] – 2026-07-21
 
 ### New Features
 
-- Add `SimpleRawBufferAllocator` with virtual interface and wire into `RuntimeContext` ([#3241](https://github.com/xadupre/onnx-light/pull/3241))
-- Add `RuntimeContext*` to all kernel `operator()` signatures for allocator-backed output buffers ([#3261](https://github.com/xadupre/onnx-light/pull/3261))
+- Added a `RuntimeContext` allocator framework (`SimpleRawBufferAllocator`, allocator-backed kernel outputs) and custom-op `shape_tag` registration hooks.
+- Added a symbolic gradient framework (reverse-mode `Conv`/normalization gradients with backend-test verification) and a peak-memory dispatch registry.
+- Extended the Python/serialization API (`SaveToFileDescriptor`, `SerializeToOstream`) and added `cp313`/`cp314` wheels.
 
 ### Improvements
 
-- Migrated most kernels (cast, elementwise, math, tensor, sequence, reduction, pooling, `TopK`, `Einsum`, `MatMul`, `Where`, normalization, etc.) from `std::vector<int64_t>` to the dedicated `Shape` type for shape/state handling.
-- Routed kernel output allocation through the `RuntimeContext` allocator across many kernels (`Bernoulli`, `CumSum`/`CumProd`, `Min`/`Max`/`Mean`/`Sum`, `NonMaxSuppression`, `DelayedInitializer`, `QuantizeLinear`, `TopK`, image decoder, `MatMulInteger`), replacing ad-hoc or inline buffers.
-- Extended shape-tag metadata coverage to initializers and cached symbolic byte-size simplification for inplace-reuse analysis.
-- Build/tooling improvements: MSVC hardening aligned with ONNX Runtime, `NodeProto` repeated-string `str.join` compatibility, `constexpr` enum-name helpers.
-- Eliminated `memcpy`/type-punning hotspots (`cast_float8`, `MelWeightMatrix`, `EyeLike`) and added shared helpers (`Shape::product()`, `ElementSize`, `BroadcastShape`) to remove duplicated kernel code.
+- Reorganized the C++ tree around a new intermediate `lib_onnx_core` and an `onnx_extensions` layout (`onnx_backend_test`/`onnx_kernels`/`onnx_gradient` moves, `onnx_optim`→`onnx_shapes` rename, `ExecutionPlan` split).
+- Migrated kernels to the dedicated `Shape` type and routed their output allocation through the `RuntimeContext` allocator, preserving ownership and reusing shared empty-tensor fallbacks.
+- Reduced string copies and allocations across parsing/graph paths (`RepeatedProtoField`, more `constexpr` helpers, removed `memcpy`/type-punning hotspots) and extended shape-tag metadata coverage.
 
 ### Fixes
 
-- Corrected in-place reuse annotations for `Transpose`/`Reshape`/`Unsqueeze`/`EyeLike` (`kGreater` vs `kEqual`, symbolic dimensions).
-- Fixed shape-tag propagation across `Concat`/`Reshape`/`Cast`/`Sub` and seeded `weight` tags for graph inputs/outputs/initializers.
-- Propagated upstream ONNX shape-inference fixes (`Scan` `num_scan_inputs` underflow, `Range` symbolic dims).
-- Fixed several kernels (`If`, `Bernoulli`, `EyeLike`, `ConstantOfShape`, `CastLike`, `AffineGrid`, `BatchNormalization`, `MelWeightMatrix`, multi-output kernels) to use the `RuntimeContext` allocator and avoid unnecessary allocations/`memcpy`.
-- Fixed expression-simplification integer-coefficient combination and SVG barycenter crossing-minimisation edge handling.
+- Corrected in-place reuse and shape-tag propagation across many operators and preserved `doc_string` in the IR converter.
+- Propagated upstream ONNX fixes (shape inference, locale-independent text parser/printer, `TopK` `sorted=0`) and hardened version conversion for malformed `Scan`/default-domain imports.
+- Fixed expression-simplification, SVG rendering edge cases, and spelling across the codebase.
 
 ### Security
 
-- Fixed a `size_t` underflow in `Scan` shape inference (GHSA-qrhj-v62m-vmpf).
-- Hardened the zero-copy ORT parsing path and tar-extraction path validation.
-- Validated `graphviz` format arguments and replaced insecure temp-file creation to prevent command injection/insecure I/O.
-- Prevented GitHub Actions code/expression injection in the `clang_tidy` and release-wheel workflows.
-- Addressed external-data security advisories (GHSA-3jf9-582g-jjmq, GHSA-xrch-8vh7-h656), raised the ONNX minimum to 1.21.0 (GHSA-p893-rvq9-2xf9), and investigated/closed GHSA-hqmj-h5c6-369m and GHSA-8qff-7g33-75mx with added defense-in-depth checks.
+- Fixed a `size_t` underflow in `Scan` shape inference (GHSA-qrhj-v62m-vmpf) and hardened zero-copy ORT parsing and tar-extraction path validation.
+- Prevented command injection/insecure I/O (`graphviz` args, temp files) and GitHub Actions code injection in workflows.
+- Addressed external-data advisories, raised the ONNX minimum to 1.21.0, and added defense-in-depth checks (GHSA-3jf9-582g-jjmq, GHSA-xrch-8vh7-h656, GHSA-p893-rvq9-2xf9, GHSA-hqmj-h5c6-369m, GHSA-8qff-7g33-75mx).
 
 ### Testing
 
-- Added regression tests for upstream ONNX shape-inference fixes (`Loop` early-exit, `ScatterND` reductions, `AvgPool`/`Conv` edge cases).
-- Enforced full metadata-tagging coverage in shape-tag backend tests.
-- Added C++ backend coverage for pooling, local-function shape propagation, and the `qwen3_4_layers_like` case.
-- Added inplace-metadata expectations for `tiny_llm` `Unsqueeze` and more backend-test options.
-- Delayed C++ backend-test `ModelProto` construction via `TestCase::emplace_model()` across registered cases.
+- Extended C++/Python backend and shape-inference coverage (gradient verification, pooling, local functions, metadata/value-tag enforcement, `OpSchema` attribute parity).
+- Delayed backend-test `ModelProto` construction via `TestCase::emplace_model()` and forwarded `TestMode` through the Python facade.
+
+### Documentation & CI
+
+- Added the changelog and string-types documentation, bumped the release version to `0.1.7` across canonical metadata.
+- Sped up CI (`sccache` for `clang-tidy`, trimmed Windows jobs, parallel preflights, C++-build skips in style/typing jobs).
 
 ## [0.1.4] – 2026-07-07
 

@@ -156,6 +156,10 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterSeluCases(std::vector<TestCase> &regi
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterSwishCases(std::vector<TestCase> &registry,
                                                       TestMode mode = TestMode::TEST);
 
+/// Registers the ``SwiGLU`` backend test node case(s).
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterSwiGLUCases(std::vector<TestCase> &registry,
+                                                       TestMode mode = TestMode::TEST);
+
 /// Registers the ``Mish`` backend test node case(s).
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterMishCases(std::vector<TestCase> &registry,
                                                      TestMode mode = TestMode::TEST);

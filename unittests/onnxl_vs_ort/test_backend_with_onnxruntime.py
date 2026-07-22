@@ -68,6 +68,8 @@ ORT_OPSET_GATED_EXCLUDE_REGEX = {
         # Celu-28 adds float16/bfloat16 support; these test cases target opset 28.
         r"^test_cc_celu_float16$",
         r"^test_cc_celu_bfloat16$",
+        # SwiGLU is opset 28 (onnx#8202).
+        r"^test_cc_swiglu.*$",
     ],
 }
 

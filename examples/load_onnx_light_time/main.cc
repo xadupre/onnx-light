@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
 
   // Run one unmeasured warm-up iteration so the first (cold-cache) load does
   // not skew the average/median. This mirrors the Python ``measure()`` helper
-  // in ``docs/examples/core/plot_onnx_time.py`` which discards a warmup run
+  // in ``docs/examples/proto/plot_onnx_time.py`` which discards a warmup run
   // before timing. Without it, the C++ benchmark looked systematically slower
   // than the Python one even though both call the same parser.
   const int total_iterations = iterations + 1;

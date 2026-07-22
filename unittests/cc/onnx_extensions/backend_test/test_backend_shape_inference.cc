@@ -2275,9 +2275,9 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
 //
 // These tests collect only big-model cases (CollectTestCases("", true)
 // filtered to names containing "_big_") and verify that the four main
-// optimisation passes complete without throwing. No detailed output checks
-// are performed; the goal is to guard against crashes or assertion failures
-// in the analysis passes when faced with realistic large graphs.
+// optimisation passes complete without throwing. For ``kind == "model"``
+// cases the expected output shapes and intermediate ``value_info`` shapes
+// recorded in the model are also validated after shape inference.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -2306,19 +2306,42 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
 
     ModelProto model_copy = DeepCopyModel(tc.model(), tc.name);
 
-    for (auto &out : model_copy.mutable_graph()->ref_output()) {
-      if (auto *ott = MutableTensorTypeOf(*out.mutable_type()); ott != nullptr) {
-        ott->clear_shape();
-      }
+    // For ``kind == "model"`` cases, capture the expected intermediate shapes
+    // recorded in ``value_info`` so we can verify inference recovers them.
+    const auto expected = SnapshotAndStripOutputs(model_copy);
+    std::vector<ExpectedOutput> expected_value_info;
+    if (tc.kind == "model") {
+      expected_value_info = SnapshotAndStripValueInfo(model_copy);
     }
     model_copy.mutable_graph()->mutable_value_info()->clear();
 
     ASSERT_NO_THROW(core::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
 
-    // Every graph output must have a type after shape inference.
-    for (const auto &out : model_copy.ref_graph().ref_output()) {
-      EXPECT_TRUE(out.has_type()) << "output " << out.ref_name()
-                                  << " missing type after shape inference";
+    const auto &outputs = model_copy.ref_graph().ref_output();
+    ASSERT_EQ(outputs.size(), expected.size());
+    for (size_t i = 0; i < outputs.size(); ++i) {
+      const auto &out = outputs[i];
+      ASSERT_TRUE(out.has_type()) << "output " << expected[i].name << " missing type";
+      const TypeProto::Tensor *tt_ptr = TensorTypeOf(out.ref_type());
+      ASSERT_NE(tt_ptr, nullptr) << "output " << expected[i].name << " not a tensor";
+      const auto &tt = *tt_ptr;
+      EXPECT_EQ(static_cast<int32_t>(tt.elem_type()), expected[i].elem_type)
+          << "elem_type mismatch on output " << expected[i].name;
+      const auto inferred_dims = DimsOf(tt);
+      if (!inferred_dims.empty() || tt.has_shape()) {
+        ASSERT_EQ(inferred_dims.size(), expected[i].shape.size())
+            << "rank mismatch on output " << expected[i].name;
+        for (size_t d = 0; d < inferred_dims.size(); ++d) {
+          if (inferred_dims[d] != -1 && expected[i].shape[d] != -1) {
+            EXPECT_EQ(inferred_dims[d], expected[i].shape[d])
+                << "dim[" << d << "] mismatch on output " << expected[i].name;
+          }
+        }
+      }
+    }
+
+    if (tc.kind == "model") {
+      CheckValueInfoMatchesExpected(model_copy.ref_graph(), expected_value_info);
     }
   }
   EXPECT_TRUE(found) << "no big-model backend cases were collected";

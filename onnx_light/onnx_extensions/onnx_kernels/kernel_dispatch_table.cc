@@ -153,6 +153,22 @@ NodeKernelFn MakeUnaryAlphaTrampoline(const char *attr_name, float default_alpha
   };
 }
 
+// Wraps a kernel of the form
+// ``Tensor operator()(const Tensor&, const Tensor&, float alpha)`` (e.g. ``SwiGLU``).
+template <class KernelT>
+NodeKernelFn MakeBinaryAlphaTrampoline(const char *attr_name, float default_alpha) {
+  const std::string name(attr_name);
+  return [name, default_alpha](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 2);
+    RequireOutputCount(node, 1);
+    const Tensor &a = GetInput(node, 0, rt.tensors());
+    const Tensor &b = GetInput(node, 1, rt.tensors());
+    const float alpha = GetAttributeFloatOrDefault(node, name, default_alpha);
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(a, b, alpha, &rt), rt);
+  };
+}
+
 // Wraps a kernel of the form ``Tensor operator()(const Tensor&, int64_t axis)``
 // (``Softmax``, ``LogSoftmax``, ``Hardmax``). Opset 13+ defaults ``axis`` to
 // ``-1``, which matches the kernel reference implementation.
@@ -2390,6 +2406,8 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
       {"ai.onnx:Sub", MakeBinaryTrampoline <onnx_kernels::kernel::Sub>()},
       {"ai.onnx:Sum", MakeVariadicTrampoline <onnx_kernels::kernel::Sum>()},
       {"ai.onnx:Swish", MakeUnaryAlphaTrampoline <onnx_kernels::kernel::Swish>("alpha", 1.0f)},
+      {"ai.onnx:SwiGLU",
+       MakeBinaryAlphaTrampoline <onnx_kernels::kernel::SwiGLU>("alpha", 1.0f)},
       {"ai.onnx:Tan", MakeUnaryTrampoline <onnx_kernels::kernel::Tan>()},
       {"ai.onnx:Tanh", MakeUnaryTrampoline <onnx_kernels::kernel::Tanh>()},
       {"ai.onnx:TensorScatter",

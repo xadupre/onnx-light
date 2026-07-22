@@ -7,6 +7,7 @@
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/runtime_parameters.h"
 #include "onnx_core/runtime/simple_map.h"
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"
@@ -349,6 +350,14 @@ public:
   void set_verbose(int verbose) noexcept { verbose_ = verbose; }
   int verbose() const noexcept { return verbose_; }
 
+  /// Model-independent execution parameters (e.g. the requested degree of
+  /// parallelism, :cpp:var:`RuntimeParameters::num_threads`). Inherited by
+  /// subgraph and function contexts created through
+  /// :cpp:func:`MakeSubgraphContext` / :cpp:func:`MakeFunctionContext`.
+  void set_parameters(RuntimeParameters parameters) noexcept { parameters_ = parameters; }
+  RuntimeParameters &parameters() noexcept { return parameters_; }
+  const RuntimeParameters &parameters() const noexcept { return parameters_; }
+
   /// Index of the control-flow node in the parent graph currently being
   /// executed. Set before running a subgraph so that events recorded inside
   /// carry :cpp:var:`RuntimeEvent::subgraph_node_index` and
@@ -478,8 +487,9 @@ public:
   /// ``then_branch`` or ``else_branch`` of ``If``, or the ``body`` of
   /// ``Loop`` / ``Scan``). The child context inherits the parent's
   /// kernel context, allocator, function registry, tensor map,
-  /// sequence map, verbosity and event-logging flag so outer-scope
-  /// values are visible inside the subgraph. :cpp:func:`current_subgraph`
+  /// sequence map, verbosity, runtime parameters and event-logging flag so
+  /// outer-scope values are visible inside the subgraph.
+  /// :cpp:func:`current_subgraph`
   /// is set to ``(current_node_index(), attr_name)`` on the child.
   /// The subgraph's writes remain local and do not pollute this context.
   ///
@@ -489,9 +499,9 @@ public:
 
   /// Creates a fresh child context for executing a model-local function.
   /// The child inherits the parent's kernel context, allocator, function
-  /// registry and verbosity, but starts with an empty tensor and sequence
-  /// map so the function's formal inputs are bound explicitly by the
-  /// caller.
+  /// registry, verbosity and runtime parameters, but starts with an empty
+  /// tensor and sequence map so the function's formal inputs are bound
+  /// explicitly by the caller.
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for function execution.
@@ -698,6 +708,7 @@ private:
   OnnxMapMap maps_;
   bool events_enabled_ = false;
   int verbose_ = 0;
+  RuntimeParameters parameters_;
   bool release_intermediates_ = false;
   int64_t current_node_index_ = -1;
   /// Index of the control-flow node in the parent graph currently being

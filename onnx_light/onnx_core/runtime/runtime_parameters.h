@@ -1,0 +1,80 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include "onnx_light_helpers.h"
+
+#include <cstdint>
+#include <thread>
+
+/**
+ * @file runtime_parameters.h
+ * @brief Tunable, model-independent knobs controlling how a graph is
+ *        evaluated through :cpp:func:`RunNode` / :cpp:func:`RunNodes`.
+ */
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace core {
+namespace runtime {
+
+/**
+ * Bundles the model-independent execution settings shared across the
+ * nodes of a graph evaluated through :cpp:func:`RunNode` /
+ * :cpp:func:`RunNodes`.
+ *
+ * Today the only knob is :cpp:var:`num_threads`, the requested degree of
+ * parallelism. Grouping it in a dedicated struct keeps the
+ * :cpp:class:`RuntimeContext` interface stable as more tuning knobs
+ * (for example a thread-pool handle or a device descriptor) are added
+ * later without forcing every call site to take an extra argument.
+ */
+struct RuntimeParameters {
+  /** Number of threads used to parallelize the execution of a graph.
+   *  - ``0`` (default): use the number of CPU cores reported by
+   *    ``std::thread::hardware_concurrency()``.
+   *  - ``1``: no parallelization, everything runs on the calling thread.
+   *  - ``> 1``: use exactly this many worker threads.
+   *  - ``< 0``: treated the same as ``0`` (use the number of CPU cores). */
+  int32_t num_threads = 0;
+
+  RuntimeParameters() = default;
+  explicit RuntimeParameters(int32_t num_threads_) : num_threads(num_threads_) {}
+
+  /**
+   * Returns the concrete number of threads to use, resolving the special
+   * ``num_threads`` values to an actual count.
+   *
+   * ``0`` and any negative value resolve to the number of CPU cores
+   * reported by ``std::thread::hardware_concurrency()`` (falling back to
+   * ``1`` when the hardware count is not available); every other value is
+   * returned unchanged. The result is always ``>= 1``.
+   *
+   * Returns:
+   *   The effective number of threads, always at least ``1``.
+   */
+  int32_t EffectiveNumThreads() const noexcept {
+    if (num_threads > 1) {
+      return num_threads;
+    }
+    if (num_threads == 1) {
+      return 1;
+    }
+    unsigned int cores = std::thread::hardware_concurrency();
+    return cores == 0 ? 1 : static_cast<int32_t>(cores);
+  }
+
+  /**
+   * Returns ``true`` when the graph should be executed with more than one
+   * thread, i.e. when :cpp:func:`EffectiveNumThreads` is greater than ``1``.
+   *
+   * Returns:
+   *   ``true`` when parallel execution is enabled, ``false`` otherwise.
+   */
+  bool is_parallel() const noexcept { return EffectiveNumThreads() > 1; }
+};
+
+} // namespace runtime
+} // namespace core
+} // namespace ONNX_LIGHT_NAMESPACE

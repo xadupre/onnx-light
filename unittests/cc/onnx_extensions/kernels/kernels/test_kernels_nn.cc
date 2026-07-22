@@ -468,9 +468,10 @@ TEST(KernelClass, AttentionUsesAllocatorForScratchBuffers) {
   const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
   const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
 
-  // Y + qk_matmul_output (2 result tensors) plus scores/bias/qkraw (3 scratch)
-  // must fit concurrently.
-  PeakTrackingAllocator alloc(8);
+  // Capacity for the peak: 2 result tensors (Y + qk_matmul_output) plus 3
+  // scratch buffers (scores/bias/qkraw), with a little headroom.
+  constexpr size_t kAllocatorSlotCapacity = 8;
+  PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
 

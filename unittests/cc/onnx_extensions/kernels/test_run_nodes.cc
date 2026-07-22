@@ -5,6 +5,7 @@
 #include "onnx_core/annotations/inplace_reuse.h"
 #include "onnx_core/annotations/peak_memory.h"
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/execute_action.h"
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/node_helpers.h"
@@ -4115,6 +4116,37 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
   EXPECT_TRUE(t_inplace);
   EXPECT_TRUE(y_allocated);
   EXPECT_TRUE(t_deleted);
+}
+
+TEST(RunNodes, ExecuteActionSummary) {
+  using core::runtime::ExecuteAction;
+  using core::runtime::ExecuteActionKind;
+
+  // Node execution mentions the node index only.
+  ExecuteAction execute(ExecuteActionKind::kExecuteNode, "", nullptr, /*node_index=*/3);
+  EXPECT_EQ(execute.summary(), "ExecuteNode node_index=3");
+
+  // Lock / unlock and shape actions mention only the name.
+  ExecuteAction lock(ExecuteActionKind::kLockInput, "x");
+  EXPECT_EQ(lock.summary(), "LockInput name='x'");
+  ExecuteAction create_shape(ExecuteActionKind::kCreateShape, "s");
+  EXPECT_EQ(create_shape.summary(), "CreateShape name='s'");
+
+  // A fresh buffer allocation mentions name and size.
+  ExecuteAction alloc(ExecuteActionKind::kAllocateBuffer, "y", nullptr, /*node_index=*/0,
+                      /*size=*/16);
+  EXPECT_EQ(alloc.summary(), "AllocateBuffer name='y' size=16");
+
+  // An in-place allocation mentions the reuse decision and reused buffer.
+  ExecuteAction inplace(ExecuteActionKind::kAllocateBuffer, "t", nullptr, /*node_index=*/0,
+                        /*size=*/8, /*target=*/"x", core::annotations::InPlaceReuse{0, 0});
+  EXPECT_EQ(inplace.summary(),
+            "AllocateBuffer name='t' size=8 inplace(output=0, input=0) reuses='x'");
+
+  // A transfer mentions both endpoints.
+  ExecuteAction transfer(ExecuteActionKind::kTransfer, "a", nullptr, /*node_index=*/0,
+                         /*size=*/0, /*target=*/"b");
+  EXPECT_EQ(transfer.summary(), "Transfer name='a' -> target='b'");
 }
 
 TEST(RunNodes, ExecutionPlanShapeTagActions) {

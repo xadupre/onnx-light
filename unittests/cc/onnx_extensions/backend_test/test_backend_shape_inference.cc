@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/annotations/inplace_reuse.h"
-#include "onnx_core/annotations/peak_memory.h"
-#include "onnx_core/annotations/value_tags.h"
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/compute/inplace_reuse.h"
+#include "onnx_core/compute/peak_memory.h"
+#include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_lib/checker.h"

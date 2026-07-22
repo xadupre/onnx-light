@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/annotations/peak_memory.h"
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/compute/peak_memory.h"
 #include "onnx_extensions/backend_test/cases_for_shapes/peak_memory/include_peak_memory_cases.h"
 #include "onnx_proto/onnx_helper.h"
 

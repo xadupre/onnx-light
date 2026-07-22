@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/annotations/compute_context.h"
+#include "onnx_core/compute/compute_context.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {

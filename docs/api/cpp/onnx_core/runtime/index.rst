@@ -6,7 +6,7 @@ generic execution engine: the runtime value types
 (:cpp:struct:`Tensor`, :cpp:struct:`Sequence`, :cpp:struct:`Map`),
 :cpp:class:`RuntimeContext`, the node/graph/function/model traversal
 (:cpp:func:`RunNode`, :cpp:func:`RunNodes`, :cpp:func:`RunGraph`,
-:cpp:func:`RunFunction`, :cpp:func:`RunModel`), the raw-buffer allocator,
+:cpp:func:`RunFunction`, :cpp:func:`RunModel`),
 random-number helpers, and low-level cast/promotion helpers shared by many
 kernels.
 
@@ -33,12 +33,9 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     simple_map
     runtime_context
     kernel_context
-    execute_action
-    execution_plan
     run_nodes
     kernel_dispatch_table
     node_helpers
-    raw_buffer_allocator
     temporary_buffer
     random
     cast_float8

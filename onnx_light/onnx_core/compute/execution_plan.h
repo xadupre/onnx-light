@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "onnx_core/runtime/execute_action.h"
-#include "onnx_core/runtime/raw_buffer_allocator.h"
+#include "onnx_core/compute/execute_action.h"
+#include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx.h"
 

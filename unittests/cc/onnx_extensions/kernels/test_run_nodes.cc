@@ -2,14 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/annotations/inplace_reuse.h"
-#include "onnx_core/annotations/peak_memory.h"
 #include "onnx_core/backend_test/test_case.h"
-#include "onnx_core/runtime/execute_action.h"
+#include "onnx_core/compute/execute_action.h"
+#include "onnx_core/compute/inplace_reuse.h"
+#include "onnx_core/compute/peak_memory.h"
+#include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/node_helpers.h"
-#include "onnx_core/runtime/raw_buffer_allocator.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"

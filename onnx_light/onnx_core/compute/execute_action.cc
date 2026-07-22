@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/execute_action.h"
+#include "onnx_core/compute/execute_action.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {

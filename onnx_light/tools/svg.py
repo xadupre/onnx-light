@@ -56,6 +56,8 @@ _MARGIN = 20.0  # Outer margin around the whole drawing.
 # passes is enough to converge for the small graphs rendered here.
 _CROSSING_SWEEPS = 4
 _EDGE_LABEL_STAGGER = 8.0  # Per-label orthogonal offset to reduce text collisions.
+_EDGE_LABEL_HALO_COLOR = "#ffffff"
+_EDGE_LABEL_HALO_WIDTH = 3
 
 # Styling per kind of box: ``fill``, ``stroke`` and ``dashed`` flag.
 _STYLES = {
@@ -584,9 +586,10 @@ def _render_svg(
     for src, dst, label in edges:
         label_shift = 0.0
         if label:
-            stagger_multiplier = labeled_edge_index // 2 + 1
-            sign = -1.0 if labeled_edge_index % 2 == 0 else 1.0
-            label_shift = sign * stagger_multiplier * _EDGE_LABEL_STAGGER
+            if labeled_edge_index > 0:
+                stagger_multiplier = (labeled_edge_index + 1) // 2
+                sign = 1.0 if labeled_edge_index % 2 == 1 else -1.0
+                label_shift = sign * stagger_multiplier * _EDGE_LABEL_STAGGER
             labeled_edge_index += 1
         parts.append(_render_edge(boxes[src], boxes[dst], label, horizontal, label_shift))
 
@@ -653,8 +656,9 @@ def _render_edge(
             mx += label_shift
         out.append(
             f'<text x="{_round(mx)}" y="{_round(my)}" text-anchor="middle" '
-            f'fill="#555555" font-size="{_FONT_SIZE - 2}" stroke="#ffffff" '
-            f'stroke-width="3" paint-order="stroke">{_escape_xml(label)}</text>'
+            f'fill="#555555" font-size="{_FONT_SIZE - 2}" stroke="{_EDGE_LABEL_HALO_COLOR}" '
+            f'stroke-width="{_EDGE_LABEL_HALO_WIDTH}" '
+            f'paint-order="stroke">{_escape_xml(label)}</text>'
         )
     return "".join(out)
 

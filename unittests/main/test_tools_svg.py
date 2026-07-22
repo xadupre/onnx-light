@@ -244,13 +244,13 @@ class TestSvg(unittest.TestCase):
             [src, dst], [(0, 1, "L0"), (0, 1, "L1")], 200.0, 220.0, horizontal=False
         )
         doc = xml.dom.minidom.parseString(svg)
-        labels = {
+        label_positions = {
             node.firstChild.nodeValue: float(node.getAttribute("x"))
             for node in doc.getElementsByTagName("text")
             if node.firstChild is not None and node.firstChild.nodeValue in {"L0", "L1"}
         }
-        self.assertEqual(set(labels), {"L0", "L1"})
-        self.assertNotEqual(labels["L0"], labels["L1"])
+        self.assertEqual(set(label_positions), {"L0", "L1"})
+        self.assertNotEqual(label_positions["L0"], label_positions["L1"])
 
     def test_edge_labels_include_halo_for_readability(self) -> None:
         g = _graph(

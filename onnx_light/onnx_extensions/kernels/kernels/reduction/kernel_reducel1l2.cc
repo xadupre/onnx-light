@@ -134,7 +134,7 @@ Tensor ReduceL1L2::operator()(const Tensor &data, bool keepdims, bool noop_with_
   Shape is_reduced;
   is_reduced.assign(static_cast<size_t>(rank), 0);
   if (!noop_with_empty_axes) {
-    std::fill(is_reduced.begin(), is_reduced.end(), true);
+    std::fill(is_reduced.begin(), is_reduced.end(), 1);
   }
   const Shape out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
   int64_t out_count = 1;
@@ -156,7 +156,7 @@ void ReduceL1L2::operator()(const Tensor &data, bool keepdims, bool noop_with_em
   Shape is_reduced;
   is_reduced.assign(static_cast<size_t>(rank), 0);
   if (!noop_with_empty_axes) {
-    std::fill(is_reduced.begin(), is_reduced.end(), true);
+    std::fill(is_reduced.begin(), is_reduced.end(), 1);
   }
   const Shape expected_out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
   EXT_ENFORCE_INVALID(
@@ -186,13 +186,13 @@ Tensor ReduceL1L2::operator()(const Tensor &data, const Tensor &axes, bool keepd
   const int64_t naxes = axes.element_count();
   if (naxes == 0) {
     if (!noop_with_empty_axes) {
-      std::fill(is_reduced.begin(), is_reduced.end(), true);
+      std::fill(is_reduced.begin(), is_reduced.end(), 1);
     }
   } else {
     const int64_t *pa = axes.AsInt64();
     for (int64_t i = 0; i < naxes; ++i) {
       const int64_t a = ResolveAxis(pa[i], rank);
-      is_reduced[static_cast<size_t>(a)] = true;
+      is_reduced[static_cast<size_t>(a)] = 1;
     }
   }
   const Shape out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
@@ -220,13 +220,13 @@ void ReduceL1L2::operator()(const Tensor &data, const Tensor &axes, bool keepdim
   const int64_t naxes = axes.element_count();
   if (naxes == 0) {
     if (!noop_with_empty_axes) {
-      std::fill(is_reduced.begin(), is_reduced.end(), true);
+      std::fill(is_reduced.begin(), is_reduced.end(), 1);
     }
   } else {
     const int64_t *pa = axes.AsInt64();
     for (int64_t i = 0; i < naxes; ++i) {
       const int64_t a = ResolveAxis(pa[i], rank);
-      is_reduced[static_cast<size_t>(a)] = true;
+      is_reduced[static_cast<size_t>(a)] = 1;
     }
   }
   const Shape expected_out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);

@@ -158,7 +158,7 @@ class TestOnnxOptimDependency(unittest.TestCase):
         )
 
     def test_onnx_shapes_registers_its_builtin_shape_functions(self):
-        header = self.root / "onnx_light" / "onnx_extensions" / "onnx_shapes" / "dispatch_table.h"
+        header = self.root / "onnx_light" / "onnx_extensions" / "shapes" / "dispatch_table.h"
         content = header.read_text(encoding="utf-8")
         self.assertIn(
             "RegisterShapeFunctions",

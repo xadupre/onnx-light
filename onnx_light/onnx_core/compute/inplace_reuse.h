@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "onnx_core/annotations/inplace_reuse_types.h"
+#include "onnx_core/compute/inplace_reuse_types.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
@@ -110,4 +110,4 @@ void WriteInPlaceReuseToMetadata(
 // Backward-compatibility include: ComputeContext was previously declared in
 // this header. Including compute_context.h here ensures that existing code
 // that includes inplace_reuse.h continues to see the full ComputeContext API.
-#include "onnx_core/annotations/compute_context.h"
+#include "onnx_core/compute/compute_context.h"

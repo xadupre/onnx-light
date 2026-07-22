@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/annotations/peak_memory.h"
+#include "onnx_core/compute/peak_memory.h"
 
 #include "onnx_core/shapes/dispatch_table.h"
 

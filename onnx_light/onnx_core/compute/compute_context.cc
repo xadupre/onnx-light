@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/annotations/compute_context.h"
+#include "onnx_core/compute/compute_context.h"
 
 #include <algorithm>
 #include <optional>
@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "onnx_core/annotations/value_tags.h"
+#include "onnx_core/compute/value_tags.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

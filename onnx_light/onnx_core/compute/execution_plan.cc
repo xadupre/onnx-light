@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/execution_plan.h"
-#include "onnx_core/annotations/inplace_reuse.h"
-#include "onnx_core/annotations/peak_memory.h"
+#include "onnx_core/compute/execution_plan.h"
+#include "onnx_core/compute/inplace_reuse.h"
+#include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/runtime/runtime_context.h"
 
 #include <cstddef>

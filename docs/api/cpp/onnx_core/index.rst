@@ -17,5 +17,5 @@ libraries depending on the other.
     sym_map
     shapes/index
     runtime/index
-    annotations/index
+    compute/index
     backend_test/index

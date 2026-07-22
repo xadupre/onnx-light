@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "onnx_core/runtime/raw_buffer_allocator.h"
+#include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
 #include <cstdint>

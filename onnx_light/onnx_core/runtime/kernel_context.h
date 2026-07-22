@@ -10,7 +10,7 @@
 // file, and pulling it in here would create a circular ``#include`` that
 // silently truncates whichever of the two happens to be entered first
 // (relying on include order for correctness).
-#include "onnx_core/runtime/raw_buffer_allocator.h"
+#include "onnx_core/compute/raw_buffer_allocator.h"
 
 #include <cstdint>
 #include <string>

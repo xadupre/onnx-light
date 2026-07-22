@@ -533,4 +533,36 @@ TEST(KernelClass, MomentumRejectsInvalidInputs) {
   EXPECT_THROW(momentum(R, T, {X}, {G_bad}, {V}, 0.9f, 0.1f, 0.0f), std::invalid_argument);
 }
 
+// Ensures the allocating overload acquires its output buffers from the
+// ``KernelContext`` allocator instead of inline ``std::vector<uint8_t>`` storage.
+TEST(KernelClass, MomentumUsesAllocatorWhenContextHasOne) {
+  core::runtime::SimpleRawBufferAllocator alloc(2);
+  const KernelContext ctx(OpsetId("ai.onnx.preview.training", 1), &alloc);
+  const Momentum momentum{ctx};
+  const float norm_coefficient = 0.001f;
+  const float alpha = 0.95f;
+  const float beta = 0.1f;
+
+  const Tensor R = Tensor::FromFloat("", {}, {0.1f});
+  const Tensor T = Tensor::FromInt64("", {}, {0});
+  const Tensor X = Tensor::FromFloat("", {2}, {1.2f, 2.8f});
+  const Tensor G = Tensor::FromFloat("", {2}, {-0.94f, -2.5f});
+  const Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
+
+  const std::vector<Tensor> outs =
+      momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient, Momentum::Mode::kStandard);
+  ASSERT_EQ(outs.size(), 2u);
+  EXPECT_TRUE(outs[0].has_allocation());
+  EXPECT_TRUE(outs[1].has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 2u);
+
+  std::vector<float> X_ref, V_ref;
+  MomentumReference(0.1f, 0, {1.2f, 2.8f}, {-0.94f, -2.5f}, {1.7f, 3.6f}, alpha, beta,
+                    norm_coefficient, Momentum::Mode::kStandard, X_ref, V_ref);
+  for (int64_t k = 0; k < outs[0].element_count(); ++k) {
+    EXPECT_NEAR(outs[0].AsFloat()[k], X_ref[static_cast<size_t>(k)], 1e-6);
+    EXPECT_NEAR(outs[1].AsFloat()[k], V_ref[static_cast<size_t>(k)], 1e-6);
+  }
+}
+
 } // namespace Test

@@ -1282,6 +1282,82 @@ class TestVersionConverter(ExtTestCase):
         assert opset_by_domain["ai.onnx"] == 8
         assert opset_by_domain["custom.domain"] == 1
 
+    def _resize_18_17_converted(
+        self,
+        *,
+        use_sizes: bool = True,
+        antialias: int | None = None,
+        keep_aspect_ratio_policy: str | None = None,
+        axes: list[int] | None = None,
+    ) -> onnxl.ModelProto:
+        attributes: dict[str, object] = {
+            "mode": "nearest",
+            "coordinate_transformation_mode": "asymmetric",
+            "nearest_mode": "floor",
+        }
+        if antialias is not None:
+            attributes["antialias"] = antialias
+        if keep_aspect_ratio_policy is not None:
+            attributes["keep_aspect_ratio_policy"] = keep_aspect_ratio_policy
+        if axes is not None:
+            attributes["axes"] = axes
+
+        parameter_shape = (len(axes),) if axes is not None else (4,)
+        if use_sizes:
+            resize_inputs = ["X", "", "", "resize_parameter"]
+            parameter_type = onnxl.TensorProto.INT64
+        else:
+            resize_inputs = ["X", "", "resize_parameter"]
+            parameter_type = onnxl.TensorProto.FLOAT
+
+        graph = oh.make_graph(
+            [oh.make_node("Resize", resize_inputs, ["Y"], **attributes)],
+            "test_resize_18_17",
+            [
+                oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, (1, 1, 2, 2)),
+                oh.make_tensor_value_info("resize_parameter", parameter_type, parameter_shape),
+            ],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, (1, 1, 4, 4))],
+        )
+        return self._converted(graph, oh.make_operatorsetid("", 18), 17)
+
+    def test_resize_18_17_converts_scales(self) -> None:
+        converted = self._resize_18_17_converted(use_sizes=False)
+        resize = converted.graph.node[0]
+        assert converted.opset_import[0].version == 17
+        assert resize.op_type == "Resize"
+        assert list(resize.input) == ["X", "", "resize_parameter"]
+
+    def test_resize_18_17_converts_sizes(self) -> None:
+        converted = self._resize_18_17_converted(use_sizes=True)
+        resize = converted.graph.node[0]
+        assert converted.opset_import[0].version == 17
+        assert resize.op_type == "Resize"
+        assert list(resize.input) == ["X", "", "", "resize_parameter"]
+
+    def test_resize_18_17_removes_default_attributes(self) -> None:
+        converted = self._resize_18_17_converted(antialias=0, keep_aspect_ratio_policy="stretch")
+        attributes = {
+            attribute.name: attribute for attribute in converted.graph.node[0].attribute
+        }
+        self.assertNotIn("antialias", attributes)
+        self.assertNotIn("keep_aspect_ratio_policy", attributes)
+        assert attributes["mode"].s == b"nearest"
+        assert attributes["coordinate_transformation_mode"].s == b"asymmetric"
+        assert attributes["nearest_mode"].s == b"floor"
+
+    def test_resize_18_17_rejects_antialias(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "antialias=1"):
+            self._resize_18_17_converted(antialias=1)
+
+    def test_resize_18_17_rejects_aspect_ratio_policy(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "keep_aspect_ratio_policy"):
+            self._resize_18_17_converted(keep_aspect_ratio_policy="not_larger")
+
+    def test_resize_18_17_rejects_axes(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "axes"):
+            self._resize_18_17_converted(axes=[2, 3])
+
     # Test Cast Adapter: 8 -> 9
     def test_cast_8_9(self) -> None:
         from_opset = 8

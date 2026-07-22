@@ -24,7 +24,7 @@ hot path. Enable it on the context before running inference:
 
 .. code-block:: python
 
-    from onnx_light.onnx_extensions.onnx_shapes.shape_inference import (
+    from onnx_light.onnx_core.shape_inference import (
         ShapeEventAction,
         ShapesContext,
     )

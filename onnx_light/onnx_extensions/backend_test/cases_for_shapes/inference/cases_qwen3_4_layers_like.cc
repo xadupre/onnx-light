@@ -167,7 +167,8 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   // Golden shape-inference / in-place-reuse metadata, attached to each node as
   // it is created and verified by BigModelsInplaceInfo.
   const auto tag = [](NodeProto &n, const char *node_tag, const std::string &inplace,
-                      const std::string &release_after, const std::string &release_shape) {
+                      const std::string &release_after,
+                      const std::string &release_after_shape_tag) {
     n.add_metadata(core::annotations::kNodeTagMetadataKey, node_tag);
     if (!inplace.empty()) {
       n.add_metadata(core::annotations::kInPlaceReuseMetadataKey, inplace);
@@ -175,8 +176,8 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
     if (!release_after.empty()) {
       n.add_metadata(core::annotations::kReleaseAfterMetadataKey, release_after);
     }
-    if (!release_shape.empty()) {
-      n.add_metadata(core::annotations::kReleaseAfterShapeTagMetadataKey, release_shape);
+    if (!release_after_shape_tag.empty()) {
+      n.add_metadata(core::annotations::kReleaseAfterShapeTagMetadataKey, release_after_shape_tag);
     }
   };
 
@@ -540,6 +541,8 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       tag(n, "weight", "", "layer_" + li + "_neg_k;layer_" + li + "_k_half0", "");
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
     }
+    // In the last layer the shared RoPE cos/sin tables (unsqueeze_16/17) reach
+    // their last use here, so they are additionally released after these nodes.
     tag(AddNode(*graph, "Mul", {make_layer_name("k_T"), "unsqueeze_16"},
                 {make_layer_name("k_cos")}),
         "weight", "0:0:equal", "layer_" + li + "_k_T" + (layer == 3 ? ";unsqueeze_16" : ""), "");
@@ -602,6 +605,8 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
     tag(AddNode(*graph, "MatMul", {make_layer_name("scaled_q"), make_layer_name("k_gqa_T")},
                 {make_layer_name("attn_scores")}),
         "weight", "", "layer_" + li + "_scaled_q;layer_" + li + "_k_gqa_T", "");
+    // In the last layer the shared causal mask (and_2) reaches its last use
+    // here, so it is additionally released after this node.
     tag(AddNode(*graph, "Where",
                 {"and_2", make_layer_name("attn_scores"), "init10_s1___" + layer_suffix},
                 {make_layer_name("masked")}),

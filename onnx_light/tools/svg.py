@@ -587,6 +587,7 @@ def _render_svg(
         label_shift = 0.0
         if label:
             if labeled_edge_index > 0:
+                # Staggers as 0, +d, -d, +2d, -2d, ... to reduce label collisions.
                 stagger_multiplier = (labeled_edge_index + 1) // 2
                 sign = 1.0 if labeled_edge_index % 2 == 1 else -1.0
                 label_shift = sign * stagger_multiplier * _EDGE_LABEL_STAGGER
@@ -632,6 +633,7 @@ def _render_box(box: _Box) -> str:
 def _render_edge(
     src: _Box, dst: _Box, label: str, horizontal: bool, label_shift: float = 0.0
 ) -> str:
+    """Renders one edge and shifts its label orthogonally to avoid overlaps."""
     if horizontal:
         x1 = src.x + src.width
         y1 = src.y + src.height / 2.0

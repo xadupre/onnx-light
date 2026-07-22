@@ -31,6 +31,7 @@
 #include "onnx_extensions/onnx_backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
 #include "onnx_extensions/onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
 #include "onnx_extensions/onnx_backend_test/cases_for_shapes/inplace/include_inplace_cases.h"
+#include "onnx_extensions/onnx_backend_test/cases_for_shapes/peak_memory/include_peak_memory_cases.h"
 #include "onnx_extensions/onnx_backend_test/cases_for_shapes/release/include_release_cases.h"
 #include "onnx_extensions/onnx_backend_test/cases_for_shapes/shape_tag/include_shape_tag_cases.h"
 #include "onnx_extensions/onnx_backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
@@ -108,6 +109,9 @@ namespace {
   });
   RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
     onnx_backend_test::CollectInPlaceTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectPeakMemoryTestCases(r, op, m);
   });
   RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
     onnx_backend_test::CollectReleaseTestCases(r, op, m);

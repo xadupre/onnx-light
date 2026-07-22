@@ -233,6 +233,35 @@ class TestSvg(unittest.TestCase):
         self.assertNotIn(">very_long_output_name_uvwxyz<", text)
         self.assertNotIn(">very_long_node_name_123456789<", text)
 
+    def test_edge_labels_are_staggered_to_reduce_collisions(self) -> None:
+        from onnx_light.tools.svg import _Box, _render_svg
+
+        src = _Box(0, "input", ["X"])
+        dst = _Box(1, "op", ["Add"])
+        src.x, src.y = 10.0, 10.0
+        dst.x, dst.y = 10.0, 120.0
+        svg = _render_svg(
+            [src, dst], [(0, 1, "L0"), (0, 1, "L1")], 200.0, 220.0, horizontal=False
+        )
+        doc = xml.dom.minidom.parseString(svg)
+        label_positions = {
+            node.firstChild.nodeValue: float(node.getAttribute("x"))
+            for node in doc.getElementsByTagName("text")
+            if node.firstChild is not None and node.firstChild.nodeValue in {"L0", "L1"}
+        }
+        self.assertEqual(set(label_positions), {"L0", "L1"})
+        self.assertNotEqual(label_positions["L0"], label_positions["L1"])
+
+    def test_edge_labels_include_halo_for_readability(self) -> None:
+        g = _graph(
+            nodes=[_node("Identity", ["X"], ["Y"])],
+            inputs=[_vi("X", dims=(2,))],
+            outputs=[_vi("Y", dims=(2,))],
+        )
+        text = to_svg(_model(g), include_shapes=True)
+        self.assertIn('paint-order="stroke"', text)
+        self.assertIn('stroke="#ffffff"', text)
+
     def test_inplace(self) -> None:
         g = _graph(
             nodes=[

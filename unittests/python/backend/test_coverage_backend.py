@@ -72,6 +72,7 @@ class TestCoverage(ExtTestCase):
                 "nan_inf",
                 "shape_tag",
                 "empty_shape",
+                "peak_memory",
             },
             set(counts),
         )

@@ -71,6 +71,7 @@ using ::onnx_light::core::shapes::ShapesContext;
 // The symbolic value descriptors live in ``core::symbolic``; bring them
 // into ``core::annotations`` so this file can keep referring to them
 // unqualified.
+using ::onnx_light::core::symbolic::Device;
 using ::onnx_light::core::symbolic::SymDim;
 using ::onnx_light::core::symbolic::SymShape;
 using ::onnx_light::core::symbolic::SymTensor;

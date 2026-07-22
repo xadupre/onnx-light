@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/annotations/inplace_reuse.h"
+#include "onnx_core/annotations/peak_memory.h"
 #include "onnx_core/annotations/value_tags.h"
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/shapes/shape_inference.h"
@@ -926,6 +927,45 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
               (core::annotations::InPlaceReuse{0, 0, core::annotations::InPlaceReuseKind::kEqual}));
   }
   ASSERT_TRUE(found) << "test_cc_shape_inference_inplace_reuse case not registered";
+}
+
+TEST(BackendTestCaseShapeInference, OnnxOptimWritesPeakMemoryMetadataOnBackendCases) {
+  const std::vector<TestCase> cases = CollectTestCases("peak_memory");
+  ASSERT_FALSE(cases.empty());
+
+  for (const TestCase &tc : cases) {
+    SCOPED_TRACE(tc.name);
+
+    std::vector<MetadataMap> expected_node_meta;
+    for (const auto &node : tc.model().ref_graph().ref_node()) {
+      expected_node_meta.push_back(MetadataOf(node));
+    }
+
+    ModelProto model_copy;
+    std::string serialized;
+    ASSERT_TRUE(tc.model().SerializeToString(serialized))
+        << "failed to serialize case: " << tc.name;
+    ASSERT_TRUE(model_copy.ParseFromString(serialized)) << "failed to parse case: " << tc.name;
+
+    GraphProto *graph = model_copy.mutable_graph();
+    ASSERT_NE(graph, nullptr);
+    for (auto &node : *graph->mutable_node()) {
+      node.mutable_metadata_props()->clear();
+    }
+
+    core::shapes::ShapesContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(model_copy)) << "case: " << tc.name;
+    ASSERT_NO_THROW(
+        core::annotations::WritePeakMemoryToMetadata(*graph, ctx, core::symbolic::Device::kCPU))
+        << "case: " << tc.name;
+
+    const auto &result_nodes = graph->ref_node();
+    ASSERT_EQ(result_nodes.size(), expected_node_meta.size());
+    for (size_t i = 0; i < result_nodes.size(); ++i) {
+      EXPECT_EQ(MetadataOf(result_nodes[i]), expected_node_meta[i])
+          << "metadata mismatch on node " << i << " in case " << tc.name;
+    }
+  }
 }
 
 TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopPairwiseDistance) {

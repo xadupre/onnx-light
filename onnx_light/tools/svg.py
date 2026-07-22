@@ -55,6 +55,7 @@ _MARGIN = 20.0  # Outer margin around the whole drawing.
 # Number of barycenter sweeps used to reduce edge crossings; a handful of
 # passes is enough to converge for the small graphs rendered here.
 _CROSSING_SWEEPS = 4
+_EDGE_LABEL_STAGGER = 8.0  # Per-label orthogonal offset to reduce text collisions.
 
 # Styling per kind of box: ``fill``, ``stroke`` and ``dashed`` flag.
 _STYLES = {
@@ -579,8 +580,15 @@ def _render_svg(
     )
 
     # Draw edges first so boxes sit on top of the lines.
+    labeled_edge_index = 0
     for src, dst, label in edges:
-        parts.append(_render_edge(boxes[src], boxes[dst], label, horizontal))
+        label_shift = 0.0
+        if label:
+            rank = labeled_edge_index // 2 + 1
+            sign = -1.0 if labeled_edge_index % 2 == 0 else 1.0
+            label_shift = sign * rank * _EDGE_LABEL_STAGGER
+            labeled_edge_index += 1
+        parts.append(_render_edge(boxes[src], boxes[dst], label, horizontal, label_shift))
 
     for box in boxes:
         parts.append(_render_box(box))
@@ -618,7 +626,9 @@ def _render_box(box: _Box) -> str:
     return "".join(out)
 
 
-def _render_edge(src: _Box, dst: _Box, label: str, horizontal: bool) -> str:
+def _render_edge(
+    src: _Box, dst: _Box, label: str, horizontal: bool, label_shift: float = 0.0
+) -> str:
     if horizontal:
         x1 = src.x + src.width
         y1 = src.y + src.height / 2.0
@@ -637,9 +647,14 @@ def _render_edge(src: _Box, dst: _Box, label: str, horizontal: bool) -> str:
     if label:
         mx = (x1 + x2) / 2.0
         my = (y1 + y2) / 2.0
+        if horizontal:
+            my += label_shift
+        else:
+            mx += label_shift
         out.append(
             f'<text x="{_round(mx)}" y="{_round(my)}" text-anchor="middle" '
-            f'fill="#555555" font-size="{_FONT_SIZE - 2}">{_escape_xml(label)}</text>'
+            f'fill="#555555" font-size="{_FONT_SIZE - 2}" stroke="#ffffff" '
+            f'stroke-width="3" paint-order="stroke">{_escape_xml(label)}</text>'
         )
     return "".join(out)
 

@@ -42,9 +42,9 @@ template <typename T> T *WhereTypedOutput(Tensor &t) {
 
 struct TernaryBroadcastInfo {
   onnx_kernels::Shape shape;
-  std::vector<int64_t> strides_c;
-  std::vector<int64_t> strides_x;
-  std::vector<int64_t> strides_y;
+  onnx_kernels::Shape strides_c;
+  onnx_kernels::Shape strides_x;
+  onnx_kernels::Shape strides_y;
   int64_t element_count = 0;
 };
 

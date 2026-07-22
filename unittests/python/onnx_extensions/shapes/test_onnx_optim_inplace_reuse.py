@@ -956,6 +956,51 @@ class TestInPlaceReuse(ExtTestCase):
         peak = ctx.compute_peak_memory(model.graph)
         self.assertEqual(list(peak), [0])
 
+    def test_compute_shapes_node_list_with_input_shapes(self):
+        nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Neg", ["A"], ["Y"])]
+        ctx = si.ComputeContext()
+        shapes = ctx.compute_shapes(
+            nodes, input_shapes={"X": si.SymTensor(onnxl.TensorProto.FLOAT, [3, 4])}
+        )
+        self.assertTrue(shapes.has("A"))
+        self.assertTrue(shapes.has("Y"))
+        self.assertEqual(list(shapes.get("Y").shape.dims()), [3, 4])
+
+    def test_compute_shapes_node_list_missing_input_raises(self):
+        nodes = [oh.make_node("Abs", ["X"], ["Y"])]
+        ctx = si.ComputeContext()
+        with self.assertRaises(ValueError):
+            ctx.compute_shapes(nodes)
+
+    def test_compute_shapes_function_with_input_shapes(self):
+        function = oh.make_function(
+            "com.acme",
+            "MyFunc",
+            ["X"],
+            ["Y"],
+            [oh.make_node("Abs", ["X"], ["Y"])],
+            [oh.make_opsetid("", 18)],
+        )
+        ctx = si.ComputeContext()
+        shapes = ctx.compute_shapes(
+            function, input_shapes={"X": si.SymTensor(onnxl.TensorProto.FLOAT, [2, 5])}
+        )
+        self.assertTrue(shapes.has("Y"))
+        self.assertEqual(list(shapes.get("Y").shape.dims()), [2, 5])
+
+    def test_compute_shapes_function_missing_input_raises(self):
+        function = oh.make_function(
+            "com.acme",
+            "MyFunc",
+            ["X"],
+            ["Y"],
+            [oh.make_node("Abs", ["X"], ["Y"])],
+            [oh.make_opsetid("", 18)],
+        )
+        ctx = si.ComputeContext()
+        with self.assertRaises(ValueError):
+            ctx.compute_shapes(function)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

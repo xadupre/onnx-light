@@ -1491,6 +1491,47 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "Runs shape inference on ``model.graph`` (recording opset versions and local functions "
           "from ``model``) and stores the result in the :class:`ShapesContext` owned by this "
           "context (also returned).")
+      .def(
+          "compute_shapes",
+          [](onnx_annotations::ComputeContext &self, const FunctionProto &function,
+             const onnx_annotations::ComputeContext::InputShapes &input_shapes)
+              -> const onnx_shapes::ShapesContext & {
+            return self.ComputeShapes(function, input_shapes);
+          },
+          nb::arg("function"),
+          nb::arg("input_shapes") = onnx_annotations::ComputeContext::InputShapes{},
+          nb::rv_policy::reference_internal,
+          "Runs shape inference on the body of ``function`` and stores the result in the "
+          ":class:`ShapesContext` owned by this context (also returned). A ``FunctionProto`` only "
+          "names its inputs, so their shapes/types must be supplied through ``input_shapes`` (a "
+          "``dict`` mapping value name to :class:`SymTensor`). Raises ``ValueError`` when an input "
+          "consumed by a node is missing from ``input_shapes`` and not produced by an earlier "
+          "node.")
+      .def(
+          "compute_shapes",
+          [](onnx_annotations::ComputeContext &self, nb::handle nodes,
+             const onnx_annotations::ComputeContext::InputShapes &input_shapes)
+              -> const onnx_shapes::ShapesContext & {
+            if (nb::isinstance<utils::RepeatedProtoField<NodeProto>>(nodes)) {
+              return self.ComputeShapes(nb::cast<utils::RepeatedProtoField<NodeProto> &>(nodes),
+                                        input_shapes);
+            }
+            utils::RepeatedProtoField<NodeProto> copied;
+            for (nb::handle h : nb::borrow<nb::iterable>(nodes)) {
+              copied.push_back(nb::cast<const NodeProto &>(h));
+            }
+            return self.ComputeShapes(copied, input_shapes);
+          },
+          nb::arg("nodes"),
+          nb::arg("input_shapes") = onnx_annotations::ComputeContext::InputShapes{},
+          nb::rv_policy::reference_internal,
+          "Runs shape inference on the node list ``nodes`` and stores the result in the "
+          ":class:`ShapesContext` owned by this context (also returned). A bare node list has no "
+          "declared inputs, so the shapes/types of every value not produced by the list must be "
+          "supplied through ``input_shapes`` (a ``dict`` mapping value name to "
+          ":class:`SymTensor`). "
+          "Raises ``ValueError`` when an input consumed by a node is missing from ``input_shapes`` "
+          "and not produced by an earlier node.")
       .def_prop_ro(
           "shapes",
           [](onnx_annotations::ComputeContext &self) -> const onnx_shapes::ShapesContext & {

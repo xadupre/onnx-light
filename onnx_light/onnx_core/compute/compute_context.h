@@ -362,6 +362,43 @@ public:
   const ShapesContext &ComputeShapes(const ModelProto &model,
                                      bool prefill_with_value_info_output = false);
 
+  /// Map from value name to the :cpp:class:`SymTensor` describing its shape and
+  /// element type, used to seed shape inference for a :cpp:class:`FunctionProto`
+  /// or a bare node list (neither of which carries declared input types).
+  using InputShapes = std::unordered_map<std::string, SymTensor>;
+
+  /// Runs shape inference on the body of ``function`` and stores the resulting
+  /// descriptors in the :cpp:class:`ShapesContext` owned by ``*this``.
+  ///
+  /// A :cpp:class:`FunctionProto` only names its inputs, so their shapes and
+  /// element types must be supplied through ``input_shapes``. Any input consumed
+  /// by a node but absent from ``input_shapes`` (and not produced by an earlier
+  /// node) makes shape inference throw ``std::invalid_argument``.
+  ///
+  /// @param function  Function whose nodes are analysed, in topological order.
+  /// @param input_shapes  Shapes/types for the function inputs, seeded into the
+  ///        owned :cpp:class:`ShapesContext` before inference.
+  /// @return A reference to the owned :cpp:class:`ShapesContext`, now populated.
+  const ShapesContext &ComputeShapes(const FunctionProto &function,
+                                     const InputShapes &input_shapes = {});
+
+  /// Runs shape inference on the node list ``nodes`` and stores the resulting
+  /// descriptors in the :cpp:class:`ShapesContext` owned by ``*this``.
+  ///
+  /// A bare node list has no declared inputs, so the shapes and element types of
+  /// every value not produced by the list itself must be supplied through
+  /// ``input_shapes``. Any input consumed by a node but absent from
+  /// ``input_shapes`` (and not produced by an earlier node) makes shape inference
+  /// throw ``std::invalid_argument``.
+  ///
+  /// @param nodes  Nodes analysed in topological order.
+  /// @param input_shapes  Shapes/types for the values consumed by ``nodes`` but
+  ///        not produced by them, seeded into the owned
+  ///        :cpp:class:`ShapesContext` before inference.
+  /// @return A reference to the owned :cpp:class:`ShapesContext`, now populated.
+  const ShapesContext &ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                     const InputShapes &input_shapes = {});
+
   /// Read-only access to the :cpp:class:`ShapesContext` owned by ``*this``.
   /// Empty until :cpp:func:`ComputeShapes` (or :cpp:func:`Compute`) has run.
   const ShapesContext &Shapes() const noexcept { return shapes_; }

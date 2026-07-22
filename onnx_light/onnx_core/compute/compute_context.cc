@@ -1262,6 +1262,31 @@ const ShapesContext &ComputeContext::ComputeShapes(const ModelProto &model,
   return shapes_;
 }
 
+const ShapesContext &ComputeContext::ComputeShapes(const FunctionProto &function,
+                                                   const InputShapes &input_shapes) {
+  shapes_.Clear();
+  for (int i = 0; i < function.opset_import().size(); ++i) {
+    const OperatorSetIdProto &osi = function.opset_import()[i];
+    shapes_.SetOpsetVersion(osi.domain(), static_cast<int>(osi.version()));
+  }
+  for (const auto &entry : input_shapes) {
+    shapes_.Set(entry.first, SymTensor(entry.second));
+  }
+  shapes_.ComputeShapes(function.node());
+  return shapes_;
+}
+
+const ShapesContext &
+ComputeContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes,
+                              const InputShapes &input_shapes) {
+  shapes_.Clear();
+  for (const auto &entry : input_shapes) {
+    shapes_.Set(entry.first, SymTensor(entry.second));
+  }
+  shapes_.ComputeShapes(nodes);
+  return shapes_;
+}
+
 const std::vector<int64_t> &ComputeContext::ComputePeakMemory(const GraphProto &graph,
                                                               Device device) {
   peak_memory_.assign(static_cast<std::size_t>(graph.node().size()), 0);

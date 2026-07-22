@@ -197,7 +197,6 @@ private:
     std::string domain;
     std::string op_type;
     NodeKernelFn kernel;
-    bool initialized = false;
   };
 
   /// Resolves and caches the kernel for every node the plan executes.

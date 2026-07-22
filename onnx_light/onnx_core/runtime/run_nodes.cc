@@ -1065,7 +1065,6 @@ void RuntimeSession::InitializeKernels() {
     prepared.domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
     prepared.op_type = node.op_type().value();
     prepared.kernel = ResolveNodeKernel(node, rt_, prepared.domain, prepared.op_type);
-    prepared.initialized = true;
   }
 }
 

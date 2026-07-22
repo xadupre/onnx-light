@@ -45,8 +45,10 @@ class RuntimeContext;
  *    declared inputs and outputs.
  *  * ``actions`` — the ordered list of :cpp:class:`ExecuteAction` steps
  *    (lock / unlock, allocate / delete buffer, create / delete shape,
- *    execute node) derived from the in-place / lifetime metadata written
- *    to each node by :cpp:class:`annotations::ComputeContext`.
+ *    allocate / delete temporary buffer, execute node) derived from the
+ *    in-place / lifetime / peak-memory metadata written to each node by
+ *    :cpp:class:`annotations::ComputeContext` and
+ *    :cpp:func:`annotations::WritePeakMemoryToMetadata`.
  *
  * The memory-management schedule is entirely metadata-driven: the
  * :cpp:class:`ComputeContext` is responsible for annotating each node
@@ -132,7 +134,11 @@ protected:
   /// (:cpp:var:`annotations::kNotUsedAfterMetadataKey`); each output is either
   /// allocated as a result (or reused in place per the in-place annotation) or
   /// created as a shape when value-tagged ``"shape"``, and freed on its last
-  /// use (:cpp:var:`annotations::kReleaseAfterMetadataKey`).
+  /// use (:cpp:var:`annotations::kReleaseAfterMetadataKey`). When a node
+  /// carries a peak-memory estimate
+  /// (:cpp:var:`annotations::kNodePeakMemoryMetadataKey`, written by
+  /// :cpp:func:`annotations::WritePeakMemoryToMetadata`), a temporary buffer of
+  /// that size is allocated right before the node runs and deleted right after.
   ///
   /// When the node range carries explicit lock-lifetime metadata
   /// (:cpp:var:`annotations::kNotUsedAfterMetadataKey`), that metadata is

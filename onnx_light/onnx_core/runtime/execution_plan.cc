@@ -4,8 +4,10 @@
 
 #include "onnx_core/runtime/execution_plan.h"
 #include "onnx_core/annotations/inplace_reuse.h"
+#include "onnx_core/annotations/peak_memory.h"
 #include "onnx_core/runtime/runtime_context.h"
 
+#include <cstddef>
 #include <cstdlib>
 #include <string>
 #include <unordered_map>
@@ -73,6 +75,19 @@ std::vector<annotations::InPlaceReuse> ParseInPlaceReuse(const std::string &valu
     reuse.push_back(r);
   }
   return reuse;
+}
+
+/// Parses the ``kNodePeakMemoryMetadataKey`` value (the decimal string
+/// representation of an ``int64_t`` byte count written by
+/// :cpp:func:`annotations::WritePeakMemoryToMetadata`) into a size in bytes.
+/// Returns ``0`` when the metadata is absent, empty or non-positive, i.e. when
+/// the node needs no scratch/temporary buffer.
+size_t ParsePeakMemory(const std::string &value) {
+  if (value.empty()) {
+    return 0;
+  }
+  const long long bytes = std::strtoll(value.c_str(), nullptr, 10);
+  return bytes > 0 ? static_cast<size_t>(bytes) : 0;
 }
 
 } // namespace
@@ -270,9 +285,26 @@ void ExecutionPlan::BuildActions() {
       }
     }
 
+    // A temporary/scratch buffer required by the node's kernel to handle a
+    // memory peak is allocated right before the node runs and freed right
+    // after. The size is read from the peak-memory metadata written by
+    // :cpp:func:`annotations::WritePeakMemoryToMetadata`; nodes without it (or
+    // with a non-positive estimate) need no scratch buffer.
+    const size_t peak_memory =
+        ParsePeakMemory(ReadNodeMetadata(node, annotations::kNodePeakMemoryMetadataKey));
+    if (peak_memory != 0) {
+      actions_.emplace_back(ExecuteActionKind::kAllocateTemporaryBuffer, std::string(), allocator_,
+                            i, peak_memory);
+    }
+
     // A node execution does not target a named result, so its name is empty;
     // the node it runs is identified by ``node_index``.
     actions_.emplace_back(ExecuteActionKind::kExecuteNode, std::string(), nullptr, i);
+
+    if (peak_memory != 0) {
+      actions_.emplace_back(ExecuteActionKind::kDeleteTemporaryBuffer, std::string(), allocator_, i,
+                            peak_memory);
+    }
 
     // Free the intermediates whose last use falls at this node (release_after)
     // and unlock the inputs / initializers reaching their last use here

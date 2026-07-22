@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/annotations/inplace_reuse.h"
+#include "onnx_core/annotations/peak_memory.h"
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/kernel_dispatch_table.h"
@@ -26,6 +27,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -4159,6 +4161,65 @@ TEST(RunNodes, ExecutionPlanShapeTagActions) {
   EXPECT_TRUE(s_shape_created);
   EXPECT_TRUE(s_shape_deleted);
   EXPECT_FALSE(s_buffer_touched);
+}
+
+TEST(RunNodes, ExecutionPlanPeakMemoryActions) {
+  // A node carrying a peak-memory estimate gets a temporary/scratch buffer
+  // allocated right before it runs and deleted right after, sized from the
+  // peak-memory metadata written by WritePeakMemoryToMetadata.
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Neg", {"t"}, {"y"}));
+
+  (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "t");
+  // Only node 0 needs a scratch buffer of 256 bytes.
+  (*graph.mutable_node())[0].add_metadata(core::annotations::kNodePeakMemoryMetadataKey, "256");
+
+  core::runtime::SimpleRawBufferAllocator allocator(8);
+  core::runtime::ExecutionPlan plan(graph, &allocator);
+
+  using core::runtime::ExecuteActionKind;
+  const std::vector<core::runtime::ExecuteAction> &actions = plan.actions();
+
+  // Locate the temporary-buffer actions and the executions they wrap.
+  std::optional<size_t> alloc_temp_index;
+  std::optional<size_t> delete_temp_index;
+  std::optional<size_t> execute_node0_index;
+  size_t temp_action_count = 0;
+  for (size_t i = 0; i < actions.size(); ++i) {
+    const core::runtime::ExecuteAction &action = actions[i];
+    if (action.kind() == ExecuteActionKind::kAllocateTemporaryBuffer) {
+      ++temp_action_count;
+      alloc_temp_index = i;
+      EXPECT_EQ(action.node_index(), 0u);
+      EXPECT_EQ(action.size(), 256u);
+      EXPECT_EQ(action.allocator(), &allocator);
+    }
+    if (action.kind() == ExecuteActionKind::kDeleteTemporaryBuffer) {
+      ++temp_action_count;
+      delete_temp_index = i;
+      EXPECT_EQ(action.node_index(), 0u);
+      EXPECT_EQ(action.size(), 256u);
+      EXPECT_EQ(action.allocator(), &allocator);
+    }
+    if (action.kind() == ExecuteActionKind::kExecuteNode && action.node_index() == 0u) {
+      execute_node0_index = i;
+    }
+  }
+  // Exactly one allocate + one delete, and only for the annotated node.
+  EXPECT_EQ(temp_action_count, 2u);
+  ASSERT_TRUE(alloc_temp_index.has_value());
+  ASSERT_TRUE(delete_temp_index.has_value());
+  ASSERT_TRUE(execute_node0_index.has_value());
+  // The scratch buffer wraps the node execution: allocate before, delete after.
+  EXPECT_LT(*alloc_temp_index, *execute_node0_index);
+  EXPECT_LT(*execute_node0_index, *delete_temp_index);
 }
 
 // ---------------------------------------------------------------------------

@@ -468,6 +468,37 @@ class TestExecutionPlanBindings(ExtTestCase):
         self.assertNotIn(("AllocateBuffer", "t1"), [(a.kind_name, a.name) for a in actions])
         self.assertNotIn(("DeleteBuffer", "t1"), [(a.kind_name, a.name) for a in actions])
 
+    def test_execution_plan_actions_peak_memory(self):
+        model = parser.parse_model(self._PLAN_SRC)
+        node = model.graph.node
+        # The first node needs a 512-byte scratch/temporary buffer to handle its
+        # memory peak; the others need none.
+        node[0].add_metadata("onnx_light.peak_memory", "512")
+        node[2].add_metadata("onnx_light.release_after", "t1;t0")
+        plan = rt.ExecutionPlan(model.graph)
+        actions = plan.actions()
+        # A temporary buffer is allocated before node 0 runs and deleted after,
+        # sized from the peak-memory metadata.
+        alloc = [a for a in actions if a.kind_name == "AllocateTemporaryBuffer"]
+        delete = [a for a in actions if a.kind_name == "DeleteTemporaryBuffer"]
+        self.assertEqual(len(alloc), 1)
+        self.assertEqual(len(delete), 1)
+        self.assertEqual(alloc[0].node_index, 0)
+        self.assertEqual(alloc[0].size, 512)
+        self.assertEqual(delete[0].node_index, 0)
+        self.assertEqual(delete[0].size, 512)
+        kinds = [a.kind_name for a in actions]
+        alloc_index = kinds.index("AllocateTemporaryBuffer")
+        delete_index = kinds.index("DeleteTemporaryBuffer")
+        execute0_index = next(
+            i
+            for i, a in enumerate(actions)
+            if a.kind_name == "ExecuteNode" and a.node_index == 0
+        )
+        # The scratch buffer wraps the node execution.
+        self.assertLess(alloc_index, execute0_index)
+        self.assertLess(execute0_index, delete_index)
+
     def test_default_execution_plan_has_no_actions(self):
         plan = rt.ExecutionPlan()
         self.assertEqual(plan.actions(), [])

@@ -4045,6 +4045,103 @@ TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
   EXPECT_EQ(&rt.GetExecutionPlan(graph), &plan1);
 }
 
+TEST(RuntimeSession, InitializesKernelsThenRunsAndReleases) {
+  // A RuntimeSession is constructed with the nodes, the RuntimeContext and a
+  // precomputed ExecutionPlan; its kernels are resolved up front and only
+  // then is it run. Running it must produce the graph outputs and release the
+  // scheduled intermediates, exactly like the plan-aware RunNodes overload.
+  using core::runtime::ExecutionPlan;
+  using core::runtime::RuntimeSession;
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_z;
+  vi_z.set_name("z");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_input().push_back(vi_z);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Add", {"t", "z"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_release_intermediates(true);
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
+
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(graph.node(), rt, plan);
+  session.Run();
+
+  // "t" was released, "y" (output) survived with the expected values.
+  EXPECT_FALSE(rt.Has("t"));
+  ASSERT_TRUE(rt.Has("y"));
+  const float *y = rt.Get("y").AsFloat();
+  ASSERT_EQ(rt.Get("y").element_count(), 2);
+  EXPECT_FLOAT_EQ(y[0], 1.0f + 10.0f);
+  EXPECT_FLOAT_EQ(y[1], 2.0f + 20.0f);
+}
+
+TEST(RuntimeSession, IsReusableAcrossMultipleRuns) {
+  // The same session, built once (kernels initialized once), can be run again
+  // with fresh inputs without re-resolving the kernels.
+  using core::runtime::ExecutionPlan;
+  using core::runtime::RuntimeSession;
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Neg", {"t"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_release_intermediates(true);
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(graph.node(), rt, plan);
+
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  session.Run();
+  EXPECT_FALSE(rt.Has("t"));
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], -1.0f);
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], -2.0f);
+
+  rt.Remove("y");
+  rt.Put("x", Tensor::FromFloat("x", {2}, {-3.0f, 4.0f}));
+  session.Run();
+  EXPECT_FALSE(rt.Has("t"));
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], -3.0f);
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], -4.0f);
+}
+
+TEST(RuntimeSession, RejectsUnsupportedOpDuringKernelInitialization) {
+  // Resolution happens at construction time (kernel initialization), so an
+  // unsupported operator is rejected before Run is ever called.
+  using core::runtime::ExecutionPlan;
+  using core::runtime::RuntimeSession;
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("ThisOpDoesNotExist", {"x"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_release_intermediates(true);
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  EXPECT_THROW(RuntimeSession(graph.node(), rt, plan), std::invalid_argument);
+}
+
 TEST(RunNodes, ExecutionPlanBuildsActions) {
   // BuildActions is metadata-driven: it locks the input on first use, allocates
   // a result (or reuses one in place) per output, executes each node, then frees

@@ -349,7 +349,7 @@ const ExecutionPlan &RuntimeContext::GetExecutionPlan(const GraphProto &graph) {
   const void *key = static_cast<const void *>(&graph);
   auto it = execution_plans_.find(key);
   if (it == execution_plans_.end()) {
-    it = execution_plans_.emplace(key, ExecutionPlan(graph)).first;
+    it = execution_plans_.emplace(key, ExecutionPlan(graph, allocator_)).first;
   }
   return it->second;
 }
@@ -358,7 +358,7 @@ const ExecutionPlan &RuntimeContext::GetExecutionPlan(const FunctionProto &func)
   const void *key = static_cast<const void *>(&func);
   auto it = execution_plans_.find(key);
   if (it == execution_plans_.end()) {
-    it = execution_plans_.emplace(key, ExecutionPlan(func)).first;
+    it = execution_plans_.emplace(key, ExecutionPlan(func, allocator_)).first;
   }
   return it->second;
 }

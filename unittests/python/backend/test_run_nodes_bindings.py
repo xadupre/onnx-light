@@ -405,15 +405,15 @@ class TestExecutionPlanBindings(ExtTestCase):
         plan = rt.ExecutionPlan(model.graph)
         self.assertEqual(plan.num_nodes, 3)
         self.assertEqual(sorted(plan.keep()), ["x", "y"])
-        # t0 and t1 are intermediates whose last reference falls at the last
-        # (Sub) node; nothing is releasable earlier.
-        self.assertEqual(plan.releasable(), [[], [], ["t1", "t0"]])
+        # An unannotated graph still yields an execute step per node.
+        execute_indices = [a.node_index for a in plan.actions() if a.kind_name == "ExecuteNode"]
+        self.assertEqual(execute_indices, [0, 1, 2])
 
     def test_default_execution_plan_is_empty(self):
         plan = rt.ExecutionPlan()
         self.assertEqual(plan.num_nodes, 0)
         self.assertEqual(plan.keep(), set())
-        self.assertEqual(plan.releasable(), [])
+        self.assertEqual(plan.actions(), [])
 
     def test_get_execution_plan_is_cached(self):
         model = parser.parse_model(self._PLAN_SRC)
@@ -422,7 +422,7 @@ class TestExecutionPlanBindings(ExtTestCase):
         self.assertEqual(plan.num_nodes, 3)
         # Same graph object -> same cached plan contents.
         plan_again = ctx.get_execution_plan(model.graph)
-        self.assertEqual(plan_again.releasable(), plan.releasable())
+        self.assertEqual(plan_again.num_nodes, plan.num_nodes)
         ctx.clear_execution_plans()
 
     def test_release_after_frees_intermediates(self):
@@ -435,6 +435,113 @@ class TestExecutionPlanBindings(ExtTestCase):
         plan.release_after(last_node, ctx)
         self.assertFalse(ctx.has("t0"))
         self.assertFalse(ctx.has("t1"))
+
+    def test_execute_action_construction(self):
+        action = rt.ExecuteAction(rt.ExecuteActionKind.kLockInput, "x")
+        self.assertEqual(action.kind, rt.ExecuteActionKind.kLockInput)
+        self.assertEqual(action.kind_name, "LockInput")
+        self.assertEqual(action.name, "x")
+        self.assertEqual(action.target, "")
+        self.assertEqual(action.node_index, 0)
+        self.assertEqual(action.size, 0)
+        self.assertFalse(action.has_allocator)
+        self.assertIn("LockInput", repr(action))
+
+    def test_execution_plan_actions_shape_tag(self):
+        model = parser.parse_model(self._PLAN_SRC)
+        node = model.graph.node
+        # "t1" is released at the final node and value-tagged as a shape; "t0" is
+        # a regular data result also released there. The input "x" reaches its
+        # last use at the first node.
+        node[0].add_metadata("onnx_light.not_used_after", "x")
+        node[2].add_metadata("onnx_light.release_after", "t1;t0")
+        node[2].add_metadata("onnx_light.release_after_shape_tag", "t1")
+        plan = rt.ExecutionPlan(model.graph)
+        actions = plan.actions()
+        # A shape is created for "t1" (no data buffer) and destroyed on release.
+        self.assertIn(("CreateShape", "t1"), [(a.kind_name, a.name) for a in actions])
+        self.assertIn(("DeleteShape", "t1"), [(a.kind_name, a.name) for a in actions])
+        # "t0" is a result: it is allocated and freed as a buffer.
+        self.assertIn(("AllocateBuffer", "t0"), [(a.kind_name, a.name) for a in actions])
+        self.assertIn(("DeleteBuffer", "t0"), [(a.kind_name, a.name) for a in actions])
+        # The shape value is never allocated / freed as a buffer.
+        self.assertNotIn(("AllocateBuffer", "t1"), [(a.kind_name, a.name) for a in actions])
+        self.assertNotIn(("DeleteBuffer", "t1"), [(a.kind_name, a.name) for a in actions])
+
+    def test_execution_plan_actions_peak_memory(self):
+        model = parser.parse_model(self._PLAN_SRC)
+        node = model.graph.node
+        # The first node needs a 512-byte scratch/temporary buffer to handle its
+        # memory peak; the others need none.
+        node[0].add_metadata("onnx_light.peak_memory", "512")
+        node[2].add_metadata("onnx_light.release_after", "t1;t0")
+        plan = rt.ExecutionPlan(model.graph)
+        actions = plan.actions()
+        # A temporary buffer is allocated before node 0 runs and deleted after,
+        # sized from the peak-memory metadata.
+        alloc = [a for a in actions if a.kind_name == "AllocateTemporaryBuffer"]
+        delete = [a for a in actions if a.kind_name == "DeleteTemporaryBuffer"]
+        self.assertEqual(len(alloc), 1)
+        self.assertEqual(len(delete), 1)
+        self.assertEqual(alloc[0].node_index, 0)
+        self.assertEqual(alloc[0].size, 512)
+        self.assertEqual(delete[0].node_index, 0)
+        self.assertEqual(delete[0].size, 512)
+        kinds = [a.kind_name for a in actions]
+        alloc_index = kinds.index("AllocateTemporaryBuffer")
+        delete_index = kinds.index("DeleteTemporaryBuffer")
+        execute0_index = next(
+            i for i, a in enumerate(actions) if a.kind_name == "ExecuteNode" and a.node_index == 0
+        )
+        # The scratch buffer wraps the node execution.
+        self.assertLess(alloc_index, execute0_index)
+        self.assertLess(execute0_index, delete_index)
+
+    def test_default_execution_plan_has_no_actions(self):
+        plan = rt.ExecutionPlan()
+        self.assertEqual(plan.actions(), [])
+
+    def test_execution_plan_actions_from_graph(self):
+        model = parser.parse_model(self._PLAN_SRC)
+        # BuildActions is metadata-driven, so annotate the nodes with the
+        # in-place / lifetime metadata the in-place reuse pass would write.
+        node = model.graph.node
+        # Add(x, x) reuses input 0 ("x") in place for its output "t0".
+        node[0].add_metadata("onnx_light.inplace_reuse", "0:0:equal")
+        node[0].add_metadata("onnx_light.not_used_after", "x")
+        # "t0" and "t1" reach their last use at the final Sub node.
+        node[2].add_metadata("onnx_light.release_after", "t1;t0")
+        plan = rt.ExecutionPlan(model.graph)
+        kinds = [(a.kind_name, a.name) for a in plan.actions()]
+        # The single input is locked first and, since it is only read by the
+        # first node, unlocked right after that node runs.
+        self.assertEqual(kinds[0], ("LockInput", "x"))
+        self.assertIn(("UnlockInput", "x"), kinds)
+        first_execute = kinds.index(("ExecuteNode", ""))
+        self.assertGreater(kinds.index(("UnlockInput", "x")), first_execute)
+        # Exactly one ExecuteNode action per node, in order.
+        execute_indices = [a.node_index for a in plan.actions() if a.kind_name == "ExecuteNode"]
+        self.assertEqual(execute_indices, [0, 1, 2])
+        # The intermediates are freed; the output ``y`` is kept.
+        deleted = {a.name for a in plan.actions() if a.kind_name == "DeleteBuffer"}
+        self.assertEqual(deleted, {"t0", "t1"})
+        self.assertNotIn("y", deleted)
+        # "t0" is produced in place from "x": its allocation carries the reuse
+        # information and does not reference an allocator.
+        t0_alloc = [
+            a for a in plan.actions() if a.kind_name == "AllocateBuffer" and a.name == "t0"
+        ]
+        self.assertEqual(len(t0_alloc), 1)
+        self.assertTrue(t0_alloc[0].is_inplace)
+        self.assertEqual(t0_alloc[0].target, "x")
+        self.assertEqual(t0_alloc[0].inplace_output_index, 0)
+        self.assertEqual(t0_alloc[0].inplace_input_index, 0)
+        # "t1" has no reuse opportunity: it is allocated fresh.
+        t1_alloc = [
+            a for a in plan.actions() if a.kind_name == "AllocateBuffer" and a.name == "t1"
+        ]
+        self.assertEqual(len(t1_alloc), 1)
+        self.assertFalse(t1_alloc[0].is_inplace)
 
 
 class TestTensorToProto(ExtTestCase):

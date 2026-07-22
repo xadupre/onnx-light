@@ -439,6 +439,62 @@ TEST(KernelClass, AttentionMatchesHandComputedSingleHead) {
   EXPECT_NEAR(Y.AsFloat()[1], static_cast<float>(p0 * 2.0 + p1 * 4.0), 1e-6);
 }
 
+TEST(KernelClass, AttentionUsesAllocatorForScratchBuffers) {
+  // A peak-tracking allocator wraps the pool so the test can observe the
+  // maximum number of buffers alive at once during the call. The scratch
+  // buffers (scores/bias/qkraw) must be acquired from the allocator, so the
+  // peak count exceeds the number of allocator-backed result tensors alone.
+  class PeakTrackingAllocator : public core::runtime::RawBufferAllocator {
+  public:
+    explicit PeakTrackingAllocator(size_t capacity) : pool_(capacity) {}
+    core::runtime::RawBuffer *Allocate(size_t n_bytes) override {
+      core::runtime::RawBuffer *buf = pool_.Allocate(n_bytes);
+      if (pool_.allocated_count() > peak_) {
+        peak_ = pool_.allocated_count();
+      }
+      return buf;
+    }
+    void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
+    size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t allocated_count() const noexcept { return pool_.allocated_count(); }
+    size_t peak() const noexcept { return peak_; }
+
+  private:
+    core::runtime::SimpleRawBufferAllocator pool_;
+    size_t peak_ = 0;
+  };
+
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  // Y + qk_matmul_output (2 result tensors) plus scores/bias/qkraw (3 scratch)
+  // must fit concurrently.
+  PeakTrackingAllocator alloc(8);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  const KernelContext ctx = AttentionKernelContext();
+  const Attention attention{ctx};
+  Attention::Attributes attrs;
+  Attention::Result r = attention(Q, K, V, attrs, nullptr, nullptr, nullptr, nullptr, &rt);
+
+  ASSERT_TRUE(r.Y.has_allocation());
+  ASSERT_TRUE(r.qk_matmul_output.has_allocation());
+  // Peak includes the 2 allocator-backed results plus the 3 scratch buffers.
+  EXPECT_GE(alloc.peak(), 5u);
+  // All scratch buffers are released; only the returned results remain alive.
+  EXPECT_EQ(alloc.allocated_count(), 2u);
+
+  const double s = 1.0 / std::sqrt(2.0);
+  const double e0 = std::exp(s);
+  const double e1 = 1.0;
+  const double p0 = e0 / (e0 + e1);
+  const double p1 = e1 / (e0 + e1);
+  EXPECT_NEAR(r.Y.AsFloat()[0], static_cast<float>(p0 * 1.0 + p1 * 3.0), 1e-6);
+  EXPECT_NEAR(r.Y.AsFloat()[1], static_cast<float>(p0 * 2.0 + p1 * 4.0), 1e-6);
+}
+
 TEST(KernelClass, AttentionExplicitScaleMatchesDefault) {
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
   const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});

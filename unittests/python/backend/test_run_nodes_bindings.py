@@ -491,9 +491,7 @@ class TestExecutionPlanBindings(ExtTestCase):
         alloc_index = kinds.index("AllocateTemporaryBuffer")
         delete_index = kinds.index("DeleteTemporaryBuffer")
         execute0_index = next(
-            i
-            for i, a in enumerate(actions)
-            if a.kind_name == "ExecuteNode" and a.node_index == 0
+            i for i, a in enumerate(actions) if a.kind_name == "ExecuteNode" and a.node_index == 0
         )
         # The scratch buffer wraps the node execution.
         self.assertLess(alloc_index, execute0_index)

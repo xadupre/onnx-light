@@ -584,9 +584,9 @@ def _render_svg(
     for src, dst, label in edges:
         label_shift = 0.0
         if label:
-            stagger_level = labeled_edge_index // 2 + 1
+            stagger_multiplier = labeled_edge_index // 2 + 1
             sign = -1.0 if labeled_edge_index % 2 == 0 else 1.0
-            label_shift = sign * stagger_level * _EDGE_LABEL_STAGGER
+            label_shift = sign * stagger_multiplier * _EDGE_LABEL_STAGGER
             labeled_edge_index += 1
         parts.append(_render_edge(boxes[src], boxes[dst], label, horizontal, label_shift))
 

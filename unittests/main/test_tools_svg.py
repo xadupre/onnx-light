@@ -233,7 +233,7 @@ class TestSvg(unittest.TestCase):
         self.assertNotIn(">very_long_output_name_uvwxyz<", text)
         self.assertNotIn(">very_long_node_name_123456789<", text)
 
-    def test_edge_labels_stagger_to_reduce_collisions(self) -> None:
+    def test_edge_labels_are_staggered_to_reduce_collisions(self) -> None:
         from onnx_light.tools.svg import _Box, _render_svg
 
         src = _Box(0, "input", ["X"])
@@ -252,7 +252,7 @@ class TestSvg(unittest.TestCase):
         self.assertEqual(set(labels), {"L0", "L1"})
         self.assertNotEqual(labels["L0"], labels["L1"])
 
-    def test_edge_labels_use_halo_for_readability(self) -> None:
+    def test_edge_labels_include_halo_for_readability(self) -> None:
         g = _graph(
             nodes=[_node("Identity", ["X"], ["Y"])],
             inputs=[_vi("X", dims=(2,))],

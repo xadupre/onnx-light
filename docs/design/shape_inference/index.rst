@@ -25,9 +25,13 @@ Overview
 
 Shape inference computes, for every value in an ONNX graph, the element
 type and (possibly symbolic) shape of the tensor it carries, without
-running the model. ``onnx-light`` implements it in C++ under
-``onnx_light/onnx_extensions/shapes/shapes/`` and exposes it through the Python entry
-point :func:`onnx_light.onnx_core.shape_inference.infer_shapes_model`.
+running the model. ``onnx-light`` implements the traversal engine (the
+:cpp:class:`ShapesContext`, the ``ComputeShape*`` drivers and the
+dispatch table) in C++ under ``onnx_light/onnx_core/shapes/`` and the
+per-operator shape functions under
+``onnx_light/onnx_extensions/shapes/shapes/``; it exposes the whole
+pipeline through the Python entry point
+:func:`onnx_light.onnx_core.shape_inference.infer_shapes_model`.
 
 The engine keeps its working state in a :cpp:class:`ShapesContext`: a
 ``name → SymTensor`` map describing every known value, plus the opset

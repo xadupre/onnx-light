@@ -31,6 +31,7 @@ base dependency)::
                 ├── lib_onnx_shape
                 ├── lib_onnx_kernels
                 │       └── lib_onnx_backend_test
+                ├── lib_onnx_gradient
                 └── lib_onnx_manipulations
                         └── lib_onnx_lib
 
@@ -62,6 +63,12 @@ on it.
 transitively on ``lib_onnx_core`` / ``lib_onnx_proto``) because every
 registered test case computes its expected outputs by invoking the
 bundled C++ reference kernels.
+``lib_onnx_gradient`` provides reverse-mode automatic differentiation for
+ONNX graphs (``GradientOfNodes`` / ``GradientOfFunction``); it depends on
+``lib_onnx_core`` only (and transitively on ``lib_onnx_proto``).  Like
+``lib_onnx_kernels`` and ``lib_onnx_backend_test`` it belongs to the
+extended build variant and is only built when
+``ONNX_LIGHT_BUILD_KERNELS=ON``.
 
 When installed (``cmake --install``) all libraries are exported under the
 ``onnx_light::`` namespace and can be consumed individually through
@@ -164,6 +171,16 @@ Summary of each library
         Depends publicly on ``lib_onnx_kernels`` (and transitively on
         ``lib_onnx_core`` / ``lib_onnx_proto``); intentionally **independent**
         from ``lib_onnx_lib`` / ``lib_onnx_op`` / ``lib_onnx_manipulations``.
+    * - ``onnx_light::lib_onnx_gradient`` (in-tree target
+        ``lib_onnx_gradient``):
+        ``onnx_light/onnx_extensions/gradient/``
+      - Reverse-mode automatic differentiation for ONNX graphs.  Provides
+        ``GradientOfNodes`` (from a sequence of ``NodeProto`` plus graph
+        metadata) and ``GradientOfFunction`` (from a ``FunctionProto``),
+        each returning a gradient ``FunctionProto`` encoding the backward
+        computation.  Depends publicly on ``lib_onnx_core`` (and transitively
+        on ``lib_onnx_proto``).  Part of the extended build variant, so it is
+        only built when ``ONNX_LIGHT_BUILD_KERNELS=ON``.
 
 What to link for a given use case
 ---------------------------------
@@ -196,6 +213,9 @@ smallest set** that covers its needs.  The most common scenarios are:
   transitively pulls ``lib_onnx_kernels``, ``lib_onnx_core`` and
   ``lib_onnx_proto``).  It can be combined with ``onnx_light::lib_onnx_lib``
   when both schema validation and execution are needed.
+* **Compute gradient functions** (reverse-mode automatic differentiation
+  of ONNX graphs) — link ``onnx_light::lib_onnx_gradient`` (which
+  transitively pulls ``lib_onnx_core`` and ``lib_onnx_proto``).
 
 The Python extensions follow the same split and each link to the
 minimal C++ library that provides their feature.  See

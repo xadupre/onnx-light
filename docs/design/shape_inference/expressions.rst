@@ -4,7 +4,7 @@ Symbolic expression library (``onnx_light.onnx_core.expressions``)
 ====================================================================
 
 This page describes the design of the symbolic dimension-expression library
-introduced in ``onnx_light/onnx_extensions/shapes/`` and exposed as the
+implemented in ``onnx_light/onnx_core/expressions/`` and exposed as the
 Python module :mod:`onnx_light.onnx_core.expressions`.
 
 The library was ported from
@@ -333,11 +333,13 @@ Two renaming functions cover different use cases:
 Build layout
 ------------
 
-The expressions library is compiled as part of the ``onnx_shapes`` CMake
-``STATIC`` target (``lib_onnx_shape``).  ``lib_onnx_shape`` depends on
-``lib_onnx_op`` and is linked into the Python extension so that the
-expressions code is available to all callers that consume the optimisation
-library.
+The expressions library lives in ``onnx_light/onnx_core/expressions/`` and
+is compiled as part of the ``lib_onnx_core`` CMake target (built ``SHARED``
+for Python builds and ``STATIC`` for pure C++ consumers).  Every
+higher-level library — including ``lib_onnx_shape`` (which depends on
+``lib_onnx_core``) — therefore has the expressions code available, and it
+is linked into the Python extensions so all callers that consume the
+shape-inference library can use it.
 
 The C++ header and implementation files live in:
 
@@ -349,8 +351,8 @@ The C++ header and implementation files live in:
                              transformers, evaluator, unparser)
 
 The Python module ``onnx_light.onnx_core.expressions`` wraps the C++ functions
-exposed via the ``_onnxpy.expressions`` nanobind submodule (defined in
-``onnx_light/onnx_py/_onnxpy_submodules.cc``).
+exposed via the ``_onnxpyoptim.expressions`` nanobind submodule (defined in
+``onnx_light/onnx_py/_onnxpy_optim.cc``).
 
 Python wrapper:
 

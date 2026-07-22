@@ -173,6 +173,50 @@ public:
   /// ``output_index == -1``.
   const annotations::InPlaceReuse &inplace() const noexcept { return inplace_; }
 
+  /**
+   * Returns a concise, human-readable one-line summary of the action.
+   *
+   * The summary starts with the action :cpp:func:`kind_name` and only appends
+   * the fields relevant to that kind (node index for node execution, byte size
+   * for buffer allocations, transfer destination, in-place reuse). It is meant
+   * for logging and debugging an :cpp:class:`ExecutionPlan`.
+   *
+   * @return A short description such as ``"AllocateBuffer name='y' size=16"``.
+   */
+  std::string summary() const {
+    std::string text = kind_name();
+    switch (kind_) {
+    case ExecuteActionKind::kExecuteNode:
+      text += " node_index=" + std::to_string(node_index_);
+      break;
+    case ExecuteActionKind::kAllocateBuffer:
+    case ExecuteActionKind::kAllocateTemporaryBuffer:
+      text += " name='" + name_ + "' size=" + std::to_string(size_);
+      if (is_inplace()) {
+        text += " inplace(output=" + std::to_string(inplace_.output_index) +
+                ", input=" + std::to_string(inplace_.input_index) + ")";
+        if (!target_.empty()) {
+          text += " reuses='" + target_ + "'";
+        }
+      }
+      break;
+    case ExecuteActionKind::kTransfer:
+      text += " name='" + name_ + "' -> target='" + target_ + "'";
+      break;
+    case ExecuteActionKind::kLockInitializer:
+    case ExecuteActionKind::kUnlockInitializer:
+    case ExecuteActionKind::kLockInput:
+    case ExecuteActionKind::kUnlockInput:
+    case ExecuteActionKind::kDeleteBuffer:
+    case ExecuteActionKind::kDeleteTemporaryBuffer:
+    case ExecuteActionKind::kCreateShape:
+    case ExecuteActionKind::kDeleteShape:
+      text += " name='" + name_ + "'";
+      break;
+    }
+    return text;
+  }
+
 private:
   ExecuteActionKind kind_ = ExecuteActionKind::kExecuteNode;
   std::string name_;

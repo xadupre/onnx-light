@@ -397,6 +397,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "inplace_input_index", [](const ExecuteAction &a) { return a.inplace().input_index; },
           "Input index reused in place (negative when the action is not an "
           "in-place allocation).")
+      .def(
+          "summary", [](const ExecuteAction &a) { return a.summary(); },
+          "Returns a concise, human-readable one-line summary of the action, "
+          "including only the fields relevant to its :attr:`kind`.")
       .def("__repr__", [](const ExecuteAction &a) {
         return std::string("ExecuteAction(kind='") + a.kind_name() + "', name='" + a.name() +
                "', target='" + a.target() + "', node_index=" + std::to_string(a.node_index()) +

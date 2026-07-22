@@ -9,5 +9,6 @@ inference and value lifetimes.
 
     compute_context
     inplace_reuse
+    inplace_reuse_types
     peak_memory
     value_tags

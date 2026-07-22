@@ -12,7 +12,7 @@
 #include <variant>
 #include <vector>
 
-#include "onnx_core/annotations/inplace_reuse.h"
+#include "onnx_core/annotations/inplace_reuse_types.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"

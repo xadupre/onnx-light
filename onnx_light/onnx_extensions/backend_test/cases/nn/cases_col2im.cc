@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -40,6 +41,30 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
   const KernelContext ctx{opset};
   const onnx_kernels::kernel::Col2Im op{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    // Large 2-D Col2Im: image 64x64, block 4x4, 16 channels.
+    // L = (64 - 4 + 1)^2 = 3721 blocks; input is [1, C*block, L].
+    const int64_t channels = 16;
+    const int64_t block = 4;
+    const int64_t image = 64;
+    const int64_t blocks = (image - block + 1) * (image - block + 1);
+    const int64_t col = channels * block * block;
+    const std::vector<int64_t> in_shape = {1, col, blocks};
+    NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
+    Expect(registry, std::move(node), "test_cc_col2im_benchmark", {opset}, {col * blocks, 2, 2},
+           {channels * image * image}, [op, in_shape, block, image]() -> IoData {
+             Tensor input = Tensor::FromFloat("input", in_shape, Randn<float>(in_shape, 2001));
+             Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {image, image});
+             Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {block, block});
+             onnx_kernels::kernel::Col2Im::Attributes attrs;
+             Tensor output = op(input, image_shape, block_shape, attrs);
+             output.name = "output";
+             return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
+                           {std::move(output)}};
+           });
+    return;
+  }
 
   // ---------------------------------------------------------------------
   // Case 1: 2-D, no padding, default stride/dilation. Mirrors upstream

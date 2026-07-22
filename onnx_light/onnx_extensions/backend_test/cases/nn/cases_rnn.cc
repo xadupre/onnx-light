@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -33,6 +34,37 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
   const KernelContext ctx{opset};
   const onnx_kernels::kernel::RNN rnn_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const int64_t seq_length = 64;
+    const int64_t batch_size = 32;
+    const int64_t input_size = 128;
+    const int64_t hidden_size = 128;
+    NodeProto node;
+    node.set_op_type("RNN");
+    node.add_input("X");
+    node.add_input("W");
+    node.add_input("R");
+    node.add_output("");
+    node.add_output("Y_h");
+    AddAttribute<int64_t>(node, "hidden_size", hidden_size);
+    Expect(
+        registry, std::move(node), "test_cc_rnn_benchmark", {opset},
+        {seq_length * batch_size * input_size, hidden_size * input_size, hidden_size * hidden_size},
+        {batch_size * hidden_size},
+        [rnn_kernel, seq_length, batch_size, input_size, hidden_size]() -> IoData {
+          const std::vector<int64_t> x_shape = {seq_length, batch_size, input_size};
+          const std::vector<int64_t> w_shape = {1, hidden_size, input_size};
+          const std::vector<int64_t> r_shape = {1, hidden_size, hidden_size};
+          Tensor x = Tensor::FromFloat("", x_shape, Randn<float>(x_shape, 2001));
+          Tensor w = Tensor::FromFloat("", w_shape, Randn<float>(w_shape, 2002));
+          Tensor r = Tensor::FromFloat("", r_shape, Randn<float>(r_shape, 2003));
+          auto [y_unused, y_h] = rnn_kernel(x, w, r);
+          (void)y_unused;
+          return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h)}};
+        });
+    return;
+  }
 
   // ``simple_rnn_defaults``: seq_length=2, batch_size=3, input_size=2,
   // hidden_size=4. No bias, no initial_h.

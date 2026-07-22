@@ -32,6 +32,45 @@ void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode)
   const std::vector<std::string> cats_strings{"hello", "world", "good morning"};
   const std::vector<int64_t> cats_int64s{1, 2, 3};
 
+  if (mode == TestMode::BENCHMARK) {
+    const int64_t count = 65536;
+    const std::string default_string = "_Unused";
+    NodeProto node;
+    node.set_op_type("CategoryMapper");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+    AttributeProto *cats_strings_attr = node.add_attribute();
+    cats_strings_attr->set_name("cats_strings");
+    cats_strings_attr->set_type(AttributeProto::AttributeType::STRINGS);
+    for (const std::string &v : cats_strings) {
+      cats_strings_attr->strings().push_back(utils::String(v));
+    }
+    AttributeProto *cats_int64s_attr = node.add_attribute();
+    cats_int64s_attr->set_name("cats_int64s");
+    cats_int64s_attr->set_type(AttributeProto::AttributeType::INTS);
+    for (int64_t v : cats_int64s) {
+      cats_int64s_attr->ints().push_back(v);
+    }
+    AttributeProto *default_attr = node.add_attribute();
+    default_attr->set_name("default_string");
+    default_attr->set_type(AttributeProto::AttributeType::STRING);
+    default_attr->set_s(utils::String(default_string));
+    Expect(registry, std::move(node), "test_cc_category_mapper_benchmark", {default_opset, opset},
+           {count}, {count},
+           [category_mapper, cats_strings, cats_int64s, default_string, count]() -> IoData {
+             std::vector<int64_t> x_values(static_cast<size_t>(count));
+             for (int64_t i = 0; i < count; ++i) {
+               x_values[static_cast<size_t>(i)] = (i % 3) + 1;
+             }
+             Tensor x = Tensor::FromInt64("", {count}, x_values);
+             Tensor y = category_mapper.operator()<int64_t, std::string>(
+                 x, cats_strings, cats_int64s, default_string);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+    return;
+  }
+
   // string -> int64 variant.
   {
     NodeProto node;

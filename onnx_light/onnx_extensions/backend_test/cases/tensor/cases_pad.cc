@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -61,6 +62,22 @@ Tensor MakeInt64Vector(const std::string &name, const std::vector<int64_t> &valu
 
 void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(21);
+
+  if (mode == TestMode::BENCHMARK) {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::Pad pad_kernel{ctx};
+    const std::vector<int64_t> shape = {2048, 2048};
+    Expect(registry, MakePadNode({"x", "pads", "value"}, "constant"), "test_cc_pad_benchmark",
+           {opset}, {2048 * 2048, 4, 1}, {2050 * 2050}, [pad_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromFloat("x", shape, Randn<float>(shape, 2001));
+             Tensor pads = MakeInt64Vector("pads", {1, 1, 1, 1});
+             Tensor value = Tensor::FromFloat("value", {}, {0.0f});
+             Tensor y = pad_kernel(x, pads, &value, /*axes=*/nullptr, "constant");
+             y.name = "y";
+             return IoData{{std::move(x), std::move(pads), std::move(value)}, {std::move(y)}};
+           });
+    return;
+  }
 
   // test_cc_constant_pad - pads ``data`` with the constant 1.2 on the trailing two axes.
   // Inputs and expected output mirror the upstream ONNX node test

@@ -252,15 +252,18 @@ class TestSvg(unittest.TestCase):
         self.assertEqual(set(label_positions), {"L0", "L1"})
         self.assertNotEqual(label_positions["L0"], label_positions["L1"])
 
-    def test_edge_labels_include_halo_for_readability(self) -> None:
+    def test_edge_labels_are_small_and_not_highlighted(self) -> None:
         g = _graph(
             nodes=[_node("Identity", ["X"], ["Y"])],
             inputs=[_vi("X", dims=(2,))],
             outputs=[_vi("Y", dims=(2,))],
         )
         text = to_svg(_model(g), include_shapes=True)
-        self.assertIn('paint-order="stroke"', text)
-        self.assertIn('stroke="#ffffff"', text)
+        # Edge labels must be rendered small and without a highlight halo,
+        # i.e. no white stroke / paint-order on the label text.
+        self.assertNotIn('paint-order="stroke"', text)
+        self.assertNotIn('stroke="#ffffff"', text)
+        self.assertIn('font-size="9"', text)
 
     def test_inplace(self) -> None:
         g = _graph(

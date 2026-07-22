@@ -568,89 +568,360 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   AddNode(*graph, "MatMul", {"final_normed", "p_lm_head_weight::T10"}, {"output_0"});
 
   // ---- Intermediate value_info shapes -------------------------------------
-  // Declared in forward-pass order. Only the dims that shape inference can
-  // resolve from the static initializers are concrete; symbolic
-  // batch/sequence/KV-cache dims stay symbolic.
-
-  // Token embedding produced by the initial Gather.
+  // Every intermediate result produced by the graph records its expected
+  // shape so shape inference is validated on the full model: each entry is
+  // stripped before inference runs and must be recovered with the same
+  // elem_type, the same rank and identical concrete dims (symbolic dims such
+  // as batch_size / sequence_length / past_sequence_length /
+  // total_sequence_length, and arithmetic expressions thereof, are tolerated).
+  // elem_type: FLOAT=float32 RMSNorm accumulators, FLOAT16=model activations,
+  // INT64=shape / index math, BOOL=attention masks.
+  //
+  // Values computed once before the transformer stack (RoPE tables, causal
+  // mask, token embedding) and the trailing final-RMSNorm / LM-head values.
+  AppendValueInfo(*graph->add_value_info(), "A::Sq__2", DataType::INT64, {});
+  AppendValueInfo(*graph->add_value_info(), "A::Sq__3", DataType::INT64, {});
+  AppendValueInfo(*graph->add_value_info(), "B::Sq__2", DataType::INT64, {});
+  AppendValueInfo(*graph->add_value_info(), "B::Sq__3", DataType::INT64, {});
+  AppendValueInfo(*graph->add_value_info(),
+                  "SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25", DataType::INT64,
+                  {DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "_onx_add_unsqueeze_12", DataType::INT64,
+                  {DimSpec("batch_size"), DimSpec(INT64_C(1)), DimSpec(INT64_C(1)),
+                   DimSpec("past_sequence_length+sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "_onx_add_unsqueeze_12::RSh-1", DataType::INT64,
+                  {DimSpec("batch_size*(past_sequence_length+sequence_length)")});
+  AppendValueInfo(*graph->add_value_info(), "_onx_add_unsqueeze_12::Shape:", DataType::INT64,
+                  {DimSpec(INT64_C(4))});
+  AppendValueInfo(*graph->add_value_info(), "_onx_cos_mul_weights__1", DataType::FLOAT,
+                  {DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
+  AppendValueInfo(*graph->add_value_info(), "_onx_gather_to::RSh-1", DataType::BOOL,
+                  {DimSpec("batch_size*(past_sequence_length+sequence_length)")});
+  AppendValueInfo(
+      *graph->add_value_info(), "_onx_mul_range_init7_s_02::UnSq1x2x3__3", DataType::INT64,
+      {DimSpec("batch_size"), DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "_onx_mul_weights__1", DataType::FLOAT,
+                  {DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
+  AppendValueInfo(
+      *graph->add_value_info(), "_onx_range_A::Sq::UnSq0x1x3__2", DataType::INT64,
+      {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "_onx_range_A::Sq__2", DataType::INT64,
+                  {DimSpec("sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "_onx_range_dim1::Sq::UnSq0x1::C1::RSh0x-1x1__1",
+                  DataType::FLOAT,
+                  {DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "_onx_range_dim1::Sq::UnSq0x1::C1__1", DataType::FLOAT,
+                  {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec("sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "_onx_range_dim1::Sq::UnSq0x1__1", DataType::INT64,
+                  {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec("sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "_onx_range_dim1::Sq__1", DataType::INT64,
+                  {DimSpec("sequence_length")});
+  AppendValueInfo(
+      *graph->add_value_info(), "_onx_range_init7_s_02::UnSq1x2x3__3", DataType::INT64,
+      {DimSpec("batch_size"), DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "_onx_range_init7_s_02__3", DataType::INT64,
+                  {DimSpec("batch_size")});
+  AppendValueInfo(*graph->add_value_info(), "_onx_range_init7_s_0::UnSq0x1x2__2", DataType::INT64,
+                  {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec(INT64_C(1)),
+                   DimSpec("past_sequence_length+sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "_onx_range_init7_s_0::UnSq0x1x2__3", DataType::INT64,
+                  {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec(INT64_C(1)),
+                   DimSpec("past_sequence_length+sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "_onx_range_init7_s_0__2", DataType::INT64,
+                  {DimSpec("past_sequence_length+sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "_onx_range_init7_s_0__3", DataType::INT64,
+                  {DimSpec("past_sequence_length+sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "_onx_sin_mul_weights__1", DataType::FLOAT,
+                  {DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
+  AppendValueInfo(*graph->add_value_info(), "and_2", DataType::BOOL,
+                  {DimSpec("batch_size"), DimSpec(INT64_C(1)), DimSpec("sequence_length"),
+                   DimSpec("past_sequence_length+sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "dim1::Sq__1", DataType::INT64, {});
+  AppendValueInfo(*graph->add_value_info(), "dim2::Sq__1", DataType::INT64, {});
   AppendValueInfo(*graph->add_value_info(), "embedding", DataType::FLOAT16,
                   {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
-
-  // Per-position RoPE cosine/sine embeddings (shape [1, seq, 64] → [1, 1, seq, 128] after
-  // Unsqueeze + Concat). Computed once before the transformer stack and shared across layers.
-  AppendValueInfo(*graph->add_value_info(), "uoutput_0", DataType::FLOAT16,
-                  {DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
-  AppendValueInfo(*graph->add_value_info(), "uoutput_1", DataType::FLOAT16,
-                  {DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
+  AppendValueInfo(*graph->add_value_info(), "final_add", DataType::FLOAT,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "final_f32", DataType::FLOAT,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+  AppendValueInfo(*graph->add_value_info(), "final_half", DataType::FLOAT16,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+  AppendValueInfo(*graph->add_value_info(), "final_mean", DataType::FLOAT,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "final_mul", DataType::FLOAT,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+  AppendValueInfo(*graph->add_value_info(), "final_normed", DataType::FLOAT16,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+  AppendValueInfo(*graph->add_value_info(), "final_pow", DataType::FLOAT,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+  AppendValueInfo(*graph->add_value_info(), "final_rsqrt", DataType::FLOAT,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "final_sqrt", DataType::FLOAT,
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "index", DataType::BOOL,
+                  {DimSpec("batch_size"), DimSpec(INT64_C(1)), DimSpec(INT64_C(1)),
+                   DimSpec("past_sequence_length+sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "input_ids::Shape1:2", DataType::INT64,
+                  {DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "le_3", DataType::BOOL,
+                  {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec("sequence_length"),
+                   DimSpec("past_sequence_length+sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "past_key_values_key_0::Shape2:3", DataType::INT64,
+                  {DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "past_key_values_value_2::Shape:1", DataType::INT64,
+                  {DimSpec(INT64_C(1))});
+  AppendValueInfo(*graph->add_value_info(), "to", DataType::BOOL,
+                  {DimSpec("batch_size"), DimSpec("total_sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "to::RSh-1", DataType::BOOL,
+                  {DimSpec("batch_size*total_sequence_length")});
+  AppendValueInfo(*graph->add_value_info(), "to::Shape-1:", DataType::INT64, {DimSpec(INT64_C(1))});
   AppendValueInfo(*graph->add_value_info(), "unsqueeze_16", DataType::FLOAT16,
                   {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec("sequence_length"),
                    DimSpec(INT64_C(128))});
   AppendValueInfo(*graph->add_value_info(), "unsqueeze_17", DataType::FLOAT16,
                   {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec("sequence_length"),
                    DimSpec(INT64_C(128))});
+  AppendValueInfo(*graph->add_value_info(), "uoutput_0", DataType::FLOAT16,
+                  {DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
+  AppendValueInfo(*graph->add_value_info(), "uoutput_1", DataType::FLOAT16,
+                  {DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
+  AppendValueInfo(
+      *graph->add_value_info(), "uunsqueeze_16", DataType::FLOAT16,
+      {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
+  AppendValueInfo(
+      *graph->add_value_info(), "uunsqueeze_17", DataType::FLOAT16,
+      {DimSpec(INT64_C(1)), DimSpec(INT64_C(1)), DimSpec("sequence_length"), DimSpec(INT64_C(64))});
 
-  // Per-transformer-layer intermediate shapes.
+  // Per-transformer-layer intermediate shapes (identical across the 4 layers).
   // Notation: B=batch_size, S=sequence_length, P=past_sequence_length.
-  // hidden_size=1024; Q: 16 heads × 128; KV: 8 heads × 128; MLP_intermediate=3072.
+  // hidden_size=1024; Q: 16 heads x 128; KV: 8 heads x 128; MLP=3072.
   for (int vi_layer = 0; vi_layer < 4; ++vi_layer) {
     const std::string vls = "layer_" + std::to_string(vi_layer) + "_";
     const auto vln = [&vls](const char *s) { return vls + s; };
 
-    const std::vector<DimSpec> bsh = {DimSpec("batch_size"), DimSpec("sequence_length"),
-                                      DimSpec(INT64_C(1024))};
-    const std::vector<DimSpec> b_16_s_128 = {DimSpec("batch_size"), DimSpec(INT64_C(16)),
-                                             DimSpec("sequence_length"), DimSpec(INT64_C(128))};
-    const std::vector<DimSpec> b_8_s_128 = {DimSpec("batch_size"), DimSpec(INT64_C(8)),
-                                            DimSpec("sequence_length"), DimSpec(INT64_C(128))};
-    const std::vector<DimSpec> b_s_16_128 = {DimSpec("batch_size"), DimSpec("sequence_length"),
-                                             DimSpec(INT64_C(16)), DimSpec(INT64_C(128))};
-    const std::vector<DimSpec> bs_2048 = {DimSpec("batch_size"), DimSpec("sequence_length"),
-                                          DimSpec(INT64_C(2048))};
-    const std::vector<DimSpec> bsi = {DimSpec("batch_size"), DimSpec("sequence_length"),
-                                      DimSpec(INT64_C(3072))};
-
-    // Pre-attention RMSNorm output — the shared input to Q/K/V projections.
-    AppendValueInfo(*graph->add_value_info(), vln("normed"), DataType::FLOAT16, bsh);
-
-    // Q, K, V projections after transpose (head dim last in memory).
-    AppendValueInfo(*graph->add_value_info(), vln("q_T"), DataType::FLOAT16, b_16_s_128);
-    AppendValueInfo(*graph->add_value_info(), vln("k_T"), DataType::FLOAT16, b_8_s_128);
-    AppendValueInfo(*graph->add_value_info(), vln("v_T"), DataType::FLOAT16, b_8_s_128);
-
-    // Q and K after rotary position embedding (RoPE).
-    AppendValueInfo(*graph->add_value_info(), vln("q_rope"), DataType::FLOAT16, b_16_s_128);
-    AppendValueInfo(*graph->add_value_info(), vln("k_rope"), DataType::FLOAT16, b_8_s_128);
-
-    // Scaled dot-product attention output and reshape/projection steps.
-    // attn_out is [B, n_q_heads, S, head_dim] — same dims as q_T.
-    AppendValueInfo(*graph->add_value_info(), vln("attn_out"), DataType::FLOAT16, b_16_s_128);
-    // After Transpose([0,2,1,3]): [B, S, n_q_heads, head_dim].
-    AppendValueInfo(*graph->add_value_info(), vln("attn_out_T"), DataType::FLOAT16, b_s_16_128);
-    // After Reshape([0,0,2048]): [B, S, n_q_heads * head_dim].
-    AppendValueInfo(*graph->add_value_info(), vln("attn_2d"), DataType::FLOAT16, bs_2048);
-    // After output projection (o_proj): back to hidden_size.
-    AppendValueInfo(*graph->add_value_info(), vln("attn_proj"), DataType::FLOAT16, bsh);
-    // Residual connection after attention.
-    AppendValueInfo(*graph->add_value_info(), vln("resid_attn"), DataType::FLOAT16, bsh);
-
-    // Post-attention RMSNorm output — MLP input.
-    AppendValueInfo(*graph->add_value_info(), vln("mlp_in"), DataType::FLOAT16, bsh);
-
-    // SwiGLU MLP: gate/up projections → SwiGLU → down projection.
-    AppendValueInfo(*graph->add_value_info(), vln("gate"), DataType::FLOAT16, bsi);
-    AppendValueInfo(*graph->add_value_info(), vln("up"), DataType::FLOAT16, bsi);
-    AppendValueInfo(*graph->add_value_info(), vln("swiglu"), DataType::FLOAT16, bsi);
-    AppendValueInfo(*graph->add_value_info(), vln("down"), DataType::FLOAT16, bsh);
-
-    // Layer output (residual connection after MLP).
-    AppendValueInfo(*graph->add_value_info(), vln("out"), DataType::FLOAT16, bsh);
+    AppendValueInfo(*graph->add_value_info(), vln("add_k"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(8)),
+                     DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("add_post"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("add_pre"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("add_q"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(16)),
+                     DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("attn_2d"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(2048))});
+    AppendValueInfo(*graph->add_value_info(), vln("attn_out"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("attn_out_T"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(16)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("attn_proj"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("attn_scores"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec("past_sequence_length+sequence_length")});
+    AppendValueInfo(*graph->add_value_info(), vln("attn_w"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec("past_sequence_length+sequence_length")});
+    AppendValueInfo(*graph->add_value_info(), vln("down"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("f32"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("gate"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(3072))});
+    AppendValueInfo(*graph->add_value_info(), vln("gate_act"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(3072))});
+    AppendValueInfo(*graph->add_value_info(), vln("is_nan"), DataType::BOOL,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec("past_sequence_length+sequence_length")});
+    AppendValueInfo(*graph->add_value_info(), vln("k_4d"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(8)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_T"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_cos"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_f32"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_gqa"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)),
+                     DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_gqa_T"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec(INT64_C(128)),
+                     DimSpec("past_sequence_length+sequence_length")});
+    AppendValueInfo(*graph->add_value_info(), vln("k_half0"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(64))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_half1"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(64))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_mm"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_normed"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(8)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_normed_half"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(8)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_rope"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_rot"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("k_sin"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("masked"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec("past_sequence_length+sequence_length")});
+    AppendValueInfo(*graph->add_value_info(), vln("mean_k"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(8)),
+                     DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("mean_post"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("mean_pre"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("mean_q"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(16)),
+                     DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("mlp_in"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("mul_k"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(8)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("mul_post"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("mul_pre"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("mul_q"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(16)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("neg_k"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(64))});
+    AppendValueInfo(*graph->add_value_info(), vln("neg_q"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(64))});
+    AppendValueInfo(*graph->add_value_info(), vln("normed"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("normed_half"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("out"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("post_f32"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("post_half"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("pow_k"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(8)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("pow_post"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("pow_pre"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("pow_q"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(16)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_4d"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(16)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_T"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_cos"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_f32"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(2048))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_half0"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(64))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_half1"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(64))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_mm"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(2048))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_normed"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(16)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_normed_half"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(16)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_rope"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_rot"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("q_sin"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("resid_attn"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("rsqrt_k"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(8)),
+                     DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("rsqrt_post"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("rsqrt_pre"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("rsqrt_q"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(16)),
+                     DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("scaled_k"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)),
+                     DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("scaled_k_exp"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec(INT64_C(2)),
+                     DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("scaled_k_unsq"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec(INT64_C(1)),
+                     DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("scaled_q"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("silu"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(3072))});
+    AppendValueInfo(*graph->add_value_info(), vln("softmax"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)), DimSpec("sequence_length"),
+                     DimSpec("past_sequence_length+sequence_length")});
+    AppendValueInfo(*graph->add_value_info(), vln("sqrt_k"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(8)),
+                     DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("sqrt_post"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("sqrt_pre"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("sqrt_q"), DataType::FLOAT,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(16)),
+                     DimSpec(INT64_C(1))});
+    AppendValueInfo(*graph->add_value_info(), vln("swiglu"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(3072))});
+    AppendValueInfo(*graph->add_value_info(), vln("up"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(3072))});
+    AppendValueInfo(*graph->add_value_info(), vln("v_4d"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(8)),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("v_T"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec("sequence_length"),
+                     DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("v_exp"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec(INT64_C(2)),
+                     DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("v_gqa"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(16)),
+                     DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
+    AppendValueInfo(*graph->add_value_info(), vln("v_mm"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
+    AppendValueInfo(*graph->add_value_info(), vln("v_unsq"), DataType::FLOAT16,
+                    {DimSpec("batch_size"), DimSpec(INT64_C(8)), DimSpec(INT64_C(1)),
+                     DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
   }
-
-  // Final RMSNorm: float32 intermediate and fp16 normalised output.
-  AppendValueInfo(*graph->add_value_info(), "final_f32", DataType::FLOAT,
-                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
-  AppendValueInfo(*graph->add_value_info(), "final_normed", DataType::FLOAT16,
-                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(1024))});
 
   // ---- Graph inputs -------------------------------------------------------
   AppendValueInfo(*graph->add_input(), "input_ids", DataType::INT64,

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/backend_test/cases/optional/include_optional_cases.h"
 #include "onnx_extensions/kernels/kernels/optional/include_optional_kernels.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
@@ -290,6 +291,17 @@ void RegisterOptionalHasElementEmptyCase(const std::string &name, bool with_empt
 //     [4]>> input (opset 15).
 // ---------------------------------------------------------------------------
 void RegisterOptionalGetElementCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> big_shape = {512, 512};
+    Tensor input = Tensor::FromFloat("", big_shape, Randn<float>(big_shape, 4101));
+    const OpsetId opset = DefaultOpset(18);
+    const KernelContext ctx{opset};
+    Tensor output = onnx_kernels::kernel::OptionalGetElement(ctx)(input);
+    RegisterTensorInputCase("test_cc_optional_get_element_benchmark", "OptionalGetElement", input,
+                            output, opset, registry);
+    return;
+  }
+
   const std::vector<int64_t> shape = {2, 3};
   Tensor input = Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
 
@@ -360,6 +372,17 @@ void RegisterOptionalGetElementCases(std::vector<TestCase> &registry, TestMode m
 //     ``OptionalHasElement()`` kernel overload to produce ``false``.
 // ---------------------------------------------------------------------------
 void RegisterOptionalHasElementCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> big_shape = {512, 512};
+    Tensor input = Tensor::FromFloat("", big_shape, Randn<float>(big_shape, 4201));
+    const OpsetId opset = DefaultOpset(18);
+    const KernelContext ctx{opset};
+    Tensor output = onnx_kernels::kernel::OptionalHasElement(ctx)(input);
+    RegisterTensorInputCase("test_cc_optional_has_element_benchmark", "OptionalHasElement", input,
+                            output, opset, registry);
+    return;
+  }
+
   const std::vector<int64_t> shape = {2, 3};
   Tensor input = Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -44,6 +45,39 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
   const OpsetId opset = DefaultOpset(23);
   const KernelContext ctx{opset};
   const onnx_kernels::kernel::RotaryEmbedding kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    const int64_t batch = 8;
+    const int64_t num_heads = 16;
+    const int64_t seq = 256;
+    const int64_t head_size = 64;
+    const int64_t half = head_size / 2;
+    const int64_t max_pos = 512;
+    NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
+    Expect(registry, std::move(node), "test_cc_rotary_embedding_benchmark", {opset},
+           {batch * num_heads * seq * head_size, max_pos * half, max_pos * half, batch * seq},
+           {batch * num_heads * seq * head_size},
+           [kernel, batch, num_heads, seq, head_size, half, max_pos]() -> IoData {
+             const std::vector<int64_t> x_shape = {batch, num_heads, seq, head_size};
+             const std::vector<int64_t> cache_shape = {max_pos, half};
+             Tensor X = Tensor::FromFloat("", x_shape, Randn<float>(x_shape, 2001));
+             Tensor cos_cache = Tensor::FromFloat("", cache_shape, Randn<float>(cache_shape, 2002));
+             Tensor sin_cache = Tensor::FromFloat("", cache_shape, Randn<float>(cache_shape, 2003));
+             std::vector<int64_t> pos(static_cast<size_t>(batch * seq));
+             for (int64_t b = 0; b < batch; ++b) {
+               for (int64_t s = 0; s < seq; ++s) {
+                 pos[static_cast<size_t>(b * seq + s)] = s;
+               }
+             }
+             Tensor position_ids = Tensor::FromInt64("", {batch, seq}, pos);
+             onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
+             Tensor Y = kernel(X, cos_cache, sin_cache, position_ids, attrs);
+             return IoData{{std::move(X), std::move(cos_cache), std::move(sin_cache),
+                            std::move(position_ids)},
+                           {std::move(Y)}};
+           });
+    return;
+  }
 
   // 4D X = (batch=1, num_heads=2, seq=3, head_size=4); position_ids drive
   // selection from a (max_pos_plus_1=5, head_size/2=2) cos/sin cache.

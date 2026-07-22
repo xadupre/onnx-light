@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/backend_test/cases/sequence/include_sequence_cases.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
@@ -124,6 +125,19 @@ void RegisterSequenceEraseCase(const std::string &name, const std::vector<Tensor
 // ---------------------------------------------------------------------------
 void RegisterSequenceEraseCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
+
+  if (mode == TestMode::BENCHMARK) {
+    const std::vector<int64_t> big_shape = {512, 512};
+    std::vector<Tensor> inputs;
+    inputs.reserve(8);
+    for (int i = 0; i < 8; ++i) {
+      inputs.push_back(
+          Tensor::FromFloat("t" + std::to_string(i), big_shape, Randn<float>(big_shape, 2001 + i)));
+    }
+    RegisterSequenceEraseCase("test_cc_sequence_erase_benchmark", inputs, big_shape,
+                              /*has_position=*/true, /*position=*/3, opset, registry);
+    return;
+  }
 
   const std::vector<int64_t> elem_shape = {2, 3};
   Tensor a = Tensor::FromFloat("a", elem_shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});

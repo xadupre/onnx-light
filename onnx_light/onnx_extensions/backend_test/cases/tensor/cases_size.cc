@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -36,6 +37,20 @@ void RegisterSizeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
   const KernelContext ctx{opset};
   const onnx_kernels::kernel::Size size_kernel{ctx};
+
+  if (mode == TestMode::BENCHMARK) {
+    // Size only reads the input's element count, so the case exists mainly
+    // for benchmark coverage; a large input keeps the timed materialisation
+    // representative.
+    const std::vector<int64_t> shape = {2048, 2048};
+    Expect(registry, MakeSizeNode(), "test_cc_size_benchmark", {opset}, {2048 * 2048}, {1},
+           [size_kernel, shape]() -> IoData {
+             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 2001));
+             Tensor y = Rename(size_kernel(x), "y");
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+    return;
+  }
 
   // test_cc_size_example — mirrors upstream ``test_size_example`` (2-D
   // float input of shape [2, 3]).

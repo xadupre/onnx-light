@@ -56,8 +56,10 @@ _MARGIN = 20.0  # Outer margin around the whole drawing.
 # passes is enough to converge for the small graphs rendered here.
 _CROSSING_SWEEPS = 4
 _EDGE_LABEL_STAGGER = 8.0  # Per-label orthogonal offset to reduce text collisions.
-_EDGE_LABEL_HALO_COLOR = "#ffffff"
-_EDGE_LABEL_HALO_WIDTH = 3  # SVG stroke width, in pixels.
+# Edge labels are rendered small and unobtrusive (no highlight halo) so they do
+# not dominate the diagram.
+_EDGE_FONT_SIZE = _FONT_SIZE - 3
+_EDGE_LABEL_COLOR = "#888888"
 
 # Styling per kind of box: ``fill``, ``stroke`` and ``dashed`` flag.
 _STYLES = {
@@ -658,9 +660,8 @@ def _render_edge(
             mx += label_shift
         out.append(
             f'<text x="{_round(mx)}" y="{_round(my)}" text-anchor="middle" '
-            f'fill="#555555" font-size="{_FONT_SIZE - 2}" stroke="{_EDGE_LABEL_HALO_COLOR}" '
-            f'stroke-width="{_EDGE_LABEL_HALO_WIDTH}" '
-            f'paint-order="stroke">{_escape_xml(label)}</text>'
+            f'fill="{_EDGE_LABEL_COLOR}" font-size="{_EDGE_FONT_SIZE}">'
+            f"{_escape_xml(label)}</text>"
         )
     return "".join(out)
 

@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_extensions/kernels/kernels/traditionalml/kernel_tree_ensemble_common.h"
 
 #include <span>
 #include <string>
@@ -485,9 +486,10 @@ public:
 /// "AVERAGE", "MIN", and "MAX", and ``post_transform`` value "NONE".
 class TreeEnsembleRegressor : public KernelBase {
 public:
-  using KernelBase::KernelBase;
-
-  /// @param x               Input feature matrix, shape ``[N, F]`` or ``[F]``.
+  /// Builds the classic node and leaf maps from the parallel ``nodes_*`` and
+  /// ``target_*`` attribute arrays so the tree structure is constructed once,
+  /// ahead of any call to ``operator()``.
+  ///
   /// @param nodes_treeids   Tree id per node.
   /// @param nodes_nodeids   Node id per node (root is 0 per tree).
   /// @param nodes_featureids Feature index per node.
@@ -501,23 +503,34 @@ public:
   /// @param target_nodeids  Node id per leaf entry.
   /// @param target_ids      Target index per leaf entry.
   /// @param target_weights  Weight contribution per leaf entry.
-  /// @param n_targets       Total number of regression targets.
-  /// @param aggregate_function  "SUM" | "AVERAGE" | "MIN" | "MAX".
-  /// @param post_transform  "NONE".
-  /// @param base_values     Added to the aggregated output; empty means 0.
-  template <typename T>
-  Tensor operator()(
-      const Tensor &x, const std::vector<int64_t> &nodes_treeids,
+  TreeEnsembleRegressor(
+      const KernelContext &ctx, const std::vector<int64_t> &nodes_treeids,
       const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
       const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
       const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
       const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &target_treeids,
       const std::vector<int64_t> &target_nodeids, const std::vector<int64_t> &target_ids,
-      const std::vector<float> &target_weights, int64_t n_targets,
-      const std::string &aggregate_function, const std::string &post_transform,
-      const std::vector<float> &base_values, RuntimeContext *rt = nullptr) const;
+      const std::vector<float> &target_weights);
+
+  /// Traverses the pre-built decision tree ensemble and returns a float tensor
+  /// of regression scores with shape ``[N, n_targets]``.
+  ///
+  /// @param x               Input feature matrix, shape ``[N, F]`` or ``[F]``.
+  /// @param n_targets       Total number of regression targets.
+  /// @param aggregate_function  "SUM" | "AVERAGE" | "MIN" | "MAX".
+  /// @param post_transform  "NONE".
+  /// @param base_values     Added to the aggregated output; empty means 0.
+  template <typename T>
+  Tensor operator()(const Tensor &x, int64_t n_targets, const std::string &aggregate_function,
+                    const std::string &post_transform, const std::vector<float> &base_values,
+                    RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  ClassicNodeMap node_map_;
+  ClassicLeafMap leaf_map_;
+  std::vector<int64_t> tree_ids_;
 };
 
 /// Reference implementation helper for the ``ai.onnx.ml``
@@ -531,31 +544,34 @@ public:
 /// Supports integer and string class labels.
 class TreeEnsembleClassifier : public KernelBase {
 public:
-  using KernelBase::KernelBase;
-
-  template <typename T>
-  std::pair<Tensor, Tensor> operator()(
-      const Tensor &x, const std::vector<int64_t> &nodes_treeids,
+  /// Builds the classic node and leaf maps from the parallel ``nodes_*`` and
+  /// ``class_*`` attribute arrays so the tree structure is constructed once,
+  /// ahead of any call to ``operator()``.
+  TreeEnsembleClassifier(
+      const KernelContext &ctx, const std::vector<int64_t> &nodes_treeids,
       const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
       const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
       const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
       const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &class_treeids,
       const std::vector<int64_t> &class_nodeids, const std::vector<int64_t> &class_ids,
-      const std::vector<float> &class_weights, const std::vector<int64_t> &classlabels_int64s,
-      const std::vector<float> &base_values, const std::string &post_transform) const;
+      const std::vector<float> &class_weights);
 
   template <typename T>
-  std::pair<Tensor, Tensor> operator()(
-      const Tensor &x, const std::vector<int64_t> &nodes_treeids,
-      const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
-      const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
-      const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
-      const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &class_treeids,
-      const std::vector<int64_t> &class_nodeids, const std::vector<int64_t> &class_ids,
-      const std::vector<float> &class_weights, const std::vector<std::string> &classlabels_strings,
-      const std::vector<float> &base_values, const std::string &post_transform) const;
+  std::pair<Tensor, Tensor>
+  operator()(const Tensor &x, const std::vector<int64_t> &classlabels_int64s,
+             const std::vector<float> &base_values, const std::string &post_transform) const;
+
+  template <typename T>
+  std::pair<Tensor, Tensor>
+  operator()(const Tensor &x, const std::vector<std::string> &classlabels_strings,
+             const std::vector<float> &base_values, const std::string &post_transform) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  ClassicNodeMap node_map_;
+  ClassicLeafMap leaf_map_;
+  std::vector<int64_t> tree_ids_;
 };
 
 /// Reference implementation helper for the ``ai.onnx.ml`` ``TreeEnsemble``
@@ -567,12 +583,12 @@ public:
 /// Only ``post_transform`` 0 (NONE) and 1 (SOFTMAX) are supported.
 class TreeEnsemble : public KernelBase {
 public:
-  using KernelBase::KernelBase;
-
-  /// @param x                    Input feature matrix ``[N, F]``.
+  /// Stores the tree structure and precomputes the per-node membership sets so
+  /// the tree is constructed once, ahead of any call to ``operator()``.
+  ///
   /// @param tree_roots           Index into nodes_* arrays for each tree root.
   /// @param nodes_featureids     Feature index per interior node.
-  /// @param nodes_splits         Threshold per interior node (same type as x).
+  /// @param nodes_splits         Threshold per interior node.
   /// @param nodes_modes          Comparison mode per node (uint8 encoding).
   /// @param nodes_truenodeids    True-branch index per node.
   /// @param nodes_falsenodeids   False-branch index per node.
@@ -580,54 +596,55 @@ public:
   /// @param nodes_falseleafs     1 if false branch is a leaf.
   /// @param nodes_missing        1 if NaN follows true branch.
   /// @param leaf_targetids       Target index per leaf.
-  /// @param leaf_weights         Weight per leaf (same type as x).
+  /// @param leaf_weights         Weight per leaf.
   /// @param membership_values    Flat list of set-member values consumed in
   ///                             ``nodes_modes`` order for every node with
   ///                             ``BRANCH_MEMBER`` (6) mode. Each node's set
   ///                             is delimited by a ``NaN`` sentinel. May be
   ///                             empty if no node uses ``BRANCH_MEMBER``.
+  ///
+  /// ``nodes_splits``, ``leaf_weights``, and ``membership_values`` are taken as
+  /// ``double`` so the kernel owns its tree data (independent of the input
+  /// element type) and remains safely copy-constructible.
+  TreeEnsemble(const KernelContext &ctx, const std::vector<int64_t> &tree_roots,
+               const std::vector<int64_t> &nodes_featureids,
+               const std::vector<double> &nodes_splits, const std::vector<uint8_t> &nodes_modes,
+               const std::vector<int64_t> &nodes_truenodeids,
+               const std::vector<int64_t> &nodes_falsenodeids,
+               const std::vector<int64_t> &nodes_trueleafs,
+               const std::vector<int64_t> &nodes_falseleafs,
+               const std::vector<int64_t> &nodes_missing,
+               const std::vector<int64_t> &leaf_targetids, const std::vector<double> &leaf_weights,
+               const std::vector<double> &membership_values);
+
+  /// Traverses the pre-built tree ensemble and returns a tensor of shape
+  /// ``[N, n_targets]`` with the same element type as ``x``.
+  ///
+  /// @param x                    Input feature matrix ``[N, F]``.
   /// @param n_targets            Number of regression targets.
   /// @param aggregate_function   0=AVERAGE, 1=SUM (default), 2=MIN, 3=MAX.
   /// @param post_transform       0=NONE (default), 1=SOFTMAX.
-  ///
-  /// The ``nodes_splits``, ``nodes_modes``, ``leaf_weights``, and
-  /// ``membership_values`` parameters are passed as zero-copy spans because
-  /// they originate from tensor attribute buffers. The integer index arrays
-  /// (``tree_roots``, ``nodes_featureids``, etc.) come from repeated-int64
-  /// attributes and remain as ``std::vector<int64_t>`` references.
   template <typename T>
-  Tensor operator()(
-      const Tensor &x, const std::vector<int64_t> &tree_roots,
-      const std::vector<int64_t> &nodes_featureids, std::span<const T> nodes_splits,
-      std::span<const uint8_t> nodes_modes, const std::vector<int64_t> &nodes_truenodeids,
-      const std::vector<int64_t> &nodes_falsenodeids, const std::vector<int64_t> &nodes_trueleafs,
-      const std::vector<int64_t> &nodes_falseleafs, const std::vector<int64_t> &nodes_missing,
-      const std::vector<int64_t> &leaf_targetids, std::span<const T> leaf_weights,
-      std::span<const T> membership_values, int64_t n_targets, int64_t aggregate_function,
-      int64_t post_transform, RuntimeContext *rt = nullptr) const;
-
-  /// Convenience overload for callers that already own ``std::vector`` objects
-  /// for ``nodes_splits``, ``nodes_modes``, ``leaf_weights``, and
-  /// ``membership_values``; forwards to the span overload.
-  template <typename T>
-  Tensor operator()(
-      const Tensor &x, const std::vector<int64_t> &tree_roots,
-      const std::vector<int64_t> &nodes_featureids, const std::vector<T> &nodes_splits,
-      const std::vector<uint8_t> &nodes_modes, const std::vector<int64_t> &nodes_truenodeids,
-      const std::vector<int64_t> &nodes_falsenodeids, const std::vector<int64_t> &nodes_trueleafs,
-      const std::vector<int64_t> &nodes_falseleafs, const std::vector<int64_t> &nodes_missing,
-      const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
-      const std::vector<T> &membership_values, int64_t n_targets, int64_t aggregate_function,
-      int64_t post_transform, RuntimeContext *rt = nullptr) const {
-    return (*this).template operator()<T>(
-        x, tree_roots, nodes_featureids, std::span<const T>{nodes_splits},
-        std::span<const uint8_t>{nodes_modes}, nodes_truenodeids, nodes_falsenodeids,
-        nodes_trueleafs, nodes_falseleafs, nodes_missing, leaf_targetids,
-        std::span<const T>{leaf_weights}, std::span<const T>{membership_values}, n_targets,
-        aggregate_function, post_transform, rt);
-  }
+  Tensor operator()(const Tensor &x, int64_t n_targets, int64_t aggregate_function,
+                    int64_t post_transform, RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  std::vector<int64_t> tree_roots_;
+  std::vector<int64_t> nodes_featureids_;
+  std::vector<double> nodes_splits_;
+  std::vector<uint8_t> nodes_modes_;
+  std::vector<int64_t> nodes_truenodeids_;
+  std::vector<int64_t> nodes_falsenodeids_;
+  std::vector<int64_t> nodes_trueleafs_;
+  std::vector<int64_t> nodes_falseleafs_;
+  std::vector<int64_t> nodes_missing_;
+  std::vector<int64_t> leaf_targetids_;
+  std::vector<double> leaf_weights_;
+  /// Per-node set-membership values for ``BRANCH_MEMBER`` nodes; other nodes
+  /// hold an empty vector.
+  std::vector<std::vector<double>> node_member_sets_;
 };
 
 /// Reference implementation of the ``ai.onnx.ml`` ``DictVectorizer`` operator

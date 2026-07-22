@@ -20,10 +20,13 @@ namespace kernel {
 
 namespace {
 
-// Reads the 1-D FLOAT ``scales`` input tensor. ``expected_length`` is the
-// number of axes the kernel expects scales for (``rank`` when ``axes`` is
-// absent, ``axes.size()`` otherwise).
-std::vector<float> ReadResizeScales(const Tensor &scales, std::size_t expected_length) {
+// Reads the 1-D FLOAT ``scales`` input tensor into an allocator-backed scratch
+// buffer. ``expected_length`` is the number of axes the kernel expects scales
+// for (``rank`` when ``axes`` is absent, ``axes.size()`` otherwise). ``allocator``
+// (when non-null) supplies the scratch storage; otherwise the returned tensor
+// falls back to inline storage.
+Tensor ReadResizeScales(const Tensor &scales, std::size_t expected_length,
+                        RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(scales.data_type == DataType::FLOAT,
                       "kernel::Resize: 'scales' input must be FLOAT.");
   EXT_ENFORCE_INVALID(scales.shape.size() == 1,
@@ -31,18 +34,23 @@ std::vector<float> ReadResizeScales(const Tensor &scales, std::size_t expected_l
   const int64_t n = scales.shape[0];
   EXT_ENFORCE_INVALID(static_cast<std::size_t>(n) == expected_length,
                       "kernel::Resize: 'scales' length must match the number of resized axes.");
-  std::vector<float> out(static_cast<std::size_t>(n));
+  const size_t n_bytes = static_cast<size_t>(n) * sizeof(float);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {n}, n_bytes, allocator);
   if (n > 0) {
-    std::memcpy(out.data(), scales.bytes(), static_cast<std::size_t>(n) * sizeof(float));
+    std::memcpy(out.mutable_bytes(), scales.bytes(), n_bytes);
   }
-  for (float s : out) {
-    EXT_ENFORCE_INVALID(s > 0.0f, "kernel::Resize: 'scales' values must be > 0.");
+  const float *values = out.As<float>();
+  for (int64_t i = 0; i < n; ++i) {
+    EXT_ENFORCE_INVALID(values[i] > 0.0f, "kernel::Resize: 'scales' values must be > 0.");
   }
   return out;
 }
 
-// Reads the 1-D INT64 ``sizes`` input tensor.
-std::vector<int64_t> ReadResizeSizes(const Tensor &sizes, std::size_t expected_length) {
+// Reads the 1-D INT64 ``sizes`` input tensor into an allocator-backed scratch
+// buffer. ``allocator`` (when non-null) supplies the scratch storage; otherwise
+// the returned tensor falls back to inline storage.
+Tensor ReadResizeSizes(const Tensor &sizes, std::size_t expected_length,
+                       RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(sizes.data_type == DataType::INT64,
                       "kernel::Resize: 'sizes' input must be INT64.");
   EXT_ENFORCE_INVALID(sizes.shape.size() == 1,
@@ -50,12 +58,14 @@ std::vector<int64_t> ReadResizeSizes(const Tensor &sizes, std::size_t expected_l
   const int64_t n = sizes.shape[0];
   EXT_ENFORCE_INVALID(static_cast<std::size_t>(n) == expected_length,
                       "kernel::Resize: 'sizes' length must match the number of resized axes.");
-  std::vector<int64_t> out(static_cast<std::size_t>(n));
+  const size_t n_bytes = static_cast<size_t>(n) * sizeof(int64_t);
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), {n}, n_bytes, allocator);
   if (n > 0) {
-    std::memcpy(out.data(), sizes.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.mutable_bytes(), sizes.bytes(), n_bytes);
   }
-  for (int64_t s : out) {
-    EXT_ENFORCE_INVALID(s > 0, "kernel::Resize: 'sizes' values must be > 0.");
+  const int64_t *values = out.As<int64_t>();
+  for (int64_t i = 0; i < n; ++i) {
+    EXT_ENFORCE_INVALID(values[i] > 0, "kernel::Resize: 'sizes' values must be > 0.");
   }
   return out;
 }
@@ -82,10 +92,11 @@ std::vector<int64_t> NormaliseAxes(const std::vector<int64_t> &axes, std::size_t
 }
 
 // Expands a per-axis ``scales``/``sizes`` array to a length-``rank`` array,
-// inserting ``identity`` values on non-resized axes.
+// inserting ``identity`` values on non-resized axes. ``values`` points to
+// ``axes.size()`` elements.
 template <typename T>
-std::vector<T> ScatterByAxes(const std::vector<T> &values, const std::vector<int64_t> &axes,
-                             std::size_t rank, T identity) {
+std::vector<T> ScatterByAxes(const T *values, const std::vector<int64_t> &axes, std::size_t rank,
+                             T identity) {
   std::vector<T> out(rank, identity);
   for (std::size_t i = 0; i < axes.size(); ++i) {
     out[static_cast<std::size_t>(axes[i])] = values[i];
@@ -594,20 +605,22 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
 
 // Applies ``keep_aspect_ratio_policy`` to a per-axis ``sizes`` request and
 // returns the effective target output size for each resized axis.
-std::vector<int64_t> ApplyKeepAspectRatioPolicy(const std::vector<int64_t> &requested_sizes,
+// ``requested_sizes`` points to ``requested_len`` elements.
+std::vector<int64_t> ApplyKeepAspectRatioPolicy(const int64_t *requested_sizes,
+                                                std::size_t requested_len,
                                                 const std::vector<int64_t> &in_sizes,
                                                 const std::string &policy) {
   if (policy == "stretch") {
-    return requested_sizes;
+    return std::vector<int64_t>(requested_sizes, requested_sizes + requested_len);
   }
-  EXT_ENFORCE_INVALID(requested_sizes.size() == in_sizes.size(),
+  EXT_ENFORCE_INVALID(requested_len == in_sizes.size(),
                       "kernel::Resize: 'sizes' length must match the number of resized axes.");
   // Pick a single scale factor that satisfies the policy across every axis.
   // ``not_larger``: output dim <= sizes[i] for all i (use the minimum ratio).
   // ``not_smaller``: output dim >= sizes[i] for all i (use the maximum ratio).
   double picked = 0.0;
   bool first = true;
-  for (std::size_t i = 0; i < requested_sizes.size(); ++i) {
+  for (std::size_t i = 0; i < requested_len; ++i) {
     EXT_ENFORCE_INVALID(in_sizes[i] > 0,
                         "kernel::Resize: input dim must be > 0 when using 'sizes'.");
     const double ratio = static_cast<double>(requested_sizes[i]) / static_cast<double>(in_sizes[i]);
@@ -622,7 +635,7 @@ std::vector<int64_t> ApplyKeepAspectRatioPolicy(const std::vector<int64_t> &requ
       EXT_THROW_INVALID("kernel::Resize: unsupported keep_aspect_ratio_policy '", policy, "'.");
     }
   }
-  std::vector<int64_t> out(requested_sizes.size());
+  std::vector<int64_t> out(requested_len);
   for (std::size_t i = 0; i < out.size(); ++i) {
     // ONNX spec: round(sizes[i] * in_sizes[i] / sizes[i]) ... effectively
     // round(picked * in_sizes[i]) since picked is the chosen common ratio.
@@ -688,9 +701,10 @@ Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attribute
                           RuntimeContext *rt) const {
   const std::size_t rank = X.shape.size();
   const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
-  const std::vector<float> scales_in = ReadResizeScales(scales, axes.size());
+  const Tensor scales_in = ReadResizeScales(scales, axes.size(), rt ? rt->allocator() : nullptr);
   // Expand to per-axis (rank-length) scales, defaulting non-resized axes to 1.
-  const std::vector<float> scales_vec = ScatterByAxes<float>(scales_in, axes, rank, 1.0f);
+  const std::vector<float> scales_vec =
+      ScatterByAxes<float>(scales_in.As<float>(), axes, rank, 1.0f);
   onnx_kernels::Shape out_shape;
   out_shape.assign(rank, 0);
   for (std::size_t k = 0; k < rank; ++k) {
@@ -713,8 +727,9 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
   CheckSupportedAttrs(attrs);
   const std::size_t rank = X.shape.size();
   const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
-  const std::vector<float> scales_in = ReadResizeScales(scales, axes.size());
-  const std::vector<float> scales_vec = ScatterByAxes<float>(scales_in, axes, rank, 1.0f);
+  const Tensor scales_in = ReadResizeScales(scales, axes.size(), nullptr);
+  const std::vector<float> scales_vec =
+      ScatterByAxes<float>(scales_in.As<float>(), axes, rank, 1.0f);
   onnx_kernels::Shape out_shape;
   out_shape.assign(rank, 0);
   for (std::size_t k = 0; k < rank; ++k) {
@@ -738,15 +753,15 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   CheckSupportedAttrs(attrs);
   const std::size_t rank = X.shape.size();
   const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
-  const std::vector<int64_t> requested = ReadResizeSizes(sizes, axes.size());
+  const Tensor requested = ReadResizeSizes(sizes, axes.size(), rt ? rt->allocator() : nullptr);
   // Per-axis input shape restricted to the resized axes, used when computing
   // the effective output sizes under ``keep_aspect_ratio_policy``.
   std::vector<int64_t> in_axes_shape(axes.size());
   for (std::size_t i = 0; i < axes.size(); ++i) {
     in_axes_shape[i] = X.shape[static_cast<std::size_t>(axes[i])];
   }
-  const std::vector<int64_t> effective =
-      ApplyKeepAspectRatioPolicy(requested, in_axes_shape, attrs.keep_aspect_ratio_policy);
+  const std::vector<int64_t> effective = ApplyKeepAspectRatioPolicy(
+      requested.As<int64_t>(), axes.size(), in_axes_shape, attrs.keep_aspect_ratio_policy);
   // Build the full output shape, leaving non-resized axes untouched.
   onnx_kernels::Shape out_shape = X.shape;
   for (std::size_t i = 0; i < axes.size(); ++i) {

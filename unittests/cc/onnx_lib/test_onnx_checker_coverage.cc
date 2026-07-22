@@ -303,6 +303,40 @@ TEST(CHECKER_COVERAGE, TensorPackedSubByteRawDataTooSmall) {
   }
 }
 
+// Reject non-packed int32_data-stored tensors whose payload is too small.
+TEST(CHECKER_COVERAGE, TensorUnpackedInt32DataTooSmall) {
+  // BOOL, INT8, UINT8, INT16, UINT16, FLOAT16, BFLOAT16, and FLOAT8* types are
+  // stored one element per int32_data entry (they are not bit-packed), unlike
+  // INT4/UINT4/FLOAT4E2M1.
+  for (TensorProto::DataType dtype :
+       {TensorProto::BOOL, TensorProto::INT8, TensorProto::UINT8, TensorProto::INT16,
+        TensorProto::UINT16, TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::FLOAT8E4M3FN,
+        TensorProto::FLOAT8E4M3FNUZ, TensorProto::FLOAT8E5M2, TensorProto::FLOAT8E5M2FNUZ,
+        TensorProto::FLOAT8E8M0}) {
+    // 4 int32_data entries for a 32-element tensor: the 4-bit packed formula
+    // ceil(nelem/8) = ceil(32/8) = 4 would incorrectly accept this, but these
+    // types require nelem=32 entries (one per element), not the packed count.
+    TensorProto t;
+    t.set_name("t");
+    t.set_data_type(dtype);
+    t.add_dims(32);
+    for (int i = 0; i < 4; ++i) {
+      t.add_int32_data(0);
+    }
+    EXPECT_THROW(checker::check_tensor(t, MakeCtx()), ValidationError);
+
+    // Exactly enough (unpacked) int32 values must pass.
+    TensorProto ok;
+    ok.set_name("t");
+    ok.set_data_type(dtype);
+    ok.add_dims(32);
+    for (int i = 0; i < 32; ++i) {
+      ok.add_int32_data(0);
+    }
+    EXPECT_NO_THROW(checker::check_tensor(ok, MakeCtx()));
+  }
+}
+
 // Reject packed sub-byte tensors whose int32_data payload is too small.
 TEST(CHECKER_COVERAGE, TensorPackedSubByteInt32DataTooSmall) {
   // 4-bit types: 8 elements per int32.

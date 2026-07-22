@@ -221,6 +221,9 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
       break;
 
     case TensorProto::INT32:
+      check_field(int32_data);
+      break;
+
     case TensorProto::UINT8:
     case TensorProto::INT8:
     case TensorProto::UINT16:
@@ -234,6 +237,15 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
     case TensorProto::FLOAT8E5M2FNUZ:
     case TensorProto::FLOAT8E8M0:
       check_field(int32_data);
+      if (nelem > 0) {
+        // These types are not packed: each element occupies one int32_data entry.
+        const int64_t expected_int32s = nelem;
+        if (static_cast<int64_t>(tensor.int32_data().size()) < expected_int32s) {
+          fail_check("TensorProto (tensor name: ", tensor.name(), ") int32_data size (",
+                     tensor.int32_data().size(), ") is too small for the declared shape (",
+                     expected_int32s, " int32 values required).");
+        }
+      }
       break;
 
     case TensorProto::UINT4:

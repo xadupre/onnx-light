@@ -25,7 +25,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
 
-const char *InPlaceReuseKindName(core::annotations::InPlaceReuseKind kind) {
+constexpr const char *InPlaceReuseKindName(core::annotations::InPlaceReuseKind kind) {
   switch (kind) {
   case core::annotations::InPlaceReuseKind::kEqual:
     return "equal";
@@ -35,7 +35,7 @@ const char *InPlaceReuseKindName(core::annotations::InPlaceReuseKind kind) {
   return "unknown";
 }
 
-const char *InPlaceReuseKindEnumName(core::annotations::InPlaceReuseKind kind) {
+constexpr const char *InPlaceReuseKindEnumName(core::annotations::InPlaceReuseKind kind) {
   switch (kind) {
   case core::annotations::InPlaceReuseKind::kEqual:
     return "kEqual";

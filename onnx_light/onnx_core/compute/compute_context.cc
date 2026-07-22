@@ -743,19 +743,6 @@ std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
 
 // ── ComputeContext method implementations ────────────────────────────────────
 
-const char *ComputeEventActionName(ComputeEventAction action) {
-  switch (action) {
-  case ComputeEventAction::kInPlace:
-    return "inplace";
-  case ComputeEventAction::kRelease:
-    return "release";
-  case ComputeEventAction::kReleaseShapeTag:
-    return "release_shape_tag";
-  }
-  throw std::invalid_argument("ComputeEventActionName: unexpected action value " +
-                              std::to_string(static_cast<int32_t>(action)));
-}
-
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 ComputeContext::ComputeValueAndNodeTags(const GraphProto &graph) {
   value_tags_.clear();

@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -2496,7 +2497,25 @@ TEST(BackendTestCaseShapeInference, BigModelsShapeTag) {
 
 TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
   const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  // Per-node metadata keys produced by the value-tag / in-place-reuse passes
+  // that a big-model case may embed as a golden expectation.
+  const std::array<const char *, 4> checked_node_keys = {
+      core::annotations::kNodeTagMetadataKey, core::annotations::kInPlaceReuseMetadataKey,
+      core::annotations::kReleaseAfterMetadataKey,
+      core::annotations::kReleaseAfterShapeTagMetadataKey};
+  const auto checked_subset = [&](const MetadataMap &full) {
+    MetadataMap subset;
+    for (const char *key : checked_node_keys) {
+      auto it = full.find(key);
+      if (it != full.end()) {
+        subset.emplace(*it);
+      }
+    }
+    return subset;
+  };
+
   bool found = false;
+  bool verified_expected = false;
   for (const TestCase &tc : cases) {
     if (tc.name.find("_big_") == std::string::npos) {
       continue;
@@ -2510,8 +2529,73 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
     ASSERT_NO_THROW(core::annotations::ComputeInPlaceReuse(tc.model().ref_graph(), ctx,
                                                            /*allow_input_overwrite=*/true))
         << "case: " << tc.name;
+
+    // Capture the golden metadata embedded in the case (if any). A case that
+    // pre-embeds the expected value-tags JSON and per-node in-place-reuse
+    // metadata is verified against a fresh recomputation below.
+    const GraphProto &expected_graph = tc.model().ref_graph();
+    const MetadataMap expected_graph_meta = MetadataOf(expected_graph);
+    bool has_expected = expected_graph_meta.count(core::annotations::kValueTagsMetadataKey) != 0;
+    std::vector<MetadataMap> expected_node_meta;
+    for (const auto &node : expected_graph.ref_node()) {
+      MetadataMap subset = checked_subset(MetadataOf(node));
+      if (!subset.empty()) {
+        has_expected = true;
+      }
+      expected_node_meta.push_back(std::move(subset));
+    }
+    if (!has_expected) {
+      continue;
+    }
+    verified_expected = true;
+
+    // Recompute the metadata from scratch on a clean copy and confirm it
+    // matches the golden values embedded in the case.
+    ModelProto model_copy = DeepCopyModel(tc.model(), tc.name);
+    GraphProto *graph = model_copy.mutable_graph();
+    graph->mutable_metadata_props()->clear();
+    const auto clear_meta = [](auto *entries) {
+      for (size_t i = 0; i < entries->size(); ++i) {
+        (*entries)[i].mutable_metadata_props()->clear();
+      }
+    };
+    clear_meta(graph->mutable_node());
+    clear_meta(graph->mutable_value_info());
+    clear_meta(graph->mutable_input());
+    clear_meta(graph->mutable_output());
+    clear_meta(graph->mutable_initializer());
+
+    core::shapes::ShapesContext recompute_ctx;
+    ASSERT_NO_THROW(recompute_ctx.ComputeShapeModel(model_copy)) << "case: " << tc.name;
+    const auto value_tags = core::annotations::InferValueAndNodeTags(*graph).first;
+    ASSERT_NO_THROW(core::annotations::WriteValueAndNodeTagsToMetadata(*graph))
+        << "case: " << tc.name;
+    ASSERT_NO_THROW(
+        core::annotations::WriteInPlaceReuseToMetadata(*graph, recompute_ctx, value_tags))
+        << "case: " << tc.name;
+
+    const MetadataMap computed_graph_meta = MetadataOf(*graph);
+    const auto expected_value_tags =
+        expected_graph_meta.find(core::annotations::kValueTagsMetadataKey);
+    if (expected_value_tags != expected_graph_meta.end()) {
+      const auto computed_value_tags =
+          computed_graph_meta.find(core::annotations::kValueTagsMetadataKey);
+      ASSERT_NE(computed_value_tags, computed_graph_meta.end())
+          << "missing value_tags metadata on case " << tc.name;
+      EXPECT_EQ(computed_value_tags->second, expected_value_tags->second)
+          << "value_tags metadata mismatch on case " << tc.name;
+    }
+
+    const auto &result_nodes = graph->ref_node();
+    ASSERT_EQ(result_nodes.size(), expected_node_meta.size());
+    for (size_t i = 0; i < result_nodes.size(); ++i) {
+      EXPECT_EQ(checked_subset(MetadataOf(result_nodes[i])), expected_node_meta[i])
+          << "in-place-reuse metadata mismatch on node " << i << " in case " << tc.name;
+    }
   }
   EXPECT_TRUE(found) << "no big-model backend cases were collected";
+  EXPECT_TRUE(verified_expected)
+      << "no big-model backend case carried expected in-place-reuse metadata";
 }
 
 } // namespace Test

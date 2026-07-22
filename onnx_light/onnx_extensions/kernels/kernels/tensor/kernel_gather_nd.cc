@@ -44,17 +44,6 @@ onnx_kernels::Shape ComputeGatherNDOutputShape(const onnx_kernels::Shape &data_s
   return out_shape;
 }
 
-std::vector<int64_t> ReadGatherNDIndices(const Tensor &indices) {
-  EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64),
-                      "kernel::GatherND: 'indices' input must be INT64.");
-  int64_t n = indices.element_count();
-  std::vector<int64_t> out(static_cast<std::size_t>(n));
-  if (n > 0) {
-    std::memcpy(out.data(), indices.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
-  }
-  return out;
-}
-
 } // namespace
 
 Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims,
@@ -78,8 +67,10 @@ void GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t bat
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::GatherND: output dtype must match data dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape, "kernel::GatherND: output shape mismatch.");
+  EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64),
+                      "kernel::GatherND: 'indices' input must be INT64.");
 
-  const std::vector<int64_t> idx_values = ReadGatherNDIndices(indices);
+  const int64_t *idx_values = reinterpret_cast<const int64_t *>(indices.bytes());
   const int64_t r = static_cast<int64_t>(data.shape.size());
   const int64_t q = static_cast<int64_t>(indices.shape.size());
   const int64_t k_last = indices.shape[static_cast<std::size_t>(q - 1)];

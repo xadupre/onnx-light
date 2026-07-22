@@ -7,7 +7,6 @@
 #include "onnx_light_helpers.h"
 
 #include <cstdint>
-#include <thread>
 
 /**
  * @file runtime_parameters.h
@@ -54,16 +53,7 @@ struct RuntimeParameters {
    * Returns:
    *   The effective number of threads, always at least ``1``.
    */
-  int32_t EffectiveNumThreads() const noexcept {
-    if (num_threads > 1) {
-      return num_threads;
-    }
-    if (num_threads == 1) {
-      return 1;
-    }
-    unsigned int cores = std::thread::hardware_concurrency();
-    return cores == 0 ? 1 : static_cast<int32_t>(cores);
-  }
+  int32_t EffectiveNumThreads() const noexcept;
 
   /**
    * Returns ``true`` when the graph should be executed with more than one

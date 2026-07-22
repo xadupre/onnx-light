@@ -172,7 +172,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             self.assertEqual(expected, inferred, f"{name!r} failed\n{expected=}\n--\n{inferred=}")
 
     def test_peak_memory_backend_case_metadata(self):
-        """Checks that the backend peak-memory cases reproduce their pre-embedded node metadata."""
+        """Checks that backend peak-memory cases reproduce their pre-embedded node metadata."""
         tests = list(collect_test_cases("peak_memory"))
         self.assertNotEmpty(tests)
 

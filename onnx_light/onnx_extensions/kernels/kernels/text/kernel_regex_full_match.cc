@@ -46,8 +46,8 @@ Tensor RegexFullMatch::operator()(const Tensor &x, const std::string &pattern,
                                   RuntimeContext *rt) const {
   CheckRegexFullMatchInput(x);
   const int64_t n = x.element_count();
-  Tensor out = Tensor::FromBool("", x.shape, std::vector<uint8_t>(static_cast<size_t>(n), 0),
-                                ctx_.allocator);
+  const size_t n_bytes = static_cast<size_t>(n) * sizeof(uint8_t);
+  Tensor out = MakeOutputTensor(DataType::BOOL, x.shape, n_bytes, ctx_.allocator);
   (*this)(x, pattern, out);
   return out;
 }

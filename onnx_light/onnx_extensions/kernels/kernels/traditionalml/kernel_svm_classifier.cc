@@ -8,7 +8,6 @@
 
 #include "onnx_core/runtime/simple_tensor.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>

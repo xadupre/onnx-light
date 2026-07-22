@@ -6,7 +6,7 @@
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/raw_buffer_allocator.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_extensions/onnx_kernels/kernels/generator/include_generator_kernels.h"
+#include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 
 #include <gtest/gtest.h>
 

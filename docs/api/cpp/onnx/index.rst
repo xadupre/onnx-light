@@ -5,7 +5,6 @@ onnx
     :maxdepth: 1
 
     checker
-    onnx-data_pb
     string_utils
     common/index
     inliner/index

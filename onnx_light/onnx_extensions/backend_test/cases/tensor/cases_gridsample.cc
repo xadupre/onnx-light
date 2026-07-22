@@ -1,0 +1,234 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/random.h"
+#include "onnx_extensions/backend_test/cases/tensor/include_tensor_cases.h"
+#include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_proto/onnx_helper.h"
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_backend_test {
+
+namespace {
+
+// Inputs and outputs mirror the upstream ``GridSample`` reference tests
+// in ``onnx/backend/test/case/node/gridsample.py``. Inputs are copied
+// verbatim from that file. Expected outputs use the bit-exact ``float``
+// values produced by :cpp:class:`onnx_kernels::kernel::GridSample` so the
+// ``BackendRunModel`` bit-exact equality check matches; the values agree
+// with the upstream four-decimal-rounded reference within rounding.
+
+// 4x4 image used by ``test_gridsample``.
+Tensor MakeX_4x4() {
+  return Tensor::FromFloat("X", {1, 1, 4, 4},
+                           {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                            11.0f, 12.0f, 13.0f, 14.0f, 15.0f});
+}
+
+// 6x6 sampling grid used by ``test_gridsample``.
+Tensor MakeGrid_6x6() {
+  std::vector<float> g;
+  g.reserve(1 * 6 * 6 * 2);
+  const float ys[6] = {-1.0f, -0.6f, -0.2f, 0.2f, 0.6f, 1.0f};
+  const float xs[6] = {-1.0f, -0.6f, -0.2f, 0.2f, 0.6f, 1.0f};
+  for (float y : ys) {
+    for (float x : xs) {
+      g.push_back(x);
+      g.push_back(y);
+    }
+  }
+  return Tensor::FromFloat("Grid", {1, 6, 6, 2}, g);
+}
+
+// 3x2 image shared by all ``test_gridsample_*_padding`` and
+// ``test_gridsample_bilinear`` / ``_nearest`` / ``_bicubic`` cases.
+Tensor MakeX_3x2() {
+  return Tensor::FromFloat("X", {1, 1, 3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+}
+
+// 2x4 grid used by ``test_gridsample_*_padding``.
+Tensor MakeGrid_2x4_Pad() {
+  return Tensor::FromFloat("Grid", {1, 2, 4, 2},
+                           {-10.0f, -10.0f, -5.0f, -5.0f, -0.2f, -0.2f, 10.0f, 10.0f, 10.0f, 10.0f,
+                            -0.2f, -0.2f, 5.0f, 5.0f, 10.0f, 10.0f});
+}
+
+// 2x4 grid used by ``test_gridsample_bilinear`` / ``_aligncorners_true`` /
+// ``_nearest`` / ``_bicubic``.
+Tensor MakeGrid_2x4_Mode() {
+  return Tensor::FromFloat("Grid", {1, 2, 4, 2},
+                           {-1.0f, -1.0f, -0.5f, -0.5f, -0.2f, -0.2f, 0.0f, 0.0f, 0.0f, 0.0f, -0.2f,
+                            -0.2f, 0.5f, 0.5f, 1.0f, 1.0f});
+}
+
+// 2x4 grid used by ``test_gridsample_*_align_corners_*_additional_1``.
+Tensor MakeGrid_2x4_Additional() {
+  return Tensor::FromFloat("Grid", {1, 2, 4, 2},
+                           {-1.0f, -0.8f, -0.6f, -0.5f, -0.1f, -0.2f, 0.7f, 0.0f, 0.0f, 0.4f, 0.2f,
+                            -0.2f, -0.3f, 0.5f, -1.0f, 1.0f});
+}
+
+// 3-D volume used by ``test_gridsample_volumetric_*``. Shape [N, C, D, H, W]
+// = [1, 1, 3, 2, 2].
+Tensor MakeX_Volumetric() {
+  return Tensor::FromFloat(
+      "X", {1, 1, 3, 2, 2},
+      {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+}
+
+// 3-D sampling grid used by ``test_gridsample_volumetric_*``. Shape
+// [N, D_out, H_out, W_out, 3] = [1, 2, 4, 2, 3].
+Tensor MakeGrid_Volumetric() {
+  return Tensor::FromFloat("Grid", {1, 2, 4, 2, 3},
+                           {-1.0f, -1.0f, -1.0f, -1.0f, -0.5f, 0.3f,  -0.5f, -0.5f, -0.5f, 1.0f,
+                            -0.6f, -1.0f, -0.2f, -0.2f, -0.2f, 0.4f,  0.2f,  0.6f,  0.0f,  0.0f,
+                            0.0f,  -1.0f, 0.0f,  0.0f,  0.0f,  0.0f,  0.0f,  -1.0f, 1.0f,  0.0f,
+                            -0.2f, -0.2f, -0.2f, 1.0f,  0.4f,  -0.2f, 0.5f,  0.5f,  0.5f,  -1.0f,
+                            -0.8f, 0.8f,  1.0f,  1.0f,  1.0f,  0.4f,  0.6f,  -0.3f});
+}
+
+void AddCase(std::vector<TestCase> &registry, const OpsetId &opset, const std::string &name,
+             const std::string &mode, const std::string &padding_mode, int64_t align_corners,
+             const Tensor &X, const Tensor &Grid, const std::vector<int64_t> &y_shape,
+             const std::vector<float> &y_values) {
+  NodeProto node;
+  node.set_op_type("GridSample");
+  node.add_input("X");
+  node.add_input("Grid");
+  node.add_output("Y");
+  if (!mode.empty()) {
+    AddAttribute<std::string>(node, "mode", mode);
+  }
+  if (!padding_mode.empty()) {
+    AddAttribute<std::string>(node, "padding_mode", padding_mode);
+  }
+  if (align_corners != 0) {
+    AddAttribute<int64_t>(node, "align_corners", align_corners);
+  }
+  Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
+    Tensor Y = Tensor::FromFloat("Y", y_shape, y_values);
+    return IoData{{std::move(X), std::move(Grid)}, {std::move(Y)}};
+  });
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// GridSample — samples ``X`` at the positions given by ``Grid``. Available
+// since opset 16 in the ai.onnx domain (extended to N-D in opset 20).
+// Inputs/outputs match the upstream cases in
+// ``onnx/backend/test/case/node/gridsample.py``.
+// ---------------------------------------------------------------------------
+void RegisterGridSampleCases(std::vector<TestCase> &registry, TestMode mode) {
+  const OpsetId opset = DefaultOpset(20);
+
+  if (mode == TestMode::BENCHMARK) {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::GridSample gridsample_kernel{ctx};
+    const std::vector<int64_t> x_shape = {1, 16, 256, 256};
+    const std::vector<int64_t> grid_shape = {1, 256, 256, 2};
+    NodeProto node;
+    node.set_op_type("GridSample");
+    node.add_input("X");
+    node.add_input("Grid");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "mode", "linear");
+    Expect(registry, std::move(node), "test_cc_gridsample_benchmark", {opset},
+           {1 * 16 * 256 * 256, 1 * 256 * 256 * 2}, {1 * 16 * 256 * 256},
+           [gridsample_kernel, x_shape, grid_shape]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", x_shape, Randn<float>(x_shape, 2001));
+             Tensor Grid = Tensor::FromFloat("Grid", grid_shape, Randn<float>(grid_shape, 2002));
+             onnx_kernels::kernel::GridSample::Attributes attrs;
+             attrs.mode = "linear";
+             Tensor Y = gridsample_kernel(X, Grid, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(Grid)}, {std::move(Y)}};
+           });
+    return;
+  }
+
+  // ---- test_gridsample ----------------------------------------------------
+  AddCase(registry, opset, "test_gridsample", "linear", "zeros", /*align_corners=*/0, MakeX_4x4(),
+          MakeGrid_6x6(), {1, 1, 6, 6},
+          {0.0f,         0.149999976f, 0.550000012f, 0.949999988f, 1.35000002f, 0.75f,       //
+           0.599999905f, 1.49999976f,  2.29999971f,  3.0999999f,   3.89999986f, 2.0999999f,  //
+           2.20000005f,  4.69999981f,  5.5f,         6.30000019f,  7.0999999f,  3.70000005f, //
+           3.79999995f,  7.9000001f,   8.69999981f,  9.5f,         10.3000002f, 5.30000019f, //
+           5.4000001f,   11.1000004f,  11.9000006f,  12.6999998f,  13.5f,       6.9000001f,  //
+           3.0f,         6.1500001f,   6.55000019f,  6.94999981f,  7.3499999f,  3.75f});
+
+  // ---- padding-mode cases (test_gridsample_*_padding) --------------------
+  AddCase(registry, opset, "test_gridsample_zeros_padding", "", "zeros", 0, MakeX_3x2(),
+          MakeGrid_2x4_Pad(), {1, 1, 2, 4},
+          {0.0f, 0.0f, 1.70000005f, 0.0f, 0.0f, 1.70000005f, 0.0f, 0.0f});
+  AddCase(registry, opset, "test_gridsample_border_padding", "", "border", 0, MakeX_3x2(),
+          MakeGrid_2x4_Pad(), {1, 1, 2, 4},
+          {0.0f, 0.0f, 1.70000005f, 5.0f, 5.0f, 1.70000005f, 5.0f, 5.0f});
+  AddCase(registry, opset, "test_gridsample_reflection_padding", "", "reflection", 0, MakeX_3x2(),
+          MakeGrid_2x4_Pad(), {1, 1, 2, 4},
+          {2.5f, 0.0f, 1.70000005f, 2.5f, 2.5f, 1.70000005f, 5.0f, 2.5f});
+
+  // ---- mode / align_corners cases ----------------------------------------
+  AddCase(registry, opset, "test_gridsample_bilinear", "linear", "", 0, MakeX_3x2(),
+          MakeGrid_2x4_Mode(), {1, 1, 2, 4},
+          {0.0f, 0.5f, 1.70000005f, 2.5f, 2.5f, 1.70000005f, 4.5f, 1.25f});
+  AddCase(registry, opset, "test_gridsample_aligncorners_true", "linear", "", 1, MakeX_3x2(),
+          MakeGrid_2x4_Mode(), {1, 1, 2, 4}, {0.0f, 1.25f, 2.0f, 2.5f, 2.5f, 2.0f, 3.75f, 5.0f});
+  AddCase(registry, opset, "test_gridsample_nearest", "nearest", "", 0, MakeX_3x2(),
+          MakeGrid_2x4_Mode(), {1, 1, 2, 4}, {0.0f, 0.0f, 2.0f, 2.0f, 2.0f, 2.0f, 5.0f, 0.0f});
+  AddCase(registry, opset, "test_gridsample_bicubic", "cubic", "", 0, MakeX_3x2(),
+          MakeGrid_2x4_Mode(), {1, 1, 2, 4},
+          {-0.140625f, 0.3828125f, 1.75555158f, 2.96875f, 2.96875f, 1.75555158f, 5.14453125f,
+           1.390625f});
+
+  // ---- additional align_corners cases -----------------------------------
+  AddCase(registry, opset, "test_gridsample_nearest_align_corners_0_additional_1", "nearest", "", 0,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {0.0f, 0.0f, 2.0f, 3.0f, 4.0f, 3.0f, 4.0f, 4.0f});
+  AddCase(registry, opset, "test_gridsample_nearest_align_corners_1_additional_1", "nearest", "", 1,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {0.0f, 0.0f, 2.0f, 3.0f, 2.0f, 3.0f, 4.0f, 4.0f});
+  AddCase(
+      registry, opset, "test_gridsample_bilinear_align_corners_0_additional_1", "linear", "", 0,
+      MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+      {0.0f, 0.449999988f, 1.79999995f, 2.4000001f, 3.70000005f, 2.0999999f, 3.70000005f, 1.0f});
+  AddCase(registry, opset, "test_gridsample_bilinear_align_corners_1_additional_1", "linear", "", 1,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {0.399999976f, 1.20000005f, 2.04999995f, 2.8499999f, 3.29999995f, 2.20000005f, 3.3499999f,
+           4.0f});
+  AddCase(registry, opset, "test_gridsample_bicubic_align_corners_0_additional_1", "cubic", "", 0,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {-0.173250005f, 0.284264624f, 1.923105f, 2.56800008f, 5.17037487f, 2.28441286f,
+           4.74484348f, 1.046875f});
+  AddCase(registry, opset, "test_gridsample_bicubic_align_corners_1_additional_1", "cubic", "", 1,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {0.30399999f, 1.12874997f, 2.26626992f, 3.14484382f, 4.53149986f, 2.45535994f,
+           4.59981918f, 4.0f});
+
+  // ---- volumetric (5-D) cases (opset 20+) -------------------------------
+  AddCase(registry, opset, "test_gridsample_volumetric_nearest_align_corners_0", "nearest", "", 0,
+          MakeX_Volumetric(), MakeGrid_Volumetric(), {1, 1, 2, 4, 2},
+          {1.0f, 5.0f, 1.0f, 0.0f, 5.0f, 12.0f, 5.0f, 5.0f, 5.0f, 0.0f, 5.0f, 0.0f, 12.0f, 9.0f,
+           0.0f, 8.0f});
+  AddCase(registry, opset, "test_gridsample_volumetric_nearest_align_corners_1", "nearest", "", 1,
+          MakeX_Volumetric(), MakeGrid_Volumetric(), {1, 1, 2, 4, 2},
+          {1.0f, 5.0f, 1.0f, 2.0f, 5.0f, 12.0f, 5.0f, 5.0f, 5.0f, 7.0f, 5.0f, 8.0f, 12.0f, 9.0f,
+           12.0f, 8.0f});
+  AddCase(registry, opset, "test_gridsample_volumetric_bilinear_align_corners_0", "linear", "", 0,
+          MakeX_Volumetric(), MakeGrid_Volumetric(), {1, 1, 2, 4, 2},
+          {0.125f, 3.4000001f, 2.0f, 0.449999988f, 4.69999981f, 10.9000006f, 6.5f, 3.0f, 6.5f,
+           1.75f, 4.69999981f, 3.29999995f, 11.0f, 2.51999998f, 1.5f, 5.48999977f});
+  AddCase(registry, opset, "test_gridsample_volumetric_bilinear_align_corners_1", "linear", "", 1,
+          MakeX_Volumetric(), MakeGrid_Volumetric(), {1, 1, 2, 4, 2},
+          {1.0f, 6.69999981f, 3.75f, 2.4000001f, 5.4000001f, 9.30000019f, 6.5f, 6.0f, 6.5f, 7.0f,
+           5.4000001f, 6.5999999f, 9.25f, 8.39999962f, 12.0f, 6.0999999f});
+}
+
+} // namespace onnx_backend_test
+} // namespace ONNX_LIGHT_NAMESPACE

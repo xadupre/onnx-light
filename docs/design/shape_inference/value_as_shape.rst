@@ -202,7 +202,7 @@ shape ``[N, 1]`` (``N`` symbolic); the goal is to ``Expand`` it to
     from onnx_light.onnx.helper import (
         make_model, make_node, make_graph, make_tensor_value_info, make_opsetid,
     )
-    from onnx_light.onnx_extensions.onnx_shapes.shape_inference import ShapesContext
+    from onnx_light.onnx_core.shape_inference import ShapesContext
 
     # Inputs and output
     x_vi = make_tensor_value_info("x", TensorProto.FLOAT, ["N", 1])
@@ -294,6 +294,6 @@ API reference
   :cpp:func:`PropagateValueAsShapeArithmetic`
   (:doc:`/api/cpp/onnx_core/shapes/shape_broadcast`).
 * **Python API**: :class:`SymTensor`
-  (:doc:`/api/python/onnx_extensions/onnx_shapes/shape_inference`).
+  (:doc:`/api/python/onnx_core/shape_inference`).
 * **Expression library**: :ref:`l-design-expressions`.
 * **Constraint mechanism**: :ref:`l-design-shape-constraints`.

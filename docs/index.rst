@@ -117,7 +117,7 @@ outputs for the backend tests. Parallelization is allowed except where it
 would change the order of floating-point accumulation: operators that
 accumulate internally (reductions, ``MatMul``, ``Gemm``, ``Attention``, ...)
 stay sequential on the accumulated axis to enforce reproducibility.
-See :ref:`l-design-kernels` for details.
+See :ref:`l-design-library-split` for details.
 
 Backend tests
 +++++++++++++

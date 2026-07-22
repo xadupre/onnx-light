@@ -4,7 +4,7 @@ Symbolic expression library (``onnx_light.onnx_core.expressions``)
 ====================================================================
 
 This page describes the design of the symbolic dimension-expression library
-introduced in ``onnx_light/onnx_extensions/onnx_shapes/`` and exposed as the
+introduced in ``onnx_light/onnx_extensions/shapes/`` and exposed as the
 Python module :mod:`onnx_light.onnx_core.expressions`.
 
 The library was ported from

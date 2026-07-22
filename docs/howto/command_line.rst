@@ -179,7 +179,7 @@ When a model stores its weight tensors in a separate ``.data`` file,
 See also
 ^^^^^^^^
 
-* :func:`~onnx_light.onnx_extensions.onnx_shapes.shape_inference.infer_shapes_model` — the
+* :func:`~onnx_light.onnx_core.shape_inference.infer_shapes_model` — the
   Python function used under the hood.
 * :ref:`l-howto-use-custom-shape-inference` — how to plug in a callback for
   custom operators before running shape inference.

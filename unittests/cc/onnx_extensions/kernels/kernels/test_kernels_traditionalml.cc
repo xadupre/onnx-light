@@ -4,7 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernel_context.h"
-#include "onnx_extensions/onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
 #include <gtest/gtest.h>
 

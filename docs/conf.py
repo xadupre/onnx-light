@@ -112,36 +112,30 @@ epkg_dictionary = {
     "libFuzzer command line": "https://llvm.org/docs/LibFuzzer.html#options",
     "libFuzzer entry point": "https://llvm.org/docs/LibFuzzer.html#fuzz-target",
     "lib_onnx_backend_test": (
-        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_extensions/onnx_backend_test"
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_extensions/backend_test"
     ),
     "lib_onnx_kernels": (
-        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_extensions/onnx_kernels"
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_extensions/kernels"
     ),
     "Mermaid": "https://mermaid.js.org/",
     "mermaid.js": "https://mermaid.js.org/",
     "onnx": "https://github.com/onnx/onnx",
-    "onnx_light/onnx_extensions/onnx_backend_test/cases": (
-        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_extensions/onnx_backend_test/cases"
+    "onnx_light/onnx_extensions/backend_test/cases": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_extensions/backend_test/cases"
     ),
-    "onnx_light/onnx_extensions/onnx_kernels": (
-        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_extensions/onnx_kernels"
-    ),
-    "onnx_light/onnx_extensions/onnx_kernels/kernels": (
-        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_extensions/onnx_kernels/kernels"
-    ),
-    "onnx_light/onnx_extensions/onnx_kernels/run_nodes.cc": (
-        "https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_extensions/onnx_kernels/run_nodes.cc"
+    "onnx_light/onnx_extensions/kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_extensions/kernels"
     ),
     "onnxruntime": "https://github.com/microsoft/onnxruntime",
     "OSS-Fuzz": "https://github.com/google/oss-fuzz",
     "protobuf": "https://protobuf.dev/",
     "Protocol Buffers": "https://protobuf.dev/",
     "sphinx-datatables": "https://pypi.org/project/sphinx-datatables/",
-    "unittests/cc/onnx_extensions/onnx_backend_test": (
-        "https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_extensions/onnx_backend_test"
+    "unittests/cc/onnx_extensions/backend_test": (
+        "https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_extensions/backend_test"
     ),
-    "unittests/cc/onnx_extensions/onnx_kernels": (
-        "https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_extensions/onnx_kernels"
+    "unittests/cc/onnx_extensions/kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_extensions/kernels"
     ),
     "unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py": (
         "https://github.com/xadupre/onnx-light/blob/main/unittests/onnxl_vs_ort/"

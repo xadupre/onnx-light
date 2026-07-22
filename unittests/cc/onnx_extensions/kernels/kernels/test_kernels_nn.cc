@@ -6,7 +6,7 @@
 #include "onnx_core/runtime/float16_promote.h"
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_extensions/onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include <gtest/gtest.h>
 

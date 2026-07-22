@@ -112,6 +112,7 @@ print(f"Abs replaced by negation: y = {y2}")
 # See also
 # ++++++++
 #
-# * :ref:`l-design-custom-kernels` for the design notes, including the
-#   matching low-level Python (``RuntimeContext.register_custom_kernel``)
-#   and C++ (``RuntimeContext::RegisterCustomKernel``) entry points.
+# * :ref:`l-howto-use-custom-kernel` for how to register custom kernels,
+#   including the matching low-level Python
+#   (``RuntimeContext.register_custom_kernel``) and C++
+#   (``RuntimeContext::RegisterCustomKernel``) entry points.

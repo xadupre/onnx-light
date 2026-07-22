@@ -100,16 +100,17 @@ public:
   /// Releases from ``rt`` every intermediate whose last use falls at
   /// ``node``. ``node`` must be one of the :cpp:class:`NodeProto` instances
   /// the plan was built from (lookup is by address); if it is not, this is a
-  /// no-op. The names to release are read from the node's
-  /// :cpp:var:`annotations::kReleaseAfterMetadataKey` metadata written by
-  /// :cpp:class:`annotations::ComputeContext`; when the node range carries no
-  /// such annotations, they are derived from graph topology (last use,
-  /// excluding :cpp:func:`keep` names) as a fallback. Each removal is
-  /// performed on both the tensor map and the sequence map:
-  /// :cpp:func:`RuntimeContext::Remove` is a no-op if the name is absent and
-  /// emits a :cpp:enumerator:`RuntimeEventAction::kRemove` event when event
-  /// logging is on; sequence removals do not emit events (sequence values
-  /// live outside the tensor event stream).
+  /// no-op. The names to release are the ones carried by the
+  /// :cpp:enumerator:`ExecuteActionKind::kDeleteBuffer` /
+  /// :cpp:enumerator:`ExecuteActionKind::kDeleteShape` actions
+  /// :cpp:func:`BuildActions` scheduled for ``node`` (their
+  /// :cpp:func:`ExecuteAction::node_index`), so the release schedule lives
+  /// entirely in :cpp:func:`actions`. Each removal is performed on both the
+  /// tensor map and the sequence map: :cpp:func:`RuntimeContext::Remove` is a
+  /// no-op if the name is absent and emits a
+  /// :cpp:enumerator:`RuntimeEventAction::kRemove` event when event logging is
+  /// on; sequence removals do not emit events (sequence values live outside the
+  /// tensor event stream).
   void ReleaseAfter(const NodeProto &node, RuntimeContext &rt) const;
 
   /// Ordered list of :cpp:class:`ExecuteAction` steps the runtime performs
@@ -134,7 +135,12 @@ protected:
   /// (:cpp:var:`annotations::kNotUsedAfterMetadataKey`); each output is either
   /// allocated as a result (or reused in place per the in-place annotation) or
   /// created as a shape when value-tagged ``"shape"``, and freed on its last
-  /// use (:cpp:var:`annotations::kReleaseAfterMetadataKey`). When a node
+  /// use. When at least one node carries
+  /// :cpp:var:`annotations::kReleaseAfterMetadataKey`, that metadata drives the
+  /// :cpp:enumerator:`ExecuteActionKind::kDeleteBuffer` /
+  /// :cpp:enumerator:`ExecuteActionKind::kDeleteShape` schedule; otherwise the
+  /// releases are derived from graph topology (each intermediate is freed after
+  /// its last use, excluding :cpp:func:`keep` names). When a node
   /// carries a peak-memory estimate
   /// (:cpp:var:`annotations::kNodePeakMemoryMetadataKey`, written by
   /// :cpp:func:`annotations::WritePeakMemoryToMetadata`), a temporary buffer of
@@ -157,10 +163,6 @@ protected:
   virtual void BuildActions();
 
 private:
-  /// Lazily computes (and caches) the per-node topology release schedule used
-  /// by :cpp:func:`ReleaseAfter` when the node range is not annotated.
-  void EnsureFallbackReleasable() const;
-
   RawBufferAllocator *allocator_ = nullptr;
   std::unordered_set<std::string> keep_;
   std::unordered_map<const NodeProto *, size_t> node_index_;
@@ -173,14 +175,6 @@ private:
   /// Nodes (in order) whose outputs drive allocation / shape actions.
   std::vector<const NodeProto *> nodes_;
   std::vector<ExecuteAction> actions_;
-  /// ``true`` when at least one node carries ``release_after`` metadata, so
-  /// :cpp:func:`ReleaseAfter` reads the schedule from the node metadata instead
-  /// of the topology fallback.
-  bool annotated_ = false;
-  /// Fallback per-node release schedule derived from topology, computed on
-  /// first :cpp:func:`ReleaseAfter` for an un-annotated node range.
-  mutable std::vector<std::vector<std::string>> fallback_releasable_;
-  mutable bool fallback_ready_ = false;
 };
 
 } // namespace runtime

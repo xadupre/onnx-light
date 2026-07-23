@@ -252,6 +252,19 @@ call), link:
 combined with ``onnx_light::lib_onnx_lib`` when both schema validation and
 execution are needed in the same binary.
 
+To compute gradient functions (reverse-mode automatic differentiation of
+ONNX graphs via ``GradientOfNodes`` / ``GradientOfFunction``), link the
+gradient target, which depends on ``lib_onnx_core`` (and transitively on
+``lib_onnx_proto``):
+
+.. code-block:: cmake
+
+    find_package(onnx_light REQUIRED)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_gradient)
+
+See :doc:`../api/cpp/onnx_extensions/gradient/index` for the full C++ API
+reference.
+
 This keeps downstream CMake files independent from hardcoded include paths and
 library file names. If *onnx-light* is installed to a non-standard prefix,
 configure the downstream project with ``-DCMAKE_PREFIX_PATH=<prefix>``.
@@ -270,7 +283,8 @@ For monorepos or local development, a downstream CMake project can also include
 
 Use the in-tree ``lib_onnx_proto`` target instead when only proto
 parsing/serialization is needed, or ``lib_onnx_op``, ``lib_onnx_manipulations``,
-``lib_onnx_shape``, ``lib_onnx_kernels`` or ``lib_onnx_backend_test`` for the
+``lib_onnx_shape``, ``lib_onnx_kernels``, ``lib_onnx_backend_test`` or
+``lib_onnx_gradient`` for the
 corresponding feature subset.  This uses the
 in-tree build targets directly instead of ``find_package``.
 
@@ -287,12 +301,16 @@ that pattern:
 Python extension modules and proto duplication
 ----------------------------------------------
 
-The Python package ships five nanobind extension modules,
+The Python package ships up to six nanobind extension modules,
 ``onnx_light.onnx_py._onnxpyprotoop``,
 ``onnx_light.onnx_py._onnxpyprotolib``,
 ``onnx_light.onnx_py._onnxpyoptim``,
-``onnx_light.onnx_py._onnxpykernels`` and
-``onnx_light.onnx_py._onnxpybackend``.  All five need access to the proto
+``onnx_light.onnx_py._onnxpykernels``,
+``onnx_light.onnx_py._onnxpybackend`` and
+``onnx_light.onnx_py._onnxpygradient``.  The first three are always built;
+the last three (``_onnxpykernels``, ``_onnxpybackend`` and
+``_onnxpygradient``) belong to the extended build variant and are only
+present when ``ONNX_LIGHT_BUILD_KERNELS=ON``.  They all need access to the proto
 classes (:class:`~onnx_light.onnx_lib.ModelProto`, :class:`~onnx_light.onnx_lib.NodeProto`, :class:`~onnx_light.onnx_lib.TensorProto`, ...) defined in
 ``onnx_light/onnx_proto``.  How do the extensions agree on a single
 ``nb::class_<ModelProto>`` registration so that values can flow between
@@ -300,11 +318,11 @@ them without a serialise/parse round-trip?
 
 When ``ONNX_LIGHT_BUILD_PYTHON=ON``, ``CMakeLists.txt`` builds
 ``lib_onnx_proto`` as a **shared** library (``liblib_onnx_proto.so`` /
-``.dylib`` / ``.dll``) instead of a static archive.  All five
+``.dylib`` / ``.dll``) instead of a static archive.  All the
 extensions link against that single shared
 object (directly or transitively through ``lib_onnx_lib`` /
 ``lib_onnx_op`` / ``lib_onnx_shape`` / ``lib_onnx_kernels`` /
-``lib_onnx_backend_test``), and
+``lib_onnx_backend_test`` / ``lib_onnx_gradient``), and
 the build installs every file side by side under
 ``onnx_light/onnx_py/``.  The extensions are linked with an ``$ORIGIN``
 runtime path (``@loader_path`` on macOS) so the dynamic loader finds
@@ -326,17 +344,18 @@ extension, and nanobind's cross-module type registry resolves
 ``nb::class_<ModelProto>`` that ``_onnxpyprotoop`` registered.  In
 practice, only ``_onnxpyprotoop`` declares
 ``nb::class_<NodeProto>`` / ``nb::class_<ModelProto>`` / ...; the
-``_onnxpyprotolib``, ``_onnxpyoptim``, ``_onnxpykernels`` and
-``_onnxpybackend`` modules return proto values by
+``_onnxpyprotolib``, ``_onnxpyoptim``, ``_onnxpykernels``,
+``_onnxpybackend`` and ``_onnxpygradient`` modules return proto values by
 reference (for example
 ``TestCase.model``, see ``onnx_light/onnx_py/_onnxpy_backend_test.cc``)
 and let the shared registry produce a Python object backed by the same
-binding.  The package's ``onnx_light/onnx_py/_onnxpy.py`` shim imports
-``_onnxpyprotoop`` before ``_onnxpyprotolib``, ``_onnxpyoptim``,
-``_onnxpykernels`` and ``_onnxpybackend`` to
-guarantee that the
-:class:`~onnx_light.onnx_lib.ModelProto` binding exists by the time any ``_onnxpyprotolib``,
-``_onnxpyoptim``, ``_onnxpykernels`` or ``_onnxpybackend`` accessor is used.
+binding.  Every Python module that consumes a proto value imports the
+proto classes directly from ``_onnxpyprotoop`` (for example
+``from ..onnx_py._onnxpyprotoop import ModelProto``), which guarantees that
+``_onnxpyprotoop`` is loaded — and its ``nb::class_<ModelProto>`` binding
+registered — before any ``_onnxpyprotolib`` / ``_onnxpyoptim`` /
+``_onnxpykernels`` / ``_onnxpybackend`` / ``_onnxpygradient`` accessor is
+used.
 
 See also
 --------

@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -126,8 +127,8 @@ void CubicCoeffs(double x, double coeffs[4]) {
 // reflected using ``lo[k]`` / ``hi[k]``.
 template <typename T>
 double PixelAtND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
-                 const onnx_kernels::Shape &spatial_strides, const std::vector<int64_t> &idx,
-                 Padding pad, const std::vector<double> &lo, const std::vector<double> &hi) {
+                 const onnx_kernels::Shape &spatial_strides, const int64_t *idx, Padding pad,
+                 const std::vector<double> &lo, const std::vector<double> &hi) {
   const size_t r = spatial_dims.size();
   int64_t offset = 0;
   for (size_t k = 0; k < r; ++k) {
@@ -170,7 +171,7 @@ double LinearInterpND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
                       const onnx_kernels::Shape &spatial_strides,
                       const std::vector<double> &x_coords, Padding pad,
                       const std::vector<double> &lo, const std::vector<double> &hi,
-                      std::vector<int64_t> &base_idx, size_t cur_dim) {
+                      int64_t *base_idx, size_t cur_dim) {
   const size_t r = spatial_dims.size();
   const double xc = x_coords[cur_dim];
   const int64_t x0 = static_cast<int64_t>(std::floor(xc));
@@ -197,7 +198,7 @@ double CubicInterpND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
                      const onnx_kernels::Shape &spatial_strides,
                      const std::vector<double> &x_coords, Padding pad,
                      const std::vector<double> &lo, const std::vector<double> &hi,
-                     std::vector<int64_t> &base_idx, size_t cur_dim) {
+                     int64_t *base_idx, size_t cur_dim) {
   const size_t r = spatial_dims.size();
   const double xc = x_coords[cur_dim];
   const int64_t x0 = static_cast<int64_t>(std::floor(xc));
@@ -254,11 +255,11 @@ onnx_kernels::Shape ComputeOutputShape(const Tensor &X, const Tensor &grid) {
 }
 
 // Iterate over all combinations of ``shape`` indices, writing them to
-// ``idx`` and invoking ``fn`` for each. ``idx`` is resized as needed.
-template <typename Fn>
-void ForEachIndex(const onnx_kernels::Shape &shape, std::vector<int64_t> &idx, Fn &&fn) {
+// ``idx`` and invoking ``fn`` for each. ``idx`` must point to at least
+// ``shape.size()`` elements; it is zero-filled on entry.
+template <typename Fn> void ForEachIndex(const onnx_kernels::Shape &shape, int64_t *idx, Fn &&fn) {
   const size_t r = shape.size();
-  idx.assign(r, 0);
+  std::fill(idx, idx + r, int64_t{0});
   if (r == 0) {
     fn();
     return;
@@ -289,7 +290,8 @@ void ForEachIndex(const onnx_kernels::Shape &shape, std::vector<int64_t> &idx, F
 // Main per-channel computation, templated on the element type ``T``.
 template <typename T>
 void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, bool align_corners,
-              RawBuffer &out_bytes, const onnx_kernels::Shape &out_shape) {
+              RawBuffer &out_bytes, const onnx_kernels::Shape &out_shape,
+              RawBufferAllocator *allocator) {
   const T *x_data = reinterpret_cast<const T *>(X.bytes());
   const T *grid_data = reinterpret_cast<const T *>(grid.bytes());
   T *y_data = reinterpret_cast<T *>(out_bytes.data());
@@ -323,9 +325,14 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
   std::vector<double> lo, hi;
   PrepareBorders(spatial_dims, align_corners, lo, hi);
 
-  std::vector<int64_t> ox(out_spatial_dims.size(), 0);
+  // Index scratch buffers are drawn from the runtime allocator when one is
+  // available, falling back to std::vector otherwise.
+  detail::TemporaryTypedBuffer<int64_t> ox_buf(out_spatial_dims.size(), allocator,
+                                               "kernel::GridSample");
+  int64_t *ox = ox_buf.data();
   std::vector<double> x_coords(r, 0.0);
-  std::vector<int64_t> work_idx(r, 0);
+  detail::TemporaryTypedBuffer<int64_t> work_idx_buf(r, allocator, "kernel::GridSample");
+  int64_t *work_idx = work_idx_buf.data();
 
   for (int64_t n = 0; n < N; ++n) {
     // grid layout: [N, *out_spatial, r]
@@ -339,7 +346,7 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
         // Compute flat offset into grid_n for index ox.
         int64_t grid_off = 0;
         int64_t stride = static_cast<int64_t>(r);
-        for (size_t k = ox.size(); k > 0; --k) {
+        for (size_t k = out_spatial_dims.size(); k > 0; --k) {
           grid_off += ox[k - 1] * stride;
           stride *= out_spatial_dims[k - 1];
         }
@@ -432,10 +439,12 @@ void GridSample::operator()(const Tensor &X, const Tensor &grid, const Attribute
     return;
   }
 
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
+
   if (X.data_type == static_cast<int32_t>(DataType::FLOAT)) {
-    RunTyped<float>(X, grid, interp, pad, align_corners, output.data, expected_shape);
+    RunTyped<float>(X, grid, interp, pad, align_corners, output.data, expected_shape, allocator);
   } else {
-    RunTyped<double>(X, grid, interp, pad, align_corners, output.data, expected_shape);
+    RunTyped<double>(X, grid, interp, pad, align_corners, output.data, expected_shape, allocator);
   }
 }
 

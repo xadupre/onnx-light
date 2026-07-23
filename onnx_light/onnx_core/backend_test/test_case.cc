@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/backend_test/expect.h"
+#include "onnx_core/backend_test/io_data.h"
 #include "onnx_core/backend_test/test_case_registry.h"
 
 #include <stdexcept>

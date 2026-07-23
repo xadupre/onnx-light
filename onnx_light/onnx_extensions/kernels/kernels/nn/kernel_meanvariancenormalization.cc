@@ -7,7 +7,6 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -17,8 +16,8 @@ namespace {
 
 constexpr double kMvnEpsilon = 1e-9;
 
-std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes, int64_t rank) {
-  std::vector<int64_t> normalized;
+Shape NormalizeAxes(const Shape &axes, int64_t rank) {
+  Shape normalized;
   normalized.reserve(axes.size());
   Shape seen;
   seen.assign(static_cast<size_t>(rank), 0);
@@ -52,8 +51,7 @@ int64_t ComputeLane(int64_t idx, const onnx_kernels::Shape &dims,
 }
 
 template <typename T>
-void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axes,
-                RawBufferAllocator *allocator) {
+void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAllocator *allocator) {
   const onnx_kernels::Shape &dims = x.shape;
   const int64_t rank = static_cast<int64_t>(dims.size());
   const int64_t total = x.element_count();
@@ -61,7 +59,7 @@ void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axe
     return;
   }
 
-  const std::vector<int64_t> normalized_axes = NormalizeAxes(axes, rank);
+  const Shape normalized_axes = NormalizeAxes(axes, rank);
   Shape reduce_mask;
   reduce_mask.assign(static_cast<size_t>(rank), 0);
   for (int64_t axis : normalized_axes) {
@@ -124,7 +122,7 @@ void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axe
   }
 }
 
-void DispatchMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axes,
+void DispatchMvn(const Tensor &x, Tensor &output, const Shape &axes,
                  RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           x.data_type == static_cast<int32_t>(DataType::DOUBLE),
@@ -146,7 +144,7 @@ void DispatchMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &ax
 
 } // namespace
 
-Tensor MeanVarianceNormalization::operator()(const Tensor &x, const std::vector<int64_t> &axes,
+Tensor MeanVarianceNormalization::operator()(const Tensor &x, const Shape &axes,
                                              RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           x.data_type == static_cast<int32_t>(DataType::DOUBLE),
@@ -159,7 +157,7 @@ Tensor MeanVarianceNormalization::operator()(const Tensor &x, const std::vector<
 }
 
 void MeanVarianceNormalization::operator()(const Tensor &x, Tensor &output,
-                                           const std::vector<int64_t> &axes) const {
+                                           const Shape &axes) const {
   DispatchMvn(x, output, axes, nullptr);
 }
 

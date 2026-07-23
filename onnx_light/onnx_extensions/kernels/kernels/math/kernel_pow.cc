@@ -64,7 +64,7 @@ void PowLoop(const detail::BroadcastInfo &bi, const TBase *px, const TExp *py, T
   }
 
   const size_t rank = bi.shape.size();
-  onnx_kernels::Shape idx;
+  Shape idx;
   idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t ox = 0, oy = 0;
@@ -148,7 +148,7 @@ void PowHalfLoop(const detail::BroadcastInfo &bi, const uint16_t *px, const TExp
     return;
   }
   const size_t rank = bi.shape.size();
-  onnx_kernels::Shape idx;
+  Shape idx;
   idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t ox = 0, oy = 0;

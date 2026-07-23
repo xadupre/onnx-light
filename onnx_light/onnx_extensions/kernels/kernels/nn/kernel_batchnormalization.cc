@@ -5,12 +5,12 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
-#include <algorithm>
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <tuple>
 #include <utility>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -81,8 +81,15 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   // Pre-compute the per-channel normalization scale and offset:
   //   y = (x - mean) * inv_std * scale + B
   //     = x * (scale * inv_std) + (B - mean * scale * inv_std)
-  std::vector<float> scale_inv_std(static_cast<size_t>(C));
-  std::vector<float> offset(static_cast<size_t>(C));
+  // Scratch buffers are drawn from the runtime allocator backing ``output``
+  // (when it is allocator-backed) and fall back to inline storage otherwise.
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
+  detail::TemporaryTypedBuffer<float> scale_inv_std_buf(static_cast<size_t>(C), allocator,
+                                                        "kernel::BatchNormalization scale_inv_std");
+  detail::TemporaryTypedBuffer<float> offset_buf(static_cast<size_t>(C), allocator,
+                                                 "kernel::BatchNormalization offset");
+  float *scale_inv_std = scale_inv_std_buf.data();
+  float *offset = offset_buf.data();
   for (int64_t c = 0; c < C; ++c) {
     const float inv_std = 1.0f / std::sqrt(p_var[c] + epsilon);
     scale_inv_std[c] = p_scale[c] * inv_std;
@@ -140,9 +147,18 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
   const float *px = x.AsFloat();
 
   // Per-channel batch mean and (population) variance, computed over every
-  // axis except the channel axis, matching the ONNX reference.
-  std::vector<float> saved_mean(static_cast<size_t>(C), 0.0f);
-  std::vector<float> saved_var(static_cast<size_t>(C), 0.0f);
+  // axis except the channel axis, matching the ONNX reference. The batch
+  // statistics are written straight into the allocator-backed result tensors
+  // so no extra scratch storage is required.
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  const size_t saved_mean_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
+  Tensor saved_mean_t =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_mean_t_n_bytes, allocator);
+  const size_t saved_var_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
+  Tensor saved_var_t =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_var_t_n_bytes, allocator);
+  float *saved_mean = saved_mean_t.AsFloat();
+  float *saved_var = saved_var_t.AsFloat();
   if (x.shape.size() == 1u) {
     double sum = 0.0;
     for (int64_t i = 0; i < N; ++i) {
@@ -180,15 +196,6 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
   }
 
   // Normalize Y using the batch statistics via the inference path.
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
-  const size_t saved_mean_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
-  Tensor saved_mean_t =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_mean_t_n_bytes, allocator);
-  const size_t saved_var_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
-  Tensor saved_var_t =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_var_t_n_bytes, allocator);
-  std::copy(saved_mean.begin(), saved_mean.end(), saved_mean_t.AsFloat());
-  std::copy(saved_var.begin(), saved_var.end(), saved_var_t.AsFloat());
   Tensor y = (*this)(x, scale, bias, saved_mean_t, saved_var_t, epsilon, rt);
 
   // Update the running estimates: running = input * momentum + saved * (1 - m).

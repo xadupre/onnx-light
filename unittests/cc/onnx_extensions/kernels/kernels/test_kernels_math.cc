@@ -1762,7 +1762,11 @@ TEST(KernelClass, EinsumUsesAllocatorWhenRuntimeContextHasOne) {
   Einsum einsum_kernel{ctx};
   Tensor a = Tensor::FromFloat("", {2, 3}, {1, 2, 3, 4, 5, 6});
   Tensor b = Tensor::FromFloat("", {3, 2}, {7, 8, 9, 10, 11, 12});
-  SimpleRawBufferAllocator alloc(1);
+  // Three concurrent slots are needed during the call: the output tensor plus
+  // the transient ``ix`` and ``in_ptrs`` scratch buffers routed through the
+  // allocator. The scratch buffers are freed before returning, leaving only
+  // the output allocation alive.
+  SimpleRawBufferAllocator alloc(3);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
 
@@ -1777,6 +1781,26 @@ TEST(KernelClass, EinsumUsesAllocatorWhenRuntimeContextHasOne) {
   EXPECT_FLOAT_EQ(py[1], 1 * 8 + 2 * 10 + 3 * 12);
   EXPECT_FLOAT_EQ(py[2], 4 * 7 + 5 * 9 + 6 * 11);
   EXPECT_FLOAT_EQ(py[3], 4 * 8 + 5 * 10 + 6 * 12);
+}
+
+TEST(KernelClass, EinsumScalarUsesAllocatorWithoutError) {
+  // The scalar equation "->" produces an empty ``all_labels`` set (zero
+  // iteration labels). The ``ix`` scratch buffer must still be created safely
+  // when an allocator is attached; verify the reduction runs and the result is
+  // correct.
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {}, {5.0f});
+  SimpleRawBufferAllocator alloc(3);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = einsum_kernel({x}, "->", &rt);
+
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  ASSERT_TRUE(y.shape.empty());
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 5.0f);
 }
 
 TEST(KernelClass, EinsumRejectsEmptyEquation) {
@@ -2436,13 +2460,16 @@ TEST(KernelClass, MelWeightMatrixUsesAllocatorWhenRuntimeContextHasOne) {
   const Tensor lower_edge_hertz = Tensor::FromFloat("", {}, {0.0f});
   const Tensor upper_edge_hertz = Tensor::FromFloat("", {}, {4000.0f});
 
-  SimpleRawBufferAllocator alloc(1);
+  // Two concurrent slots are needed: one for the output tensor and one for the
+  // transient ``bin_indices`` scratch buffer routed through the allocator.
+  SimpleRawBufferAllocator alloc(2);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
 
   Tensor y = kernel(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz,
                     core::runtime::DataType::FLOAT, &rt);
   EXPECT_TRUE(y.has_allocation());
+  // Only the output remains allocated; the scratch buffer was freed.
   EXPECT_EQ(alloc.allocated_count(), 1u);
   EXPECT_EQ(y.data.size(), 0u);
   ASSERT_EQ(y.shape.size(), 2u);

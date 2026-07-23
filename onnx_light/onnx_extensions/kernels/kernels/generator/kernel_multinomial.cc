@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -56,11 +57,10 @@ double DecodeHalf(uint16_t h) {
 }
 
 // Builds the CDF for a single batch row from a typed pointer and returns the
-// unnormalized probability sum. The ``cdf`` vector is written in-place and
+// unnormalized probability sum. The ``cdf`` buffer is written in-place and
 // must already be sized to ``class_size``. No intermediate conversion buffer
 // is allocated; values are read directly from ``row``.
-template <typename T>
-double BuildRowCdf(const T *row, int64_t class_size, std::vector<double> &cdf) {
+template <typename T> double BuildRowCdf(const T *row, int64_t class_size, double *cdf) {
   double max_logit = static_cast<double>(row[0]);
   for (int64_t c = 1; c < class_size; ++c) {
     const double v = static_cast<double>(row[c]);
@@ -78,8 +78,7 @@ double BuildRowCdf(const T *row, int64_t class_size, std::vector<double> &cdf) {
 }
 
 // Specialisation for FLOAT16 stored as raw uint16_t bytes.
-template <>
-double BuildRowCdf<uint16_t>(const uint16_t *row, int64_t class_size, std::vector<double> &cdf) {
+template <> double BuildRowCdf<uint16_t>(const uint16_t *row, int64_t class_size, double *cdf) {
   double max_logit = DecodeHalf(row[0]);
   for (int64_t c = 1; c < class_size; ++c) {
     const double v = DecodeHalf(row[c]);
@@ -132,12 +131,12 @@ Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t
 
   Tensor out = MakeOutputTensor(out_dtype, {batch_size, sample_size}, out_n_bytes,
                                 rt ? rt->allocator() : nullptr);
-  (*this)(input, sample_size, seed, dtype, out);
+  (*this)(input, sample_size, seed, dtype, out, rt);
   return out;
 }
 
 void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t seed, int32_t dtype,
-                             Tensor &output) const {
+                             Tensor &output, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(input.shape.size() == 2,
                       "kernel::Multinomial: input must be a 2-D tensor of shape "
                       "[batch_size, class_size].");
@@ -168,8 +167,14 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
   std::uniform_real_distribution<double> uniform(0.0, 1.0);
 
   // Per-row CDF over normalized class probabilities (softmax of the
-  // unnormalized log-probabilities). Reused across rows.
-  std::vector<double> cdf(static_cast<std::size_t>(class_size));
+  // unnormalized log-probabilities). Reused across rows. Uses the runtime
+  // allocator when available and falls back to inline storage otherwise. The
+  // buffer is sized to at least one element so an empty batch (``class_size``
+  // == 0) never requests a zero-byte allocation.
+  detail::TemporaryTypedBuffer<double> cdf_buf(
+      static_cast<std::size_t>(std::max<int64_t>(class_size, 1)), rt ? rt->allocator() : nullptr,
+      "kernel::Multinomial cdf");
+  double *cdf = cdf_buf.data();
 
   // Dispatch on input dtype once, outside the batch loop, so that typed row
   // pointers are advanced directly without any intermediate conversion buffer.
@@ -185,8 +190,8 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
       for (int64_t s = 0; s < sample_size; ++s) {
         const double u = uniform(engine);
         // Inverse-CDF: find the smallest index whose CDF >= u.
-        const auto it = std::lower_bound(cdf.begin(), cdf.end(), u);
-        int64_t idx = static_cast<int64_t>(it - cdf.begin());
+        const auto it = std::lower_bound(cdf, cdf + class_size, u);
+        int64_t idx = static_cast<int64_t>(it - cdf);
         if (idx >= class_size) {
           idx = class_size - 1;
         }

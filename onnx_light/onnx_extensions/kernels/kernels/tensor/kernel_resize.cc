@@ -684,16 +684,16 @@ void BuildRoi(const Resize::Attributes &attrs, const onnx_kernels::Shape &axes, 
 
 // Dispatches to the nearest or separable (linear/cubic) implementation
 // according to ``attrs.mode``.
-void RunResize(const Tensor &X, const float *scales_vec, const onnx_kernels::Shape &out_shape,
+void RunResize(const Tensor &X, const float *scales_data, const onnx_kernels::Shape &out_shape,
                const std::vector<double> &roi_start, const std::vector<double> &roi_end,
                const Resize::Attributes &attrs, Tensor &output) {
   if (IsNearestMode(attrs.mode)) {
-    ResizeNearest(X, scales_vec, out_shape, attrs.nearest_mode,
+    ResizeNearest(X, scales_data, out_shape, attrs.nearest_mode,
                   attrs.coordinate_transformation_mode, roi_start, roi_end,
                   static_cast<double>(attrs.extrapolation_value), output);
     return;
   }
-  ResizeSeparable(X, scales_vec, out_shape, attrs.coordinate_transformation_mode, roi_start,
+  ResizeSeparable(X, scales_data, out_shape, attrs.coordinate_transformation_mode, roi_start,
                   roi_end, attrs.mode, static_cast<double>(attrs.cubic_coeff_a),
                   attrs.exclude_outside != 0, attrs.antialias != 0,
                   static_cast<double>(attrs.extrapolation_value), output);
@@ -709,12 +709,12 @@ Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attribute
   // Expand to per-axis (rank-length) scales, defaulting non-resized axes to 1.
   detail::TemporaryTypedBuffer<float> scales_buf(rank, rt ? rt->allocator() : nullptr,
                                                  "kernel::Resize scales");
-  float *scales_vec = scales_buf.data();
-  ScatterByAxes<float>(scales_in.As<float>(), axes, rank, 1.0f, scales_vec);
+  float *scales_data = scales_buf.data();
+  ScatterByAxes<float>(scales_in.As<float>(), axes, rank, 1.0f, scales_data);
   onnx_kernels::Shape out_shape;
   out_shape.assign(rank, 0);
   for (std::size_t k = 0; k < rank; ++k) {
-    const double scaled = static_cast<double>(X.shape[k]) * static_cast<double>(scales_vec[k]);
+    const double scaled = static_cast<double>(X.shape[k]) * static_cast<double>(scales_data[k]);
     out_shape[k] = static_cast<int64_t>(std::floor(scaled));
   }
   int64_t total_elements = 1;
@@ -735,12 +735,12 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
   const onnx_kernels::Shape axes = NormaliseAxes(attrs.axes, rank);
   const Tensor scales_in = ReadResizeScales(scales, axes.size(), nullptr);
   detail::TemporaryTypedBuffer<float> scales_buf(rank, nullptr, "kernel::Resize scales");
-  float *scales_vec = scales_buf.data();
-  ScatterByAxes<float>(scales_in.As<float>(), axes, rank, 1.0f, scales_vec);
+  float *scales_data = scales_buf.data();
+  ScatterByAxes<float>(scales_in.As<float>(), axes, rank, 1.0f, scales_data);
   onnx_kernels::Shape out_shape;
   out_shape.assign(rank, 0);
   for (std::size_t k = 0; k < rank; ++k) {
-    const double scaled = static_cast<double>(X.shape[k]) * static_cast<double>(scales_vec[k]);
+    const double scaled = static_cast<double>(X.shape[k]) * static_cast<double>(scales_data[k]);
     out_shape[k] = static_cast<int64_t>(std::floor(scaled));
   }
 
@@ -752,7 +752,7 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
   std::vector<double> roi_start;
   std::vector<double> roi_end;
   BuildRoi(attrs, axes, rank, roi_start, roi_end);
-  RunResize(X, scales_vec, out_shape, roi_start, roi_end, attrs, output);
+  RunResize(X, scales_data, out_shape, roi_start, roi_end, attrs, output);
 }
 
 Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs,
@@ -778,15 +778,15 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   // the nearest path.
   detail::TemporaryTypedBuffer<float> scales_buf(rank, rt ? rt->allocator() : nullptr,
                                                  "kernel::Resize scales");
-  float *scales_vec = scales_buf.data();
+  float *scales_data = scales_buf.data();
   for (std::size_t k = 0; k < rank; ++k) {
-    scales_vec[k] = 1.0f;
+    scales_data[k] = 1.0f;
   }
   for (std::size_t i = 0; i < axes.size(); ++i) {
     const std::size_t k = static_cast<std::size_t>(axes[i]);
     EXT_ENFORCE_INVALID(X.shape[k] > 0,
                         "kernel::Resize: input dim must be > 0 when using 'sizes'.");
-    scales_vec[k] = static_cast<float>(effective[i]) / static_cast<float>(X.shape[k]);
+    scales_data[k] = static_cast<float>(effective[i]) / static_cast<float>(X.shape[k]);
   }
   int64_t total_elements = 1;
   for (int64_t d : out_shape) {
@@ -798,7 +798,7 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   std::vector<double> roi_start;
   std::vector<double> roi_end;
   BuildRoi(attrs, axes, rank, roi_start, roi_end);
-  RunResize(X, scales_vec, out_shape, roi_start, roi_end, attrs, output);
+  RunResize(X, scales_data, out_shape, roi_start, roi_end, attrs, output);
   return output;
 }
 

@@ -79,9 +79,10 @@ void ValidateInputs(const Tensor &x, const Tensor &w, const Tensor &b,
 
 // Computes the per-axis output spatial dimension and (for SAME_*/VALID auto-pad)
 // fills the begin/end pad vectors at indices ``i`` and ``i + spatial_rank``.
-std::vector<int64_t> ComputeOutputSpatial(const Tensor &x, Conv::Attributes &attrs) {
+onnx_kernels::Shape ComputeOutputSpatial(const Tensor &x, Conv::Attributes &attrs) {
   const size_t spatial_rank = x.shape.size() - 2;
-  std::vector<int64_t> out_spatial(spatial_rank);
+  onnx_kernels::Shape out_spatial;
+  out_spatial.assign(spatial_rank, 0);
   const bool use_auto_pad = attrs.auto_pad != AutoPad::kNotSet;
   for (size_t i = 0; i < spatial_rank; ++i) {
     const int64_t iD = x.shape[i + 2];
@@ -131,7 +132,7 @@ Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, b, resolved);
-  std::vector<int64_t> out_spatial = ComputeOutputSpatial(x, resolved);
+  onnx_kernels::Shape out_spatial = ComputeOutputSpatial(x, resolved);
   onnx_kernels::Shape out_shape;
   out_shape.reserve(x.shape.size());
   out_shape.push_back(x.shape[0]);
@@ -166,7 +167,7 @@ void Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const A
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, b, resolved);
-  std::vector<int64_t> out_spatial = ComputeOutputSpatial(x, resolved);
+  onnx_kernels::Shape out_spatial = ComputeOutputSpatial(x, resolved);
   onnx_kernels::Shape expected_shape;
   expected_shape.reserve(x.shape.size());
   expected_shape.push_back(x.shape[0]);

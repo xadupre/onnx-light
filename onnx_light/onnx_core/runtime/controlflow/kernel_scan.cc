@@ -48,8 +48,8 @@ std::size_t ElementBytes(const Tensor &t) {
 // ``axis``, optionally reversing them when ``reverse`` is true (matching the
 // ONNX Scan "prepend" direction). When ``allocator`` is non-null, the
 // returned tensor stores its bytes in an allocator-owned ``RawBuffer``.
-Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, int64_t axis_raw,
-                       bool reverse, RawBufferAllocator *allocator = nullptr) {
+Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count, int64_t axis_raw, bool reverse,
+                       RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(static_cast<int64_t>(per_iter.size()) >= trip_count,
                       "kernel::Scan: scan-output row is shorter than the trip count.");
 
@@ -133,9 +133,9 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, 
 //   * ``scan_output_axes`` supplies the output-axis positions for stacking each scan output.
 //   * ``scan_output_directions`` supplies the per-output append/prepend directions.
 //   * ``allocator`` specifies the optional allocator used for stacked scan outputs.
-Tensors AssembleScanOutputs(int64_t trip_count, const std::vector<Tensor> &initial_state,
-                            const std::vector<Tensor> &final_state,
-                            const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state,
+                            const Tensors &final_state,
+                            const std::vector<Tensors> &scan_values_per_iter,
                             const std::vector<int64_t> &scan_output_axes,
                             const std::vector<int64_t> &scan_output_directions,
                             RawBufferAllocator *allocator) {
@@ -169,29 +169,26 @@ Tensors AssembleScanOutputs(int64_t trip_count, const std::vector<Tensor> &initi
 
 } // namespace
 
-Tensors Scan::operator()(int64_t trip_count, const std::vector<Tensor> &initial_state,
-                         const std::vector<Tensor> &final_state,
-                         const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+Tensors Scan::operator()(int64_t trip_count, const Tensors &initial_state,
+                         const Tensors &final_state,
+                         const std::vector<Tensors> &scan_values_per_iter,
                          const std::vector<int64_t> &scan_output_axes,
                          const std::vector<int64_t> &scan_output_directions) const {
   return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
                              scan_output_axes, scan_output_directions, nullptr);
 }
 
-Tensors Scan::operator()(RuntimeContext &rt, int64_t trip_count,
-                         const std::vector<Tensor> &initial_state,
-                         const std::vector<Tensor> &final_state,
-                         const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+Tensors Scan::operator()(RuntimeContext &rt, int64_t trip_count, const Tensors &initial_state,
+                         const Tensors &final_state,
+                         const std::vector<Tensors> &scan_values_per_iter,
                          const std::vector<int64_t> &scan_output_axes,
                          const std::vector<int64_t> &scan_output_directions) const {
   return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
                              scan_output_axes, scan_output_directions, rt.allocator());
 }
 
-Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body,
-                         const std::vector<Tensor> &initial_state,
-                         const std::vector<Tensor> &scan_inputs,
-                         const std::vector<int64_t> &scan_input_axes_in,
+Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tensors &initial_state,
+                         const Tensors &scan_inputs, const std::vector<int64_t> &scan_input_axes_in,
                          const std::vector<int64_t> &scan_input_directions_in,
                          const std::vector<int64_t> &scan_output_axes,
                          const std::vector<int64_t> &scan_output_directions) const {
@@ -250,8 +247,8 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body,
 
   // Iterate the body once per scan step, threading the state forward and
   // collecting the per-iteration scan outputs.
-  std::vector<Tensor> state = initial_state;
-  std::vector<std::vector<Tensor>> scan_values(k);
+  Tensors state = initial_state;
+  std::vector<Tensors> scan_values(k);
   for (int64_t iter = 0; iter < trip_count; ++iter) {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(n + m);
@@ -268,7 +265,7 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body,
       bindings.emplace_back(slice.name, std::move(slice));
     }
 
-    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt, "body");
+    const Tensors body_outputs = RunSubgraph(body, bindings, rt, "body");
     EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
                         "kernel::Scan: body produced an unexpected number of outputs.");
     state.assign(body_outputs.begin(), body_outputs.begin() + static_cast<std::ptrdiff_t>(n));
@@ -308,7 +305,7 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body,
       bindings.emplace_back(slice.name, std::move(slice));
     }
 
-    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt, "body");
+    const Tensors body_outputs = RunSubgraph(body, bindings, rt, "body");
     EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
                         "kernel::Scan: body produced an unexpected number of outputs.");
     for (std::size_t i = 0; i < k; ++i) {

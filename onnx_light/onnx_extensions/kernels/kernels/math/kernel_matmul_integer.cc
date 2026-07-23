@@ -119,7 +119,8 @@ void RunMatMulInteger(const Tensor &a, const int32_t *a_values, size_t a_size, c
   const bool a_per_row = a_size > 1;
   const bool b_per_col = b_size > 1;
 
-  std::vector<int64_t> batch_idx(batch_rank, 0);
+  Shape batch_idx;
+  batch_idx.assign(batch_rank, 0);
   for (int64_t batch = 0; batch < batch_count; ++batch) {
     int64_t a_base = 0;
     int64_t b_base = 0;

@@ -16,6 +16,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
 using core::runtime::Tensor;
+using core::runtime::Tensors;
 using onnx_kernels::Sequence;
 using onnx_kernels::Sequences;
 using onnx_kernels::kernel::KernelContext;
@@ -593,7 +594,7 @@ TEST(KernelClass, SequenceMapBuildsOneSequencePerBodyOutput) {
   const Sequence in_seq("", a.data_type, {a, b, c});
 
   // Single body output: identity-like per-iteration tensors.
-  std::vector<std::vector<Tensor>> body_out = {{a, b, c}};
+  std::vector<Tensors> body_out = {{a, b, c}};
   Sequences outs = op(in_seq, body_out);
 
   ASSERT_EQ(outs.size(), 1u);
@@ -614,7 +615,7 @@ TEST(KernelClass, SequenceMapBuildsMultipleOutputSequences) {
   const Sequence in_seq("", a.data_type, {a, b});
 
   // Two body outputs (mixed dtypes), each with one tensor per iteration.
-  std::vector<std::vector<Tensor>> body_out = {{a, b}, {x, y}};
+  std::vector<Tensors> body_out = {{a, b}, {x, y}};
   Sequences outs = op(in_seq, body_out);
 
   ASSERT_EQ(outs.size(), 2u);
@@ -634,7 +635,7 @@ TEST(KernelClass, SequenceMapRejectsRowLengthMismatch) {
   const Sequence in_seq("", a.data_type, {a, b});
 
   // Body row has only one tensor — does not match the input sequence length.
-  std::vector<std::vector<Tensor>> body_out = {{a}};
+  std::vector<Tensors> body_out = {{a}};
   EXPECT_THROW(op(in_seq, body_out), std::invalid_argument);
 }
 
@@ -646,7 +647,7 @@ TEST(KernelClass, SequenceMapRejectsMixedDtypeWithinOneOutput) {
   const Sequence in_seq("", a.data_type, {a, a});
 
   // Body row mixes FLOAT and INT64 tensors.
-  std::vector<std::vector<Tensor>> body_out = {{a, x}};
+  std::vector<Tensors> body_out = {{a, x}};
   EXPECT_THROW(op(in_seq, body_out), std::invalid_argument);
 }
 
@@ -658,7 +659,7 @@ TEST(KernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
   // Zero iterations: each body output row is empty; the resulting output
   // sequence is empty and its elem_type degrades to UNDEFINED (since no
   // sample tensors are available).
-  std::vector<std::vector<Tensor>> body_out = {{}};
+  std::vector<Tensors> body_out = {{}};
   Sequences outs = op(in_seq, body_out);
 
   ASSERT_EQ(outs.size(), 1u);

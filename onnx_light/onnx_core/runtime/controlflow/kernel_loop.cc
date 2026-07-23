@@ -103,7 +103,7 @@ bool ParseInitialCond(const Tensor &cond) {
 // ``trip_count`` entries are consumed (later entries, if any, are ignored
 // because the loop terminated early). When ``allocator`` is non-null, the
 // returned tensor stores its bytes in an allocator-owned ``RawBuffer``.
-Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count,
+Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count,
                        RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(static_cast<int64_t>(per_iter.size()) >= trip_count,
                       "kernel::Loop: scan-output row is shorter than the effective trip count.");
@@ -164,9 +164,9 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count,
 //   * ``final_state`` supplies the final loop-carried tensors produced by the loop body.
 //   * ``scan_values_per_iter`` supplies the collected per-iteration scan-output tensors.
 //   * ``allocator`` specifies the optional allocator used for stacked scan outputs.
-Tensors AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
-                            const std::vector<Tensor> &final_state,
-                            const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+Tensors AssembleLoopOutputs(int64_t trip_count, const Tensors &v_initial,
+                            const Tensors &final_state,
+                            const std::vector<Tensors> &scan_values_per_iter,
                             RawBufferAllocator *allocator) {
   Tensors out;
   out.reserve(final_state.size() + scan_values_per_iter.size());
@@ -187,7 +187,7 @@ Tensors AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_ini
 //     ``run_body``.
 //   * ``run_body`` implements one Loop body iteration.
 //   * ``allocator`` specifies the optional allocator used for stacked scan outputs.
-Tensors RunLoopBody(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
+Tensors RunLoopBody(const Tensor &M, const Tensor &cond, const Tensors &v_initial,
                     std::size_t num_scan_outputs, const Loop::BodyRunner &run_body,
                     RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(static_cast<bool>(run_body),
@@ -197,12 +197,12 @@ Tensors RunLoopBody(const Tensor &M, const Tensor &cond, const std::vector<Tenso
   bool cond_value = ParseInitialCond(cond);
 
   const std::size_t n = v_initial.size();
-  std::vector<Tensor> state = v_initial;
-  std::vector<std::vector<Tensor>> scan_values(num_scan_outputs);
+  Tensors state = v_initial;
+  std::vector<Tensors> scan_values(num_scan_outputs);
 
   int64_t trip_count = 0;
   for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
-    std::vector<Tensor> body_outputs = run_body(iter, cond_value, state);
+    Tensors body_outputs = run_body(iter, cond_value, state);
     EXT_ENFORCE_INVALID(body_outputs.size() == 1 + n + num_scan_outputs,
                         "kernel::Loop: body returned the wrong number of outputs (expected "
                         "1 + N + num_scan_outputs).");
@@ -212,7 +212,7 @@ Tensors RunLoopBody(const Tensor &M, const Tensor &cond, const std::vector<Tenso
     cond_value = body_outputs[0].bytes()[0] != 0;
     ReleaseTensorAllocation(body_outputs[0]);
 
-    std::vector<Tensor> next_state;
+    Tensors next_state;
     next_state.reserve(n);
     for (std::size_t i = 0; i < n; ++i) {
       EXT_ENFORCE_INVALID(body_outputs[1 + i].data_type == v_initial[i].data_type,
@@ -232,9 +232,9 @@ Tensors RunLoopBody(const Tensor &M, const Tensor &cond, const std::vector<Tenso
 
 } // namespace
 
-Tensors Loop::operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
-                         const std::vector<Tensor> &final_state,
-                         const std::vector<std::vector<Tensor>> &scan_values_per_iter) const {
+Tensors Loop::operator()(const Tensor &M, const Tensor &cond, const Tensors &v_initial,
+                         const Tensors &final_state,
+                         const std::vector<Tensors> &scan_values_per_iter) const {
   EXT_ENFORCE_INVALID(v_initial.size() == final_state.size(),
                       "kernel::Loop: 'final_state' must have the same number of tensors "
                       "as 'v_initial'.");
@@ -269,9 +269,8 @@ Tensors Loop::operator()(const Tensor &M, const Tensor &cond, const std::vector<
 }
 
 Tensors Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
-                         const std::vector<Tensor> &v_initial,
-                         const std::vector<Tensor> &final_state,
-                         const std::vector<std::vector<Tensor>> &scan_values_per_iter) const {
+                         const Tensors &v_initial, const Tensors &final_state,
+                         const std::vector<Tensors> &scan_values_per_iter) const {
   EXT_ENFORCE_INVALID(v_initial.size() == final_state.size(),
                       "kernel::Loop: 'final_state' must have the same number of tensors "
                       "as 'v_initial'.");
@@ -301,13 +300,13 @@ Tensors Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond
                              rt.allocator());
 }
 
-Tensors Loop::operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
+Tensors Loop::operator()(const Tensor &M, const Tensor &cond, const Tensors &v_initial,
                          std::size_t num_scan_outputs, const BodyRunner &run_body) const {
   return RunLoopBody(M, cond, v_initial, num_scan_outputs, run_body, nullptr);
 }
 
 Tensors Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
-                         const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
+                         const Tensors &v_initial, std::size_t num_scan_outputs,
                          const BodyRunner &run_body) const {
   return RunLoopBody(M, cond, v_initial, num_scan_outputs, run_body, rt.allocator());
 }

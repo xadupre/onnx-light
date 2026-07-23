@@ -221,7 +221,7 @@ public:
   ///                               the same data type.
   /// @return ``M`` output sequences each of length ``N``.
   Sequences operator()(const Sequence &input_sequence,
-                       const std::vector<std::vector<Tensor>> &body_outputs_per_iter) const;
+                       const std::vector<Tensors> &body_outputs_per_iter) const;
 
   /// Output sequences are freshly constructed, so they cannot share
   /// storage with any input.

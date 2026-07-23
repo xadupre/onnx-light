@@ -84,7 +84,7 @@ using NodeKernelFn =
  */
 using SequenceMapPackFn =
     std::function<Sequences(RuntimeContext &rt, const Sequence &input_sequence,
-                            const std::vector<std::vector<Tensor>> &body_outputs_per_iter)>;
+                            const std::vector<Tensors> &body_outputs_per_iter)>;
 
 /**
  * Returns the ``(normalised_domain, op_type) -> NodeKernelFn`` factory

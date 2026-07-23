@@ -15,14 +15,14 @@ namespace kernel {
 
 Sequences
 SequenceMap::operator()(const Sequence &input_sequence,
-                        const std::vector<std::vector<Tensor>> &body_outputs_per_iter) const {
+                        const std::vector<Tensors> &body_outputs_per_iter) const {
   const std::size_t n = input_sequence.size();
 
   Sequences outputs;
   outputs.reserve(body_outputs_per_iter.size());
 
   for (std::size_t k = 0; k < body_outputs_per_iter.size(); ++k) {
-    const std::vector<Tensor> &row = body_outputs_per_iter[k];
+    const Tensors &row = body_outputs_per_iter[k];
     EXT_ENFORCE_INVALID(row.size() == n, "kernel::SequenceMap: body output #", std::to_string(k),
                         " has ", std::to_string(row.size()), " per-iteration tensors, expected ",
                         std::to_string(n),

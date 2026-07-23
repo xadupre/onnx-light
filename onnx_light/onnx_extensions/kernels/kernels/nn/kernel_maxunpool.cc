@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -29,7 +30,7 @@ namespace {
 //      top-left corner of a zero buffer of shape ``output_shape``.
 Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_shape,
                     const Shape &strides_in, const Shape &pads_in,
-                    const Shape *explicit_output_shape) {
+                    const Shape *explicit_output_shape, RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::MaxUnpool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64),
@@ -86,7 +87,14 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_
     x_total *= d;
   }
 
-  std::vector<float> y_inferred(static_cast<size_t>(inferred_total), 0.0f);
+  // Draw the scatter buffer from the runtime allocator (falling back to a
+  // std::vector when no allocator is attached). The allocator-backed path is
+  // not guaranteed zeroed, so the buffer is explicitly zero-filled before the
+  // scatter below.
+  detail::TemporaryTypedBuffer<float> y_inferred_buf(static_cast<size_t>(inferred_total), allocator,
+                                                     "kernel::MaxUnpool y_inferred");
+  float *y_inferred = y_inferred_buf.data();
+  std::fill(y_inferred, y_inferred + static_cast<size_t>(inferred_total), 0.0f);
   const float *px = x.AsFloat();
   const int64_t *pi = indices.AsInt64();
   for (int64_t i = 0; i < x_total; ++i) {
@@ -98,9 +106,11 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_
   }
 
   if (explicit_output_shape == nullptr) {
-    std::vector<uint8_t> buffer(static_cast<size_t>(inferred_total) * sizeof(float));
-    std::memcpy(buffer.data(), y_inferred.data(), buffer.size());
-    return Tensor("", static_cast<int32_t>(DataType::FLOAT), inferred_shape, std::move(buffer));
+    Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), inferred_shape,
+                                  static_cast<size_t>(inferred_total) * sizeof(float), allocator);
+    std::memcpy(out.mutable_bytes(), y_inferred,
+                static_cast<size_t>(inferred_total) * sizeof(float));
+    return out;
   }
 
   EXT_ENFORCE_INVALID(explicit_output_shape->size() == x.shape.size(),
@@ -118,8 +128,10 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_
   for (int64_t d : *explicit_output_shape) {
     out_total *= d;
   }
-  std::vector<uint8_t> buffer(static_cast<size_t>(out_total) * sizeof(float), 0);
-  float *po = reinterpret_cast<float *>(buffer.data());
+  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), *explicit_output_shape,
+                                static_cast<size_t>(out_total) * sizeof(float), allocator);
+  float *po = reinterpret_cast<float *>(out.mutable_bytes());
+  std::fill(po, po + static_cast<size_t>(out_total), 0.0f);
 
   // Compute strides for both layouts and copy the inferred region into the
   // top-left corner of the output.
@@ -146,15 +158,15 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_
     po[out_offset] = y_inferred[static_cast<size_t>(flat)];
   }
 
-  return Tensor("", static_cast<int32_t>(DataType::FLOAT), *explicit_output_shape,
-                std::move(buffer));
+  return out;
 }
 
 } // namespace
 
 Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Shape &kernel_shape,
                              const Shape &strides, const Shape &pads, RuntimeContext *rt) const {
-  return RunMaxUnpool(x, indices, kernel_shape, strides, pads, /*explicit_output_shape=*/nullptr);
+  return RunMaxUnpool(x, indices, kernel_shape, strides, pads, /*explicit_output_shape=*/nullptr,
+                      rt != nullptr ? rt->allocator() : nullptr);
 }
 
 Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Tensor &output_shape,
@@ -172,7 +184,8 @@ Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Tenso
   for (size_t i = 0; i < shape_vec.size(); ++i) {
     shape_vec[i] = posh[i];
   }
-  return RunMaxUnpool(x, indices, kernel_shape, strides, pads, &shape_vec);
+  return RunMaxUnpool(x, indices, kernel_shape, strides, pads, &shape_vec,
+                      rt != nullptr ? rt->allocator() : nullptr);
 }
 
 } // namespace kernel

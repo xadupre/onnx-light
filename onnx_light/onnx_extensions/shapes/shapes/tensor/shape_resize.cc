@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
@@ -23,6 +24,10 @@ namespace onnx_shapes {
 // Alias to the symbolic dimension-expression library, which lives in
 // ``onnx_core`` so both ``onnx_op`` and ``onnx_shapes`` can share it.
 namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
+
+// Alias to the fixed-capacity integer shape type, reused here to carry the
+// resolved list of axes.
+using Shape = ::ONNX_LIGHT_NAMESPACE::core::runtime::Shape;
 namespace shapes {
 namespace tensor {
 
@@ -39,9 +44,9 @@ SymDim FromDimType(const expressions::DimType &d) {
 // Reads the optional ``axes`` attribute introduced at opset 18 and normalises
 // negative entries to positive indices in ``[0, rank)``. When ``axes`` is
 // absent the function returns ``{0, 1, ..., rank-1}``.
-std::vector<int64_t> ResolveAxes(const NodeProto &node, std::size_t rank) {
+Shape ResolveAxes(const NodeProto &node, std::size_t rank) {
   const AttributeProto *axes_attr = FindAttribute(node, "axes");
-  std::vector<int64_t> axes;
+  Shape axes;
   if (axes_attr == nullptr || axes_attr->ref_ints().size() == 0) {
     axes.reserve(rank);
     for (std::size_t i = 0; i < rank; ++i) {
@@ -156,7 +161,7 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
 
   // ``axes`` (v18+) selects the subset of axes that ``scales``/``sizes`` refer
   // to. When absent it defaults to all axes.
-  std::vector<int64_t> axes = ResolveAxes(node, rank);
+  Shape axes = ResolveAxes(node, rank);
 
   SymShape out_shape;
   for (std::size_t i = 0; i < rank; ++i) {

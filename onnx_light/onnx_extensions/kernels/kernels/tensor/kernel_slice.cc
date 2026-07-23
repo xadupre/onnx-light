@@ -75,11 +75,11 @@ int64_t SliceLength(int64_t start, int64_t end, int64_t step) {
 }
 
 struct SliceLayout {
-  Shape starts;
-  Shape steps;
+  onnx_kernels::Shape starts;
+  onnx_kernels::Shape steps;
   onnx_kernels::Shape out_shape;
-  Shape in_strides;
-  Shape out_strides;
+  onnx_kernels::Shape in_strides;
+  onnx_kernels::Shape out_strides;
   int64_t total_elements = 1;
   std::size_t elem_size = 0;
 };

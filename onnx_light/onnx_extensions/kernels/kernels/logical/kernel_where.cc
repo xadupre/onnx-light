@@ -42,9 +42,9 @@ template <typename T> T *WhereTypedOutput(Tensor &t) {
 
 struct TernaryBroadcastInfo {
   onnx_kernels::Shape shape;
-  std::vector<int64_t> strides_c;
-  std::vector<int64_t> strides_x;
-  std::vector<int64_t> strides_y;
+  onnx_kernels::Shape strides_c;
+  onnx_kernels::Shape strides_x;
+  onnx_kernels::Shape strides_y;
   int64_t element_count = 0;
 };
 
@@ -115,7 +115,8 @@ Tensor WhereAllocTyped(const Tensor &condition, const Tensor &x, const Tensor &y
   T *po = WhereTypedOutput<T>(out);
 
   const size_t rank = bi.shape.size();
-  std::vector<int64_t> idx(rank, 0);
+  onnx_kernels::Shape idx;
+  idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t oc = 0, ox = 0, oy = 0;
     for (size_t d = 0; d < rank; ++d) {
@@ -152,7 +153,8 @@ void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y
   T *po = WhereTypedOutput<T>(output);
 
   const size_t rank = bi.shape.size();
-  std::vector<int64_t> idx(rank, 0);
+  onnx_kernels::Shape idx;
+  idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t oc = 0, ox = 0, oy = 0;
     for (size_t d = 0; d < rank; ++d) {
@@ -182,7 +184,8 @@ Tensor WhereAllocString(const Tensor &condition, const Tensor &x, const Tensor &
   const uint8_t *pc = condition.AsBool();
 
   const size_t rank = bi.shape.size();
-  std::vector<int64_t> idx(rank, 0);
+  onnx_kernels::Shape idx;
+  idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t oc = 0, ox = 0, oy = 0;
     for (size_t d = 0; d < rank; ++d) {
@@ -217,7 +220,8 @@ void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &
   const uint8_t *pc = condition.AsBool();
 
   const size_t rank = bi.shape.size();
-  std::vector<int64_t> idx(rank, 0);
+  onnx_kernels::Shape idx;
+  idx.assign(rank, 0);
   for (int64_t flat = 0; flat < bi.element_count; ++flat) {
     int64_t oc = 0, ox = 0, oy = 0;
     for (size_t d = 0; d < rank; ++d) {

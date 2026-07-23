@@ -57,11 +57,10 @@ namespace backend_test {
  *         ``output_types`` is non-empty and its size does not equal
  *         ``outputs.size()``.
  */
-void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
-            const std::vector<Tensor> &outputs, const std::string &name,
-            const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
-            std::vector<TestCase> &registry, const std::string &tag = "",
-            const std::vector<TypeSpec> &output_types = {});
+void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs,
+            const std::string &name, const std::vector<OpsetId> &opset_imports,
+            const std::string &producer_name, std::vector<TestCase> &registry,
+            const std::string &tag = "", const std::vector<TypeSpec> &output_types = {});
 
 /**
  * Builds a single-node ``ModelProto`` and its one data set from ``node`` and
@@ -80,9 +79,8 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
  *
  * @throws std::invalid_argument under the same conditions as :func:`Expect`.
  */
-BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
-                              std::vector<Tensor> outputs, const std::string &name,
-                              const std::vector<OpsetId> &opset_imports,
+BuiltCase BuildSingleNodeCase(const NodeProto &node, Tensors inputs, Tensors outputs,
+                              const std::string &name, const std::vector<OpsetId> &opset_imports,
                               const std::string &producer_name,
                               const std::vector<TypeSpec> &output_types = {},
                               std::vector<Map> maps = {});

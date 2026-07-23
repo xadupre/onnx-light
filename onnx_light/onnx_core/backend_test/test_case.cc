@@ -140,7 +140,7 @@ void AppendValueInfo(ValueInfoProto &vi, const std::string &name, TensorProto::D
   }
 }
 
-void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor> outputs) {
+void AppendDataSet(TestCase &tc, Tensors inputs, Tensors outputs) {
   DataSet ds;
   ds.inputs = std::move(inputs);
   ds.outputs = std::move(outputs);

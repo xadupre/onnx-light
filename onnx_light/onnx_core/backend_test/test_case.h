@@ -51,8 +51,8 @@ enum class TestMode { TEST, BENCHMARK };
 
 /// A single (inputs, expected outputs) data set associated with a TestCase.
 struct DataSet {
-  std::vector<Tensor> inputs;
-  std::vector<Tensor> outputs;
+  Tensors inputs;
+  Tensors outputs;
   /// Map-typed inputs keyed by the graph input name.
   std::vector<Map> maps;
 };
@@ -339,7 +339,7 @@ void AppendValueInfo(ValueInfoProto &vi, const std::string &name, const TypeSpec
  * tc.data_sets().emplace_back(std::move(ds));`` boilerplate that every
  * manually-built TestCase otherwise repeats.
  */
-void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor> outputs);
+void AppendDataSet(TestCase &tc, Tensors inputs, Tensors outputs);
 
 /// Function pointer registering one or more :ref:`TestCase` entries into the
 /// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.

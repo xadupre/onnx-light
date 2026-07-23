@@ -17,8 +17,8 @@ using namespace ::onnx_light::core::runtime;
 
 /// Materialized inputs/outputs produced by a lazy case builder.
 struct IoData {
-  std::vector<Tensor> inputs;
-  std::vector<Tensor> outputs;
+  Tensors inputs;
+  Tensors outputs;
   /// Map-typed inputs (e.g. for CastMap, DictVectorizer). Each ``Map::name``
   /// must match a non-empty entry in the node's ``input`` list. When present,
   /// ``BuildSingleNodeCase`` declares the corresponding graph input with a

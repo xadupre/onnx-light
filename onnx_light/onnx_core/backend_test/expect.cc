@@ -39,9 +39,8 @@ std::vector<std::string> NonEmpty(const utils::RepeatedField<utils::String> &nam
 
 } // namespace
 
-BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
-                              std::vector<Tensor> outputs, const std::string &name,
-                              const std::vector<OpsetId> &opset_imports,
+BuiltCase BuildSingleNodeCase(const NodeProto &node, Tensors inputs, Tensors outputs,
+                              const std::string &name, const std::vector<OpsetId> &opset_imports,
                               const std::string &producer_name,
                               const std::vector<TypeSpec> &output_types, std::vector<Map> maps) {
   const auto present_inputs = NonEmpty(node.ref_input());
@@ -119,8 +118,8 @@ struct LazyCaseState {
   std::string producer_name;
   std::vector<TypeSpec> output_types;
   std::function<IoData()> make_io;
-  std::vector<Tensor> inputs;
-  std::vector<Tensor> outputs;
+  Tensors inputs;
+  Tensors outputs;
 };
 
 // Builds the ``TestCase::build`` closure for a lazy case backed by ``state``.
@@ -151,11 +150,10 @@ std::string ResolveTag(const NodeProto &node, const std::string &tag) {
 
 } // namespace
 
-void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
-            const std::vector<Tensor> &outputs, const std::string &name,
-            const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
-            std::vector<TestCase> &registry, const std::string &tag,
-            const std::vector<TypeSpec> &output_types) {
+void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs,
+            const std::string &name, const std::vector<OpsetId> &opset_imports,
+            const std::string &producer_name, std::vector<TestCase> &registry,
+            const std::string &tag, const std::vector<TypeSpec> &output_types) {
   const std::string resolved_tag = ResolveTag(node, tag);
 
   // Validate arity eagerly so callers still get an immediate error at

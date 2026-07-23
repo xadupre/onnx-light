@@ -56,6 +56,10 @@ enum class ExecuteActionKind : int32_t {
   kAllocateTemporaryBuffer = 10,
   /// Deallocates a temporary buffer once the kernel(s) using it are done.
   kDeleteTemporaryBuffer = 11,
+  /// Deletes a named sequence result (frees the sequence it holds).
+  kDeleteSequence = 12,
+  /// Deletes a named map result (frees the map it holds).
+  kDeleteMap = 13,
 };
 
 /// Returns a stable, human-readable name for ``kind``.
@@ -85,6 +89,10 @@ inline constexpr const char *ExecuteActionKindName(ExecuteActionKind kind) noexc
     return "AllocateTemporaryBuffer";
   case ExecuteActionKind::kDeleteTemporaryBuffer:
     return "DeleteTemporaryBuffer";
+  case ExecuteActionKind::kDeleteSequence:
+    return "DeleteSequence";
+  case ExecuteActionKind::kDeleteMap:
+    return "DeleteMap";
   }
   return "Unknown";
 }
@@ -211,6 +219,8 @@ public:
     case ExecuteActionKind::kDeleteTemporaryBuffer:
     case ExecuteActionKind::kCreateShape:
     case ExecuteActionKind::kDeleteShape:
+    case ExecuteActionKind::kDeleteSequence:
+    case ExecuteActionKind::kDeleteMap:
       text += " name='" + name_ + "'";
       break;
     }

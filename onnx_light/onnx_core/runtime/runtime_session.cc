@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
@@ -85,15 +86,32 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       break;
     }
     case ExecuteActionKind::kDeleteBuffer:
-    case ExecuteActionKind::kDeleteShape:
-      // A shape-tagged value additionally lives in the shape map; free it
-      // there as well. The tensor / sequence removals below are shared with
-      // kDeleteBuffer (they are no-ops when the name is absent).
-      if (action.kind() == ExecuteActionKind::kDeleteShape) {
-        rt.RemoveShape(action.name());
+      if (rt.verbose() > 1) {
+        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
+                  << std::endl;
       }
       rt.Remove(action.name());
+      break;
+    case ExecuteActionKind::kDeleteShape:
+      if (rt.verbose() > 1) {
+        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
+                  << std::endl;
+      }
+      rt.RemoveShape(action.name());
+      break;
+    case ExecuteActionKind::kDeleteSequence:
+      if (rt.verbose() > 1) {
+        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
+                  << std::endl;
+      }
       rt.RemoveSequence(action.name());
+      break;
+    case ExecuteActionKind::kDeleteMap:
+      if (rt.verbose() > 1) {
+        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
+                  << std::endl;
+      }
+      rt.RemoveMap(action.name());
       break;
     default:
       break;

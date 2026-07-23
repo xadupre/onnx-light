@@ -16,10 +16,11 @@ namespace kernel {
 
 namespace {
 
-// Reads the 1-D INT64 ``repeats`` input tensor and validates it. The values are
-// copied into an allocator-backed :cpp:class:`Tensor` (obtained from
+// Reads and validates the 1-D INT64 ``repeats`` input tensor and copies its
+// values into an allocator-backed :cpp:class:`Tensor` (obtained from
 // :cpp:func:`MakeOutputTensor`) instead of a temporary ``std::vector<int64_t>``,
 // so the scratch storage can come from the runtime allocator when one is given.
+// Returns the INT64 ``Tensor`` holding the validated ``repeats`` values.
 Tensor ReadTileRepeatsInput(const Tensor &repeats, std::size_t input_rank,
                             RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(repeats.data_type == DataType::INT64,

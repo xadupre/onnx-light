@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -52,9 +53,17 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
   const float *input_ptr = input.AsFloat();
   const float *weight_ptr = weight != nullptr ? weight->AsFloat() : nullptr;
 
-  // Per-sample loss and applied weight (prior to reduction).
-  std::vector<float> per_sample_loss(static_cast<size_t>(n_loss), 0.0f);
-  std::vector<float> per_sample_weight(static_cast<size_t>(n_loss), 0.0f);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+
+  // Per-sample loss and applied weight (prior to reduction). Backed by the
+  // runtime allocator when available, falling back to inline storage otherwise.
+  detail::TemporaryTypedBuffer<float> per_sample_loss_buf(
+      static_cast<size_t>(n_loss), allocator, "kernel::NegativeLogLikelihoodLoss per_sample_loss");
+  detail::TemporaryTypedBuffer<float> per_sample_weight_buf(
+      static_cast<size_t>(n_loss), allocator,
+      "kernel::NegativeLogLikelihoodLoss per_sample_weight");
+  float *per_sample_loss = per_sample_loss_buf.data();
+  float *per_sample_weight = per_sample_weight_buf.data();
 
   for (int64_t o = 0; o < n_batch; ++o) {
     for (int64_t i = 0; i < n_inner; ++i) {
@@ -85,8 +94,7 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
 
   if (reduction == "none") {
     const size_t loss_n_bytes = static_cast<size_t>(n_loss) * sizeof(float);
-    Tensor loss = MakeOutputTensor(DataType::FLOAT, target.shape, loss_n_bytes,
-                                   rt ? rt->allocator() : nullptr);
+    Tensor loss = MakeOutputTensor(DataType::FLOAT, target.shape, loss_n_bytes, allocator);
     float *out = loss.AsFloat();
     for (int64_t k = 0; k < n_loss; ++k) {
       out[static_cast<size_t>(k)] = per_sample_loss[static_cast<size_t>(k)];
@@ -112,8 +120,7 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
   }
 
   const size_t loss_n_bytes = sizeof(float);
-  Tensor loss =
-      MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor loss = MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, allocator);
   loss.AsFloat()[0] = reduced;
   return loss;
 }

@@ -795,7 +795,7 @@ public:
 /// Each input may use any of the four supported element types — they need not
 /// agree across inputs. The kernel validates each input's dtype against the
 /// caller-supplied per-input template parameters; the convenience overload
-/// that takes a homogeneous ``std::vector<Tensor>`` plus the per-input element
+/// that takes a homogeneous ``Tensors`` plus the per-input element
 /// type ``DataType`` dispatches to the right template specialization.
 class FeatureVectorizer : public KernelBase {
 public:
@@ -806,10 +806,10 @@ public:
   /// have the same length as ``inputs`` and gives the declared feature width
   /// per input. When empty the feature width is taken from each input's last
   /// dimension.
-  Tensor operator()(const std::vector<Tensor> &inputs, const std::vector<int64_t> &inputdimensions,
+  Tensor operator()(const Tensors &inputs, const std::vector<int64_t> &inputdimensions,
                     RuntimeContext *rt = nullptr) const;
 
-  void operator()(const std::vector<Tensor> &inputs, const std::vector<int64_t> &inputdimensions,
+  void operator()(const Tensors &inputs, const std::vector<int64_t> &inputdimensions,
                   Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }

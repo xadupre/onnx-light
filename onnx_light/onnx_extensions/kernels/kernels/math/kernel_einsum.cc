@@ -109,7 +109,7 @@ std::string ExpandEllipsis(const std::string &term, std::size_t ellipsis_rank,
   return out;
 }
 
-EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_equation) {
+EinsumPlan BuildPlan(const Tensors &inputs, const std::string &raw_equation) {
   std::string equation = StripSpaces(raw_equation);
   EXT_ENFORCE_INVALID(!equation.empty(), kEinsumName, ": equation must not be empty.");
   std::vector<std::string> input_terms;
@@ -308,8 +308,7 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
   return plan;
 }
 
-template <typename T>
-void RunEinsum(const std::vector<Tensor> &inputs, const EinsumPlan &plan, T *out_data) {
+template <typename T> void RunEinsum(const Tensors &inputs, const EinsumPlan &plan, T *out_data) {
   int64_t out_count = 1;
   for (int64_t d : plan.output_shape) {
     out_count *= d;
@@ -364,7 +363,7 @@ void RunEinsum(const std::vector<Tensor> &inputs, const EinsumPlan &plan, T *out
 }
 
 template <typename T>
-Tensor EinsumAlloc(const std::vector<Tensor> &inputs, const EinsumPlan &plan, int32_t dtype,
+Tensor EinsumAlloc(const Tensors &inputs, const EinsumPlan &plan, int32_t dtype,
                    RuntimeContext *rt) {
   int64_t out_count = 1;
   for (int64_t d : plan.output_shape) {
@@ -377,8 +376,7 @@ Tensor EinsumAlloc(const std::vector<Tensor> &inputs, const EinsumPlan &plan, in
 }
 
 template <typename T>
-void EinsumInPlace(const std::vector<Tensor> &inputs, const EinsumPlan &plan, int32_t dtype,
-                   Tensor &output) {
+void EinsumInPlace(const Tensors &inputs, const EinsumPlan &plan, int32_t dtype, Tensor &output) {
   int64_t out_count = 1;
   for (int64_t d : plan.output_shape) {
     out_count *= d;
@@ -390,7 +388,7 @@ void EinsumInPlace(const std::vector<Tensor> &inputs, const EinsumPlan &plan, in
   RunEinsum<T>(inputs, plan, output.As<T>());
 }
 
-void RequireHomogeneous(const std::vector<Tensor> &inputs) {
+void RequireHomogeneous(const Tensors &inputs) {
   EXT_ENFORCE_INVALID(!inputs.empty(), kEinsumName, " requires at least one input.");
   const int32_t dtype = inputs[0].data_type;
   for (std::size_t i = 1; i < inputs.size(); ++i) {
@@ -401,8 +399,7 @@ void RequireHomogeneous(const std::vector<Tensor> &inputs) {
 
 } // namespace
 
-const EinsumPlan &Einsum::EnsurePlan(const std::vector<Tensor> &inputs,
-                                     const std::string &equation) const {
+const EinsumPlan &Einsum::EnsurePlan(const Tensors &inputs, const std::string &equation) const {
   std::vector<Shape> shapes;
   shapes.reserve(inputs.size());
   for (const Tensor &t : inputs) {
@@ -416,7 +413,7 @@ const EinsumPlan &Einsum::EnsurePlan(const std::vector<Tensor> &inputs,
   return *plan_;
 }
 
-Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation,
+Tensor Einsum::operator()(const Tensors &inputs, const std::string &equation,
                           RuntimeContext *rt) const {
   RequireHomogeneous(inputs);
   const EinsumPlan &plan = EnsurePlan(inputs, equation);
@@ -431,8 +428,7 @@ Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &
   }
 }
 
-void Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &equation,
-                        Tensor &output) const {
+void Einsum::operator()(const Tensors &inputs, const std::string &equation, Tensor &output) const {
   RequireHomogeneous(inputs);
   const EinsumPlan &plan = EnsurePlan(inputs, equation);
   switch (inputs[0].data_type) {

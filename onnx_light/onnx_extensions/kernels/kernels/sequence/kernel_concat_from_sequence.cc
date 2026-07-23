@@ -10,7 +10,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -40,8 +39,8 @@ int64_t SuffixProduct(const onnx_kernels::Shape &shape, std::size_t from) {
 //   * ``resolved_axis``: non-negative axis in the output shape;
 //   * ``out_shape``    : the output tensor shape;
 //   * ``elem_size``    : the size in bytes of one input element.
-void ResolveAndValidate(const std::vector<Tensor> &inputs, int64_t axis, int64_t new_axis,
-                        int &resolved_axis, onnx_kernels::Shape &out_shape, size_t &elem_size) {
+void ResolveAndValidate(const Tensors &inputs, int64_t axis, int64_t new_axis, int &resolved_axis,
+                        onnx_kernels::Shape &out_shape, size_t &elem_size) {
   EXT_ENFORCE_INVALID(new_axis == 0 || new_axis == 1,
                       "kernel::ConcatFromSequence: new_axis must be either 0 or 1.");
   EXT_ENFORCE_INVALID(!inputs.empty(),
@@ -109,7 +108,7 @@ void ResolveAndValidate(const std::vector<Tensor> &inputs, int64_t axis, int64_t
 // Copies the concatenated bytes of ``inputs`` into ``output_bytes`` in
 // row-major layout. ``out_shape`` and ``resolved_axis`` describe the
 // output tensor; ``elem_size`` is the per-element byte size.
-void CopyConcatenated(const std::vector<Tensor> &inputs, int resolved_axis,
+void CopyConcatenated(const Tensors &inputs, int resolved_axis,
                       const onnx_kernels::Shape &out_shape, size_t elem_size,
                       RawBuffer &output_bytes) {
   // Block of consecutive bytes that the concat sees as a "row" of the
@@ -140,8 +139,8 @@ void CopyConcatenated(const std::vector<Tensor> &inputs, int resolved_axis,
 
 } // namespace
 
-Tensor ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t axis,
-                                      int64_t new_axis, RuntimeContext *rt) const {
+Tensor ConcatFromSequence::operator()(const Tensors &inputs, int64_t axis, int64_t new_axis,
+                                      RuntimeContext *rt) const {
   int resolved_axis = 0;
   onnx_kernels::Shape out_shape;
   size_t elem_size = 0;
@@ -156,7 +155,7 @@ Tensor ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t
     // along ``resolved_axis`` after inserting a unit dim at that position
     // into every input. We can therefore reuse ``CopyConcatenated`` by
     // treating each input's "axis dim" as 1.
-    std::vector<Tensor> reshaped;
+    Tensors reshaped;
     reshaped.reserve(inputs.size());
     for (const Tensor &in : inputs) {
       Tensor r = in;
@@ -170,8 +169,8 @@ Tensor ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t
   return out;
 }
 
-void ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t axis,
-                                    int64_t new_axis, Tensor &output) const {
+void ConcatFromSequence::operator()(const Tensors &inputs, int64_t axis, int64_t new_axis,
+                                    Tensor &output) const {
   int resolved_axis = 0;
   onnx_kernels::Shape out_shape;
   size_t elem_size = 0;
@@ -188,7 +187,7 @@ void ConcatFromSequence::operator()(const std::vector<Tensor> &inputs, int64_t a
       output.size_bytes() == total_bytes,
       "kernel::ConcatFromSequence preallocated output buffer has unexpected size in bytes.");
   if (new_axis == 1) {
-    std::vector<Tensor> reshaped;
+    Tensors reshaped;
     reshaped.reserve(inputs.size());
     for (const Tensor &in : inputs) {
       Tensor r = in;

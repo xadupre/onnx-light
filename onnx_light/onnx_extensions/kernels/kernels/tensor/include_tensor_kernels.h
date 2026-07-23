@@ -58,9 +58,8 @@ using ::onnx_light::core::runtime::OpsetId;
 class Concat : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, int64_t axis,
-                    RuntimeContext *rt = nullptr) const;
-  void operator()(const std::vector<Tensor> &inputs, int64_t axis, Tensor &output) const;
+  Tensor operator()(const Tensors &inputs, int64_t axis, RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensors &inputs, int64_t axis, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

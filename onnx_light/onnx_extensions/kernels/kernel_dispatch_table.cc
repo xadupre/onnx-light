@@ -123,13 +123,13 @@ template <class KernelT> NodeKernelFn MakeTernaryTrampoline() {
   };
 }
 
-// Wraps a kernel of the form ``Tensor operator()(const std::vector<Tensor>&)``
+// Wraps a kernel of the form ``Tensor operator()(const Tensors&)``
 // (the variadic element-wise reducers: ``Sum``, ``Max``, ``Min``, ``Mean``).
 template <class KernelT> NodeKernelFn MakeVariadicTrampoline(int min_inputs = 1) {
   return [min_inputs](const NodeProto &node, RuntimeContext &rt) {
     RequireMinInputCount(node, min_inputs);
     RequireOutputCount(node, 1);
-    std::vector<Tensor> inputs;
+    Tensors inputs;
     inputs.reserve(node.input_size());
     for (int i = 0; i < node.input_size(); ++i) {
       inputs.push_back(GetInput(node, i, rt.tensors()));
@@ -308,8 +308,8 @@ inline SVMCommonAttrs ParseSVMCommonAttrs(const NodeProto &node, const char *op_
 // with a ``T*`` tag pointer (always null) so the caller can recover ``T`` via
 // ``std::remove_pointer_t<decltype(tag)>``.
 template <class Fn>
-auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
-                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
+auto DispatchSVMByDataType(const Tensor &x, const char *op_name, Fn &&fn)
+    -> decltype(fn(static_cast<float *>(nullptr))) {
   switch (x.data_type) {
   case static_cast<int32_t>(DataType::FLOAT):
     return fn(static_cast<float *>(nullptr));
@@ -329,8 +329,8 @@ auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
 // set of input element types (FLOAT, DOUBLE, INT32, INT64) per the
 // ``ai.onnx.ml`` schema.
 template <class Fn>
-auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name,
-                                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
+auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name, Fn &&fn)
+    -> decltype(fn(static_cast<float *>(nullptr))) {
   return DispatchSVMByDataType(x, op_name, std::forward<Fn>(fn));
 }
 
@@ -897,7 +897,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
          RequireOutputCount(node, 1);
-         std::vector<Tensor> inputs;
+         Tensors inputs;
          inputs.reserve(node.input_size());
          for (int i = 0; i < node.input_size(); ++i) {
            inputs.push_back(GetInput(node, i, rt.tensors()));
@@ -1148,7 +1148,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
          RequireOutputCount(node, 1);
-         std::vector<Tensor> inputs;
+         Tensors inputs;
          inputs.reserve(node.input_size());
          for (int i = 0; i < node.input_size(); ++i) {
            inputs.push_back(GetInput(node, i, rt.tensors()));
@@ -2179,7 +2179,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
          RequireOutputCount(node, 1);
-         std::vector<Tensor> inputs;
+         Tensors inputs;
          inputs.reserve(node.input_size());
          for (int i = 0; i < node.input_size(); ++i) {
            inputs.push_back(GetInput(node, i, rt.tensors()));
@@ -2261,7 +2261,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          }
 
          onnx_kernels::kernel::Split k(rt.kernel_ctx());
-         std::vector<Tensor> outputs = k(input, axis, split, num_outputs);
+         Tensors outputs = k(input, axis, split, num_outputs);
          EXT_ENFORCE_INVALID(!(static_cast<int>(outputs.size()) != node.output_size()), 
                "RunNode: op 'Split' produced " , outputs.size() ,
                " outputs but node declares " , node.output_size() , ".");
@@ -2614,7 +2614,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
                                        n , ").");
          const Tensor &R = GetInput(node, 0, rt.tensors());
          const Tensor &T = GetInput(node, 1, rt.tensors());
-         std::vector<Tensor> Xs, Gs, Hs;
+         Tensors Xs, Gs, Hs;
          Xs.reserve(n);
          Gs.reserve(n);
          Hs.reserve(n);
@@ -2628,7 +2628,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          const float norm_coefficient =
              GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
          onnx_kernels::kernel::Adagrad k(rt.kernel_ctx());
-         std::vector<Tensor> outs =
+         Tensors outs =
              k(R, T, Xs, Gs, Hs, epsilon, decay_factor, norm_coefficient);
          for (int64_t i = 0; i < 2 * n; ++i) {
            SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]),
@@ -2645,7 +2645,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
                                        n , ").");
          const Tensor &R = GetInput(node, 0, rt.tensors());
          const Tensor &T = GetInput(node, 1, rt.tensors());
-         std::vector<Tensor> Xs, Gs, Vs, Hs;
+         Tensors Xs, Gs, Vs, Hs;
          Xs.reserve(n);
          Gs.reserve(n);
          Vs.reserve(n);
@@ -2664,7 +2664,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          const float norm_coefficient_post =
              GetAttributeFloatOrDefault(node, "norm_coefficient_post", 0.0f);
          onnx_kernels::kernel::Adam k(rt.kernel_ctx());
-         std::vector<Tensor> outs = k(R, T, Xs, Gs, Vs, Hs, alpha, beta, epsilon,
+         Tensors outs = k(R, T, Xs, Gs, Vs, Hs, alpha, beta, epsilon,
                                       norm_coefficient, norm_coefficient_post);
          for (int64_t i = 0; i < 3 * n; ++i) {
            SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]),
@@ -2682,7 +2682,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
                                        n , ").");
          const Tensor &R = GetInput(node, 0, rt.tensors());
          const Tensor &T = GetInput(node, 1, rt.tensors());
-         std::vector<Tensor> Xs, Gs, Vs;
+         Tensors Xs, Gs, Vs;
          Xs.reserve(n);
          Gs.reserve(n);
          Vs.reserve(n);
@@ -2707,7 +2707,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
                "'.");
          }
          onnx_kernels::kernel::Momentum k(rt.kernel_ctx());
-         std::vector<Tensor> outs = k(R, T, Xs, Gs, Vs, alpha, beta, norm_coefficient, mode);
+         Tensors outs = k(R, T, Xs, Gs, Vs, alpha, beta, norm_coefficient, mode);
          for (int64_t i = 0; i < 2 * n; ++i) {
            SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]),
                      rt.tensors());
@@ -3422,7 +3422,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
          RequireOutputCount(node, 1);
-         std::vector<Tensor> inputs;
+         Tensors inputs;
          inputs.reserve(node.input_size());
          for (int i = 0; i < node.input_size(); ++i) {
            inputs.push_back(GetInput(node, i, rt.tensors()));

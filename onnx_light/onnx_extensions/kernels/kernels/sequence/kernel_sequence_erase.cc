@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -41,7 +40,7 @@ Sequence SequenceErase::operator()(const Sequence &input_sequence, const Tensor 
   }
 
   // Build output sequence omitting element at idx.
-  std::vector<Tensor> out_values;
+  Tensors out_values;
   out_values.reserve(static_cast<std::size_t>(n - 1));
   for (int64_t i = 0; i < n; ++i) {
     if (i != idx) {

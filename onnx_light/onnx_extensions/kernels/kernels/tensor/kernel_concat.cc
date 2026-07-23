@@ -7,7 +7,6 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -24,7 +23,7 @@ struct ConcatLayout {
   size_t elem_size;
 };
 
-ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t axis) {
+ConcatLayout ValidateAndComputeLayout(const Tensors &inputs, int64_t axis) {
   EXT_ENFORCE_INVALID(!inputs.empty(), "kernel::Concat requires at least one input tensor.");
 
   const int32_t dtype = inputs[0].data_type;
@@ -59,8 +58,7 @@ ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t
 
 } // namespace
 
-Tensor Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis,
-                          RuntimeContext *rt) const {
+Tensor Concat::operator()(const Tensors &inputs, int64_t axis, RuntimeContext *rt) const {
   const ConcatLayout layout = ValidateAndComputeLayout(inputs, axis);
   int64_t total = 1;
   for (int64_t d : layout.shape) {
@@ -73,7 +71,7 @@ Tensor Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis,
   return out;
 }
 
-void Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis, Tensor &output) const {
+void Concat::operator()(const Tensors &inputs, int64_t axis, Tensor &output) const {
   const ConcatLayout layout = ValidateAndComputeLayout(inputs, axis);
   const int32_t dtype = inputs[0].data_type;
   EXT_ENFORCE_INVALID(output.data_type == dtype,

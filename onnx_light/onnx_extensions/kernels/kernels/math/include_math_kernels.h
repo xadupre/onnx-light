@@ -862,8 +862,8 @@ public:
 class Sum : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt = nullptr) const;
-  void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
+  Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensors &inputs, Tensor &output) const;
 
   /// Variadic element-wise kernel: the output buffer may alias an input
   /// buffer when that input is not broadcast-expanded (i.e. its shape equals
@@ -879,8 +879,8 @@ public:
 class Max : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt = nullptr) const;
-  void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
+  Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensors &inputs, Tensor &output) const;
 
   /// Variadic element-wise kernel: the output buffer may alias an input
   /// buffer when that input is not broadcast-expanded.
@@ -895,8 +895,8 @@ public:
 class Min : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt = nullptr) const;
-  void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
+  Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensors &inputs, Tensor &output) const;
 
   /// See :class:`Max`.
   static constexpr bool CanRunInPlace() noexcept { return true; }
@@ -910,8 +910,8 @@ public:
 class Mean : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt = nullptr) const;
-  void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
+  Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensors &inputs, Tensor &output) const;
 
   /// Variadic element-wise kernel: the output buffer may alias an input
   /// buffer when that input is not broadcast-expanded.
@@ -990,10 +990,9 @@ struct EinsumPlan;
 class Einsum : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const std::vector<Tensor> &inputs, const std::string &equation,
+  Tensor operator()(const Tensors &inputs, const std::string &equation,
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const std::vector<Tensor> &inputs, const std::string &equation,
-                  Tensor &output) const;
+  void operator()(const Tensors &inputs, const std::string &equation, Tensor &output) const;
 
   /// Einsum generally changes shape and cannot alias inputs safely.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -1002,8 +1001,7 @@ private:
   /// Returns the contraction plan for ``inputs``/``equation``, building it once
   /// and reusing the cached result while the equation and input shapes are
   /// unchanged, so :cpp:func:`BuildPlan` is not recomputed on every call.
-  const EinsumPlan &EnsurePlan(const std::vector<Tensor> &inputs,
-                               const std::string &equation) const;
+  const EinsumPlan &EnsurePlan(const Tensors &inputs, const std::string &equation) const;
 
   mutable std::shared_ptr<const EinsumPlan> plan_;
   mutable std::string plan_equation_;

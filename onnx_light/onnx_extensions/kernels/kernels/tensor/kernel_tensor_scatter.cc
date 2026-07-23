@@ -138,7 +138,8 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
 
   // Strides through the leading `axis` dims (decompose the linear prefix
   // index into per-dim coordinates so we can recover batch_idx = coord[0]).
-  std::vector<int64_t> prefix_strides(static_cast<std::size_t>(axis), 1);
+  onnx_kernels::Shape prefix_strides;
+  prefix_strides.assign(static_cast<std::size_t>(axis), 1);
   for (int64_t k = axis - 2; k >= 0; --k) {
     prefix_strides[static_cast<std::size_t>(k)] = prefix_strides[static_cast<std::size_t>(k + 1)] *
                                                   past_cache.shape[static_cast<std::size_t>(k + 1)];

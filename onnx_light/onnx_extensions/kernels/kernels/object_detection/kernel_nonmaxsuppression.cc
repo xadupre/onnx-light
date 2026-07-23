@@ -136,7 +136,9 @@ Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
   const float *pboxes = boxes.AsFloat();
   const float *pscores = scores.AsFloat();
 
-  const int64_t max_per_pair = std::min<int64_t>(spatial, max_boxes > 0 ? max_boxes : 0);
+  // ``max_per_pair`` may be non-positive when ``max_boxes <= 0``; the
+  // ``max_selected <= 0`` guard below turns that into an empty output.
+  const int64_t max_per_pair = std::min<int64_t>(spatial, max_boxes);
   const int64_t max_selected = num_batches * num_classes * max_per_pair;
 
   // Nothing can be selected (e.g. ``max_output_boxes_per_class <= 0`` or an

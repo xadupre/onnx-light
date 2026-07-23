@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -58,17 +57,18 @@ Tensors Adam::operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, co
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size() && Xs.size() == Hs.size(),
                       kAdamName, ": 'Xs', 'Gs', 'Vs' and 'Hs' must have the same length.");
 
+  RawBufferAllocator *allocator = ctx_.allocator;
   Tensors outputs;
   outputs.reserve(Xs.size() * 3);
   // Layout: X_final_1..N, V_new_1..N, H_new_1..N.
   for (const auto &X : Xs) {
-    outputs.emplace_back("", DataType::FLOAT, X.shape, std::vector<uint8_t>(X.size_bytes()));
+    outputs.push_back(MakeOutputTensor(DataType::FLOAT, X.shape, X.size_bytes(), allocator));
   }
   for (const auto &V : Vs) {
-    outputs.emplace_back("", DataType::FLOAT, V.shape, std::vector<uint8_t>(V.size_bytes()));
+    outputs.push_back(MakeOutputTensor(DataType::FLOAT, V.shape, V.size_bytes(), allocator));
   }
   for (const auto &H : Hs) {
-    outputs.emplace_back("", DataType::FLOAT, H.shape, std::vector<uint8_t>(H.size_bytes()));
+    outputs.push_back(MakeOutputTensor(DataType::FLOAT, H.shape, H.size_bytes(), allocator));
   }
   (*this)(R, T, Xs, Gs, Vs, Hs, outputs, alpha, beta, epsilon, norm_coefficient,
           norm_coefficient_post);

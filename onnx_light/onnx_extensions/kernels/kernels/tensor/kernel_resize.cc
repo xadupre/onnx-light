@@ -196,8 +196,10 @@ void ResizeNearest(const Tensor &input, const std::vector<float> &scales,
     total_elements *= d;
   }
 
-  std::vector<int64_t> in_strides(rank, 0);
-  std::vector<int64_t> out_strides(rank, 0);
+  onnx_kernels::Shape in_strides;
+  in_strides.assign(rank, 0);
+  onnx_kernels::Shape out_strides;
+  out_strides.assign(rank, 0);
   if (rank > 0) {
     in_strides[rank - 1] = 1;
     out_strides[rank - 1] = 1;

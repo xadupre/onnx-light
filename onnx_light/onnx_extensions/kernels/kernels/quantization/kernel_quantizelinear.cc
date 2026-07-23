@@ -279,7 +279,8 @@ void ComputeScaleIndex(const Tensor &x, const Tensor &y_scale, int64_t axis, int
       stride *= s_shape[d];
       repeats[d] = s_shape[d] != 0 ? x_shape[d] / s_shape[d] : 1;
     }
-    std::vector<int64_t> coord(rank, 0);
+    onnx_kernels::Shape coord;
+    coord.assign(rank, 0);
     for (int64_t i = 0; i < n; ++i) {
       int64_t si = 0;
       for (std::size_t d = 0; d < rank; ++d) {

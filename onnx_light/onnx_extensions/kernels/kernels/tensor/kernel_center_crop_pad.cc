@@ -190,7 +190,8 @@ void CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
 
   // Iterate over the copy window (n-D loop). The inner-most axis copy is
   // collapsed into a single ``memcpy`` for efficiency.
-  std::vector<int64_t> idx(rank, 0);
+  onnx_kernels::Shape idx;
+  idx.assign(rank, 0);
   const int64_t inner_len = copy_len.back() * static_cast<int64_t>(elem_size);
   const int64_t inner_in_off_base = in_start.back();
   const int64_t inner_out_off_base = out_start.back();

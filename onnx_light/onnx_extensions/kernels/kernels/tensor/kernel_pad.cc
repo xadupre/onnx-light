@@ -165,8 +165,10 @@ Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *con
   }
 
   // Per-axis pad_begin/pad_end (indexed by data axis).
-  std::vector<int64_t> pad_begin(rank, 0);
-  std::vector<int64_t> pad_end(rank, 0);
+  onnx_kernels::Shape pad_begin;
+  pad_begin.assign(rank, 0);
+  onnx_kernels::Shape pad_end;
+  pad_end.assign(rank, 0);
   for (std::size_t i = 0; i < num_axes; ++i) {
     const std::size_t axis = static_cast<std::size_t>(axes_vec[i]);
     pad_begin[axis] = pads_vec[i];
@@ -203,8 +205,10 @@ void Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *const
         p >= 0, "kernel::Pad: negative padding (cropping) is not supported by this kernel.");
   }
 
-  std::vector<int64_t> pad_begin(rank, 0);
-  std::vector<int64_t> pad_end(rank, 0);
+  onnx_kernels::Shape pad_begin;
+  pad_begin.assign(rank, 0);
+  onnx_kernels::Shape pad_end;
+  pad_end.assign(rank, 0);
   for (std::size_t i = 0; i < num_axes; ++i) {
     const std::size_t axis = static_cast<std::size_t>(axes_vec[i]);
     pad_begin[axis] = pads_vec[i];
@@ -233,7 +237,8 @@ void Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *const
     total *= d;
   }
 
-  std::vector<int64_t> out_coord(rank, 0);
+  onnx_kernels::Shape out_coord;
+  out_coord.assign(rank, 0);
   for (int64_t out_idx = 0; out_idx < total; ++out_idx) {
     int64_t remaining = out_idx;
     for (std::size_t k = 0; k < rank; ++k) {

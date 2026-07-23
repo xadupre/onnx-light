@@ -88,7 +88,8 @@ void Tile::operator()(const Tensor &input, const Tensor &repeats, Tensor &output
   }
 
   // Pre-compute input row-major strides (in elements).
-  std::vector<int64_t> in_strides(rank, 0);
+  onnx_kernels::Shape in_strides;
+  in_strides.assign(rank, 0);
   if (rank > 0) {
     in_strides[rank - 1] = 1;
     for (std::size_t k = rank - 1; k > 0; --k) {
@@ -96,7 +97,8 @@ void Tile::operator()(const Tensor &input, const Tensor &repeats, Tensor &output
     }
   }
   // Pre-compute output row-major strides.
-  std::vector<int64_t> out_strides(rank, 0);
+  onnx_kernels::Shape out_strides;
+  out_strides.assign(rank, 0);
   if (rank > 0) {
     out_strides[rank - 1] = 1;
     for (std::size_t k = rank - 1; k > 0; --k) {

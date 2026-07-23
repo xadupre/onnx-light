@@ -277,7 +277,7 @@ public:
   Tensor operator()(const Tensor &input, int64_t sample_size = 1, int64_t seed = kNoSeed,
                     int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, int64_t sample_size, int64_t seed, int32_t dtype,
-                  Tensor &output) const;
+                  Tensor &output, RuntimeContext *rt = nullptr) const;
 
   /// Sentinel meaning ``seed`` attribute is absent.
   static constexpr int64_t kNoSeed = -1;

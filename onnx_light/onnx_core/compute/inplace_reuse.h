@@ -4,11 +4,14 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "onnx_core/compute/inplace_reuse_types.h"
+#include "onnx_core/compute/result_lifetime.h"
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
@@ -50,12 +53,14 @@
  * kernel-level ``CanRunInPlace()`` capability before actually aliasing
  * buffers.
  *
- * The analysis is exposed through :cpp:class:`ComputeContext` (declared
- * in ``compute_context.h``), which stores the per-node result (mirroring
+ * The matching algorithm itself lives here, in
+ * :cpp:func:`ComputeInPlaceReuseMatches`. :cpp:class:`ComputeContext`
+ * (declared in ``compute_context.h``) calls into it and stores the
+ * per-node result alongside its other graph-level annotations (mirroring
  * the way :cpp:class:`core::shapes::ShapesContext` stores inferred
  * descriptors). The free functions :cpp:func:`ComputeInPlaceReuse` and
  * :cpp:func:`WriteInPlaceReuseToMetadata` remain available as thin
- * convenience wrappers around it.
+ * convenience wrappers around :cpp:class:`ComputeContext`.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -63,6 +68,47 @@ namespace core {
 namespace compute {
 
 using ::onnx_light::core::shapes::ShapesContext;
+
+/// Memoization cache mapping a symbolic expression string to its simplified
+/// form, shared across the byte-size comparisons below to avoid re-running
+/// the symbolic simplifier on the same expression.
+using SimplifiedExpressionCache = std::unordered_map<std::string, expressions::DimType>;
+
+/// Returns ``value`` unchanged when it is already a concrete integer,
+/// otherwise the canonical simplified form of the symbolic expression it
+/// holds (memoized in ``cache`` when provided).
+expressions::DimType SimplifyDimType(const expressions::DimType &value,
+                                     SimplifiedExpressionCache *cache = nullptr);
+
+/// Returns (and memoizes in ``cache``) the packed byte-size expression of the
+/// tensor named ``name`` in ``ctx``, or ``std::nullopt`` when its element type
+/// has no fixed bit width (strings, sequences, maps, optionals, undefined).
+const std::optional<expressions::DimType> &
+GetCachedByteSizeExpr(const ShapesContext &ctx, const std::string &name,
+                      std::unordered_map<std::string, std::optional<expressions::DimType>> &cache,
+                      SimplifiedExpressionCache *simplification_cache = nullptr);
+
+/**
+ * Core matching algorithm: for every node of ``graph``, pairs each output
+ * with at most one input whose buffer it may reuse in place, using the
+ * shapes inferred into ``ctx`` and the per-value lifetime information already
+ * computed in ``lifetime`` (see :cpp:func:`ComputeResultLifetimeInfo`).
+ *
+ * @param graph     Graph whose nodes are analysed, in topological order.
+ * @param ctx       Shapes context already populated with the inferred
+ *                  descriptors for ``graph``.
+ * @param lifetime  Per-value lifetime information for ``graph`` (producer /
+ *                  last-use maps and the set of names that must never be
+ *                  reused in place), computed with the same
+ *                  ``allow_input_overwrite`` setting the caller intends.
+ * @return A vector with one entry per node of ``graph`` (same order as
+ *         ``graph.node()``); each entry lists the reuse opportunities
+ *         discovered for that node, ordered by output index. Nodes without
+ *         any opportunity carry an empty list.
+ */
+std::vector<std::vector<InPlaceReuse>>
+ComputeInPlaceReuseMatches(const GraphProto &graph, const ShapesContext &ctx,
+                           const ResultLifetimeInfo &lifetime);
 
 /**
  * Convenience wrapper around :cpp:func:`ComputeContext::ComputeInPlaceReuseGraph`:

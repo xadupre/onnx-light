@@ -11,7 +11,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -26,7 +25,7 @@ constexpr const char *kSupportedMinTypesMsg =
 
 // Computes the broadcast shape of every tensor in ``inputs``. ``inputs`` must
 // be non-empty and all tensors must share ``expected_dtype``.
-Shape ValidateAndBroadcastShape(const std::vector<Tensor> &inputs, const char *dtype_name,
+Shape ValidateAndBroadcastShape(const Tensors &inputs, const char *dtype_name,
                                 int32_t expected_dtype) {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
@@ -43,7 +42,7 @@ Shape ValidateAndBroadcastShape(const std::vector<Tensor> &inputs, const char *d
 template <typename T> T MinOf(T a, T b) { return a < b ? a : b; }
 
 template <typename T>
-Tensor MinAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
+Tensor MinAlloc(const char *dtype_name, int32_t dtype, const Tensors &inputs,
                 RawBufferAllocator *allocator) {
   const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   int64_t out_count = 1;
@@ -66,8 +65,7 @@ Tensor MinAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
 }
 
 template <typename T>
-void MinInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
-                Tensor &output) {
+void MinInPlace(const char *dtype_name, int32_t dtype, const Tensors &inputs, Tensor &output) {
   const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   const size_t expected_bytes = [&]() {
     int64_t n = 1;
@@ -103,7 +101,7 @@ void MinInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
   MACRO(UINT32, uint32_t, "UINT32")                                                                \
   MACRO(UINT64, uint64_t, "UINT64")
 
-Tensor MinFloat16Alloc(const std::vector<Tensor> &inputs, RawBufferAllocator *allocator = nullptr) {
+Tensor MinFloat16Alloc(const Tensors &inputs, RawBufferAllocator *allocator = nullptr) {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
     EXT_ENFORCE_INVALID(inputs[i].data_type == DataType::FLOAT16, kMinName,
@@ -128,7 +126,7 @@ Tensor MinFloat16Alloc(const std::vector<Tensor> &inputs, RawBufferAllocator *al
   return z;
 }
 
-void MinFloat16InPlace(const std::vector<Tensor> &inputs, Tensor &output) {
+void MinFloat16InPlace(const Tensors &inputs, Tensor &output) {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
     EXT_ENFORCE_INVALID(inputs[i].data_type == DataType::FLOAT16, kMinName,
@@ -149,7 +147,7 @@ void MinFloat16InPlace(const std::vector<Tensor> &inputs, Tensor &output) {
 
 } // namespace
 
-Tensor Min::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
+Tensor Min::operator()(const Tensors &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   switch (inputs[0].data_type) {
@@ -166,7 +164,7 @@ Tensor Min::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) co
   }
 }
 
-void Min::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
+void Min::operator()(const Tensors &inputs, Tensor &output) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   switch (inputs[0].data_type) {
 #define ONNX_LIGHT_MIN_CASE_INPLACE(ENUM, CPP, NAME)                                               \

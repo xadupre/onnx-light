@@ -10,7 +10,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -23,7 +22,7 @@ constexpr const char *kSupportedMeanTypesMsg = " only supports FLOAT and DOUBLE 
 
 // Computes the broadcast shape of every tensor in ``inputs``. ``inputs`` must
 // be non-empty and all tensors must share ``expected_dtype``.
-Shape ValidateAndBroadcastShape(const std::vector<Tensor> &inputs, const char *dtype_name,
+Shape ValidateAndBroadcastShape(const Tensors &inputs, const char *dtype_name,
                                 int32_t expected_dtype) {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMeanName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
@@ -38,7 +37,7 @@ Shape ValidateAndBroadcastShape(const std::vector<Tensor> &inputs, const char *d
 }
 
 template <typename T>
-void AccumulateAndScale(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
+void AccumulateAndScale(const char *dtype_name, int32_t dtype, const Tensors &inputs,
                         Tensor &output) {
   // Single input: copy verbatim. ``Mean`` of a single tensor is the tensor itself.
   if (inputs.size() == 1) {
@@ -66,7 +65,7 @@ void AccumulateAndScale(const char *dtype_name, int32_t dtype, const std::vector
 }
 
 template <typename T>
-Tensor MeanAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
+Tensor MeanAlloc(const char *dtype_name, int32_t dtype, const Tensors &inputs,
                  RawBufferAllocator *allocator) {
   const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   int64_t out_count = 1;
@@ -80,8 +79,7 @@ Tensor MeanAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor
 }
 
 template <typename T>
-void MeanInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor> &inputs,
-                 Tensor &output) {
+void MeanInPlace(const char *dtype_name, int32_t dtype, const Tensors &inputs, Tensor &output) {
   const Shape out_shape = ValidateAndBroadcastShape(inputs, dtype_name, dtype);
   const size_t expected_bytes = [&]() {
     int64_t n = 1;
@@ -96,7 +94,7 @@ void MeanInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor
 
 } // namespace
 
-Tensor Mean::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
+Tensor Mean::operator()(const Tensors &inputs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMeanName, " requires at least one input.");
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   switch (inputs[0].data_type) {
@@ -110,7 +108,7 @@ Tensor Mean::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) c
   }
 }
 
-void Mean::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
+void Mean::operator()(const Tensors &inputs, Tensor &output) const {
   EXT_ENFORCE_INVALID(!inputs.empty(), kMeanName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:

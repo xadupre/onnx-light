@@ -2436,13 +2436,16 @@ TEST(KernelClass, MelWeightMatrixUsesAllocatorWhenRuntimeContextHasOne) {
   const Tensor lower_edge_hertz = Tensor::FromFloat("", {}, {0.0f});
   const Tensor upper_edge_hertz = Tensor::FromFloat("", {}, {4000.0f});
 
-  SimpleRawBufferAllocator alloc(1);
+  // Two concurrent slots are needed: one for the output tensor and one for the
+  // transient ``bin_indices`` scratch buffer routed through the allocator.
+  SimpleRawBufferAllocator alloc(2);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
 
   Tensor y = kernel(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz,
                     core::runtime::DataType::FLOAT, &rt);
   EXPECT_TRUE(y.has_allocation());
+  // Only the output remains allocated; the scratch buffer was freed.
   EXPECT_EQ(alloc.allocated_count(), 1u);
   EXPECT_EQ(y.data.size(), 0u);
   ASSERT_EQ(y.shape.size(), 2u);

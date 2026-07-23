@@ -11,7 +11,7 @@
 /**
  * @file runtime_parameters.h
  * @brief Tunable, model-independent knobs controlling how a graph is
- *        evaluated through :cpp:func:`RunNode` / :cpp:func:`RunNodes`.
+ *        evaluated through :cpp:func:`RunNode` / :cpp:class:`RuntimeSession`.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -21,7 +21,7 @@ namespace runtime {
 /**
  * Bundles the model-independent execution settings shared across the
  * nodes of a graph evaluated through :cpp:func:`RunNode` /
- * :cpp:func:`RunNodes`.
+ * :cpp:class:`RuntimeSession`.
  *
  * Today the only knob is :cpp:var:`num_threads`, the requested degree of
  * parallelism. Grouping it in a dedicated struct keeps the

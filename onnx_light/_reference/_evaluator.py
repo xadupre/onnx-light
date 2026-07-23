@@ -4,12 +4,13 @@
 
 """Implementation of :class:`ReferenceEvaluator`.
 
-The evaluator wraps the ``RunModel`` / ``RunGraph`` / ``RunFunction``
-dispatcher exposed by :mod:`onnx_light.onnx_py._onnxpykernels` (re-exported
-through the ``runtime`` submodule). All operator implementations come
-from the C++ ``KernelDispatchTable``; this Python class only handles
-input/output conversion between :class:`numpy.ndarray` and the runtime
-``Tensor`` type and the bookkeeping required to expose an
+The evaluator wraps the ``RunModel`` dispatcher and the ``RuntimeSession`` /
+``ExecutionPlan`` execution machinery exposed by
+:mod:`onnx_light.onnx_py._onnxpykernels` (re-exported through the ``runtime``
+submodule). All operator implementations come from the C++
+``KernelDispatchTable``; this Python class only handles input/output
+conversion between :class:`numpy.ndarray` and the runtime ``Tensor`` type and
+the bookkeeping required to expose an
 ``onnx.reference.ReferenceEvaluator``-compatible API.
 """
 
@@ -121,6 +122,27 @@ def _numpy_to_cpp_tensor(name: str, arr: np.ndarray) -> Any:
     # Fallback for strings, sub-byte types, and exotic dtypes.
     tp = numpy_helper.from_array(arr, name=name)
     return _runtime.tensor_from_proto(tp)
+
+
+def _run_via_session(graph_or_function: Any, ctx: Any) -> None:
+    """Runs ``graph_or_function`` by building (or reusing) its cached
+    :class:`~onnx_light.onnx_py._onnxpykernels.runtime.ExecutionPlan` and
+    driving it through a fresh
+    :class:`~onnx_light.onnx_py._onnxpykernels.runtime.RuntimeSession`.
+
+    When ``graph_or_function`` is a ``GraphProto``, every declared
+    initializer is seeded into ``ctx`` first (names ``ctx`` already carries
+    are left as-is), mirroring what :func:`_runtime.run_model` does for a
+    full model's graph. ``FunctionProto`` has no initializers, so nothing is
+    seeded in that case.
+    """
+    initializers = getattr(graph_or_function, "initializer", None)
+    if initializers is not None:
+        for init in initializers:
+            if not ctx.has(init.name):
+                ctx.set(init.name, _runtime.tensor_from_proto(init), "initializer")
+    plan = ctx.get_execution_plan(graph_or_function)
+    _runtime.RuntimeSession(plan).run(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -508,9 +530,9 @@ class ReferenceEvaluator:
         if self._model is not None:
             _runtime.run_model(self._model, ctx)
         elif self._function is not None:
-            _runtime.run_function(self._function, ctx)
+            _run_via_session(self._function, ctx)
         else:
-            _runtime.run_graph(self._graph, ctx)
+            _run_via_session(self._graph, ctx)
 
         self._last_ctx = ctx
 

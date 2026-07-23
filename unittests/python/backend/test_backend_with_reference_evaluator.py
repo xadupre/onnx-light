@@ -10,8 +10,9 @@ test registry produced by :func:`onnx_light.backend.test.case.make_test_class`
 and validates that :class:`ReferenceEvaluator` reproduces the expected
 outputs without discrepancies.
 
-The evaluator wraps the C++ ``RunModel`` / ``RunGraph`` / ``RunFunction``
-dispatcher exposed by :mod:`onnx_light.onnx_py._onnxpykernels`, so the
+The evaluator wraps the C++ ``RunModel`` dispatcher and the
+``RuntimeSession`` / ``ExecutionPlan`` execution machinery exposed by
+:mod:`onnx_light.onnx_py._onnxpykernels`, so the
 coverage here is a superset of ``test_backend_with_run_model.py`` (which
 only exercises single-node graphs) and a useful cross-check of the Python
 ``ReferenceEvaluator`` facade against the upstream expected outputs.

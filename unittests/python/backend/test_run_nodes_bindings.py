@@ -1,8 +1,8 @@
 # Copyright (c) ONNX Project Contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for the Python bindings of the ``RunNode`` / ``RunGraph`` /
-``RunFunction`` / ``RunModel`` dispatcher exposed by
+"""Tests for the Python bindings of the ``RunNode`` / ``RunModel`` dispatcher
+and the ``ExecutionPlan`` / ``RuntimeSession`` execution machinery exposed by
 :mod:`onnx_light.onnx_py._onnxpykernels`.
 
 The dispatcher is exposed as the ``runtime`` submodule of
@@ -75,14 +75,12 @@ class TestRunNodesBindings(ExtTestCase):
             "RuntimeEvent",
             "RuntimeEventAction",
             "ExecutionPlan",
+            "RuntimeSession",
             "default_opset",
             "tensor_from_proto",
             "tensor_to_proto",
             "tensor_to_numpy",
             "run_node",
-            "run_nodes",
-            "run_graph",
-            "run_function",
             "run_model",
         ]:
             self.assertTrue(hasattr(rt, name), name)
@@ -297,7 +295,8 @@ class TestRunNodesBindings(ExtTestCase):
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         ctx.set("x", _make_float_tensor("x", [-4.0, 5.0, -6.0]))
         ctx.set("z", _make_float_tensor("z", [1.0, 1.0, 1.0]))
-        rt.run_graph(model.graph, ctx)
+        plan = rt.ExecutionPlan(model.graph)
+        rt.RuntimeSession(plan).run(ctx)
         self.assertEqual(_unpack_floats(ctx.get("y")), (5.0, 6.0, 7.0))
 
     def test_run_node_executes_a_single_node(self):
@@ -313,7 +312,8 @@ class TestRunNodesBindings(ExtTestCase):
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         ctx.set("x", _make_float_tensor("x", [-1.0, 1.0, -1.0]))
         ctx.set("z", _make_float_tensor("z", [100.0, 200.0, 300.0]))
-        rt.run_nodes(list(model.graph.node), ctx)
+        plan = rt.ExecutionPlan(model.graph)
+        rt.RuntimeSession(plan).run(ctx)
         self.assertEqual(_unpack_floats(ctx.get("y")), (101.0, 201.0, 301.0))
 
     def test_run_node_unknown_op_raises(self):
@@ -388,7 +388,8 @@ class TestRunNodesBindings(ExtTestCase):
             c.put(tp.name, rt.tensor_from_proto(tp), "output")
 
         ctx.register_custom_kernel("", "Abs", fake_abs)
-        rt.run_nodes(list(model.graph.node), ctx)
+        plan = rt.ExecutionPlan(model.graph)
+        rt.RuntimeSession(plan).run(ctx)
         # Abs replaced by negation: -(-1) = 1, -(-2) = 2, -(-3) = 3, +0.
         self.assertEqual(_unpack_floats(ctx.get("y")), (1.0, 2.0, 3.0))
 

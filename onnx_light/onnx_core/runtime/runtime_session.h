@@ -21,9 +21,11 @@
  * (which already carries the node list it drives) and, on its first
  * :cpp:func:`Run`, resolves every executed node's kernel once against the
  * supplied :cpp:class:`RuntimeContext`; subsequent runs reuse the cached
- * kernels. The release-aware :cpp:func:`RunNodes` overload in ``run_nodes.h``
- * is a thin wrapper that constructs a session and calls
- * :cpp:func:`RuntimeSession::Run` a single time.
+ * kernels. Every entry point that runs a node list — :cpp:func:`RunModel`,
+ * :cpp:func:`RunSubgraph`, the model-local function call helper, and the
+ * ``If`` / ``Loop`` / ``Scan`` control-flow kernels — constructs one of
+ * these sessions (over the graph's or function's cached
+ * :cpp:class:`ExecutionPlan`) and calls :cpp:func:`Run` a single time.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -53,9 +55,9 @@ namespace runtime {
  *     without redoing the per-node dispatch lookup.
  *
  * This mirrors how an inference runtime prepares an executable graph once and
- * then runs it repeatedly. The release-aware :cpp:func:`RunNodes` overload is
- * a thin wrapper that constructs a session and calls :cpp:func:`Run` a single
- * time.
+ * then runs it repeatedly. Every caller that needs to run a node list builds
+ * one of these sessions over the list's :cpp:class:`ExecutionPlan` and calls
+ * :cpp:func:`Run` on it.
  */
 class RuntimeSession {
 public:
@@ -75,10 +77,13 @@ public:
    * Executes the plan once against ``rt``: on the first call it resolves and
    * caches the kernel for every scheduled node (rejecting unsupported
    * operators) and records the external inputs those nodes read; every call
-   * then verifies ``rt`` supplies each of those required inputs, runs each
-   * scheduled node using its resolved kernel and frees each intermediate whose
-   * last reference has been reached. Safe to call repeatedly on the same
-   * session.
+   * then verifies ``rt`` supplies each of those required inputs and runs each
+   * scheduled node using its resolved kernel. When
+   * :cpp:func:`RuntimeContext::release_intermediates` is enabled on ``rt``,
+   * it additionally frees each intermediate whose last reference has been
+   * reached, as scheduled by the plan; when disabled, every intermediate the
+   * plan would have released instead stays observable in ``rt`` after
+   * ``Run`` returns. Safe to call repeatedly on the same session.
    *
    * @param rt In/out runtime context used both to resolve the kernels
    *           (function registry / custom kernels) and to exchange tensors.
@@ -125,12 +130,12 @@ public:
 
 private:
   /// A node's kernel resolved once during :cpp:func:`InitializeKernels`,
-  /// together with the normalised ``(domain, op_type)`` used for progress
-  /// printing and event logging so :cpp:func:`Run` never has to recompute
-  /// them.
+  /// together with the normalised ``domain`` and ``op_type`` fused into a
+  /// single ``"<domain>:<op_type>"`` key (the same format used to look the
+  /// kernel up in the :cpp:func:`KernelDispatchTable`) so :cpp:func:`Run`
+  /// never has to recompute or re-store them separately.
   struct PreparedKernel {
-    std::string domain;
-    std::string op_type;
+    std::string key;
     NodeKernelFn kernel;
   };
 

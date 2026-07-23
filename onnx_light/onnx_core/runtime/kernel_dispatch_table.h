@@ -51,9 +51,9 @@ using NodeKernelFn = std::function<void(const NodeProto &node, RuntimeContext &r
  * output ``k`` at iteration ``i``), returns the ``M`` assembled output
  * sequences. Registered by ``onnx_kernels`` (``kernel::SequenceMap``)
  * so that :cpp:func:`RunNode`'s ``SequenceMap`` orchestration (which
- * must live in ``onnx_core`` since it recursively invokes
- * :cpp:func:`RunGraph`) never has to include an ``onnx_kernels`` header
- * directly.
+ * must live in ``onnx_core`` since it recursively drives a
+ * :cpp:class:`RuntimeSession`) never has to include an ``onnx_kernels``
+ * header directly.
  */
 using SequenceMapPackFn = std::function<std::vector<Sequence>(
     RuntimeContext &rt, const Sequence &input_sequence,

@@ -51,7 +51,7 @@ namespace runtime {
 //     explicit buffer copy.
 //   * The "branch graphs" overload
 //     (``operator()(rt, cond, then_branch, else_branch)``) executes the
-//     selected ``GraphProto`` subgraph through :cpp:func:`RunGraph` using
+//     selected ``GraphProto`` subgraph through a :cpp:class:`RuntimeSession` using
 //     the caller-provided :cpp:class:`RuntimeContext` and returns the
 //     subgraph's outputs in declaration order. The caller's tensors,
 //     sequences, and verbosity level are all propagated to the child
@@ -79,7 +79,7 @@ public:
   ///
   /// Selects the ``then_branch`` :cpp:class:`GraphProto` when the scalar
   /// BOOL ``cond`` is true and ``else_branch`` otherwise, then executes
-  /// the selected subgraph through :cpp:func:`RunGraph` using ``rt`` (a
+  /// the selected subgraph through a :cpp:class:`RuntimeSession` using ``rt`` (a
   /// child :cpp:class:`RuntimeContext` is created internally so the
   /// caller's tensor map is left untouched apart from being inherited as
   /// the outer scope of the subgraph). The child context also inherits

@@ -40,13 +40,12 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
 using core::runtime::DataType;
+using core::runtime::ExecutionPlan;
 using core::runtime::KernelDispatchTable;
-using core::runtime::RunFunction;
-using core::runtime::RunGraph;
 using core::runtime::RunModel;
 using core::runtime::RunNode;
-using core::runtime::RunNodes;
 using core::runtime::RuntimeContext;
+using core::runtime::RuntimeSession;
 using core::runtime::Sequence;
 using core::runtime::SliceTensorAlongAxis;
 using core::runtime::Tensor;
@@ -88,6 +87,27 @@ private:
   size_t allocate_calls_ = 0;
   size_t free_calls_ = 0;
 };
+
+// Seeds `graph`'s initializers into `rt` (without overriding any name the
+// caller already provided) and then runs `graph.node()` by building the
+// graph's ExecutionPlan and driving it through a RuntimeSession. This
+// mirrors the production `RunGraphNodesViaSession` helper used internally
+// by `RunModel` / `RunSubgraph` / the control-flow kernels, giving these
+// tests the same "build a plan, then run it through a session" flow every
+// call site now uses.
+void RunGraphViaSession(const GraphProto &graph, RuntimeContext &rt) {
+  const auto &inits = graph.initializer();
+  for (size_t i = 0; i < inits.size(); ++i) {
+    const TensorProto &tp = inits[i];
+    const std::string init_name = tp.name();
+    if (!rt.Has(init_name)) {
+      rt.Set(init_name, TensorFromProto(tp), core::runtime::RuntimeEventKind::kInitializer);
+    }
+  }
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  session.Run(rt);
+}
 
 // Builds a single-node ``NodeProto`` of type ``op_type`` with the
 // requested input and output names.
@@ -603,9 +623,9 @@ TEST(RunNodes, RunNodeDynamicQuantizeLinearFromDispatchTable) {
 
 TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
   // Builds the small graph:  t = Mul(x, y);  out = Sub(t, z)
-  // and runs it through the iterator overload that drives a
-  // RepeatedProtoField<NodeProto> directly (mirroring how a caller
-  // would feed ``graph.node()``).
+  // and runs it by building a free-standing ExecutionPlan over a
+  // RepeatedProtoField<NodeProto> (mirroring how a caller would feed
+  // ``graph.node()``) and driving it through a RuntimeSession.
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.tensors()["x"] = Tensor::FromFloat("x", {2}, {1.0f, 2.0f});
   rt.tensors()["y"] = Tensor::FromFloat("y", {2}, {3.0f, 4.0f});
@@ -615,7 +635,9 @@ TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
   *nodes.Add() = MakeNode("Mul", {"x", "y"}, {"t"});
   *nodes.Add() = MakeNode("Sub", {"t", "z"}, {"out"});
 
-  RunNodes(nodes, rt);
+  core::runtime::ExecutionPlan plan(nodes, {}, rt.allocator());
+  core::runtime::RuntimeSession session(plan);
+  session.Run(rt);
 
   ASSERT_NE(rt.tensors().find("t"), rt.tensors().end());
   ASSERT_NE(rt.tensors().find("out"), rt.tensors().end());
@@ -627,8 +649,10 @@ TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
 }
 
 TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {
-  // Same graph, but driven through the generic iterator overload so
-  // any container whose elements dereference to ``NodeProto`` works.
+  // Same graph, but the node list starts out as a std::vector<NodeProto>;
+  // it is converted to a RepeatedProtoField<NodeProto> (which any container
+  // of NodeProto converts to) before building the ExecutionPlan / session,
+  // so any container works.
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.tensors()["a"] = Tensor::FromFloat("a", {1}, {6.0f});
   rt.tensors()["b"] = Tensor::FromFloat("b", {1}, {2.0f});
@@ -637,7 +661,10 @@ TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {
   nodes.push_back(MakeNode("Div", {"a", "b"}, {"q"})); // q = 3
   nodes.push_back(MakeNode("Neg", {"q"}, {"out"}));    // out = -3
 
-  RunNodes(nodes.begin(), nodes.end(), rt);
+  utils::RepeatedProtoField<NodeProto> node_field(nodes);
+  core::runtime::ExecutionPlan plan(node_field, {}, rt.allocator());
+  core::runtime::RuntimeSession session(plan);
+  session.Run(rt);
 
   const float *out = rt.tensors()["out"].AsFloat();
   ASSERT_EQ(rt.tensors()["out"].element_count(), 1);
@@ -1483,7 +1510,10 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
   nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
-  RunNodes(nodes.begin(), nodes.end(), rt);
+  utils::RepeatedProtoField<NodeProto> node_field(nodes);
+  core::runtime::ExecutionPlan plan(node_field, {}, rt.allocator());
+  core::runtime::RuntimeSession session(plan);
+  session.Run(rt);
 
   // Each node produces one tensor ``add`` event tagged as an
   // intermediate plus one ``run_node`` event summarising the dispatch.
@@ -1641,7 +1671,7 @@ TEST(RunGraph, InitializersLoadedAndNodesRun) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x_input", Tensor::FromFloat("x_input", {2}, {1.0f, 2.0f}));
 
-  RunGraph(graph, rt);
+  RunGraphViaSession(graph, rt);
 
   ASSERT_TRUE(rt.Has("out"));
   const float *res = rt.Get("out").AsFloat();
@@ -1669,7 +1699,7 @@ TEST(RunGraph, CallerInputOverridesInitializer) {
   // Override the initializer with the caller's value.
   rt.Set("w", Tensor::FromFloat("w", {1}, {-5.0f}));
 
-  RunGraph(graph, rt);
+  RunGraphViaSession(graph, rt);
 
   ASSERT_TRUE(rt.Has("out"));
   EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[0], 5.0f);
@@ -1958,7 +1988,9 @@ TEST(RunFunction, NodesRun) {
   rt.Set("a", Tensor::FromFloat("a", {2}, {3.0f, 4.0f}));
   rt.Set("b", Tensor::FromFloat("b", {2}, {2.0f, 5.0f}));
 
-  RunFunction(func, rt);
+  const ExecutionPlan &plan = rt.GetExecutionPlan(func);
+  RuntimeSession session(plan);
+  session.Run(rt);
 
   ASSERT_TRUE(rt.Has("result"));
   const float *res = rt.Get("result").AsFloat();
@@ -3982,7 +4014,7 @@ TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
 
-  RunGraph(graph, rt);
+  RunGraphViaSession(graph, rt);
 
   // "t" was released, "y" / "x" / "z" survived.
   EXPECT_FALSE(rt.Has("t"));
@@ -4005,7 +4037,7 @@ TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   RuntimeContext rt2(KernelContext(DefaultOpset(18)));
   rt2.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt2.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
-  RunGraph(graph, rt2);
+  RunGraphViaSession(graph, rt2);
   EXPECT_TRUE(rt2.Has("t"));
   EXPECT_TRUE(rt2.Has("y"));
 }
@@ -4035,12 +4067,12 @@ TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
 
   // Two successive RunGraph calls both reuse the cached plan.
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
-  RunGraph(graph, rt);
+  RunGraphViaSession(graph, rt);
   EXPECT_FALSE(rt.Has("t"));
   EXPECT_TRUE(rt.Has("y"));
   rt.Remove("y");
   rt.Put("x", Tensor::FromFloat("x", {2}, {-3.0f, 4.0f}));
-  RunGraph(graph, rt);
+  RunGraphViaSession(graph, rt);
   EXPECT_FALSE(rt.Has("t"));
   EXPECT_TRUE(rt.Has("y"));
   // Cached plan still the same instance after both runs.
@@ -4051,8 +4083,8 @@ TEST(RuntimeSession, InitializesKernelsThenRunsAndReleases) {
   // A RuntimeSession is constructed with a precomputed ExecutionPlan; its
   // kernels are resolved on the first Run against the supplied RuntimeContext
   // and only then is it run. Running it must produce the graph outputs and
-  // release the scheduled intermediates, exactly like the plan-aware RunNodes
-  // overload.
+  // release the scheduled intermediates, exactly like `RunModel` /
+  // `RunSubgraph` (which build and run through a RuntimeSession internally).
   using core::runtime::ExecutionPlan;
   using core::runtime::RuntimeSession;
 

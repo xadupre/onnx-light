@@ -33,6 +33,7 @@ using core::runtime::Map;
 using core::runtime::OpsetId;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeParameters;
+using core::runtime::RuntimeSession;
 using core::runtime::Sequence;
 using core::runtime::Tensor;
 
@@ -60,13 +61,14 @@ core::runtime::RuntimeEventKind ParseRuntimeEventKind(const std::string &kind) {
 
 NB_MODULE(_onnxpykernels, m) {
   m.doc() = "onnx_light kernels bindings: deterministic pseudo-random helpers "
-            "backing _onnxpybackend_test, plus the RunNode/RunGraph/RunFunction/"
-            "RunModel dispatcher and its supporting RuntimeContext/KernelContext "
-            "types.";
+            "backing _onnxpybackend_test, plus the RunNode/RunModel dispatcher "
+            "(and the RuntimeSession every other node list is run through) and its "
+            "supporting RuntimeContext/KernelContext types.";
 
-  // The ``runtime`` submodule exposes :cpp:func:`RunNode`,
-  // :cpp:func:`RunNodes`, :cpp:func:`RunGraph`, :cpp:func:`RunFunction` and
-  // :cpp:func:`RunModel`. These take/return ``Tensor`` and proto types whose
+  // The ``runtime`` submodule exposes :cpp:func:`RunNode`, :cpp:func:`RunModel`
+  // and :cpp:class:`RuntimeSession` (used to run any other node list: a bare
+  // graph, a function body, ...). These take/return ``Tensor`` and proto types
+  // whose
   // ``nb::class_`` bindings live in sibling extensions. Importing those
   // extensions here guarantees the cross-module typeid registry has the
   // necessary entries by the time we register the ``runtime`` callables and
@@ -79,7 +81,8 @@ NB_MODULE(_onnxpykernels, m) {
   AddOnnxPyRuntime(m);
 
   // Register all built-in onnx_kernels operator trampolines with the
-  // core::runtime dispatch table so that RunNode/RunGraph/RunModel work as
+  // core::runtime dispatch table so that RunNode/RunModel/RuntimeSession work
+  // as
   // soon as the module is imported.
   onnx_kernels::RegisterKernelFunctions();
 }
@@ -125,13 +128,13 @@ void AddOnnxPyKernels(nb::module_ &m) {
 void AddOnnxPyRuntime(nb::module_ &m) {
   // -----------------------------------------------------------------------
   // Submodule `runtime`
-  // Exposes the C++ RunNode/RunNodes/RunGraph/RunFunction/RunModel
-  // dispatcher together with its supporting RuntimeContext / KernelContext
-  // / OpsetId types and the TensorFromProto helper.
+  // Exposes the C++ RunNode/RunModel dispatcher and RuntimeSession (used to
+  // run any other node list) together with their supporting RuntimeContext /
+  // KernelContext / OpsetId types and the TensorFromProto helper.
   // -----------------------------------------------------------------------
   auto rt_mod = m.def_submodule("runtime");
-  rt_mod.doc() = "C++ kernel dispatcher exposed to Python. RunNode/RunNodes/RunGraph/"
-                 "RunFunction/RunModel evaluate one or more nodes through the static "
+  rt_mod.doc() = "C++ kernel dispatcher exposed to Python. RunNode/RunModel and "
+                 "RuntimeSession evaluate one or more nodes through the static "
                  "KernelDispatchTable (with transparent dispatch to model-local "
                  "FunctionProto's) using a name-keyed RuntimeContext for tensor I/O.";
 
@@ -418,21 +421,24 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   // ExecutionPlan — precomputed per-graph execution / release schedule.
   nb::class_<ExecutionPlan>(
       rt_mod, "ExecutionPlan",
-      "Precomputed per-graph execution schedule used by :func:`run_graph` / "
-      ":func:`run_function` / :func:`run_nodes` when "
-      ":attr:`RuntimeContext.release_intermediates` is enabled. Captures the "
+      "Precomputed per-graph execution schedule used by :class:`RuntimeSession` "
+      "when :attr:`RuntimeContext.release_intermediates` is enabled. Captures the "
       "structural set of names that must never be released (:func:`keep`) and "
       "the ordered list of :class:`ExecuteAction` steps (:func:`actions`) "
       "derived from the in-place / lifetime metadata written to each node by "
       "the in-place reuse pass. Depends only on graph topology / metadata, so a "
       "single plan can be reused across every invocation of the same model.")
       .def(nb::init<>())
-      .def(nb::init<const GraphProto &>(), nb::arg("graph"),
+      .def(nb::init<const GraphProto &>(), nb::arg("graph"), nb::keep_alive<1, 2>(),
            "Builds the plan for ``graph``. ``keep`` is seeded with the graph's "
-           "declared inputs, initializers and declared outputs.")
-      .def(nb::init<const FunctionProto &>(), nb::arg("func"),
+           "declared inputs, initializers and declared outputs. This binding keeps "
+           "``graph`` alive for at least as long as the plan, since the plan's node "
+           "list holds non-owning pointers into it.")
+      .def(nb::init<const FunctionProto &>(), nb::arg("func"), nb::keep_alive<1, 2>(),
            "Builds the plan for ``func``. ``keep`` is seeded with the function's "
-           "declared inputs and outputs.")
+           "declared inputs and outputs. This binding keeps ``func`` alive for at "
+           "least as long as the plan, since the plan's node list holds non-owning "
+           "pointers into it.")
       .def(
           "keep", [](const ExecutionPlan &plan) { return plan.keep(); },
           "Returns the structural set of names that must never be released.")
@@ -453,11 +459,37 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "``node``. ``node`` must be one of the nodes the plan was built from "
           "(lookup is by identity); otherwise this is a no-op.");
 
+  // RuntimeSession — reusable execution session binding an ExecutionPlan.
+  // Every node list the runtime executes (a graph, a function body, a
+  // subgraph, ...) is run through one of these sessions; there is no
+  // standalone "run this node list" function.
+  nb::class_<RuntimeSession>(
+      rt_mod, "RuntimeSession",
+      "Reusable execution session binding a precomputed :class:`ExecutionPlan`. "
+      "The first call to :func:`run` resolves and caches the kernel for every "
+      "scheduled node against the supplied :class:`RuntimeContext`; subsequent "
+      "calls reuse the cached kernels. When "
+      ":attr:`RuntimeContext.release_intermediates` is enabled, :func:`run` also "
+      "frees each intermediate whose last reference has been reached.")
+      .def(nb::init<const ExecutionPlan &>(), nb::arg("plan"), nb::keep_alive<1, 2>(),
+           "Builds a session over ``plan``. ``plan`` (and the graph / function it "
+           "was built from) must outlive the session; this binding keeps ``plan`` "
+           "alive for at least as long as the session.")
+      .def("run", &RuntimeSession::Run, nb::arg("rt"),
+           "Executes the plan once against ``rt``, resolving and caching kernels on "
+           "the first call. Safe to call repeatedly on the same session.")
+      .def_prop_rw("parameters", &RuntimeSession::parameters, &RuntimeSession::set_parameters,
+                   "Model-independent execution parameters applied to the nodes this "
+                   "session runs.")
+      .def_prop_ro("required_inputs", &RuntimeSession::required_inputs,
+                   "Returns the external input names the scheduled nodes read. Populated "
+                   "during kernel initialization; empty until the first :func:`run`.");
+
   // RuntimeParameters — model-independent execution knobs (parallelism, ...).
   nb::class_<RuntimeParameters>(
       rt_mod, "RuntimeParameters",
       "Model-independent execution settings shared across the nodes of a graph "
-      "evaluated through :func:`run_node` / :func:`run_nodes`. Currently carries only "
+      "evaluated through :func:`run_node` / :class:`RuntimeSession`. Currently carries only "
       "the requested degree of parallelism, :attr:`num_threads`.")
       .def(nb::init<>())
       .def(nb::init<int32_t>(), nb::arg("num_threads"))
@@ -477,8 +509,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.
   nb::class_<RuntimeContext>(
       rt_mod, "RuntimeContext",
-      "Per-invocation runtime state passed to :func:`RunNode` / :func:`RunNodes` / "
-      ":func:`RunGraph` / :func:`RunFunction` / :func:`RunModel`. Owns the name-keyed "
+      "Per-invocation runtime state passed to :func:`RunNode` / :func:`RunModel` / "
+      ":class:`RuntimeSession`. Owns the name-keyed "
       "tensor map carrying graph inputs/initializers and every intermediate value "
       "produced by previously executed nodes.")
       .def(nb::init<>())
@@ -499,7 +531,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "release_intermediates",
           [](const RuntimeContext &rt) { return rt.release_intermediates(); },
           [](RuntimeContext &rt, bool v) { rt.set_release_intermediates(v); },
-          "When ``True``, :func:`run_nodes` / :func:`run_graph` / :func:`run_function` / "
+          "When ``True``, :class:`RuntimeSession` / :func:`run_model` / "
           ":func:`run_model` remove an intermediate tensor (or sequence) from the runtime "
           "context as soon as the last node that references it has finished — emitting a "
           "``kRemove`` event when :attr:`events_enabled` is ``True``. Graph / function "
@@ -748,20 +780,25 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           [](RuntimeContext &rt, const GraphProto &graph) -> const ExecutionPlan & {
             return rt.GetExecutionPlan(graph);
           },
-          nb::arg("graph"), nb::rv_policy::reference_internal,
+          nb::arg("graph"), nb::rv_policy::reference_internal, nb::keep_alive<1, 2>(),
           "Returns the cached :class:`ExecutionPlan` for ``graph``, building it on "
           "first use. The plan is keyed by the identity of ``graph`` and reused "
           "across subsequent runs of the same model, so the analysis is paid only "
-          "once for the lifetime of this :class:`RuntimeContext`.")
+          "once for the lifetime of this :class:`RuntimeContext`. This binding keeps "
+          "``graph`` alive for at least as long as ``self``, since the cached plan "
+          "holds non-owning pointers into it beyond the lifetime of the returned "
+          "wrapper.")
       .def(
           "get_execution_plan",
           [](RuntimeContext &rt, const FunctionProto &func) -> const ExecutionPlan & {
             return rt.GetExecutionPlan(func);
           },
-          nb::arg("func"), nb::rv_policy::reference_internal,
+          nb::arg("func"), nb::rv_policy::reference_internal, nb::keep_alive<1, 2>(),
           "Returns the cached :class:`ExecutionPlan` for ``func``, building it on "
           "first use. Same caching semantics as the ``GraphProto`` overload — the "
-          "structural keep set consists of the function's declared inputs and outputs.")
+          "structural keep set consists of the function's declared inputs and "
+          "outputs. This binding keeps ``func`` alive for at least as long as "
+          "``self``, for the same reason as the ``graph`` overload.")
       .def("clear_execution_plans", &RuntimeContext::ClearExecutionPlans,
            "Clears every cached :class:`ExecutionPlan`. Useful when the owning model "
            "has been mutated in place (rare).")
@@ -780,7 +817,12 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "list preserves first-seen order and contains no duplicates; empty input "
           "names (optional inputs left unbound) are skipped.");
 
-  // Top-level run helpers.
+  // Top-level run helpers. Only single-node dispatch (``run_node``) and
+  // whole-model dispatch (``run_model``) are exposed as standalone helpers;
+  // running any other node list (a bare graph, a function body, ...) is done
+  // by building an :class:`ExecutionPlan` (via
+  // :func:`RuntimeContext.get_execution_plan`) and driving it through a
+  // :class:`RuntimeSession`.
   rt_mod.def(
       "run_node",
       [](const NodeProto &node, RuntimeContext &rt) { core::runtime::RunNode(node, rt); },
@@ -790,36 +832,15 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "on return it also contains entries for every output declared by ``node``.");
 
   rt_mod.def(
-      "run_nodes",
-      [](const std::vector<NodeProto> &nodes, RuntimeContext &rt) {
-        core::runtime::RunNodes(nodes.begin(), nodes.end(), rt);
-      },
-      nb::arg("nodes"), nb::arg("rt"),
-      "Runs :func:`run_node` on every node of ``nodes`` in order. The sequence "
-      "must be topologically sorted with respect to data dependencies.");
-
-  rt_mod.def(
-      "run_graph",
-      [](const GraphProto &graph, RuntimeContext &rt) { core::runtime::RunGraph(graph, rt); },
-      nb::arg("graph"), nb::arg("rt"),
-      "Runs all nodes in ``graph`` using ``rt``. Before executing the node sequence "
-      "the function seeds ``rt`` with every ``TensorProto`` in ``graph.initializer``.");
-
-  rt_mod.def(
-      "run_function",
-      [](const FunctionProto &func, RuntimeContext &rt) { core::runtime::RunFunction(func, rt); },
-      nb::arg("func"), nb::arg("rt"),
-      "Runs all nodes in ``func`` using ``rt``. The caller is responsible for "
-      "inserting the function's input tensors into ``rt`` before calling.");
-
-  rt_mod.def(
       "run_model",
       [](const ModelProto &model, RuntimeContext &rt) { core::runtime::RunModel(model, rt); },
       nb::arg("model"), nb::arg("rt"),
-      "Runs the graph embedded in ``model`` using ``rt``. Before delegating to "
-      ":func:`run_graph`, every ``FunctionProto`` in ``model.functions`` is registered "
-      "in the runtime's function registry so nodes referring to model-local functions "
-      "by ``(domain, op_type, overload)`` are dispatched transparently.");
+      "Runs the graph embedded in ``model`` using ``rt``. Every ``FunctionProto`` "
+      "in ``model.functions`` is registered in the runtime's function registry so "
+      "nodes referring to model-local functions by ``(domain, op_type, overload)`` "
+      "are dispatched transparently, then the model's graph is executed by seeding "
+      "its initializers into ``rt`` and driving its cached :class:`ExecutionPlan` "
+      "through a :class:`RuntimeSession`.");
 
   rt_mod.def(
       "tensor_from_proto",

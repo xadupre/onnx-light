@@ -850,8 +850,8 @@ TEST(KernelClass, ScanBodyAwareOverloadRejectsMismatchedScanInputTripCounts) {
   body.add_input()->set_name("a");
   body.add_input()->set_name("b");
   // No nodes needed — body just declares formal I/O. We still need at
-  // least one node so RunGraph has work to do; use an Identity that
-  // doesn't contribute to the (empty) output set.
+  // least one node so the body's ExecutionPlan / RuntimeSession has work to
+  // do; use an Identity that doesn't contribute to the (empty) output set.
   NodeProto *id = body.add_node();
   id->set_op_type("Identity");
   id->add_input("a");

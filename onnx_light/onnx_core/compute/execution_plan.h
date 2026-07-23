@@ -31,10 +31,8 @@ namespace runtime {
 class RuntimeContext;
 
 /**
- * Precomputed per-graph release schedule used by
- * :cpp:func:`RunGraph` / :cpp:func:`RunFunction` /
- * :cpp:func:`RunNodes` when
- * :cpp:func:`RuntimeContext::release_intermediates` is enabled.
+ * Precomputed per-graph release schedule used by :cpp:class:`RuntimeSession`
+ * when :cpp:func:`RuntimeContext::release_intermediates` is enabled.
  *
  * An :cpp:class:`ExecutionPlan` captures, for a given node sequence:
  *
@@ -123,7 +121,8 @@ public:
   ///
   /// This scans :cpp:func:`actions` for the node's delete actions, so it is
   /// linear in the plan size per call; the runtime does not use it on the hot
-  /// path (:cpp:func:`RunNodes` replays the whole action list once instead).
+  /// path (:cpp:class:`RuntimeSession` replays the whole action list once
+  /// instead).
   /// It is kept as a per-node convenience for callers that drive execution
   /// themselves.
   void ReleaseAfter(const NodeProto &node, RuntimeContext &rt) const;

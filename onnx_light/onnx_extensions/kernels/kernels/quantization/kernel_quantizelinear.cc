@@ -271,8 +271,10 @@ void ComputeScaleIndex(const Tensor &x, const Tensor &y_scale, int64_t axis, int
   if (y_scale.shape.size() == rank) {
     // Blocked: scale shape matches x rank, each scale dim divides x dim.
     const onnx_kernels::Shape &s_shape = y_scale.shape;
-    std::vector<int64_t> repeats(rank);
-    std::vector<int64_t> s_strides(rank);
+    onnx_kernels::Shape repeats;
+    repeats.assign(rank, 0);
+    onnx_kernels::Shape s_strides;
+    s_strides.assign(rank, 0);
     int64_t stride = 1;
     for (std::size_t d = rank; d-- > 0;) {
       s_strides[d] = stride;

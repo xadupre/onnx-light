@@ -48,7 +48,7 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
   if (!axis.has_value()) {
     // Flatten mode: select individual elements from the flattened input. The
     // selected elements are counted first, then copied in a single pass, so no
-    // scratch index buffer is allocated outside the runtime allocator.
+    // scratch index buffer is allocated at all.
     const int64_t total = input.element_count();
     int64_t out_count = 0;
     for (int64_t i = 0; i < total && static_cast<std::size_t>(i) < cond_len; ++i) {

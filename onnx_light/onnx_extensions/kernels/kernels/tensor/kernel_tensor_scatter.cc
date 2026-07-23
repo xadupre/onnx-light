@@ -5,6 +5,8 @@
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -91,8 +93,12 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
   const int64_t max_seq = past_cache.shape[static_cast<std::size_t>(axis)];
   const int64_t seq_len = update.shape[static_cast<std::size_t>(axis)];
 
-  // Read write_indices (or default to all zeros).
-  std::vector<int64_t> writes(static_cast<std::size_t>(batch_size), 0);
+  // Read write_indices (or default to all zeros). The scratch buffer is drawn
+  // from the runtime allocator when one is available, falling back to inline
+  // std::vector storage otherwise.
+  detail::TemporaryTypedBuffer<int64_t> writes_buf(static_cast<std::size_t>(batch_size),
+                                                   ctx_.allocator, "kernel::TensorScatter writes");
+  int64_t *writes = writes_buf.data();
   if (write_indices != nullptr) {
     EXT_ENFORCE_INVALID(write_indices->data_type == static_cast<int32_t>(DataType::INT64),
                         "kernel::TensorScatter: 'write_indices' must be a tensor(int64).");
@@ -102,6 +108,8 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
     for (int64_t i = 0; i < batch_size; ++i) {
       writes[static_cast<std::size_t>(i)] = src[i];
     }
+  } else {
+    std::fill_n(writes, static_cast<std::size_t>(batch_size), static_cast<int64_t>(0));
   }
 
   // Initialize output := past_cache (copy).

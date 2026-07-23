@@ -610,7 +610,7 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
 // ``requested_sizes`` points to ``requested_len`` elements.
 std::vector<int64_t> ApplyKeepAspectRatioPolicy(const int64_t *requested_sizes,
                                                 std::size_t requested_len,
-                                                const std::vector<int64_t> &in_sizes,
+                                                const onnx_kernels::Shape &in_sizes,
                                                 const std::string &policy) {
   if (policy == "stretch") {
     return std::vector<int64_t>(requested_sizes, requested_sizes + requested_len);
@@ -758,7 +758,8 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   const Tensor requested = ReadResizeSizes(sizes, axes.size(), rt ? rt->allocator() : nullptr);
   // Per-axis input shape restricted to the resized axes, used when computing
   // the effective output sizes under ``keep_aspect_ratio_policy``.
-  std::vector<int64_t> in_axes_shape(axes.size());
+  onnx_kernels::Shape in_axes_shape;
+  in_axes_shape.assign(axes.size(), 0);
   for (std::size_t i = 0; i < axes.size(); ++i) {
     in_axes_shape[i] = X.shape[static_cast<std::size_t>(axes[i])];
   }

@@ -21,7 +21,7 @@ namespace {
 
 /// Runs the tree ensemble on the input and writes raw class scores [N, E] into
 /// the caller-provided ``scores`` buffer (allocator-backed output storage).
-/// The buffer must be zero-initialised and hold ``sample_count * n_classes``
+/// The buffer must be zero-initialized and hold ``sample_count * n_classes``
 /// floats. Uses class_treeids/class_nodeids/class_ids/class_weights (classic
 /// encoding).
 void ComputeClassifierScores(const ClassicNodeMap &node_map, const ClassicLeafMap &leaf_map,

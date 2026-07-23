@@ -147,8 +147,8 @@ inline void FinalizeAggregation(std::vector<float> &accum, const std::vector<int
 }
 
 /// Applies the post_transform in place to a single sample's scores held in the
-/// contiguous range ``[scores, scores + count)``.
-/// Only "NONE" is fully supported; other transforms raise an error.
+/// contiguous range ``[scores, scores + count)``. Supports "NONE", "SOFTMAX",
+/// "LOGISTIC", and "SOFTMAX_ZERO"; other values raise an error.
 inline void ApplyPostTransform(float *scores, size_t count, const std::string &post_transform) {
   if (post_transform == "NONE") {
     return;
@@ -189,8 +189,9 @@ inline void ApplyPostTransform(float *scores, size_t count, const std::string &p
   EXT_THROW_INVALID("ApplyPostTransform: unsupported post_transform: ", post_transform);
 }
 
-/// Applies the post_transform to the scores for a single sample.
-/// Only "NONE" is fully supported; other transforms raise an error.
+/// Applies the post_transform to the scores for a single sample. Supports
+/// "NONE", "SOFTMAX", "LOGISTIC", and "SOFTMAX_ZERO"; other values raise an
+/// error.
 inline void ApplyPostTransform(std::vector<float> &scores, const std::string &post_transform) {
   ApplyPostTransform(scores.data(), scores.size(), post_transform);
 }

@@ -13,7 +13,6 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -60,7 +59,7 @@ void TopKCompute(const Tensor &x, int64_t k, int64_t axis, bool largest, bool so
   // sized by the axis dimension ``axis_dim``, which is unbounded (e.g. 4096 in
   // ``test_cc_top_k_benchmark``) and routinely exceeds ``Shape::kMaxRank`` (16),
   // so a fixed-capacity ``Shape`` cannot be used. It is drawn from the runtime
-  // allocator when one is available, falling back to a ``std::vector`` otherwise.
+  // allocator when one is available.
   detail::TemporaryTypedBuffer<int64_t> idx_buf(static_cast<std::size_t>(axis_dim), allocator,
                                                 kTopKName);
   int64_t *idx = idx_buf.data();

@@ -13,7 +13,6 @@
 #include <string>
 #include <tuple>
 #include <utility>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

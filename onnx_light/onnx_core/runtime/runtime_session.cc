@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
@@ -86,14 +87,22 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     }
     case ExecuteActionKind::kDeleteBuffer:
     case ExecuteActionKind::kDeleteShape:
-      // A shape-tagged value additionally lives in the shape map; free it
-      // there as well. The tensor / sequence removals below are shared with
-      // kDeleteBuffer (they are no-ops when the name is absent).
-      if (action.kind() == ExecuteActionKind::kDeleteShape) {
-        rt.RemoveShape(action.name());
+    case ExecuteActionKind::kDeleteSequence:
+    case ExecuteActionKind::kDeleteMap:
+      // Make sure the named result fully disappears. A value may live in the
+      // tensor, sequence, map or shape map depending on the kernel that
+      // produced it, so every removal is attempted; each one is a no-op when
+      // the name is absent (and RemoveShape / RemoveMap only touch their own
+      // map). This keeps kDeleteBuffer / kDeleteShape / kDeleteSequence /
+      // kDeleteMap interchangeable from the runtime's point of view.
+      if (rt.verbose() > 1) {
+        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
+                  << std::endl;
       }
+      rt.RemoveShape(action.name());
       rt.Remove(action.name());
       rt.RemoveSequence(action.name());
+      rt.RemoveMap(action.name());
       break;
     default:
       break;

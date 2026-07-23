@@ -4248,6 +4248,14 @@ TEST(RunNodes, ExecuteActionSummary) {
   ExecuteAction transfer(ExecuteActionKind::kTransfer, "a", nullptr, /*node_index=*/0,
                          /*size=*/0, /*target=*/"b");
   EXPECT_EQ(transfer.summary(), "Transfer name='a' -> target='b'");
+
+  // Sequence / map deletions mention only the name and expose stable names.
+  ExecuteAction delete_sequence(ExecuteActionKind::kDeleteSequence, "seq");
+  EXPECT_EQ(delete_sequence.kind_name(), std::string("DeleteSequence"));
+  EXPECT_EQ(delete_sequence.summary(), "DeleteSequence name='seq'");
+  ExecuteAction delete_map(ExecuteActionKind::kDeleteMap, "m");
+  EXPECT_EQ(delete_map.kind_name(), std::string("DeleteMap"));
+  EXPECT_EQ(delete_map.summary(), "DeleteMap name='m'");
 }
 
 TEST(RunNodes, ExecutionPlanShapeTagActions) {

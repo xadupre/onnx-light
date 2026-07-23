@@ -351,7 +351,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .value("kAllocateTemporaryBuffer", ExecuteActionKind::kAllocateTemporaryBuffer,
              "Allocates a temporary buffer to handle a kernel memory peak.")
       .value("kDeleteTemporaryBuffer", ExecuteActionKind::kDeleteTemporaryBuffer,
-             "Deallocates a temporary buffer once the kernel(s) are done.");
+             "Deallocates a temporary buffer once the kernel(s) are done.")
+      .value("kDeleteSequence", ExecuteActionKind::kDeleteSequence,
+             "Deletes a named sequence result (frees the sequence it holds).")
+      .value("kDeleteMap", ExecuteActionKind::kDeleteMap,
+             "Deletes a named map result (frees the map it holds).");
 
   // ExecuteAction — single step of an ExecutionPlan.
   nb::class_<ExecuteAction>(

@@ -439,14 +439,22 @@ void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) cons
   }
   // The release schedule lives entirely in :cpp:func:`actions`: every
   // intermediate whose last use falls at ``node`` is materialised as a
-  // kDeleteBuffer / kDeleteShape action tagged with this node's index.
+  // kDeleteBuffer / kDeleteShape / kDeleteSequence / kDeleteMap action tagged
+  // with this node's index.
   const size_t index = it->second;
   for (const ExecuteAction &action : actions_) {
     if ((action.kind() == ExecuteActionKind::kDeleteBuffer ||
-         action.kind() == ExecuteActionKind::kDeleteShape) &&
+         action.kind() == ExecuteActionKind::kDeleteShape ||
+         action.kind() == ExecuteActionKind::kDeleteSequence ||
+         action.kind() == ExecuteActionKind::kDeleteMap) &&
         action.node_index() == index) {
+      // Every removal is a no-op when the name is absent; attempting all of
+      // them makes sure the value fully disappears regardless of the map it
+      // ended up in.
+      rt.RemoveShape(action.name());
       rt.Remove(action.name());
       rt.RemoveSequence(action.name());
+      rt.RemoveMap(action.name());
     }
   }
 }

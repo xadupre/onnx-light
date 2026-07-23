@@ -199,8 +199,8 @@ void ComputeMatMulInteger(const Tensor &a, const Tensor &b, const Tensor &a_zero
 
   const size_t a_count = ZeroPointCount(a_zero_point, a.data_type, M, "a_zero_point");
   const size_t b_count = ZeroPointCount(b_zero_point, b.data_type, N, "b_zero_point");
-  detail::TemporaryTypedBuffer<int32_t> a_zps(a_count, allocator, "a_zero_point");
-  detail::TemporaryTypedBuffer<int32_t> b_zps(b_count, allocator, "b_zero_point");
+  core::runtime::detail::TemporaryTypedBuffer<int32_t> a_zps(a_count, allocator, "a_zero_point");
+  core::runtime::detail::TemporaryTypedBuffer<int32_t> b_zps(b_count, allocator, "b_zero_point");
   FillZeroPoints(a_zero_point, a_zps.data(), a_count);
   FillZeroPoints(b_zero_point, b_zps.data(), b_count);
 

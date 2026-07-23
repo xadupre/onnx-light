@@ -6,6 +6,7 @@
 #include "onnx_light_helpers.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
 #include <cstdint>
 #include <set>
@@ -308,7 +309,9 @@ EinsumPlan BuildPlan(const Tensors &inputs, const std::string &raw_equation) {
   return plan;
 }
 
-template <typename T> void RunEinsum(const Tensors &inputs, const EinsumPlan &plan, T *out_data) {
+template <typename T>
+void RunEinsum(const Tensors &inputs, const EinsumPlan &plan, T *out_data,
+               RawBufferAllocator *allocator) {
   int64_t out_count = 1;
   for (int64_t d : plan.output_shape) {
     out_count *= d;
@@ -318,8 +321,15 @@ template <typename T> void RunEinsum(const Tensors &inputs, const EinsumPlan &pl
   }
 
   // Iterate over the Cartesian product of ``label_size``. ``ix[k]`` is the
-  // current value of label ``all_labels[k]``.
-  std::vector<int64_t> ix(plan.all_labels.size(), 0);
+  // current value of label ``all_labels[k]``. The scratch buffer is drawn from
+  // the runtime allocator when one is attached, falling back to inline
+  // ``std::vector`` storage otherwise. Allocator-backed buffers are not
+  // guaranteed zeroed, so the indices are explicitly zeroed below.
+  const std::size_t n_labels = plan.all_labels.size();
+  detail::TemporaryTypedBuffer<int64_t> ix_buf(n_labels > 0 ? n_labels : 1, allocator,
+                                               "kernel::Einsum ix");
+  int64_t *ix = ix_buf.data();
+  std::fill(ix, ix + n_labels, int64_t{0});
   int64_t total = 1;
   for (int64_t s : plan.label_size) {
     total *= s;
@@ -328,10 +338,11 @@ template <typename T> void RunEinsum(const Tensors &inputs, const EinsumPlan &pl
     return; // Output is zero-sized along some dimension.
   }
 
-  std::vector<const T *> in_ptrs;
-  in_ptrs.reserve(inputs.size());
-  for (const Tensor &t : inputs) {
-    in_ptrs.push_back(t.As<T>());
+  detail::TemporaryTypedBuffer<const T *> in_ptrs_buf(inputs.size(), allocator,
+                                                      "kernel::Einsum in_ptrs");
+  const T **in_ptrs = in_ptrs_buf.data();
+  for (std::size_t i = 0; i < inputs.size(); ++i) {
+    in_ptrs[i] = inputs[i].As<T>();
   }
 
   for (int64_t step = 0; step < total; ++step) {
@@ -371,7 +382,7 @@ Tensor EinsumAlloc(const Tensors &inputs, const EinsumPlan &plan, int32_t dtype,
   }
   const size_t z_n_bytes = static_cast<std::size_t>(out_count) * sizeof(T);
   Tensor z = MakeOutputTensor(dtype, plan.output_shape, z_n_bytes, rt ? rt->allocator() : nullptr);
-  RunEinsum<T>(inputs, plan, z.As<T>());
+  RunEinsum<T>(inputs, plan, z.As<T>(), rt ? rt->allocator() : nullptr);
   return z;
 }
 
@@ -385,7 +396,7 @@ void EinsumInPlace(const Tensors &inputs, const EinsumPlan &plan, int32_t dtype,
   EXT_ENFORCE_INVALID(output.shape == plan.output_shape, kEinsumName, ": output shape mismatch.");
   EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(out_count) * sizeof(T),
                       kEinsumName, ": output buffer size mismatch.");
-  RunEinsum<T>(inputs, plan, output.As<T>());
+  RunEinsum<T>(inputs, plan, output.As<T>(), nullptr);
 }
 
 void RequireHomogeneous(const Tensors &inputs) {

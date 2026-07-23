@@ -8,7 +8,6 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
-
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 // Re-exports the runtime types moved to ``onnx_core::runtime`` so

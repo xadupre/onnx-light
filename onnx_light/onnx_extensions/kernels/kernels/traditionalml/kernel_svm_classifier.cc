@@ -6,6 +6,8 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/kernel_svm_common.h"
 
+#include "onnx_core/runtime/simple_tensor.h"
+
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -17,12 +19,13 @@ namespace kernel {
 
 namespace {
 
-std::vector<float>
-ComputeBinaryDecisionScores(const std::vector<double> &x_values, int64_t sample_count,
-                            int64_t feature_count, const std::vector<float> &support_vectors,
-                            const std::vector<float> &coefficients, const std::vector<float> &rho,
-                            const std::vector<int64_t> &vectors_per_class, const char *kernel_type,
-                            float gamma, float coef0, float degree) {
+Tensor ComputeBinaryDecisionScores(const std::vector<double> &x_values, int64_t sample_count,
+                                   int64_t feature_count, const std::vector<float> &support_vectors,
+                                   const std::vector<float> &coefficients,
+                                   const std::vector<float> &rho,
+                                   const std::vector<int64_t> &vectors_per_class,
+                                   const char *kernel_type, float gamma, float coef0, float degree,
+                                   RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(vectors_per_class.size() == 2,
                       "kernel::SVMClassifier currently supports binary classifiers only.");
   const int64_t expected_supports = vectors_per_class[0] + vectors_per_class[1];
@@ -36,7 +39,12 @@ ComputeBinaryDecisionScores(const std::vector<double> &x_values, int64_t sample_
       "kernel::SVMClassifier coefficients size must match number of support vectors.");
   EXT_ENFORCE_INVALID(!rho.empty(), "kernel::SVMClassifier rho must be non-empty.");
 
-  std::vector<float> scores(static_cast<size_t>(sample_count), 0.0f);
+  // The per-sample decision scores are held in an allocator-backed scratch
+  // buffer so no working memory is allocated outside the runtime allocator;
+  // it falls back to inline storage when ``allocator`` is null.
+  const size_t scores_n_bytes = static_cast<size_t>(sample_count) * sizeof(float);
+  Tensor scores_buf = MakeOutputTensor(DataType::FLOAT, {sample_count}, scores_n_bytes, allocator);
+  float *scores = scores_buf.AsFloat();
   for (int64_t n = 0; n < sample_count; ++n) {
     const double *x_row = x_values.data() + n * feature_count;
     double decision = 0.0;
@@ -49,7 +57,7 @@ ComputeBinaryDecisionScores(const std::vector<double> &x_values, int64_t sample_
     decision += static_cast<double>(rho[0]);
     scores[static_cast<size_t>(n)] = static_cast<float>(decision);
   }
-  return scores;
+  return scores_buf;
 }
 
 } // namespace
@@ -67,9 +75,10 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
   EXT_ENFORCE_INVALID(class_labels.size() == 2,
                       "kernel::SVMClassifier requires exactly two int64 class labels.");
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
-  const std::vector<float> scores = ComputeBinaryDecisionScores(
+  const Tensor scores_buf = ComputeBinaryDecisionScores(
       x_values, sample_count, feature_count, support_vectors, coefficients, rho, vectors_per_class,
-      kernel_type, gamma, coef0, degree);
+      kernel_type, gamma, coef0, degree, ctx_.allocator);
+  const float *scores = scores_buf.AsFloat();
   std::vector<int64_t> labels(static_cast<size_t>(sample_count));
   std::vector<float> expanded_scores(static_cast<size_t>(sample_count * 2));
   for (int64_t i = 0; i < sample_count; ++i) {
@@ -96,9 +105,10 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
   EXT_ENFORCE_INVALID(class_labels.size() == 2,
                       "kernel::SVMClassifier requires exactly two string class labels.");
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
-  const std::vector<float> scores = ComputeBinaryDecisionScores(
+  const Tensor scores_buf = ComputeBinaryDecisionScores(
       x_values, sample_count, feature_count, support_vectors, coefficients, rho, vectors_per_class,
-      kernel_type, gamma, coef0, degree);
+      kernel_type, gamma, coef0, degree, ctx_.allocator);
+  const float *scores = scores_buf.AsFloat();
   std::vector<std::string> labels(static_cast<size_t>(sample_count));
   std::vector<float> expanded_scores(static_cast<size_t>(sample_count * 2));
   for (int64_t i = 0; i < sample_count; ++i) {

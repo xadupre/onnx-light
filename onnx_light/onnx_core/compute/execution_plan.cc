@@ -448,13 +448,24 @@ void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) cons
          action.kind() == ExecuteActionKind::kDeleteSequence ||
          action.kind() == ExecuteActionKind::kDeleteMap) &&
         action.node_index() == index) {
-      // Every removal is a no-op when the name is absent; attempting all of
-      // them makes sure the value fully disappears regardless of the map it
-      // ended up in.
-      rt.RemoveShape(action.name());
-      rt.Remove(action.name());
-      rt.RemoveSequence(action.name());
-      rt.RemoveMap(action.name());
+      // Each delete kind targets a single map, so the removal is chosen from
+      // the action's kind rather than clearing every map.
+      switch (action.kind()) {
+      case ExecuteActionKind::kDeleteBuffer:
+        rt.Remove(action.name());
+        break;
+      case ExecuteActionKind::kDeleteShape:
+        rt.RemoveShape(action.name());
+        break;
+      case ExecuteActionKind::kDeleteSequence:
+        rt.RemoveSequence(action.name());
+        break;
+      case ExecuteActionKind::kDeleteMap:
+        rt.RemoveMap(action.name());
+        break;
+      default:
+        break;
+      }
     }
   }
 }

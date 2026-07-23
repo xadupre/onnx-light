@@ -89,20 +89,30 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     case ExecuteActionKind::kDeleteShape:
     case ExecuteActionKind::kDeleteSequence:
     case ExecuteActionKind::kDeleteMap:
-      // Make sure the named result fully disappears. A value may live in the
-      // tensor, sequence, map or shape map depending on the kernel that
-      // produced it, so every removal is attempted; each one is a no-op when
-      // the name is absent (and RemoveShape / RemoveMap only touch their own
-      // map). This keeps kDeleteBuffer / kDeleteShape / kDeleteSequence /
-      // kDeleteMap interchangeable from the runtime's point of view.
+      // Each delete kind targets a single map: kDeleteBuffer removes the
+      // tensor, kDeleteShape the shape, kDeleteSequence the sequence and
+      // kDeleteMap the map. The kind is chosen when the action is scheduled, so
+      // the correct remover is selected here rather than clearing every map.
       if (rt.verbose() > 1) {
         std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
                   << std::endl;
       }
-      rt.RemoveShape(action.name());
-      rt.Remove(action.name());
-      rt.RemoveSequence(action.name());
-      rt.RemoveMap(action.name());
+      switch (action.kind()) {
+      case ExecuteActionKind::kDeleteBuffer:
+        rt.Remove(action.name());
+        break;
+      case ExecuteActionKind::kDeleteShape:
+        rt.RemoveShape(action.name());
+        break;
+      case ExecuteActionKind::kDeleteSequence:
+        rt.RemoveSequence(action.name());
+        break;
+      case ExecuteActionKind::kDeleteMap:
+        rt.RemoveMap(action.name());
+        break;
+      default:
+        break;
+      }
       break;
     default:
       break;

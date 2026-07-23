@@ -164,12 +164,11 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count,
 //   * ``final_state`` supplies the final loop-carried tensors produced by the loop body.
 //   * ``scan_values_per_iter`` supplies the collected per-iteration scan-output tensors.
 //   * ``allocator`` specifies the optional allocator used for stacked scan outputs.
-std::vector<Tensor>
-AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
-                    const std::vector<Tensor> &final_state,
-                    const std::vector<std::vector<Tensor>> &scan_values_per_iter,
-                    RawBufferAllocator *allocator) {
-  std::vector<Tensor> out;
+Tensors AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
+                            const std::vector<Tensor> &final_state,
+                            const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+                            RawBufferAllocator *allocator) {
+  Tensors out;
   out.reserve(final_state.size() + scan_values_per_iter.size());
   for (std::size_t i = 0; i < final_state.size(); ++i) {
     out.push_back(trip_count == 0 ? v_initial[i] : final_state[i]);
@@ -188,9 +187,9 @@ AssembleLoopOutputs(int64_t trip_count, const std::vector<Tensor> &v_initial,
 //     ``run_body``.
 //   * ``run_body`` implements one Loop body iteration.
 //   * ``allocator`` specifies the optional allocator used for stacked scan outputs.
-std::vector<Tensor> RunLoopBody(const Tensor &M, const Tensor &cond,
-                                const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
-                                const Loop::BodyRunner &run_body, RawBufferAllocator *allocator) {
+Tensors RunLoopBody(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
+                    std::size_t num_scan_outputs, const Loop::BodyRunner &run_body,
+                    RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(static_cast<bool>(run_body),
                       "kernel::Loop: 'run_body' callback must be callable.");
 
@@ -233,10 +232,9 @@ std::vector<Tensor> RunLoopBody(const Tensor &M, const Tensor &cond,
 
 } // namespace
 
-std::vector<Tensor>
-Loop::operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
-                 const std::vector<Tensor> &final_state,
-                 const std::vector<std::vector<Tensor>> &scan_values_per_iter) const {
+Tensors Loop::operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
+                         const std::vector<Tensor> &final_state,
+                         const std::vector<std::vector<Tensor>> &scan_values_per_iter) const {
   EXT_ENFORCE_INVALID(v_initial.size() == final_state.size(),
                       "kernel::Loop: 'final_state' must have the same number of tensors "
                       "as 'v_initial'.");
@@ -270,10 +268,10 @@ Loop::operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> 
   return AssembleLoopOutputs(trip_count, v_initial, final_state, scan_values_per_iter, nullptr);
 }
 
-std::vector<Tensor>
-Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
-                 const std::vector<Tensor> &v_initial, const std::vector<Tensor> &final_state,
-                 const std::vector<std::vector<Tensor>> &scan_values_per_iter) const {
+Tensors Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
+                         const std::vector<Tensor> &v_initial,
+                         const std::vector<Tensor> &final_state,
+                         const std::vector<std::vector<Tensor>> &scan_values_per_iter) const {
   EXT_ENFORCE_INVALID(v_initial.size() == final_state.size(),
                       "kernel::Loop: 'final_state' must have the same number of tensors "
                       "as 'v_initial'.");
@@ -303,17 +301,14 @@ Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
                              rt.allocator());
 }
 
-std::vector<Tensor> Loop::operator()(const Tensor &M, const Tensor &cond,
-                                     const std::vector<Tensor> &v_initial,
-                                     std::size_t num_scan_outputs,
-                                     const BodyRunner &run_body) const {
+Tensors Loop::operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
+                         std::size_t num_scan_outputs, const BodyRunner &run_body) const {
   return RunLoopBody(M, cond, v_initial, num_scan_outputs, run_body, nullptr);
 }
 
-std::vector<Tensor> Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
-                                     const std::vector<Tensor> &v_initial,
-                                     std::size_t num_scan_outputs,
-                                     const BodyRunner &run_body) const {
+Tensors Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
+                         const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
+                         const BodyRunner &run_body) const {
   return RunLoopBody(M, cond, v_initial, num_scan_outputs, run_body, rt.allocator());
 }
 

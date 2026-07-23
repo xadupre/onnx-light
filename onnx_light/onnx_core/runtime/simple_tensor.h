@@ -630,6 +630,15 @@ private:
   const std::vector<std::string> *borrow_string_data_ = nullptr;
 };
 
+/// ``Tensors`` — the runtime value produced by kernels that emit more than one
+/// tensor (for example ``Split``, ``Loop`` or the training optimizers).
+///
+/// It is an ordered, owning list of :cpp:struct:`Tensor` values and is
+/// equivalent to ``std::vector<Tensor>``; the alias exists so kernel signatures
+/// creating several outputs can name the concept directly instead of spelling
+/// out ``std::vector<Tensor>`` at every call site.
+using Tensors = std::vector<Tensor>;
+
 /// Trait mapping a C++ element type to its ``DataType`` value.
 /// Specialize to support additional element types in ``Tensor::From``/``As``.
 template <typename T> struct TensorElementType; // primary template intentionally undefined

@@ -24,9 +24,10 @@ int64_t NormalizeAxis(int64_t axis, int64_t rank) {
 }
 
 // Row-major strides in elements.
-std::vector<int64_t> RowMajorStrides(const onnx_kernels::Shape &shape) {
+onnx_kernels::Shape RowMajorStrides(const onnx_kernels::Shape &shape) {
   const std::size_t r = shape.size();
-  std::vector<int64_t> strides(r, 1);
+  onnx_kernels::Shape strides;
+  strides.assign(r, 1);
   for (std::size_t i = r; i-- > 1;) {
     strides[i - 1] = strides[i] * shape[i];
   }
@@ -118,8 +119,8 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
   }
 
   // Strides for cache (output) and update tensors (in elements).
-  const std::vector<int64_t> cache_strides = RowMajorStrides(past_cache.shape);
-  const std::vector<int64_t> update_strides = RowMajorStrides(update.shape);
+  const onnx_kernels::Shape cache_strides = RowMajorStrides(past_cache.shape);
+  const onnx_kernels::Shape update_strides = RowMajorStrides(update.shape);
 
   // Product of dims [0..axis): the prefix indices we iterate over.
   int64_t prefix_total = 1;

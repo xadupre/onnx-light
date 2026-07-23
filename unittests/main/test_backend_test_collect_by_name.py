@@ -52,28 +52,33 @@ class TestCollectTestCasesByName(ExtTestCase):
             [tc.name for tc in with_big], ["test_cc_shape_inference_big_qwen3_4_layers_like"]
         )
 
-    def test_collect_test_case_accepts_mode(self):
+    def test_collect_test_case_accepts_mode_test(self):
         # ``mode`` is consumed by the C++ ``collect_test_cases`` binding, which
         # returns cases lazily (models and data sets are only materialized when
         # accessed). Exercise the real binding and read only ``name`` so the
-        # test stays fast while still verifying that ``mode`` is accepted and
-        # actually changes the generated cases.
+        # test stays fast while still verifying that ``TestMode.TEST`` is
+        # accepted and matches the default (no ``mode``).
         test_cases = bt.collect_test_cases(mode=bt.TestMode.TEST)
         self.assertGreater(len(test_cases), 0)
         test_names = {tc.name for tc in test_cases}
         # TEST mode does not emit the oversized benchmark cases.
         self.assertFalse(any(name.endswith("_benchmark") for name in test_names))
+        # The default (no ``mode``) matches ``TestMode.TEST``.
+        default_names = {tc.name for tc in bt.collect_test_cases()}
+        self.assertEqual(default_names, test_names)
 
+    def test_collect_test_case_accepts_mode_benchmark(self):
+        # ``mode`` is consumed by the C++ ``collect_test_cases`` binding, which
+        # returns cases lazily (models and data sets are only materialized when
+        # accessed). Exercise the real binding and read only ``name`` so the
+        # test stays fast while still verifying that ``TestMode.BENCHMARK`` is
+        # accepted and changes the generated cases.
         benchmark_cases = bt.collect_test_cases(mode=bt.TestMode.BENCHMARK)
         self.assertGreater(len(benchmark_cases), 0)
         benchmark_names = {tc.name for tc in benchmark_cases}
         # BENCHMARK mode adds ``*_benchmark`` cases, proving ``mode`` reaches the
         # generator and changes its output.
         self.assertTrue(any(name.endswith("_benchmark") for name in benchmark_names))
-
-        # The default (no ``mode``) matches ``TestMode.TEST``.
-        default_names = {tc.name for tc in bt.collect_test_cases()}
-        self.assertEqual(default_names, test_names)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,6 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

@@ -9,7 +9,6 @@
 #include "onnx_core/runtime/simple_tensor.h"
 
 #include <cstdint>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

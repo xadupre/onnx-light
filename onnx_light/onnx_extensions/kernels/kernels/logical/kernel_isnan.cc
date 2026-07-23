@@ -9,7 +9,6 @@
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

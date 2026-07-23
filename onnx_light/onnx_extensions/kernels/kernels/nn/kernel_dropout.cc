@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <cstring>
 #include <random>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

@@ -11,7 +11,6 @@
 #include <stdexcept>
 #include <string>
 #include <tuple>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

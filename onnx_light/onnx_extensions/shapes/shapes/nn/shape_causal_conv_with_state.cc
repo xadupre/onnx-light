@@ -6,7 +6,6 @@
 
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 #include "onnx_core/shapes/shape_check.h"
 

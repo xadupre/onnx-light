@@ -32,7 +32,6 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
   const OpsetId opset("ai.onnx.ml", 1);
   const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::TreeEnsembleRegressor reg{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -109,17 +108,16 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
     const std::vector<int64_t> target_ids{0, 0, 0, 0};
     const std::vector<float> target_weights{1.0f, 3.0f, 2.0f, 4.0f};
 
+    const onnx_kernels::kernel::TreeEnsembleRegressor reg{
+        ctx,           nodes_treeids,  nodes_nodeids,     nodes_featureids,
+        nodes_values,  nodes_modes,    nodes_truenodeids, nodes_falsenodeids,
+        nodes_missing, target_treeids, target_nodeids,    target_ids,
+        target_weights};
+
     Expect(registry, std::move(node), "test_cc_treeensembleregressor_sum_single_target_benchmark",
-           {default_opset, opset}, {8192}, {8192},
-           [reg, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
-            nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids, target_nodeids,
-            target_ids, target_weights]() -> IoData {
+           {default_opset, opset}, {8192}, {8192}, [reg]() -> IoData {
              Tensor x = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2731));
-             Tensor y = reg.operator()<float>(x, nodes_treeids, nodes_nodeids, nodes_featureids,
-                                              nodes_values, nodes_modes, nodes_truenodeids,
-                                              nodes_falsenodeids, nodes_missing, target_treeids,
-                                              target_nodeids, target_ids, target_weights,
-                                              /*n_targets=*/1, /*aggregate_function=*/"SUM",
+             Tensor y = reg.operator()<float>(x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
                                               /*post_transform=*/"NONE", /*base_values=*/{});
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -200,14 +198,16 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
   const std::vector<int64_t> target_ids{0, 0, 0, 0};
   const std::vector<float> target_weights{1.0f, 3.0f, 2.0f, 4.0f};
 
+  const onnx_kernels::kernel::TreeEnsembleRegressor reg{
+      ctx,           nodes_treeids,  nodes_nodeids,     nodes_featureids,
+      nodes_values,  nodes_modes,    nodes_truenodeids, nodes_falsenodeids,
+      nodes_missing, target_treeids, target_nodeids,    target_ids,
+      target_weights};
+
   Expect(registry, std::move(node), "test_cc_treeensembleregressor_sum_single_target",
          {default_opset, opset}, [=]() -> IoData {
            Tensor x = Tensor::FromFloat("", {2, 1}, {0.5f, 3.0f});
-           Tensor y = reg.operator()<float>(x, nodes_treeids, nodes_nodeids, nodes_featureids,
-                                            nodes_values, nodes_modes, nodes_truenodeids,
-                                            nodes_falsenodeids, nodes_missing, target_treeids,
-                                            target_nodeids, target_ids, target_weights,
-                                            /*n_targets=*/1, /*aggregate_function=*/"SUM",
+           Tensor y = reg.operator()<float>(x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
                                             /*post_transform=*/"NONE", /*base_values=*/{});
            return IoData{{std::move(x)}, {std::move(y)}};
          });

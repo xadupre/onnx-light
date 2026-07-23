@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -17,8 +16,8 @@ namespace kernel {
 
 namespace {
 
-std::vector<int64_t> ResolveAxes(const std::vector<int64_t> &axes, int64_t output_rank) {
-  std::vector<int64_t> resolved;
+onnx_kernels::Shape ResolveAxes(const onnx_kernels::Shape &axes, int64_t output_rank) {
+  onnx_kernels::Shape resolved;
   resolved.reserve(axes.size());
   for (int64_t axis : axes) {
     const int64_t adjusted = axis < 0 ? axis + output_rank : axis;
@@ -32,10 +31,10 @@ std::vector<int64_t> ResolveAxes(const std::vector<int64_t> &axes, int64_t outpu
   return resolved;
 }
 
-onnx_kernels::Shape ComputeUnsqueezedShape(const Tensor &data, const std::vector<int64_t> &axes) {
+onnx_kernels::Shape ComputeUnsqueezedShape(const Tensor &data, const onnx_kernels::Shape &axes) {
   const int64_t input_rank = static_cast<int64_t>(data.shape.size());
   const int64_t output_rank = input_rank + static_cast<int64_t>(axes.size());
-  const std::vector<int64_t> resolved_axes = ResolveAxes(axes, output_rank);
+  const onnx_kernels::Shape resolved_axes = ResolveAxes(axes, output_rank);
 
   onnx_kernels::Shape out_shape;
   out_shape.reserve(static_cast<size_t>(output_rank));
@@ -55,7 +54,7 @@ onnx_kernels::Shape ComputeUnsqueezedShape(const Tensor &data, const std::vector
 
 } // namespace
 
-Tensor Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
+Tensor Unsqueeze::operator()(const Tensor &data, const onnx_kernels::Shape &axes,
                              RuntimeContext *rt) const {
   const onnx_kernels::Shape out_shape = ComputeUnsqueezedShape(data, axes);
   Tensor output = MakeOutputTensor(data.data_type, out_shape, data.size_bytes(),
@@ -69,7 +68,7 @@ Tensor Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axe
   return output;
 }
 
-void Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
+void Unsqueeze::operator()(const Tensor &data, const onnx_kernels::Shape &axes,
                            Tensor &output) const {
   const onnx_kernels::Shape out_shape = ComputeUnsqueezedShape(data, axes);
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,

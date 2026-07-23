@@ -68,7 +68,10 @@ class TestCollectTestCasesByName(ExtTestCase):
             collect_test_case()
             collect_test_case(mode=TestMode.TEST)
             collect_test_case(mode=TestMode.BENCHMARK)
-        forwarded = [call.kwargs["mode"] for call in spy.call_args_list]
+        forwarded = [
+            call.kwargs["mode"] if "mode" in call.kwargs else call.args[-1]
+            for call in spy.call_args_list
+        ]
         # A ``None`` mode defaults to TEST; BENCHMARK must be forwarded as-is.
         self.assertEqual(forwarded, [TestMode.TEST, TestMode.TEST, TestMode.BENCHMARK])
 

@@ -88,7 +88,8 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
   out_shape[static_cast<std::size_t>(a)] = selected_count;
 
   // Compute strides (in elements) for the input tensor.
-  std::vector<int64_t> strides(static_cast<std::size_t>(rank), 1);
+  onnx_kernels::Shape strides;
+  strides.assign(static_cast<std::size_t>(rank), 1);
   for (int64_t d = rank - 2; d >= 0; --d) {
     strides[static_cast<std::size_t>(d)] =
         strides[static_cast<std::size_t>(d + 1)] * input.shape[static_cast<std::size_t>(d + 1)];

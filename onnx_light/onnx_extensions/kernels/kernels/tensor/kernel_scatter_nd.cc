@@ -128,7 +128,8 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
   }
 
   // Row-major strides for data (in elements).
-  std::vector<int64_t> data_strides(static_cast<std::size_t>(r), 1);
+  onnx_kernels::Shape data_strides;
+  data_strides.assign(static_cast<std::size_t>(r), 1);
   for (int64_t i = r - 2; i >= 0; --i) {
     data_strides[static_cast<std::size_t>(i)] =
         data_strides[static_cast<std::size_t>(i + 1)] * data.shape[static_cast<std::size_t>(i + 1)];

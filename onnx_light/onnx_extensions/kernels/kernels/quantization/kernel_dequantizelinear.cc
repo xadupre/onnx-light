@@ -13,7 +13,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -543,22 +542,25 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
     break;
   case static_cast<int32_t>(DataType::UINT16): {
     const int64_t n_zp = x_zero_point.element_count();
-    std::vector<uint16_t> zp_vec(static_cast<std::size_t>(n_zp));
-    std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(uint16_t));
+    detail::TemporaryTypedBuffer<uint16_t> zp_vec(static_cast<std::size_t>(n_zp), allocator,
+                                                  "kernel::DequantizeLinear: zero-point");
+    zp_vec.CopyFromBytes(zp_bytes);
     DequantizeBlockLoop<uint16_t>(x, scales, zp_vec.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT16): {
     const int64_t n_zp = x_zero_point.element_count();
-    std::vector<int16_t> zp_vec(static_cast<std::size_t>(n_zp));
-    std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(int16_t));
+    detail::TemporaryTypedBuffer<int16_t> zp_vec(static_cast<std::size_t>(n_zp), allocator,
+                                                 "kernel::DequantizeLinear: zero-point");
+    zp_vec.CopyFromBytes(zp_bytes);
     DequantizeBlockLoop<int16_t>(x, scales, zp_vec.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT32): {
     const int64_t n_zp = x_zero_point.element_count();
-    std::vector<int32_t> zp_vec(static_cast<std::size_t>(n_zp));
-    std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(int32_t));
+    detail::TemporaryTypedBuffer<int32_t> zp_vec(static_cast<std::size_t>(n_zp), allocator,
+                                                 "kernel::DequantizeLinear: zero-point");
+    zp_vec.CopyFromBytes(zp_bytes);
     DequantizeBlockLoop<int32_t>(x, scales, zp_vec.data(), idx, output);
     break;
   }

@@ -180,8 +180,10 @@ Tensor LpPool::operator()(const Tensor &x, const Shape &kernel_shape, const Shap
   const double pd = static_cast<double>(p);
   const double inv_p = 1.0 / pd;
 
-  std::vector<int64_t> out_idx(k);
-  std::vector<int64_t> kidx(k);
+  Shape out_idx;
+  out_idx.assign(k, 0);
+  Shape kidx;
+  kidx.assign(k, 0);
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c = 0; c < C; ++c) {
       const int64_t in_base = n * in_strides[0] + c * in_strides[1];

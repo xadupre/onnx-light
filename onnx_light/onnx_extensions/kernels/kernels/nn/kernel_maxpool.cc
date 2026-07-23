@@ -265,8 +265,9 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const Shape &kernel_shape,
   Tensor y = MakeOutputTensor(x.data_type, out_shape, y_n_bytes, allocator);
   Tensor indices;
   if (produce_indices) {
-    indices = Tensor("", static_cast<int32_t>(DataType::INT64), out_shape,
-                     std::vector<uint8_t>(static_cast<size_t>(n_out) * sizeof(int64_t)));
+    const size_t indices_n_bytes = static_cast<size_t>(n_out) * sizeof(int64_t);
+    indices = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape, indices_n_bytes,
+                               allocator);
   }
 
   const Shape in_strides = RowMajorStrides(x.shape);

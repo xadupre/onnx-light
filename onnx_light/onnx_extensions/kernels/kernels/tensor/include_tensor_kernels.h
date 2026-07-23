@@ -377,9 +377,9 @@ public:
 class Squeeze : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const std::vector<int64_t> &axes,
+  Tensor operator()(const Tensor &data, const onnx_kernels::Shape &axes,
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &data, const std::vector<int64_t> &axes, Tensor &output) const;
+  void operator()(const Tensor &data, const onnx_kernels::Shape &axes, Tensor &output) const;
 
   /// Rank may change after squeezing.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -390,9 +390,9 @@ public:
 class Unsqueeze : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const std::vector<int64_t> &axes,
+  Tensor operator()(const Tensor &data, const onnx_kernels::Shape &axes,
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &data, const std::vector<int64_t> &axes, Tensor &output) const;
+  void operator()(const Tensor &data, const onnx_kernels::Shape &axes, Tensor &output) const;
 
   /// Rank changes after unsqueezing.
   static constexpr bool CanRunInPlace() noexcept { return false; }

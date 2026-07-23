@@ -1764,6 +1764,42 @@ TEST(KernelClass, EinsumRejectsRankMismatch) {
   EXPECT_THROW(einsum_kernel({x}, "i->i"), std::invalid_argument);
 }
 
+TEST(KernelClass, EinsumReusesKernelAcrossEquationsAndShapes) {
+  // A single kernel instance caches its contraction plan; reusing it with a
+  // different equation or different input shapes must rebuild the plan and
+  // still produce correct results.
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+
+  Tensor a = Tensor::FromFloat("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor b = Tensor::FromFloat("", {3, 2}, {7, 8, 9, 10, 11, 12});
+
+  // First call builds the plan for the matmul equation.
+  Tensor mm = einsum_kernel({a, b}, "ij,jk->ik");
+  ASSERT_EQ(mm.shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_FLOAT_EQ(mm.AsFloat()[0], 1 * 7 + 2 * 9 + 3 * 11);
+
+  // Same equation and shapes again: cached plan must yield the same result.
+  Tensor mm2 = einsum_kernel({a, b}, "ij,jk->ik");
+  ASSERT_EQ(mm2.shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_FLOAT_EQ(mm2.AsFloat()[0], 1 * 7 + 2 * 9 + 3 * 11);
+  EXPECT_FLOAT_EQ(mm2.AsFloat()[3], 4 * 8 + 5 * 10 + 6 * 12);
+
+  // Different equation on the same instance: plan must be rebuilt.
+  Tensor t = einsum_kernel({a}, "ij->ji");
+  ASSERT_EQ(t.shape, (std::vector<int64_t>{3, 2}));
+  EXPECT_FLOAT_EQ(t.AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(t.AsFloat()[1], 4.0f);
+
+  // Same equation as the first call but different input shapes: the cached
+  // plan keyed on shapes must be invalidated and rebuilt.
+  Tensor c = Tensor::FromFloat("", {1, 2}, {1, 2});
+  Tensor d = Tensor::FromFloat("", {2, 1}, {3, 4});
+  Tensor mm3 = einsum_kernel({c, d}, "ij,jk->ik");
+  ASSERT_EQ(mm3.shape, (std::vector<int64_t>{1, 1}));
+  EXPECT_FLOAT_EQ(mm3.AsFloat()[0], 1 * 3 + 2 * 4);
+}
+
 TEST(KernelClass, ClipClassClampsToMinAndMax) {
   const KernelContext ctx{DefaultOpset(13)};
   Clip clip_kernel{ctx};
@@ -1903,7 +1939,10 @@ TEST(KernelClass, TopKClassUsesAllocatorWhenRuntimeContextHasOne) {
   TopK topk_kernel{ctx};
 
   Tensor x = Tensor::FromFloat("", {1, 4}, {3.0f, 1.0f, 4.0f, 2.0f});
-  SimpleRawBufferAllocator alloc(2);
+  // Capacity 3: the two persistent outputs (values, indices) plus one transient
+  // scratch index buffer that TopK draws from the allocator and frees before
+  // returning.
+  SimpleRawBufferAllocator alloc(3);
   RuntimeContext rt;
   rt.set_allocator(&alloc);
 
@@ -1911,6 +1950,7 @@ TEST(KernelClass, TopKClassUsesAllocatorWhenRuntimeContextHasOne) {
       topk_kernel(x, /*k=*/2, /*axis=*/-1, /*largest=*/true, /*sorted=*/true, &rt);
   EXPECT_TRUE(values.has_allocation());
   EXPECT_TRUE(indices.has_allocation());
+  // The transient scratch buffer has been freed, leaving only the two outputs.
   EXPECT_EQ(alloc.allocated_count(), 2u);
   ASSERT_EQ(values.shape, (std::vector<int64_t>{1, 2}));
   EXPECT_FLOAT_EQ(values.AsFloat()[0], 4.0f);

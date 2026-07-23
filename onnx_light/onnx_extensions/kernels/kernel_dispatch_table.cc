@@ -1610,10 +1610,9 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &indices = GetInput(node, 1, rt.tensors());
-         const std::vector<int64_t> kernel_shape =
-             GetAttributeIntsOrDefault(node, "kernel_shape", {});
-         const std::vector<int64_t> strides = GetAttributeIntsOrDefault(node, "strides", {});
-         const std::vector<int64_t> pads = GetAttributeIntsOrDefault(node, "pads", {});
+         const Shape kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+         const Shape strides = GetAttributeIntsOrDefault(node, "strides", {});
+         const Shape pads = GetAttributeIntsOrDefault(node, "pads", {});
          onnx_kernels::kernel::MaxUnpool k(rt.kernel_ctx());
          const Tensor *output_shape = GetOptionalInput(node, 2, rt.tensors());
          if (output_shape != nullptr) {
@@ -2957,16 +2956,16 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
              GetAttributeStringOrDefault(node, "post_transform", "NONE");
          const std::vector<float> base_values =
              GetAttributeFloatsOrDefault(node, "base_values", {});
-         onnx_kernels::kernel::TreeEnsembleRegressor reg(rt.kernel_ctx());
+         onnx_kernels::kernel::TreeEnsembleRegressor reg(
+             rt.kernel_ctx(), nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values,
+             nodes_modes, nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids,
+             target_nodeids, target_ids, target_weights);
          Tensor y =
              DispatchTreeEnsembleClassicByDataType(x, "TreeEnsembleRegressor", [&](auto *tag) {
                using T = std::remove_pointer_t<decltype(tag)>;
                (void)tag;
-               return reg.template operator()<T>(
-                   x, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
-                   nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids,
-                   target_nodeids, target_ids, target_weights, n_targets, aggregate_function,
-                   post_transform, base_values);
+               return reg.template operator()<T>(x, n_targets, aggregate_function, post_transform,
+                                                 base_values);
              });
          SetOutput(node, 0, std::move(y), rt);
        }},
@@ -3045,22 +3044,19 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          EXT_ENFORCE_INVALID(use_strings != has_ints, 
                "RunNode: TreeEnsembleClassifier requires exactly one of "
                "'classlabels_int64s' or 'classlabels_strings' to be set.");
-         onnx_kernels::kernel::TreeEnsembleClassifier cls(rt.kernel_ctx());
+         onnx_kernels::kernel::TreeEnsembleClassifier cls(
+             rt.kernel_ctx(), nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values,
+             nodes_modes, nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids,
+             class_nodeids, class_ids, class_weights);
          std::pair<Tensor, Tensor> yz = DispatchTreeEnsembleClassicByDataType(
              x, "TreeEnsembleClassifier", [&](auto *tag) {
                using T = std::remove_pointer_t<decltype(tag)>;
                (void)tag;
                return use_strings
-                          ? cls.template operator()<T>(
-                                x, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values,
-                                nodes_modes, nodes_truenodeids, nodes_falsenodeids, nodes_missing,
-                                class_treeids, class_nodeids, class_ids, class_weights,
-                                classlabels_strings, base_values, post_transform)
-                          : cls.template operator()<T>(
-                                x, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values,
-                                nodes_modes, nodes_truenodeids, nodes_falsenodeids, nodes_missing,
-                                class_treeids, class_nodeids, class_ids, class_weights,
-                                classlabels_int64s, base_values, post_transform);
+                          ? cls.template operator()<T>(x, classlabels_strings, base_values,
+                                                       post_transform)
+                          : cls.template operator()<T>(x, classlabels_int64s, base_values,
+                                                       post_transform);
              });
          SetOutput(node, 0, std::move(yz.first), rt);
          SetOutput(node, 1, std::move(yz.second), rt);
@@ -3477,31 +3473,42 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
                "RunNode: TreeEnsemble attribute 'membership_values' must have the same "
                "element type as input 'X'.");
          const std::span<const uint8_t> nodes_modes_span = TensorSpan<uint8_t>(nodes_modes_t);
-         onnx_kernels::kernel::TreeEnsemble tree_ens(rt.kernel_ctx());
+         // Materialize the tensor-typed attributes as ``double`` so the kernel
+         // owns its tree data (independent of the input element type).
+         const auto tensor_to_double = [](const Tensor &t) -> std::vector<double> {
+           if (t.element_count() == 0) {
+             return {};
+           }
+           switch (t.data_type) {
+           case static_cast<int32_t>(DataType::FLOAT): {
+             const std::span<const float> s = TensorSpan<float>(t);
+             return std::vector<double>(s.begin(), s.end());
+           }
+           case static_cast<int32_t>(DataType::DOUBLE): {
+             const std::span<const double> s = TensorSpan<double>(t);
+             return std::vector<double>(s.begin(), s.end());
+           }
+           default:
+             EXT_THROW_INVALID("RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");
+           }
+         };
+         const std::vector<double> nodes_splits_d = tensor_to_double(nodes_splits);
+         const std::vector<double> leaf_weights_d = tensor_to_double(leaf_weights);
+         const std::vector<double> membership_d = tensor_to_double(membership_values);
+         const std::vector<uint8_t> nodes_modes_vec(nodes_modes_span.begin(),
+                                                    nodes_modes_span.end());
+         onnx_kernels::kernel::TreeEnsemble tree_ens(
+             rt.kernel_ctx(), tree_roots, nodes_featureids, nodes_splits_d, nodes_modes_vec,
+             nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs, nodes_falseleafs, nodes_missing,
+             leaf_targetids, leaf_weights_d, membership_d);
          Tensor y;
          switch (x.data_type) {
-         case static_cast<int32_t>(DataType::FLOAT): {
-           const std::span<const float> members =
-               membership_values.element_count() > 0 ? TensorSpan<float>(membership_values)
-                                                      : std::span<const float>{};
-           y = tree_ens.operator()<float>(
-               x, tree_roots, nodes_featureids, TensorSpan<float>(nodes_splits), nodes_modes_span,
-               nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs, nodes_falseleafs,
-               nodes_missing, leaf_targetids, TensorSpan<float>(leaf_weights), members, n_targets,
-               aggregate_function, post_transform);
+         case static_cast<int32_t>(DataType::FLOAT):
+           y = tree_ens.operator()<float>(x, n_targets, aggregate_function, post_transform);
            break;
-         }
-         case static_cast<int32_t>(DataType::DOUBLE): {
-           const std::span<const double> members =
-               membership_values.element_count() > 0 ? TensorSpan<double>(membership_values)
-                                                      : std::span<const double>{};
-           y = tree_ens.operator()<double>(
-               x, tree_roots, nodes_featureids, TensorSpan<double>(nodes_splits), nodes_modes_span,
-               nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs, nodes_falseleafs,
-               nodes_missing, leaf_targetids, TensorSpan<double>(leaf_weights), members, n_targets,
-               aggregate_function, post_transform);
+         case static_cast<int32_t>(DataType::DOUBLE):
+           y = tree_ens.operator()<double>(x, n_targets, aggregate_function, post_transform);
            break;
-         }
          default:
            EXT_THROW_INVALID(
                "RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");

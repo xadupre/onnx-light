@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -974,6 +975,11 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Precomputed contraction plan for :cpp:class:`Einsum` (defined in the
+/// implementation file). Cached between calls so it is built only once per
+/// distinct equation/input-shape combination.
+struct EinsumPlan;
+
 /// Reference implementation of the ``Einsum`` operator (opset 12).
 ///
 /// Evaluates the Einstein summation expressed by ``equation`` over the list
@@ -991,6 +997,17 @@ public:
 
   /// Einsum generally changes shape and cannot alias inputs safely.
   static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  /// Returns the contraction plan for ``inputs``/``equation``, building it once
+  /// and reusing the cached result while the equation and input shapes are
+  /// unchanged, so :cpp:func:`BuildPlan` is not recomputed on every call.
+  const EinsumPlan &EnsurePlan(const std::vector<Tensor> &inputs,
+                               const std::string &equation) const;
+
+  mutable std::shared_ptr<const EinsumPlan> plan_;
+  mutable std::string plan_equation_;
+  mutable std::vector<Shape> plan_shapes_;
 };
 
 /// Reference implementation of the ONNX ``DFT`` operator (since opset 17;

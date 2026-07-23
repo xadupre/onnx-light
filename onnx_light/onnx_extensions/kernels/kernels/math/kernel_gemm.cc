@@ -7,11 +7,12 @@
 #include "onnx_core/runtime/float16_promote.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -21,21 +22,22 @@ namespace {
 
 constexpr const char *kGemmName = "kernel::Gemm";
 
-/// Computes Y = alpha * op(A) * op(B) + beta * C into a pre-allocated
+/// Computes Y = alpha * op(A) * op(B) + beta * C into a caller-provided
 /// result buffer.  ``op(X)`` transposes X when the corresponding
-/// ``trans`` flag is non-zero.
+/// ``trans`` flag is non-zero.  ``result`` must point to storage large
+/// enough to hold ``M * N`` elements.
 ///
 /// A has shape (M, K) when transA=0, (K, M) when transA≠0.
 /// B has shape (K, N) when transB=0, (N, K) when transB≠0.
 /// C (optional) is unidirectionally broadcastable to (M, N).
 template <typename T>
 void GemmCompute(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
-                 int64_t transA, int64_t transB, std::vector<T> &result) {
+                 int64_t transA, int64_t transB, T *result) {
   const int64_t m = transA ? a.shape[1] : a.shape[0];
   const int64_t k = transA ? a.shape[0] : a.shape[1];
   const int64_t n = transB ? b.shape[0] : b.shape[1];
 
-  result.assign(static_cast<std::size_t>(m * n), T{0});
+  std::fill_n(result, static_cast<std::size_t>(m * n), T{0});
 
   const T *pa = a.As<T>();
   const T *pb = b.As<T>();
@@ -87,9 +89,10 @@ Tensor GemmAlloc(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
                  int64_t transA, int64_t transB, RawBufferAllocator *allocator = nullptr) {
   const int64_t m = transA ? a.shape[1] : a.shape[0];
   const int64_t n = transB ? b.shape[0] : b.shape[1];
-  std::vector<T> result;
-  GemmCompute<T>(a, b, c, alpha, beta, transA, transB, result);
-  return Tensor::From<T>("", {m, n}, result, allocator);
+  const std::size_t n_bytes = static_cast<std::size_t>(m * n) * sizeof(T);
+  Tensor y = MakeOutputTensor(TensorElementType<T>::value, {m, n}, n_bytes, allocator);
+  GemmCompute<T>(a, b, c, alpha, beta, transA, transB, y.As<T>());
+  return y;
 }
 
 /// Computes Y = alpha * op(A) * op(B) + beta * C into a preallocated output tensor.
@@ -104,9 +107,7 @@ void GemmInPlace(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
   EXT_ENFORCE_INVALID(output.shape.size() == 2 && output.shape[0] == m && output.shape[1] == n,
                       kGemmName, " preallocated output shape must be [", std::to_string(m), ", ",
                       std::to_string(n), "].");
-  std::vector<T> result;
-  GemmCompute<T>(a, b, c, alpha, beta, transA, transB, result);
-  std::memcpy(output.mutable_bytes(), result.data(), result.size() * sizeof(T));
+  GemmCompute<T>(a, b, c, alpha, beta, transA, transB, output.As<T>());
 }
 
 constexpr const char *kSupportedGemmTypesMsg =

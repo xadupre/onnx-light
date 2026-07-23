@@ -792,7 +792,6 @@ TEST(KernelClass, CategoryMapperInPlaceWritesToPreallocatedOutput) {
 
 TEST(KernelClass, TreeEnsembleRegressorSumSingleTargetMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_kernels::kernel::TreeEnsembleRegressor reg{ctx};
   // Single-tree: node 0 splits feature[0] <= 1.0; true -> leaf weight 1.0, false -> 3.0.
   Tensor x = Tensor::FromFloat("", {2, 1}, {0.5f, 2.0f});
   const std::vector<int64_t> treeids{0, 0, 0};
@@ -807,9 +806,10 @@ TEST(KernelClass, TreeEnsembleRegressorSumSingleTargetMatchesReference) {
   const std::vector<int64_t> t_nodeids{1, 2};
   const std::vector<int64_t> t_ids{0, 0};
   const std::vector<float> t_weights{1.0f, 3.0f};
-  Tensor y = reg.operator()<float>(x, treeids, nodeids, featureids, values, modes, truenodes,
-                                   falsenodes, missing, t_treeids, t_nodeids, t_ids, t_weights,
-                                   /*n_targets=*/1, /*aggregate_function=*/"SUM",
+  onnx_kernels::kernel::TreeEnsembleRegressor reg{
+      ctx,        treeids, nodeids,   featureids, values, modes,    truenodes,
+      falsenodes, missing, t_treeids, t_nodeids,  t_ids,  t_weights};
+  Tensor y = reg.operator()<float>(x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
                                    /*post_transform=*/"NONE", /*base_values=*/{});
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
@@ -822,7 +822,6 @@ TEST(KernelClass, TreeEnsembleRegressorSumSingleTargetMatchesReference) {
 
 TEST(KernelClass, TreeEnsembleClassifierInt64BinaryMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_kernels::kernel::TreeEnsembleClassifier cls{ctx};
   // Single-tree binary: node 0 splits feature[0] <= 0.5; true -> class 0, false -> class 1.
   Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
   const std::vector<int64_t> treeids{0, 0, 0};
@@ -837,9 +836,10 @@ TEST(KernelClass, TreeEnsembleClassifierInt64BinaryMatchesReference) {
   const std::vector<int64_t> c_nodeids{1, 2};
   const std::vector<int64_t> c_ids{0, 1};
   const std::vector<float> c_weights{1.0f, 1.0f};
-  auto yz = cls.operator()<float>(x, treeids, nodeids, featureids, values, modes, truenodes,
-                                  falsenodes, missing, c_treeids, c_nodeids, c_ids, c_weights,
-                                  std::vector<int64_t>{0, 1}, {}, "NONE");
+  onnx_kernels::kernel::TreeEnsembleClassifier cls{
+      ctx,        treeids, nodeids,   featureids, values, modes,    truenodes,
+      falsenodes, missing, c_treeids, c_nodeids,  c_ids,  c_weights};
+  auto yz = cls.operator()<float>(x, std::vector<int64_t>{0, 1}, {}, "NONE");
   ASSERT_EQ(yz.first.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
   ASSERT_EQ(yz.first.shape, (std::vector<int64_t>{2}));
   const int64_t *labels = yz.first.AsInt64();
@@ -849,15 +849,25 @@ TEST(KernelClass, TreeEnsembleClassifierInt64BinaryMatchesReference) {
 
 TEST(KernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
-  onnx_kernels::kernel::TreeEnsemble tree_ens{ctx};
   // Single-tree v5: root=0, node 0 splits feature[0] LEQ 0.5 (mode=0).
   //   true  -> leaf index 0 (target 0, weight 1.0)
   //   false -> leaf index 1 (target 0, weight 2.0)
   Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
-  Tensor y = tree_ens.operator()<float>(
-      x, {0}, {0}, {0.5f}, {0}, {0}, {1}, {1}, {1}, {}, {0, 0}, {1.0f, 2.0f},
-      /*membership_values=*/{},
-      /*n_targets=*/1, /*aggregate_function=*/1, /*post_transform=*/0);
+  onnx_kernels::kernel::TreeEnsemble tree_ens{ctx,
+                                              /*tree_roots=*/{0},
+                                              /*nodes_featureids=*/{0},
+                                              /*nodes_splits=*/{0.5},
+                                              /*nodes_modes=*/{0},
+                                              /*nodes_truenodeids=*/{0},
+                                              /*nodes_falsenodeids=*/{1},
+                                              /*nodes_trueleafs=*/{1},
+                                              /*nodes_falseleafs=*/{1},
+                                              /*nodes_missing=*/{},
+                                              /*leaf_targetids=*/{0, 0},
+                                              /*leaf_weights=*/{1.0, 2.0},
+                                              /*membership_values=*/{}};
+  Tensor y = tree_ens.operator()<float>(x, /*n_targets=*/1, /*aggregate_function=*/1,
+                                        /*post_transform=*/0);
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
   const float *py = y.AsFloat();
@@ -874,18 +884,24 @@ TEST(KernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
 // expected outputs, including NaN feature handling.
 TEST(KernelClass, TreeEnsembleV5SetMembershipMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
-  onnx_kernels::kernel::TreeEnsemble tree_ens{ctx};
   const float kNaN = std::numeric_limits<float>::quiet_NaN();
   Tensor x = Tensor::FromFloat("", {6, 1}, {1.2f, 3.4f, -0.12f, kNaN, 12.0f, 7.0f});
-  Tensor y = tree_ens.operator()<float>(
-      x, /*tree_roots=*/{0}, /*nodes_featureids=*/{0, 0, 0},
-      /*nodes_splits=*/{11.0f, 232344.0f, kNaN}, /*nodes_modes=*/{0, 6, 6},
-      /*nodes_truenodeids=*/{1, 0, 1}, /*nodes_falsenodeids=*/{2, 2, 3},
-      /*nodes_trueleafs=*/{0, 1, 1}, /*nodes_falseleafs=*/{1, 0, 1},
-      /*nodes_missing=*/{}, /*leaf_targetids=*/{0, 1, 2, 3},
+  onnx_kernels::kernel::TreeEnsemble tree_ens{
+      ctx,
+      /*tree_roots=*/{0},
+      /*nodes_featureids=*/{0, 0, 0},
+      /*nodes_splits=*/{11.0f, 232344.0f, kNaN},
+      /*nodes_modes=*/{0, 6, 6},
+      /*nodes_truenodeids=*/{1, 0, 1},
+      /*nodes_falsenodeids=*/{2, 2, 3},
+      /*nodes_trueleafs=*/{0, 1, 1},
+      /*nodes_falseleafs=*/{1, 0, 1},
+      /*nodes_missing=*/{},
+      /*leaf_targetids=*/{0, 1, 2, 3},
       /*leaf_weights=*/{1.0f, 10.0f, 1000.0f, 100.0f},
-      /*membership_values=*/{1.2f, 3.7f, 8.0f, 9.0f, kNaN, 12.0f, 7.0f, kNaN},
-      /*n_targets=*/4, /*aggregate_function=*/1, /*post_transform=*/0);
+      /*membership_values=*/{1.2f, 3.7f, 8.0f, 9.0f, kNaN, 12.0f, 7.0f, kNaN}};
+  Tensor y = tree_ens.operator()<float>(x, /*n_targets=*/4, /*aggregate_function=*/1,
+                                        /*post_transform=*/0);
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{6, 4}));
   const float *py = y.AsFloat();

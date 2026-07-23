@@ -28,8 +28,7 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 // Computes the output shape of a ReduceSum: dimensions in ``reduce_axes`` are
 // either dropped (when ``keepdims`` is false) or replaced by 1.
-Shape ComputeOutputShape(const Shape &input_shape, const std::vector<bool> &is_reduced,
-                         bool keepdims) {
+Shape ComputeOutputShape(const Shape &input_shape, const Shape &is_reduced, bool keepdims) {
   Shape out_shape;
   out_shape.reserve(input_shape.size());
   for (size_t d = 0; d < input_shape.size(); ++d) {
@@ -60,8 +59,8 @@ Shape RowMajorStrides(const Shape &shape) {
 // dimensions only (i.e. ``keepdims == false``); callers that want the
 // keepdims layout reshape the same byte buffer afterwards.
 template <typename T>
-void SumReduceT(const Tensor &data, const std::vector<bool> &is_reduced,
-                const Shape &output_shape_noreduce, Tensor &output) {
+void SumReduceT(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
+                Tensor &output) {
   const Shape out_strides = RowMajorStrides(output_shape_noreduce);
 
   // Zero-initialize the output bytes so we can accumulate into it.
@@ -72,7 +71,8 @@ void SumReduceT(const Tensor &data, const std::vector<bool> &is_reduced,
 
   // Iterate over every element of the input using a multi-dimensional index.
   const int64_t rank = static_cast<int64_t>(data.shape.size());
-  std::vector<int64_t> idx(static_cast<size_t>(rank), 0);
+  Shape idx;
+  idx.assign(static_cast<size_t>(rank), 0);
   const int64_t total = data.element_count();
   for (int64_t i = 0; i < total; ++i) {
     // Compute the output offset by walking through the non-reduced dims.
@@ -97,8 +97,8 @@ void SumReduceT(const Tensor &data, const std::vector<bool> &is_reduced,
   }
 }
 
-void SumReduce(const Tensor &data, const std::vector<bool> &is_reduced,
-               const Shape &output_shape_noreduce, Tensor &output) {
+void SumReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
+               Tensor &output) {
   if (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
     SumReduceT<double>(data, is_reduced, output_shape_noreduce, output);
   } else {
@@ -121,10 +121,11 @@ Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_e
   const size_t elem_size =
       data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
 
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   if (!noop_with_empty_axes) {
     // Reduce over all dimensions.
-    std::fill(is_reduced.begin(), is_reduced.end(), true);
+    std::fill(is_reduced.begin(), is_reduced.end(), 1);
   }
 
   const Shape out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
@@ -150,9 +151,10 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
       data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
   const int64_t rank = static_cast<int64_t>(data.shape.size());
 
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   if (!noop_with_empty_axes) {
-    std::fill(is_reduced.begin(), is_reduced.end(), true);
+    std::fill(is_reduced.begin(), is_reduced.end(), 1);
   }
 
   const Shape expected_out_shape = ComputeOutputShape(data.shape, is_reduced, keepdims);
@@ -180,17 +182,18 @@ Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdi
   const size_t elem_size =
       data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
 
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   const int64_t naxes = axes.element_count();
   if (naxes == 0) {
     if (!noop_with_empty_axes) {
-      std::fill(is_reduced.begin(), is_reduced.end(), true);
+      std::fill(is_reduced.begin(), is_reduced.end(), 1);
     }
   } else {
     const int64_t *pa = axes.AsInt64();
     for (int64_t i = 0; i < naxes; ++i) {
       const int64_t a = ResolveAxis(pa[i], rank);
-      is_reduced[static_cast<size_t>(a)] = true;
+      is_reduced[static_cast<size_t>(a)] = 1;
     }
   }
 
@@ -216,17 +219,18 @@ void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims
   const size_t elem_size =
       data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
 
-  std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
+  Shape is_reduced;
+  is_reduced.assign(static_cast<size_t>(rank), 0);
   const int64_t naxes = axes.element_count();
   if (naxes == 0) {
     if (!noop_with_empty_axes) {
-      std::fill(is_reduced.begin(), is_reduced.end(), true);
+      std::fill(is_reduced.begin(), is_reduced.end(), 1);
     }
   } else {
     const int64_t *pa = axes.AsInt64();
     for (int64_t i = 0; i < naxes; ++i) {
       const int64_t a = ResolveAxis(pa[i], rank);
-      is_reduced[static_cast<size_t>(a)] = true;
+      is_reduced[static_cast<size_t>(a)] = 1;
     }
   }
 

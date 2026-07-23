@@ -208,10 +208,10 @@ class QLinearConv : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``QLinearConv`` operator.
   struct Attributes {
-    std::vector<int64_t> kernel_shape;
-    std::vector<int64_t> strides;
-    std::vector<int64_t> pads;
-    std::vector<int64_t> dilations;
+    Shape kernel_shape;
+    Shape strides;
+    Shape pads;
+    Shape dilations;
     int64_t group = 1;
     AutoPad auto_pad = AutoPad::kNotSet;
   };

@@ -84,16 +84,33 @@ std::vector<int64_t> DistinctTreeIds(const std::vector<int64_t> &nodes_treeids) 
 
 } // namespace
 
-template <typename T>
-std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
-    const Tensor &x, const std::vector<int64_t> &nodes_treeids,
+TreeEnsembleClassifier::TreeEnsembleClassifier(
+    const KernelContext &ctx, const std::vector<int64_t> &nodes_treeids,
     const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
     const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
     const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
     const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &class_treeids,
     const std::vector<int64_t> &class_nodeids, const std::vector<int64_t> &class_ids,
-    const std::vector<float> &class_weights, const std::vector<int64_t> &classlabels_int64s,
-    const std::vector<float> &base_values, const std::string &post_transform) const {
+    const std::vector<float> &class_weights)
+    : KernelBase(ctx), node_map_(BuildClassicNodeMap(nodes_treeids, nodes_nodeids, nodes_featureids,
+                                                     nodes_values, nodes_modes, nodes_truenodeids,
+                                                     nodes_falsenodeids, nodes_missing)),
+      tree_ids_(DistinctTreeIds(nodes_treeids)) {
+  const size_t n_leaves = class_treeids.size();
+  EXT_ENFORCE_INVALID(class_nodeids.size() == n_leaves && class_ids.size() == n_leaves &&
+                          class_weights.size() == n_leaves,
+                      "kernel::TreeEnsembleClassifier: class_* arrays must have the same length.");
+  leaf_map_.reserve(n_leaves);
+  for (size_t i = 0; i < n_leaves; ++i) {
+    leaf_map_[{class_treeids[i], class_nodeids[i]}].push_back({class_ids[i], class_weights[i]});
+  }
+}
+
+template <typename T>
+std::pair<Tensor, Tensor>
+TreeEnsembleClassifier::operator()(const Tensor &x, const std::vector<int64_t> &classlabels_int64s,
+                                   const std::vector<float> &base_values,
+                                   const std::string &post_transform) const {
   EXT_ENFORCE_INVALID(!classlabels_int64s.empty(),
                       "kernel::TreeEnsembleClassifier: classlabels_int64s must not be empty.");
 
@@ -102,29 +119,13 @@ std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
 
   const int64_t n_classes = static_cast<int64_t>(classlabels_int64s.size());
-  const ClassicNodeMap node_map =
-      BuildClassicNodeMap(nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
-                          nodes_truenodeids, nodes_falsenodeids, nodes_missing);
-
-  const size_t n_leaves = class_treeids.size();
-  EXT_ENFORCE_INVALID(class_nodeids.size() == n_leaves && class_ids.size() == n_leaves &&
-                          class_weights.size() == n_leaves,
-                      "kernel::TreeEnsembleClassifier: class_* arrays must have the same length.");
-
-  ClassicLeafMap leaf_map;
-  leaf_map.reserve(n_leaves);
-  for (size_t i = 0; i < n_leaves; ++i) {
-    leaf_map[{class_treeids[i], class_nodeids[i]}].push_back({class_ids[i], class_weights[i]});
-  }
-
-  const std::vector<int64_t> tree_ids = DistinctTreeIds(nodes_treeids);
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
 
   Tensor z = MakeOutputTensor(DataType::FLOAT, {sample_count, n_classes},
                               static_cast<size_t>(sample_count * n_classes) * sizeof(float),
                               ctx_.allocator);
   float *scores = z.AsFloat();
-  ComputeClassifierScores(node_map, leaf_map, tree_ids, x_values.data(), sample_count,
+  ComputeClassifierScores(node_map_, leaf_map_, tree_ids_, x_values.data(), sample_count,
                           feature_count, n_classes, base_values, post_transform, scores);
 
   std::vector<int64_t> labels(static_cast<size_t>(sample_count));
@@ -139,13 +140,7 @@ std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
 
 template <typename T>
 std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
-    const Tensor &x, const std::vector<int64_t> &nodes_treeids,
-    const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
-    const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
-    const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
-    const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &class_treeids,
-    const std::vector<int64_t> &class_nodeids, const std::vector<int64_t> &class_ids,
-    const std::vector<float> &class_weights, const std::vector<std::string> &classlabels_strings,
+    const Tensor &x, const std::vector<std::string> &classlabels_strings,
     const std::vector<float> &base_values, const std::string &post_transform) const {
   EXT_ENFORCE_INVALID(!classlabels_strings.empty(),
                       "kernel::TreeEnsembleClassifier: classlabels_strings must not be empty.");
@@ -155,29 +150,13 @@ std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
 
   const int64_t n_classes = static_cast<int64_t>(classlabels_strings.size());
-  const ClassicNodeMap node_map =
-      BuildClassicNodeMap(nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
-                          nodes_truenodeids, nodes_falsenodeids, nodes_missing);
-
-  const size_t n_leaves = class_treeids.size();
-  EXT_ENFORCE_INVALID(class_nodeids.size() == n_leaves && class_ids.size() == n_leaves &&
-                          class_weights.size() == n_leaves,
-                      "kernel::TreeEnsembleClassifier: class_* arrays must have the same length.");
-
-  ClassicLeafMap leaf_map;
-  leaf_map.reserve(n_leaves);
-  for (size_t i = 0; i < n_leaves; ++i) {
-    leaf_map[{class_treeids[i], class_nodeids[i]}].push_back({class_ids[i], class_weights[i]});
-  }
-
-  const std::vector<int64_t> tree_ids = DistinctTreeIds(nodes_treeids);
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
 
   Tensor z = MakeOutputTensor(DataType::FLOAT, {sample_count, n_classes},
                               static_cast<size_t>(sample_count * n_classes) * sizeof(float),
                               ctx_.allocator);
   float *scores = z.AsFloat();
-  ComputeClassifierScores(node_map, leaf_map, tree_ids, x_values.data(), sample_count,
+  ComputeClassifierScores(node_map_, leaf_map_, tree_ids_, x_values.data(), sample_count,
                           feature_count, n_classes, base_values, post_transform, scores);
 
   std::vector<std::string> labels(static_cast<size_t>(sample_count));
@@ -192,18 +171,10 @@ std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
 
 #define ONNX_LIGHT_INSTANTIATE_TREE_CLASSIFIER(T)                                                  \
   template std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()<T>(                        \
-      const Tensor &, const std::vector<int64_t> &, const std::vector<int64_t> &,                  \
-      const std::vector<int64_t> &, const std::vector<float> &, const std::vector<std::string> &,  \
-      const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
-      const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
-      const std::vector<float> &, const std::vector<int64_t> &, const std::vector<float> &,        \
+      const Tensor &, const std::vector<int64_t> &, const std::vector<float> &,                    \
       const std::string &) const;                                                                  \
   template std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()<T>(                        \
-      const Tensor &, const std::vector<int64_t> &, const std::vector<int64_t> &,                  \
-      const std::vector<int64_t> &, const std::vector<float> &, const std::vector<std::string> &,  \
-      const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
-      const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
-      const std::vector<float> &, const std::vector<std::string> &, const std::vector<float> &,    \
+      const Tensor &, const std::vector<std::string> &, const std::vector<float> &,                \
       const std::string &) const
 
 ONNX_LIGHT_INSTANTIATE_TREE_CLASSIFIER(float);

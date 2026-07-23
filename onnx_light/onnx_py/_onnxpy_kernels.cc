@@ -81,7 +81,7 @@ NB_MODULE(_onnxpykernels, m) {
   AddOnnxPyKernels(m);
   AddOnnxPyRuntime(m);
 
-  // Register all built-in onnx_kernels operator trampolines with the
+  // Register all built-in onnx_kernels operator factories with the
   // core::runtime dispatch table so that RunNode/RuntimeSession work as
   // soon as the module is imported.
   onnx_kernels::RegisterKernelFunctions();
@@ -467,9 +467,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   nb::class_<RuntimeSession>(
       rt_mod, "RuntimeSession",
       "Reusable execution session binding a precomputed :class:`ExecutionPlan`. "
-      "The first call to :func:`run` resolves and caches the kernel for every "
-      "scheduled node against the supplied :class:`RuntimeContext`; subsequent "
-      "calls reuse the cached kernels. When "
+      "The first call to :func:`run` resolves, builds, and caches the kernel "
+      "instance for every scheduled node against the supplied "
+      ":class:`RuntimeContext`; subsequent calls reuse those cached instances. When "
       ":attr:`RuntimeContext.release_intermediates` is enabled, :func:`run` also "
       "frees each intermediate whose last reference has been reached.")
       .def(nb::init<const ExecutionPlan &>(), nb::arg("plan"), nb::keep_alive<1, 2>(),
@@ -477,8 +477,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "was built from) must outlive the session; this binding keeps ``plan`` "
            "alive for at least as long as the session.")
       .def("run", &RuntimeSession::Run, nb::arg("rt"),
-           "Executes the plan once against ``rt``, resolving and caching kernels on "
-           "the first call. Safe to call repeatedly on the same session.")
+           "Executes the plan once against ``rt``, resolving, building, and caching "
+           "kernel instances on the first call. Safe to call repeatedly on the same session.")
       .def_prop_rw("parameters", &RuntimeSession::parameters, &RuntimeSession::set_parameters,
                    "Model-independent execution parameters applied to the nodes this "
                    "session runs.")

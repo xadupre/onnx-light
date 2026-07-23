@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/runtime_parameters.h"
 #include "onnx_proto/onnx.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -47,14 +48,16 @@ namespace runtime {
  *     kernel for every node the plan executes once (against the model-local
  *     function registry, the control-flow handlers, the user custom kernels
  *     and the static :cpp:func:`KernelDispatchTable` of the supplied
- *     :cpp:class:`RuntimeContext`) and caches it. Any unsupported operator is
- *     rejected here rather than mid-run. It also records the external inputs
- *     the scheduled nodes read (:cpp:func:`required_inputs`) so
- *     :cpp:func:`Run` can verify they are supplied before executing.
+ *     :cpp:class:`RuntimeContext`), builds the resulting per-node kernel
+ *     instance, and caches it. Any unsupported operator is rejected here
+ *     rather than mid-run. It also records the external inputs the scheduled
+ *     nodes read (:cpp:func:`required_inputs`) so :cpp:func:`Run` can verify
+ *     they are supplied before executing.
  *  3. **Execution** — :cpp:func:`Run` replays the plan, invoking each
- *     pre-resolved kernel and releasing intermediates as scheduled. It may be
- *     called more than once (e.g. to re-run the same graph with fresh inputs)
- *     without redoing the per-node dispatch lookup.
+ *     pre-resolved kernel instance and releasing intermediates as scheduled. It
+ *     may be called more than once (e.g. to re-run the same graph with fresh
+ *     inputs) without redoing the per-node dispatch lookup or re-constructing
+ *     the concrete per-node kernel objects.
  *
  * This mirrors how an inference runtime prepares an executable graph once and
  * then runs it repeatedly. Every caller that needs to run a node list builds
@@ -131,17 +134,35 @@ public:
   static std::vector<std::string> CollectNodeInputs(const NodeProto &node);
 
 private:
-  /// A node's kernel resolved once during :cpp:func:`InitializeKernels`,
-  /// together with the normalised ``domain`` and ``op_type`` fused into a
-  /// single ``"<domain>:<op_type>"`` key (the same format used to look the
-  /// kernel up in the :cpp:func:`KernelDispatchTable`) so :cpp:func:`Run`
-  /// never has to recompute or re-store them separately.
+  /// A node's kernel instance built once during
+  /// :cpp:func:`InitializeKernels`, together with the normalised ``domain``
+  /// and ``op_type`` fused into a single ``"<domain>:<op_type>"`` key (the
+  /// same format used to look the kernel up in the
+  /// :cpp:func:`KernelDispatchTable`) so :cpp:func:`Run` never has to
+  /// recompute or re-store them separately.
   struct PreparedKernel {
+    PreparedKernel() = default;
+    PreparedKernel(const PreparedKernel &other)
+        : key(other.key),
+          instance(other.instance != nullptr ? std::make_unique<ResolvedKernel>(*other.instance)
+                                             : nullptr) {}
+    PreparedKernel &operator=(const PreparedKernel &other) {
+      if (this == &other) {
+        return *this;
+      }
+      key = other.key;
+      instance =
+          other.instance != nullptr ? std::make_unique<ResolvedKernel>(*other.instance) : nullptr;
+      return *this;
+    }
+    PreparedKernel(PreparedKernel &&) noexcept = default;
+    PreparedKernel &operator=(PreparedKernel &&) noexcept = default;
+
     std::string key;
-    NodeKernelFn kernel;
+    std::unique_ptr<ResolvedKernel> instance;
   };
 
-  /// Resolves and caches the kernel for every node the plan executes,
+  /// Resolves and builds the kernel instance for every node the plan executes,
   /// resolving against ``rt``, and records the external inputs those nodes
   /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt);

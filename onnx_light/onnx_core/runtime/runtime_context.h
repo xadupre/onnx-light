@@ -103,10 +103,11 @@ using ShapeMap = std::unordered_map<std::string, Shape>;
 using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
 
 /**
- * Signature of a user-provided custom kernel callback. Mirrors
- * :cpp:type:`onnx_kernels::NodeKernelFn`: implementations read their
- * inputs from ``rt.tensors()`` (or ``rt.sequences()``) by name and
- * insert produced outputs under the names declared by ``node.output(i)``.
+ * Signature of a user-provided custom kernel callback. Unlike the internal
+ * :cpp:type:`NodeKernelFn` dispatch-table factories, custom kernels keep the
+ * simple "run the whole node now" contract: implementations read their inputs
+ * from ``rt.tensors()`` (or ``rt.sequences()``) by name and insert produced
+ * outputs under the names declared by ``node.output(i)``.
  *
  * Custom kernels are looked up by the canonical
  * ``"<domain>:<op_type>"`` key (the default ONNX domain — the empty

@@ -53,36 +53,27 @@ class TestCollectTestCasesByName(ExtTestCase):
         )
 
     def test_collect_test_case_accepts_mode(self):
-        from unittest import mock
+        # ``mode`` is consumed by the C++ ``collect_test_cases`` binding, which
+        # returns cases lazily (models and data sets are only materialized when
+        # accessed). Exercise the real binding and read only ``name`` so the
+        # test stays fast while still verifying that ``mode`` is accepted and
+        # actually changes the generated cases.
+        test_cases = bt.collect_test_cases(mode=bt.TestMode.TEST)
+        self.assertGreater(len(test_cases), 0)
+        test_names = {tc.name for tc in test_cases}
+        # TEST mode does not emit the oversized benchmark cases.
+        self.assertFalse(any(name.endswith("_benchmark") for name in test_names))
 
-        from onnx_light.onnx.backend import TestMode, collect_test_case
-        from onnx_light.onnx_lib.backend.test.case import base as case_base
+        benchmark_cases = bt.collect_test_cases(mode=bt.TestMode.BENCHMARK)
+        self.assertGreater(len(benchmark_cases), 0)
+        benchmark_names = {tc.name for tc in benchmark_cases}
+        # BENCHMARK mode adds ``*_benchmark`` cases, proving ``mode`` reaches the
+        # generator and changes its output.
+        self.assertTrue(any(name.endswith("_benchmark") for name in benchmark_names))
 
-        # ``collect_test_case`` must accept ``mode`` and forward it to the C++
-        # binding. Materializing every case (models + data sets, which are huge
-        # for BENCHMARK) makes this test slow, so spy on the binding to assert
-        # the forwarded mode without building any case.
-        with mock.patch.object(
-            case_base._backend_test_cc, "collect_test_cases", return_value=[]
-        ) as spy:
-            collect_test_case()
-            collect_test_case(mode=TestMode.TEST)
-            collect_test_case(mode=TestMode.BENCHMARK)
-        forwarded = [
-            call.kwargs["mode"] if "mode" in call.kwargs else call.args[-1]
-            for call in spy.call_args_list
-        ]
-        # A ``None`` mode defaults to TEST; BENCHMARK must be forwarded as-is.
-        self.assertEqual(forwarded, [TestMode.TEST, TestMode.TEST, TestMode.BENCHMARK])
-
-        # Smoke-check the real C++ binding lazily (``len`` only, no model/data
-        # materialization) so that broken generation is still caught quickly.
-        self.assertGreater(
-            len(case_base._backend_test_cc.collect_test_cases(mode=TestMode.TEST)), 0
-        )
-        self.assertGreater(
-            len(case_base._backend_test_cc.collect_test_cases(mode=TestMode.BENCHMARK)), 0
-        )
+        # The default (no ``mode``) matches ``TestMode.TEST``.
+        default_names = {tc.name for tc in bt.collect_test_cases()}
+        self.assertEqual(default_names, test_names)
 
 
 if __name__ == "__main__":

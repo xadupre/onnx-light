@@ -4146,6 +4146,51 @@ TEST(RuntimeSession, RejectsUnsupportedOpDuringKernelInitialization) {
   EXPECT_THROW(session.Run(rt), std::invalid_argument);
 }
 
+TEST(RuntimeSession, RecordsRequiredInputsAndRejectsMissingOne) {
+  // Kernel initialization records the external inputs the scheduled nodes read
+  // (required_inputs), and Run verifies the RuntimeContext supplies every one
+  // of them before executing any kernel.
+  using core::runtime::ExecutionPlan;
+  using core::runtime::RuntimeSession;
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_z;
+  vi_z.set_name("z");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_input().push_back(vi_z);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Add", {"t", "z"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_release_intermediates(true);
+  // Only "x" is provided; the plan also requires "z", so Run must reject it
+  // before running the kernels.
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  EXPECT_THROW(session.Run(rt), std::invalid_argument);
+
+  // After the first (failed) Run the required inputs are known: "x" and "z"
+  // (the intermediate "t" is produced by a node and is not required).
+  const std::vector<std::string> &required = session.required_inputs();
+  ASSERT_EQ(required.size(), 2u);
+  EXPECT_EQ(required[0], "x");
+  EXPECT_EQ(required[1], "z");
+
+  // Supplying the missing input lets the session run to completion.
+  rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
+  session.Run(rt);
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], 1.0f + 10.0f);
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], 2.0f + 20.0f);
+}
+
 TEST(RunNodes, ExecutionPlanBuildsActions) {
   // BuildActions is metadata-driven: it locks the input on first use, allocates
   // a result (or reuses one in place) per output, executes each node, then frees
@@ -4248,6 +4293,14 @@ TEST(RunNodes, ExecuteActionSummary) {
   ExecuteAction transfer(ExecuteActionKind::kTransfer, "a", nullptr, /*node_index=*/0,
                          /*size=*/0, /*target=*/"b");
   EXPECT_EQ(transfer.summary(), "Transfer name='a' -> target='b'");
+
+  // Sequence / map deletions mention only the name and expose stable names.
+  ExecuteAction delete_sequence(ExecuteActionKind::kDeleteSequence, "seq");
+  EXPECT_EQ(delete_sequence.kind_name(), std::string("DeleteSequence"));
+  EXPECT_EQ(delete_sequence.summary(), "DeleteSequence name='seq'");
+  ExecuteAction delete_map(ExecuteActionKind::kDeleteMap, "m");
+  EXPECT_EQ(delete_map.kind_name(), std::string("DeleteMap"));
+  EXPECT_EQ(delete_map.summary(), "DeleteMap name='m'");
 }
 
 TEST(RunNodes, ExecutionPlanShapeTagActions) {

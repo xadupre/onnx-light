@@ -44,7 +44,9 @@ namespace runtime {
  *     function registry, the control-flow handlers, the user custom kernels
  *     and the static :cpp:func:`KernelDispatchTable` of the supplied
  *     :cpp:class:`RuntimeContext`) and caches it. Any unsupported operator is
- *     rejected here rather than mid-run.
+ *     rejected here rather than mid-run. It also records the external inputs
+ *     the scheduled nodes read (:cpp:func:`required_inputs`) so
+ *     :cpp:func:`Run` can verify they are supplied before executing.
  *  3. **Execution** — :cpp:func:`Run` replays the plan, invoking each
  *     pre-resolved kernel and releasing intermediates as scheduled. It may be
  *     called more than once (e.g. to re-run the same graph with fresh inputs)
@@ -72,15 +74,18 @@ public:
   /**
    * Executes the plan once against ``rt``: on the first call it resolves and
    * caches the kernel for every scheduled node (rejecting unsupported
-   * operators); every call then runs each scheduled node using its resolved
-   * kernel and frees each intermediate whose last reference has been reached.
-   * Safe to call repeatedly on the same session.
+   * operators) and records the external inputs those nodes read; every call
+   * then verifies ``rt`` supplies each of those required inputs, runs each
+   * scheduled node using its resolved kernel and frees each intermediate whose
+   * last reference has been reached. Safe to call repeatedly on the same
+   * session.
    *
    * @param rt In/out runtime context used both to resolve the kernels
    *           (function registry / custom kernels) and to exchange tensors.
    *
    * @throws std::invalid_argument if the plan references an out-of-range node
-   *         index or if any executed node cannot be dispatched.
+   *         index, if any executed node cannot be dispatched, or if ``rt`` does
+   *         not define one of the plan's required external inputs.
    */
   void Run(RuntimeContext &rt);
 
@@ -89,6 +94,12 @@ public:
   /// nodes this session runs.
   void set_parameters(RuntimeParameters parameters) noexcept { parameters_ = parameters; }
   const RuntimeParameters &parameters() const noexcept { return parameters_; }
+
+  /// Returns the external input names the scheduled nodes read (the inputs that
+  /// must be present in the :cpp:class:`RuntimeContext` before :cpp:func:`Run`).
+  /// Populated during kernel initialization; empty until the first
+  /// :cpp:func:`Run`.
+  const std::vector<std::string> &required_inputs() const noexcept { return required_inputs_; }
 
   /**
    * Returns the list of input names referenced by ``nodes`` that are not
@@ -124,11 +135,13 @@ private:
   };
 
   /// Resolves and caches the kernel for every node the plan executes,
-  /// resolving against ``rt``.
+  /// resolving against ``rt``, and records the external inputs those nodes
+  /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt);
 
   const ExecutionPlan &plan_;
   std::vector<PreparedKernel> kernels_;
+  std::vector<std::string> required_inputs_;
   bool kernels_initialized_ = false;
   RuntimeParameters parameters_;
 };

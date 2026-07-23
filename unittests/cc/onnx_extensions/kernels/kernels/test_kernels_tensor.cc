@@ -31,6 +31,7 @@ using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::Reshape;
 using onnx_kernels::kernel::Slice;
 using onnx_kernels::kernel::Squeeze;
+using onnx_kernels::kernel::Unique;
 using onnx_kernels::kernel::Unsqueeze;
 
 namespace Test {
@@ -546,6 +547,50 @@ TEST(KernelClass, CastLikeWithSaturateUsesAllocatorWhenRuntimeContextHasOne) {
   const int32_t *py = y.AsInt32();
   EXPECT_EQ(py[0], 1);
   EXPECT_EQ(py[1], 2);
+}
+
+// Ensures the Unique kernel's ``ComputeUniqueGroups`` driver acquires its
+// scratch and result buffers (indices/inverse_indices/counts) from the
+// ``KernelContext`` allocator instead of inline ``std::vector`` storage.
+TEST(KernelClass, UniqueUsesAllocatorWhenContextHasOne) {
+  SimpleRawBufferAllocator alloc(16);
+  const KernelContext ctx(DefaultOpset(11), &alloc);
+  const Unique unique_kernel{ctx};
+
+  Unique::Attributes attrs;
+  attrs.sorted = true;
+  const Tensor x = Tensor::FromFloat("", {5}, {2.0f, 1.0f, 2.0f, 3.0f, 1.0f});
+
+  const Unique::Outputs out = unique_kernel(x, attrs);
+
+  // indices, inverse_indices and counts must be allocator-backed; Y falls back
+  // to inline storage because no RuntimeContext (allocator) is threaded in.
+  EXPECT_TRUE(out.indices.has_allocation());
+  EXPECT_TRUE(out.inverse_indices.has_allocation());
+  EXPECT_TRUE(out.counts.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 3u);
+
+  ASSERT_EQ(out.y.shape, (std::vector<int64_t>{3}));
+  const float *py = out.y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.0f);
+
+  ASSERT_EQ(out.indices.shape, (std::vector<int64_t>{3}));
+  const int64_t *pidx = out.indices.As<int64_t>();
+  EXPECT_EQ(pidx[0], 1);
+  EXPECT_EQ(pidx[1], 0);
+  EXPECT_EQ(pidx[2], 3);
+
+  ASSERT_EQ(out.inverse_indices.shape, (std::vector<int64_t>{5}));
+  const int64_t *pinv = out.inverse_indices.As<int64_t>();
+  const std::vector<int64_t> inv(pinv, pinv + 5);
+  EXPECT_EQ(inv, (std::vector<int64_t>{1, 0, 1, 2, 0}));
+
+  ASSERT_EQ(out.counts.shape, (std::vector<int64_t>{3}));
+  const int64_t *pcnt = out.counts.As<int64_t>();
+  const std::vector<int64_t> cnt(pcnt, pcnt + 3);
+  EXPECT_EQ(cnt, (std::vector<int64_t>{2, 2, 1}));
 }
 
 // ---------------------------------------------------------------------------
@@ -1620,6 +1665,60 @@ TEST(KernelClass, OneHotRejectsAxisOutOfRange) {
   onnx_kernels::kernel::OneHot::Attributes attrs;
   attrs.axis = 5;
   EXPECT_THROW((void)one_hot(indices, depth, values, attrs), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// Compress kernel tests
+// ---------------------------------------------------------------------------
+
+TEST(KernelClass, CompressFlattenSelectsElements) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_kernels::kernel::Compress compress{ctx};
+  Tensor input = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor condition = Tensor::FromBool("", {5}, {0, 1, 0, 0, 1});
+  Tensor output = compress(input, condition, std::nullopt);
+  ASSERT_EQ(output.shape, (std::vector<int64_t>{2}));
+  const float *py = output.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 2.0f);
+  EXPECT_FLOAT_EQ(py[1], 5.0f);
+}
+
+TEST(KernelClass, CompressAlongAxisSelectsSlices) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_kernels::kernel::Compress compress{ctx};
+  Tensor input = Tensor::FromFloat("", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor condition = Tensor::FromBool("", {3}, {0, 1, 1});
+  Tensor output = compress(input, condition, /*axis=*/0);
+  ASSERT_EQ(output.shape, (std::vector<int64_t>{2, 2}));
+  const float *py = output.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 3.0f);
+  EXPECT_FLOAT_EQ(py[1], 4.0f);
+  EXPECT_FLOAT_EQ(py[2], 5.0f);
+  EXPECT_FLOAT_EQ(py[3], 6.0f);
+}
+
+// Ensures the allocating overload draws its single output buffer from the
+// runtime allocator and does not allocate any additional scratch storage
+// outside it (the selection is computed without a std::vector temporary).
+TEST(KernelClass, CompressUsesAllocatorWithoutScratch) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_kernels::kernel::Compress compress{ctx};
+  Tensor input = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor condition = Tensor::FromBool("", {2}, {1, 0});
+
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor output = compress(input, condition, /*axis=*/0, &rt);
+  EXPECT_TRUE(output.has_allocation());
+  // Only the output buffer is drawn from the allocator; no scratch buffers.
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  ASSERT_EQ(output.shape, (std::vector<int64_t>{1, 3}));
+  const float *py = output.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.0f);
 }
 
 } // namespace Test

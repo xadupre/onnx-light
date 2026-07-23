@@ -12,6 +12,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <new>
 #include <stdexcept>
 #include <vector>
 
@@ -223,7 +224,21 @@ TEST(KernelClass, NonMaxSuppressionUsesAllocatorWhenRuntimeContextHasOne) {
   Tensor max_out = Tensor::FromInt64("", {1}, {10});
   NonMaxSuppression::Attributes attrs;
 
-  constexpr size_t kAllocatorSlotCapacity = 1;
+  // The kernel now draws its per-invocation working buffers (corner boxes,
+  // candidate/kept index lists and the selected-triple list) from the runtime
+  // allocator in addition to the output tensor. A single-slot allocator cannot
+  // satisfy the concurrent scratch allocations, so the run must fail loudly
+  // rather than silently allocate outside the allocator.
+  {
+    SimpleRawBufferAllocator tiny_alloc(1);
+    RuntimeContext rt;
+    rt.set_allocator(&tiny_alloc);
+    EXPECT_THROW(nms(boxes, scores, &max_out, nullptr, nullptr, attrs, &rt), std::bad_alloc);
+  }
+
+  // With enough slots the kernel runs; the scratch buffers are released on
+  // return so only the output tensor's buffer stays alive.
+  constexpr size_t kAllocatorSlotCapacity = 8;
   constexpr size_t kExpectedAllocationCount = 1;
   SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
   RuntimeContext rt;

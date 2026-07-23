@@ -5,11 +5,11 @@
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <optional>
 #include <stdexcept>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -26,46 +26,45 @@ int64_t NormaliseCompressAxis(int64_t axis, int64_t rank) {
   return axis;
 }
 
-// Read the boolean values from a BOOL tensor.  Returns true/false per element.
-std::vector<bool> ReadCondition(const Tensor &condition) {
+// Validate the 'condition' input and return a direct view over its bytes. The
+// BOOL tensor stores one byte per element (0 == false, non-zero == true), so no
+// intermediate copy (and therefore no working-memory allocation) is required.
+const uint8_t *ValidateCondition(const Tensor &condition) {
   EXT_ENFORCE_INVALID(condition.data_type == static_cast<int32_t>(DataType::BOOL),
                       "kernel::Compress: 'condition' must be a BOOL tensor.");
   EXT_ENFORCE_INVALID(condition.shape.size() == 1, "kernel::Compress: 'condition' must be rank-1.");
-  const int64_t n = condition.element_count();
-  std::vector<bool> result(static_cast<std::size_t>(n));
-  const uint8_t *ptr = condition.bytes();
-  for (int64_t i = 0; i < n; ++i) {
-    result[static_cast<std::size_t>(i)] = (ptr[static_cast<std::size_t>(i)] != 0);
-  }
-  return result;
+  return condition.bytes();
 }
 
 } // namespace
 
 Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
                             std::optional<int64_t> axis, RuntimeContext *rt) const {
-  const std::vector<bool> cond = ReadCondition(condition);
-  const std::size_t cond_len = cond.size();
+  const uint8_t *cond = ValidateCondition(condition);
+  const std::size_t cond_len = static_cast<std::size_t>(condition.element_count());
   const std::size_t elem_size = ElementSize(input.data_type);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
 
   if (!axis.has_value()) {
-    // Flatten mode: select individual elements from the flattened input.
+    // Flatten mode: select individual elements from the flattened input. The
+    // selected elements are counted first, then copied in a single pass, so no
+    // scratch index buffer is allocated at all.
     const int64_t total = input.element_count();
-    std::vector<int64_t> selected_indices;
+    int64_t out_count = 0;
     for (int64_t i = 0; i < total && static_cast<std::size_t>(i) < cond_len; ++i) {
       if (cond[static_cast<std::size_t>(i)]) {
-        selected_indices.push_back(i);
+        ++out_count;
       }
     }
-    const int64_t out_count = static_cast<int64_t>(selected_indices.size());
     const size_t output_n_bytes = static_cast<std::size_t>(out_count) * elem_size;
-    Tensor output = MakeOutputTensor(input.data_type, {out_count}, output_n_bytes,
-                                     rt ? rt->allocator() : nullptr);
-    for (int64_t k = 0; k < out_count; ++k) {
-      const std::size_t src_off =
-          static_cast<std::size_t>(selected_indices[static_cast<std::size_t>(k)]) * elem_size;
-      const std::size_t dst_off = static_cast<std::size_t>(k) * elem_size;
-      std::memcpy(output.mutable_bytes() + dst_off, input.bytes() + src_off, elem_size);
+    Tensor output = MakeOutputTensor(input.data_type, {out_count}, output_n_bytes, allocator);
+    int64_t k = 0;
+    for (int64_t i = 0; i < total && static_cast<std::size_t>(i) < cond_len; ++i) {
+      if (cond[static_cast<std::size_t>(i)]) {
+        std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(k) * elem_size,
+                    input.bytes() + static_cast<std::size_t>(i) * elem_size, elem_size);
+        ++k;
+      }
     }
     return output;
   }
@@ -87,14 +86,6 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
   onnx_kernels::Shape out_shape = input.shape;
   out_shape[static_cast<std::size_t>(a)] = selected_count;
 
-  // Compute strides (in elements) for the input tensor.
-  onnx_kernels::Shape strides;
-  strides.assign(static_cast<std::size_t>(rank), 1);
-  for (int64_t d = rank - 2; d >= 0; --d) {
-    strides[static_cast<std::size_t>(d)] =
-        strides[static_cast<std::size_t>(d + 1)] * input.shape[static_cast<std::size_t>(d + 1)];
-  }
-
   // Number of elements in the output.
   int64_t out_total = 1;
   for (int64_t d : out_shape) {
@@ -102,22 +93,9 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
   }
 
   const size_t output_n_bytes = static_cast<std::size_t>(out_total) * elem_size;
-  Tensor output =
-      MakeOutputTensor(input.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor output = MakeOutputTensor(input.data_type, out_shape, output_n_bytes, allocator);
 
-  // Collect the selected axis indices.
-  std::vector<int64_t> sel_axis_indices;
-  sel_axis_indices.reserve(static_cast<std::size_t>(selected_count));
-  for (int64_t i = 0; i < axis_dim && static_cast<std::size_t>(i) < cond_len; ++i) {
-    if (cond[static_cast<std::size_t>(i)]) {
-      sel_axis_indices.push_back(i);
-    }
-  }
-
-  // Iterate over all output elements and copy from input.
-  // We use a multi-index approach.
-  const int64_t out_total_cnt = (out_shape.empty() ? 0 : out_total);
-  if (out_total_cnt == 0) {
+  if (out_total == 0) {
     return output;
   }
 
@@ -131,15 +109,21 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
     inner *= input.shape[static_cast<std::size_t>(d)];
   }
 
+  // Iterate over the selected slices and copy them in a single pass, tracking
+  // the destination slice index directly instead of collecting the selected
+  // axis indices into a scratch buffer.
   for (int64_t o = 0; o < outer; ++o) {
-    for (int64_t s = 0; s < selected_count; ++s) {
-      const int64_t src_axis = sel_axis_indices[static_cast<std::size_t>(s)];
-      // Source flat offset for this (outer, axis_idx) block.
-      const int64_t src_base = (o * axis_dim + src_axis) * inner;
-      const int64_t dst_base = (o * selected_count + s) * inner;
-      std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(dst_base) * elem_size,
-                  input.bytes() + static_cast<std::size_t>(src_base) * elem_size,
-                  static_cast<std::size_t>(inner) * elem_size);
+    int64_t s = 0;
+    for (int64_t i = 0; i < axis_dim; ++i) {
+      if (static_cast<std::size_t>(i) < cond_len && cond[static_cast<std::size_t>(i)]) {
+        // Source flat offset for this (outer, axis_idx) block.
+        const int64_t src_base = (o * axis_dim + i) * inner;
+        const int64_t dst_base = (o * selected_count + s) * inner;
+        std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(dst_base) * elem_size,
+                    input.bytes() + static_cast<std::size_t>(src_base) * elem_size,
+                    static_cast<std::size_t>(inner) * elem_size);
+        ++s;
+      }
     }
   }
   return output;

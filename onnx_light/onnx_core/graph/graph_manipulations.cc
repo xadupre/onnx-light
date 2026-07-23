@@ -178,6 +178,15 @@ CollectRemainingInputsImpl(const NodeRange &nodes, const std::vector<std::string
   return result;
 }
 
+// Adapts a vector of node pointers to the ``size()`` / ``operator[] -> const
+// NodeProto&`` interface expected by the ``*Impl`` helpers above, so the
+// pointer-range overloads can reuse the exact same traversal logic.
+struct NodePointerRange {
+  const std::vector<const NodeProto *> &nodes;
+  size_t size() const { return nodes.size(); }
+  const NodeProto &operator[](size_t i) const { return *nodes[i]; }
+};
+
 } // namespace
 
 std::vector<std::string> CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes) {
@@ -186,6 +195,10 @@ std::vector<std::string> CollectExternalInputs(const utils::RepeatedProtoField<N
 
 std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes) {
   return CollectExternalInputsImpl(nodes);
+}
+
+std::vector<std::string> CollectExternalInputs(const std::vector<const NodeProto *> &nodes) {
+  return CollectExternalInputsImpl(NodePointerRange{nodes});
 }
 
 std::vector<std::vector<std::string>>

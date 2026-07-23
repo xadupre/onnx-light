@@ -111,71 +111,97 @@ int CompareStringSubtensor(const std::vector<std::string> &strings, std::size_t 
   return 0;
 }
 
+// Allocates an INT64 buffer of ``n`` elements. The storage is acquired from
+// ``allocator`` when non-null (so no scratch is allocated outside the runtime
+// context) and falls back to inline ``std::vector`` storage otherwise.
+Tensor MakeInt64Buffer(int64_t n, RawBufferAllocator *allocator) {
+  return MakeOutputTensor(static_cast<int32_t>(DataType::INT64), {n},
+                          static_cast<std::size_t>(n) * sizeof(int64_t), allocator);
+}
+
 // Common driver: given a list of ``count`` "items", a comparator (returning
 // negative/zero/positive), build the unique groups (order of first
 // occurrence). When ``sorted`` is true, the returned groups are reordered
-// lexicographically by the canonical item.
+// lexicographically by the canonical item. Every buffer — the returned outputs
+// and the transient working buffers — is acquired from ``allocator`` (or inline
+// storage when it is null).
 struct UniqueGroups {
   // The "representative" item index in input order for every unique group.
-  std::vector<int64_t> first_occurrence; // indices into [0, count)
-  // For every input item, the index of its group in ``first_occurrence``.
-  std::vector<int64_t> inverse; // size == count
-  // Count of items in every group (same order as ``first_occurrence``).
-  std::vector<int64_t> counts;
+  Tensor indices; // INT64, shape {n_unique}, values in [0, count)
+  // For every input item, the index of its group in ``indices``.
+  Tensor inverse_indices; // INT64, shape {count}
+  // Count of items in every group (same order as ``indices``).
+  Tensor counts; // INT64, shape {n_unique}
 };
 
 template <typename Cmp>
-UniqueGroups ComputeUniqueGroups(int64_t count, const Cmp &cmp, bool sorted) {
-  UniqueGroups out;
-  out.inverse.assign(static_cast<std::size_t>(count), 0);
+UniqueGroups ComputeUniqueGroups(int64_t count, const Cmp &cmp, bool sorted,
+                                 RawBufferAllocator *allocator) {
+  Tensor inverse = MakeInt64Buffer(count, allocator);
+  int64_t *inv = (count > 0) ? inverse.As<int64_t>() : nullptr;
+
+  // Working buffers with capacity ``count`` (the maximum possible group count).
+  Tensor first_scratch = MakeInt64Buffer(count, allocator);
+  Tensor counts_scratch = MakeInt64Buffer(count, allocator);
+  int64_t *first = (count > 0) ? first_scratch.As<int64_t>() : nullptr;
+  int64_t *cnts = (count > 0) ? counts_scratch.As<int64_t>() : nullptr;
+
   // Naive O(count * unique) grouping. Sufficient for reference kernel use.
+  int64_t n_unique = 0;
   for (int64_t i = 0; i < count; ++i) {
     int64_t found = -1;
-    for (std::size_t g = 0; g < out.first_occurrence.size(); ++g) {
-      if (cmp(i, out.first_occurrence[g]) == 0) {
-        found = static_cast<int64_t>(g);
+    for (int64_t g = 0; g < n_unique; ++g) {
+      if (cmp(i, first[g]) == 0) {
+        found = g;
         break;
       }
     }
     if (found < 0) {
-      out.inverse[static_cast<std::size_t>(i)] = static_cast<int64_t>(out.first_occurrence.size());
-      out.first_occurrence.push_back(i);
-      out.counts.push_back(1);
+      inv[i] = n_unique;
+      first[n_unique] = i;
+      cnts[n_unique] = 1;
+      ++n_unique;
     } else {
-      out.inverse[static_cast<std::size_t>(i)] = found;
-      out.counts[static_cast<std::size_t>(found)] += 1;
+      inv[i] = found;
+      cnts[found] += 1;
     }
   }
 
-  if (sorted && out.first_occurrence.size() > 1) {
-    // Build a permutation that sorts the groups by their representative item.
-    std::vector<int64_t> perm(out.first_occurrence.size());
-    for (std::size_t i = 0; i < perm.size(); ++i) {
-      perm[i] = static_cast<int64_t>(i);
-    }
-    std::sort(perm.begin(), perm.end(), [&](int64_t a, int64_t b) {
-      return cmp(out.first_occurrence[static_cast<std::size_t>(a)],
-                 out.first_occurrence[static_cast<std::size_t>(b)]) < 0;
-    });
+  UniqueGroups out;
+  out.indices = MakeInt64Buffer(n_unique, allocator);
+  out.counts = MakeInt64Buffer(n_unique, allocator);
+  int64_t *out_first = (n_unique > 0) ? out.indices.As<int64_t>() : nullptr;
+  int64_t *out_counts = (n_unique > 0) ? out.counts.As<int64_t>() : nullptr;
 
-    // Apply the permutation to first_occurrence and counts, and remap
-    // inverse[] accordingly.
-    std::vector<int64_t> remap(perm.size());
-    for (std::size_t new_idx = 0; new_idx < perm.size(); ++new_idx) {
-      remap[static_cast<std::size_t>(perm[new_idx])] = static_cast<int64_t>(new_idx);
+  if (sorted && n_unique > 1) {
+    // Build a permutation that sorts the groups by their representative item,
+    // then remap ``inverse`` accordingly.
+    Tensor perm_scratch = MakeInt64Buffer(n_unique, allocator);
+    Tensor remap_scratch = MakeInt64Buffer(n_unique, allocator);
+    int64_t *perm = perm_scratch.As<int64_t>();
+    int64_t *remap = remap_scratch.As<int64_t>();
+    for (int64_t i = 0; i < n_unique; ++i) {
+      perm[i] = i;
     }
-    std::vector<int64_t> new_first(perm.size());
-    std::vector<int64_t> new_counts(perm.size());
-    for (std::size_t i = 0; i < perm.size(); ++i) {
-      new_first[i] = out.first_occurrence[static_cast<std::size_t>(perm[i])];
-      new_counts[i] = out.counts[static_cast<std::size_t>(perm[i])];
+    std::sort(perm, perm + n_unique,
+              [&](int64_t a, int64_t b) { return cmp(first[a], first[b]) < 0; });
+    for (int64_t new_idx = 0; new_idx < n_unique; ++new_idx) {
+      const int64_t old_idx = perm[new_idx];
+      remap[old_idx] = new_idx;
+      out_first[new_idx] = first[old_idx];
+      out_counts[new_idx] = cnts[old_idx];
     }
-    out.first_occurrence = std::move(new_first);
-    out.counts = std::move(new_counts);
-    for (int64_t &v : out.inverse) {
-      v = remap[static_cast<std::size_t>(v)];
+    for (int64_t i = 0; i < count; ++i) {
+      inv[i] = remap[inv[i]];
+    }
+  } else {
+    for (int64_t g = 0; g < n_unique; ++g) {
+      out_first[g] = first[g];
+      out_counts[g] = cnts[g];
     }
   }
+
+  out.inverse_indices = std::move(inverse);
   return out;
 }
 
@@ -251,7 +277,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
             return CompareString(strs[static_cast<std::size_t>(a)],
                                  strs[static_cast<std::size_t>(b)]);
           },
-          attrs.sorted);
+          attrs.sorted, ctx_.allocator);
     } else {
       const uint8_t *base = x.bytes();
       groups = ComputeUniqueGroups(
@@ -260,7 +286,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
             return CompareElement(dt, base + static_cast<std::size_t>(a) * elem_size,
                                   base + static_cast<std::size_t>(b) * elem_size, elem_size);
           },
-          attrs.sorted);
+          attrs.sorted, ctx_.allocator);
     }
   } else {
     // Axis mode: an "item" is a subtensor spanning all outer x inner positions
@@ -284,7 +310,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
         }
         return 0;
       };
-      groups = ComputeUniqueGroups(count, cmp, attrs.sorted);
+      groups = ComputeUniqueGroups(count, cmp, attrs.sorted, ctx_.allocator);
     } else {
       const uint8_t *base = x.bytes();
       const std::size_t block_bytes = static_cast<std::size_t>(inner_elems) * elem_size;
@@ -305,11 +331,12 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
         }
         return 0;
       };
-      groups = ComputeUniqueGroups(count, cmp, attrs.sorted);
+      groups = ComputeUniqueGroups(count, cmp, attrs.sorted, ctx_.allocator);
     }
   }
 
-  const int64_t n_unique = static_cast<int64_t>(groups.first_occurrence.size());
+  const int64_t n_unique = groups.indices.element_count();
+  const int64_t *first_occ = (n_unique > 0) ? groups.indices.As<int64_t>() : nullptr;
 
   // Build Y.
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
@@ -319,17 +346,15 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
     if (is_string) {
       std::vector<std::string> y_strs;
       y_strs.reserve(static_cast<std::size_t>(n_unique));
-      for (int64_t idx : groups.first_occurrence) {
-        y_strs.push_back(x.string_data[static_cast<std::size_t>(idx)]);
+      for (int64_t g = 0; g < n_unique; ++g) {
+        y_strs.push_back(x.string_data[static_cast<std::size_t>(first_occ[g])]);
       }
       out.y = Tensor::FromStrings("", {n_unique}, y_strs);
     } else {
       const size_t y_n_bytes = static_cast<std::size_t>(n_unique) * elem_size;
       Tensor y = MakeOutputTensor(x.data_type, {n_unique}, y_n_bytes, allocator);
       for (int64_t g = 0; g < n_unique; ++g) {
-        const std::size_t src_off =
-            static_cast<std::size_t>(groups.first_occurrence[static_cast<std::size_t>(g)]) *
-            elem_size;
+        const std::size_t src_off = static_cast<std::size_t>(first_occ[g]) * elem_size;
         const std::size_t dst_off = static_cast<std::size_t>(g) * elem_size;
         std::memcpy(y.mutable_bytes() + dst_off, x.bytes() + src_off, elem_size);
       }
@@ -347,7 +372,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
       std::vector<std::string> y_strs(static_cast<std::size_t>(y_total));
       for (int64_t o = 0; o < outer; ++o) {
         for (int64_t g = 0; g < n_unique; ++g) {
-          const int64_t k = groups.first_occurrence[static_cast<std::size_t>(g)];
+          const int64_t k = first_occ[g];
           for (int64_t i = 0; i < inner_elems; ++i) {
             const std::size_t src =
                 static_cast<std::size_t>(o * axis_dim * inner_elems + k * inner_elems + i);
@@ -364,7 +389,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
       Tensor y = MakeOutputTensor(x.data_type, y_shape, y_n_bytes, allocator);
       for (int64_t o = 0; o < outer; ++o) {
         for (int64_t g = 0; g < n_unique; ++g) {
-          const int64_t k = groups.first_occurrence[static_cast<std::size_t>(g)];
+          const int64_t k = first_occ[g];
           const std::size_t src_off =
               (static_cast<std::size_t>(o) * static_cast<std::size_t>(axis_dim) +
                static_cast<std::size_t>(k)) *
@@ -380,9 +405,9 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
     }
   }
 
-  out.indices = Tensor::FromInt64("", {n_unique}, groups.first_occurrence, ctx_.allocator);
-  out.inverse_indices = Tensor::FromInt64("", {count}, groups.inverse, ctx_.allocator);
-  out.counts = Tensor::FromInt64("", {n_unique}, groups.counts, ctx_.allocator);
+  out.indices = std::move(groups.indices);
+  out.inverse_indices = std::move(groups.inverse_indices);
+  out.counts = std::move(groups.counts);
   return out;
 }
 

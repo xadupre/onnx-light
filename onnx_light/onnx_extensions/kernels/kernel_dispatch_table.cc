@@ -243,7 +243,7 @@ template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_n
                         "' expects at most 2 inputs.");
     RequireOutputCount(node, 1);
     const Tensor &data = GetInput(node, 0, rt.tensors());
-    std::vector<int64_t> axes;
+    onnx_kernels::Shape axes;
     const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
     if (axes_input != nullptr) {
       // The schema requires a 1-D INT64 tensor, but the ai.onnx::AffineGrid

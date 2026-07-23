@@ -352,16 +352,15 @@ public:
   ///
   /// This overload accepts a zero-copy span view of the split sizes (preferred
   /// when the sizes come directly from a tensor buffer).
-  std::vector<Tensor> operator()(const Tensor &input, int64_t axis, std::span<const int64_t> split,
-                                 int64_t num_outputs, RuntimeContext *rt = nullptr) const;
+  Tensors operator()(const Tensor &input, int64_t axis, std::span<const int64_t> split,
+                     int64_t num_outputs, RuntimeContext *rt = nullptr) const;
 
   /// Convenience overload for brace-enclosed initializer lists such as
   /// ``{2, 4}``; copies the values into a temporary vector and forwards to
   /// the span overload.  Callers with an existing ``std::vector<int64_t>``
   /// can pass it directly via implicit conversion to ``std::span``.
-  std::vector<Tensor> operator()(const Tensor &input, int64_t axis,
-                                 std::initializer_list<int64_t> split, int64_t num_outputs,
-                                 RuntimeContext *rt = nullptr) const {
+  Tensors operator()(const Tensor &input, int64_t axis, std::initializer_list<int64_t> split,
+                     int64_t num_outputs, RuntimeContext *rt = nullptr) const {
     std::vector<int64_t> tmp(split);
     return (*this)(input, axis, std::span<const int64_t>{tmp}, num_outputs, rt);
   }

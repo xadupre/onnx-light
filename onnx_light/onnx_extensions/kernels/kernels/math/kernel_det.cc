@@ -5,11 +5,11 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -101,12 +101,14 @@ void Det::operator()(const Tensor &x, Tensor &output) const {
   const float *px = x.AsFloat();
   float *py = output.AsFloat();
   const int64_t matrix_size = m * m;
-  std::vector<float> work(static_cast<size_t>(matrix_size));
+  detail::TemporaryTypedBuffer<float> work(static_cast<std::size_t>(matrix_size), ctx_.allocator,
+                                           "kernel::Det work");
+  float *work_data = work.data();
   for (int64_t b = 0; b < batch; ++b) {
     const float *src = px + b * matrix_size;
     for (int64_t i = 0; i < matrix_size; ++i)
-      work[static_cast<size_t>(i)] = src[i];
-    py[static_cast<size_t>(b)] = DeterminantInPlace(work.data(), m);
+      work_data[static_cast<size_t>(i)] = src[i];
+    py[static_cast<size_t>(b)] = DeterminantInPlace(work_data, m);
   }
 }
 

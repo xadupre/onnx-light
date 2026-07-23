@@ -443,29 +443,26 @@ void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) cons
   // with this node's index.
   const size_t index = it->second;
   for (const ExecuteAction &action : actions_) {
-    if ((action.kind() == ExecuteActionKind::kDeleteBuffer ||
-         action.kind() == ExecuteActionKind::kDeleteShape ||
-         action.kind() == ExecuteActionKind::kDeleteSequence ||
-         action.kind() == ExecuteActionKind::kDeleteMap) &&
-        action.node_index() == index) {
-      // Each delete kind targets a single map, so the removal is chosen from
-      // the action's kind rather than clearing every map.
-      switch (action.kind()) {
-      case ExecuteActionKind::kDeleteBuffer:
-        rt.Remove(action.name());
-        break;
-      case ExecuteActionKind::kDeleteShape:
-        rt.RemoveShape(action.name());
-        break;
-      case ExecuteActionKind::kDeleteSequence:
-        rt.RemoveSequence(action.name());
-        break;
-      case ExecuteActionKind::kDeleteMap:
-        rt.RemoveMap(action.name());
-        break;
-      default:
-        break;
-      }
+    if (action.node_index() != index) {
+      continue;
+    }
+    // Each delete kind targets a single map, so exactly one remover is called
+    // depending on the action's kind.
+    switch (action.kind()) {
+    case ExecuteActionKind::kDeleteBuffer:
+      rt.Remove(action.name());
+      break;
+    case ExecuteActionKind::kDeleteShape:
+      rt.RemoveShape(action.name());
+      break;
+    case ExecuteActionKind::kDeleteSequence:
+      rt.RemoveSequence(action.name());
+      break;
+    case ExecuteActionKind::kDeleteMap:
+      rt.RemoveMap(action.name());
+      break;
+    default:
+      break;
     }
   }
 }

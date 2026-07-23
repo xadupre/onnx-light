@@ -86,33 +86,32 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       break;
     }
     case ExecuteActionKind::kDeleteBuffer:
-    case ExecuteActionKind::kDeleteShape:
-    case ExecuteActionKind::kDeleteSequence:
-    case ExecuteActionKind::kDeleteMap:
-      // Each delete kind targets a single map: kDeleteBuffer removes the
-      // tensor, kDeleteShape the shape, kDeleteSequence the sequence and
-      // kDeleteMap the map. The kind is chosen when the action is scheduled, so
-      // the correct remover is selected here rather than clearing every map.
       if (rt.verbose() > 1) {
         std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
                   << std::endl;
       }
-      switch (action.kind()) {
-      case ExecuteActionKind::kDeleteBuffer:
-        rt.Remove(action.name());
-        break;
-      case ExecuteActionKind::kDeleteShape:
-        rt.RemoveShape(action.name());
-        break;
-      case ExecuteActionKind::kDeleteSequence:
-        rt.RemoveSequence(action.name());
-        break;
-      case ExecuteActionKind::kDeleteMap:
-        rt.RemoveMap(action.name());
-        break;
-      default:
-        break;
+      rt.Remove(action.name());
+      break;
+    case ExecuteActionKind::kDeleteShape:
+      if (rt.verbose() > 1) {
+        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
+                  << std::endl;
       }
+      rt.RemoveShape(action.name());
+      break;
+    case ExecuteActionKind::kDeleteSequence:
+      if (rt.verbose() > 1) {
+        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
+                  << std::endl;
+      }
+      rt.RemoveSequence(action.name());
+      break;
+    case ExecuteActionKind::kDeleteMap:
+      if (rt.verbose() > 1) {
+        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
+                  << std::endl;
+      }
+      rt.RemoveMap(action.name());
       break;
     default:
       break;

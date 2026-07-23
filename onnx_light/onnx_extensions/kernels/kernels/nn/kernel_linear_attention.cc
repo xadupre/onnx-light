@@ -178,8 +178,9 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
 
   // Initialize state: (B, H_kv, d_k, d_v). The state buffer is drawn from the
   // runtime allocator (via ``MakeOutputTensor``) so it is allocator-backed and
-  // becomes the ``present_state`` result without an extra copy;
-  // ``MakeOutputTensor`` zero-initializes the buffer.
+  // becomes the ``present_state`` result without an extra copy. The recurrence
+  // accumulates into it, so it is explicitly zero-initialized (or seeded from
+  // ``past_state``) rather than relying on the allocator returning zeroed bytes.
   const int64_t state_size = B * kv_num_heads * d_k * d_v;
   Tensor state_tensor =
       MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {B, kv_num_heads, d_k, d_v},
@@ -196,6 +197,8 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
     for (int64_t i = 0; i < state_size; ++i) {
       state[static_cast<size_t>(i)] = ps[i];
     }
+  } else {
+    std::fill(state, state + state_size, 0.0f);
   }
 
   // Output buffer: (B, T, H_q * d_v), likewise drawn from the runtime allocator.
@@ -282,6 +285,7 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
           detail::TemporaryTypedBuffer<float> Sk_buf(static_cast<std::size_t>(d_v), ctx_.allocator,
                                                      "kernel::LinearAttention Sk");
           float *Sk = Sk_buf.data();
+          std::fill(Sk, Sk + d_v, 0.0f);
           for (int64_t i = 0; i < d_k; ++i) {
             for (int64_t j = 0; j < d_v; ++j) {
               Sk[static_cast<size_t>(j)] += S[static_cast<size_t>(i * d_v + j)] * k_t[i];
@@ -299,6 +303,7 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
           detail::TemporaryTypedBuffer<float> gSk_buf(static_cast<std::size_t>(d_v), ctx_.allocator,
                                                       "kernel::LinearAttention gSk");
           float *gSk = gSk_buf.data();
+          std::fill(gSk, gSk + d_v, 0.0f);
           for (int64_t i = 0; i < d_k; ++i) {
             for (int64_t j = 0; j < d_v; ++j) {
               gSk[static_cast<size_t>(j)] +=

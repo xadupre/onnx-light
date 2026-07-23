@@ -193,23 +193,25 @@ void Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const A
   const int64_t M_per_group = M / resolved.group;
 
   // Per-axis input spatial sizes and per-axis output spatial sizes.
-  std::vector<int64_t> iD(spatial_rank), oD = out_spatial;
+  onnx_kernels::Shape iD;
+  iD.assign(spatial_rank, 0);
+  onnx_kernels::Shape oD = out_spatial;
   for (size_t i = 0; i < spatial_rank; ++i) {
     iD[i] = x.shape[i + 2];
   }
 
   // Helper: strides through a contiguous (D1..Dk) buffer.
-  auto compute_strides = [](const std::vector<int64_t> &dims) {
-    std::vector<int64_t> strides(dims.size(), 1);
+  auto compute_strides = [](const auto &dims) {
+    onnx_kernels::Shape strides;
+    strides.assign(dims.size(), 1);
     for (int i = static_cast<int>(dims.size()) - 2; i >= 0; --i) {
       strides[i] = strides[i + 1] * dims[i + 1];
     }
     return strides;
   };
-  const std::vector<int64_t> in_strides = compute_strides(iD);
-  const std::vector<int64_t> out_strides = compute_strides(oD);
-  const std::vector<int64_t> &k_shape = resolved.kernel_shape;
-  const std::vector<int64_t> ker_strides = compute_strides(k_shape);
+  const onnx_kernels::Shape in_strides = compute_strides(iD);
+  const onnx_kernels::Shape &k_shape = resolved.kernel_shape;
+  const onnx_kernels::Shape ker_strides = compute_strides(k_shape);
 
   int64_t in_spatial_size = 1;
   for (int64_t d : iD) {
@@ -230,8 +232,10 @@ void Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const A
   float *py = output.AsFloat();
 
   // Index into spatial outputs by decomposition.
-  std::vector<int64_t> oidx(spatial_rank, 0);
-  std::vector<int64_t> kidx(spatial_rank, 0);
+  onnx_kernels::Shape oidx;
+  oidx.assign(spatial_rank, 0);
+  onnx_kernels::Shape kidx;
+  kidx.assign(spatial_rank, 0);
 
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t m = 0; m < M; ++m) {

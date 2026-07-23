@@ -5,11 +5,12 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -47,7 +48,7 @@ double ReadFloatScalar(const Tensor &t, const char *what) {
 /// ``num_spectrogram_bins * num_mel_bins_v`` elements of type ``T``.
 template <typename T>
 void ComputeMelMatrix(T *out, int64_t num_mel_bins_v, int64_t num_spectrogram_bins,
-                      const std::vector<int64_t> &bin_indices) {
+                      const int64_t *bin_indices) {
   const size_t total = static_cast<size_t>(num_spectrogram_bins * num_mel_bins_v);
   std::fill(out, out + total, T(0));
   for (int64_t i = 0; i < num_mel_bins_v; ++i) {
@@ -143,7 +144,14 @@ void MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft_l
   const double high_mel = 2595.0 * std::log10(1.0 + upper_hz / 700.0);
   const double mel_step = (high_mel - low_mel) / static_cast<double>(n_points);
 
-  std::vector<int64_t> bin_indices(static_cast<size_t>(n_points));
+  // Scratch buffer of bin edge indices, sized by ``n_points`` (num_mel_bins +
+  // 2), which is unbounded and exceeds ``Shape::kMaxRank``. It is drawn from
+  // the runtime allocator when one is available, falling back to a
+  // ``std::vector`` otherwise.
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
+  detail::TemporaryTypedBuffer<int64_t> bin_indices_buf(static_cast<std::size_t>(n_points),
+                                                        allocator, "kernel::MelWeightMatrix");
+  int64_t *bin_indices = bin_indices_buf.data();
   for (int64_t i = 0; i < n_points; ++i) {
     const double mel_value = static_cast<double>(i) * mel_step + low_mel;
     const double hz = 700.0 * (std::pow(10.0, mel_value / 2595.0) - 1.0);

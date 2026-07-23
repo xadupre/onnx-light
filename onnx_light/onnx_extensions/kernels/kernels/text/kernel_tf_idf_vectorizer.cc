@@ -114,18 +114,53 @@ NgramNode<Key> BuildTrie(const std::vector<Key> &pool, const std::vector<int64_t
   return root;
 }
 
-// Reads a single row's worth of tokens out of ``x`` into the caller
-// provided ``row`` buffer, allowing the allocation to be reused across
-// rows. For string tensors the values are copied into a vector of
-// ``std::string``; for integer tensors they are converted to
-// ``int64_t``.
-template <typename Key>
-void ReadRow(const Tensor &x, int64_t row_num, int64_t row_size, std::vector<Key> &row);
+// Reusable scratch buffer holding one input row's worth of ``int64_t``
+// tokens. Storage is acquired from the runtime ``RawBufferAllocator``
+// when one is attached (so no per-row heap allocation happens outside
+// the runtime context) and falls back to an inline ``std::vector`` only
+// when no allocator is available. Mirrors the ``ReadZeroPoints`` helper
+// in kernel_matmul_integer.cc.
+class Int64RowBuffer {
+public:
+  Int64RowBuffer(RawBufferAllocator *allocator, int64_t row_size) : allocator_(allocator) {
+    const size_t n_bytes = static_cast<size_t>(row_size) * sizeof(int64_t);
+    if (allocator_ != nullptr) {
+      buffer_ = allocator_->Allocate(n_bytes);
+      EXT_ENFORCE_INVALID(buffer_ != nullptr,
+                          "kernel::TfIdfVectorizer: row allocator returned null.");
+      // RawBufferAllocator::Allocate returns at least n_bytes.
+      EXT_ENFORCE_INVALID(buffer_->size() >= n_bytes,
+                          "kernel::TfIdfVectorizer: row allocator returned too small a buffer.");
+      EXT_ENFORCE_INVALID(reinterpret_cast<std::uintptr_t>(buffer_->data()) % alignof(int64_t) == 0,
+                          "kernel::TfIdfVectorizer: allocator returned misaligned row buffer.");
+    } else {
+      fallback_.resize(static_cast<size_t>(row_size));
+    }
+  }
 
-template <>
-void ReadRow<int64_t>(const Tensor &x, int64_t row_num, int64_t row_size,
-                      std::vector<int64_t> &row) {
-  row.resize(static_cast<size_t>(row_size));
+  ~Int64RowBuffer() {
+    if (buffer_ != nullptr) {
+      allocator_->Free(buffer_);
+    }
+  }
+
+  Int64RowBuffer(const Int64RowBuffer &) = delete;
+  Int64RowBuffer &operator=(const Int64RowBuffer &) = delete;
+
+  int64_t *data() noexcept {
+    return buffer_ != nullptr ? reinterpret_cast<int64_t *>(buffer_->data()) : fallback_.data();
+  }
+
+private:
+  RawBufferAllocator *allocator_ = nullptr;
+  RawBuffer *buffer_ = nullptr;
+  std::vector<int64_t> fallback_;
+};
+
+// Reads a single row's worth of integer tokens out of ``x`` into the
+// caller-provided ``row`` buffer, allowing the allocation to be reused
+// across rows. Values are widened to ``int64_t`` to match the trie keys.
+void ReadIntRow(const Tensor &x, int64_t row_num, int64_t row_size, int64_t *row) {
   const size_t offset = static_cast<size_t>(row_num) * static_cast<size_t>(row_size);
   if (x.data_type == static_cast<int32_t>(DataType::INT32)) {
     const int32_t *data = x.As<int32_t>();
@@ -143,28 +178,15 @@ void ReadRow<int64_t>(const Tensor &x, int64_t row_num, int64_t row_size,
   }
 }
 
-template <>
-void ReadRow<std::string>(const Tensor &x, int64_t row_num, int64_t row_size,
-                          std::vector<std::string> &row) {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
-                      "kernel::TfIdfVectorizer: string pool requires a STRING input tensor.");
-  row.resize(static_cast<size_t>(row_size));
-  const size_t offset = static_cast<size_t>(row_num) * static_cast<size_t>(row_size);
-  for (int64_t i = 0; i < row_size; ++i) {
-    row[static_cast<size_t>(i)] = x.string_data[offset + static_cast<size_t>(i)];
-  }
-}
-
 // Computes the per-row n-gram frequencies for one input row and
 // accumulates them into ``frequencies`` (a flat ``[num_rows,
 // output_size]`` buffer). Mirrors the upstream onnx
 // ``compute_impl`` reference helper.
 template <typename Key>
-void AccumulateRow(const std::vector<Key> &row, int64_t row_num, int64_t output_size,
+void AccumulateRow(const Key *row, int64_t row_size, int64_t row_num, int64_t output_size,
                    int64_t min_gram_length, int64_t max_gram_length, int64_t max_skip_count,
                    const std::vector<int64_t> &ngram_indexes, const NgramNode<Key> &root,
                    std::vector<int64_t> &frequencies) {
-  const int64_t row_size = static_cast<int64_t>(row.size());
   const int64_t max_skip_distance = max_skip_count + 1;
   int64_t start_ngram_size = min_gram_length;
 
@@ -321,10 +343,11 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
       NgramNode<int64_t> root =
           BuildTrie<int64_t>(pool_int64s, ngram_counts, min_gram_length, max_gram_length);
       if (!root.leaves.empty()) {
-        std::vector<int64_t> row;
+        Int64RowBuffer row(ctx_.allocator, c_dim);
+        int64_t *row_data = row.data();
         for (int64_t r = 0; r < num_rows; ++r) {
-          ReadRow<int64_t>(x, r, c_dim, row);
-          AccumulateRow<int64_t>(row, r, output_size, min_gram_length, max_gram_length,
+          ReadIntRow(x, r, c_dim, row_data);
+          AccumulateRow<int64_t>(row_data, c_dim, r, output_size, min_gram_length, max_gram_length,
                                  max_skip_count, ngram_indexes, root, frequencies);
         }
       }
@@ -332,11 +355,16 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
       NgramNode<std::string> root =
           BuildTrie<std::string>(pool_strings, ngram_counts, min_gram_length, max_gram_length);
       if (!root.leaves.empty()) {
-        std::vector<std::string> row;
+        EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
+                            "kernel::TfIdfVectorizer: string pool requires a STRING input tensor.");
         for (int64_t r = 0; r < num_rows; ++r) {
-          ReadRow<std::string>(x, r, c_dim, row);
-          AccumulateRow<std::string>(row, r, output_size, min_gram_length, max_gram_length,
-                                     max_skip_count, ngram_indexes, root, frequencies);
+          // ``string_data`` is contiguous row-major, so the row can be
+          // read in place without copying it into a scratch buffer.
+          const std::string *row_data =
+              x.string_data.data() + static_cast<size_t>(r) * static_cast<size_t>(c_dim);
+          AccumulateRow<std::string>(row_data, c_dim, r, output_size, min_gram_length,
+                                     max_gram_length, max_skip_count, ngram_indexes, root,
+                                     frequencies);
         }
       }
     }

@@ -87,6 +87,9 @@ show
         Flowchart direction for the ``mermaid`` and ``svg`` formats.
         One of ``TB`` (top-to-bottom, default), ``LR`` (left-to-right),
         ``TD`` or ``BT`` (``mermaid`` only).
+    ``--layout LAYOUT``
+        Box positioning strategy for the ``svg`` format.  One of
+        ``layered`` (default) or ``umap`` (requires ``umap-learn``).
 
 run
     Generates random inputs and runs a model through the onnx-light runtime.
@@ -458,6 +461,7 @@ def _cmd_show(args: argparse.Namespace) -> None:
         text = to_svg(
             model,
             direction=direction,
+            layout=args.layout,
             include_initializers=include_initializers,
             include_shapes=include_shapes,
             include_attributes=include_attributes,
@@ -903,6 +907,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Flowchart direction for 'mermaid', 'svg' and 'dot' formats. "
             "One of TB (default), LR, TD or BT (mermaid only)."
+        ),
+    )
+    show_parser.add_argument(
+        "--layout",
+        default="layered",
+        metavar="LAYOUT",
+        choices=("layered", "umap"),
+        help=(
+            "Box positioning strategy for the 'svg' format. "
+            "One of layered (default) or umap (requires the 'umap-learn' package)."
         ),
     )
     show_parser.add_argument(

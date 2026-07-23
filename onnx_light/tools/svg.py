@@ -22,6 +22,7 @@ package.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from ._proto_utils import (
@@ -132,6 +133,7 @@ def to_svg(
     model_or_graph: Any,
     *,
     direction: str = "TB",
+    layout: str = "layered",
     include_initializers: bool = True,
     include_shapes: bool = True,
     include_attributes: bool = False,
@@ -146,6 +148,13 @@ def to_svg(
         direction: Layout direction; ``"TB"`` (or ``"TD"``) lays the graph
             out top-to-bottom and ``"LR"`` left-to-right.  Defaults to
             ``"TB"``.
+        layout: Positioning strategy for the boxes.  ``"layered"`` (the
+            default) uses the built-in layered layout with barycenter
+            crossing reduction.  ``"umap"`` instead derives the box
+            positions from a two-dimensional `UMAP
+            <https://umap-learn.readthedocs.io/>`_ embedding of the graph's
+            connectivity, which requires the optional ``umap-learn`` package
+            to be installed.
         include_initializers: When :data:`True`, initializers are rendered
             as separate (dashed) boxes connected to their consumers.  When
             :data:`False`, initializer tensors are not shown.
@@ -170,7 +179,7 @@ def to_svg(
     Raises:
         TypeError: If ``model_or_graph`` is neither a ``ModelProto`` nor
             a ``GraphProto``.
-        ValueError: If ``direction`` is not a supported direction.
+        ValueError: If ``direction`` or ``layout`` is not supported.
 
     The example below builds a small ``Abs`` chain, runs shape inference and
     records the in-place reuse opportunities into the graph metadata with
@@ -226,6 +235,7 @@ def to_svg(
     return to_svg_graph(
         graph,
         direction=direction,
+        layout=layout,
         include_initializers=include_initializers,
         include_shapes=include_shapes,
         include_attributes=include_attributes,
@@ -238,6 +248,7 @@ def to_svg_graph(
     graph: Any,
     *,
     direction: str = "TB",
+    layout: str = "layered",
     include_initializers: bool = True,
     include_shapes: bool = True,
     include_attributes: bool = False,
@@ -252,6 +263,12 @@ def to_svg_graph(
         raise TypeError(
             "to_svg_graph expected a GraphProto-like object "
             f"with 'node', 'input' and 'output' fields, got {type(graph).__name__}."
+        )
+
+    valid_layouts = {"layered", "umap"}
+    if layout not in valid_layouts:
+        raise ValueError(
+            f"Unsupported SVG layout {layout!r}; expected one of {sorted(valid_layouts)}."
         )
 
     horizontal = direction == "LR"
@@ -365,9 +382,12 @@ def to_svg_graph(
         if src is not None:
             edges.append((src, box.id, _edge_label(name, shape if include_shapes else "")))
 
-    _assign_layers(boxes, edges)
-    _minimize_crossings(boxes, edges)
-    width, height = _layout(boxes, horizontal)
+    if layout == "umap":
+        width, height = _layout_umap(boxes, edges, horizontal)
+    else:
+        _assign_layers(boxes, edges)
+        _minimize_crossings(boxes, edges)
+        width, height = _layout(boxes, horizontal)
 
     return _render_svg(boxes, edges, width, height, horizontal)
 
@@ -556,6 +576,119 @@ def _layout(boxes: list[_Box], horizontal: bool) -> tuple[float, float]:
     if horizontal:
         return (depth_extent, cross_extent + _MARGIN)
     return (cross_extent + _MARGIN, depth_extent)
+
+
+# Minimum number of boxes required for a meaningful UMAP embedding; below this
+# the layered layout is used because UMAP needs a handful of neighbours.
+_UMAP_MIN_BOXES = 4
+
+
+def _graph_distances(box_count: int, edges: list[tuple[int, int, str]]) -> list[list[float]]:
+    """Computes an all-pairs shortest-path distance matrix over the boxes.
+
+    Edges are treated as undirected and unit length.  Pairs of boxes that are
+    not connected receive a distance one greater than the graph diameter so
+    that disconnected components are pushed apart by the embedding.
+
+    Returns:
+        A symmetric ``box_count`` by ``box_count`` matrix of distances.
+    """
+    from collections import deque
+
+    adjacency: list[set[int]] = [set() for _ in range(box_count)]
+    for src, dst, _label in edges:
+        adjacency[src].add(dst)
+        adjacency[dst].add(src)
+
+    distances = [[0.0] * box_count for _ in range(box_count)]
+    diameter = 0
+    for start in range(box_count):
+        seen = {start: 0}
+        queue = deque([start])
+        while queue:
+            node = queue.popleft()
+            for neighbour in adjacency[node]:
+                if neighbour not in seen:
+                    seen[neighbour] = seen[node] + 1
+                    queue.append(neighbour)
+        for target, hops in seen.items():
+            distances[start][target] = float(hops)
+            diameter = max(diameter, hops)
+
+    far = float(diameter + 1)
+    for i in range(box_count):
+        for j in range(box_count):
+            if i != j and distances[i][j] == 0.0:
+                distances[i][j] = far
+    return distances
+
+
+def _layout_umap(
+    boxes: list[_Box], edges: list[tuple[int, int, str]], horizontal: bool
+) -> tuple[float, float]:
+    """Places every box using a two-dimensional UMAP embedding of the graph.
+
+    The graph connectivity is turned into an all-pairs shortest-path distance
+    matrix which is embedded into two dimensions with UMAP (``metric``
+    ``"precomputed"``).  The embedding is scaled to pixel space and, so the
+    dominant axis matches ``direction``, optionally rotated by ninety degrees.
+    Graphs with fewer than :data:`_UMAP_MIN_BOXES` boxes fall back to the
+    layered layout because UMAP needs a handful of neighbours to converge.
+
+    Returns:
+        The overall ``(width, height)`` of the drawing in pixels.
+
+    Raises:
+        ImportError: If the optional ``umap-learn`` package is not installed.
+    """
+    if len(boxes) < _UMAP_MIN_BOXES:
+        _assign_layers(boxes, edges)
+        _minimize_crossings(boxes, edges)
+        return _layout(boxes, horizontal)
+
+    try:
+        import numpy
+        import umap
+    except ImportError as exc:  # pragma: no cover - depends on optional package
+        raise ImportError(
+            "The 'umap' layout requires the optional 'umap-learn' package; "
+            "install it with 'pip install umap-learn'."
+        ) from exc
+
+    distances = numpy.asarray(_graph_distances(len(boxes), edges), dtype=numpy.float64)
+    reducer = umap.UMAP(
+        n_components=2, metric="precomputed", n_neighbors=min(15, len(boxes) - 1), random_state=42
+    )
+    embedding = numpy.asarray(reducer.fit_transform(distances), dtype=numpy.float64)
+
+    # Orient the embedding so its most spread-out axis runs along the layer
+    # (depth) direction requested by the caller.
+    spread = embedding.max(axis=0) - embedding.min(axis=0)
+    depth_axis = 1 if horizontal else 0
+    if spread[depth_axis] < spread[1 - depth_axis]:
+        embedding = embedding[:, ::-1]
+
+    lo = embedding.min(axis=0)
+    hi = embedding.max(axis=0)
+    span = numpy.where(hi - lo > 0.0, hi - lo, 1.0)
+    normalized = (embedding - lo) / span
+
+    # Size the canvas so the boxes have room to spread without heavy overlap.
+    columns = math.ceil(math.sqrt(len(boxes)))
+    max_width = max(box.width for box in boxes)
+    max_height = max(box.height for box in boxes)
+    canvas_width = columns * (max_width + _SIBLING_GAP)
+    canvas_height = columns * (max_height + _SIBLING_GAP)
+
+    for index, box in enumerate(boxes):
+        center_x = _MARGIN + max_width / 2.0 + normalized[index, 0] * canvas_width
+        center_y = _MARGIN + max_height / 2.0 + normalized[index, 1] * canvas_height
+        box.x = center_x - box.width / 2.0
+        box.y = center_y - box.height / 2.0
+
+    width = 2 * _MARGIN + canvas_width + max_width
+    height = 2 * _MARGIN + canvas_height + max_height
+    return (width, height)
 
 
 # ---------------------------------------------------------------------------

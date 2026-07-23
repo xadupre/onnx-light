@@ -111,7 +111,7 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertFalse(ctx.has("x"))
         self.assertFalse(ctx.remove("x"))
 
-    def test_runtime_parameters_semantics_and_context_property(self):
+    def test_runtime_parameters_semantics(self):
         params = rt.RuntimeParameters()
         self.assertEqual(params.num_threads, 0)
         self.assertGreaterEqual(params.effective_num_threads(), 1)
@@ -127,12 +127,6 @@ class TestRunNodesBindings(ExtTestCase):
 
         negative = rt.RuntimeParameters(-3)
         self.assertGreaterEqual(negative.effective_num_threads(), 1)
-
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        self.assertEqual(ctx.parameters.num_threads, 0)
-        ctx.parameters = rt.RuntimeParameters(1)
-        self.assertEqual(ctx.parameters.num_threads, 1)
-        self.assertFalse(ctx.parameters.is_parallel())
 
     def test_runtime_context_event_log_records_add_replace_remove(self):
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))

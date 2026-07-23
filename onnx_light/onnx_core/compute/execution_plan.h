@@ -97,6 +97,15 @@ public:
   /// Number of nodes covered by this plan.
   size_t num_nodes() const noexcept { return nodes_.size(); }
 
+  /// Non-owning pointers to the nodes covered by this plan, in execution
+  /// order. Entry ``i`` corresponds to the node an
+  /// :cpp:enumerator:`ExecuteActionKind::kExecuteNode` action with
+  /// :cpp:func:`ExecuteAction::node_index` ``i`` runs, so
+  /// :cpp:class:`RuntimeSession` can recover the node list from the plan
+  /// alone. The pointers reference the caller-owned graph / function and are
+  /// valid only while it (and this plan) outlive the session.
+  const std::vector<const NodeProto *> &nodes() const noexcept { return nodes_; }
+
   /// Releases from ``rt`` every intermediate whose last use falls at
   /// ``node``. ``node`` must be one of the :cpp:class:`NodeProto` instances
   /// the plan was built from (lookup is by address); if it is not, this is a

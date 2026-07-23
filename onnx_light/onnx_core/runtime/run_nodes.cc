@@ -1056,8 +1056,9 @@ void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext 
 
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt,
               const ExecutionPlan &plan) {
-  RuntimeSession session(nodes, rt, plan);
-  session.Run();
+  (void)nodes;
+  RuntimeSession session(plan);
+  session.Run(rt);
 }
 
 void RunGraph(const GraphProto &graph, RuntimeContext &rt) {

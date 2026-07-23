@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "onnx_lib/defs/function.h"
 #include "onnx_lib/defs/schema.h"

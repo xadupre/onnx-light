@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include <vector>
-
 #include "onnx_core/light_op_schema/light_op_schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

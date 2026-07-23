@@ -15,7 +15,6 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

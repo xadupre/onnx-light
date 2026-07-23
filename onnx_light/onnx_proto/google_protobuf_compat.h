@@ -12,7 +12,6 @@
 #include <iterator>
 #include <ostream>
 #include <string>
-#include <vector>
 
 namespace google {
 namespace protobuf {

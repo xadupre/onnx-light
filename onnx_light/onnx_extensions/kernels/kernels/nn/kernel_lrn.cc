@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

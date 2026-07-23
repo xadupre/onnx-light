@@ -4,8 +4,6 @@
 
 #include "onnx_op/operator_sets_logical_doc.h"
 
-#include <vector>
-
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace logical {

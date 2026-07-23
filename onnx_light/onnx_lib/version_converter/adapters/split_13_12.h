@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "onnx_lib/version_converter/adapters/adapter.h"
 

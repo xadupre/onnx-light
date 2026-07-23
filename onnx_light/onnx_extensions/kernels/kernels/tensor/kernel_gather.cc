@@ -8,7 +8,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -16,22 +15,29 @@ namespace kernel {
 
 namespace {
 
-std::vector<int64_t> ReadIndicesAsInt64(const Tensor &indices, const std::string &op_name) {
+// Reads the ``indices`` input into a contiguous INT64 scratch tensor. The
+// scratch buffer is acquired from ``allocator`` when non-null (so no temporary
+// storage is allocated outside the runtime context) and falls back to inline
+// ``std::vector`` storage otherwise.
+Tensor ReadIndicesAsInt64(const Tensor &indices, const std::string &op_name,
+                          RawBufferAllocator *allocator) {
   const int32_t int64_dt = static_cast<int32_t>(DataType::INT64);
   const int32_t int32_dt = static_cast<int32_t>(DataType::INT32);
   EXT_ENFORCE_INVALID(indices.data_type == int64_dt || indices.data_type == int32_dt,
                       "kernel::", op_name, ": 'indices' input must be INT32 or INT64.");
-  int64_t n = indices.element_count();
-  std::vector<int64_t> out(static_cast<std::size_t>(n));
+  const int64_t n = indices.element_count();
+  const std::size_t n_bytes = static_cast<std::size_t>(n) * sizeof(int64_t);
+  Tensor out = MakeOutputTensor(int64_dt, {n}, n_bytes, allocator);
   if (n == 0) {
     return out;
   }
+  int64_t *dst = out.As<int64_t>();
   if (indices.data_type == int64_dt) {
-    std::memcpy(out.data(), indices.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(dst, indices.bytes(), n_bytes);
   } else {
     const int32_t *p = reinterpret_cast<const int32_t *>(indices.bytes());
     for (int64_t i = 0; i < n; ++i) {
-      out[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);
+      dst[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);
     }
   }
   return out;
@@ -83,7 +89,8 @@ void Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::Gather: preallocated output dtype must match data dtype.");
 
-  const std::vector<int64_t> idx_values = ReadIndicesAsInt64(indices, "Gather");
+  const Tensor idx_tensor = ReadIndicesAsInt64(indices, "Gather", ctx_.allocator);
+  const int64_t *idx_values = idx_tensor.As<int64_t>();
   const int64_t axis_dim = data.shape[static_cast<std::size_t>(a)];
 
   // Build per-element strides (in bytes) for data and output.
@@ -99,7 +106,7 @@ void Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
   for (int64_t k = a + 1; k < r; ++k) {
     inner *= data.shape[static_cast<std::size_t>(k)];
   }
-  const int64_t q_count = static_cast<int64_t>(idx_values.size());
+  const int64_t q_count = idx_tensor.element_count();
   const int64_t inner_bytes = inner * static_cast<int64_t>(elem_size);
   const int64_t data_axis_stride_bytes = inner_bytes * axis_dim;
   const int64_t out_outer_bytes = inner_bytes * q_count;

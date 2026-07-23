@@ -16,9 +16,10 @@ namespace kernel {
 
 namespace {
 
-std::vector<int64_t> ResolvePermOrDefault(const std::vector<int64_t> &perm, std::size_t rank) {
+onnx_kernels::Shape ResolvePermOrDefault(const onnx_kernels::Shape &perm, std::size_t rank) {
   if (perm.empty()) {
-    std::vector<int64_t> reversed(rank);
+    onnx_kernels::Shape reversed;
+    reversed.assign(rank, 0);
     for (std::size_t i = 0; i < rank; ++i) {
       reversed[i] = static_cast<int64_t>(rank - 1 - i);
     }
@@ -36,11 +37,12 @@ std::vector<int64_t> ResolvePermOrDefault(const std::vector<int64_t> &perm, std:
   return perm;
 }
 
-std::vector<int64_t> ComputeStrides(const onnx_kernels::Shape &shape) {
+onnx_kernels::Shape ComputeStrides(const onnx_kernels::Shape &shape) {
   if (shape.empty()) {
     return {};
   }
-  std::vector<int64_t> strides(shape.size(), 1);
+  onnx_kernels::Shape strides;
+  strides.assign(shape.size(), 1);
   for (std::size_t i = shape.size() - 1; i > 0; --i) {
     strides[i - 1] = strides[i] * shape[i];
   }
@@ -51,7 +53,7 @@ std::vector<int64_t> ComputeStrides(const onnx_kernels::Shape &shape) {
 
 Tensor Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm,
                              RuntimeContext *rt) const {
-  const std::vector<int64_t> resolved_perm = ResolvePermOrDefault(perm, data.shape.size());
+  const onnx_kernels::Shape resolved_perm = ResolvePermOrDefault(perm, data.shape.size());
   onnx_kernels::Shape out_shape;
   out_shape.assign(resolved_perm.size(), 0);
   for (std::size_t i = 0; i < resolved_perm.size(); ++i) {
@@ -67,7 +69,7 @@ Tensor Transpose::operator()(const Tensor &data, const std::vector<int64_t> &per
 
 void Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm,
                            Tensor &output) const {
-  const std::vector<int64_t> resolved_perm = ResolvePermOrDefault(perm, data.shape.size());
+  const onnx_kernels::Shape resolved_perm = ResolvePermOrDefault(perm, data.shape.size());
   onnx_kernels::Shape out_shape;
   out_shape.assign(resolved_perm.size(), 0);
   for (std::size_t i = 0; i < resolved_perm.size(); ++i) {
@@ -80,8 +82,8 @@ void Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm,
                       "kernel::Transpose: preallocated output shape mismatch.");
 
   const std::size_t elem_size = ElementSize(data.data_type);
-  const std::vector<int64_t> in_strides = ComputeStrides(data.shape);
-  const std::vector<int64_t> out_strides = ComputeStrides(out_shape);
+  const onnx_kernels::Shape in_strides = ComputeStrides(data.shape);
+  const onnx_kernels::Shape out_strides = ComputeStrides(out_shape);
   const int64_t total = output.element_count();
 
   for (int64_t out_idx = 0; out_idx < total; ++out_idx) {

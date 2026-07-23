@@ -36,6 +36,7 @@ using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
 using core::runtime::Sequence;
 using core::runtime::Tensor;
+using core::runtime::Tensors;
 
 void AddOnnxPyKernels(nb::module_ &m);
 void AddOnnxPyRuntime(nb::module_ &m);
@@ -598,7 +599,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "get_sequence",
           [](const RuntimeContext &rt, const std::string &name) {
-            return rt.GetSequence(name).values;
+            const Tensors &values = rt.GetSequence(name).values;
+            return std::vector<Tensor>(values.begin(), values.end());
           },
           nb::arg("name"),
           "Returns the tensors in the sequence stored under ``name`` as a list of "

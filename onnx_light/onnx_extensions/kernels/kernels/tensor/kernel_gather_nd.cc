@@ -77,7 +77,8 @@ void GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t bat
   const std::size_t elem_size = ElementSize(data.data_type);
 
   // Row-major strides for data (in elements).
-  std::vector<int64_t> data_strides(static_cast<std::size_t>(r), 1);
+  onnx_kernels::Shape data_strides;
+  data_strides.assign(static_cast<std::size_t>(r), 1);
   for (int64_t k = r - 2; k >= 0; --k) {
     data_strides[static_cast<std::size_t>(k)] =
         data_strides[static_cast<std::size_t>(k + 1)] * data.shape[static_cast<std::size_t>(k + 1)];

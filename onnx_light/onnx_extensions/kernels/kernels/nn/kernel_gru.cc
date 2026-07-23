@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <cstring>
 #include <utility>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

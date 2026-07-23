@@ -343,6 +343,64 @@ TEST(KernelClass, BatchNormalizationTrainingModeUsesAllocatorWhenRuntimeContextH
   ASSERT_EQ(running_var.shape, (std::vector<int64_t>{2}));
 }
 
+TEST(KernelClass, BatchNormalizationInferenceUsesAllocatorForScratchBuffers) {
+  // A peak-tracking allocator wraps the pool so the test can observe the
+  // maximum number of buffers alive at once during the call. The per-channel
+  // scratch buffers (scale_inv_std/offset) must be acquired from the allocator,
+  // so the peak count exceeds the single allocator-backed output tensor.
+  class PeakTrackingAllocator : public core::runtime::RawBufferAllocator {
+  public:
+    explicit PeakTrackingAllocator(size_t capacity) : pool_(capacity) {}
+    core::runtime::RawBuffer *Allocate(size_t n_bytes) override {
+      core::runtime::RawBuffer *buf = pool_.Allocate(n_bytes);
+      if (pool_.allocated_count() > peak_) {
+        peak_ = pool_.allocated_count();
+      }
+      return buf;
+    }
+    void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
+    size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t allocated_count() const noexcept { return pool_.allocated_count(); }
+    size_t peak() const noexcept { return peak_; }
+
+  private:
+    core::runtime::SimpleRawBufferAllocator pool_;
+    size_t peak_ = 0;
+  };
+
+  const KernelContext ctx{DefaultOpset(15)};
+  BatchNormalization bn{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
+  Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  Tensor mean = Tensor::FromFloat("", {2}, {0.0f, 3.0f});
+  Tensor var = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
+
+  // Capacity for the peak: 1 result tensor (Y) plus 2 scratch buffers
+  // (scale_inv_std/offset), with a little headroom.
+  constexpr size_t kAllocatorSlotCapacity = 8;
+  PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = bn(x, scale, bias, mean, var, /*epsilon=*/1e-5f, &rt);
+
+  ASSERT_TRUE(y.has_allocation());
+  // Peak includes the allocator-backed result plus the 2 scratch buffers.
+  EXPECT_GE(alloc.peak(), 3u);
+  // All scratch buffers are released; only the returned result remains alive.
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+
+  const float *py = y.AsFloat();
+  const float k = 1.5f / std::sqrt(1.5f);
+  EXPECT_NEAR(py[0], -1.0f, 1e-3f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-3f);
+  EXPECT_NEAR(py[2], 1.0f, 1e-3f);
+  EXPECT_NEAR(py[3], (2.0f - 3.0f) * k + 1.0f, 1e-3f);
+  EXPECT_NEAR(py[4], (3.0f - 3.0f) * k + 1.0f, 1e-3f);
+  EXPECT_NEAR(py[5], (4.0f - 3.0f) * k + 1.0f, 1e-3f);
+}
+
 TEST(KernelClass, MeanVarianceNormalizationDefaultAxes) {
   const KernelContext ctx{DefaultOpset(13)};
   MeanVarianceNormalization mvn{ctx};

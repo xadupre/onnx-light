@@ -7,12 +7,12 @@
 #include "onnx_core/runtime/float16_promote.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -179,7 +179,9 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   // Handle the all-``-inf`` row produced by an exhaustively masked
   // position by leaving the probabilities at zero, matching ONNX's
   // reference semantics.
-  std::vector<double> row(static_cast<size_t>(kv_seq_len));
+  detail::TemporaryTypedBuffer<double> row_buf(static_cast<size_t>(kv_seq_len), allocator,
+                                               "kernel::FlexAttention softmax row");
+  double *row = row_buf.data();
   for (int64_t b = 0; b < batch_size; ++b) {
     for (int64_t h = 0; h < q_num_heads; ++h) {
       T *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;

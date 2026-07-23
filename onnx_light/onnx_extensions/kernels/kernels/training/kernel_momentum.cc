@@ -44,17 +44,15 @@ void CheckSameShape(const Tensor &a, const Tensor &b, const char *label_a, const
 
 } // namespace
 
-std::vector<Tensor> Momentum::operator()(const Tensor &R, const Tensor &T,
-                                         const std::vector<Tensor> &Xs,
-                                         const std::vector<Tensor> &Gs,
-                                         const std::vector<Tensor> &Vs, float alpha, float beta,
-                                         float norm_coefficient, Mode mode) const {
+Tensors Momentum::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
+                             const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
+                             float alpha, float beta, float norm_coefficient, Mode mode) const {
   EXT_ENFORCE_INVALID(!Xs.empty(), kMomentumName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size(), kMomentumName,
                       ": 'Xs', 'Gs' and 'Vs' must have the same length.");
 
   RawBufferAllocator *allocator = ctx_.allocator;
-  std::vector<Tensor> outputs;
+  Tensors outputs;
   outputs.reserve(Xs.size() * 2);
   // Layout: X_new_1..N, V_new_1..N.
   for (const auto &X : Xs) {
@@ -69,8 +67,8 @@ std::vector<Tensor> Momentum::operator()(const Tensor &R, const Tensor &T,
 
 void Momentum::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
                           const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                          std::vector<Tensor> &outputs, float alpha, float beta,
-                          float norm_coefficient, Mode mode) const {
+                          Tensors &outputs, float alpha, float beta, float norm_coefficient,
+                          Mode mode) const {
   EXT_ENFORCE_INVALID(!Xs.empty(), kMomentumName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size(), kMomentumName,
                       ": 'Xs', 'Gs' and 'Vs' must have the same length.");

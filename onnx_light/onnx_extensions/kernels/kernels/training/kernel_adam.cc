@@ -51,16 +51,15 @@ void CheckSameShape(const Tensor &a, const Tensor &b, const char *label_a, const
 
 } // namespace
 
-std::vector<Tensor> Adam::operator()(const Tensor &R, const Tensor &T,
-                                     const std::vector<Tensor> &Xs, const std::vector<Tensor> &Gs,
-                                     const std::vector<Tensor> &Vs, const std::vector<Tensor> &Hs,
-                                     float alpha, float beta, float epsilon, float norm_coefficient,
-                                     float norm_coefficient_post) const {
+Tensors Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
+                         const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
+                         const std::vector<Tensor> &Hs, float alpha, float beta, float epsilon,
+                         float norm_coefficient, float norm_coefficient_post) const {
   EXT_ENFORCE_INVALID(!Xs.empty(), kAdamName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size() && Xs.size() == Hs.size(),
                       kAdamName, ": 'Xs', 'Gs', 'Vs' and 'Hs' must have the same length.");
 
-  std::vector<Tensor> outputs;
+  Tensors outputs;
   outputs.reserve(Xs.size() * 3);
   // Layout: X_final_1..N, V_new_1..N, H_new_1..N.
   for (const auto &X : Xs) {
@@ -79,9 +78,8 @@ std::vector<Tensor> Adam::operator()(const Tensor &R, const Tensor &T,
 
 void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
                       const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                      const std::vector<Tensor> &Hs, std::vector<Tensor> &outputs, float alpha,
-                      float beta, float epsilon, float norm_coefficient,
-                      float norm_coefficient_post) const {
+                      const std::vector<Tensor> &Hs, Tensors &outputs, float alpha, float beta,
+                      float epsilon, float norm_coefficient, float norm_coefficient_post) const {
   EXT_ENFORCE_INVALID(!Xs.empty(), kAdamName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size() && Xs.size() == Hs.size(),
                       kAdamName, ": 'Xs', 'Gs', 'Vs' and 'Hs' must have the same length.");

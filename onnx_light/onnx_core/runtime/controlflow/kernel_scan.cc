@@ -133,13 +133,12 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, 
 //   * ``scan_output_axes`` supplies the output-axis positions for stacking each scan output.
 //   * ``scan_output_directions`` supplies the per-output append/prepend directions.
 //   * ``allocator`` specifies the optional allocator used for stacked scan outputs.
-std::vector<Tensor>
-AssembleScanOutputs(int64_t trip_count, const std::vector<Tensor> &initial_state,
-                    const std::vector<Tensor> &final_state,
-                    const std::vector<std::vector<Tensor>> &scan_values_per_iter,
-                    const std::vector<int64_t> &scan_output_axes,
-                    const std::vector<int64_t> &scan_output_directions,
-                    RawBufferAllocator *allocator) {
+Tensors AssembleScanOutputs(int64_t trip_count, const std::vector<Tensor> &initial_state,
+                            const std::vector<Tensor> &final_state,
+                            const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+                            const std::vector<int64_t> &scan_output_axes,
+                            const std::vector<int64_t> &scan_output_directions,
+                            RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(trip_count >= 0, "kernel::Scan: trip_count must be non-negative.");
   EXT_ENFORCE_INVALID(initial_state.size() == final_state.size(),
                       "kernel::Scan: 'final_state' must have the same number of tensors "
@@ -155,7 +154,7 @@ AssembleScanOutputs(int64_t trip_count, const std::vector<Tensor> &initial_state
   EXT_ENFORCE_INVALID(scan_output_directions.empty() || scan_output_directions.size() == k,
                       "kernel::Scan: 'scan_output_directions' must have K entries when provided.");
 
-  std::vector<Tensor> out;
+  Tensors out;
   out.reserve(initial_state.size() + k);
   for (std::size_t i = 0; i < initial_state.size(); ++i) {
     out.push_back(trip_count == 0 ? initial_state[i] : final_state[i]);
@@ -170,32 +169,32 @@ AssembleScanOutputs(int64_t trip_count, const std::vector<Tensor> &initial_state
 
 } // namespace
 
-std::vector<Tensor> Scan::operator()(int64_t trip_count, const std::vector<Tensor> &initial_state,
-                                     const std::vector<Tensor> &final_state,
-                                     const std::vector<std::vector<Tensor>> &scan_values_per_iter,
-                                     const std::vector<int64_t> &scan_output_axes,
-                                     const std::vector<int64_t> &scan_output_directions) const {
+Tensors Scan::operator()(int64_t trip_count, const std::vector<Tensor> &initial_state,
+                         const std::vector<Tensor> &final_state,
+                         const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+                         const std::vector<int64_t> &scan_output_axes,
+                         const std::vector<int64_t> &scan_output_directions) const {
   return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
                              scan_output_axes, scan_output_directions, nullptr);
 }
 
-std::vector<Tensor> Scan::operator()(RuntimeContext &rt, int64_t trip_count,
-                                     const std::vector<Tensor> &initial_state,
-                                     const std::vector<Tensor> &final_state,
-                                     const std::vector<std::vector<Tensor>> &scan_values_per_iter,
-                                     const std::vector<int64_t> &scan_output_axes,
-                                     const std::vector<int64_t> &scan_output_directions) const {
+Tensors Scan::operator()(RuntimeContext &rt, int64_t trip_count,
+                         const std::vector<Tensor> &initial_state,
+                         const std::vector<Tensor> &final_state,
+                         const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+                         const std::vector<int64_t> &scan_output_axes,
+                         const std::vector<int64_t> &scan_output_directions) const {
   return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
                              scan_output_axes, scan_output_directions, rt.allocator());
 }
 
-std::vector<Tensor> Scan::operator()(RuntimeContext &rt, const GraphProto &body,
-                                     const std::vector<Tensor> &initial_state,
-                                     const std::vector<Tensor> &scan_inputs,
-                                     const std::vector<int64_t> &scan_input_axes_in,
-                                     const std::vector<int64_t> &scan_input_directions_in,
-                                     const std::vector<int64_t> &scan_output_axes,
-                                     const std::vector<int64_t> &scan_output_directions) const {
+Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body,
+                         const std::vector<Tensor> &initial_state,
+                         const std::vector<Tensor> &scan_inputs,
+                         const std::vector<int64_t> &scan_input_axes_in,
+                         const std::vector<int64_t> &scan_input_directions_in,
+                         const std::vector<int64_t> &scan_output_axes,
+                         const std::vector<int64_t> &scan_output_directions) const {
   const std::size_t n = initial_state.size();
   const std::size_t m = scan_inputs.size();
   EXT_ENFORCE_INVALID(m > 0, "kernel::Scan: at least one scan input is required.");

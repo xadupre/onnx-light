@@ -242,15 +242,16 @@ void QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tenso
   }
 
   auto compute_strides = [](const auto &dims) {
-    std::vector<int64_t> strides(dims.size(), 1);
+    onnx_kernels::Shape strides;
+    strides.assign(dims.size(), 1);
     for (int i = static_cast<int>(dims.size()) - 2; i >= 0; --i) {
       strides[i] = strides[i + 1] * dims[i + 1];
     }
     return strides;
   };
-  const std::vector<int64_t> in_strides = compute_strides(iD);
-  const std::vector<int64_t> &k_shape = resolved.kernel_shape;
-  const std::vector<int64_t> ker_strides = compute_strides(k_shape);
+  const onnx_kernels::Shape in_strides = compute_strides(iD);
+  const onnx_kernels::Shape &k_shape = resolved.kernel_shape;
+  const onnx_kernels::Shape ker_strides = compute_strides(k_shape);
 
   int64_t in_spatial_size = 1;
   for (int64_t d : iD) {
@@ -269,8 +270,10 @@ void QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tenso
   const int32_t *pB = has_bias ? B.AsInt32() : nullptr;
   const bool out_is_int8 = output.data_type == static_cast<int32_t>(DataType::INT8);
 
-  std::vector<int64_t> oidx(spatial_rank, 0);
-  std::vector<int64_t> kidx(spatial_rank, 0);
+  onnx_kernels::Shape oidx;
+  oidx.assign(spatial_rank, 0);
+  onnx_kernels::Shape kidx;
+  kidx.assign(spatial_rank, 0);
 
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t m = 0; m < M; ++m) {

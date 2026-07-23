@@ -34,10 +34,10 @@ using ::onnx_light::core::runtime::OpsetId;
 //
 // Two flavors of ``operator()`` are provided:
 //
-//   * The returning overload (``std::vector<Tensor> operator()(...) const``)
+//   * The returning overload (``Tensors operator()(...) const``)
 //     allocates fresh ``Tensor`` objects whose data buffers are owned by the
 //     returned vector.
-//   * The in-place overload (``void operator()(..., std::vector<Tensor>
+//   * The in-place overload (``void operator()(..., Tensors
 //     &outputs) const``) writes results into caller-supplied output tensors
 //     whose buffers have already been allocated. The caller is responsible
 //     for setting each ``output.data_type``, ``output.shape`` and sizing
@@ -78,12 +78,11 @@ public:
   /// The trailing ``alpha``, ``beta``, ``epsilon``, ``norm_coefficient`` and
   /// ``norm_coefficient_post`` parameters mirror the Adam ONNX schema
   /// attributes; defaults match the schema defaults.
-  std::vector<Tensor> operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                                 const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                                 const std::vector<Tensor> &Hs, float alpha = 0.9f,
-                                 float beta = 0.999f, float epsilon = 1e-6f,
-                                 float norm_coefficient = 0.0f,
-                                 float norm_coefficient_post = 0.0f) const;
+  Tensors operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
+                     const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
+                     const std::vector<Tensor> &Hs, float alpha = 0.9f, float beta = 0.999f,
+                     float epsilon = 1e-6f, float norm_coefficient = 0.0f,
+                     float norm_coefficient_post = 0.0f) const;
 
   /// In-place overload writing into caller-allocated ``outputs``. The vector
   /// must contain exactly ``3 * Xs.size()`` tensors in the layout
@@ -92,7 +91,7 @@ public:
   /// optimized tensor.
   void operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
                   const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                  const std::vector<Tensor> &Hs, std::vector<Tensor> &outputs, float alpha = 0.9f,
+                  const std::vector<Tensor> &Hs, Tensors &outputs, float alpha = 0.9f,
                   float beta = 0.999f, float epsilon = 1e-6f, float norm_coefficient = 0.0f,
                   float norm_coefficient_post = 0.0f) const;
 
@@ -131,10 +130,10 @@ public:
   /// The trailing ``epsilon``, ``decay_factor`` and ``norm_coefficient``
   /// parameters mirror the Adagrad ONNX schema attributes; defaults match
   /// the schema defaults.
-  std::vector<Tensor> operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                                 const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs,
-                                 float epsilon = 0.0f, float decay_factor = 0.0f,
-                                 float norm_coefficient = 0.0f) const;
+  Tensors operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
+                     const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs,
+                     float epsilon = 0.0f, float decay_factor = 0.0f,
+                     float norm_coefficient = 0.0f) const;
 
   /// In-place overload writing into caller-allocated ``outputs``. The vector
   /// must contain exactly ``2 * Xs.size()`` tensors in the layout
@@ -142,8 +141,8 @@ public:
   /// FLOAT data type, shape and buffer size of the corresponding optimized
   /// tensor.
   void operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                  const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs,
-                  std::vector<Tensor> &outputs, float epsilon = 0.0f, float decay_factor = 0.0f,
+                  const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs, Tensors &outputs,
+                  float epsilon = 0.0f, float decay_factor = 0.0f,
                   float norm_coefficient = 0.0f) const;
 
   /// Adagrad writes its outputs based on independent reads of multiple
@@ -188,10 +187,9 @@ public:
   /// ``R`` must be a scalar FLOAT tensor and ``T`` a scalar INT64 tensor.
   /// The trailing ``alpha``, ``beta``, ``norm_coefficient`` and ``mode``
   /// parameters mirror the Momentum ONNX schema attributes.
-  std::vector<Tensor> operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                                 const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                                 float alpha, float beta, float norm_coefficient,
-                                 Mode mode = Mode::kStandard) const;
+  Tensors operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
+                     const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs, float alpha,
+                     float beta, float norm_coefficient, Mode mode = Mode::kStandard) const;
 
   /// In-place overload writing into caller-allocated ``outputs``. The vector
   /// must contain exactly ``2 * Xs.size()`` tensors in the layout
@@ -199,8 +197,8 @@ public:
   /// FLOAT data type, shape and buffer size of the corresponding optimized
   /// tensor.
   void operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                  const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                  std::vector<Tensor> &outputs, float alpha, float beta, float norm_coefficient,
+                  const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs, Tensors &outputs,
+                  float alpha, float beta, float norm_coefficient,
                   Mode mode = Mode::kStandard) const;
 
   /// Momentum writes its outputs based on independent reads of multiple

@@ -6,10 +6,7 @@
 
 #include "onnx_core/runtime/simple_tensor.h"
 
-#include <algorithm>
-#include <cmath>
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -40,161 +37,37 @@ enum class TreeNodeModeV5 : uint8_t {
   kBranchMember = 6,
 };
 
-inline TreeNodeMode ParseTreeNodeMode(const std::string &mode) {
-  if (mode == "BRANCH_LEQ")
-    return TreeNodeMode::kBranchLeq;
-  if (mode == "BRANCH_LT")
-    return TreeNodeMode::kBranchLt;
-  if (mode == "BRANCH_GTE")
-    return TreeNodeMode::kBranchGte;
-  if (mode == "BRANCH_GT")
-    return TreeNodeMode::kBranchGt;
-  if (mode == "BRANCH_EQ")
-    return TreeNodeMode::kBranchEq;
-  if (mode == "BRANCH_NEQ")
-    return TreeNodeMode::kBranchNeq;
-  if (mode == "LEAF")
-    return TreeNodeMode::kLeaf;
-  EXT_THROW_INVALID("Unsupported tree node mode: ", mode);
-}
+/// Parses a classic (string) tree node mode attribute value.
+TreeNodeMode ParseTreeNodeMode(const std::string &mode);
 
 /// Applies a comparison at an interior node.
 /// Returns true if the sample should follow the 'true' branch.
-inline bool ApplyTreeNodeMode(TreeNodeMode mode, double feature_value, double threshold) {
-  switch (mode) {
-  case TreeNodeMode::kBranchLeq:
-    return feature_value <= threshold;
-  case TreeNodeMode::kBranchLt:
-    return feature_value < threshold;
-  case TreeNodeMode::kBranchGte:
-    return feature_value >= threshold;
-  case TreeNodeMode::kBranchGt:
-    return feature_value > threshold;
-  case TreeNodeMode::kBranchEq:
-    return feature_value == threshold;
-  case TreeNodeMode::kBranchNeq:
-    return feature_value != threshold;
-  case TreeNodeMode::kLeaf:
-    EXT_THROW_INVALID("ApplyTreeNodeMode: LEAF nodes should not be compared.");
-  }
-  EXT_THROW_INVALID("ApplyTreeNodeMode: unknown mode.");
-}
+bool ApplyTreeNodeMode(TreeNodeMode mode, double feature_value, double threshold);
 
-inline bool ApplyTreeNodeModeV5(TreeNodeModeV5 mode, double feature_value, double threshold) {
-  switch (mode) {
-  case TreeNodeModeV5::kBranchLeq:
-    return feature_value <= threshold;
-  case TreeNodeModeV5::kBranchLt:
-    return feature_value < threshold;
-  case TreeNodeModeV5::kBranchGte:
-    return feature_value >= threshold;
-  case TreeNodeModeV5::kBranchGt:
-    return feature_value > threshold;
-  case TreeNodeModeV5::kBranchEq:
-    return feature_value == threshold;
-  case TreeNodeModeV5::kBranchNeq:
-    return feature_value != threshold;
-  case TreeNodeModeV5::kBranchMember:
-    EXT_THROW_INVALID("ApplyTreeNodeModeV5: BRANCH_MEMBER must be evaluated via "
-                      "membership_values, not via ApplyTreeNodeModeV5.");
-  }
-  EXT_THROW_INVALID("ApplyTreeNodeModeV5: unknown mode.");
-}
+/// Applies a comparison at a TreeEnsemble v5 interior node.
+/// Returns true if the sample should follow the 'true' branch.
+bool ApplyTreeNodeModeV5(TreeNodeModeV5 mode, double feature_value, double threshold);
 
 /// Applies the aggregate function to accumulate leaf weights into per-target
 /// accumulators.
 ///
 /// ``agg``: "SUM" (default), "AVERAGE", "MIN", "MAX".
-inline void AggregateTreeLeafWeight(std::vector<float> &accum, int64_t target_id, float weight,
-                                    const std::string &agg, std::vector<int64_t> &counts) {
-  EXT_ENFORCE_INVALID(target_id >= 0 && target_id < static_cast<int64_t>(accum.size()),
-                      "AggregateTreeLeafWeight: target_id out of range.");
-  if (agg == "SUM" || agg == "AVERAGE") {
-    accum[static_cast<size_t>(target_id)] += weight;
-    counts[static_cast<size_t>(target_id)]++;
-  } else if (agg == "MIN") {
-    if (counts[static_cast<size_t>(target_id)] == 0) {
-      accum[static_cast<size_t>(target_id)] = weight;
-    } else {
-      accum[static_cast<size_t>(target_id)] =
-          std::min(accum[static_cast<size_t>(target_id)], weight);
-    }
-    counts[static_cast<size_t>(target_id)]++;
-  } else if (agg == "MAX") {
-    if (counts[static_cast<size_t>(target_id)] == 0) {
-      accum[static_cast<size_t>(target_id)] = weight;
-    } else {
-      accum[static_cast<size_t>(target_id)] =
-          std::max(accum[static_cast<size_t>(target_id)], weight);
-    }
-    counts[static_cast<size_t>(target_id)]++;
-  } else {
-    EXT_THROW_INVALID("AggregateTreeLeafWeight: unsupported aggregate_function: ", agg);
-  }
-}
+void AggregateTreeLeafWeight(std::vector<float> &accum, int64_t target_id, float weight,
+                             const std::string &agg, std::vector<int64_t> &counts);
 
 /// Finalizes the aggregation for one sample (divides by count for AVERAGE).
-inline void FinalizeAggregation(std::vector<float> &accum, const std::vector<int64_t> &counts,
-                                const std::string &agg) {
-  if (agg != "AVERAGE") {
-    return;
-  }
-  for (size_t i = 0; i < accum.size(); ++i) {
-    if (counts[i] > 0) {
-      accum[i] /= static_cast<float>(counts[i]);
-    }
-  }
-}
+void FinalizeAggregation(std::vector<float> &accum, const std::vector<int64_t> &counts,
+                         const std::string &agg);
 
 /// Applies the post_transform in place to a single sample's scores held in the
 /// contiguous range ``[scores, scores + count)``. Supports "NONE", "SOFTMAX",
 /// "LOGISTIC", and "SOFTMAX_ZERO"; other values raise an error.
-inline void ApplyPostTransform(float *scores, size_t count, const std::string &post_transform) {
-  if (post_transform == "NONE") {
-    return;
-  }
-  if (post_transform == "SOFTMAX") {
-    float max_val = *std::max_element(scores, scores + count);
-    float sum = 0.0f;
-    for (size_t i = 0; i < count; ++i) {
-      scores[i] = std::exp(scores[i] - max_val);
-      sum += scores[i];
-    }
-    for (size_t i = 0; i < count; ++i) {
-      scores[i] /= sum;
-    }
-    return;
-  }
-  if (post_transform == "LOGISTIC") {
-    for (size_t i = 0; i < count; ++i) {
-      scores[i] = 1.0f / (1.0f + std::exp(-scores[i]));
-    }
-    return;
-  }
-  if (post_transform == "SOFTMAX_ZERO") {
-    float max_val = *std::max_element(scores, scores + count);
-    if (max_val == 0.0f) {
-      return;
-    }
-    float sum = 0.0f;
-    for (size_t i = 0; i < count; ++i) {
-      scores[i] = std::exp(scores[i] - max_val);
-      sum += scores[i];
-    }
-    for (size_t i = 0; i < count; ++i) {
-      scores[i] /= sum;
-    }
-    return;
-  }
-  EXT_THROW_INVALID("ApplyPostTransform: unsupported post_transform: ", post_transform);
-}
+void ApplyPostTransform(float *scores, size_t count, const std::string &post_transform);
 
 /// Applies the post_transform to the scores for a single sample. Supports
 /// "NONE", "SOFTMAX", "LOGISTIC", and "SOFTMAX_ZERO"; other values raise an
 /// error.
-inline void ApplyPostTransform(std::vector<float> &scores, const std::string &post_transform) {
-  ApplyPostTransform(scores.data(), scores.size(), post_transform);
-}
+void ApplyPostTransform(std::vector<float> &scores, const std::string &post_transform);
 
 /// Classic tree node record used by TreeEnsembleRegressor and
 /// TreeEnsembleClassifier.
@@ -267,28 +140,8 @@ inline ClassicNodeMap BuildClassicNodeMap(
 
 /// Traverses a single tree for a single sample and returns the leaf node id
 /// reached.
-inline int64_t TraverseClassicTree(const ClassicNodeMap &node_map, int64_t tree_id,
-                                   const double *x_row, int64_t feature_count) {
-  int64_t cur_node_id = 0;
-  for (;;) {
-    auto it = node_map.find({tree_id, cur_node_id});
-    EXT_ENFORCE_INVALID(it != node_map.end(), "TraverseClassicTree: node not found in tree.");
-    const ClassicTreeNode &node = it->second;
-    if (node.mode == TreeNodeMode::kLeaf) {
-      return cur_node_id;
-    }
-    EXT_ENFORCE_INVALID(node.feature_id >= 0 && node.feature_id < feature_count,
-                        "TraverseClassicTree: feature_id out of range.");
-    const double feature_value = x_row[node.feature_id];
-    bool go_true;
-    if (std::isnan(feature_value)) {
-      go_true = node.missing_tracks_true;
-    } else {
-      go_true = ApplyTreeNodeMode(node.mode, feature_value, node.threshold);
-    }
-    cur_node_id = go_true ? node.true_node_id : node.false_node_id;
-  }
-}
+int64_t TraverseClassicTree(const ClassicNodeMap &node_map, int64_t tree_id, const double *x_row,
+                            int64_t feature_count);
 
 } // namespace kernel
 } // namespace onnx_kernels

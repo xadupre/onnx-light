@@ -11,7 +11,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -72,7 +71,8 @@ template <typename T> void MatMulCompute(const Tensor &a, const Tensor &b, Tenso
   T *py = output.As<T>();
 
   const int64_t batch_count = NumElements(out_prefix);
-  std::vector<int64_t> batch_idx(batch_rank, 0);
+  Shape batch_idx;
+  batch_idx.assign(batch_rank, 0);
   const size_t a_prefix_rank = a_prefix.size();
   const size_t b_prefix_rank = b_prefix.size();
 

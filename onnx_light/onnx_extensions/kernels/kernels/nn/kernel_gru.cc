@@ -5,8 +5,11 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <utility>
 #include <vector>
 
@@ -61,11 +64,17 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
   Tensor initial_h_storage;
   const Tensor *x_p = &x_in;
   const Tensor *initial_h_p = &initial_h_in;
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   if (layout == 1) {
     const int64_t batch_size = x_in.shape[0];
     const int64_t seq_length = x_in.shape[1];
     const int64_t input_size = x_in.shape[2];
-    std::vector<float> x_data(static_cast<size_t>(batch_size * seq_length * input_size));
+    const size_t x_n_bytes =
+        static_cast<size_t>(batch_size * seq_length * input_size) * sizeof(float);
+    x_storage = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
+                                 onnx_kernels::Shape{seq_length, batch_size, input_size}, x_n_bytes,
+                                 allocator);
+    float *x_data = x_storage.AsFloat();
     const float *src = x_in.AsFloat();
     for (int64_t n = 0; n < batch_size; ++n) {
       for (int64_t s = 0; s < seq_length; ++s) {
@@ -75,7 +84,6 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
         }
       }
     }
-    x_storage = Tensor::FromFloat("", {seq_length, batch_size, input_size}, std::move(x_data));
     x_p = &x_storage;
 
     if (!(initial_h_in.shape.empty() && initial_h_in.size_bytes() == 0)) {
@@ -85,7 +93,8 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
       initial_h_storage = Tensor::FromFloat(
           "", {1, initial_h_in.shape[0], initial_h_in.shape[2]},
           std::vector<float>(initial_h_in.AsFloat(),
-                             initial_h_in.AsFloat() + (initial_h_in.size_bytes() / sizeof(float))));
+                             initial_h_in.AsFloat() + (initial_h_in.size_bytes() / sizeof(float))),
+          allocator);
       initial_h_p = &initial_h_storage;
     }
   }
@@ -150,7 +159,6 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
   const onnx_kernels::Shape y_h_shape{1, batch_size, hidden_size};
   const size_t y_n_bytes =
       static_cast<size_t>(seq_length * batch_size * hidden_size) * sizeof(float);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, allocator);
   const size_t y_h_n_bytes = static_cast<size_t>(batch_size * hidden_size) * sizeof(float);
   Tensor y_h =
@@ -158,26 +166,40 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
   float *py = y.AsFloat();
   float *py_h = y_h.AsFloat();
 
-  // Working buffers for H_{t-1} and H_t.
-  std::vector<float> h_prev(static_cast<size_t>(batch_size * hidden_size), 0.0f);
+  // Working buffers for H_{t-1} and H_t. Drawn from the runtime allocator when
+  // available (falling back to inline storage otherwise). Allocator-backed
+  // buffers are not guaranteed zeroed, so ``h_prev`` is explicitly initialised.
+  const size_t state_count = static_cast<size_t>(batch_size * hidden_size);
+  detail::TemporaryTypedBuffer<float> h_prev_buf(state_count, allocator, "kernel::GRU h_prev");
+  detail::TemporaryTypedBuffer<float> h_curr_buf(state_count, allocator, "kernel::GRU h_curr");
+  float *h_prev = h_prev_buf.data();
+  float *h_curr = h_curr_buf.data();
   if (p_initial_h != nullptr) {
     for (int64_t i = 0; i < batch_size * hidden_size; ++i) {
       h_prev[static_cast<size_t>(i)] = p_initial_h[i];
     }
+  } else {
+    std::fill(h_prev, h_prev + state_count, 0.0f);
   }
-  std::vector<float> h_curr(static_cast<size_t>(batch_size * hidden_size), 0.0f);
 
-  // Per-time-step gate buffers (sized for one batch row at a time).
-  std::vector<float> z_gate(static_cast<size_t>(hidden_size), 0.0f);
-  std::vector<float> r_gate(static_cast<size_t>(hidden_size), 0.0f);
-  std::vector<float> h_tilde(static_cast<size_t>(hidden_size), 0.0f);
+  // Per-time-step gate buffers (sized for one batch row at a time). Every
+  // element is written before being read on each row, so no zero-fill needed.
+  detail::TemporaryTypedBuffer<float> z_gate_buf(static_cast<size_t>(hidden_size), allocator,
+                                                 "kernel::GRU z_gate");
+  detail::TemporaryTypedBuffer<float> r_gate_buf(static_cast<size_t>(hidden_size), allocator,
+                                                 "kernel::GRU r_gate");
+  detail::TemporaryTypedBuffer<float> h_tilde_buf(static_cast<size_t>(hidden_size), allocator,
+                                                  "kernel::GRU h_tilde");
+  float *z_gate = z_gate_buf.data();
+  float *r_gate = r_gate_buf.data();
+  float *h_tilde = h_tilde_buf.data();
 
   for (int64_t t = 0; t < seq_length; ++t) {
     const float *x_t = px + t * batch_size * input_size;
     for (int64_t n = 0; n < batch_size; ++n) {
       const float *x_row = x_t + n * input_size;
-      const float *h_row = h_prev.data() + n * hidden_size;
-      float *out_row = h_curr.data() + n * hidden_size;
+      const float *h_row = h_prev + n * hidden_size;
+      float *out_row = h_curr + n * hidden_size;
 
       // z_t and r_t gates.
       for (int64_t h = 0; h < hidden_size; ++h) {
@@ -241,12 +263,14 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
     }
 
     // Copy h_curr into Y at time-step t (num_directions=1) and swap into
-    // h_prev for the next iteration.
+    // h_prev for the next iteration. The swap only exchanges the two raw
+    // pointers; both TemporaryTypedBuffer objects stay alive (and their
+    // storage valid) until the end of the function.
     float *y_t = py + t * batch_size * hidden_size;
     for (int64_t i = 0; i < batch_size * hidden_size; ++i) {
       y_t[i] = h_curr[static_cast<size_t>(i)];
     }
-    h_prev.swap(h_curr);
+    std::swap(h_prev, h_curr);
   }
 
   // Y_h is the last time step of Y (which is currently in h_prev after the
@@ -259,7 +283,10 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
     // Permute Y from [seq, 1, batch, hidden] to [batch, seq, 1, hidden]
     // and reshape Y_h from [1, batch, hidden] to [batch, 1, hidden]
     // (num_directions == 1 makes the Y_h transform a pure reshape).
-    std::vector<float> y_perm(static_cast<size_t>(seq_length * batch_size * hidden_size));
+    Tensor y_perm_t = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
+                                       onnx_kernels::Shape{batch_size, seq_length, 1, hidden_size},
+                                       y_n_bytes, allocator);
+    float *y_perm = y_perm_t.AsFloat();
     const float *y_src = y.AsFloat();
     for (int64_t s = 0; s < seq_length; ++s) {
       for (int64_t n = 0; n < batch_size; ++n) {
@@ -269,12 +296,13 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
         }
       }
     }
-    y = Tensor::FromFloat("", {batch_size, seq_length, 1, hidden_size}, std::move(y_perm),
-                          ctx_.allocator);
-    y_h = Tensor::FromFloat(
-        "", {batch_size, 1, hidden_size},
-        std::vector<float>(y_h.AsFloat(), y_h.AsFloat() + (y_h.size_bytes() / sizeof(float))),
-        ctx_.allocator);
+    y = std::move(y_perm_t);
+    const size_t y_h_reshape_bytes = static_cast<size_t>(batch_size * hidden_size) * sizeof(float);
+    Tensor y_h_reshape = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
+                                          onnx_kernels::Shape{batch_size, 1, hidden_size},
+                                          y_h_reshape_bytes, allocator);
+    std::memcpy(y_h_reshape.mutable_bytes(), y_h.AsFloat(), y_h_reshape_bytes);
+    y_h = std::move(y_h_reshape);
   }
 
   return std::pair<Tensor, Tensor>(std::move(y), std::move(y_h));

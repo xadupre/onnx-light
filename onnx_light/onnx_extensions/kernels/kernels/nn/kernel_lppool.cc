@@ -19,8 +19,8 @@ namespace {
 
 // Row-major strides for ``shape``. Each stride is the number of elements one
 // must skip to advance by one along that dimension.
-Shape RowMajorStridesLpPool(const onnx_kernels::Shape &shape) {
-  Shape strides;
+onnx_kernels::Shape RowMajorStridesLpPool(const onnx_kernels::Shape &shape) {
+  onnx_kernels::Shape strides;
   strides.assign(shape.size(), 1);
   for (size_t i = shape.size(); i-- > 1;) {
     strides[i - 1] = strides[i] * shape[i];
@@ -154,8 +154,8 @@ Tensor LpPool::operator()(const Tensor &x, const Shape &kernel_shape, const Shap
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());
 
-  const Shape in_strides = RowMajorStridesLpPool(x.shape);
-  const Shape out_strides = RowMajorStridesLpPool(out.shape);
+  const onnx_kernels::Shape in_strides = RowMajorStridesLpPool(x.shape);
+  const onnx_kernels::Shape out_strides = RowMajorStridesLpPool(out.shape);
 
   const int64_t N = x.shape[0];
   const int64_t C = x.shape[1];

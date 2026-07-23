@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <string>
 #include <tuple>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -47,48 +46,31 @@ void CheckParamBroadcast(const Shape &x_shape, int64_t axis, const Shape &param_
   }
 }
 
-// Precomputes, for each position ``flat`` in ``[0, norm_size)`` (row-major
-// over ``x_shape[axis:]``), the corresponding flat index into a broadcast
-// parameter tensor of shape ``param_shape``. Dimensions of ``param_shape``
-// equal to 1 contribute 0 to the index.
-std::vector<int64_t> BuildBroadcastIndex(const Shape &x_shape, int64_t axis,
-                                         const Shape &param_shape, int64_t norm_size) {
+// Returns the broadcast strides of a parameter tensor of shape ``param_shape``
+// over the normalized region ``x_shape[axis:]``. The returned Shape has rank
+// ``rank(x_shape) - axis`` (the normalized rank, always <= rank(x_shape)); the
+// entry for normalized dimension ``d`` is the stride into the parameter tensor,
+// or 0 when that dimension is broadcast (``param_shape`` dimension equal to 1 or
+// absent because ``param_shape`` has a smaller rank than the normalized region).
+//
+// Combined with a row-major coordinate over ``x_shape[axis:]``, these strides
+// yield the flat index into the broadcast parameter tensor for each position.
+Shape BuildBroadcastIndex(const Shape &x_shape, int64_t axis, const Shape &param_shape) {
   const int64_t normalized_rank = static_cast<int64_t>(x_shape.size()) - axis;
   const int64_t param_rank = static_cast<int64_t>(param_shape.size());
   const int64_t offset = normalized_rank - param_rank;
 
-  Shape param_strides;
-  param_strides.assign(static_cast<size_t>(param_rank), 0);
+  Shape strides;
+  strides.assign(static_cast<size_t>(normalized_rank), 0);
   if (param_rank > 0) {
     int64_t stride = 1;
     for (int64_t i = param_rank - 1; i >= 0; --i) {
       const int64_t dim = param_shape[static_cast<size_t>(i)];
-      param_strides[static_cast<size_t>(i)] = dim == 1 ? 0 : stride;
+      strides[static_cast<size_t>(i + offset)] = dim == 1 ? 0 : stride;
       stride *= dim;
     }
   }
-
-  std::vector<int64_t> index(static_cast<size_t>(norm_size), 0);
-  if (norm_size > 0 && param_rank > 0) {
-    Shape coord;
-    coord.assign(static_cast<size_t>(normalized_rank), 0);
-    for (int64_t flat = 0; flat < norm_size; ++flat) {
-      int64_t pi = 0;
-      for (int64_t i = offset; i < normalized_rank; ++i) {
-        pi += coord[static_cast<size_t>(i)] * param_strides[static_cast<size_t>(i - offset)];
-      }
-      index[static_cast<size_t>(flat)] = pi;
-
-      for (int64_t i = normalized_rank - 1; i >= 0; --i) {
-        ++coord[static_cast<size_t>(i)];
-        if (coord[static_cast<size_t>(i)] < x_shape[static_cast<size_t>(axis + i)]) {
-          break;
-        }
-        coord[static_cast<size_t>(i)] = 0;
-      }
-    }
-  }
-  return index;
+  return strides;
 }
 
 // Returns the shape ``[d[0], ..., d[axis-1], 1, ..., 1]`` (rank ==
@@ -179,10 +161,15 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
     norm_size *= x.shape[static_cast<size_t>(i)];
   }
 
-  const std::vector<int64_t> scale_index =
-      BuildBroadcastIndex(x.shape, axis, scale.shape, norm_size);
-  const std::vector<int64_t> bias_index =
-      has_bias ? BuildBroadcastIndex(x.shape, axis, b.shape, norm_size) : std::vector<int64_t>();
+  const int64_t normalized_rank = rank - axis;
+  Shape norm_dims;
+  norm_dims.assign(static_cast<size_t>(normalized_rank), 0);
+  for (int64_t i = 0; i < normalized_rank; ++i) {
+    norm_dims[static_cast<size_t>(i)] = x.shape[static_cast<size_t>(axis + i)];
+  }
+
+  const Shape scale_strides = BuildBroadcastIndex(x.shape, axis, scale.shape);
+  const Shape bias_strides = has_bias ? BuildBroadcastIndex(x.shape, axis, b.shape) : Shape();
 
   const float *px = x.AsFloat();
   const float *ps = scale.AsFloat();
@@ -207,14 +194,36 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
     const float inv = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
     pmean[o] = static_cast<float>(m);
     pinv[o] = inv;
+
+    // Row-major "odometer" over ``x_shape[axis:]``, maintaining the flat index
+    // into the (broadcast) Scale and B tensors incrementally via their strides.
+    Shape coord;
+    coord.assign(static_cast<size_t>(normalized_rank), 0);
+    int64_t si = 0;
+    int64_t bi = 0;
     for (int64_t i = 0; i < norm_size; ++i) {
       const float normalized = (px[base + i] - static_cast<float>(m)) * inv;
-      const int64_t si = scale_index[static_cast<size_t>(i)];
       float v = normalized * ps[si];
       if (has_bias) {
-        v += pb[bias_index[static_cast<size_t>(i)]];
+        v += pb[bi];
       }
       py[base + i] = v;
+
+      for (int64_t d = normalized_rank - 1; d >= 0; --d) {
+        ++coord[static_cast<size_t>(d)];
+        si += scale_strides[static_cast<size_t>(d)];
+        if (has_bias) {
+          bi += bias_strides[static_cast<size_t>(d)];
+        }
+        if (coord[static_cast<size_t>(d)] < norm_dims[static_cast<size_t>(d)]) {
+          break;
+        }
+        coord[static_cast<size_t>(d)] = 0;
+        si -= scale_strides[static_cast<size_t>(d)] * norm_dims[static_cast<size_t>(d)];
+        if (has_bias) {
+          bi -= bias_strides[static_cast<size_t>(d)] * norm_dims[static_cast<size_t>(d)];
+        }
+      }
     }
   }
 }

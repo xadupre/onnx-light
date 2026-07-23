@@ -17,22 +17,28 @@ namespace kernel {
 
 namespace {
 
-std::vector<int64_t> ReadScatterElementsIndices(const Tensor &indices) {
+// Reads the ``indices`` input into a contiguous INT64 scratch tensor. The
+// scratch buffer is acquired from ``allocator`` when non-null (so no temporary
+// storage is allocated outside the runtime context) and falls back to inline
+// ``std::vector`` storage otherwise.
+Tensor ReadScatterElementsIndices(const Tensor &indices, RawBufferAllocator *allocator) {
   const int32_t int64_dt = static_cast<int32_t>(DataType::INT64);
   const int32_t int32_dt = static_cast<int32_t>(DataType::INT32);
   EXT_ENFORCE_INVALID(indices.data_type == int64_dt || indices.data_type == int32_dt,
                       "kernel::ScatterElements: 'indices' input must be INT32 or INT64.");
-  int64_t n = indices.element_count();
-  std::vector<int64_t> out(static_cast<std::size_t>(n));
+  const int64_t n = indices.element_count();
+  const std::size_t n_bytes = static_cast<std::size_t>(n) * sizeof(int64_t);
+  Tensor out = MakeOutputTensor(int64_dt, {n}, n_bytes, allocator);
   if (n == 0) {
     return out;
   }
+  int64_t *dst = out.As<int64_t>();
   if (indices.data_type == int64_dt) {
-    std::memcpy(out.data(), indices.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(dst, indices.bytes(), n_bytes);
   } else {
     const int32_t *p = reinterpret_cast<const int32_t *>(indices.bytes());
     for (int64_t i = 0; i < n; ++i) {
-      out[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);
+      dst[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);
     }
   }
   return out;
@@ -40,13 +46,12 @@ std::vector<int64_t> ReadScatterElementsIndices(const Tensor &indices) {
 
 template <typename T>
 void ApplyScatterElementsTyped(const Tensor &updates, RawBuffer &out_bytes,
-                               const std::vector<int64_t> &idx_values, int64_t axis,
+                               const int64_t *idx_values, int64_t total, int64_t axis,
                                int64_t axis_dim, const onnx_kernels::Shape &data_strides,
                                const onnx_kernels::Shape &idx_strides, const std::string &reduction,
                                int64_t r) {
   T *out = reinterpret_cast<T *>(out_bytes.data());
   const T *upd = reinterpret_cast<const T *>(updates.bytes());
-  const int64_t total = static_cast<int64_t>(idx_values.size());
   onnx_kernels::Shape coord;
   coord.assign(static_cast<std::size_t>(r), 0);
   for (int64_t u_idx = 0; u_idx < total; ++u_idx) {
@@ -121,7 +126,9 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
     std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
   }
 
-  const std::vector<int64_t> idx_values = ReadScatterElementsIndices(indices);
+  const Tensor idx_tensor = ReadScatterElementsIndices(indices, ctx_.allocator);
+  const int64_t *idx_values = idx_tensor.As<int64_t>();
+  const int64_t total_indices = idx_tensor.element_count();
   const int64_t axis_dim = data.shape[static_cast<std::size_t>(axis)];
 
   onnx_kernels::Shape data_strides;
@@ -139,30 +146,30 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
 
   const int32_t dt = data.data_type;
   if (dt == static_cast<int32_t>(DataType::FLOAT)) {
-    ApplyScatterElementsTyped<float>(updates, output.data, idx_values, axis, axis_dim, data_strides,
-                                     idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<float>(updates, output.data, idx_values, total_indices, axis,
+                                     axis_dim, data_strides, idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::DOUBLE)) {
-    ApplyScatterElementsTyped<double>(updates, output.data, idx_values, axis, axis_dim,
-                                      data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<double>(updates, output.data, idx_values, total_indices, axis,
+                                      axis_dim, data_strides, idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::INT32)) {
-    ApplyScatterElementsTyped<int32_t>(updates, output.data, idx_values, axis, axis_dim,
-                                       data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<int32_t>(updates, output.data, idx_values, total_indices, axis,
+                                       axis_dim, data_strides, idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::INT64)) {
-    ApplyScatterElementsTyped<int64_t>(updates, output.data, idx_values, axis, axis_dim,
-                                       data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<int64_t>(updates, output.data, idx_values, total_indices, axis,
+                                       axis_dim, data_strides, idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::UINT8)) {
-    ApplyScatterElementsTyped<uint8_t>(updates, output.data, idx_values, axis, axis_dim,
-                                       data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<uint8_t>(updates, output.data, idx_values, total_indices, axis,
+                                       axis_dim, data_strides, idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::INT8)) {
-    ApplyScatterElementsTyped<int8_t>(updates, output.data, idx_values, axis, axis_dim,
-                                      data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<int8_t>(updates, output.data, idx_values, total_indices, axis,
+                                      axis_dim, data_strides, idx_strides, attrs.reduction, r);
   } else {
     // Fall back to byte-wise copy when reduction == "none".
     EXT_ENFORCE_INVALID(attrs.reduction == "none",
                         "kernel::ScatterElements: reductions other than 'none' are not "
                         "supported for this dtype.");
     const std::size_t elem_size = ElementSize(data.data_type);
-    const int64_t total = static_cast<int64_t>(idx_values.size());
+    const int64_t total = total_indices;
     onnx_kernels::Shape coord;
     coord.assign(static_cast<std::size_t>(r), 0);
     for (int64_t u_idx = 0; u_idx < total; ++u_idx) {

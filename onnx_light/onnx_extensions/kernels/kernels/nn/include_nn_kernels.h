@@ -860,12 +860,12 @@ public:
   /// Attributes carried by the ONNX ``DeformConv`` operator. Defaults match
   /// the upstream schema (since opset 19).
   struct Attributes {
-    std::vector<int64_t> kernel_shape; ///< Defaults to ``W.shape[2:]``.
-    std::vector<int64_t> strides;      ///< Defaults to all ones.
-    std::vector<int64_t> pads;         ///< Defaults to all zeros (length ``2 * rank``).
-    std::vector<int64_t> dilations;    ///< Defaults to all ones.
-    int64_t group = 1;                 ///< Number of conv groups.
-    int64_t offset_group = 1;          ///< Number of offset groups.
+    Shape kernel_shape;       ///< Defaults to ``W.shape[2:]``.
+    Shape strides;            ///< Defaults to all ones.
+    Shape pads;               ///< Defaults to all zeros (length ``2 * rank``).
+    Shape dilations;          ///< Defaults to all ones.
+    int64_t group = 1;        ///< Number of conv groups.
+    int64_t offset_group = 1; ///< Number of offset groups.
   };
 
   using KernelBase::KernelBase;
@@ -893,10 +893,10 @@ class Conv : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``Conv`` operator.
   struct Attributes {
-    std::vector<int64_t> kernel_shape;   ///< Defaults to ``W.shape[2:]``.
-    std::vector<int64_t> strides;        ///< Defaults to all ones.
-    std::vector<int64_t> pads;           ///< Defaults to all zeros (length ``2 * rank``).
-    std::vector<int64_t> dilations;      ///< Defaults to all ones.
+    Shape kernel_shape;                  ///< Defaults to ``W.shape[2:]``.
+    Shape strides;                       ///< Defaults to all ones.
+    Shape pads;                          ///< Defaults to all zeros (length ``2 * rank``).
+    Shape dilations;                     ///< Defaults to all ones.
     int64_t group = 1;                   ///< Number of conv groups.
     AutoPad auto_pad = AutoPad::kNotSet; ///< Padding strategy.
   };
@@ -927,10 +927,10 @@ class ConvInteger : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``ConvInteger`` operator.
   struct Attributes {
-    std::vector<int64_t> kernel_shape;
-    std::vector<int64_t> strides;
-    std::vector<int64_t> pads;
-    std::vector<int64_t> dilations;
+    Shape kernel_shape;
+    Shape strides;
+    Shape pads;
+    Shape dilations;
     int64_t group = 1;
     AutoPad auto_pad = AutoPad::kNotSet;
   };
@@ -962,12 +962,12 @@ class ConvTranspose : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``ConvTranspose`` operator.
   struct Attributes {
-    std::vector<int64_t> kernel_shape;
-    std::vector<int64_t> strides;
-    std::vector<int64_t> pads;
-    std::vector<int64_t> dilations;
-    std::vector<int64_t> output_padding;
-    std::vector<int64_t> output_shape;
+    Shape kernel_shape;
+    Shape strides;
+    Shape pads;
+    Shape dilations;
+    Shape output_padding;
+    Shape output_shape;
     int64_t group = 1;
     AutoPad auto_pad = AutoPad::kNotSet;
   };
@@ -1013,9 +1013,9 @@ class Col2Im : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``Col2Im`` operator.
   struct Attributes {
-    std::vector<int64_t> dilations; ///< Defaults to all ones.
-    std::vector<int64_t> pads;      ///< Defaults to all zeros (length ``2 * n_spatial``).
-    std::vector<int64_t> strides;   ///< Defaults to all ones.
+    Shape dilations; ///< Defaults to all ones.
+    Shape pads;      ///< Defaults to all zeros (length ``2 * n_spatial``).
+    Shape strides;   ///< Defaults to all ones.
   };
 
   using KernelBase::KernelBase;

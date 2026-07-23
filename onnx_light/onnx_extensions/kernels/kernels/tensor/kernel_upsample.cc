@@ -10,7 +10,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -18,11 +17,13 @@ namespace kernel {
 
 namespace {
 
-// Reads the 1-D FLOAT ``scales`` input tensor and validates it against the
-// rank of the input. Mirrors the upstream Upsample v7/9/10 contract: the
-// number of elements of ``scales`` must equal the rank of ``X`` and every
-// entry must be >= 1.
-std::vector<float> ReadUpsampleScales(const Tensor &scales, std::size_t rank) {
+// Reads the 1-D FLOAT ``scales`` input tensor into an allocator-backed scratch
+// buffer and validates it against the rank of the input. Mirrors the upstream
+// Upsample v7/9/10 contract: the number of elements of ``scales`` must equal
+// the rank of ``X`` and every entry must be >= 1. ``allocator`` (when non-null)
+// supplies the scratch storage; otherwise the returned tensor falls back to
+// inline storage.
+Tensor ReadUpsampleScales(const Tensor &scales, std::size_t rank, RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(scales.data_type == DataType::FLOAT,
                       "kernel::Upsample: 'scales' input must be FLOAT.");
   EXT_ENFORCE_INVALID(scales.shape.size() == 1,
@@ -30,18 +31,20 @@ std::vector<float> ReadUpsampleScales(const Tensor &scales, std::size_t rank) {
   const int64_t n = scales.shape[0];
   EXT_ENFORCE_INVALID(static_cast<std::size_t>(n) == rank,
                       "kernel::Upsample: 'scales' length must equal the rank of 'X'.");
-  std::vector<float> out(static_cast<std::size_t>(n));
+  const size_t n_bytes = static_cast<size_t>(n) * sizeof(float);
+  Tensor out = MakeOutputTensor(DataType::FLOAT, {n}, n_bytes, allocator);
   if (n > 0) {
-    std::memcpy(out.data(), scales.bytes(), static_cast<std::size_t>(n) * sizeof(float));
+    std::memcpy(out.mutable_bytes(), scales.bytes(), n_bytes);
   }
-  for (float s : out) {
-    EXT_ENFORCE_INVALID(s >= 1.0f, "kernel::Upsample: 'scales' values must be >= 1.");
+  const float *values = out.As<float>();
+  for (int64_t i = 0; i < n; ++i) {
+    EXT_ENFORCE_INVALID(values[i] >= 1.0f, "kernel::Upsample: 'scales' values must be >= 1.");
   }
   return out;
 }
 
 onnx_kernels::Shape ComputeUpsampleOutputShape(const onnx_kernels::Shape &in_shape,
-                                               const std::vector<float> &scales) {
+                                               const float *scales) {
   onnx_kernels::Shape out_shape;
   out_shape.assign(in_shape.size(), 0);
   for (std::size_t k = 0; k < in_shape.size(); ++k) {
@@ -52,8 +55,8 @@ onnx_kernels::Shape ComputeUpsampleOutputShape(const onnx_kernels::Shape &in_sha
 }
 
 // Nearest-neighbor upsample for any rank, byte-element-wise copy.
-void UpsampleNearest(const Tensor &input, const std::vector<float> &scales,
-                     const onnx_kernels::Shape &out_shape, Tensor &output) {
+void UpsampleNearest(const Tensor &input, const float *scales, const onnx_kernels::Shape &out_shape,
+                     Tensor &output) {
   const std::size_t elem_size = ElementSize(input.data_type);
   const std::size_t rank = out_shape.size();
 
@@ -141,7 +144,7 @@ void StoreFloat(Tensor &output, int64_t idx, double value) {
 // Bilinear upsample of a 4-D NCHW tensor using the "asymmetric" coordinate
 // transformation matching upstream Upsample v7/9/10 (in_coord = out_coord /
 // scale, clamped to ``[0, in_dim - 1]``).
-void UpsampleLinear4D(const Tensor &input, const std::vector<float> &scales,
+void UpsampleLinear4D(const Tensor &input, const float *scales,
                       const onnx_kernels::Shape &out_shape, Tensor &output) {
   EXT_ENFORCE_INVALID(input.shape.size() == 4,
                       "kernel::Upsample: linear mode requires a 4-D NCHW input.");
@@ -227,8 +230,9 @@ bool IsLinearMode(const std::string &mode) { return mode == "linear" || mode == 
 
 Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
                             RuntimeContext *rt) const {
-  const std::vector<float> scales_vec = ReadUpsampleScales(scales, X.shape.size());
-  const onnx_kernels::Shape out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec);
+  const Tensor scales_vec =
+      ReadUpsampleScales(scales, X.shape.size(), rt ? rt->allocator() : nullptr);
+  const onnx_kernels::Shape out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec.As<float>());
   int64_t total_elements = 1;
   for (int64_t d : out_shape) {
     total_elements *= d;
@@ -242,8 +246,8 @@ Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attribu
 
 void Upsample::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
                           Tensor &output) const {
-  const std::vector<float> scales_vec = ReadUpsampleScales(scales, X.shape.size());
-  const onnx_kernels::Shape out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec);
+  const Tensor scales_vec = ReadUpsampleScales(scales, X.shape.size(), nullptr);
+  const onnx_kernels::Shape out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec.As<float>());
 
   EXT_ENFORCE_INVALID(output.data_type == X.data_type,
                       "kernel::Upsample: preallocated output dtype must match input dtype.");
@@ -251,11 +255,11 @@ void Upsample::operator()(const Tensor &X, const Tensor &scales, const Attribute
                       "kernel::Upsample: preallocated output shape mismatch.");
 
   if (IsNearestMode(attrs.mode)) {
-    UpsampleNearest(X, scales_vec, out_shape, output);
+    UpsampleNearest(X, scales_vec.As<float>(), out_shape, output);
     return;
   }
   if (IsLinearMode(attrs.mode)) {
-    UpsampleLinear4D(X, scales_vec, out_shape, output);
+    UpsampleLinear4D(X, scales_vec.As<float>(), out_shape, output);
     return;
   }
   EXT_THROW_INVALID("kernel::Upsample: unsupported mode '", attrs.mode,

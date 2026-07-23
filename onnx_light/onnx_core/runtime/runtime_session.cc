@@ -53,6 +53,11 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     prepared.op_type = node.op_type().value();
     prepared.kernel = detail::ResolveNodeKernel(node, rt, prepared.domain, prepared.op_type);
   }
+  // Record the external inputs the scheduled nodes read (names not produced by
+  // any node in the plan, including values captured by subgraph attributes) so
+  // :cpp:func:`Run` can verify the RuntimeContext supplies them before it
+  // starts executing kernels.
+  required_inputs_ = ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
   kernels_initialized_ = true;
 }
 
@@ -61,6 +66,16 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // runs reuse them without redoing the per-node dispatch lookup.
   if (!kernels_initialized_) {
     InitializeKernels(rt);
+  }
+  // Every external input the scheduled nodes read must already be available in
+  // ``rt`` (as a tensor, sequence or map) — graph initializers are seeded
+  // before Run and graph inputs are supplied by the caller. Surface a missing
+  // one as a clear error before executing any kernel rather than failing
+  // partway through the plan.
+  for (const std::string &name : required_inputs_) {
+    EXT_ENFORCE_INVALID(rt.Has(name) || rt.HasSequence(name) || rt.HasMap(name),
+                        "RuntimeSession: required input '", name,
+                        "' is not defined in the RuntimeContext before Run().");
   }
   const std::vector<const NodeProto *> &nodes = plan_.nodes();
   // Replay the plan's ordered action list. Each kExecuteNode action invokes

@@ -29,6 +29,10 @@ std::vector<std::string> CollectExternalInputs(const utils::RepeatedProtoField<N
 /// ``std::vector`` overload of :cpp:func:`CollectExternalInputs`.
 std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes);
 
+/// Node-pointer overload of :cpp:func:`CollectExternalInputs`, used to collect
+/// the external inputs of an :cpp:class:`ExecutionPlan`'s node list.
+std::vector<std::string> CollectExternalInputs(const std::vector<const NodeProto *> &nodes);
+
 /**
  * Returns, for every node in ``nodes``, the list of input names that must
  * already be available before that node runs in order to eventually produce

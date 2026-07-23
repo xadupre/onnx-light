@@ -25,6 +25,7 @@ using onnx_kernels::kernel::AutoPad;
 using onnx_kernels::kernel::AveragePool;
 using onnx_kernels::kernel::BatchNormalization;
 using onnx_kernels::kernel::Dropout;
+using onnx_kernels::kernel::GRU;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::MaxPool;
 using onnx_kernels::kernel::MaxUnpool;
@@ -427,6 +428,128 @@ TEST(KernelClass, MeanVarianceNormalizationUsesAllocatorForScratchBuffers) {
   EXPECT_NEAR(py[1], -1.0f, 1e-5f);
   EXPECT_NEAR(py[2], 1.0f, 1e-5f);
   EXPECT_NEAR(py[3], 1.0f, 1e-5f);
+}
+
+TEST(KernelClass, GRUUsesAllocatorForScratchBuffersAndMatchesFallback) {
+  // A peak-tracking allocator wraps the pool so the test can observe the
+  // maximum number of buffers alive at once during the call. The per-step
+  // working/gate scratch buffers (h_prev/h_curr/z_gate/r_gate/h_tilde) must be
+  // acquired from the allocator, so the peak count exceeds the two
+  // allocator-backed output tensors (Y and Y_h).
+  class PeakTrackingAllocator : public core::runtime::RawBufferAllocator {
+  public:
+    explicit PeakTrackingAllocator(size_t capacity) : pool_(capacity) {}
+    core::runtime::RawBuffer *Allocate(size_t n_bytes) override {
+      core::runtime::RawBuffer *buf = pool_.Allocate(n_bytes);
+      if (pool_.allocated_count() > peak_) {
+        peak_ = pool_.allocated_count();
+      }
+      return buf;
+    }
+    void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
+    size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t allocated_count() const noexcept { return pool_.allocated_count(); }
+    size_t peak() const noexcept { return peak_; }
+
+  private:
+    core::runtime::SimpleRawBufferAllocator pool_;
+    size_t peak_ = 0;
+  };
+
+  const KernelContext ctx{DefaultOpset(14)};
+  GRU gru{ctx};
+
+  constexpr int64_t kSeqLength = 2;
+  constexpr int64_t kBatch = 3;
+  constexpr int64_t kInput = 2;
+  constexpr int64_t kHidden = 4;
+  constexpr int64_t kNumGates = 3;
+  constexpr float kWeightScale = 0.1f;
+
+  std::vector<float> x_data(static_cast<size_t>(kSeqLength * kBatch * kInput));
+  for (size_t i = 0; i < x_data.size(); ++i) {
+    x_data[i] = static_cast<float>(i + 1);
+  }
+  std::vector<float> w_data(static_cast<size_t>(kNumGates * kHidden * kInput), kWeightScale);
+  std::vector<float> r_data(static_cast<size_t>(kNumGates * kHidden * kHidden), kWeightScale);
+  Tensor x = Tensor::FromFloat("", {kSeqLength, kBatch, kInput}, x_data);
+  Tensor w = Tensor::FromFloat("", {1, kNumGates * kHidden, kInput}, w_data);
+  Tensor r = Tensor::FromFloat("", {1, kNumGates * kHidden, kHidden}, r_data);
+
+  // Baseline: no allocator (falls back to inline std::vector storage).
+  auto [y_ref, y_h_ref] = gru(x, w, r);
+
+  // Allocator-backed run: scratch buffers must come from the pool.
+  constexpr size_t kAllocatorSlotCapacity = 16;
+  PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+  auto [y, y_h] = gru(x, w, r, Tensor{}, Tensor{}, /*linear_before_reset=*/0, /*layout=*/0, &rt);
+
+  ASSERT_TRUE(y.has_allocation());
+  ASSERT_TRUE(y_h.has_allocation());
+  // Peak includes the two allocator-backed outputs plus the scratch buffers.
+  EXPECT_GT(alloc.peak(), 2u);
+  // All scratch buffers are released; only the two returned results remain.
+  EXPECT_EQ(alloc.allocated_count(), 2u);
+
+  ASSERT_EQ(y.shape, y_ref.shape);
+  ASSERT_EQ(y_h.shape, y_h_ref.shape);
+  ASSERT_EQ(y.element_count(), y_ref.element_count());
+  for (int64_t i = 0; i < y.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y.AsFloat()[i], y_ref.AsFloat()[i]);
+  }
+  for (int64_t i = 0; i < y_h.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y_h.AsFloat()[i], y_h_ref.AsFloat()[i]);
+  }
+}
+
+TEST(KernelClass, GRULayout1AllocatorMatchesFallback) {
+  // ``layout == 1`` permutes the X/Y batch and time axes through
+  // allocator-backed scratch tensors; the allocator run must match the
+  // inline-storage baseline bit-for-bit.
+  const KernelContext ctx{DefaultOpset(14)};
+  GRU gru{ctx};
+
+  constexpr int64_t kSeqLength = 2;
+  constexpr int64_t kBatch = 3;
+  constexpr int64_t kInput = 2;
+  constexpr int64_t kHidden = 4;
+  constexpr int64_t kNumGates = 3;
+  constexpr float kWeightScale = 0.1f;
+
+  // layout=1 X is [batch, seq, input].
+  std::vector<float> x_data(static_cast<size_t>(kBatch * kSeqLength * kInput));
+  for (size_t i = 0; i < x_data.size(); ++i) {
+    x_data[i] = static_cast<float>(i + 1);
+  }
+  std::vector<float> w_data(static_cast<size_t>(kNumGates * kHidden * kInput), kWeightScale);
+  std::vector<float> r_data(static_cast<size_t>(kNumGates * kHidden * kHidden), kWeightScale);
+  Tensor x = Tensor::FromFloat("", {kBatch, kSeqLength, kInput}, x_data);
+  Tensor w = Tensor::FromFloat("", {1, kNumGates * kHidden, kInput}, w_data);
+  Tensor r = Tensor::FromFloat("", {1, kNumGates * kHidden, kHidden}, r_data);
+
+  auto [y_ref, y_h_ref] = gru(x, w, r, Tensor{}, Tensor{}, /*linear_before_reset=*/0, /*layout=*/1);
+
+  constexpr size_t kAllocatorSlotCapacity = 16;
+  SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+  auto [y, y_h] = gru(x, w, r, Tensor{}, Tensor{}, /*linear_before_reset=*/0, /*layout=*/1, &rt);
+
+  ASSERT_TRUE(y.has_allocation());
+  ASSERT_TRUE(y_h.has_allocation());
+  ASSERT_EQ(y.shape, y_ref.shape);
+  ASSERT_EQ(y_h.shape, y_h_ref.shape);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{kBatch, kSeqLength, 1, kHidden}));
+  ASSERT_EQ(y_h.shape, (std::vector<int64_t>{kBatch, 1, kHidden}));
+  ASSERT_EQ(y.element_count(), y_ref.element_count());
+  for (int64_t i = 0; i < y.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y.AsFloat()[i], y_ref.AsFloat()[i]);
+  }
+  for (int64_t i = 0; i < y_h.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y_h.AsFloat()[i], y_h_ref.AsFloat()[i]);
+  }
 }
 
 TEST(KernelClass, DropoutInferenceModeCopiesInputAndOnesMask) {

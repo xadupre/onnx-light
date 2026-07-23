@@ -51,7 +51,8 @@ int64_t ComputeLane(int64_t idx, const onnx_kernels::Shape &dims,
 }
 
 template <typename T>
-void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axes) {
+void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axes,
+                RawBufferAllocator *allocator) {
   const onnx_kernels::Shape &dims = x.shape;
   const int64_t rank = static_cast<int64_t>(dims.size());
   const int64_t total = x.element_count();
@@ -77,9 +78,20 @@ void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axe
   EXT_ENFORCE_INVALID(reduced_size > 0,
                       "kernel::MeanVarianceNormalization: reduced size must be > 0.");
 
-  std::vector<double> sum(static_cast<size_t>(lane_count), 0.0);
-  std::vector<double> sqsum(static_cast<size_t>(lane_count), 0.0);
-  std::vector<double> mean(static_cast<size_t>(lane_count), 0.0);
+  // The per-lane scratch buffers are acquired from the runtime allocator (when
+  // one is provided) so no working memory is allocated outside it; they fall
+  // back to inline storage when ``allocator`` is null.
+  const size_t scratch_n_bytes = static_cast<size_t>(lane_count) * sizeof(double);
+  Tensor sum_buf = MakeOutputTensor(DataType::DOUBLE, {lane_count}, scratch_n_bytes, allocator);
+  Tensor sqsum_buf = MakeOutputTensor(DataType::DOUBLE, {lane_count}, scratch_n_bytes, allocator);
+  Tensor mean_buf = MakeOutputTensor(DataType::DOUBLE, {lane_count}, scratch_n_bytes, allocator);
+  double *sum = sum_buf.AsDouble();
+  double *sqsum = sqsum_buf.AsDouble();
+  double *mean = mean_buf.AsDouble();
+  for (int64_t lane = 0; lane < lane_count; ++lane) {
+    sum[static_cast<size_t>(lane)] = 0.0;
+    sqsum[static_cast<size_t>(lane)] = 0.0;
+  }
 
   const T *px = x.As<T>();
   T *py = output.As<T>();
@@ -109,21 +121,8 @@ void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axe
   }
 }
 
-} // namespace
-
-Tensor MeanVarianceNormalization::operator()(const Tensor &x, const std::vector<int64_t> &axes,
-                                             RuntimeContext *rt) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
-                          x.data_type == static_cast<int32_t>(DataType::DOUBLE),
-                      "kernel::MeanVarianceNormalization: X must be FLOAT or DOUBLE.");
-  const size_t out_n_bytes = x.size_bytes();
-  Tensor out = MakeOutputTensor(x.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(x, out, axes);
-  return out;
-}
-
-void MeanVarianceNormalization::operator()(const Tensor &x, Tensor &output,
-                                           const std::vector<int64_t> &axes) const {
+void DispatchMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axes,
+                 RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           x.data_type == static_cast<int32_t>(DataType::DOUBLE),
                       "kernel::MeanVarianceNormalization: X must be FLOAT or DOUBLE.");
@@ -136,10 +135,29 @@ void MeanVarianceNormalization::operator()(const Tensor &x, Tensor &output,
       "kernel::MeanVarianceNormalization: output buffer must have the same byte size as X.");
 
   if (x.data_type == static_cast<int32_t>(DataType::FLOAT)) {
-    ComputeMvn<float>(x, output, axes);
+    ComputeMvn<float>(x, output, axes, allocator);
     return;
   }
-  ComputeMvn<double>(x, output, axes);
+  ComputeMvn<double>(x, output, axes, allocator);
+}
+
+} // namespace
+
+Tensor MeanVarianceNormalization::operator()(const Tensor &x, const std::vector<int64_t> &axes,
+                                             RuntimeContext *rt) const {
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
+                          x.data_type == static_cast<int32_t>(DataType::DOUBLE),
+                      "kernel::MeanVarianceNormalization: X must be FLOAT or DOUBLE.");
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  const size_t out_n_bytes = x.size_bytes();
+  Tensor out = MakeOutputTensor(x.data_type, x.shape, out_n_bytes, allocator);
+  DispatchMvn(x, out, axes, allocator);
+  return out;
+}
+
+void MeanVarianceNormalization::operator()(const Tensor &x, Tensor &output,
+                                           const std::vector<int64_t> &axes) const {
+  DispatchMvn(x, output, axes, nullptr);
 }
 
 } // namespace kernel

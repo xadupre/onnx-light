@@ -44,10 +44,10 @@ struct Sequence {
 
   /// Tensor elements of the sequence, in order. All elements must share
   /// ``elem_type``; element shapes may differ between elements.
-  std::vector<Tensor> values;
+  Tensors values;
 
   Sequence() = default;
-  Sequence(std::string n, int32_t et, std::vector<Tensor> v)
+  Sequence(std::string n, int32_t et, Tensors v)
       : name(std::move(n)), elem_type(et), values(std::move(v)) {}
 
   /// Number of tensors in the sequence.

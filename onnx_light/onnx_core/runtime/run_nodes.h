@@ -162,9 +162,8 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt);
  * @throws std::invalid_argument if a subgraph output has an empty name or
  *         is not produced by the body.
  */
-std::vector<Tensor> RunSubgraph(const GraphProto &graph,
-                                std::vector<std::pair<std::string, Tensor>> bindings,
-                                RuntimeContext &rt, const std::string &attr_name = "");
+Tensors RunSubgraph(const GraphProto &graph, std::vector<std::pair<std::string, Tensor>> bindings,
+                    RuntimeContext &rt, const std::string &attr_name = "");
 
 /**
  * Resolves a possibly-negative ``axis`` against a tensor of rank

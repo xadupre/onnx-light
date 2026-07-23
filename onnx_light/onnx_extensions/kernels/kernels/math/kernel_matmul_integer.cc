@@ -6,6 +6,7 @@
 #include "onnx_extensions/kernels/kernels/math/matmul_shape_utils.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -31,82 +32,16 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
   return static_cast<int32_t>(t.AsUint8()[idx]);
 }
 
-// Holds zero-point values either in a fallback std::vector<int32_t> or in
-// allocator-backed RawBuffer storage. Takes ownership of allocator-backed
-// storage and releases it upon destruction.
-struct ZeroPointValues {
-  std::vector<int32_t> fallback;
-  // `buffer` is the active-storage discriminator: non-null means allocator-backed
-  // storage, null means fallback vector storage.
-  RawBufferAllocator *allocator = nullptr;
-  RawBuffer *buffer = nullptr;
-  size_t size = 0;
-
-  ZeroPointValues() = default;
-  ZeroPointValues(const ZeroPointValues &) = delete;
-  ZeroPointValues &operator=(const ZeroPointValues &) = delete;
-
-  ZeroPointValues(ZeroPointValues &&other) noexcept
-      : fallback(std::move(other.fallback)), allocator(other.allocator), buffer(other.buffer),
-        size(other.size) {
-    other.allocator = nullptr;
-    other.buffer = nullptr;
-    other.size = 0;
-  }
-
-  ZeroPointValues &operator=(ZeroPointValues &&other) noexcept {
-    if (this != &other) {
-      if (buffer != nullptr && allocator != nullptr) {
-        allocator->Free(buffer);
-      }
-      fallback = std::move(other.fallback);
-      allocator = other.allocator;
-      buffer = other.buffer;
-      size = other.size;
-      other.allocator = nullptr;
-      other.buffer = nullptr;
-      other.size = 0;
-    }
-    return *this;
-  }
-
-  ~ZeroPointValues() {
-    if (buffer != nullptr && allocator != nullptr) {
-      allocator->Free(buffer);
-    }
-  }
-
-  bool is_allocator_backed() const noexcept { return buffer != nullptr; }
-
-  // Returns writable zero-point values from the active storage backend.
-  int32_t *mutable_data() {
-    if (!is_allocator_backed()) {
-      return fallback.data();
-    }
-    return reinterpret_cast<int32_t *>(buffer->data());
-  }
-  // Returns read-only zero-point values from the active storage backend.
-  const int32_t *data() const {
-    if (!is_allocator_backed()) {
-      return fallback.data();
-    }
-    return reinterpret_cast<const int32_t *>(buffer->data());
-  }
-};
-
-// Returns zero-point values for the given optional zero-point tensor.
-// - Empty tensor (absent input): returns {0} — scalar zero broadcast to all positions.
-// - Scalar (0-D) or 1-D of size 1: returns a one-element vector (per-tensor).
-// - 1-D of size `expected_size`: returns all values (per-row or per-column).
+// Validates the optional zero-point tensor `t` and returns the number of
+// zero-point values it contributes.
+// - Empty tensor (absent input): returns 1 — a single zero broadcast to all positions.
+// - Scalar (0-D) or 1-D of size 1: returns 1 (per-tensor).
+// - 1-D of size `expected_size`: returns `expected_size` (per-row or per-column).
 // Any other shape triggers an assertion failure.
-// Uses allocator-backed storage when `allocator` is provided.
-ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t expected_size,
-                               const char *name, RawBufferAllocator *allocator) {
-  ZeroPointValues zps;
+size_t ZeroPointCount(const Tensor &t, int32_t expected_dtype, int64_t expected_size,
+                      const char *name) {
   if (t.shape.empty() && t.size_bytes() == 0) {
-    zps.fallback = {0};
-    zps.size = 1;
-    return zps;
+    return 1;
   }
   EXT_ENFORCE_INVALID(t.data_type == expected_dtype, kName, ": '", name,
                       "' dtype must match its data input.");
@@ -119,28 +54,20 @@ ZeroPointValues ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t 
   EXT_ENFORCE_INVALID(numel == 1 || numel == expected_size, kName, ": '", name,
                       "' must be a scalar, a one-element 1-D tensor, or a 1-D tensor whose "
                       "size matches the corresponding matrix dimension.");
-  const size_t numel_u = static_cast<size_t>(numel);
+  return static_cast<size_t>(numel);
+}
 
-  zps.size = numel_u;
-  if (allocator != nullptr) {
-    zps.allocator = allocator;
-    zps.buffer = allocator->Allocate(numel_u * sizeof(int32_t));
-    EXT_ENFORCE_INVALID(zps.buffer != nullptr, kName, ": zero-point allocator returned null.");
-    // RawBufferAllocator::Allocate returns at least n_bytes, so >= is expected.
-    EXT_ENFORCE_INVALID(zps.buffer->size() >= numel_u * sizeof(int32_t), kName,
-                        ": zero-point allocator returned too small a buffer.");
-    EXT_ENFORCE_INVALID(reinterpret_cast<std::uintptr_t>(zps.buffer->data()) % alignof(int32_t) ==
-                            0,
-                        kName, ": allocator returned misaligned zero-point buffer.");
-  } else {
-    zps.fallback.resize(numel_u);
+// Fills `out` with `count` zero-point values read from `t`. For an absent input
+// (empty tensor) a single zero is written; allocator-backed storage is not
+// zero-initialized, so the zero is written explicitly.
+void FillZeroPoints(const Tensor &t, int32_t *out, size_t count) {
+  if (t.shape.empty() && t.size_bytes() == 0) {
+    out[0] = 0;
+    return;
   }
-
-  int32_t *out = zps.mutable_data();
-  for (int64_t i = 0; i < numel; ++i) {
-    out[static_cast<size_t>(i)] = ReadIntElem(t, i);
+  for (size_t i = 0; i < count; ++i) {
+    out[i] = ReadIntElem(t, static_cast<int64_t>(i));
   }
-  return zps;
 }
 
 Shape ComputeStrides(const Shape &shape) {
@@ -160,8 +87,8 @@ Shape ComputeOutputShape(const Shape &a_shape, const Shape &b_shape) {
       ": inputs are not broadcast-compatible on batch dimensions.");
 }
 
-void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tensor &b,
-                      const ZeroPointValues &b_zps, Tensor &output) {
+void RunMatMulInteger(const Tensor &a, const int32_t *a_values, size_t a_size, const Tensor &b,
+                      const int32_t *b_values, size_t b_size, Tensor &output) {
   const Shape a2 = detail::PromoteMatMulShape(a.shape, true);
   const Shape b2 = detail::PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
@@ -189,10 +116,8 @@ void RunMatMulInteger(const Tensor &a, const ZeroPointValues &a_zps, const Tenso
 
   int32_t *py = output.AsInt32();
 
-  const bool a_per_row = a_zps.size > 1;
-  const bool b_per_col = b_zps.size > 1;
-  const int32_t *a_values = a_zps.data();
-  const int32_t *b_values = b_zps.data();
+  const bool a_per_row = a_size > 1;
+  const bool b_per_col = b_size > 1;
 
   std::vector<int64_t> batch_idx(batch_rank, 0);
   for (int64_t batch = 0; batch < batch_count; ++batch) {
@@ -272,10 +197,14 @@ void ComputeMatMulInteger(const Tensor &a, const Tensor &b, const Tensor &a_zero
   const int64_t M = a2[a2.size() - 2];
   const int64_t N = b2[b2.size() - 1];
 
-  ZeroPointValues a_zps = ReadZeroPoints(a_zero_point, a.data_type, M, "a_zero_point", allocator);
-  ZeroPointValues b_zps = ReadZeroPoints(b_zero_point, b.data_type, N, "b_zero_point", allocator);
+  const size_t a_count = ZeroPointCount(a_zero_point, a.data_type, M, "a_zero_point");
+  const size_t b_count = ZeroPointCount(b_zero_point, b.data_type, N, "b_zero_point");
+  core::runtime::detail::TemporaryTypedBuffer<int32_t> a_zps(a_count, allocator, "a_zero_point");
+  core::runtime::detail::TemporaryTypedBuffer<int32_t> b_zps(b_count, allocator, "b_zero_point");
+  FillZeroPoints(a_zero_point, a_zps.data(), a_count);
+  FillZeroPoints(b_zero_point, b_zps.data(), b_count);
 
-  RunMatMulInteger(a, a_zps, b, b_zps, output);
+  RunMatMulInteger(a, a_zps.data(), a_count, b, b_zps.data(), b_count, output);
 }
 
 } // namespace

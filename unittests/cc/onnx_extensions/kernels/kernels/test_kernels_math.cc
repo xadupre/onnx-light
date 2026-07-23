@@ -1572,6 +1572,36 @@ TEST(KernelClass, MatMulIntegerWithPerRowAZeroPoint) {
   EXPECT_EQ(py[3], 52);
 }
 
+TEST(KernelClass, MatMulIntegerUsesAllocatorForZeroPoints) {
+  // When the RuntimeContext carries an allocator, the transient per-row and
+  // per-column zero-point buffers are drawn from it (via TemporaryTypedBuffer)
+  // and freed before returning, leaving only the output allocation alive.
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromUint8("", {2, 3}, {11, 7, 3, 10, 6, 2});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {1, 4, 2, 5, 3, 6});
+  Tensor a_zp("", core::runtime::DataType::UINT8, {2}, std::vector<uint8_t>{1, 2});
+  Tensor b_zp("", core::runtime::DataType::UINT8, {2}, std::vector<uint8_t>{1, 2});
+
+  // Capacity 3: the persistent output plus the two transient zero-point buffers
+  // that must be alive simultaneously during the computation.
+  SimpleRawBufferAllocator alloc(3);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = mmi(a, b, a_zp, b_zp, &rt);
+  EXPECT_TRUE(y.has_allocation());
+  // The two transient zero-point buffers have been freed, leaving only the output.
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const int32_t *py = y.AsInt32();
+  // Y[i][j] = sum_k (A[i][k] - a_zp[i]) * (B[k][j] - b_zp[j])
+  EXPECT_EQ(py[0], 10);
+  EXPECT_EQ(py[1], 46);
+  EXPECT_EQ(py[2], 4);
+  EXPECT_EQ(py[3], 28);
+}
+
 TEST(KernelClass, FloorClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Floor floor_kernel{ctx};

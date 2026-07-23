@@ -53,15 +53,33 @@ class TestCollectTestCasesByName(ExtTestCase):
         )
 
     def test_collect_test_case_accepts_mode(self):
-        from onnx_light.onnx.backend import TestMode, collect_test_case
+        from unittest import mock
 
-        default_cases = collect_test_case()
-        self.assertGreater(len(default_cases), 0)
-        test_mode_cases = collect_test_case(mode=TestMode.TEST)
-        self.assertEqual(sorted(default_cases), sorted(test_mode_cases))
-        # BENCHMARK mode must also be accepted and forwarded to the C++ binding.
-        benchmark_cases = collect_test_case(mode=TestMode.BENCHMARK)
-        self.assertGreater(len(benchmark_cases), 0)
+        from onnx_light.onnx.backend import TestMode, collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import base as case_base
+
+        # ``collect_test_case`` must accept ``mode`` and forward it to the C++
+        # binding. Materializing every case (models + data sets, which are huge
+        # for BENCHMARK) makes this test slow, so spy on the binding to assert
+        # the forwarded mode without building any case.
+        with mock.patch.object(
+            case_base._backend_test_cc, "collect_test_cases", return_value=[]
+        ) as spy:
+            collect_test_case()
+            collect_test_case(mode=TestMode.TEST)
+            collect_test_case(mode=TestMode.BENCHMARK)
+        forwarded = [call.kwargs["mode"] for call in spy.call_args_list]
+        # A ``None`` mode defaults to TEST; BENCHMARK must be forwarded as-is.
+        self.assertEqual(forwarded, [TestMode.TEST, TestMode.TEST, TestMode.BENCHMARK])
+
+        # Smoke-check the real C++ binding lazily (``len`` only, no model/data
+        # materialization) so that broken generation is still caught quickly.
+        self.assertGreater(
+            len(case_base._backend_test_cc.collect_test_cases(mode=TestMode.TEST)), 0
+        )
+        self.assertGreater(
+            len(case_base._backend_test_cc.collect_test_cases(mode=TestMode.BENCHMARK)), 0
+        )
 
 
 if __name__ == "__main__":

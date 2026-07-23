@@ -20,7 +20,8 @@ constexpr double kMvnEpsilon = 1e-9;
 std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes, int64_t rank) {
   std::vector<int64_t> normalized;
   normalized.reserve(axes.size());
-  std::vector<uint8_t> seen(static_cast<size_t>(rank), 0);
+  Shape seen;
+  seen.assign(static_cast<size_t>(rank), 0);
   for (int64_t axis : axes) {
     const int64_t normalized_axis = axis < 0 ? axis + rank : axis;
     EXT_ENFORCE_INVALID(normalized_axis >= 0 && normalized_axis < rank,
@@ -34,7 +35,7 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes, int64_t ran
 }
 
 int64_t ComputeLane(int64_t idx, const onnx_kernels::Shape &dims,
-                    const std::vector<uint8_t> &reduce_mask) {
+                    const onnx_kernels::Shape &reduce_mask) {
   const int64_t rank = static_cast<int64_t>(dims.size());
   int64_t lane = 0;
   int64_t lane_multiplier = 1;
@@ -60,7 +61,8 @@ void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axe
   }
 
   const std::vector<int64_t> normalized_axes = NormalizeAxes(axes, rank);
-  std::vector<uint8_t> reduce_mask(static_cast<size_t>(rank), 0);
+  Shape reduce_mask;
+  reduce_mask.assign(static_cast<size_t>(rank), 0);
   for (int64_t axis : normalized_axes) {
     reduce_mask[static_cast<size_t>(axis)] = 1;
   }

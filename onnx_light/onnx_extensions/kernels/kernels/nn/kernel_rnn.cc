@@ -72,7 +72,8 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
         }
       }
     }
-    x_storage = Tensor::FromFloat("", {seq_length, batch_size, input_size}, std::move(x_data));
+    x_storage = Tensor::FromFloat("", {seq_length, batch_size, input_size}, std::move(x_data),
+                                  ctx_.allocator);
     x_p = &x_storage;
 
     if (!(initial_h_in.shape.empty() && initial_h_in.size_bytes() == 0)) {
@@ -82,7 +83,8 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
       initial_h_storage = Tensor::FromFloat(
           "", {1, initial_h_in.shape[0], initial_h_in.shape[2]},
           std::vector<float>(initial_h_in.AsFloat(),
-                             initial_h_in.AsFloat() + (initial_h_in.size_bytes() / sizeof(float))));
+                             initial_h_in.AsFloat() + (initial_h_in.size_bytes() / sizeof(float))),
+          ctx_.allocator);
       initial_h_p = &initial_h_storage;
     }
   }

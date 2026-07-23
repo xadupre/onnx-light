@@ -27,8 +27,8 @@ namespace {
 // but two class labels are declared) the single raw score ``z`` is expanded to
 // the canonical pair ``[-z, z]`` following the ONNX spec, so ``out`` has two
 // columns per sample.
-void ComputeLinearScoresInto(const std::vector<double> &x_values, int64_t sample_count,
-                             int64_t feature_count, const std::vector<float> &coefficients,
+void ComputeLinearScoresInto(const double *x_values, int64_t sample_count, int64_t feature_count,
+                             const std::vector<float> &coefficients,
                              const std::vector<float> &intercepts, int64_t raw_class_count,
                              bool binary_expand, float *out) {
   EXT_ENFORCE_INVALID(raw_class_count >= 1,
@@ -42,7 +42,7 @@ void ComputeLinearScoresInto(const std::vector<double> &x_values, int64_t sample
                       "class_count.");
   const int64_t out_class_count = binary_expand ? 2 : raw_class_count;
   for (int64_t n = 0; n < sample_count; ++n) {
-    const double *x_row = x_values.data() + n * feature_count;
+    const double *x_row = x_values + n * feature_count;
     float *out_row = out + n * out_class_count;
     for (int64_t c = 0; c < raw_class_count; ++c) {
       const float *w = coefficients.data() + c * feature_count;
@@ -90,7 +90,7 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
   const int64_t raw_class_count =
       feature_count == 0 ? 0 : static_cast<int64_t>(coefficients.size()) / feature_count;
-  const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
+  const Tensor x_values = ToDoubleRowMajorTensor<T>(x, sample_count, feature_count, ctx_.allocator);
   const bool binary_expand = raw_class_count == 1 && class_labels.size() == 2;
   const int64_t score_class_count = binary_expand ? 2 : raw_class_count;
   EXT_ENFORCE_INVALID(static_cast<int64_t>(class_labels.size()) == score_class_count,
@@ -101,8 +101,8 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
       TensorElementType<float>::value, {sample_count, score_class_count},
       PackedByteSize(TensorElementType<float>::value, sample_count * score_class_count),
       ctx_.allocator);
-  ComputeLinearScoresInto(x_values, sample_count, feature_count, coefficients, intercepts,
-                          raw_class_count, binary_expand, z.As<float>());
+  ComputeLinearScoresInto(x_values.As<double>(), sample_count, feature_count, coefficients,
+                          intercepts, raw_class_count, binary_expand, z.As<float>());
 
   const float *scores = z.As<float>();
   std::vector<int64_t> labels(static_cast<size_t>(sample_count));
@@ -129,7 +129,7 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
   const int64_t raw_class_count =
       feature_count == 0 ? 0 : static_cast<int64_t>(coefficients.size()) / feature_count;
-  const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
+  const Tensor x_values = ToDoubleRowMajorTensor<T>(x, sample_count, feature_count, ctx_.allocator);
   const bool binary_expand = raw_class_count == 1 && class_labels.size() == 2;
   const int64_t score_class_count = binary_expand ? 2 : raw_class_count;
   EXT_ENFORCE_INVALID(static_cast<int64_t>(class_labels.size()) == score_class_count,
@@ -140,8 +140,8 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
       TensorElementType<float>::value, {sample_count, score_class_count},
       PackedByteSize(TensorElementType<float>::value, sample_count * score_class_count),
       ctx_.allocator);
-  ComputeLinearScoresInto(x_values, sample_count, feature_count, coefficients, intercepts,
-                          raw_class_count, binary_expand, z.As<float>());
+  ComputeLinearScoresInto(x_values.As<double>(), sample_count, feature_count, coefficients,
+                          intercepts, raw_class_count, binary_expand, z.As<float>());
 
   const float *scores = z.As<float>();
   std::vector<std::string> labels(static_cast<size_t>(sample_count));

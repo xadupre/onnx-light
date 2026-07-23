@@ -376,6 +376,58 @@ TEST(KernelClass, MeanVarianceNormalizationRejectsAxisOutOfRange) {
   EXPECT_THROW(mvn(x, {2}), std::invalid_argument);
 }
 
+TEST(KernelClass, MeanVarianceNormalizationUsesAllocatorForScratchBuffers) {
+  // A peak-tracking allocator wraps the pool so the test can observe the
+  // maximum number of buffers alive at once during the call. The per-lane
+  // scratch buffers (sum/sqsum/mean) must be acquired from the allocator, so
+  // the peak count exceeds the single allocator-backed output tensor.
+  class PeakTrackingAllocator : public core::runtime::RawBufferAllocator {
+  public:
+    explicit PeakTrackingAllocator(size_t capacity) : pool_(capacity) {}
+    core::runtime::RawBuffer *Allocate(size_t n_bytes) override {
+      core::runtime::RawBuffer *buf = pool_.Allocate(n_bytes);
+      if (pool_.allocated_count() > peak_) {
+        peak_ = pool_.allocated_count();
+      }
+      return buf;
+    }
+    void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
+    size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t allocated_count() const noexcept { return pool_.allocated_count(); }
+    size_t peak() const noexcept { return peak_; }
+
+  private:
+    core::runtime::SimpleRawBufferAllocator pool_;
+    size_t peak_ = 0;
+  };
+
+  const KernelContext ctx{DefaultOpset(13)};
+  MeanVarianceNormalization mvn{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2, 1, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  // Capacity for the peak: 1 result tensor (Y) plus 3 scratch buffers
+  // (sum/sqsum/mean), with a little headroom.
+  constexpr size_t kAllocatorSlotCapacity = 8;
+  PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor y = mvn(x, {0, 2, 3}, &rt);
+
+  ASSERT_TRUE(y.has_allocation());
+  // Peak includes the allocator-backed result plus the 3 scratch buffers.
+  EXPECT_GE(alloc.peak(), 4u);
+  // All scratch buffers are released; only the returned result remains alive.
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+
+  ASSERT_EQ(y.shape, x.shape);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -1.0f, 1e-5f);
+  EXPECT_NEAR(py[1], -1.0f, 1e-5f);
+  EXPECT_NEAR(py[2], 1.0f, 1e-5f);
+  EXPECT_NEAR(py[3], 1.0f, 1e-5f);
+}
+
 TEST(KernelClass, DropoutInferenceModeCopiesInputAndOnesMask) {
   const KernelContext ctx{DefaultOpset(22)};
   Dropout dropout{ctx};

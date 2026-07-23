@@ -38,7 +38,7 @@ void ResolveAttributes(size_t n_spatial, Col2Im::Attributes &attrs) {
 // Reads a 1-D INT64 tensor into a fixed-capacity shape of int64s. Throws if the
 // dtype or rank are wrong. The result is rank-sized (spatial rank) and therefore
 // fits within ``onnx_kernels::Shape`` without heap allocation.
-onnx_kernels::Shape ReadInt64Vector(const Tensor &t, const char *name) {
+onnx_kernels::Shape ReadInt64Shape(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::INT64), "kernel::Col2Im: '",
                       name, "' must be INT64.");
   EXT_ENFORCE_INVALID(t.shape.size() == 1, "kernel::Col2Im: '", name, "' must be a 1-D tensor.");
@@ -53,8 +53,8 @@ onnx_kernels::Shape ReadInt64Vector(const Tensor &t, const char *name) {
 
 Tensor Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Tensor &block_shape,
                           const Attributes &attrs, RuntimeContext *rt) const {
-  const onnx_kernels::Shape image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
-  const onnx_kernels::Shape block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
+  const onnx_kernels::Shape image_shape_vec = ReadInt64Shape(image_shape, "image_shape");
+  const onnx_kernels::Shape block_shape_vec = ReadInt64Shape(block_shape, "block_shape");
   EXT_ENFORCE_INVALID(image_shape_vec.size() == block_shape_vec.size(),
                       "kernel::Col2Im: 'image_shape' and 'block_shape' must have the same length.");
 
@@ -92,8 +92,8 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
                       "kernel::Col2Im: 'input' must be FLOAT.");
   EXT_ENFORCE_INVALID(input.shape.size() == 3, "kernel::Col2Im: 'input' must be rank 3.");
 
-  const onnx_kernels::Shape image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
-  const onnx_kernels::Shape block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
+  const onnx_kernels::Shape image_shape_vec = ReadInt64Shape(image_shape, "image_shape");
+  const onnx_kernels::Shape block_shape_vec = ReadInt64Shape(block_shape, "block_shape");
   EXT_ENFORCE_INVALID(image_shape_vec.size() == block_shape_vec.size(),
                       "kernel::Col2Im: 'image_shape' and 'block_shape' must have the same length.");
   const size_t n_spatial = image_shape_vec.size();

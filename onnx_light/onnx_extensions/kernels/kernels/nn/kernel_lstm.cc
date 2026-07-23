@@ -5,7 +5,10 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -52,6 +55,11 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
                       "kernel::LSTM: R must have shape [1, 4 * hidden_size, hidden_size] "
                       "(single forward direction only).");
 
+  // Scratch and result buffers are drawn from the runtime allocator (when one
+  // is attached) so no storage is acquired outside the runtime context; they
+  // fall back to inline ``std::vector`` storage otherwise.
+  RawBufferAllocator *allocator = rt != nullptr ? rt->allocator() : nullptr;
+
   // ``layout == 1`` permutes batch and time/direction axes on a subset
   // of inputs and outputs; the time-major kernel body below stays as
   // is. ``num_directions`` is always 1 (only ``forward`` is implemented)
@@ -77,16 +85,18 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
         }
       }
     }
-    x_storage = Tensor::FromFloat("", {seq_length, batch_size, input_size}, std::move(x_data));
+    x_storage =
+        Tensor::FromFloat("", {seq_length, batch_size, input_size}, std::move(x_data), allocator);
     x_p = &x_storage;
 
-    auto reshape_initial_state = [](const Tensor &t, const char *role) {
+    auto reshape_initial_state = [allocator](const Tensor &t, const char *role) {
       EXT_ENFORCE_INVALID(
           t.shape.size() == 3u && t.shape[1] == 1, "kernel::LSTM: ", role,
           " must have shape [batch_size, num_directions=1, hidden_size] for layout=1.");
       return Tensor::FromFloat(
           "", {1, t.shape[0], t.shape[2]},
-          std::vector<float>(t.AsFloat(), t.AsFloat() + (t.size_bytes() / sizeof(float))));
+          std::vector<float>(t.AsFloat(), t.AsFloat() + (t.size_bytes() / sizeof(float))),
+          allocator);
     };
     if (!(initial_h_in.shape.empty() && initial_h_in.size_bytes() == 0)) {
       initial_h_storage = reshape_initial_state(initial_h_in, "initial_h");
@@ -147,10 +157,21 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
   const int64_t gC = 3 * hidden_size;
 
   // Combined per-gate bias = Wb + Rb (length hidden_size each).
-  std::vector<float> bias_i(static_cast<size_t>(hidden_size), 0.0f);
-  std::vector<float> bias_o(static_cast<size_t>(hidden_size), 0.0f);
-  std::vector<float> bias_f(static_cast<size_t>(hidden_size), 0.0f);
-  std::vector<float> bias_c(static_cast<size_t>(hidden_size), 0.0f);
+  const std::size_t hidden_count = static_cast<std::size_t>(hidden_size);
+  detail::TemporaryTypedBuffer<float> bias_i_buf(hidden_count, allocator, "kernel::LSTM bias_i");
+  detail::TemporaryTypedBuffer<float> bias_o_buf(hidden_count, allocator, "kernel::LSTM bias_o");
+  detail::TemporaryTypedBuffer<float> bias_f_buf(hidden_count, allocator, "kernel::LSTM bias_f");
+  detail::TemporaryTypedBuffer<float> bias_c_buf(hidden_count, allocator, "kernel::LSTM bias_c");
+  float *bias_i = bias_i_buf.data();
+  float *bias_o = bias_o_buf.data();
+  float *bias_f = bias_f_buf.data();
+  float *bias_c = bias_c_buf.data();
+  // Allocator-backed buffers are not guaranteed zeroed; the gate biases are
+  // read for every step even when ``B`` is absent, so zero-fill explicitly.
+  std::fill(bias_i, bias_i + hidden_count, 0.0f);
+  std::fill(bias_o, bias_o + hidden_count, 0.0f);
+  std::fill(bias_f, bias_f + hidden_count, 0.0f);
+  std::fill(bias_c, bias_c + hidden_count, 0.0f);
   if (p_b != nullptr) {
     const float *wb = p_b;                   // first half: Wb
     const float *rb = p_b + 4 * hidden_size; // second half: Rb
@@ -163,9 +184,17 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
   }
 
   // Peephole weights (length hidden_size each) in gate order i, o, f.
-  std::vector<float> peep_i(static_cast<size_t>(hidden_size), 0.0f);
-  std::vector<float> peep_o(static_cast<size_t>(hidden_size), 0.0f);
-  std::vector<float> peep_f(static_cast<size_t>(hidden_size), 0.0f);
+  detail::TemporaryTypedBuffer<float> peep_i_buf(hidden_count, allocator, "kernel::LSTM peep_i");
+  detail::TemporaryTypedBuffer<float> peep_o_buf(hidden_count, allocator, "kernel::LSTM peep_o");
+  detail::TemporaryTypedBuffer<float> peep_f_buf(hidden_count, allocator, "kernel::LSTM peep_f");
+  float *peep_i = peep_i_buf.data();
+  float *peep_o = peep_o_buf.data();
+  float *peep_f = peep_f_buf.data();
+  // Peepholes are read for every step even when ``P`` is absent; zero-fill the
+  // (potentially uninitialized) allocator-backed storage explicitly.
+  std::fill(peep_i, peep_i + hidden_count, 0.0f);
+  std::fill(peep_o, peep_o + hidden_count, 0.0f);
+  std::fill(peep_f, peep_f + hidden_count, 0.0f);
   if (p_p != nullptr) {
     for (int64_t h = 0; h < hidden_size; ++h) {
       peep_i[static_cast<size_t>(h)] = p_p[0 * hidden_size + h];
@@ -179,7 +208,6 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
   const onnx_kernels::Shape y_h_shape{1, batch_size, hidden_size};
   const size_t y_n_bytes =
       static_cast<size_t>(seq_length * batch_size * hidden_size) * sizeof(float);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, allocator);
   const size_t y_h_n_bytes = static_cast<size_t>(batch_size * hidden_size) * sizeof(float);
   Tensor y_h =
@@ -188,35 +216,49 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
   float *py_h = y_h.AsFloat();
 
   // Working buffers for H_{t-1}, C_{t-1}, H_t, C_t.
-  std::vector<float> h_prev(static_cast<size_t>(batch_size * hidden_size), 0.0f);
-  std::vector<float> c_prev(static_cast<size_t>(batch_size * hidden_size), 0.0f);
+  const std::size_t state_count = static_cast<std::size_t>(batch_size * hidden_size);
+  detail::TemporaryTypedBuffer<float> h_prev_buf(state_count, allocator, "kernel::LSTM h_prev");
+  detail::TemporaryTypedBuffer<float> c_prev_buf(state_count, allocator, "kernel::LSTM c_prev");
+  detail::TemporaryTypedBuffer<float> h_curr_buf(state_count, allocator, "kernel::LSTM h_curr");
+  detail::TemporaryTypedBuffer<float> c_curr_buf(state_count, allocator, "kernel::LSTM c_curr");
+  float *h_prev = h_prev_buf.data();
+  float *c_prev = c_prev_buf.data();
+  float *h_curr = h_curr_buf.data();
+  float *c_curr = c_curr_buf.data();
+  // H_0 / C_0 default to zero; allocator-backed storage is not guaranteed
+  // zeroed, so fill before optionally copying in the provided initial states.
+  std::fill(h_prev, h_prev + state_count, 0.0f);
+  std::fill(c_prev, c_prev + state_count, 0.0f);
   if (p_initial_h != nullptr) {
     for (int64_t i = 0; i < batch_size * hidden_size; ++i) {
-      h_prev[static_cast<size_t>(i)] = p_initial_h[i];
+      h_prev[i] = p_initial_h[i];
     }
   }
   if (p_initial_c != nullptr) {
     for (int64_t i = 0; i < batch_size * hidden_size; ++i) {
-      c_prev[static_cast<size_t>(i)] = p_initial_c[i];
+      c_prev[i] = p_initial_c[i];
     }
   }
-  std::vector<float> h_curr(static_cast<size_t>(batch_size * hidden_size), 0.0f);
-  std::vector<float> c_curr(static_cast<size_t>(batch_size * hidden_size), 0.0f);
 
-  // Reusable per-step accumulator: one row per gate (i, o, f, c).
-  std::vector<float> acc_i(static_cast<size_t>(hidden_size), 0.0f);
-  std::vector<float> acc_o(static_cast<size_t>(hidden_size), 0.0f);
-  std::vector<float> acc_f(static_cast<size_t>(hidden_size), 0.0f);
-  std::vector<float> acc_c(static_cast<size_t>(hidden_size), 0.0f);
+  // Reusable per-step accumulator: one row per gate (i, o, f, c). Each entry is
+  // fully assigned before it is read within a step, so no zero-fill is needed.
+  detail::TemporaryTypedBuffer<float> acc_i_buf(hidden_count, allocator, "kernel::LSTM acc_i");
+  detail::TemporaryTypedBuffer<float> acc_o_buf(hidden_count, allocator, "kernel::LSTM acc_o");
+  detail::TemporaryTypedBuffer<float> acc_f_buf(hidden_count, allocator, "kernel::LSTM acc_f");
+  detail::TemporaryTypedBuffer<float> acc_c_buf(hidden_count, allocator, "kernel::LSTM acc_c");
+  float *acc_i = acc_i_buf.data();
+  float *acc_o = acc_o_buf.data();
+  float *acc_f = acc_f_buf.data();
+  float *acc_c = acc_c_buf.data();
 
   for (int64_t t = 0; t < seq_length; ++t) {
     const float *x_t = px + t * batch_size * input_size;
     for (int64_t n = 0; n < batch_size; ++n) {
       const float *x_row = x_t + n * input_size;
-      const float *h_row = h_prev.data() + n * hidden_size;
-      const float *c_row = c_prev.data() + n * hidden_size;
-      float *h_out = h_curr.data() + n * hidden_size;
-      float *c_out = c_curr.data() + n * hidden_size;
+      const float *h_row = h_prev + n * hidden_size;
+      const float *c_row = c_prev + n * hidden_size;
+      float *h_out = h_curr + n * hidden_size;
+      float *c_out = c_curr + n * hidden_size;
 
       // Compute per-gate pre-activations: X_t @ W^T + H_{t-1} @ R^T + bias.
       for (int64_t h = 0; h < hidden_size; ++h) {
@@ -273,15 +315,15 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
     // h_prev / c_prev for the next iteration.
     float *y_t = py + t * batch_size * hidden_size;
     for (int64_t i = 0; i < batch_size * hidden_size; ++i) {
-      y_t[i] = h_curr[static_cast<size_t>(i)];
+      y_t[i] = h_curr[i];
     }
-    h_prev.swap(h_curr);
-    c_prev.swap(c_curr);
+    std::swap(h_prev, h_curr);
+    std::swap(c_prev, c_curr);
   }
 
   // Y_h is the last time step of Y (currently in h_prev after the final swap).
   for (int64_t i = 0; i < batch_size * hidden_size; ++i) {
-    py_h[i] = h_prev[static_cast<size_t>(i)];
+    py_h[i] = h_prev[i];
   }
 
   if (layout == 1) {
@@ -299,11 +341,11 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
       }
     }
     y = Tensor::FromFloat("", {batch_size, seq_length, 1, hidden_size}, std::move(y_perm),
-                          ctx_.allocator);
+                          allocator);
     y_h = Tensor::FromFloat(
         "", {batch_size, 1, hidden_size},
         std::vector<float>(y_h.AsFloat(), y_h.AsFloat() + (y_h.size_bytes() / sizeof(float))),
-        ctx_.allocator);
+        allocator);
   }
 
   return std::pair<Tensor, Tensor>(std::move(y), std::move(y_h));

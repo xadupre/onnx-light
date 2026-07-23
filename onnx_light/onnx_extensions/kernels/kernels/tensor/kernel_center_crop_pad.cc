@@ -118,10 +118,14 @@ void CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
   // For each input axis, compute the cropping window over the input and the
   // padding window in the output. Defaults (no change) correspond to
   // ``in_start = 0``, ``out_start = 0`` and ``copy_len = dim``.
-  std::vector<int64_t> in_start(rank, 0);
-  std::vector<int64_t> out_start(rank, 0);
-  std::vector<int64_t> copy_len(rank, 0);
-  std::vector<bool> axis_selected(rank, false);
+  onnx_kernels::Shape in_start;
+  in_start.assign(rank, 0);
+  onnx_kernels::Shape out_start;
+  out_start.assign(rank, 0);
+  onnx_kernels::Shape copy_len;
+  copy_len.assign(rank, 0);
+  onnx_kernels::Shape axis_selected;
+  axis_selected.assign(rank, 0);
   for (std::size_t i = 0; i < rank; ++i) {
     copy_len[i] = input_data.shape[i];
   }
@@ -132,7 +136,7 @@ void CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
     EXT_ENFORCE_INVALID(sh >= 0, "kernel::CenterCropPad: 'shape' values must be non-negative.");
     EXT_ENFORCE_INVALID(output.shape[a] == sh,
                         "kernel::CenterCropPad: preallocated output shape mismatch on axis.");
-    axis_selected[a] = true;
+    axis_selected[a] = 1;
     if (sh == in_dim) {
       copy_len[a] = in_dim;
     } else if (sh < in_dim) {

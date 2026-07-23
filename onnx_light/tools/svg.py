@@ -581,6 +581,10 @@ def _layout(boxes: list[_Box], horizontal: bool) -> tuple[float, float]:
 # Minimum number of boxes required for a meaningful UMAP embedding; below this
 # the layered layout is used because UMAP needs a handful of neighbours.
 _UMAP_MIN_BOXES = 4
+# Target neighbourhood size handed to UMAP; capped to the number of other boxes.
+_UMAP_DEFAULT_NEIGHBORS = 15
+# Fixed seed so the UMAP embedding (and therefore the drawing) is reproducible.
+_UMAP_RANDOM_STATE = 42
 
 
 def _graph_distances(box_count: int, edges: list[tuple[int, int, str]]) -> list[list[float]]:
@@ -657,7 +661,10 @@ def _layout_umap(
 
     distances = numpy.asarray(_graph_distances(len(boxes), edges), dtype=numpy.float64)
     reducer = umap.UMAP(
-        n_components=2, metric="precomputed", n_neighbors=min(15, len(boxes) - 1), random_state=42
+        n_components=2,
+        metric="precomputed",
+        n_neighbors=min(_UMAP_DEFAULT_NEIGHBORS, len(boxes) - 1),
+        random_state=_UMAP_RANDOM_STATE,
     )
     embedding = numpy.asarray(reducer.fit_transform(distances), dtype=numpy.float64)
 

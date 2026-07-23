@@ -7,7 +7,10 @@
 #include "onnx_core/runtime/float16_promote.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -173,9 +176,15 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
     beta_ptr = beta->AsFloat();
   }
 
-  // Initialize state: (B, H_kv, d_k, d_v)
+  // Initialize state: (B, H_kv, d_k, d_v). The state buffer is drawn from the
+  // runtime allocator (via ``MakeOutputTensor``) so it is allocator-backed and
+  // becomes the ``present_state`` result without an extra copy;
+  // ``MakeOutputTensor`` zero-initializes the buffer.
   const int64_t state_size = B * kv_num_heads * d_k * d_v;
-  std::vector<float> state(static_cast<size_t>(state_size), 0.0f);
+  Tensor state_tensor =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {B, kv_num_heads, d_k, d_v},
+                       static_cast<size_t>(state_size) * sizeof(float), ctx_.allocator);
+  float *state = state_tensor.AsFloat();
   if (past_state != nullptr) {
     EXT_ENFORCE_INVALID(past_state->data_type == DataType::FLOAT,
                         "kernel::LinearAttention: past_state must be FLOAT.");
@@ -189,9 +198,13 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
     }
   }
 
-  // Output buffer: (B, T, H_q * d_v)
+  // Output buffer: (B, T, H_q * d_v), likewise drawn from the runtime allocator.
   const int64_t out_hidden = q_num_heads * d_v;
-  std::vector<float> output(static_cast<size_t>(B * T * out_hidden), 0.0f);
+  const int64_t output_size = B * T * out_hidden;
+  Tensor output_tensor =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {B, T, out_hidden},
+                       static_cast<size_t>(output_size) * sizeof(float), ctx_.allocator);
+  float *output = output_tensor.AsFloat();
 
   const float *q_ptr = query.AsFloat();
   const float *k_ptr = key.AsFloat();
@@ -203,7 +216,7 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
       // Process each KV head
       for (int64_t h_kv = 0; h_kv < kv_num_heads; ++h_kv) {
         // State offset: state[b, h_kv, :, :] is at b*H_kv*d_k*d_v + h_kv*d_k*d_v
-        float *S = state.data() + static_cast<size_t>((b * kv_num_heads + h_kv) * d_k * d_v);
+        float *S = state + static_cast<size_t>((b * kv_num_heads + h_kv) * d_k * d_v);
 
         // Key vector for this head at this time step
         // k[b, t, h_kv*d_k : (h_kv+1)*d_k]
@@ -214,7 +227,10 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
         // Get decay for this head/timestep
         // decay_last == kv_num_heads*d_k: per-key-dim
         // decay_last == kv_num_heads: per-head scalar
-        std::vector<float> g_exp(static_cast<size_t>(d_k), 1.0f);
+        detail::TemporaryTypedBuffer<float> g_exp_buf(static_cast<std::size_t>(d_k), ctx_.allocator,
+                                                      "kernel::LinearAttention g_exp");
+        float *g_exp = g_exp_buf.data();
+        std::fill(g_exp, g_exp + d_k, 1.0f);
         if (use_decay) {
           if (decay_last == kv_num_heads * d_k) {
             const float *g_ptr =
@@ -263,7 +279,9 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
         } else if (rule == "delta") {
           // S_t = S_{t-1} + β_t * k_t ⊗ (v_t - S_{t-1}^T k_t)
           // S_{t-1}^T k_t = sum_i(S[i,:] * k_t[i]) => vector of d_v
-          std::vector<float> Sk(static_cast<size_t>(d_v), 0.0f);
+          detail::TemporaryTypedBuffer<float> Sk_buf(static_cast<std::size_t>(d_v), ctx_.allocator,
+                                                     "kernel::LinearAttention Sk");
+          float *Sk = Sk_buf.data();
           for (int64_t i = 0; i < d_k; ++i) {
             for (int64_t j = 0; j < d_v; ++j) {
               Sk[static_cast<size_t>(j)] += S[static_cast<size_t>(i * d_v + j)] * k_t[i];
@@ -278,7 +296,9 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
         } else if (rule == "gated_delta") {
           // S_t = exp(g_t)*S_{t-1} + β_t * k_t ⊗ (v_t - exp(g_t)*S_{t-1}^T k_t)
           // First compute exp(g_t)*S_{t-1}^T k_t
-          std::vector<float> gSk(static_cast<size_t>(d_v), 0.0f);
+          detail::TemporaryTypedBuffer<float> gSk_buf(static_cast<std::size_t>(d_v), ctx_.allocator,
+                                                      "kernel::LinearAttention gSk");
+          float *gSk = gSk_buf.data();
           for (int64_t i = 0; i < d_k; ++i) {
             for (int64_t j = 0; j < d_v; ++j) {
               gSk[static_cast<size_t>(j)] +=
@@ -303,7 +323,7 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
           // q[b, t, h_q*d_k : (h_q+1)*d_k]
           const float *q_t = q_ptr + static_cast<size_t>((b * T + t) * hidden_q + h_q * d_k);
           // o_t = scale * q_t^T S_t => vector of d_v
-          float *out_t = output.data() + static_cast<size_t>((b * T + t) * out_hidden + h_q * d_v);
+          float *out_t = output + static_cast<size_t>((b * T + t) * out_hidden + h_q * d_v);
           for (int64_t j = 0; j < d_v; ++j) {
             float dot = 0.0f;
             for (int64_t i = 0; i < d_k; ++i) {
@@ -317,8 +337,8 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
   }
 
   Result result;
-  result.output = Tensor::FromFloat("", {B, T, out_hidden}, output, ctx_.allocator);
-  result.present_state = Tensor::FromFloat("", {B, kv_num_heads, d_k, d_v}, state, ctx_.allocator);
+  result.output = std::move(output_tensor);
+  result.present_state = std::move(state_tensor);
   return result;
 }
 

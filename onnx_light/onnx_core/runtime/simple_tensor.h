@@ -633,11 +633,11 @@ private:
 /// ``Tensors`` — the runtime value produced by kernels that emit more than one
 /// tensor (for example ``Split``, ``Loop`` or the training optimizers).
 ///
-/// It is an ordered, owning list of :cpp:struct:`Tensor` values. It derives
-/// from ``std::vector<Tensor>`` and inherits its constructors, so it behaves
-/// exactly like the underlying vector while giving kernel signatures a named
-/// type to express "a list of created tensors" instead of spelling out
-/// ``std::vector<Tensor>`` at every call site.
+/// It is an ordered, owning list of :cpp:struct:`Tensor` values. Derives from
+/// ``std::vector<Tensor>`` and inherits its constructors, behaving exactly like
+/// the underlying vector while giving kernel signatures a named type to express
+/// "a list of created tensors" instead of spelling out ``std::vector<Tensor>``
+/// at every call site.
 class Tensors : public std::vector<Tensor> {
 public:
   using std::vector<Tensor>::vector;

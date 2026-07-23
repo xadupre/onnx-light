@@ -152,7 +152,8 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
                       "kernel::Col2Im preallocated output buffer has unexpected size.");
 
   // Per-axis image stride into the output buffer.
-  std::vector<int64_t> image_strides(n_spatial);
+  onnx_kernels::Shape image_strides;
+  image_strides.assign(n_spatial, 0);
   {
     int64_t s = 1;
     for (size_t i = n_spatial; i-- > 0;) {

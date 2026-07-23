@@ -126,7 +126,7 @@ void CubicCoeffs(double x, double coeffs[4]) {
 // reflected using ``lo[k]`` / ``hi[k]``.
 template <typename T>
 double PixelAtND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
-                 const std::vector<int64_t> &spatial_strides, const std::vector<int64_t> &idx,
+                 const onnx_kernels::Shape &spatial_strides, const std::vector<int64_t> &idx,
                  Padding pad, const std::vector<double> &lo, const std::vector<double> &hi) {
   const size_t r = spatial_dims.size();
   int64_t offset = 0;
@@ -167,7 +167,7 @@ double PixelAtND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
 // branches); on entry only dims < cur_dim are filled.
 template <typename T>
 double LinearInterpND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
-                      const std::vector<int64_t> &spatial_strides,
+                      const onnx_kernels::Shape &spatial_strides,
                       const std::vector<double> &x_coords, Padding pad,
                       const std::vector<double> &lo, const std::vector<double> &hi,
                       std::vector<int64_t> &base_idx, size_t cur_dim) {
@@ -194,7 +194,7 @@ double LinearInterpND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
 
 template <typename T>
 double CubicInterpND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
-                     const std::vector<int64_t> &spatial_strides,
+                     const onnx_kernels::Shape &spatial_strides,
                      const std::vector<double> &x_coords, Padding pad,
                      const std::vector<double> &lo, const std::vector<double> &hi,
                      std::vector<int64_t> &base_idx, size_t cur_dim) {
@@ -300,7 +300,8 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
 
   onnx_kernels::Shape spatial_dims;
   spatial_dims.insert(spatial_dims.begin(), X.shape.begin() + 2, X.shape.end());
-  std::vector<int64_t> spatial_strides(r);
+  onnx_kernels::Shape spatial_strides;
+  spatial_strides.assign(r, 0);
   if (r > 0) {
     spatial_strides[r - 1] = 1;
     for (size_t k = r - 1; k > 0; --k) {

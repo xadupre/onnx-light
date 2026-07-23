@@ -8,9 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -58,14 +56,15 @@ Tensors Adagrad::operator()(const Tensor &R, const Tensor &T, const Tensors &Xs,
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Hs.size(), kAdagradName,
                       ": 'Xs', 'Gs' and 'Hs' must have the same length.");
 
+  RawBufferAllocator *allocator = ctx_.allocator;
   Tensors outputs;
   outputs.reserve(Xs.size() * 2);
   // Layout: X_new_1..N, H_new_1..N.
   for (const auto &X : Xs) {
-    outputs.emplace_back("", DataType::FLOAT, X.shape, std::vector<uint8_t>(X.size_bytes()));
+    outputs.push_back(MakeOutputTensor(DataType::FLOAT, X.shape, X.size_bytes(), allocator));
   }
   for (const auto &H : Hs) {
-    outputs.emplace_back("", DataType::FLOAT, H.shape, std::vector<uint8_t>(H.size_bytes()));
+    outputs.push_back(MakeOutputTensor(DataType::FLOAT, H.shape, H.size_bytes(), allocator));
   }
   (*this)(R, T, Xs, Gs, Hs, outputs, epsilon, decay_factor, norm_coefficient);
   return outputs;

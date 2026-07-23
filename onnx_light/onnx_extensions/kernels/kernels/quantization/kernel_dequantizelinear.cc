@@ -182,15 +182,18 @@ void ComputeScaleIndex(const Tensor &x, const Tensor &x_scale, int64_t axis, int
     // is coarser in practice). The scale flat index is obtained by dividing each
     // coordinate by the per-dimension repeat factor.
     const onnx_kernels::Shape &s_shape = x_scale.shape;
-    std::vector<int64_t> repeats(rank);
-    std::vector<int64_t> s_strides(rank);
+    onnx_kernels::Shape repeats;
+    repeats.assign(rank, 0);
+    onnx_kernels::Shape s_strides;
+    s_strides.assign(rank, 0);
     int64_t stride = 1;
     for (std::size_t d = rank; d-- > 0;) {
       s_strides[d] = stride;
       stride *= s_shape[d];
       repeats[d] = s_shape[d] != 0 ? x_shape[d] / s_shape[d] : 1;
     }
-    std::vector<int64_t> coord(rank, 0);
+    onnx_kernels::Shape coord;
+    coord.assign(rank, 0);
     for (int64_t i = 0; i < n; ++i) {
       int64_t si = 0;
       for (std::size_t d = 0; d < rank; ++d) {

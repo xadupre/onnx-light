@@ -70,6 +70,21 @@ using SequenceMap = std::unordered_map<std::string, Sequence>;
 using OnnxMapMap = std::unordered_map<std::string, Map>;
 
 /**
+ * Name-keyed map of :cpp:struct:`Shape` values carrying the shape-typed
+ * graph edges (values tagged ``"shape"`` by
+ * :cpp:class:`annotations::ComputeContext`) produced or consumed while a
+ * graph is executed.
+ *
+ * Shapes are stored separately from tensors because a shape-tagged value is
+ * pure metadata (a rank-sized list of dimensions) with no data buffer: the
+ * runtime keeps a sibling map of shape-typed edges, looked up by the same
+ * ``NodeProto::input`` / ``NodeProto::output`` names, so a value can be
+ * released as a shape (:cpp:enumerator:`ExecuteActionKind::kDeleteShape`)
+ * independently of the tensor map.
+ */
+using ShapeMap = std::unordered_map<std::string, Shape>;
+
+/**
  * Name-keyed map of model-local :cpp:type:`FunctionProto` definitions
  * known to the runtime. Populated by :cpp:func:`RunModel` from
  * ``ModelProto::functions()`` so the dispatcher in :cpp:func:`RunNode`
@@ -350,13 +365,6 @@ public:
   void set_verbose(int verbose) noexcept { verbose_ = verbose; }
   int verbose() const noexcept { return verbose_; }
 
-  /// Model-independent execution parameters (e.g. the requested degree of
-  /// parallelism, :cpp:var:`RuntimeParameters::num_threads`). Inherited by
-  /// subgraph and function contexts created through
-  /// :cpp:func:`MakeSubgraphContext` / :cpp:func:`MakeFunctionContext`.
-  void set_parameters(RuntimeParameters parameters) noexcept { parameters_ = parameters; }
-  const RuntimeParameters &parameters() const noexcept { return parameters_; }
-
   /// Index of the control-flow node in the parent graph currently being
   /// executed. Set before running a subgraph so that events recorded inside
   /// carry :cpp:var:`RuntimeEvent::subgraph_node_index` and
@@ -534,66 +542,6 @@ public:
                           std::vector<std::string> inputs, int64_t start_time_ns,
                           int64_t duration_ns);
 
-  /**
-   * Returns the list of input names referenced by ``nodes`` that are
-   * not produced as outputs by any node in the same list — i.e. the
-   * external dependencies of the node set.
-   *
-   * Subgraph attributes (``GRAPH`` / ``GRAPHS``) are inspected
-   * recursively: for every subgraph, names read by the subgraph's
-   * nodes that are neither produced inside the subgraph (formal
-   * inputs, initializers, intermediate node outputs) nor produced by
-   * the outer ``nodes`` are appended to the result, mirroring the
-   * captured-value semantics of ONNX control-flow operators.
-   *
-   * The returned list preserves the order in which each external
-   * name is first encountered and contains no duplicates. Empty
-   * input names (optional inputs left unbound) are skipped.
-   */
-  static std::vector<std::string>
-  CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes);
-
-  /// ``std::vector``-overload of :cpp:func:`CollectExternalInputs`.
-  static std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes);
-
-  /**
-   * Returns the full list of tensor / sequence names a single ``node``
-   * depends on at runtime.
-   *
-   * The result is the union of:
-   *  * the names referenced by ``node.input()`` (skipping empty
-   *    optional-input slots), and
-   *  * every external input of the subgraph attributes
-   *    (``GRAPH`` / ``GRAPHS``) attached to ``node`` — i.e. the
-   *    captured names a subgraph reads from the enclosing scope, as
-   *    computed recursively by :cpp:func:`CollectExternalInputs`.
-   *
-   * The returned list preserves the order in which each name is first
-   * encountered and contains no duplicates.
-   */
-  static std::vector<std::string> CollectNodeInputs(const NodeProto &node);
-
-  /**
-   * Returns, for each node in ``nodes``, the list of input names that
-   * become unused once that node has finished executing — i.e. names
-   * whose last reference (per :cpp:func:`CollectNodeInputs`) appears at
-   * that node and that do not appear in ``keep``.
-   *
-   * Empty names (optional inputs left unbound) are skipped. The
-   * returned vector has exactly ``nodes.size()`` entries; each inner
-   * vector preserves the order in which the corresponding names were
-   * first encountered in the input list of the producing/consuming
-   * node.
-   */
-  static std::vector<std::vector<std::string>>
-  ComputeReleasableInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
-                          const std::unordered_set<std::string> &keep);
-
-  /// ``std::vector``-overload of :cpp:func:`ComputeReleasableInputs`.
-  static std::vector<std::vector<std::string>>
-  ComputeReleasableInputs(const std::vector<NodeProto> &nodes,
-                          const std::unordered_set<std::string> &keep);
-
   /// Returns the cached :cpp:class:`ExecutionPlan` for ``graph``,
   /// building it on first use. The plan precomputes, for every node in
   /// ``graph``, the list of input names whose last reference falls at
@@ -697,6 +645,35 @@ public:
     return it->second;
   }
 
+  /// In/out shape store shared across every node in a chain. Only
+  /// shape-typed graph edges are stored here; tensor-typed edges live in
+  /// :cpp:func:`tensors`.
+  ShapeMap &shapes() noexcept { return shapes_; }
+  const ShapeMap &shapes() const noexcept { return shapes_; }
+
+  /// Returns ``true`` if a shape named ``name`` is currently held.
+  bool HasShape(const std::string &name) const { return shapes_.find(name) != shapes_.end(); }
+
+  /// Inserts or overwrites the shape stored under ``name``.
+  void PutShape(const std::string &name, Shape shape) { shapes_[name] = std::move(shape); }
+
+  /// Removes the shape stored under ``name`` if present. Returns ``true`` if
+  /// an entry was erased, ``false`` otherwise.
+  bool RemoveShape(const std::string &name) { return shapes_.erase(name) > 0; }
+
+  /**
+   * Returns the shape stored under ``name``.
+   *
+   * @throws std::out_of_range if ``name`` is not in the shape store.
+   */
+  const Shape &GetShape(const std::string &name) const {
+    auto it = shapes_.find(name);
+    if (it == shapes_.end()) {
+      throw std::out_of_range("RuntimeContext::GetShape: no shape named '" + name + "'.");
+    }
+    return it->second;
+  }
+
 private:
   TensorMap tensors_;
   KernelContext kernel_ctx_;
@@ -705,9 +682,9 @@ private:
   RuntimeEventLog events_;
   SequenceMap sequences_;
   OnnxMapMap maps_;
+  ShapeMap shapes_;
   bool events_enabled_ = false;
   int verbose_ = 0;
-  RuntimeParameters parameters_;
   bool release_intermediates_ = false;
   int64_t current_node_index_ = -1;
   /// Index of the control-flow node in the parent graph currently being

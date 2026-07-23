@@ -19,18 +19,19 @@ namespace kernel {
 
 namespace {
 
-/// Runs the tree ensemble on the input and returns raw class scores [N, E].
-/// Uses class_treeids/class_nodeids/class_ids/class_weights (classic encoding).
-std::vector<float>
-ComputeClassifierScores(const ClassicNodeMap &node_map, const ClassicLeafMap &leaf_map,
-                        const std::vector<int64_t> &tree_ids, const double *x_values,
-                        int64_t sample_count, int64_t feature_count, int64_t n_classes,
-                        const std::vector<float> &base_values, const std::string &post_transform) {
-  std::vector<float> scores(static_cast<size_t>(sample_count * n_classes), 0.0f);
-
+/// Runs the tree ensemble on the input and writes raw class scores [N, E] into
+/// the caller-provided ``scores`` buffer (allocator-backed output storage).
+/// The buffer must be zero-initialized and hold ``sample_count * n_classes``
+/// floats. Uses class_treeids/class_nodeids/class_ids/class_weights (classic
+/// encoding).
+void ComputeClassifierScores(const ClassicNodeMap &node_map, const ClassicLeafMap &leaf_map,
+                             const std::vector<int64_t> &tree_ids, const double *x_values,
+                             int64_t sample_count, int64_t feature_count, int64_t n_classes,
+                             const std::vector<float> &base_values,
+                             const std::string &post_transform, float *scores) {
   for (int64_t n = 0; n < sample_count; ++n) {
     const double *x_row = x_values + n * feature_count;
-    std::vector<float> accum(static_cast<size_t>(n_classes), 0.0f);
+    float *row = scores + n * n_classes;
 
     for (int64_t tree_id : tree_ids) {
       const int64_t leaf_node_id = TraverseClassicTree(node_map, tree_id, x_row, feature_count);
@@ -39,7 +40,7 @@ ComputeClassifierScores(const ClassicNodeMap &node_map, const ClassicLeafMap &le
         for (const LeafEntry &entry : lit->second) {
           EXT_ENFORCE_INVALID(entry.target_id >= 0 && entry.target_id < n_classes,
                               "ComputeClassifierScores: class_id out of range.");
-          accum[static_cast<size_t>(entry.target_id)] += entry.weight;
+          row[static_cast<size_t>(entry.target_id)] += entry.weight;
         }
       }
     }
@@ -49,17 +50,12 @@ ComputeClassifierScores(const ClassicNodeMap &node_map, const ClassicLeafMap &le
           static_cast<int64_t>(base_values.size()) == n_classes,
           "ComputeClassifierScores: base_values size must equal number of classes.");
       for (int64_t c = 0; c < n_classes; ++c) {
-        accum[static_cast<size_t>(c)] += base_values[static_cast<size_t>(c)];
+        row[static_cast<size_t>(c)] += base_values[static_cast<size_t>(c)];
       }
     }
 
-    ApplyPostTransform(accum, post_transform);
-
-    for (int64_t c = 0; c < n_classes; ++c) {
-      scores[static_cast<size_t>(n * n_classes + c)] = accum[static_cast<size_t>(c)];
-    }
+    ApplyPostTransform(row, static_cast<size_t>(n_classes), post_transform);
   }
-  return scores;
 }
 
 /// Finds the argmax across a row of scores.
@@ -125,18 +121,20 @@ TreeEnsembleClassifier::operator()(const Tensor &x, const std::vector<int64_t> &
   const int64_t n_classes = static_cast<int64_t>(classlabels_int64s.size());
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
 
-  const std::vector<float> scores =
-      ComputeClassifierScores(node_map_, leaf_map_, tree_ids_, x_values.data(), sample_count,
-                              feature_count, n_classes, base_values, post_transform);
+  Tensor z = MakeOutputTensor(DataType::FLOAT, {sample_count, n_classes},
+                              static_cast<size_t>(sample_count * n_classes) * sizeof(float),
+                              ctx_.allocator);
+  float *scores = z.AsFloat();
+  ComputeClassifierScores(node_map_, leaf_map_, tree_ids_, x_values.data(), sample_count,
+                          feature_count, n_classes, base_values, post_transform, scores);
 
   std::vector<int64_t> labels(static_cast<size_t>(sample_count));
   for (int64_t n = 0; n < sample_count; ++n) {
-    const int64_t idx = ArgMaxRow(scores.data() + n * n_classes, n_classes);
+    const int64_t idx = ArgMaxRow(scores + n * n_classes, n_classes);
     labels[static_cast<size_t>(n)] = classlabels_int64s[static_cast<size_t>(idx)];
   }
 
   Tensor y = Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
-  Tensor z = Tensor::FromFloat("", {sample_count, n_classes}, scores, ctx_.allocator);
   return std::make_pair(std::move(y), std::move(z));
 }
 
@@ -154,18 +152,20 @@ std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
   const int64_t n_classes = static_cast<int64_t>(classlabels_strings.size());
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
 
-  const std::vector<float> scores =
-      ComputeClassifierScores(node_map_, leaf_map_, tree_ids_, x_values.data(), sample_count,
-                              feature_count, n_classes, base_values, post_transform);
+  Tensor z = MakeOutputTensor(DataType::FLOAT, {sample_count, n_classes},
+                              static_cast<size_t>(sample_count * n_classes) * sizeof(float),
+                              ctx_.allocator);
+  float *scores = z.AsFloat();
+  ComputeClassifierScores(node_map_, leaf_map_, tree_ids_, x_values.data(), sample_count,
+                          feature_count, n_classes, base_values, post_transform, scores);
 
   std::vector<std::string> labels(static_cast<size_t>(sample_count));
   for (int64_t n = 0; n < sample_count; ++n) {
-    const int64_t idx = ArgMaxRow(scores.data() + n * n_classes, n_classes);
+    const int64_t idx = ArgMaxRow(scores + n * n_classes, n_classes);
     labels[static_cast<size_t>(n)] = classlabels_strings[static_cast<size_t>(idx)];
   }
 
   Tensor y = Tensor::FromStrings("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, n_classes}, scores, ctx_.allocator);
   return std::make_pair(std::move(y), std::move(z));
 }
 

@@ -146,46 +146,54 @@ inline void FinalizeAggregation(std::vector<float> &accum, const std::vector<int
   }
 }
 
-/// Applies the post_transform to the scores for a single sample.
-/// Only "NONE" is fully supported; other transforms raise an error.
-inline void ApplyPostTransform(std::vector<float> &scores, const std::string &post_transform) {
+/// Applies the post_transform in place to a single sample's scores held in the
+/// contiguous range ``[scores, scores + count)``. Supports "NONE", "SOFTMAX",
+/// "LOGISTIC", and "SOFTMAX_ZERO"; other values raise an error.
+inline void ApplyPostTransform(float *scores, size_t count, const std::string &post_transform) {
   if (post_transform == "NONE") {
     return;
   }
   if (post_transform == "SOFTMAX") {
-    float max_val = *std::max_element(scores.begin(), scores.end());
+    float max_val = *std::max_element(scores, scores + count);
     float sum = 0.0f;
-    for (float &s : scores) {
-      s = std::exp(s - max_val);
-      sum += s;
+    for (size_t i = 0; i < count; ++i) {
+      scores[i] = std::exp(scores[i] - max_val);
+      sum += scores[i];
     }
-    for (float &s : scores) {
-      s /= sum;
+    for (size_t i = 0; i < count; ++i) {
+      scores[i] /= sum;
     }
     return;
   }
   if (post_transform == "LOGISTIC") {
-    for (float &s : scores) {
-      s = 1.0f / (1.0f + std::exp(-s));
+    for (size_t i = 0; i < count; ++i) {
+      scores[i] = 1.0f / (1.0f + std::exp(-scores[i]));
     }
     return;
   }
   if (post_transform == "SOFTMAX_ZERO") {
-    float max_val = *std::max_element(scores.begin(), scores.end());
+    float max_val = *std::max_element(scores, scores + count);
     if (max_val == 0.0f) {
       return;
     }
     float sum = 0.0f;
-    for (float &s : scores) {
-      s = std::exp(s - max_val);
-      sum += s;
+    for (size_t i = 0; i < count; ++i) {
+      scores[i] = std::exp(scores[i] - max_val);
+      sum += scores[i];
     }
-    for (float &s : scores) {
-      s /= sum;
+    for (size_t i = 0; i < count; ++i) {
+      scores[i] /= sum;
     }
     return;
   }
   EXT_THROW_INVALID("ApplyPostTransform: unsupported post_transform: ", post_transform);
+}
+
+/// Applies the post_transform to the scores for a single sample. Supports
+/// "NONE", "SOFTMAX", "LOGISTIC", and "SOFTMAX_ZERO"; other values raise an
+/// error.
+inline void ApplyPostTransform(std::vector<float> &scores, const std::string &post_transform) {
+  ApplyPostTransform(scores.data(), scores.size(), post_transform);
 }
 
 /// Classic tree node record used by TreeEnsembleRegressor and

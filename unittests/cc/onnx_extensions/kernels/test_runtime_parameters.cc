@@ -2,16 +2,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/runtime/runtime_parameters.h"
+#include "onnx_core/runtime/runtime_session.h"
 
 #include <gtest/gtest.h>
 
 #include <thread>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using core::runtime::RuntimeContext;
+using core::runtime::ExecutionPlan;
 using core::runtime::RuntimeParameters;
+using core::runtime::RuntimeSession;
 
 namespace {
 
@@ -52,28 +54,16 @@ TEST(runtime_parameters, GreaterThanOneUsesExactCount) {
   EXPECT_TRUE(params.is_parallel());
 }
 
-TEST(runtime_parameters, RuntimeContextDefaultsToNoParameters) {
-  RuntimeContext rt;
-  EXPECT_EQ(rt.parameters().num_threads, 0);
+TEST(runtime_parameters, RuntimeSessionDefaultsToNoParameters) {
+  ExecutionPlan plan;
+  RuntimeSession session(plan);
+  EXPECT_EQ(session.parameters().num_threads, 0);
 }
 
-TEST(runtime_parameters, RuntimeContextSetParameters) {
-  RuntimeContext rt;
-  rt.set_parameters(RuntimeParameters(3));
-  EXPECT_EQ(rt.parameters().num_threads, 3);
-  EXPECT_EQ(rt.parameters().EffectiveNumThreads(), 3);
-}
-
-TEST(runtime_parameters, SubgraphContextInheritsParameters) {
-  RuntimeContext rt;
-  rt.set_parameters(RuntimeParameters(5));
-  RuntimeContext child = rt.MakeSubgraphContext("body");
-  EXPECT_EQ(child.parameters().num_threads, 5);
-}
-
-TEST(runtime_parameters, FunctionContextInheritsParameters) {
-  RuntimeContext rt;
-  rt.set_parameters(RuntimeParameters(5));
-  RuntimeContext child = rt.MakeFunctionContext();
-  EXPECT_EQ(child.parameters().num_threads, 5);
+TEST(runtime_parameters, RuntimeSessionSetParameters) {
+  ExecutionPlan plan;
+  RuntimeSession session(plan);
+  session.set_parameters(RuntimeParameters(3));
+  EXPECT_EQ(session.parameters().num_threads, 3);
+  EXPECT_EQ(session.parameters().EffectiveNumThreads(), 3);
 }

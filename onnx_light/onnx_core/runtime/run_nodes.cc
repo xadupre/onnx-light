@@ -18,6 +18,8 @@
 #include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/run_nodes_internal.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -941,9 +943,72 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
 
 } // namespace
 
-void RunNode(const NodeProto &node, RuntimeContext &rt) {
-  auto domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
-  const std::string &op_type = node.op_type().value();
+namespace detail {
+
+// Resolves how ``node`` must be dispatched, returning the ready-to-invoke
+// trampoline that performs the actual computation (without any progress
+// printing or event logging). This is the "kernel initialization" step:
+// the (domain, op_type) resolution against the model-local function
+// registry, the control-flow handlers, the user-registered custom kernels
+// and the static :cpp:func:`KernelDispatchTable` is performed once here so
+// that a caller (e.g. :cpp:class:`RuntimeSession`) can prepare every node's
+// kernel up front and then invoke it repeatedly without redoing the lookup.
+//
+// Resolution precedence mirrors the historical inline logic of
+// :cpp:func:`RunNode`: model-local functions override built-ins, then the
+// control-flow operators, then user custom kernels, then the dispatch table.
+// An unsupported ``(domain, op_type)`` is rejected here (at resolution
+// time) with the same diagnostic previously emitted at run time.
+NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
+                               const std::string &op_type) {
+  // A node referring to a model-local FunctionProto (registered by
+  // ``RunModel`` from ``ModelProto::functions()``) takes priority over
+  // the built-in kernel dispatch table so that user-defined functions
+  // override same-named built-ins, matching the ONNX runtime semantics
+  // for model-local functions.
+  if (!rt.functions().empty()) {
+    const std::string fkey = FunctionLookupKey(domain, op_type, node.overload());
+    auto fit = rt.functions().find(fkey);
+    if (fit != rt.functions().end()) {
+      const FunctionProto *func = fit->second;
+      return [func](const NodeProto &n, RuntimeContext &r) { CallModelLocalFunction(n, *func, r); };
+    }
+  }
+
+  if (domain == kDefaultOnnxDomain && op_type == "If") {
+    return RunIfNode;
+  }
+  if (domain == kDefaultOnnxDomain && op_type == "Loop") {
+    return RunLoopNode;
+  }
+  if (domain == kDefaultOnnxDomain && op_type == "Scan") {
+    return RunScanNode;
+  }
+  if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
+    return RunSequenceMapNode;
+  }
+
+  const std::string key = domain + ":" + op_type;
+  // User-registered custom kernels take precedence over built-in
+  // kernel dispatch table entries so callers can override (or
+  // extend) the runtime with their own implementations.
+  auto ckit = rt.custom_kernels().find(key);
+  if (ckit != rt.custom_kernels().end()) {
+    return ckit->second;
+  }
+  const auto &table = KernelDispatchTable();
+  auto it = table.find(key);
+  EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '", op_type, "' in domain '",
+                      domain, "'.");
+  return it->second;
+}
+
+// Invokes an already-resolved kernel for ``node``, wrapping the call with
+// the verbose progress line and (when enabled) the per-node timing event.
+// Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both the
+// resolve-on-demand and the resolve-once execution paths log identically.
+void InvokeResolvedKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
+                          const std::string &op_type, const NodeKernelFn &kernel) {
   PrintNodeProgress(rt, node, domain, op_type);
 
   // Only capture timing and input names when event logging is active.
@@ -957,55 +1022,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
     t0 = std::chrono::steady_clock::now();
   }
 
-  // A node referring to a model-local FunctionProto (registered by
-  // ``RunModel`` from ``ModelProto::functions()``) takes priority over
-  // the built-in kernel dispatch table so that user-defined functions
-  // override same-named built-ins, matching the ONNX runtime semantics
-  // for model-local functions.
-  if (!rt.functions().empty()) {
-    const std::string fkey = FunctionLookupKey(domain, op_type, node.overload());
-    auto fit = rt.functions().find(fkey);
-    if (fit != rt.functions().end()) {
-      CallModelLocalFunction(node, *fit->second, rt);
-      if (logging) {
-        const int64_t duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                        std::chrono::steady_clock::now() - t0)
-                                        .count();
-        std::vector<std::string> inputs;
-        inputs.reserve(static_cast<size_t>(node.input_size()));
-        for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
-          inputs.push_back(node.input(i));
-        }
-        rt.AppendRunNodeEvent(domain, op_type, std::move(inputs), start_time_ns, duration_ns);
-      }
-      return;
-    }
-  }
-
-  if (domain == kDefaultOnnxDomain && op_type == "If") {
-    RunIfNode(node, rt);
-  } else if (domain == kDefaultOnnxDomain && op_type == "Loop") {
-    RunLoopNode(node, rt);
-  } else if (domain == kDefaultOnnxDomain && op_type == "Scan") {
-    RunScanNode(node, rt);
-  } else if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
-    RunSequenceMapNode(node, rt);
-  } else {
-    const std::string key = domain + ":" + op_type;
-    // User-registered custom kernels take precedence over built-in
-    // kernel dispatch table entries so callers can override (or
-    // extend) the runtime with their own implementations.
-    auto ckit = rt.custom_kernels().find(key);
-    if (ckit != rt.custom_kernels().end()) {
-      ckit->second(node, rt);
-    } else {
-      const auto &table = KernelDispatchTable();
-      auto it = table.find(key);
-      EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '", op_type,
-                          "' in domain '", domain, "'.");
-      it->second(node, rt);
-    }
-  }
+  kernel(node, rt);
 
   if (logging) {
     const int64_t duration_ns =
@@ -1020,37 +1037,14 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-namespace {
+} // namespace detail
 
-// Runs the node sequence by replaying the plan's ordered action list: each
-// :cpp:enumerator:`ExecuteActionKind::kExecuteNode` action runs the referenced
-// node, and each kDeleteBuffer / kDeleteShape action frees the intermediate the
-// plan scheduled for release right after that node. The kernels manage their
-// own allocations, so the remaining (lock / allocate / …) actions are
-// informational and skipped here.
-template <class NodeRange>
-void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt, const ExecutionPlan &plan) {
-  for (const ExecuteAction &action : plan.actions()) {
-    switch (action.kind()) {
-    case ExecuteActionKind::kExecuteNode: {
-      const size_t index = action.node_index();
-      rt.set_current_node_index(static_cast<int64_t>(index));
-      RunNode(nodes[index], rt);
-      break;
-    }
-    case ExecuteActionKind::kDeleteBuffer:
-    case ExecuteActionKind::kDeleteShape:
-      rt.Remove(action.name());
-      rt.RemoveSequence(action.name());
-      break;
-    default:
-      break;
-    }
-  }
-  rt.set_current_node_index(-1);
+void RunNode(const NodeProto &node, RuntimeContext &rt) {
+  const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
+  const std::string &op_type = node.op_type().value();
+  NodeKernelFn kernel = detail::ResolveNodeKernel(node, rt, domain, op_type);
+  detail::InvokeResolvedKernel(node, rt, domain, op_type, kernel);
 }
-
-} // namespace
 
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt) {
   for (size_t i = 0; i < nodes.size(); ++i) {
@@ -1062,7 +1056,9 @@ void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext 
 
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt,
               const ExecutionPlan &plan) {
-  RunNodesAndRelease(nodes, rt, plan);
+  (void)nodes;
+  RuntimeSession session(plan);
+  session.Run(rt);
 }
 
 void RunGraph(const GraphProto &graph, RuntimeContext &rt) {

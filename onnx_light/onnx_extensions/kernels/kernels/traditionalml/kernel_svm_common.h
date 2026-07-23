@@ -6,9 +6,7 @@
 
 #include "onnx_core/runtime/simple_tensor.h"
 
-#include <cmath>
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -16,33 +14,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-inline double ComputeSvmKernel(const char *kernel_type, const double *x, const float *sv,
-                               int64_t feature_count, float gamma, float coef0, float degree) {
-  std::string kind = kernel_type == nullptr ? "LINEAR" : std::string(kernel_type);
-  double dot = 0.0;
-  for (int64_t j = 0; j < feature_count; ++j) {
-    dot += x[j] * static_cast<double>(sv[j]);
-  }
-  if (kind == "LINEAR") {
-    return dot;
-  }
-  if (kind == "POLY") {
-    return std::pow(static_cast<double>(gamma) * dot + static_cast<double>(coef0),
-                    static_cast<double>(degree));
-  }
-  if (kind == "RBF") {
-    double sq_norm = 0.0;
-    for (int64_t j = 0; j < feature_count; ++j) {
-      const double d = x[j] - static_cast<double>(sv[j]);
-      sq_norm += d * d;
-    }
-    return std::exp(-static_cast<double>(gamma) * sq_norm);
-  }
-  if (kind == "SIGMOID") {
-    return std::tanh(static_cast<double>(gamma) * dot + static_cast<double>(coef0));
-  }
-  EXT_THROW_INVALID("Unsupported SVM kernel_type: ", kind);
-}
+/// Evaluates the SVM kernel function for a single (sample, support-vector) pair.
+/// Supported ``kernel_type`` values: "LINEAR", "POLY", "RBF", "SIGMOID".
+double ComputeSvmKernel(const char *kernel_type, const double *x, const float *sv,
+                        int64_t feature_count, float gamma, float coef0, float degree);
 
 template <typename T>
 inline std::vector<double> ToDoubleRowMajor(const Tensor &x, int64_t sample_count,
@@ -77,21 +52,10 @@ inline Tensor ToDoubleRowMajorTensor(const Tensor &x, int64_t sample_count, int6
   return values;
 }
 
-inline void ValidateFeatureMatrixShape(const Tensor &x, int64_t &sample_count,
-                                       int64_t &feature_count) {
-  EXT_ENFORCE_INVALID(!x.shape.empty(), "SVM kernels expect input rank 1 or 2.");
-  EXT_ENFORCE_INVALID(x.shape.size() == 1 || x.shape.size() == 2,
-                      "SVM kernels expect input rank 1 or 2.");
-  if (x.shape.size() == 1) {
-    sample_count = 1;
-    feature_count = x.shape[0];
-  } else {
-    sample_count = x.shape[0];
-    feature_count = x.shape[1];
-  }
-  EXT_ENFORCE_INVALID(sample_count >= 0 && feature_count >= 0,
-                      "SVM kernels expect non-negative input dimensions.");
-}
+/// Validates the shape of the feature-matrix input ``x`` and populates
+/// ``sample_count`` and ``feature_count``. Accepts rank-1 (single sample)
+/// and rank-2 (batch) tensors.
+void ValidateFeatureMatrixShape(const Tensor &x, int64_t &sample_count, int64_t &feature_count);
 
 } // namespace kernel
 } // namespace onnx_kernels

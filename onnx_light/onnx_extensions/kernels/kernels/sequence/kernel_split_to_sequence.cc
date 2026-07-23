@@ -85,6 +85,8 @@ void FillSplitSizes(int64_t axis_dim, const Tensor *split, int64_t *sizes) {
   }
   if (split->shape.empty()) {
     const int64_t chunk = ReadScalarSplit(*split);
+    // Empty axis yields a single zero-length chunk (``CountSplitSizes`` returned
+    // 1), so ``sizes[0]`` is a valid slot here.
     if (axis_dim <= 0) {
       sizes[0] = 0;
       return;
@@ -130,8 +132,9 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
   // number of outputs, so it is drawn from the runtime allocator when one is
   // available, falling back to a ``std::vector`` otherwise.
   const int64_t num_sizes = CountSplitSizes(axis_dim, split);
-  // The allocator rejects a zero-byte request; clamp to at least one slot. When
-  // ``num_sizes`` is 0 the buffer is never dereferenced.
+  // The allocator rejects a zero-byte request; clamp to at least one slot.
+  // ``num_sizes`` is 0 only for an omitted ``split`` with an empty axis, in
+  // which case ``FillSplitSizes`` writes nothing and the loop below never runs.
   detail::TemporaryTypedBuffer<int64_t> sizes_buf(
       static_cast<std::size_t>(num_sizes > 0 ? num_sizes : 1), allocator,
       "kernel::SplitToSequence sizes");

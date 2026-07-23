@@ -199,8 +199,7 @@ void RegisterSequenceMapIdentityCase(const std::string &name, const std::vector<
   // Build the input sequence and the body-output rows (identity → inputs).
   const Sequence in_seq = onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(inputs);
   std::vector<std::vector<Tensor>> body_outputs_per_iter = {inputs};
-  std::vector<Sequence> out_seqs =
-      onnx_kernels::kernel::SequenceMap(ctx)(in_seq, body_outputs_per_iter);
+  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(in_seq, body_outputs_per_iter);
 
   // Materialise the (single) output sequence as a stacked tensor.
   std::vector<Tensor> stacked_in(out_seqs[0].values.begin(), out_seqs[0].values.end());
@@ -274,7 +273,7 @@ void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
 
   // Compose expected output sequences via the reference kernel.
   std::vector<std::vector<Tensor>> body_outputs_per_iter = {x0, x1};
-  std::vector<Sequence> out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
+  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
       onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(x0), body_outputs_per_iter);
 
   // Materialise both output sequences as stacked tensors.
@@ -376,7 +375,7 @@ void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<Test
 
   // Assemble through the reference kernel and stack into a single output.
   std::vector<std::vector<Tensor>> body_outputs_per_iter = {y_per_iter};
-  std::vector<Sequence> out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
+  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
       onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(x0), body_outputs_per_iter);
   Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(
       {out_seqs[0].values.begin(), out_seqs[0].values.end()});
@@ -462,7 +461,7 @@ void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
   }
 
   std::vector<std::vector<Tensor>> body_outputs_per_iter = {y_per_iter};
-  std::vector<Sequence> out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
+  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
       onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(x0), body_outputs_per_iter);
   Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(
       {out_seqs[0].values.begin(), out_seqs[0].values.end()});
@@ -541,7 +540,7 @@ void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<Test
   }
 
   std::vector<std::vector<Tensor>> body_outputs_per_iter = {y_per_iter};
-  std::vector<Sequence> out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
+  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
       onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(x), body_outputs_per_iter);
   Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(
       {out_seqs[0].values.begin(), out_seqs[0].values.end()});
@@ -618,7 +617,7 @@ void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
   }
 
   std::vector<std::vector<Tensor>> body_outputs_per_iter = {y0_per_iter, y1_per_iter};
-  std::vector<Sequence> out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
+  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
       onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(x0), body_outputs_per_iter);
 
   // Materialise both output sequences as stacked tensors.

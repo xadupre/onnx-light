@@ -330,9 +330,8 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
 // :class:`Loop` only operates on tensor state.
 void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, const Tensor &m_tensor,
                               const Tensor &cond_tensor, const std::vector<bool> &is_seq_state,
-                              std::vector<Tensor> tensor_state,
-                              std::vector<Sequence> sequence_state, std::size_t k,
-                              RuntimeContext &rt) {
+                              std::vector<Tensor> tensor_state, Sequences sequence_state,
+                              std::size_t k, RuntimeContext &rt) {
   const std::size_t n = is_seq_state.size();
 
   int64_t max_trip = std::numeric_limits<int64_t>::max();
@@ -500,7 +499,7 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
   const std::size_t n_inputs = static_cast<std::size_t>(node.input_size() - 2);
   std::vector<bool> is_seq_state(n_inputs, false);
   std::vector<Tensor> tensor_state(n_inputs);
-  std::vector<Sequence> sequence_state(n_inputs);
+  Sequences sequence_state(n_inputs);
   bool any_sequence_state = false;
   for (std::size_t i = 0; i < n_inputs; ++i) {
     const int idx = static_cast<int>(2 + i);
@@ -827,7 +826,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
                       "RunNode: SequenceMap: no SequenceMap packing function has been "
                       "registered; call onnx_kernels::RegisterKernelFunctions() before "
                       "running a model that uses SequenceMap.");
-  std::vector<Sequence> outputs = pack_fn(rt, input_sequence, body_outputs_per_iter);
+  Sequences outputs = pack_fn(rt, input_sequence, body_outputs_per_iter);
   EXT_ENFORCE_INVALID(outputs.size() == m,
                       "RunNode: kernel::SequenceMap returned an unexpected number of "
                       "output sequences.");

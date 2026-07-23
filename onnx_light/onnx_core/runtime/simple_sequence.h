@@ -62,6 +62,21 @@ struct Sequence {
   Tensor &at(std::size_t i) { return values.at(i); }
 };
 
+/**
+ * Sequences — thin wrapper deriving from ``std::vector<Sequence>``.
+ *
+ * Companion to :cpp:class:`Tensors`: provides converting constructors
+ * from ``std::vector<Sequence>`` for interoperability while allowing
+ * future ``Sequence``-list-specific behavior to be added in one place.
+ */
+class Sequences : public std::vector<Sequence> {
+public:
+  using std::vector<Sequence>::vector;
+  Sequences() = default;
+  Sequences(const std::vector<Sequence> &values) : std::vector<Sequence>(values) {}
+  Sequences(std::vector<Sequence> &&values) : std::vector<Sequence>(std::move(values)) {}
+};
+
 } // namespace runtime
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

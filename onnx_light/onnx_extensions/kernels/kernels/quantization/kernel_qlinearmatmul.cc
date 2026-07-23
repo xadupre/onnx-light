@@ -158,7 +158,8 @@ void RunQLinearMatMul(const Tensor &a, int32_t a_zp, float a_scale, const Tensor
   const float combined_scale = a_scale * b_scale / y_scale;
   const float y_zp_f = static_cast<float>(y_zp);
 
-  std::vector<int64_t> batch_idx(batch_rank, 0);
+  Shape batch_idx;
+  batch_idx.assign(batch_rank, 0);
   for (int64_t batch = 0; batch < batch_count; ++batch) {
     int64_t a_base = 0;
     int64_t b_base = 0;

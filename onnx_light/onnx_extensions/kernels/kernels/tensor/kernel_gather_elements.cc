@@ -77,19 +77,22 @@ void GatherElements::operator()(const Tensor &data, const Tensor &indices, int64
   const std::size_t elem_size = ElementSize(data.data_type);
 
   // Row-major strides for data and indices (in elements).
-  std::vector<int64_t> data_strides(static_cast<std::size_t>(r), 1);
+  onnx_kernels::Shape data_strides;
+  data_strides.assign(static_cast<std::size_t>(r), 1);
   for (int64_t k = r - 2; k >= 0; --k) {
     data_strides[static_cast<std::size_t>(k)] =
         data_strides[static_cast<std::size_t>(k + 1)] * data.shape[static_cast<std::size_t>(k + 1)];
   }
-  std::vector<int64_t> idx_strides(static_cast<std::size_t>(r), 1);
+  onnx_kernels::Shape idx_strides;
+  idx_strides.assign(static_cast<std::size_t>(r), 1);
   for (int64_t k = r - 2; k >= 0; --k) {
     idx_strides[static_cast<std::size_t>(k)] = idx_strides[static_cast<std::size_t>(k + 1)] *
                                                indices.shape[static_cast<std::size_t>(k + 1)];
   }
 
   const int64_t total = idx_tensor.element_count();
-  std::vector<int64_t> coord(static_cast<std::size_t>(r), 0);
+  onnx_kernels::Shape coord;
+  coord.assign(static_cast<std::size_t>(r), 0);
   for (int64_t out_idx = 0; out_idx < total; ++out_idx) {
     // Decode coord from out_idx using indices' (== output's) strides.
     int64_t remaining = out_idx;

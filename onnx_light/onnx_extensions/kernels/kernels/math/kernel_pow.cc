@@ -7,6 +7,7 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -207,26 +208,26 @@ void PowDispatchHalfExp(const Tensor &x, const Tensor &y, Tensor &output,
 
 void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
                          const detail::BroadcastInfo &bi, detail::HalfDecodeFunc decode,
-                         detail::HalfEncodeFunc encode) {
+                         detail::HalfEncodeFunc encode, RawBufferAllocator *allocator) {
   switch (y.data_type) {
   case DataType::FLOAT:
     return PowDispatchHalfExp<float>(x, y, output, bi, decode, encode);
   case DataType::FLOAT16: {
     const int64_t ny = y.element_count();
-    std::vector<float> fy(static_cast<size_t>(ny));
+    detail::TemporaryTypedBuffer<float> fy(static_cast<size_t>(ny), allocator, kPowName);
     const uint16_t *raw_py = reinterpret_cast<const uint16_t *>(y.bytes());
     for (int64_t i = 0; i < ny; ++i)
-      fy[static_cast<size_t>(i)] = Float16BitsToFloat(raw_py[i]);
+      fy.data()[static_cast<size_t>(i)] = Float16BitsToFloat(raw_py[i]);
     const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
     uint16_t *pz = reinterpret_cast<uint16_t *>(output.mutable_bytes());
     return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
   }
   case DataType::BFLOAT16: {
     const int64_t ny = y.element_count();
-    std::vector<float> fy(static_cast<size_t>(ny));
+    detail::TemporaryTypedBuffer<float> fy(static_cast<size_t>(ny), allocator, kPowName);
     const uint16_t *raw_py = reinterpret_cast<const uint16_t *>(y.bytes());
     for (int64_t i = 0; i < ny; ++i)
-      fy[static_cast<size_t>(i)] = Bfloat16BitsToFloat(raw_py[i]);
+      fy.data()[static_cast<size_t>(i)] = Bfloat16BitsToFloat(raw_py[i]);
     const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
     uint16_t *pz = reinterpret_cast<uint16_t *>(output.mutable_bytes());
     return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
@@ -279,8 +280,8 @@ const char *BaseDtypeName(int32_t dtype) {
   }
 }
 
-void PowDispatch(const Tensor &x, const Tensor &y, Tensor &output,
-                 const detail::BroadcastInfo &bi) {
+void PowDispatch(const Tensor &x, const Tensor &y, Tensor &output, const detail::BroadcastInfo &bi,
+                 RawBufferAllocator *allocator) {
   switch (x.data_type) {
   case DataType::FLOAT:
     return PowDispatchBase<float>(x, y, output, bi);
@@ -289,9 +290,10 @@ void PowDispatch(const Tensor &x, const Tensor &y, Tensor &output,
   case DataType::INT64:
     return PowDispatchBase<int64_t>(x, y, output, bi);
   case DataType::FLOAT16:
-    return PowDispatchHalfBase(x, y, output, bi, Float16BitsToFloat, FloatToFloat16Bits);
+    return PowDispatchHalfBase(x, y, output, bi, Float16BitsToFloat, FloatToFloat16Bits, allocator);
   case DataType::BFLOAT16:
-    return PowDispatchHalfBase(x, y, output, bi, Bfloat16BitsToFloat, FloatToBfloat16Bits);
+    return PowDispatchHalfBase(x, y, output, bi, Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                               allocator);
   default:
     EXT_THROW_INVALID(kPowName, ": unsupported data type ", x.data_type, kSupportedBaseTypesMsg);
   }
@@ -302,8 +304,9 @@ Tensor Pow::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) con
   const detail::BroadcastInfo bi = BroadcastShape(x, y);
   const size_t elem_size = BaseDtypeSize(x.data_type);
   const size_t z_n_bytes = static_cast<size_t>(bi.element_count) * elem_size;
-  Tensor z = MakeOutputTensor(x.data_type, bi.shape, z_n_bytes, rt ? rt->allocator() : nullptr);
-  PowDispatch(x, y, z, bi);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  Tensor z = MakeOutputTensor(x.data_type, bi.shape, z_n_bytes, allocator);
+  PowDispatch(x, y, z, bi, allocator);
   return z;
 }
 
@@ -313,7 +316,8 @@ void Pow::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   const size_t expected_bytes = static_cast<size_t>(bi.element_count) * elem_size;
   detail::CheckPreallocatedOutput(kPowName, BaseDtypeName(x.data_type), x.data_type, bi.shape,
                                   expected_bytes, output);
-  PowDispatch(x, y, output, bi);
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
+  PowDispatch(x, y, output, bi, allocator);
 }
 
 } // namespace kernel

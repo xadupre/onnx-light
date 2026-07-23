@@ -2254,6 +2254,38 @@ TEST(KernelClass, PowClassSupportsMixedBaseExponentDtypes) {
   }
 }
 
+TEST(KernelClass, PowUsesAllocatorForFloat16ExponentDecode) {
+  // FLOAT16 base with a FLOAT16 exponent decodes the exponent into a transient
+  // float buffer. When the RuntimeContext carries an allocator that buffer must
+  // be drawn from it (via TemporaryTypedBuffer) and freed before returning,
+  // leaving only the output allocation alive.
+  const KernelContext ctx{DefaultOpset(15)};
+  Pow pow_kernel{ctx};
+  Tensor x32 = Tensor::FromFloat("", {3}, {2.0f, 3.0f, 4.0f});
+  Tensor y32 = Tensor::FromFloat("", {3}, {2.0f, 2.0f, 2.0f});
+  Tensor x16 =
+      onnx_kernels::DemoteFromFloat32(x32, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
+  Tensor y16 =
+      onnx_kernels::DemoteFromFloat32(y32, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
+
+  // Capacity 2: the persistent output plus the transient decode buffer that
+  // must be alive simultaneously during the computation.
+  SimpleRawBufferAllocator alloc(2);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  Tensor z16 = pow_kernel(x16, y16, &rt);
+  EXPECT_TRUE(z16.has_allocation());
+  // The transient exponent decode buffer has been freed, leaving only the output.
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  ASSERT_EQ(z16.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
+  const Tensor z = onnx_kernels::PromoteToFloat32(z16);
+  const float *pz = z.AsFloat();
+  EXPECT_NEAR(pz[0], 4.0f, 1e-2f);
+  EXPECT_NEAR(pz[1], 9.0f, 1e-2f);
+  EXPECT_NEAR(pz[2], 16.0f, 1e-2f);
+}
+
 TEST(KernelClass, PowInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(15)};
   Pow pow_kernel{ctx};

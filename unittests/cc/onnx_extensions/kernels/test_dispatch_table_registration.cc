@@ -18,7 +18,7 @@ namespace {
 // `core::runtime::KernelDispatchTable()` starts out empty: `onnx_core` must
 // not depend on `onnx_kernels`, so it cannot self-populate with the
 // built-in `onnx_kernels` operator kernels. Any test in this binary that
-// exercises `core::runtime::RunNode` / `RunModel` / `RunGraph` (rather than
+// exercises `core::runtime::RunNode` / `RuntimeSession` (rather than
 // instantiating a kernel class directly) therefore needs
 // `onnx_kernels::RegisterKernelFunctions()` to have run first. Registering
 // it once here, via a global test environment, covers every test in

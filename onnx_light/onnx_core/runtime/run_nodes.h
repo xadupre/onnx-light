@@ -16,20 +16,17 @@
 /**
  * @file run_nodes.h
  * @brief Tiny dispatcher that runs the matching backend test
- *        kernel for one ``NodeProto`` or for a list of nodes (an
- *        iterator), mirroring the per-operator
+ *        kernel for one ``NodeProto``, mirroring the per-operator
  *        :cpp:func:`core::shapes::ShapesContext::ComputeShapeNode` /
  *        :cpp:func:`core::shapes::ShapesContext::ComputeShapes` pair used
  *        by ``onnx_shapes`` for shape inference.
  *
  * Inputs and outputs are exchanged through a name-keyed
- * :cpp:type:`TensorMap` (owned by :cpp:class:`RuntimeContext`) so a
- * chain of nodes can be evaluated in topological order (as required
- * by the ONNX specification for ``GraphProto::node()``). A node is
+ * :cpp:type:`TensorMap` (owned by :cpp:class:`RuntimeContext`). A node is
  * dispatched by its ``(domain, op_type)`` pair through
  * :cpp:func:`KernelDispatchTable`; new operators are added by
  * registering a single new entry in that table without changing
- * :cpp:func:`RunNode` / :cpp:func:`RunNodes`.
+ * :cpp:func:`RunNode`.
  *
  * Only a small, working baseline of operators is registered today
  * (the simple element-wise ``ai.onnx`` ops ``Abs``, ``Add``, ``Div``,
@@ -37,20 +34,29 @@
  * extensible: as more kernels become wirable through a uniform
  * ``NodeProto``-driven call site, additional entries can be added
  * to ``KernelDispatchTable`` and they become callable from
- * :cpp:func:`RunNode` / :cpp:func:`RunNodes` automatically.
+ * :cpp:func:`RunNode` automatically.
+ *
+ * Whenever a whole node *list* (as opposed to a single node) needs to be
+ * executed — a graph, a function body, or a subgraph — callers build an
+ * :cpp:class:`ExecutionPlan` for it and drive it through a
+ * :cpp:class:`RuntimeSession` themselves (:cpp:func:`RunSubgraph` does this
+ * internally for embedded control-flow subgraphs since it also has to
+ * propagate the subgraph's outputs back to the caller).
  *
  * In addition to the static :cpp:func:`KernelDispatchTable`,
  * :cpp:func:`RunNode` also consults
  * :cpp:func:`RuntimeContext::functions` for model-local functions
  * (``ModelProto::functions``). When a node's
  * ``(domain, op_type, overload)`` triple matches a registered
- * :cpp:type:`FunctionProto`, the call is dispatched to
- * :cpp:func:`RunFunction` with a fresh child :cpp:class:`RuntimeContext`
- * bound to the function's formal inputs; the function's formal outputs
- * are then propagated back to the caller under the names declared by
- * ``node.output``. :cpp:func:`RunModel` populates that registry from
- * ``model.functions()`` before delegating to :cpp:func:`RunGraph`, so
- * nodes referring to local functions are resolved transparently.
+ * :cpp:type:`FunctionProto`, the call is dispatched to a fresh child
+ * :cpp:class:`RuntimeContext` bound to the function's formal inputs and run
+ * through a :cpp:class:`RuntimeSession`; the function's formal outputs are
+ * then propagated back to the caller under the names declared by
+ * ``node.output``. :cpp:func:`RegisterModelFunctions` populates that
+ * registry from a ``ModelProto``'s ``functions()`` field so nodes referring
+ * to local functions are resolved transparently once the caller runs the
+ * model's graph through its own :cpp:class:`ExecutionPlan` /
+ * :cpp:class:`RuntimeSession`.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -101,116 +107,23 @@ namespace runtime {
 void RunNode(const NodeProto &node, RuntimeContext &rt);
 
 /**
- * Runs :cpp:func:`RunNode` on every node of ``nodes`` in order.
- *
- * The sequence must be topologically sorted with respect to data
- * dependencies (as required by the ONNX specification for
- * ``GraphProto::node``) so that every input of a node has already
- * been produced — either as a pre-existing graph input/initializer
- * carried in ``rt.tensors()`` or as the output of an earlier node
- * in ``nodes`` — by the time the node is processed.
- *
- * @param nodes The list of nodes to execute, in topological order.
- * @param rt    In/out runtime context seeded with the graph inputs
- *              and initializers in ``rt.tensors()``; on return it
- *              additionally contains every node output.
- *
- * @throws std::invalid_argument if any node cannot be dispatched.
- */
-void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt);
-
-/**
- * Release-aware overload of :cpp:func:`RunNodes`. Runs every node of
- * ``nodes`` in order and, after each node, frees from ``rt`` every
- * intermediate whose last reference has been reached according to
- * ``plan``. Names that the caller seeded into ``rt`` on top of
- * ``plan.keep()`` (graph inputs / initializers / outputs already
- * covered by the plan) are preserved automatically — they are
- * detected at run start and excluded from the release loop.
- *
- * The plan is *not* built here: callers (typically
- * :cpp:func:`RunGraph` / :cpp:func:`RunFunction`) obtain it via
- * :cpp:func:`RuntimeContext::GetExecutionPlan` so the analysis is
- * paid only once per model and reused across every subsequent run.
- *
- * @param nodes The list of nodes to execute, in topological order.
- * @param rt    In/out runtime context.
- * @param plan  Precomputed release schedule covering ``nodes``.
- */
-void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt,
-              const ExecutionPlan &plan);
-
-/**
- * Generic iterator overload of :cpp:func:`RunNodes`. Accepts any
- * input-iterator range whose ``value_type`` (after dereferencing) is
- * convertible to ``const NodeProto &``, so callers can drive the
- * dispatcher from ``std::vector<NodeProto>``, ``std::list<NodeProto>``
- * or any other container — not only ``RepeatedProtoField``.
- */
-template <class InputIt> void RunNodes(InputIt first, InputIt last, RuntimeContext &rt) {
-  int64_t index = 0;
-  for (auto it = first; it != last; ++it, ++index) {
-    rt.set_current_node_index(index);
-    RunNode(*it, rt);
-  }
-  rt.set_current_node_index(-1);
-}
-
-/**
- * Runs all nodes in a ``GraphProto`` using the provided runtime context.
- *
- * Before executing the node sequence the function seeds ``rt.tensors()``
- * with every ``TensorProto`` in ``graph.initializer()``, so that
- * downstream nodes can look up constant values by name.  Graph inputs
- * that the caller has already placed in ``rt.tensors()`` are left as-is.
- *
- * @param graph The graph to evaluate. Its ``node`` list must already be
- *              in topological order (as required by the ONNX spec).
- * @param rt    In/out runtime context seeded with the graph inputs;
- *              on return ``rt.tensors()`` additionally contains every
- *              node output and every initializer.
- *
- * @throws std::invalid_argument if any node cannot be dispatched.
- */
-void RunGraph(const GraphProto &graph, RuntimeContext &rt);
-
-/**
- * Runs all nodes in a ``FunctionProto`` using the provided runtime context.
- *
- * The caller is responsible for inserting the function's input tensors
- * into ``rt.tensors()`` before calling this function.  On return
- * ``rt.tensors()`` additionally contains every node output.
- *
- * @param func The function to evaluate. Its ``node`` list must already be
- *             in topological order.
- * @param rt   In/out runtime context seeded with the function's inputs;
- *             on return it additionally contains every node output.
- *
- * @throws std::invalid_argument if any node cannot be dispatched.
- */
-void RunFunction(const FunctionProto &func, RuntimeContext &rt);
-
-/**
- * Runs the graph embedded in a ``ModelProto`` using the provided runtime
- * context.
- *
- * Before delegating to :cpp:func:`RunGraph`, every ``FunctionProto`` in
- * ``model.functions()`` is registered in
+ * Registers every ``FunctionProto`` in ``model.functions()`` in
  * :cpp:func:`RuntimeContext::functions` so that nodes referring to a
- * model-local function by ``(domain, op_type, overload)`` are
- * dispatched through :cpp:func:`RunFunction` rather than the static
- * :cpp:func:`KernelDispatchTable`. The caller is responsible for
- * inserting the model's input tensors into ``rt.tensors()`` beforehand.
+ * model-local function by ``(domain, op_type, overload)`` are dispatched
+ * to it rather than the static :cpp:func:`KernelDispatchTable`.
  *
- * @param model The model whose ``graph`` field will be evaluated.
- * @param rt    In/out runtime context seeded with the model inputs;
- *              on return it additionally contains every node output and
- *              every graph initializer.
+ * Callers running a ``ModelProto``'s graph must call this once (before
+ * building the graph's :cpp:class:`ExecutionPlan` and driving it through a
+ * :cpp:class:`RuntimeSession`) so that any node referring to a model-local
+ * function resolves correctly; this function itself does not run any
+ * nodes.
  *
- * @throws std::invalid_argument if the model has no graph or any node
- *         cannot be dispatched.
+ * @param model The model whose ``functions()`` are registered.
+ * @param rt    In/out runtime context whose function registry is updated.
+ *
+ * @throws std::invalid_argument if ``model`` has no graph.
  */
-void RunModel(const ModelProto &model, RuntimeContext &rt);
+void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt);
 
 /**
  * Evaluates a subgraph in a fresh child :cpp:class:`RuntimeContext` that
@@ -218,6 +131,11 @@ void RunModel(const ModelProto &model, RuntimeContext &rt);
  * seeded with ``bindings`` (typically the formal-input ↔ actual-input
  * tensor pairs for the subgraph). Returns the subgraph's outputs in the
  * order declared by ``graph.output()``.
+ *
+ * The subgraph is executed the same way as any other node list: its
+ * initializers are seeded into the child context and its cached
+ * :cpp:class:`ExecutionPlan` is driven through a fresh
+ * :cpp:class:`RuntimeSession`.
  *
  * When the caller's context has event logging enabled
  * (:cpp:func:`RuntimeContext::events_enabled`), child events are appended

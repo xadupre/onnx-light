@@ -14,7 +14,7 @@ namespace onnx_backend_test {
 using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-namespace)
 
 // ---------------------------------------------------------------------------
-// Backend test cases that require the full ``RunModel`` runtime (rather
+// Backend test cases that require the full model-run runtime (rather
 // than a direct single-kernel invocation) because the top-level graph
 // invokes user-declared model-local ``FunctionProto`` entries — and, in
 // particular, exercises a function that calls another function.
@@ -28,7 +28,7 @@ using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-n
 /// Registers a test case where a model-local function in domain
 /// ``"outer"`` (``SquareThenAdd``) calls another model-local function in
 /// domain ``"inner"`` (``Square``). Exercises cross-domain function-to-
-/// function dispatch via ``RunModel``.
+/// function dispatch via a full model run (RegisterModelFunctions + RuntimeSession).
 ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterFunctionCallsFunctionAcrossDomainsCase(std::vector<TestCase> &registry,
                                                TestMode mode = TestMode::TEST);

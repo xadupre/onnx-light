@@ -51,6 +51,31 @@ Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *alloc
 Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator = nullptr);
 
 /**
+ * Seeds ``rt.tensors()`` with every initializer of ``graph`` (names the
+ * caller already provided in ``rt`` are left as-is) and then executes
+ * ``graph.node()`` by building (or reusing) the graph's cached
+ * :cpp:class:`ExecutionPlan` and driving it through a fresh
+ * :cpp:class:`RuntimeSession`. Every node list the runtime executes goes
+ * through this same kernel-resolution / release-schedule machinery so no
+ * call site drives node dispatch by hand.
+ */
+void RunGraphNodesViaSession(const GraphProto &graph, RuntimeContext &rt) {
+  const auto &inits = graph.initializer();
+  for (size_t i = 0; i < inits.size(); ++i) {
+    const TensorProto &tp = inits[i];
+    const std::string init_name = tp.name();
+    // Only insert if the caller has not already provided a value for this
+    // name (i.e. runtime overrides of initializers are respected).
+    if (!rt.Has(init_name)) {
+      rt.Set(init_name, TensorFromProto(tp), RuntimeEventKind::kInitializer);
+    }
+  }
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  session.Run(rt);
+}
+
+/**
  * Creates a deep copy of a tensor before it leaves a child RuntimeContext.
  *
  * @param tensor Tensor to clone.
@@ -209,7 +234,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   for (auto &kv : bindings) {
     child.Put(kv.first, std::move(kv.second), RuntimeEventKind::kInput);
   }
-  RunGraph(graph, child);
+  RunGraphNodesViaSession(graph, child);
 
   if (rt.events_enabled()) {
     for (auto &ev : child.events()) {
@@ -269,7 +294,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string branch_attr = taken ? "then_branch" : "else_branch";
 
   RuntimeContext child = rt.MakeSubgraphContext(branch_attr);
-  RunGraph(branch, child);
+  RunGraphNodesViaSession(branch, child);
 
   if (rt.events_enabled()) {
     for (auto &ev : child.events()) {
@@ -341,7 +366,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         child.Put(bname, std::move(t), RuntimeEventKind::kInput);
       }
     }
-    RunGraph(body, child);
+    RunGraphNodesViaSession(body, child);
 
     if (rt.events_enabled()) {
       for (auto &ev : child.events()) {
@@ -920,7 +945,9 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
   for (size_t i = 0; i < bound_func.node().size(); ++i) {
     BindRefAttributes(bound_func.ref_node()[i], attr_map);
   }
-  RunFunction(bound_func, child);
+  const ExecutionPlan &plan = child.GetExecutionPlan(bound_func);
+  RuntimeSession session(plan);
+  session.Run(child);
 
   // Copy the function's formal outputs back into the caller's tensor
   // map under the names declared by the node's output list.
@@ -962,7 +989,7 @@ namespace detail {
 NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
                                const std::string &op_type) {
   // A node referring to a model-local FunctionProto (registered by
-  // ``RunModel`` from ``ModelProto::functions()``) takes priority over
+  // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
   // override same-named built-ins, matching the ONNX runtime semantics
   // for model-local functions.
@@ -1046,63 +1073,19 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   detail::InvokeResolvedKernel(node, rt, domain, op_type, kernel);
 }
 
-void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt) {
-  for (size_t i = 0; i < nodes.size(); ++i) {
-    rt.set_current_node_index(static_cast<int64_t>(i));
-    RunNode(nodes[i], rt);
-  }
-  rt.set_current_node_index(-1);
-}
-
-void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt,
-              const ExecutionPlan &plan) {
-  (void)nodes;
-  RuntimeSession session(plan);
-  session.Run(rt);
-}
-
-void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
-  // Seed the tensor map with all graph initializers.
-  const auto &inits = graph.initializer();
-  for (size_t i = 0; i < inits.size(); ++i) {
-    const TensorProto &tp = inits[i];
-    const std::string init_name = tp.name();
-    // Only insert if the caller has not already provided a value for this
-    // name (i.e. runtime overrides of initializers are respected).
-    if (!rt.Has(init_name)) {
-      rt.Set(init_name, TensorFromProto(tp), RuntimeEventKind::kInitializer);
-    }
-  }
-  if (!rt.release_intermediates()) {
-    RunNodes(graph.node(), rt);
-    return;
-  }
-  // Reuse the cached :cpp:class:`ExecutionPlan` for ``graph`` (built
-  // on first use) so the release analysis is paid only once across
-  // every invocation of the same model.
-  RunNodes(graph.node(), rt, rt.GetExecutionPlan(graph));
-}
-
-void RunFunction(const FunctionProto &func, RuntimeContext &rt) {
-  if (!rt.release_intermediates()) {
-    RunNodes(func.node(), rt);
-    return;
-  }
-  RunNodes(func.node(), rt, rt.GetExecutionPlan(func));
-}
-
-void RunModel(const ModelProto &model, RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(model.has_graph(), "RunModel: the ModelProto does not contain a graph.");
+void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
+  EXT_ENFORCE_INVALID(model.has_graph(),
+                      "RegisterModelFunctions: the ModelProto does not contain a graph.");
   // Register every model-local function so that nodes referring to
   // them by (domain, op_type, overload) are dispatched to
-  // :cpp:func:`RunFunction` rather than rejected as unsupported ops.
+  // :cpp:func:`CallModelLocalFunction` rather than rejected as unsupported
+  // ops.
   const auto &fns = model.functions();
   for (size_t i = 0; i < fns.size(); ++i) {
     const FunctionProto &f = fns[i];
     const std::string key = FunctionLookupKey(f.domain(), f.name(), f.overload());
     rt.functions()[key] = &f;
   }
-  RunGraph(model.ref_graph(), rt);
 }
 
 } // namespace runtime

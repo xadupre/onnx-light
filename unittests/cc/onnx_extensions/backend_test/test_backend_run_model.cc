@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
@@ -22,10 +23,13 @@ using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
 using core::runtime::DataType;
+using core::runtime::ExecutionPlan;
 using core::runtime::Map;
+using core::runtime::RegisterModelFunctions;
 using core::runtime::RuntimeContext;
+using core::runtime::RuntimeSession;
 using core::runtime::Tensor;
-using onnx_kernels::RunModel;
+using core::runtime::TensorFromProto;
 using onnx_kernels::kernel::KernelContext;
 
 namespace Test {
@@ -52,14 +56,34 @@ void ExpectTensorBitEqual(const Tensor &actual, const Tensor &expected) {
             std::vector<uint8_t>(expected.bytes(), expected.bytes() + expected.size_bytes()));
 }
 
-// Runs ``RunModel`` on every backend test case whose top-level graph contains
-// a single node whose ``op_type`` matches ``op_type``, and verifies that the
-// computed outputs match the expected outputs of every ``DataSet``. The
-// per-case dataset tensors carry the graph input/output names (see
-// :cpp:func:`Expect`), so we can wire them by name into the
+// Registers `model`'s local functions in `rt`, seeds `model.graph()`'s
+// initializers into `rt`, and runs the graph by building its ExecutionPlan
+// and driving it through a fresh RuntimeSession. This is what the removed
+// `RunModel` used to do internally; every call site now builds the
+// ExecutionPlan/RuntimeSession itself.
+void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
+  RegisterModelFunctions(model, rt);
+  const GraphProto &graph = model.ref_graph();
+  const auto &inits = graph.initializer();
+  for (size_t i = 0; i < inits.size(); ++i) {
+    const TensorProto &tp = inits[i];
+    const std::string init_name = tp.name();
+    if (!rt.Has(init_name)) {
+      rt.Set(init_name, TensorFromProto(tp), core::runtime::RuntimeEventKind::kInitializer);
+    }
+  }
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  session.Run(rt);
+}
+
+// Runs the model (via `RunModelViaSession`) on every backend test case whose top-level graph
+// contains a single node whose ``op_type`` matches ``op_type``, and verifies that the computed
+// outputs match the expected outputs of every ``DataSet``. The per-case dataset tensors carry the
+// graph input/output names (see :cpp:func:`Expect`), so we can wire them by name into the
 // :cpp:class:`RuntimeContext` directly. The expected outputs in the
 // ``cases_*`` registry are themselves produced by the very same kernels that
-// :cpp:func:`RunModel` will dispatch to, so a bit-exact comparison is
+// :cpp:func:`RunModelViaSession` will dispatch to, so a bit-exact comparison is
 // appropriate.
 //
 // Evaluates the optional ``accept_test_case`` predicate once per
@@ -101,7 +125,8 @@ void RunBackendCasesFor(const std::string &op_type,
         rt.PutMap(m.name, m);
       }
 
-      ASSERT_NO_THROW(RunModel(tc.model(), rt)) << "RunModel threw for case " << tc.name;
+      ASSERT_NO_THROW(RunModelViaSession(tc.model(), rt))
+          << "Running the model threw for case " << tc.name;
 
       for (const Tensor &expected : ds.outputs) {
         ASSERT_TRUE(rt.Has(expected.name))
@@ -128,7 +153,7 @@ void RunBackendCasesFor(
 // One TEST per kernel currently registered in ``KernelDispatchTable``
 // (see ``onnx_kernels/run_nodes.cc``). When a new kernel is registered there
 // the corresponding TEST below should be added so its backend cases are
-// exercised through the full :cpp:func:`RunModel` path (and therefore catch
+// exercised through the full model-run path (and therefore catch
 // regressions in graph wiring, kernel dispatch and the kernel itself in one
 // shot).
 
@@ -516,7 +541,8 @@ TEST(BackendRunModel, SequenceMap) {
       for (const Tensor &t : ds.inputs) {
         rt.Set(t.name, t);
       }
-      ASSERT_NO_THROW(RunModel(tc.model(), rt)) << "RunModel threw for case " << tc.name;
+      ASSERT_NO_THROW(RunModelViaSession(tc.model(), rt))
+          << "Running the model threw for case " << tc.name;
 
       // Each expected output is the stacked-tensor materialisation of
       // the corresponding output sequence (see

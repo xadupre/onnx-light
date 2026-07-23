@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 
 #include <cstring>
 #include <stdexcept>
@@ -72,9 +73,22 @@ Tensors If::operator()(RuntimeContext &rt, const Tensor &cond, const GraphProto 
   // Run the selected subgraph in a fresh child context whose tensor map and
   // model-local function registry are inherited from the caller's context
   // so the subgraph can read outer-scope values, while writes produced by
-  // the subgraph remain local and do not pollute ``rt``.
+  // the subgraph remain local and do not pollute ``rt``. Seed the branch's
+  // initializers (if any) and drive its cached ExecutionPlan through a
+  // fresh RuntimeSession, exactly like every other node list the runtime
+  // executes.
   RuntimeContext child = rt.MakeSubgraphContext(branch_name);
-  RunGraph(branch, child);
+  const auto &inits = branch.initializer();
+  for (size_t i = 0; i < inits.size(); ++i) {
+    const TensorProto &tp = inits[i];
+    const std::string init_name = tp.name();
+    if (!child.Has(init_name)) {
+      child.Set(init_name, TensorFromProto(tp), RuntimeEventKind::kInitializer);
+    }
+  }
+  const ExecutionPlan &plan = child.GetExecutionPlan(branch);
+  RuntimeSession session(plan);
+  session.Run(child);
 
   if (rt.events_enabled()) {
     for (auto &ev : child.events()) {

@@ -36,8 +36,9 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
   // Resolve the kernel for every node the plan will execute, once and up
   // front. Node indices come from the plan's kExecuteNode actions so nodes
   // the plan never runs (if any) are not resolved. Each entry caches the
-  // normalised (domain, op_type) alongside the resolved trampoline so
-  // :cpp:func:`Run` never has to redo the dispatch lookup.
+  // normalised (domain, op_type) fused into a single key alongside the
+  // resolved trampoline so :cpp:func:`Run` never has to redo the dispatch
+  // lookup.
   const std::vector<const NodeProto *> &nodes = plan_.nodes();
   kernels_.assign(nodes.size(), PreparedKernel{});
   for (const ExecuteAction &action : plan_.actions()) {
@@ -48,10 +49,11 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     EXT_ENFORCE_INVALID(index < nodes.size(), "RuntimeSession: plan references node index ", index,
                         " but only ", nodes.size(), " node(s) are available.");
     const NodeProto &node = *nodes[index];
+    const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
+    const std::string op_type = node.op_type().value();
     PreparedKernel &prepared = kernels_[index];
-    prepared.domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
-    prepared.op_type = node.op_type().value();
-    prepared.kernel = detail::ResolveNodeKernel(node, rt, prepared.domain, prepared.op_type);
+    prepared.key = domain + ":" + op_type;
+    prepared.kernel = detail::ResolveNodeKernel(node, rt, domain, op_type);
   }
   // Record the external inputs the scheduled nodes read (names not produced by
   // any node in the plan, including values captured by subgraph attributes) so
@@ -96,11 +98,22 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                           "RuntimeSession: kernel for node index ", index,
                           " was not initialized before Run().");
       rt.set_current_node_index(static_cast<int64_t>(index));
-      detail::InvokeResolvedKernel(*nodes[index], rt, prepared.domain, prepared.op_type,
-                                   prepared.kernel);
+      // Split the fused "<domain>:<op_type>" key back into its two parts;
+      // the domain itself never contains ':', so the first occurrence is
+      // always the separator.
+      const size_t sep = prepared.key.find(':');
+      const std::string domain = prepared.key.substr(0, sep);
+      const std::string op_type = prepared.key.substr(sep + 1);
+      detail::InvokeResolvedKernel(*nodes[index], rt, domain, op_type, prepared.kernel);
       break;
     }
     case ExecuteActionKind::kDeleteBuffer:
+      // Releasing intermediates is opt-in (RuntimeContext::release_intermediates);
+      // when it is disabled every intermediate stays observable in ``rt`` after
+      // Run() returns, so the scheduled delete actions are skipped entirely.
+      if (!rt.release_intermediates()) {
+        break;
+      }
       if (rt.verbose() > 1) {
         std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
                   << std::endl;
@@ -108,6 +121,9 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       rt.Remove(action.name());
       break;
     case ExecuteActionKind::kDeleteShape:
+      if (!rt.release_intermediates()) {
+        break;
+      }
       if (rt.verbose() > 1) {
         std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
                   << std::endl;
@@ -115,6 +131,9 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       rt.RemoveShape(action.name());
       break;
     case ExecuteActionKind::kDeleteSequence:
+      if (!rt.release_intermediates()) {
+        break;
+      }
       if (rt.verbose() > 1) {
         std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
                   << std::endl;
@@ -122,6 +141,9 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       rt.RemoveSequence(action.name());
       break;
     case ExecuteActionKind::kDeleteMap:
+      if (!rt.release_intermediates()) {
+        break;
+      }
       if (rt.verbose() > 1) {
         std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
                   << std::endl;

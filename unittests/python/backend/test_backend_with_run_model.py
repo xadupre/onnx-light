@@ -1,14 +1,15 @@
 # Copyright (c) ONNX Project Contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Backend tests that exercise the C++-implemented ``RunModel`` dispatcher
-(exposed through ``onnx_light.onnx_py._onnxpykernels.runtime``) against every
-backend test case whose top-level graph contains a single node of an op
-registered in ``KernelDispatchTable``.
+"""Backend tests that exercise the runtime's model execution path
+(``ExecutionPlan`` + ``RuntimeSession``, exposed through
+``onnx_light.onnx_py._onnxpykernels.runtime``) against every backend test
+case whose top-level graph contains a single node of an op registered in
+``KernelDispatchTable``.
 
 This is the Python counterpart of
 ``unittests/cc/onnx_extensions/backend_test/test_backend_run_model.cc``: both walk the
-same C++-generated backend test registry and validate that ``RunModel``
+same C++-generated backend test registry and validate that running the model
 reproduces the expected outputs without discrepancies.
 """
 
@@ -40,7 +41,8 @@ def _default_opset_version(model: onnxl.ModelProto) -> int:
 
 
 def run_model_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.ndarray]:
-    """Executes ``model`` through the C++ ``RunModel`` dispatcher.
+    """Executes ``model`` by registering its local functions and driving
+    ``model.graph``'s :class:`ExecutionPlan` through a :class:`RuntimeSession`.
 
     Mirrors the signature expected by :func:`make_test_class` (the same as
     :func:`onnxruntime_backend` in ``test_backend_with_onnxruntime.py``):
@@ -60,7 +62,12 @@ def run_model_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.n
         tp = onh.from_array(np.ascontiguousarray(arr), name=name)
         ctx.set(name, rt.tensor_from_proto(tp))
 
-    rt.run_model(model, ctx)
+    rt.register_model_functions(model, ctx)
+    for init in model.graph.initializer:
+        if not ctx.has(init.name):
+            ctx.set(init.name, rt.tensor_from_proto(init), "initializer")
+    plan = rt.ExecutionPlan(model.graph)
+    rt.RuntimeSession(plan).run(ctx)
 
     outputs: list[np.ndarray] = []
     for vi in model.graph.output:

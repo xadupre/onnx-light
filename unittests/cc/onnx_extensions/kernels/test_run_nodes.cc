@@ -40,13 +40,12 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
 using core::runtime::DataType;
+using core::runtime::ExecutionPlan;
 using core::runtime::KernelDispatchTable;
-using core::runtime::RunFunction;
-using core::runtime::RunGraph;
-using core::runtime::RunModel;
+using core::runtime::RegisterModelFunctions;
 using core::runtime::RunNode;
-using core::runtime::RunNodes;
 using core::runtime::RuntimeContext;
+using core::runtime::RuntimeSession;
 using core::runtime::Sequence;
 using core::runtime::SliceTensorAlongAxis;
 using core::runtime::Tensor;
@@ -88,6 +87,37 @@ private:
   size_t allocate_calls_ = 0;
   size_t free_calls_ = 0;
 };
+
+// Seeds `graph`'s initializers into `rt` (without overriding any name the
+// caller already provided) and then runs `graph.node()` by building the
+// graph's ExecutionPlan and driving it through a RuntimeSession. This
+// mirrors the production `RunGraphNodesViaSession` helper used internally
+// by `RunSubgraph` and the control-flow kernels, giving these
+// tests the same "build a plan, then run it through a session" flow every
+// call site now uses.
+void RunGraphViaSession(const GraphProto &graph, RuntimeContext &rt) {
+  const auto &inits = graph.initializer();
+  for (size_t i = 0; i < inits.size(); ++i) {
+    const TensorProto &tp = inits[i];
+    const std::string init_name = tp.name();
+    if (!rt.Has(init_name)) {
+      rt.Set(init_name, TensorFromProto(tp), core::runtime::RuntimeEventKind::kInitializer);
+    }
+  }
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  session.Run(rt);
+}
+
+// Registers `model`'s local functions in `rt` and then runs `model.graph()`
+// the same way `RunGraphViaSession` runs a bare graph. This mirrors the
+// production `RunModel` replacement: callers register model-local functions
+// via `RegisterModelFunctions` and then drive the model's graph through
+// their own ExecutionPlan/RuntimeSession.
+void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
+  RegisterModelFunctions(model, rt);
+  RunGraphViaSession(model.ref_graph(), rt);
+}
 
 // Builds a single-node ``NodeProto`` of type ``op_type`` with the
 // requested input and output names.
@@ -603,9 +633,9 @@ TEST(RunNodes, RunNodeDynamicQuantizeLinearFromDispatchTable) {
 
 TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
   // Builds the small graph:  t = Mul(x, y);  out = Sub(t, z)
-  // and runs it through the iterator overload that drives a
-  // RepeatedProtoField<NodeProto> directly (mirroring how a caller
-  // would feed ``graph.node()``).
+  // and runs it by building a free-standing ExecutionPlan over a
+  // RepeatedProtoField<NodeProto> (mirroring how a caller would feed
+  // ``graph.node()``) and driving it through a RuntimeSession.
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.tensors()["x"] = Tensor::FromFloat("x", {2}, {1.0f, 2.0f});
   rt.tensors()["y"] = Tensor::FromFloat("y", {2}, {3.0f, 4.0f});
@@ -615,7 +645,9 @@ TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
   *nodes.Add() = MakeNode("Mul", {"x", "y"}, {"t"});
   *nodes.Add() = MakeNode("Sub", {"t", "z"}, {"out"});
 
-  RunNodes(nodes, rt);
+  core::runtime::ExecutionPlan plan(nodes, {}, rt.allocator());
+  core::runtime::RuntimeSession session(plan);
+  session.Run(rt);
 
   ASSERT_NE(rt.tensors().find("t"), rt.tensors().end());
   ASSERT_NE(rt.tensors().find("out"), rt.tensors().end());
@@ -627,8 +659,10 @@ TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
 }
 
 TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {
-  // Same graph, but driven through the generic iterator overload so
-  // any container whose elements dereference to ``NodeProto`` works.
+  // Same graph, but the node list starts out as a std::vector<NodeProto>;
+  // it is converted to a RepeatedProtoField<NodeProto> (which any container
+  // of NodeProto converts to) before building the ExecutionPlan / session,
+  // so any container works.
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.tensors()["a"] = Tensor::FromFloat("a", {1}, {6.0f});
   rt.tensors()["b"] = Tensor::FromFloat("b", {1}, {2.0f});
@@ -637,7 +671,10 @@ TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {
   nodes.push_back(MakeNode("Div", {"a", "b"}, {"q"})); // q = 3
   nodes.push_back(MakeNode("Neg", {"q"}, {"out"}));    // out = -3
 
-  RunNodes(nodes.begin(), nodes.end(), rt);
+  utils::RepeatedProtoField<NodeProto> node_field(nodes);
+  core::runtime::ExecutionPlan plan(node_field, {}, rt.allocator());
+  core::runtime::RuntimeSession session(plan);
+  session.Run(rt);
 
   const float *out = rt.tensors()["out"].AsFloat();
   ASSERT_EQ(rt.tensors()["out"].element_count(), 1);
@@ -1483,7 +1520,10 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
   nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
-  RunNodes(nodes.begin(), nodes.end(), rt);
+  utils::RepeatedProtoField<NodeProto> node_field(nodes);
+  core::runtime::ExecutionPlan plan(node_field, {}, rt.allocator());
+  core::runtime::RuntimeSession session(plan);
+  session.Run(rt);
 
   // Each node produces one tensor ``add`` event tagged as an
   // intermediate plus one ``run_node`` event summarising the dispatch.
@@ -1641,7 +1681,7 @@ TEST(RunGraph, InitializersLoadedAndNodesRun) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x_input", Tensor::FromFloat("x_input", {2}, {1.0f, 2.0f}));
 
-  RunGraph(graph, rt);
+  RunGraphViaSession(graph, rt);
 
   ASSERT_TRUE(rt.Has("out"));
   const float *res = rt.Get("out").AsFloat();
@@ -1669,7 +1709,7 @@ TEST(RunGraph, CallerInputOverridesInitializer) {
   // Override the initializer with the caller's value.
   rt.Set("w", Tensor::FromFloat("w", {1}, {-5.0f}));
 
-  RunGraph(graph, rt);
+  RunGraphViaSession(graph, rt);
 
   ASSERT_TRUE(rt.Has("out"));
   EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[0], 5.0f);
@@ -1734,7 +1774,7 @@ TEST(RunModel, DelayedInitializerLoadsFromFileAtRuntime) {
   offset->set_i(8);
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("Y"));
   const Tensor &y = rt.Get("Y");
@@ -1958,7 +1998,9 @@ TEST(RunFunction, NodesRun) {
   rt.Set("a", Tensor::FromFloat("a", {2}, {3.0f, 4.0f}));
   rt.Set("b", Tensor::FromFloat("b", {2}, {2.0f, 5.0f}));
 
-  RunFunction(func, rt);
+  const ExecutionPlan &plan = rt.GetExecutionPlan(func);
+  RuntimeSession session(plan);
+  session.Run(rt);
 
   ASSERT_TRUE(rt.Has("result"));
   const float *res = rt.Get("result").AsFloat();
@@ -1988,7 +2030,7 @@ TEST(RunModel, GraphRun) {
   rt.Set("p", Tensor::FromFloat("p", {3}, {1.0f, 2.0f, 3.0f}));
   rt.Set("q", Tensor::FromFloat("q", {3}, {4.0f, 5.0f, 6.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("r"));
   const float *res = rt.Get("r").AsFloat();
@@ -2001,7 +2043,7 @@ TEST(RunModel, NoGraphThrows) {
   ModelProto model;
   model.set_ir_version(10);
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  EXPECT_THROW(RunModel(model, rt), std::invalid_argument);
+  EXPECT_THROW(RunModelViaSession(model, rt), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -2058,7 +2100,7 @@ TEST(RunModel, NodeDispatchedToModelLocalFunction) {
   rt.Set("w", Tensor::FromFloat("w", {2}, {3.0f, 4.0f}));
   rt.Set("k", Tensor::FromFloat("k", {2}, {10.0f, 100.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("y"));
   const float *res = rt.Get("y").AsFloat();
@@ -2126,7 +2168,7 @@ TEST(RunModel, ModelLocalFunctionCanCallAnotherFunction) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.5f, -3.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("y"));
   const float *res = rt.Get("y").AsFloat();
@@ -2197,7 +2239,7 @@ TEST(RunModel, ModelLocalFunctionCallsAnotherFunctionAcrossDomains) {
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
   rt.Set("y", Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("z"));
   const float *res = rt.Get("z").AsFloat();
@@ -2288,7 +2330,7 @@ TEST(RunModel, ModelLocalFunctionThreeLevelNestedCalls) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.5f, -3.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("y"));
   const float *res = rt.Get("y").AsFloat();
@@ -2357,7 +2399,7 @@ TEST(RunModel, ModelLocalFunctionOverloadDisambiguation) {
   rt.Set("x", Tensor::FromFloat("x", {1}, {10.0f}));
   rt.Set("y", Tensor::FromFloat("y", {1}, {3.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("s"));
   ASSERT_TRUE(rt.Has("d"));
@@ -2393,7 +2435,7 @@ TEST(RunModel, ModelLocalFunctionWrongInputCountThrows) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x", Tensor::FromFloat("x", {1}, {1.0f}));
 
-  EXPECT_THROW(RunModel(model, rt), std::invalid_argument);
+  EXPECT_THROW(RunModelViaSession(model, rt), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -2479,13 +2521,13 @@ TEST(RunModel, ModelLocalFunctionLinkedAttributeFromCallSite) {
 
   RuntimeContext rt_true(KernelContext(DefaultOpset(18)));
   rt_true.Set("cond", Tensor::FromBool("cond", {}, {1}));
-  RunModel(model, rt_true);
+  RunModelViaSession(model, rt_true);
   ASSERT_TRUE(rt_true.Has("out"));
   EXPECT_FLOAT_EQ(rt_true.Get("out").AsFloat()[0], 20.0f);
 
   RuntimeContext rt_false(KernelContext(DefaultOpset(18)));
   rt_false.Set("cond", Tensor::FromBool("cond", {}, {0}));
-  RunModel(model, rt_false);
+  RunModelViaSession(model, rt_false);
   ASSERT_TRUE(rt_false.Has("out"));
   EXPECT_FLOAT_EQ(rt_false.Get("out").AsFloat()[0], 2.0f);
 }
@@ -2540,7 +2582,7 @@ TEST(RunModel, ModelLocalFunctionLinkedAttributeUsesDefault) {
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
   ASSERT_TRUE(rt.Has("out"));
   EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[0], 10.0f);
 }
@@ -2548,7 +2590,7 @@ TEST(RunModel, ModelLocalFunctionLinkedAttributeUsesDefault) {
 TEST(RunModel, ModelLocalFunctionDoesNotMutateModel) {
   // Verify that resolving ``ref_attr_name`` references operates on a
   // copy of the FunctionProto so the source ModelProto's function body
-  // is unchanged after RunModel.
+  // is unchanged after running the model.
   ModelProto model;
   model.set_ir_version(10);
   OperatorSetIdProto *os = model.add_opset_import();
@@ -2597,7 +2639,7 @@ TEST(RunModel, ModelLocalFunctionDoesNotMutateModel) {
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   // The function body's attribute must still be a reference (no graph
   // baked in) so the same model can be executed again with a different
@@ -2655,13 +2697,13 @@ TEST(RunModel, IfNodeWithBranchSubgraphs) {
 
   RuntimeContext rt_true(KernelContext(DefaultOpset(18)));
   rt_true.Set("cond", Tensor::FromBool("cond", {}, {1}));
-  RunModel(model, rt_true);
+  RunModelViaSession(model, rt_true);
   ASSERT_TRUE(rt_true.Has("out"));
   EXPECT_FLOAT_EQ(rt_true.Get("out").AsFloat()[0], 20.0f);
 
   RuntimeContext rt_false(KernelContext(DefaultOpset(18)));
   rt_false.Set("cond", Tensor::FromBool("cond", {}, {0}));
-  RunModel(model, rt_false);
+  RunModelViaSession(model, rt_false);
   ASSERT_TRUE(rt_false.Has("out"));
   EXPECT_FLOAT_EQ(rt_false.Get("out").AsFloat()[0], 2.0f);
 }
@@ -2708,7 +2750,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("s_final"));
   ASSERT_TRUE(rt.Has("scan"));
@@ -2774,7 +2816,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
   rt.set_allocator(&alloc);
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("s_final"));
   ASSERT_TRUE(rt.Has("scan"));
@@ -2831,7 +2873,7 @@ TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {
     rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
     rt.set_allocator(&alloc);
 
-    RunModel(model, rt);
+    RunModelViaSession(model, rt);
 
     // 3 iterations x 2 transient scalar inputs (iter, cond_in) + 2 final loop
     // outputs (s_final, scan) = 8 allocations total. Only the 2 final outputs
@@ -3056,7 +3098,7 @@ TEST(RunModel, ScanNodeRunsBodySubgraph) {
   rt.Set("state0", Tensor::FromFloat("state0", {}, {0.0f}));
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("state_final"));
   ASSERT_TRUE(rt.Has("y"));
@@ -3120,7 +3162,7 @@ TEST(RunModel, ScanOpset8NodeRunsBodySubgraphWithBatchDim) {
   rt.Set("initial", Tensor::FromFloat("initial", {1, 2}, {0.0f, 0.0f}));
   rt.Set("x", Tensor::FromFloat("x", {1, 3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("y"));
   ASSERT_TRUE(rt.Has("z"));
@@ -3609,7 +3651,7 @@ TEST(RunModel, LocalFunctionStartsWithEmptyTensorMap) {
 
   // The function body references "leak" which is not bound as a formal
   // input. With proper isolation the lookup throws.
-  EXPECT_THROW(RunModel(model, rt), std::invalid_argument);
+  EXPECT_THROW(RunModelViaSession(model, rt), std::invalid_argument);
 
   // The caller's tensor map is untouched: "leak" is still there and the
   // function's formal output "out" did not leak in either.
@@ -3661,7 +3703,7 @@ TEST(RunModel, LocalFunctionSharesKernelContextOnlyWithEmptyTensorMap) {
   // value must still be there.
   rt.Set("internal_tmp", Tensor::FromFloat("internal_tmp", {1}, {-1.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("y"));
   EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], 6.0f);
@@ -3726,7 +3768,7 @@ TEST(RunModel, LocalSubgraphCopiesCallerTensorsButHidesIntermediates) {
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("outer", Tensor::FromFloat("outer", {2}, {5.0f, 7.0f}));
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   // The subgraph can see ``outer`` (caller's tensor map was copied into
   // the child) and produced the declared output.
@@ -3822,8 +3864,8 @@ TEST(RunNodes, RunNodeCustomKernelOverridesBuiltin) {
   EXPECT_FLOAT_EQ(yp[2], 3.0f);
 }
 
-// RunModel chains a built-in kernel and a custom kernel together; the
-// CustomKernelMap survives across nodes within the same context.
+// Running the model chains a built-in kernel and a custom kernel together;
+// the CustomKernelMap survives across nodes within the same context.
 TEST(RunModel, CustomKernelChainsWithBuiltinKernels) {
   ModelProto model;
   model.set_ir_version(10);
@@ -3867,7 +3909,7 @@ TEST(RunModel, CustomKernelChainsWithBuiltinKernels) {
     ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out));
   });
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
   const Tensor &y = rt.tensors().at("y");
   ASSERT_EQ(y.element_count(), 3);
   const float *yp = y.AsFloat();
@@ -3982,7 +4024,7 @@ TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
 
-  RunGraph(graph, rt);
+  RunGraphViaSession(graph, rt);
 
   // "t" was released, "y" / "x" / "z" survived.
   EXPECT_FALSE(rt.Has("t"));
@@ -4005,7 +4047,7 @@ TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   RuntimeContext rt2(KernelContext(DefaultOpset(18)));
   rt2.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt2.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
-  RunGraph(graph, rt2);
+  RunGraphViaSession(graph, rt2);
   EXPECT_TRUE(rt2.Has("t"));
   EXPECT_TRUE(rt2.Has("y"));
 }
@@ -4035,12 +4077,12 @@ TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
 
   // Two successive RunGraph calls both reuse the cached plan.
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
-  RunGraph(graph, rt);
+  RunGraphViaSession(graph, rt);
   EXPECT_FALSE(rt.Has("t"));
   EXPECT_TRUE(rt.Has("y"));
   rt.Remove("y");
   rt.Put("x", Tensor::FromFloat("x", {2}, {-3.0f, 4.0f}));
-  RunGraph(graph, rt);
+  RunGraphViaSession(graph, rt);
   EXPECT_FALSE(rt.Has("t"));
   EXPECT_TRUE(rt.Has("y"));
   // Cached plan still the same instance after both runs.
@@ -4051,8 +4093,9 @@ TEST(RuntimeSession, InitializesKernelsThenRunsAndReleases) {
   // A RuntimeSession is constructed with a precomputed ExecutionPlan; its
   // kernels are resolved on the first Run against the supplied RuntimeContext
   // and only then is it run. Running it must produce the graph outputs and
-  // release the scheduled intermediates, exactly like the plan-aware RunNodes
-  // overload.
+  // release the scheduled intermediates, exactly like running a model's
+  // graph or `RunSubgraph` (which build and run through a RuntimeSession
+  // internally).
   using core::runtime::ExecutionPlan;
   using core::runtime::RuntimeSession;
 
@@ -4465,7 +4508,7 @@ TEST(SubgraphEventGraphName, LoopSubgraphEventsCarryBodyGraphName) {
   rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
   rt.ClearEvents();
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   // All events from the loop body subgraph must be tagged with
   // subgraph_attr_name "body". Events from the outer graph must have an
@@ -4519,7 +4562,7 @@ TEST(SubgraphEventGraphName, IfSubgraphEventsCarryBranchGraphName) {
   rt_true.set_events_enabled(true);
   rt_true.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt_true.ClearEvents();
-  RunModel(model, rt_true);
+  RunModelViaSession(model, rt_true);
 
   bool found_then = false;
   for (const auto &ev : rt_true.events()) {
@@ -4535,7 +4578,7 @@ TEST(SubgraphEventGraphName, IfSubgraphEventsCarryBranchGraphName) {
   rt_false.set_events_enabled(true);
   rt_false.Set("cond", Tensor::FromBool("cond", {}, {0}));
   rt_false.ClearEvents();
-  RunModel(model, rt_false);
+  RunModelViaSession(model, rt_false);
 
   bool found_else = false;
   for (const auto &ev : rt_false.events()) {
@@ -4589,7 +4632,7 @@ TEST(SubgraphEventGraphName, ScanSubgraphEventsCarryBodyGraphName) {
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
   rt.ClearEvents();
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   bool found_body = false;
   for (const auto &ev : rt.events()) {
@@ -4621,7 +4664,7 @@ TEST(SubgraphEventGraphName, TopLevelEventsHaveEmptyGraphName) {
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt.ClearEvents();
 
-  RunModel(model, rt);
+  RunModelViaSession(model, rt);
 
   for (const auto &ev : rt.events()) {
     EXPECT_TRUE(ev.subgraph_attr_name.empty())

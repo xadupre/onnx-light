@@ -26,7 +26,7 @@
  * @file runtime_context.h
  * @brief Per-invocation runtime state shared across the nodes of a
  *        graph evaluated through :cpp:func:`RunNode` /
- *        :cpp:func:`RunNodes`.
+ *        :cpp:class:`RuntimeSession`.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -86,10 +86,12 @@ using ShapeMap = std::unordered_map<std::string, Shape>;
 
 /**
  * Name-keyed map of model-local :cpp:type:`FunctionProto` definitions
- * known to the runtime. Populated by :cpp:func:`RunModel` from
+ * known to the runtime. Populated by :cpp:func:`RegisterModelFunctions` from
  * ``ModelProto::functions()`` so the dispatcher in :cpp:func:`RunNode`
- * can transparently invoke :cpp:func:`RunFunction` whenever a node
- * references a model-local function instead of a built-in kernel.
+ * can transparently invoke the model-local function call helper
+ * (which runs the function body through a :cpp:class:`RuntimeSession`)
+ * whenever a node references a model-local function instead of a
+ * built-in kernel.
  *
  * Keys are the canonical ``"<domain>:<op_type>:<overload>"`` triple
  * (the default ONNX domain — the empty ``NodeProto::domain()`` — is
@@ -161,7 +163,8 @@ enum class RuntimeEventAction : int32_t { kAdd = 0, kReplace = 1, kRemove = 2, k
  * itself.
  *
  *  * ``kUnknown``      — origin not specified.
- *  * ``kInitializer``  — a graph initializer seeded by :cpp:func:`RunGraph`.
+ *  * ``kInitializer``  — a graph initializer seeded before running a
+ *                        graph's :cpp:class:`RuntimeSession`.
  *  * ``kInput``        — a graph / function / subgraph input binding, or a
  *                        value injected by the caller before running.
  *  * ``kIntermediate`` — an intermediate value produced by a node kernel.
@@ -323,7 +326,7 @@ using RuntimeEventLog = std::vector<RuntimeEvent>;
 
 /**
  * Per-invocation runtime state passed to :cpp:func:`RunNode` /
- * :cpp:func:`RunNodes`.
+ * :cpp:class:`RuntimeSession`.
  *
  * Bundles together everything a chain of nodes needs to execute:
  *  * a :cpp:type:`TensorMap` carrying the graph inputs / initializers
@@ -382,8 +385,8 @@ public:
 
   /// Index of the node currently being executed, used to tag the
   /// :cpp:var:`RuntimeEvent::node_index` of intermediate / output tensors
-  /// produced during its dispatch. Set by :cpp:func:`RunNodes` before each
-  /// :cpp:func:`RunNode` call and ``-1`` when no node is executing.
+  /// produced during its dispatch. Set by :cpp:class:`RuntimeSession` before
+  /// each node's kernel invocation and ``-1`` when no node is executing.
   void set_current_node_index(int64_t index) noexcept { current_node_index_ = index; }
   int64_t current_node_index() const noexcept { return current_node_index_; }
 
@@ -564,8 +567,9 @@ public:
   void ClearExecutionPlans() noexcept;
 
   /// Enables or disables the per-node release of unused intermediates
-  /// performed by :cpp:func:`RunNodes` / :cpp:func:`RunGraph` /
-  /// :cpp:func:`RunFunction` / :cpp:func:`RunModel`. When enabled, a
+  /// performed by :cpp:class:`RuntimeSession` (used when running a
+  /// model's graph, by :cpp:func:`RunSubgraph`, and every other
+  /// node-list entry point). When enabled, a
   /// name whose last reference (declared input of a node, or captured
   /// input of a subgraph attribute) appears at node ``i`` is removed
   /// from :cpp:func:`tensors` (and :cpp:func:`sequences`) right after

@@ -51,16 +51,14 @@ void CheckSameShape(const Tensor &a, const Tensor &b, const char *label_a, const
 
 } // namespace
 
-std::vector<Tensor> Adagrad::operator()(const Tensor &R, const Tensor &T,
-                                        const std::vector<Tensor> &Xs,
-                                        const std::vector<Tensor> &Gs,
-                                        const std::vector<Tensor> &Hs, float epsilon,
-                                        float decay_factor, float norm_coefficient) const {
+Tensors Adagrad::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
+                            const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs,
+                            float epsilon, float decay_factor, float norm_coefficient) const {
   EXT_ENFORCE_INVALID(!Xs.empty(), kAdagradName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Hs.size(), kAdagradName,
                       ": 'Xs', 'Gs' and 'Hs' must have the same length.");
 
-  std::vector<Tensor> outputs;
+  Tensors outputs;
   outputs.reserve(Xs.size() * 2);
   // Layout: X_new_1..N, H_new_1..N.
   for (const auto &X : Xs) {
@@ -75,7 +73,7 @@ std::vector<Tensor> Adagrad::operator()(const Tensor &R, const Tensor &T,
 
 void Adagrad::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
                          const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs,
-                         std::vector<Tensor> &outputs, float epsilon, float decay_factor,
+                         Tensors &outputs, float epsilon, float decay_factor,
                          float norm_coefficient) const {
   EXT_ENFORCE_INVALID(!Xs.empty(), kAdagradName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Hs.size(), kAdagradName,

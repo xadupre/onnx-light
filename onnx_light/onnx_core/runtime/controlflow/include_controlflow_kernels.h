@@ -92,9 +92,8 @@ public:
   ///         declared subgraph output is missing, if ``then_branch`` and
   ///         ``else_branch`` declare a different number of outputs, or if
   ///         any node of the executed subgraph fails to dispatch.
-  std::vector<Tensor> operator()(RuntimeContext &rt, const Tensor &cond,
-                                 const GraphProto &then_branch,
-                                 const GraphProto &else_branch) const;
+  Tensors operator()(RuntimeContext &rt, const Tensor &cond, const GraphProto &then_branch,
+                     const GraphProto &else_branch) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
@@ -143,16 +142,14 @@ public:
   ///                    row must share the same data type and shape.
   /// @return ``N + K`` tensors: the final loop-carried dependency values
   ///         followed by the stacked scan outputs.
-  std::vector<Tensor>
-  operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
-             const std::vector<Tensor> &final_state,
-             const std::vector<std::vector<Tensor>> &scan_values_per_iter) const;
+  Tensors operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
+                     const std::vector<Tensor> &final_state,
+                     const std::vector<std::vector<Tensor>> &scan_values_per_iter) const;
 
   /// Allocator-aware stacking-only overload used by the runtime dispatcher.
-  std::vector<Tensor>
-  operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
-             const std::vector<Tensor> &v_initial, const std::vector<Tensor> &final_state,
-             const std::vector<std::vector<Tensor>> &scan_values_per_iter) const;
+  Tensors operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
+                     const std::vector<Tensor> &v_initial, const std::vector<Tensor> &final_state,
+                     const std::vector<std::vector<Tensor>> &scan_values_per_iter) const;
 
   /// Body-runner callback executed by the new ``operator()`` overload once
   /// per iteration. ``iter`` is the 0-based iteration index, ``cond_in`` is
@@ -163,8 +160,8 @@ public:
   /// body output convention: the new ``cond_out`` (BOOL scalar) at index 0,
   /// the ``N`` updated loop-carried values at indices ``[1, 1+N)``, and the
   /// ``K`` per-iteration scan values at indices ``[1+N, 1+N+K)``.
-  using BodyRunner = std::function<std::vector<Tensor>(int64_t iter, bool cond_in,
-                                                       const std::vector<Tensor> &state)>;
+  using BodyRunner =
+      std::function<Tensors(int64_t iter, bool cond_in, const std::vector<Tensor> &state)>;
 
   /// Body-aware overload.
   ///
@@ -187,14 +184,13 @@ public:
   /// @param run_body          Callback executed once per iteration; see
   ///                          :type:`BodyRunner`.
   /// @return ``N + num_scan_outputs`` tensors.
-  std::vector<Tensor> operator()(const Tensor &M, const Tensor &cond,
-                                 const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
-                                 const BodyRunner &run_body) const;
+  Tensors operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
+                     std::size_t num_scan_outputs, const BodyRunner &run_body) const;
 
   /// Allocator-aware body-aware overload used by the runtime dispatcher.
-  std::vector<Tensor> operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
-                                 const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
-                                 const BodyRunner &run_body) const;
+  Tensors operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
+                     const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
+                     const BodyRunner &run_body) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -274,21 +270,21 @@ public:
   ///                                stacking-only overload).
   /// @return ``N + K`` tensors: the final state values followed by the
   ///         stacked scan outputs.
-  std::vector<Tensor> operator()(RuntimeContext &rt, const GraphProto &body,
-                                 const std::vector<Tensor> &initial_state,
-                                 const std::vector<Tensor> &scan_inputs,
-                                 const std::vector<int64_t> &scan_input_axes = {},
-                                 const std::vector<int64_t> &scan_input_directions = {},
-                                 const std::vector<int64_t> &scan_output_axes = {},
-                                 const std::vector<int64_t> &scan_output_directions = {}) const;
+  Tensors operator()(RuntimeContext &rt, const GraphProto &body,
+                     const std::vector<Tensor> &initial_state,
+                     const std::vector<Tensor> &scan_inputs,
+                     const std::vector<int64_t> &scan_input_axes = {},
+                     const std::vector<int64_t> &scan_input_directions = {},
+                     const std::vector<int64_t> &scan_output_axes = {},
+                     const std::vector<int64_t> &scan_output_directions = {}) const;
 
   /// Allocator-aware stacking-only overload used by the runtime dispatcher.
-  std::vector<Tensor> operator()(RuntimeContext &rt, int64_t trip_count,
-                                 const std::vector<Tensor> &initial_state,
-                                 const std::vector<Tensor> &final_state,
-                                 const std::vector<std::vector<Tensor>> &scan_values_per_iter,
-                                 const std::vector<int64_t> &scan_output_axes = {},
-                                 const std::vector<int64_t> &scan_output_directions = {}) const;
+  Tensors operator()(RuntimeContext &rt, int64_t trip_count,
+                     const std::vector<Tensor> &initial_state,
+                     const std::vector<Tensor> &final_state,
+                     const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+                     const std::vector<int64_t> &scan_output_axes = {},
+                     const std::vector<int64_t> &scan_output_directions = {}) const;
 
   /// Stacking-only overload.
   ///
@@ -320,11 +316,11 @@ public:
   ///                                 entries.
   /// @return ``N + K`` tensors: the final state values followed by the
   ///         stacked scan outputs.
-  std::vector<Tensor> operator()(int64_t trip_count, const std::vector<Tensor> &initial_state,
-                                 const std::vector<Tensor> &final_state,
-                                 const std::vector<std::vector<Tensor>> &scan_values_per_iter,
-                                 const std::vector<int64_t> &scan_output_axes = {},
-                                 const std::vector<int64_t> &scan_output_directions = {}) const;
+  Tensors operator()(int64_t trip_count, const std::vector<Tensor> &initial_state,
+                     const std::vector<Tensor> &final_state,
+                     const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+                     const std::vector<int64_t> &scan_output_axes = {},
+                     const std::vector<int64_t> &scan_output_directions = {}) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

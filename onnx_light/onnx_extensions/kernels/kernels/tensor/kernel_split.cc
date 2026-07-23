@@ -56,9 +56,8 @@ std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, std::span<const int64_t
 
 } // namespace
 
-std::vector<Tensor> Split::operator()(const Tensor &input, int64_t axis,
-                                      std::span<const int64_t> split, int64_t num_outputs,
-                                      RuntimeContext *rt) const {
+Tensors Split::operator()(const Tensor &input, int64_t axis, std::span<const int64_t> split,
+                          int64_t num_outputs, RuntimeContext *rt) const {
   const int64_t rank = static_cast<int64_t>(input.shape.size());
   EXT_ENFORCE_INVALID(rank > 0, "kernel::Split cannot split a scalar tensor.");
 
@@ -86,7 +85,7 @@ std::vector<Tensor> Split::operator()(const Tensor &input, int64_t axis,
   const size_t inner_bytes = static_cast<size_t>(inner) * elem_size;
   const size_t in_row_bytes = static_cast<size_t>(axis_dim) * inner_bytes;
 
-  std::vector<Tensor> outputs;
+  Tensors outputs;
   outputs.reserve(sizes.size());
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   size_t offset = 0; // byte offset within each "row" of the input.

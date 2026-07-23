@@ -55,9 +55,8 @@ void If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &
   }
 }
 
-std::vector<Tensor> If::operator()(RuntimeContext &rt, const Tensor &cond,
-                                   const GraphProto &then_branch,
-                                   const GraphProto &else_branch) const {
+Tensors If::operator()(RuntimeContext &rt, const Tensor &cond, const GraphProto &then_branch,
+                       const GraphProto &else_branch) const {
   EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL,
                       "kernel::If: 'cond' must be a BOOL tensor.");
   EXT_ENFORCE_INVALID(cond.element_count() == 1,
@@ -83,7 +82,7 @@ std::vector<Tensor> If::operator()(RuntimeContext &rt, const Tensor &cond,
     }
   }
 
-  std::vector<Tensor> outputs;
+  Tensors outputs;
   outputs.reserve(static_cast<size_t>(branch.output_size()));
   for (size_t i = 0; i < branch.output().size(); ++i) {
     const std::string out_name = branch.output()[i].name();

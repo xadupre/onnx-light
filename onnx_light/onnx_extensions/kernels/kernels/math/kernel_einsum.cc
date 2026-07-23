@@ -324,7 +324,10 @@ void RunEinsum(const Tensors &inputs, const EinsumPlan &plan, T *out_data,
   // current value of label ``all_labels[k]``. The scratch buffer is drawn from
   // the runtime allocator when one is attached, falling back to inline
   // ``std::vector`` storage otherwise. Allocator-backed buffers are not
-  // guaranteed zeroed, so the indices are explicitly zeroed below.
+  // guaranteed zeroed, so the indices are explicitly zeroed below. A minimum
+  // size of one element is requested when ``n_labels`` is 0 (scalar equations
+  // such as ``->``) because the allocator rejects a zero-byte request; the
+  // buffer is never dereferenced in that case.
   const std::size_t n_labels = plan.all_labels.size();
   detail::TemporaryTypedBuffer<int64_t> ix_buf(n_labels > 0 ? n_labels : 1, allocator,
                                                "kernel::Einsum ix");

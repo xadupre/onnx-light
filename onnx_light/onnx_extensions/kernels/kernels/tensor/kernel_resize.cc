@@ -72,8 +72,8 @@ Tensor ReadResizeSizes(const Tensor &sizes, std::size_t expected_length,
 
 // Normalises the user-supplied ``axes`` attribute against ``rank``. When the
 // attribute is empty, returns ``{0, 1, ..., rank-1}``.
-std::vector<int64_t> NormaliseAxes(const std::vector<int64_t> &axes, std::size_t rank) {
-  std::vector<int64_t> out;
+onnx_kernels::Shape NormaliseAxes(const std::vector<int64_t> &axes, std::size_t rank) {
+  onnx_kernels::Shape out;
   if (axes.empty()) {
     out.reserve(rank);
     for (std::size_t i = 0; i < rank; ++i) {
@@ -95,7 +95,7 @@ std::vector<int64_t> NormaliseAxes(const std::vector<int64_t> &axes, std::size_t
 // inserting ``identity`` values on non-resized axes. ``values`` points to
 // ``axes.size()`` elements.
 template <typename T>
-std::vector<T> ScatterByAxes(const T *values, const std::vector<int64_t> &axes, std::size_t rank,
+std::vector<T> ScatterByAxes(const T *values, const onnx_kernels::Shape &axes, std::size_t rank,
                              T identity) {
   std::vector<T> out(rank, identity);
   for (std::size_t i = 0; i < axes.size(); ++i) {
@@ -659,7 +659,7 @@ void CheckSupportedAttrs(const Resize::Attributes &attrs) {
 // ``axes`` (or when no ROI was provided), defaults to the full
 // ``[0.0, 1.0]`` range so that the ``"tf_crop_and_resize"`` formula
 // reduces to identity.
-void BuildRoi(const Resize::Attributes &attrs, const std::vector<int64_t> &axes, std::size_t rank,
+void BuildRoi(const Resize::Attributes &attrs, const onnx_kernels::Shape &axes, std::size_t rank,
               std::vector<double> &roi_start, std::vector<double> &roi_end) {
   roi_start.assign(rank, 0.0);
   roi_end.assign(rank, 1.0);
@@ -700,7 +700,7 @@ void RunResize(const Tensor &X, const std::vector<float> &scales_vec,
 Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
                           RuntimeContext *rt) const {
   const std::size_t rank = X.shape.size();
-  const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
+  const onnx_kernels::Shape axes = NormaliseAxes(attrs.axes, rank);
   const Tensor scales_in = ReadResizeScales(scales, axes.size(), rt ? rt->allocator() : nullptr);
   // Expand to per-axis (rank-length) scales, defaulting non-resized axes to 1.
   const std::vector<float> scales_vec =
@@ -726,7 +726,7 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
                         Tensor &output) const {
   CheckSupportedAttrs(attrs);
   const std::size_t rank = X.shape.size();
-  const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
+  const onnx_kernels::Shape axes = NormaliseAxes(attrs.axes, rank);
   const Tensor scales_in = ReadResizeScales(scales, axes.size(), nullptr);
   const std::vector<float> scales_vec =
       ScatterByAxes<float>(scales_in.As<float>(), axes, rank, 1.0f);
@@ -752,7 +752,7 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
                            RuntimeContext *rt) const {
   CheckSupportedAttrs(attrs);
   const std::size_t rank = X.shape.size();
-  const std::vector<int64_t> axes = NormaliseAxes(attrs.axes, rank);
+  const onnx_kernels::Shape axes = NormaliseAxes(attrs.axes, rank);
   const Tensor requested = ReadResizeSizes(sizes, axes.size(), rt ? rt->allocator() : nullptr);
   // Per-axis input shape restricted to the resized axes, used when computing
   // the effective output sizes under ``keep_aspect_ratio_policy``.

@@ -88,9 +88,10 @@ std::vector<uint8_t> ResolveConstantBytes(const Tensor *cv, int32_t data_type,
 }
 
 // Pre-computed row-major strides (in elements).
-std::vector<int64_t> RowMajorStrides(const onnx_kernels::Shape &shape) {
+onnx_kernels::Shape RowMajorStrides(const onnx_kernels::Shape &shape) {
   const std::size_t rank = shape.size();
-  std::vector<int64_t> strides(rank, 0);
+  onnx_kernels::Shape strides;
+  strides.assign(rank, 0);
   if (rank > 0) {
     strides[rank - 1] = 1;
     for (std::size_t k = rank - 1; k > 0; --k) {
@@ -224,8 +225,8 @@ void Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *const
   const std::vector<uint8_t> constant_bytes =
       ResolveConstantBytes(constant_value, data.data_type, elem_size);
 
-  const std::vector<int64_t> in_strides = RowMajorStrides(data.shape);
-  const std::vector<int64_t> out_strides = RowMajorStrides(output.shape);
+  const onnx_kernels::Shape in_strides = RowMajorStrides(data.shape);
+  const onnx_kernels::Shape out_strides = RowMajorStrides(output.shape);
 
   int64_t total = 1;
   for (int64_t d : output.shape) {

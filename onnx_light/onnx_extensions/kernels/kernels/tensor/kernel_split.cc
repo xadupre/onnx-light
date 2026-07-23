@@ -24,8 +24,9 @@ namespace {
 //   - When ``num_outputs`` is provided, ``axis_dim`` is divided into equal
 //     chunks of ``ceil(axis_dim / num_outputs)``; the last chunk absorbs the
 //     remainder (and may be smaller).
-std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, std::span<const int64_t> split,
-                                       int64_t num_outputs) {
+// Returns the resolved sizes as a ``Shape`` (one entry per output).
+onnx_kernels::Shape ResolveSplitSizes(int64_t axis_dim, std::span<const int64_t> split,
+                                      int64_t num_outputs) {
   if (!split.empty()) {
     EXT_ENFORCE_INVALID(num_outputs <= 0,
                         "kernel::Split: 'split' and 'num_outputs' are mutually exclusive.");
@@ -37,14 +38,17 @@ std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, std::span<const int64_t
     EXT_ENFORCE_INVALID(total == axis_dim, "kernel::Split: sum of 'split' (", std::to_string(total),
                         ") does not match the input dim on 'axis' (", std::to_string(axis_dim),
                         ").");
-    return std::vector<int64_t>(split.begin(), split.end());
+    onnx_kernels::Shape sizes;
+    sizes.assign(split.begin(), split.end());
+    return sizes;
   }
   EXT_ENFORCE_INVALID(num_outputs > 0,
                       "kernel::Split: either 'split' or 'num_outputs' must be specified.");
   // Per ONNX Split-18 spec: divide evenly; the last chunk takes the remainder
   // and may be smaller. ``chunk = ceil(axis_dim / num_outputs)``.
   const int64_t chunk = (axis_dim + num_outputs - 1) / num_outputs;
-  std::vector<int64_t> sizes(static_cast<size_t>(num_outputs), chunk);
+  onnx_kernels::Shape sizes;
+  sizes.assign(static_cast<size_t>(num_outputs), chunk);
   int64_t remaining = axis_dim;
   for (size_t i = 0; i + 1 < sizes.size(); ++i) {
     remaining -= chunk;
@@ -67,7 +71,7 @@ std::vector<Tensor> Split::operator()(const Tensor &input, int64_t axis,
                       "kernel::Split axis is out of range.");
 
   const int64_t axis_dim = input.shape[static_cast<size_t>(resolved_axis)];
-  const std::vector<int64_t> sizes = ResolveSplitSizes(axis_dim, split, num_outputs);
+  const onnx_kernels::Shape sizes = ResolveSplitSizes(axis_dim, split, num_outputs);
 
   const size_t elem_size = ElementSize(input.data_type);
 

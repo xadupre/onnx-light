@@ -145,9 +145,8 @@ void MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft_l
   const double mel_step = (high_mel - low_mel) / static_cast<double>(n_points);
 
   // Scratch buffer of bin edge indices, sized by ``n_points`` (num_mel_bins +
-  // 2), which is unbounded and exceeds ``Shape::kMaxRank``. It is drawn from
-  // the runtime allocator when one is available, falling back to a
-  // ``std::vector`` otherwise.
+  // 2), whose size is unbounded. It is drawn from the runtime allocator when
+  // one is available, falling back to a ``std::vector`` otherwise.
   RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
   detail::TemporaryTypedBuffer<int64_t> bin_indices_buf(static_cast<std::size_t>(n_points),
                                                         allocator, "kernel::MelWeightMatrix");

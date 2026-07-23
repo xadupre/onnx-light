@@ -3499,7 +3499,7 @@ void RegisterKernelFunctions() {
     }
     ::onnx_light::core::runtime::RegisterSequenceMapPackFn(
         [](RuntimeContext &rt, const Sequence &input_sequence,
-           const std::vector<std::vector<Tensor>> &body_outputs_per_iter) {
+           const std::vector<Tensors> &body_outputs_per_iter) {
           onnx_kernels::kernel::SequenceMap seq_map_kernel(rt.kernel_ctx());
           return seq_map_kernel(input_sequence, body_outputs_per_iter);
         });

@@ -227,9 +227,8 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
   return out;
 }
 
-std::vector<Tensor> RunSubgraph(const GraphProto &graph,
-                                std::vector<std::pair<std::string, Tensor>> bindings,
-                                RuntimeContext &rt, const std::string &attr_name) {
+Tensors RunSubgraph(const GraphProto &graph, std::vector<std::pair<std::string, Tensor>> bindings,
+                    RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child = rt.MakeSubgraphContext(attr_name);
   for (auto &kv : bindings) {
     child.Put(kv.first, std::move(kv.second), RuntimeEventKind::kInput);
@@ -242,7 +241,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     }
   }
 
-  std::vector<Tensor> outputs;
+  Tensors outputs;
   outputs.reserve(graph.output().size());
   for (size_t i = 0; i < graph.output().size(); ++i) {
     const std::string out_name = graph.output()[i].name();
@@ -257,8 +256,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
 
 namespace {
 
-void PropagateOutputsToCaller(const NodeProto &node, std::vector<Tensor> &&outputs,
-                              RuntimeContext &rt) {
+void PropagateOutputsToCaller(const NodeProto &node, Tensors &&outputs, RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(outputs.size() == node.output_size(), "RunNode: op '", node.op_type(),
                       "' produced ", outputs.size(), " output(s), node declares ",
                       node.output_size(), ".");
@@ -330,9 +328,8 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
 // :class:`Loop` only operates on tensor state.
 void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, const Tensor &m_tensor,
                               const Tensor &cond_tensor, const std::vector<bool> &is_seq_state,
-                              std::vector<Tensor> tensor_state,
-                              std::vector<Sequence> sequence_state, std::size_t k,
-                              RuntimeContext &rt) {
+                              Tensors tensor_state, std::vector<Sequence> sequence_state,
+                              std::size_t k, RuntimeContext &rt) {
   const std::size_t n = is_seq_state.size();
 
   int64_t max_trip = std::numeric_limits<int64_t>::max();
@@ -345,7 +342,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     cond_value = ParseBoolScalar(cond_tensor, "Loop input 'cond'");
   }
 
-  std::vector<std::vector<Tensor>> scan_values(k);
+  std::vector<Tensors> scan_values(k);
   int64_t trip_count = 0;
   for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
     RuntimeContext child = rt.MakeSubgraphContext("body");
@@ -499,7 +496,7 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
   // orchestrator since :class:`Loop` only operates on tensors.
   const std::size_t n_inputs = static_cast<std::size_t>(node.input_size() - 2);
   std::vector<bool> is_seq_state(n_inputs, false);
-  std::vector<Tensor> tensor_state(n_inputs);
+  Tensors tensor_state(n_inputs);
   std::vector<Sequence> sequence_state(n_inputs);
   bool any_sequence_state = false;
   for (std::size_t i = 0; i < n_inputs; ++i) {
@@ -532,10 +529,9 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
   }
 
   const std::size_t n = n_inputs;
-  std::vector<Tensor> v_initial = std::move(tensor_state);
+  Tensors v_initial = std::move(tensor_state);
 
-  auto run_body = [&](int64_t iter, bool cond_in,
-                      const std::vector<Tensor> &state) -> std::vector<Tensor> {
+  auto run_body = [&](int64_t iter, bool cond_in, const Tensors &state) -> Tensors {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(2 + n);
     bindings.emplace_back(body.input(0).name(),
@@ -551,7 +547,7 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
   };
 
   Loop loop_kernel(rt.kernel_ctx());
-  std::vector<Tensor> outputs = loop_kernel(rt, m_tensor, cond_tensor, v_initial, k, run_body);
+  Tensors outputs = loop_kernel(rt, m_tensor, cond_tensor, v_initial, k, run_body);
 
   // When the loop runs zero iterations the kernel produces UNDEFINED-typed
   // empty scan outputs (it has no template to seed dtype/shape from). Patch
@@ -623,7 +619,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
         "RunNode: Scan opset 8 with a non-empty 'sequence_lens' input is not supported.");
   }
 
-  std::vector<Tensor> initial_state;
+  Tensors initial_state;
   initial_state.reserve(n);
   for (size_t i = 0; i < n; ++i) {
     const int idx = static_cast<int>(scan8_offset + i);
@@ -632,7 +628,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
     initial_state.push_back(GetInput(node, idx, rt.tensors()));
   }
 
-  std::vector<Tensor> scan_inputs;
+  Tensors scan_inputs;
   scan_inputs.reserve(m);
   for (size_t i = 0; i < m; ++i) {
     const int idx = static_cast<int>(scan8_offset + n + i);
@@ -664,9 +660,8 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   // shape and forwarding inputs / attributes to the kernel.
   Scan scan_kernel(rt.kernel_ctx());
   if (!is_scan8) {
-    std::vector<Tensor> outputs =
-        scan_kernel(rt, body, initial_state, scan_inputs, scan_input_axes, scan_input_directions,
-                    scan_output_axes, scan_output_directions);
+    Tensors outputs = scan_kernel(rt, body, initial_state, scan_inputs, scan_input_axes,
+                                  scan_input_directions, scan_output_axes, scan_output_directions);
     PropagateOutputsToCaller(node, std::move(outputs), rt);
     return;
   }
@@ -700,22 +695,21 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   // ``o``-th Scan-9 output, in batch order; reusing the stacking-only
   // overload of ``Scan`` then concatenates them along a fresh
   // leading axis to recover the batch dimension.
-  std::vector<std::vector<Tensor>> per_output(n + k);
+  std::vector<Tensors> per_output(n + k);
   for (int64_t b = 0; b < batch; ++b) {
-    std::vector<Tensor> batch_state;
+    Tensors batch_state;
     batch_state.reserve(n);
     for (size_t i = 0; i < n; ++i) {
       batch_state.push_back(SliceTensorAlongAxis(initial_state[i], 0, b, "Scan"));
     }
-    std::vector<Tensor> batch_scan;
+    Tensors batch_scan;
     batch_scan.reserve(m);
     for (size_t i = 0; i < m; ++i) {
       batch_scan.push_back(SliceTensorAlongAxis(scan_inputs[i], 0, b, "Scan"));
     }
-    std::vector<Tensor> batch_outputs =
-        scan_kernel(rt, body, batch_state, batch_scan, /*scan_input_axes=*/{},
-                    scan_input_directions, /*scan_output_axes=*/{},
-                    /*scan_output_directions=*/{});
+    Tensors batch_outputs = scan_kernel(rt, body, batch_state, batch_scan, /*scan_input_axes=*/{},
+                                        scan_input_directions, /*scan_output_axes=*/{},
+                                        /*scan_output_directions=*/{});
     EXT_ENFORCE_INVALID(
         batch_outputs.size() == n + k,
         "RunNode: Scan opset 8 inner Scan-9 call produced an unexpected output count.");
@@ -725,9 +719,9 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   }
 
   // Stack each output column along a new leading axis (default axis 0).
-  std::vector<Tensor> outputs = scan_kernel(rt, batch, /*initial_state=*/{}, /*final_state=*/{},
-                                            per_output, /*scan_output_axes=*/{},
-                                            /*scan_output_directions=*/{});
+  Tensors outputs = scan_kernel(rt, batch, /*initial_state=*/{}, /*final_state=*/{}, per_output,
+                                /*scan_output_axes=*/{},
+                                /*scan_output_directions=*/{});
   PropagateOutputsToCaller(node, std::move(outputs), rt);
 }
 
@@ -781,7 +775,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
                       " output(s), but the body graph produces ", m, ".");
 
   // ``body_outputs_per_iter[k][i]`` = body output ``k`` for iteration ``i``.
-  std::vector<std::vector<Tensor>> body_outputs_per_iter(m);
+  std::vector<Tensors> body_outputs_per_iter(m);
   for (std::size_t k = 0; k < m; ++k) {
     body_outputs_per_iter[k].reserve(n);
   }
@@ -806,7 +800,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
       bindings.emplace_back(param_name, std::move(t));
     }
 
-    std::vector<Tensor> iter_outputs = RunSubgraph(body, std::move(bindings), rt, "body");
+    Tensors iter_outputs = RunSubgraph(body, std::move(bindings), rt, "body");
     EXT_ENFORCE_INVALID(iter_outputs.size() == m, "RunNode: SequenceMap body produced ",
                         iter_outputs.size(), " output(s) at iteration ", i, ", expected ", m, ".");
     for (std::size_t k = 0; k < m; ++k) {

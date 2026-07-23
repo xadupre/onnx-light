@@ -5,10 +5,11 @@
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
+#include <cstddef>
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -16,77 +17,99 @@ namespace kernel {
 
 namespace {
 
-// Reads the entries of ``split`` (an INT32 or INT64 tensor) into a
-// vector of int64 values.
-std::vector<int64_t> ReadSplit(const Tensor &split) {
-  const int64_t n = split.shape.empty() ? int64_t{1} : [&]() {
-    int64_t total = 1;
-    for (int64_t d : split.shape)
-      total *= d;
-    return total;
-  }();
-  std::vector<int64_t> out;
-  out.reserve(static_cast<std::size_t>(n));
+// Reads a single INT32/INT64 scalar ``split`` value.
+int64_t ReadScalarSplit(const Tensor &split) {
   if (split.data_type == static_cast<int32_t>(DataType::INT32)) {
     const int32_t *p = split.AsInt32();
-    EXT_ENFORCE_INVALID(p != nullptr || n == 0,
+    EXT_ENFORCE_INVALID(p != nullptr, "kernel::SplitToSequence: 'split' INT32 data is null.");
+    return static_cast<int64_t>(p[0]);
+  }
+  EXT_ENFORCE_INVALID(split.data_type == static_cast<int32_t>(DataType::INT64),
+                      "kernel::SplitToSequence: 'split' must have data type INT32 or INT64.");
+  const int64_t *p = split.AsInt64();
+  EXT_ENFORCE_INVALID(p != nullptr, "kernel::SplitToSequence: 'split' INT64 data is null.");
+  return p[0];
+}
+
+// Reads ``count`` entries of a 1-D INT32/INT64 ``split`` tensor into ``out``.
+void ReadSplitInto(const Tensor &split, std::size_t count, int64_t *out) {
+  if (split.data_type == static_cast<int32_t>(DataType::INT32)) {
+    const int32_t *p = split.AsInt32();
+    EXT_ENFORCE_INVALID(p != nullptr || count == 0,
                         "kernel::SplitToSequence: 'split' INT32 data is null.");
-    for (int64_t i = 0; i < n; ++i)
-      out.push_back(static_cast<int64_t>(p[i]));
+    for (std::size_t i = 0; i < count; ++i)
+      out[i] = static_cast<int64_t>(p[i]);
   } else {
     EXT_ENFORCE_INVALID(split.data_type == static_cast<int32_t>(DataType::INT64),
                         "kernel::SplitToSequence: 'split' must have data type INT32 or INT64.");
     const int64_t *p = split.AsInt64();
-    EXT_ENFORCE_INVALID(p != nullptr || n == 0,
+    EXT_ENFORCE_INVALID(p != nullptr || count == 0,
                         "kernel::SplitToSequence: 'split' INT64 data is null.");
-    for (int64_t i = 0; i < n; ++i)
-      out.push_back(p[i]);
+    for (std::size_t i = 0; i < count; ++i)
+      out[i] = p[i];
   }
-  return out;
 }
 
-// Resolves the per-output split sizes. Mirrors ONNX SplitToSequence:
+// Returns the number of chunks SplitToSequence produces. See ``FillSplitSizes``
+// for the per-case semantics.
+int64_t CountSplitSizes(int64_t axis_dim, const Tensor *split) {
+  if (split == nullptr) {
+    return axis_dim;
+  }
+  if (split->shape.empty()) {
+    // Scalar: equal chunks of ``chunk``; an empty axis still yields a single
+    // (zero-length) chunk.
+    const int64_t chunk = ReadScalarSplit(*split);
+    EXT_ENFORCE_INVALID(chunk > 0,
+                        "kernel::SplitToSequence: scalar 'split' must be strictly positive.");
+    return axis_dim > 0 ? (axis_dim + chunk - 1) / chunk : 1;
+  }
+  EXT_ENFORCE_INVALID(split->shape.size() == 1,
+                      "kernel::SplitToSequence: 'split' must be a scalar or 1-D tensor.");
+  return split->shape[0];
+}
+
+// Fills ``sizes`` (length == ``CountSplitSizes(axis_dim, split)``) with the
+// per-output split sizes. Mirrors ONNX SplitToSequence:
 //   * ``split`` omitted: ``axis_dim`` chunks of size 1.
 //   * ``split`` is a scalar ``s``: equal chunks of size ``s``; the last
 //     chunk takes the remainder when ``axis_dim`` is not divisible by ``s``.
 //   * ``split`` is a 1-D tensor: its entries give the chunk sizes and
 //     must sum to ``axis_dim``.
-std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, const Tensor *split) {
+void FillSplitSizes(int64_t axis_dim, const Tensor *split, int64_t *sizes) {
   if (split == nullptr) {
-    return std::vector<int64_t>(static_cast<std::size_t>(axis_dim), int64_t{1});
+    for (int64_t i = 0; i < axis_dim; ++i) {
+      sizes[static_cast<std::size_t>(i)] = 1;
+    }
+    return;
   }
-  const std::vector<int64_t> values = ReadSplit(*split);
   if (split->shape.empty()) {
-    // Scalar: split into equal chunks of ``values[0]``.
-    EXT_ENFORCE_INVALID(values.size() == 1,
-                        "kernel::SplitToSequence: scalar 'split' must contain exactly one value.");
-    const int64_t chunk = values[0];
-    EXT_ENFORCE_INVALID(chunk > 0,
-                        "kernel::SplitToSequence: scalar 'split' must be strictly positive.");
-    std::vector<int64_t> sizes;
+    const int64_t chunk = ReadScalarSplit(*split);
+    if (axis_dim <= 0) {
+      sizes[0] = 0;
+      return;
+    }
+    std::size_t i = 0;
     int64_t remaining = axis_dim;
     while (remaining > 0) {
       const int64_t take = remaining >= chunk ? chunk : remaining;
-      sizes.push_back(take);
+      sizes[i++] = take;
       remaining -= take;
     }
-    if (sizes.empty()) {
-      sizes.push_back(0);
-    }
-    return sizes;
+    return;
   }
   // 1-D: use entries as-is.
-  EXT_ENFORCE_INVALID(split->shape.size() == 1,
-                      "kernel::SplitToSequence: 'split' must be a scalar or 1-D tensor.");
+  const std::size_t count = static_cast<std::size_t>(split->shape[0]);
+  ReadSplitInto(*split, count, sizes);
   int64_t total = 0;
-  for (int64_t s : values) {
-    EXT_ENFORCE_INVALID(s >= 0, "kernel::SplitToSequence: 'split' entries must be non-negative.");
-    total += s;
+  for (std::size_t i = 0; i < count; ++i) {
+    EXT_ENFORCE_INVALID(sizes[i] >= 0,
+                        "kernel::SplitToSequence: 'split' entries must be non-negative.");
+    total += sizes[i];
   }
   EXT_ENFORCE_INVALID(total == axis_dim, "kernel::SplitToSequence: sum of 'split' (",
                       std::to_string(total), ") does not match the input dim on 'axis' (",
                       std::to_string(axis_dim), ").");
-  return values;
 }
 
 } // namespace
@@ -101,7 +124,19 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
                       "kernel::SplitToSequence axis is out of range.");
 
   const int64_t axis_dim = input.shape[static_cast<std::size_t>(resolved_axis)];
-  const std::vector<int64_t> sizes = ResolveSplitSizes(axis_dim, split);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+
+  // ``sizes`` holds one entry per output chunk; its length scales with the
+  // number of outputs, so it is drawn from the runtime allocator when one is
+  // available, falling back to a ``std::vector`` otherwise.
+  const int64_t num_sizes = CountSplitSizes(axis_dim, split);
+  // The allocator rejects a zero-byte request; clamp to at least one slot. When
+  // ``num_sizes`` is 0 the buffer is never dereferenced.
+  detail::TemporaryTypedBuffer<int64_t> sizes_buf(
+      static_cast<std::size_t>(num_sizes > 0 ? num_sizes : 1), allocator,
+      "kernel::SplitToSequence sizes");
+  int64_t *sizes = sizes_buf.data();
+  FillSplitSizes(axis_dim, split, sizes);
 
   // When ``split`` is provided, the schema mandates ``keepdims`` is ignored.
   const bool squeeze = (split == nullptr) && (keepdims == 0);
@@ -120,10 +155,10 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
   const std::size_t in_row_bytes = static_cast<std::size_t>(axis_dim) * inner_bytes;
 
   Tensors outputs;
-  outputs.reserve(sizes.size());
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  outputs.reserve(static_cast<std::size_t>(num_sizes));
   std::size_t offset = 0; // byte offset within each "row" of the input.
-  for (int64_t size : sizes) {
+  for (int64_t si = 0; si < num_sizes; ++si) {
+    const int64_t size = sizes[static_cast<std::size_t>(si)];
     onnx_kernels::Shape out_shape;
     out_shape.reserve(static_cast<std::size_t>(rank));
     for (int64_t d = 0; d < rank; ++d) {

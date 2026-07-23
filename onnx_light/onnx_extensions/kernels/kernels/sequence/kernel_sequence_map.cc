@@ -13,12 +13,11 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-std::vector<Sequence>
-SequenceMap::operator()(const Sequence &input_sequence,
-                        const std::vector<Tensors> &body_outputs_per_iter) const {
+Sequences SequenceMap::operator()(const Sequence &input_sequence,
+                                  const std::vector<Tensors> &body_outputs_per_iter) const {
   const std::size_t n = input_sequence.size();
 
-  std::vector<Sequence> outputs;
+  Sequences outputs;
   outputs.reserve(body_outputs_per_iter.size());
 
   for (std::size_t k = 0; k < body_outputs_per_iter.size(); ++k) {

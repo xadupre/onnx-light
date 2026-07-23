@@ -220,8 +220,8 @@ public:
   ///                               all tensors in a given row must share
   ///                               the same data type.
   /// @return ``M`` output sequences each of length ``N``.
-  std::vector<Sequence> operator()(const Sequence &input_sequence,
-                                   const std::vector<Tensors> &body_outputs_per_iter) const;
+  Sequences operator()(const Sequence &input_sequence,
+                       const std::vector<Tensors> &body_outputs_per_iter) const;
 
   /// Output sequences are freshly constructed, so they cannot share
   /// storage with any input.

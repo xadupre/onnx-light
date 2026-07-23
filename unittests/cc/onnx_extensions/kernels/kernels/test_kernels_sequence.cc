@@ -18,6 +18,7 @@ using core::backend_test::DefaultOpset;
 using core::runtime::Tensor;
 using core::runtime::Tensors;
 using onnx_kernels::Sequence;
+using onnx_kernels::Sequences;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::SequenceAt;
 using onnx_kernels::kernel::SequenceConstruct;
@@ -594,7 +595,7 @@ TEST(KernelClass, SequenceMapBuildsOneSequencePerBodyOutput) {
 
   // Single body output: identity-like per-iteration tensors.
   std::vector<Tensors> body_out = {{a, b, c}};
-  std::vector<Sequence> outs = op(in_seq, body_out);
+  Sequences outs = op(in_seq, body_out);
 
   ASSERT_EQ(outs.size(), 1u);
   ASSERT_EQ(outs[0].size(), 3u);
@@ -615,7 +616,7 @@ TEST(KernelClass, SequenceMapBuildsMultipleOutputSequences) {
 
   // Two body outputs (mixed dtypes), each with one tensor per iteration.
   std::vector<Tensors> body_out = {{a, b}, {x, y}};
-  std::vector<Sequence> outs = op(in_seq, body_out);
+  Sequences outs = op(in_seq, body_out);
 
   ASSERT_EQ(outs.size(), 2u);
   ASSERT_EQ(outs[0].size(), 2u);
@@ -659,7 +660,7 @@ TEST(KernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
   // sequence is empty and its elem_type degrades to UNDEFINED (since no
   // sample tensors are available).
   std::vector<Tensors> body_out = {{}};
-  std::vector<Sequence> outs = op(in_seq, body_out);
+  Sequences outs = op(in_seq, body_out);
 
   ASSERT_EQ(outs.size(), 1u);
   EXPECT_EQ(outs[0].size(), 0u);

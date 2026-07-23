@@ -59,8 +59,8 @@ onnx_kernels::Shape BroadcastOutputShape(const onnx_kernels::Shape &in_shape,
 struct ExpandLayout {
   onnx_kernels::Shape out_shape;
   onnx_kernels::Shape in_shape_aligned; // right-aligned, prepended with 1s
-  std::vector<int64_t> out_strides;
-  std::vector<int64_t> in_strides;
+  onnx_kernels::Shape out_strides;
+  onnx_kernels::Shape in_strides;
   size_t elem_size;
   int64_t total_elements;
 };
@@ -79,7 +79,7 @@ ExpandLayout ComputeExpandLayout(const Tensor &input, const onnx_kernels::Shape 
   }
 
   // Compute output strides (row-major).
-  layout.out_strides.resize(static_cast<std::size_t>(out_rank));
+  layout.out_strides.assign(static_cast<std::size_t>(out_rank), int64_t{0});
   layout.out_strides[static_cast<std::size_t>(out_rank - 1)] = 1;
   for (int64_t k = out_rank - 2; k >= 0; --k) {
     layout.out_strides[static_cast<std::size_t>(k)] =
@@ -88,7 +88,7 @@ ExpandLayout ComputeExpandLayout(const Tensor &input, const onnx_kernels::Shape 
   }
 
   // Compute input strides (row-major, based on aligned input shape).
-  layout.in_strides.resize(static_cast<std::size_t>(out_rank));
+  layout.in_strides.assign(static_cast<std::size_t>(out_rank), int64_t{0});
   layout.in_strides[static_cast<std::size_t>(out_rank - 1)] = 1;
   for (int64_t k = out_rank - 2; k >= 0; --k) {
     layout.in_strides[static_cast<std::size_t>(k)] =

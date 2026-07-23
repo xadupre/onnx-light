@@ -41,12 +41,13 @@ std::vector<int64_t> ReadScatterElementsIndices(const Tensor &indices) {
 template <typename T>
 void ApplyScatterElementsTyped(const Tensor &updates, RawBuffer &out_bytes,
                                const std::vector<int64_t> &idx_values, int64_t axis,
-                               int64_t axis_dim, const Shape &data_strides,
-                               const Shape &idx_strides, const std::string &reduction, int64_t r) {
+                               int64_t axis_dim, const onnx_kernels::Shape &data_strides,
+                               const onnx_kernels::Shape &idx_strides, const std::string &reduction,
+                               int64_t r) {
   T *out = reinterpret_cast<T *>(out_bytes.data());
   const T *upd = reinterpret_cast<const T *>(updates.bytes());
   const int64_t total = static_cast<int64_t>(idx_values.size());
-  Shape coord;
+  onnx_kernels::Shape coord;
   coord.assign(static_cast<std::size_t>(r), 0);
   for (int64_t u_idx = 0; u_idx < total; ++u_idx) {
     int64_t remaining = u_idx;
@@ -123,13 +124,13 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
   const std::vector<int64_t> idx_values = ReadScatterElementsIndices(indices);
   const int64_t axis_dim = data.shape[static_cast<std::size_t>(axis)];
 
-  Shape data_strides;
+  onnx_kernels::Shape data_strides;
   data_strides.assign(static_cast<std::size_t>(r), 1);
   for (int64_t k = r - 2; k >= 0; --k) {
     data_strides[static_cast<std::size_t>(k)] =
         data_strides[static_cast<std::size_t>(k + 1)] * data.shape[static_cast<std::size_t>(k + 1)];
   }
-  Shape idx_strides;
+  onnx_kernels::Shape idx_strides;
   idx_strides.assign(static_cast<std::size_t>(r), 1);
   for (int64_t k = r - 2; k >= 0; --k) {
     idx_strides[static_cast<std::size_t>(k)] = idx_strides[static_cast<std::size_t>(k + 1)] *
@@ -162,7 +163,7 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
                         "supported for this dtype.");
     const std::size_t elem_size = ElementSize(data.data_type);
     const int64_t total = static_cast<int64_t>(idx_values.size());
-    Shape coord;
+    onnx_kernels::Shape coord;
     coord.assign(static_cast<std::size_t>(r), 0);
     for (int64_t u_idx = 0; u_idx < total; ++u_idx) {
       int64_t remaining = u_idx;

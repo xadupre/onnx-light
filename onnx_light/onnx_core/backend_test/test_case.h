@@ -431,11 +431,3 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
 } // namespace backend_test
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE
-
-// The ``IoData`` struct and the ``Expect`` / ``BuildSingleNodeCase`` case
-// builders originally lived in this header. They now live in the dedicated
-// ``io_data.h`` and ``expect.h`` headers. Both are included here so the many
-// existing translation units that only include ``test_case.h`` keep compiling
-// unchanged.
-#include "onnx_core/backend_test/expect.h"
-#include "onnx_core/backend_test/io_data.h"

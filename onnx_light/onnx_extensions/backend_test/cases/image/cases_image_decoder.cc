@@ -13,7 +13,7 @@
 // Do not edit by hand: re-run the generator script if upstream ONNX
 // refreshes the reference data.
 
-#include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/backend_test/expect.h"
 #include "onnx_extensions/backend_test/cases/image/include_image_cases.h"
 #include "onnx_proto/onnx_helper.h"
 

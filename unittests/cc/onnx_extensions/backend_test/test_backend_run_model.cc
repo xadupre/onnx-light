@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/backend_test/expect.h"
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"

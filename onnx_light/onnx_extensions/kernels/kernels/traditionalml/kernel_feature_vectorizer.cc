@@ -70,8 +70,7 @@ void DispatchCopyRowAsFloat(const Tensor &t, int64_t row, int64_t declared_featu
   }
 }
 
-void ValidateInputs(const std::vector<Tensor> &inputs,
-                    const std::vector<int64_t> &inputdimensions) {
+void ValidateInputs(const Tensors &inputs, const std::vector<int64_t> &inputdimensions) {
   EXT_ENFORCE_INVALID(!inputs.empty(), "kernel::FeatureVectorizer requires at least one input.");
   if (!inputdimensions.empty()) {
     EXT_ENFORCE_INVALID(inputdimensions.size() == inputs.size(),
@@ -87,7 +86,7 @@ void ValidateInputs(const std::vector<Tensor> &inputs,
   }
 }
 
-std::vector<int64_t> ResolveInputDims(const std::vector<Tensor> &inputs,
+std::vector<int64_t> ResolveInputDims(const Tensors &inputs,
                                       const std::vector<int64_t> &inputdimensions) {
   if (!inputdimensions.empty()) {
     return inputdimensions;
@@ -100,7 +99,7 @@ std::vector<int64_t> ResolveInputDims(const std::vector<Tensor> &inputs,
   return dims;
 }
 
-int64_t ResolveBatchSize(const std::vector<Tensor> &inputs) {
+int64_t ResolveBatchSize(const Tensors &inputs) {
   int64_t batch = 1;
   for (const Tensor &t : inputs) {
     const int64_t b = BatchFeature(t).first;
@@ -111,7 +110,7 @@ int64_t ResolveBatchSize(const std::vector<Tensor> &inputs) {
   return batch;
 }
 
-void Compute(const std::vector<Tensor> &inputs, const std::vector<int64_t> &input_dims, int64_t n,
+void Compute(const Tensors &inputs, const std::vector<int64_t> &input_dims, int64_t n,
              int64_t total_features, float *out) {
   for (int64_t row = 0; row < n; ++row) {
     float *out_row = out + row * total_features;
@@ -125,7 +124,7 @@ void Compute(const std::vector<Tensor> &inputs, const std::vector<int64_t> &inpu
 
 } // namespace
 
-Tensor FeatureVectorizer::operator()(const std::vector<Tensor> &inputs,
+Tensor FeatureVectorizer::operator()(const Tensors &inputs,
                                      const std::vector<int64_t> &inputdimensions,
                                      RuntimeContext *rt) const {
   ValidateInputs(inputs, inputdimensions);
@@ -140,7 +139,7 @@ Tensor FeatureVectorizer::operator()(const std::vector<Tensor> &inputs,
   return Tensor::FromFloat("", {n, total_features}, values, ctx_.allocator);
 }
 
-void FeatureVectorizer::operator()(const std::vector<Tensor> &inputs,
+void FeatureVectorizer::operator()(const Tensors &inputs,
                                    const std::vector<int64_t> &inputdimensions,
                                    Tensor &output) const {
   ValidateInputs(inputs, inputdimensions);

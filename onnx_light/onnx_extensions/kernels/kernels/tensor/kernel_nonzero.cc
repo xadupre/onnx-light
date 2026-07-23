@@ -66,7 +66,13 @@ Tensor NonZero::operator()(const Tensor &x, RuntimeContext *rt) const {
 
   // Build the row-major (rank, nnz) index matrix: row r lists the r-th
   // coordinate of every non-zero element, in row-major scan order of the input.
-  std::vector<int64_t> values(static_cast<std::size_t>(rank) * static_cast<std::size_t>(nnz));
+  // The output buffer is acquired from the runtime allocator via
+  // ``MakeOutputTensor`` and written in place, avoiding a separate
+  // std::vector allocated outside the allocator.
+  const std::size_t out_count = static_cast<std::size_t>(rank) * static_cast<std::size_t>(nnz);
+  Tensor result = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape,
+                                   out_count * sizeof(int64_t), ctx_.allocator);
+  int64_t *values = result.AsInt64();
   for (std::size_t k = 0; k < nz_indices.size(); ++k) {
     int64_t flat = nz_indices[k];
     for (std::size_t r = rank; r > 0; --r) {
@@ -79,7 +85,7 @@ Tensor NonZero::operator()(const Tensor &x, RuntimeContext *rt) const {
     }
   }
 
-  return Tensor::FromInt64("", out_shape, values, ctx_.allocator);
+  return result;
 }
 
 } // namespace kernel

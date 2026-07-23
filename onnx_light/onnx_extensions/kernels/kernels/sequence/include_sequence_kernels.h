@@ -70,8 +70,8 @@ class SequenceConstruct : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt = nullptr) const;
-  void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
+  Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
+  void operator()(const Tensors &inputs, Tensor &output) const;
 
   /// Sequence-returning overload. Builds an :cpp:struct:`Sequence`
   /// whose ``elem_type`` is the common element type of ``inputs`` (or
@@ -79,7 +79,7 @@ public:
   /// preserves the input order. Unlike the ``Tensor``-returning
   /// overloads, this overload does not stack the inputs into a single
   /// buffer and does not require the inputs to share a common shape.
-  Sequence AsSequence(const std::vector<Tensor> &inputs) const;
+  Sequence AsSequence(const Tensors &inputs) const;
 
   /// Output layout is a stacked concatenation of input byte buffers, which
   /// cannot share storage with any single input buffer.
@@ -92,7 +92,7 @@ public:
 /// ONNX ``ConcatFromSequence`` operator (since opset 11 in the
 /// ai.onnx domain). The project's runtime ``Tensor`` type does not
 /// natively model sequence values, so this kernel takes the sequence
-/// as a ``std::vector<Tensor>`` of identically-typed tensors. All
+/// as a ``Tensors`` of identically-typed tensors. All
 /// inputs must share the same ``data_type`` and rank, and must agree
 /// on every dimension except (for ``new_axis == 0``) the concat axis,
 /// which must be equal across inputs (for ``new_axis == 1``) every
@@ -106,13 +106,12 @@ public:
 
   /// Returning overload. ``axis`` follows the ONNX convention and may
   /// be negative; ``new_axis`` must be 0 (concat) or 1 (stack).
-  Tensor operator()(const std::vector<Tensor> &inputs, int64_t axis, int64_t new_axis = 0,
+  Tensor operator()(const Tensors &inputs, int64_t axis, int64_t new_axis = 0,
                     RuntimeContext *rt = nullptr) const;
 
   /// In-place overload. ``output`` must already carry the expected
   /// ``data_type``, ``shape`` and sufficiently-sized ``data`` buffer.
-  void operator()(const std::vector<Tensor> &inputs, int64_t axis, int64_t new_axis,
-                  Tensor &output) const;
+  void operator()(const Tensors &inputs, int64_t axis, int64_t new_axis, Tensor &output) const;
 
   /// Output layout fundamentally differs from any single input
   /// (concatenation/stacking along an axis), so aliasing is not

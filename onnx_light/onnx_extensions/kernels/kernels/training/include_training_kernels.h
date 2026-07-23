@@ -8,8 +8,6 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
-#include <vector>
-
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 // Re-exports the runtime types moved to ``onnx_core::runtime`` so
@@ -78,9 +76,8 @@ public:
   /// The trailing ``alpha``, ``beta``, ``epsilon``, ``norm_coefficient`` and
   /// ``norm_coefficient_post`` parameters mirror the Adam ONNX schema
   /// attributes; defaults match the schema defaults.
-  Tensors operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                     const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                     const std::vector<Tensor> &Hs, float alpha = 0.9f, float beta = 0.999f,
+  Tensors operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, const Tensors &Gs,
+                     const Tensors &Vs, const Tensors &Hs, float alpha = 0.9f, float beta = 0.999f,
                      float epsilon = 1e-6f, float norm_coefficient = 0.0f,
                      float norm_coefficient_post = 0.0f) const;
 
@@ -89,9 +86,8 @@ public:
   /// ``{X_final_1..N, V_new_1..N, H_new_1..N}`` where each output already
   /// matches the FLOAT data type, shape and buffer size of the corresponding
   /// optimized tensor.
-  void operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                  const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                  const std::vector<Tensor> &Hs, Tensors &outputs, float alpha = 0.9f,
+  void operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, const Tensors &Gs,
+                  const Tensors &Vs, const Tensors &Hs, Tensors &outputs, float alpha = 0.9f,
                   float beta = 0.999f, float epsilon = 1e-6f, float norm_coefficient = 0.0f,
                   float norm_coefficient_post = 0.0f) const;
 
@@ -130,9 +126,8 @@ public:
   /// The trailing ``epsilon``, ``decay_factor`` and ``norm_coefficient``
   /// parameters mirror the Adagrad ONNX schema attributes; defaults match
   /// the schema defaults.
-  Tensors operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                     const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs,
-                     float epsilon = 0.0f, float decay_factor = 0.0f,
+  Tensors operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, const Tensors &Gs,
+                     const Tensors &Hs, float epsilon = 0.0f, float decay_factor = 0.0f,
                      float norm_coefficient = 0.0f) const;
 
   /// In-place overload writing into caller-allocated ``outputs``. The vector
@@ -140,10 +135,9 @@ public:
   /// ``{X_new_1..N, H_new_1..N}`` where each output already matches the
   /// FLOAT data type, shape and buffer size of the corresponding optimized
   /// tensor.
-  void operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                  const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs, Tensors &outputs,
-                  float epsilon = 0.0f, float decay_factor = 0.0f,
-                  float norm_coefficient = 0.0f) const;
+  void operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, const Tensors &Gs,
+                  const Tensors &Hs, Tensors &outputs, float epsilon = 0.0f,
+                  float decay_factor = 0.0f, float norm_coefficient = 0.0f) const;
 
   /// Adagrad writes its outputs based on independent reads of multiple
   /// input tensors and never aliases an input buffer.
@@ -187,19 +181,18 @@ public:
   /// ``R`` must be a scalar FLOAT tensor and ``T`` a scalar INT64 tensor.
   /// The trailing ``alpha``, ``beta``, ``norm_coefficient`` and ``mode``
   /// parameters mirror the Momentum ONNX schema attributes.
-  Tensors operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                     const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs, float alpha,
-                     float beta, float norm_coefficient, Mode mode = Mode::kStandard) const;
+  Tensors operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, const Tensors &Gs,
+                     const Tensors &Vs, float alpha, float beta, float norm_coefficient,
+                     Mode mode = Mode::kStandard) const;
 
   /// In-place overload writing into caller-allocated ``outputs``. The vector
   /// must contain exactly ``2 * Xs.size()`` tensors in the layout
   /// ``{X_new_1..N, V_new_1..N}`` where each output already matches the
   /// FLOAT data type, shape and buffer size of the corresponding optimized
   /// tensor.
-  void operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                  const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs, Tensors &outputs,
-                  float alpha, float beta, float norm_coefficient,
-                  Mode mode = Mode::kStandard) const;
+  void operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, const Tensors &Gs,
+                  const Tensors &Vs, Tensors &outputs, float alpha, float beta,
+                  float norm_coefficient, Mode mode = Mode::kStandard) const;
 
   /// Momentum writes its outputs based on independent reads of multiple
   /// input tensors and never aliases an input buffer.

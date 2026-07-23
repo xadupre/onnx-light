@@ -5,7 +5,6 @@
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
 #include <cstdint>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -17,7 +16,7 @@ Sequence SequenceEmpty::operator()(int32_t dtype) const {
   const int32_t elem_type = (dtype == static_cast<int32_t>(DataType::UNDEFINED))
                                 ? static_cast<int32_t>(DataType::FLOAT)
                                 : dtype;
-  return Sequence(std::string{}, elem_type, std::vector<Tensor>{});
+  return Sequence(std::string{}, elem_type, Tensors{});
 }
 
 } // namespace kernel

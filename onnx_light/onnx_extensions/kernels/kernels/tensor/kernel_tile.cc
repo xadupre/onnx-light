@@ -16,8 +16,13 @@ namespace kernel {
 
 namespace {
 
-// Reads the 1-D INT64 ``repeats`` input tensor and validates it.
-std::vector<int64_t> ReadTileRepeatsInput(const Tensor &repeats, std::size_t input_rank) {
+// Reads and validates the 1-D INT64 ``repeats`` input tensor and copies its
+// values into an allocator-backed :cpp:class:`Tensor` (obtained from
+// :cpp:func:`MakeOutputTensor`) instead of a temporary ``std::vector<int64_t>``,
+// so the scratch storage can come from the runtime allocator when one is given.
+// Returns the INT64 ``Tensor`` holding the validated ``repeats`` values.
+Tensor ReadTileRepeatsInput(const Tensor &repeats, std::size_t input_rank,
+                            RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(repeats.data_type == DataType::INT64,
                       "kernel::Tile: 'repeats' input must be INT64.");
   EXT_ENFORCE_INVALID(repeats.shape.size() == 1,
@@ -25,18 +30,21 @@ std::vector<int64_t> ReadTileRepeatsInput(const Tensor &repeats, std::size_t inp
   const int64_t n = repeats.shape[0];
   EXT_ENFORCE_INVALID(static_cast<std::size_t>(n) == input_rank,
                       "kernel::Tile: 'repeats' length must equal the rank of 'input'.");
-  std::vector<int64_t> out(static_cast<std::size_t>(n));
+  Tensor out = MakeOutputTensor(DataType::INT64, {n}, static_cast<std::size_t>(n) * sizeof(int64_t),
+                                allocator);
   if (n > 0) {
-    std::memcpy(out.data(), repeats.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.mutable_bytes(), repeats.bytes(),
+                static_cast<std::size_t>(n) * sizeof(int64_t));
   }
-  for (int64_t r : out) {
-    EXT_ENFORCE_INVALID(r >= 0, "kernel::Tile: 'repeats' values must be non-negative.");
+  const int64_t *reps = out.As<int64_t>();
+  for (int64_t k = 0; k < n; ++k) {
+    EXT_ENFORCE_INVALID(reps[k] >= 0, "kernel::Tile: 'repeats' values must be non-negative.");
   }
   return out;
 }
 
 onnx_kernels::Shape ComputeTileOutputShape(const onnx_kernels::Shape &in_shape,
-                                           const std::vector<int64_t> &repeats) {
+                                           const int64_t *repeats) {
   onnx_kernels::Shape out_shape;
   out_shape.assign(in_shape.size(), 0);
   for (std::size_t k = 0; k < in_shape.size(); ++k) {
@@ -48,23 +56,23 @@ onnx_kernels::Shape ComputeTileOutputShape(const onnx_kernels::Shape &in_shape,
 } // namespace
 
 Tensor Tile::operator()(const Tensor &input, const Tensor &repeats, RuntimeContext *rt) const {
-  const std::vector<int64_t> reps = ReadTileRepeatsInput(repeats, input.shape.size());
-  const onnx_kernels::Shape out_shape = ComputeTileOutputShape(input.shape, reps);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  const Tensor reps = ReadTileRepeatsInput(repeats, input.shape.size(), allocator);
+  const onnx_kernels::Shape out_shape = ComputeTileOutputShape(input.shape, reps.As<int64_t>());
   const std::size_t elem_size = ElementSize(input.data_type);
   int64_t total_elements = 1;
   for (int64_t d : out_shape) {
     total_elements *= d;
   }
   const size_t out_n_bytes = static_cast<std::size_t>(total_elements) * elem_size;
-  Tensor out =
-      MakeOutputTensor(input.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, allocator);
   (*this)(input, repeats, out);
   return out;
 }
 
 void Tile::operator()(const Tensor &input, const Tensor &repeats, Tensor &output) const {
-  const std::vector<int64_t> reps = ReadTileRepeatsInput(repeats, input.shape.size());
-  const onnx_kernels::Shape out_shape = ComputeTileOutputShape(input.shape, reps);
+  const Tensor reps = ReadTileRepeatsInput(repeats, input.shape.size(), nullptr);
+  const onnx_kernels::Shape out_shape = ComputeTileOutputShape(input.shape, reps.As<int64_t>());
 
   EXT_ENFORCE_INVALID(output.data_type == input.data_type,
                       "kernel::Tile: preallocated output dtype must match input dtype.");

@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -44,9 +43,9 @@ void CheckSameShape(const Tensor &a, const Tensor &b, const char *label_a, const
 
 } // namespace
 
-Tensors Momentum::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                             const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                             float alpha, float beta, float norm_coefficient, Mode mode) const {
+Tensors Momentum::operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, const Tensors &Gs,
+                             const Tensors &Vs, float alpha, float beta, float norm_coefficient,
+                             Mode mode) const {
   EXT_ENFORCE_INVALID(!Xs.empty(), kMomentumName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size(), kMomentumName,
                       ": 'Xs', 'Gs' and 'Vs' must have the same length.");
@@ -65,10 +64,9 @@ Tensors Momentum::operator()(const Tensor &R, const Tensor &T, const std::vector
   return outputs;
 }
 
-void Momentum::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                          const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                          Tensors &outputs, float alpha, float beta, float norm_coefficient,
-                          Mode mode) const {
+void Momentum::operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, const Tensors &Gs,
+                          const Tensors &Vs, Tensors &outputs, float alpha, float beta,
+                          float norm_coefficient, Mode mode) const {
   EXT_ENFORCE_INVALID(!Xs.empty(), kMomentumName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size(), kMomentumName,
                       ": 'Xs', 'Gs' and 'Vs' must have the same length.");

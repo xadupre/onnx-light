@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -21,8 +20,8 @@ namespace {
 // ``first_shape`` and per-element byte size ``per_elem_bytes``. Validates
 // that every entry in ``inputs`` shares the first entry's ``data_type`` and
 // ``shape``; throws ``std::invalid_argument`` otherwise.
-void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
-                                   onnx_kernels::Shape &stacked_shape, size_t &total_bytes) {
+void ValidateInputsAndComputeShape(const Tensors &inputs, onnx_kernels::Shape &stacked_shape,
+                                   size_t &total_bytes) {
   const int64_t n = static_cast<int64_t>(inputs.size());
   if (n == 0) {
     stacked_shape = {0};
@@ -51,7 +50,7 @@ void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
 
 } // namespace
 
-Tensor SequenceConstruct::operator()(const std::vector<Tensor> &inputs, RuntimeContext *rt) const {
+Tensor SequenceConstruct::operator()(const Tensors &inputs, RuntimeContext *rt) const {
   onnx_kernels::Shape stacked_shape;
   size_t total_bytes = 0;
   ValidateInputsAndComputeShape(inputs, stacked_shape, total_bytes);
@@ -63,7 +62,7 @@ Tensor SequenceConstruct::operator()(const std::vector<Tensor> &inputs, RuntimeC
   return out;
 }
 
-void SequenceConstruct::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
+void SequenceConstruct::operator()(const Tensors &inputs, Tensor &output) const {
   onnx_kernels::Shape stacked_shape;
   size_t total_bytes = 0;
   ValidateInputsAndComputeShape(inputs, stacked_shape, total_bytes);
@@ -86,7 +85,7 @@ void SequenceConstruct::operator()(const std::vector<Tensor> &inputs, Tensor &ou
   }
 }
 
-Sequence SequenceConstruct::AsSequence(const std::vector<Tensor> &inputs) const {
+Sequence SequenceConstruct::AsSequence(const Tensors &inputs) const {
   Sequence out;
   out.values = inputs;
   if (inputs.empty()) {

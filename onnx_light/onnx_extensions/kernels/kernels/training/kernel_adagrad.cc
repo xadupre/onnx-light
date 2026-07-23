@@ -51,9 +51,9 @@ void CheckSameShape(const Tensor &a, const Tensor &b, const char *label_a, const
 
 } // namespace
 
-Tensors Adagrad::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                            const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs,
-                            float epsilon, float decay_factor, float norm_coefficient) const {
+Tensors Adagrad::operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, const Tensors &Gs,
+                            const Tensors &Hs, float epsilon, float decay_factor,
+                            float norm_coefficient) const {
   EXT_ENFORCE_INVALID(!Xs.empty(), kAdagradName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Hs.size(), kAdagradName,
                       ": 'Xs', 'Gs' and 'Hs' must have the same length.");
@@ -71,9 +71,8 @@ Tensors Adagrad::operator()(const Tensor &R, const Tensor &T, const std::vector<
   return outputs;
 }
 
-void Adagrad::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
-                         const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs,
-                         Tensors &outputs, float epsilon, float decay_factor,
+void Adagrad::operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, const Tensors &Gs,
+                         const Tensors &Hs, Tensors &outputs, float epsilon, float decay_factor,
                          float norm_coefficient) const {
   EXT_ENFORCE_INVALID(!Xs.empty(), kAdagradName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Hs.size(), kAdagradName,

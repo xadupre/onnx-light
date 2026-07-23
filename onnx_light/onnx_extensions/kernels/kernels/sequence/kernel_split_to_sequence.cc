@@ -119,7 +119,7 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
   const std::size_t inner_bytes = static_cast<std::size_t>(inner) * elem_size;
   const std::size_t in_row_bytes = static_cast<std::size_t>(axis_dim) * inner_bytes;
 
-  std::vector<Tensor> outputs;
+  Tensors outputs;
   outputs.reserve(sizes.size());
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   std::size_t offset = 0; // byte offset within each "row" of the input.

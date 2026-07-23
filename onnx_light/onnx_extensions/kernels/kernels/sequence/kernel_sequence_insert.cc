@@ -6,7 +6,6 @@
 
 #include <cstdint>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -45,7 +44,7 @@ Sequence SequenceInsert::operator()(const Sequence &input_sequence, const Tensor
                         std::to_string(n), ".");
   }
 
-  std::vector<Tensor> out_values = input_sequence.values;
+  Tensors out_values = input_sequence.values;
   out_values.insert(out_values.begin() + idx, tensor);
   return Sequence(input_sequence.name, elem_type, std::move(out_values));
 }

@@ -5,13 +5,14 @@
 #include "onnx_extensions/kernels/kernels/object_detection/include_object_detection_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
 #include <stdexcept>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -20,6 +21,7 @@ namespace kernel {
 namespace {
 
 constexpr int64_t kSelectedIndexTupleWidth = 3;
+constexpr const char *kNonMaxSuppressionName = "kernel::NonMaxSuppression";
 
 // Returns (y1, x1, y2, x2) in canonical "corner" order regardless of
 // ``center_point_box`` and regardless of whether the upstream y1<y2/x1<x2
@@ -134,69 +136,99 @@ Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
   const float *pboxes = boxes.AsFloat();
   const float *pscores = scores.AsFloat();
 
-  // Pre-compute the per-batch box coordinates in canonical corner form.
-  std::vector<std::vector<CornerBox>> corner_boxes(static_cast<size_t>(num_batches));
+  const int64_t max_per_pair = std::min<int64_t>(spatial, max_boxes > 0 ? max_boxes : 0);
+  const int64_t max_selected = num_batches * num_classes * max_per_pair;
+
+  // Nothing can be selected (e.g. ``max_output_boxes_per_class <= 0`` or an
+  // empty spatial/class/batch dimension), so the output is an empty
+  // ``(0, kSelectedIndexTupleWidth)`` tensor and no working memory is needed.
+  if (max_selected <= 0) {
+    return MakeOutputTensor(static_cast<int32_t>(DataType::INT64), {0, kSelectedIndexTupleWidth}, 0,
+                            rt != nullptr ? rt->allocator() : nullptr);
+  }
+
+  RawBufferAllocator *allocator = rt != nullptr ? rt->allocator() : nullptr;
+
+  // Pre-compute the per-batch box coordinates in canonical corner form. The
+  // scratch buffers below are drawn from the runtime allocator when one is
+  // available, falling back to inline ``std::vector`` storage otherwise, so no
+  // working memory is allocated outside the allocator.
+  const std::size_t box_count =
+      static_cast<std::size_t>(num_batches) * static_cast<std::size_t>(spatial);
+  detail::TemporaryTypedBuffer<CornerBox> corner_boxes_buf(box_count, allocator,
+                                                           kNonMaxSuppressionName);
+  CornerBox *corner_boxes = corner_boxes_buf.data();
   for (int64_t b = 0; b < num_batches; ++b) {
-    corner_boxes[b].resize(static_cast<size_t>(spatial));
     for (int64_t s = 0; s < spatial; ++s) {
-      corner_boxes[b][s] = ToCornerBox(pboxes + (b * spatial + s) * 4, attrs.center_point_box);
+      corner_boxes[static_cast<std::size_t>(b * spatial + s)] =
+          ToCornerBox(pboxes + (b * spatial + s) * 4, attrs.center_point_box);
     }
   }
 
-  std::vector<int64_t> selected; // flat list of [batch, class, box] triples.
-  if (max_boxes > 0) {
-    const int64_t max_per_pair = std::min<int64_t>(spatial, max_boxes);
-    const int64_t max_selected = num_batches * num_classes * max_per_pair;
-    selected.reserve(static_cast<size_t>(max_selected * kSelectedIndexTupleWidth));
-  }
-  std::vector<int32_t> candidate_indices;
-  candidate_indices.reserve(static_cast<size_t>(spatial));
+  // Flat list of [batch, class, box] triples.
+  detail::TemporaryTypedBuffer<int64_t> selected_buf(
+      static_cast<std::size_t>(max_selected * kSelectedIndexTupleWidth), allocator,
+      kNonMaxSuppressionName);
+  int64_t *selected = selected_buf.data();
+  int64_t selected_count = 0; // number of int64 values written to ``selected``.
+
+  // Candidate box indices for a single (batch, class) pair, sorted by score.
+  detail::TemporaryTypedBuffer<int32_t> candidate_buf(static_cast<std::size_t>(spatial), allocator,
+                                                      kNonMaxSuppressionName);
+  int32_t *candidate_indices = candidate_buf.data();
+
+  // Indices already selected for the current (batch, class) pair.
+  detail::TemporaryTypedBuffer<int32_t> kept_buf(static_cast<std::size_t>(max_per_pair), allocator,
+                                                 kNonMaxSuppressionName);
+  int32_t *kept = kept_buf.data();
 
   for (int64_t b = 0; b < num_batches; ++b) {
     for (int64_t c = 0; c < num_classes; ++c) {
       const float *cs = pscores + (b * num_classes + c) * spatial;
 
       // Pre-filter by score_threshold and sort indices by descending score.
-      candidate_indices.clear();
+      int64_t candidate_count = 0;
       for (int64_t s = 0; s < spatial; ++s) {
         if (cs[s] > score_thr) {
-          candidate_indices.push_back(static_cast<int32_t>(s));
+          candidate_indices[static_cast<std::size_t>(candidate_count++)] = static_cast<int32_t>(s);
         }
       }
-      std::stable_sort(candidate_indices.begin(), candidate_indices.end(),
+      std::stable_sort(candidate_indices, candidate_indices + candidate_count,
                        [cs](int32_t lhs, int32_t rhs) { return cs[lhs] > cs[rhs]; });
 
-      std::vector<int32_t> kept; // indices already selected for (b, c)
-      kept.reserve(candidate_indices.size());
-      for (int32_t idx : candidate_indices) {
-        if (static_cast<int64_t>(kept.size()) >= max_boxes) {
+      int64_t kept_count = 0; // indices already selected for (b, c)
+      for (int64_t ci = 0; ci < candidate_count; ++ci) {
+        if (kept_count >= max_boxes) {
           break;
         }
-        const CornerBox &cand = corner_boxes[b][idx];
+        const int32_t idx = candidate_indices[static_cast<std::size_t>(ci)];
+        const CornerBox &cand = corner_boxes[static_cast<std::size_t>(b * spatial + idx)];
         bool suppressed = false;
-        for (int32_t prev : kept) {
-          if (ComputeIoU(cand, corner_boxes[b][prev]) > iou_thr) {
+        for (int64_t ki = 0; ki < kept_count; ++ki) {
+          const int32_t prev = kept[static_cast<std::size_t>(ki)];
+          if (ComputeIoU(cand, corner_boxes[static_cast<std::size_t>(b * spatial + prev)]) >
+              iou_thr) {
             suppressed = true;
             break;
           }
         }
         if (!suppressed) {
-          kept.push_back(idx);
-          selected.push_back(b);
-          selected.push_back(c);
-          selected.push_back(idx);
+          kept[static_cast<std::size_t>(kept_count++)] = idx;
+          selected[static_cast<std::size_t>(selected_count++)] = b;
+          selected[static_cast<std::size_t>(selected_count++)] = c;
+          selected[static_cast<std::size_t>(selected_count++)] = idx;
         }
       }
     }
   }
 
-  const int64_t num_selected = static_cast<int64_t>(selected.size()) / kSelectedIndexTupleWidth;
-  const size_t selected_n_bytes = static_cast<size_t>(selected.size()) * sizeof(int64_t);
+  const int64_t num_selected = selected_count / kSelectedIndexTupleWidth;
+  const size_t selected_n_bytes = static_cast<size_t>(selected_count) * sizeof(int64_t);
   Tensor output = MakeOutputTensor(static_cast<int32_t>(DataType::INT64),
                                    {num_selected, kSelectedIndexTupleWidth}, selected_n_bytes,
-                                   rt ? rt->allocator() : nullptr);
-  if (!selected.empty()) {
-    std::memcpy(output.mutable_bytes(), selected.data(), selected_n_bytes);
+                                   rt != nullptr ? rt->allocator() : nullptr);
+  if (selected_count > 0) {
+    std::memcpy(output.mutable_bytes(), selected, selected_n_bytes);
   }
   return output;
 }

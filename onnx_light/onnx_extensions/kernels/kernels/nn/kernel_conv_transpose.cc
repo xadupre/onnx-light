@@ -85,9 +85,10 @@ void ValidateInputs(const Tensor &x, const Tensor &w, const Tensor &b,
 // Mirrors the upstream ``convTransposeShapeInference`` rules for the
 // interaction between ``output_shape``, ``output_padding``, ``pads`` and
 // ``auto_pad``.
-std::vector<int64_t> ComputeOutputShape(const Tensor &x, ConvTranspose::Attributes &attrs) {
+onnx_kernels::Shape ComputeOutputShape(const Tensor &x, ConvTranspose::Attributes &attrs) {
   const size_t spatial_rank = x.shape.size() - 2;
-  std::vector<int64_t> out_spatial(spatial_rank);
+  onnx_kernels::Shape out_spatial;
+  out_spatial.assign(spatial_rank, 0);
   const bool has_output_shape = !attrs.output_shape.empty();
   const AutoPad auto_pad = attrs.auto_pad;
 
@@ -142,7 +143,7 @@ Tensor ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor 
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, b, resolved);
-  std::vector<int64_t> out_spatial = ComputeOutputShape(x, resolved);
+  onnx_kernels::Shape out_spatial = ComputeOutputShape(x, resolved);
   const int64_t M = w.shape[1] * resolved.group;
   onnx_kernels::Shape out_shape;
   out_shape.reserve(x.shape.size());
@@ -167,7 +168,7 @@ void ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor &b
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, b, resolved);
-  std::vector<int64_t> out_spatial = ComputeOutputShape(x, resolved);
+  onnx_kernels::Shape out_spatial = ComputeOutputShape(x, resolved);
   const int64_t M = w.shape[1] * resolved.group;
   onnx_kernels::Shape expected_shape;
   expected_shape.reserve(x.shape.size());

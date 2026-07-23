@@ -26,13 +26,14 @@ onnx_kernels::Shape ResolvePermOrDefault(const onnx_kernels::Shape &perm, std::s
     return reversed;
   }
   EXT_ENFORCE_INVALID(perm.size() == rank, "kernel::Transpose: perm length must match input rank.");
-  std::vector<bool> seen(rank, false);
+  onnx_kernels::Shape seen;
+  seen.assign(rank, 0);
   for (int64_t p : perm) {
     EXT_ENFORCE_INVALID(p >= 0 && static_cast<std::size_t>(p) < rank,
                         "kernel::Transpose: perm has an out-of-range axis.");
     EXT_ENFORCE_INVALID(!seen[static_cast<std::size_t>(p)],
                         "kernel::Transpose: perm has duplicate axes.");
-    seen[static_cast<std::size_t>(p)] = true;
+    seen[static_cast<std::size_t>(p)] = 1;
   }
   return perm;
 }

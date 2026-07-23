@@ -343,10 +343,9 @@ class MeanVarianceNormalization : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  Tensor operator()(const Tensor &x, const std::vector<int64_t> &axes = {0, 2, 3},
+  Tensor operator()(const Tensor &x, const Shape &axes = {0, 2, 3},
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &x, Tensor &output,
-                  const std::vector<int64_t> &axes = {0, 2, 3}) const;
+  void operator()(const Tensor &x, Tensor &output, const Shape &axes = {0, 2, 3}) const;
 
   /// Output ``Y`` has the same shape as ``X`` so the output buffer may
   /// alias the input ``X`` buffer.

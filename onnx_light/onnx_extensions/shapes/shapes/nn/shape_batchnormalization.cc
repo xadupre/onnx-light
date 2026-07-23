@@ -8,7 +8,6 @@
 #include <string>
 
 #include "onnx_core/shapes/shape_check.h"
-#include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_shapes {

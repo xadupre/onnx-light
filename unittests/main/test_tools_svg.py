@@ -150,6 +150,40 @@ class TestSvg(unittest.TestCase):
         with self.assertRaises(ValueError):
             to_svg(_model(g), direction="XX")
 
+    def test_layout_validation(self) -> None:
+        g = _graph([_node("Identity", ["X"], ["Y"])], [_vi("X")], [_vi("Y")])
+        # The default "layered" layout is accepted and matches the default.
+        self.assertEqual(to_svg(_model(g)), to_svg(_model(g), layout="layered"))
+        with self.assertRaises(ValueError):
+            to_svg(_model(g), layout="spring")
+        with self.assertRaises(ValueError):
+            to_svg_graph(g, layout="spring")
+
+    def test_umap_layout_small_graph_falls_back(self) -> None:
+        # Fewer than the minimum number of boxes falls back to the layered
+        # layout, so no optional dependency is needed and the SVG is valid.
+        g = _graph([_node("Identity", ["X"], ["Y"])], [_vi("X")], [_vi("Y")])
+        text = to_svg(_model(g), layout="umap")
+        self._assert_valid_svg(text)
+
+    def test_umap_layout_requires_dependency(self) -> None:
+        import importlib.util
+
+        g = _graph(
+            nodes=[
+                _node("Add", ["X", "Y"], ["A"]),
+                _node("Mul", ["A", "X"], ["B"]),
+                _node("Sub", ["B", "Y"], ["Z"]),
+            ],
+            inputs=[_vi("X"), _vi("Y")],
+            outputs=[_vi("Z")],
+        )
+        if importlib.util.find_spec("umap") is None or importlib.util.find_spec("numpy") is None:
+            with self.assertRaises(ImportError):
+                to_svg(_model(g), layout="umap")
+        else:
+            self._assert_valid_svg(to_svg(_model(g), layout="umap"))
+
     def test_accepts_graph(self) -> None:
         g = _graph([_node("Identity", ["X"], ["Y"])], [_vi("X")], [_vi("Y")])
         text_from_model = to_svg(_model(g))

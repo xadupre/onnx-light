@@ -91,6 +91,7 @@ void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axe
   for (int64_t lane = 0; lane < lane_count; ++lane) {
     sum[static_cast<size_t>(lane)] = 0.0;
     sqsum[static_cast<size_t>(lane)] = 0.0;
+    mean[static_cast<size_t>(lane)] = 0.0;
   }
 
   const T *px = x.As<T>();

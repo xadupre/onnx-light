@@ -26,6 +26,7 @@ using onnx_kernels::kernel::AveragePool;
 using onnx_kernels::kernel::BatchNormalization;
 using onnx_kernels::kernel::Dropout;
 using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::LSTM;
 using onnx_kernels::kernel::MaxPool;
 using onnx_kernels::kernel::MaxUnpool;
 using onnx_kernels::kernel::MeanVarianceNormalization;
@@ -525,6 +526,80 @@ TEST(KernelClass, RMSNormalizationUsesAllocatorForScratchBuffers) {
   EXPECT_GE(alloc.peak(), 4u);
   // All scratch buffers are released; only the returned result remains alive.
   EXPECT_EQ(alloc.allocated_count(), 1u);
+}
+
+TEST(KernelClass, LSTMUsesAllocatorForScratchBuffers) {
+  // A peak-tracking allocator wraps the pool so the test can observe the
+  // maximum number of buffers alive at once during the call. The per-gate
+  // bias/peephole/state/accumulator scratch buffers must be acquired from the
+  // allocator, so the peak count far exceeds the two allocator-backed result
+  // tensors (Y and Y_h).
+  class PeakTrackingAllocator : public core::runtime::RawBufferAllocator {
+  public:
+    explicit PeakTrackingAllocator(size_t capacity) : pool_(capacity) {}
+    core::runtime::RawBuffer *Allocate(size_t n_bytes) override {
+      core::runtime::RawBuffer *buf = pool_.Allocate(n_bytes);
+      if (pool_.allocated_count() > peak_) {
+        peak_ = pool_.allocated_count();
+      }
+      return buf;
+    }
+    void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
+    size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t allocated_count() const noexcept { return pool_.allocated_count(); }
+    size_t peak() const noexcept { return peak_; }
+
+  private:
+    core::runtime::SimpleRawBufferAllocator pool_;
+    size_t peak_ = 0;
+  };
+
+  constexpr int64_t kSeqLength = 2;
+  constexpr int64_t kBatch = 3;
+  constexpr int64_t kInput = 2;
+  constexpr int64_t kHidden = 3;
+  constexpr int64_t kNumGates = 4;
+  constexpr float kWeightScale = 0.1f;
+
+  const KernelContext ctx{DefaultOpset(22)};
+  LSTM lstm{ctx};
+  Tensor x =
+      Tensor::FromFloat("", {kSeqLength, kBatch, kInput}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+  std::vector<float> w_data(static_cast<size_t>(kNumGates * kHidden * kInput), kWeightScale);
+  std::vector<float> r_data(static_cast<size_t>(kNumGates * kHidden * kHidden), kWeightScale);
+  Tensor w = Tensor::FromFloat("", {1, kNumGates * kHidden, kInput}, w_data);
+  Tensor r = Tensor::FromFloat("", {1, kNumGates * kHidden, kHidden}, r_data);
+
+  // Reference result computed without an allocator (inline std::vector storage).
+  auto [y_ref, y_h_ref] = lstm(x, w, r);
+
+  // Capacity for the peak: 2 result tensors plus the per-gate scratch buffers
+  // (4 bias + 3 peephole + 4 state + 4 accumulator), with headroom.
+  constexpr size_t kAllocatorSlotCapacity = 32;
+  PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+
+  auto [y, y_h] = lstm(x, w, r, Tensor{}, Tensor{}, Tensor{}, Tensor{}, /*layout=*/0, &rt);
+
+  // Both outputs are drawn from the runtime allocator.
+  ASSERT_TRUE(y.has_allocation());
+  ASSERT_TRUE(y_h.has_allocation());
+  // The peak far exceeds the two outputs because every scratch buffer is
+  // allocator-backed too.
+  EXPECT_GE(alloc.peak(), 10u);
+  // All scratch buffers are released; only the two returned results remain.
+  EXPECT_EQ(alloc.allocated_count(), 2u);
+
+  // The allocator-backed run must match the inline reference bit-for-bit.
+  ASSERT_EQ(y.element_count(), y_ref.element_count());
+  for (int64_t i = 0; i < y.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y.AsFloat()[i], y_ref.AsFloat()[i]);
+  }
+  ASSERT_EQ(y_h.element_count(), y_h_ref.element_count());
+  for (int64_t i = 0; i < y_h.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y_h.AsFloat()[i], y_h_ref.AsFloat()[i]);
+  }
 }
 
 // ---- Attention -----------------------------------------------------------

@@ -85,11 +85,13 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       break;
     }
     case ExecuteActionKind::kDeleteBuffer:
-      rt.Remove(action.name());
-      rt.RemoveSequence(action.name());
-      break;
     case ExecuteActionKind::kDeleteShape:
-      rt.RemoveShape(action.name());
+      // A shape-tagged value additionally lives in the shape map; free it
+      // there as well. The tensor / sequence removals below are shared with
+      // kDeleteBuffer (they are no-ops when the name is absent).
+      if (action.kind() == ExecuteActionKind::kDeleteShape) {
+        rt.RemoveShape(action.name());
+      }
       rt.Remove(action.name());
       rt.RemoveSequence(action.name());
       break;

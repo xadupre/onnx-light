@@ -204,8 +204,14 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   nb::class_<DataSet>(bt_mod, "DataSet",
                       "A single (inputs, expected outputs) data set of a TestCase.")
-      .def_rw("inputs", &DataSet::inputs)
-      .def_rw("outputs", &DataSet::outputs)
+      .def_prop_rw(
+          "inputs", [](DataSet &ds) -> std::vector<Tensor> & { return ds.inputs; },
+          [](DataSet &ds, std::vector<Tensor> v) { ds.inputs = std::move(v); },
+          nb::rv_policy::reference_internal)
+      .def_prop_rw(
+          "outputs", [](DataSet &ds) -> std::vector<Tensor> & { return ds.outputs; },
+          [](DataSet &ds, std::vector<Tensor> v) { ds.outputs = std::move(v); },
+          nb::rv_policy::reference_internal)
       .def_rw("maps", &DataSet::maps)
       .def("__repr__", [](const DataSet &ds) {
         return "DataSet(inputs=" + std::to_string(ds.inputs.size()) +

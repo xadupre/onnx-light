@@ -6,7 +6,6 @@
 
 #include "onnx.h"
 #include "onnx_core/runtime/kernel_context.h"
-#include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/simple_map.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
@@ -52,8 +51,8 @@ enum class TestMode { TEST, BENCHMARK };
 
 /// A single (inputs, expected outputs) data set associated with a TestCase.
 struct DataSet {
-  std::vector<Tensor> inputs;
-  std::vector<Tensor> outputs;
+  Tensors inputs;
+  Tensors outputs;
   /// Map-typed inputs keyed by the graph input name.
   std::vector<Map> maps;
 };
@@ -340,134 +339,7 @@ void AppendValueInfo(ValueInfoProto &vi, const std::string &name, const TypeSpec
  * tc.data_sets().emplace_back(std::move(ds));`` boilerplate that every
  * manually-built TestCase otherwise repeats.
  */
-void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor> outputs);
-
-/**
- * Appends a *lazy* single-node :ref:`TestCase` built from ``node`` and the
- * provided typed inputs/outputs to ``registry``.
- *
- * Mirrors ``onnx_light.backend.test.case.base.expect()``. Only the inputs and
- * outputs whose name is non-empty in the node are wired into the graph. The
- * ``ModelProto`` and data set are not built at registration time; the given
- * ``node``/``inputs``/``outputs`` are captured and :func:`BuildSingleNodeCase`
- * is invoked only when the case is materialized (via ``TestCase::model`` /
- * :func:`TestCase::data_sets` / :func:`TestCase::Materialize`). The declared
- * element counts are recorded eagerly from the input/output tensors so the
- * sizing stays inspectable without materializing.
- *
- * @param node Single-node template; its ``op_type``, ``domain`` and
- *             ``attribute``s are kept.
- * @param inputs Concrete input tensors corresponding to the non-empty entries
- *               of ``node.input``.
- * @param outputs Concrete expected output tensors corresponding to the
- *                non-empty entries of ``node.output``.
- * @param name Unique test name (used both for ``TestCase.name`` and the
- *             graph name).
- * @param opset_imports Opset imports for the generated model. If empty the
- *                      caller is responsible for ensuring a default has been
- *                      applied — typically pass at least ``DefaultOpset(since_version)``.
- * @param producer_name Producer name written into the model.
- * @param registry Output registry (appended to).
- * @param tag Optional grouping tag (defaults to the node domain for
- *            non-default operator domains).
- * @param output_types Optional per-output declared type specs. When non-empty
- *                     it must contain one entry per output tensor; each output
- *                     value-info is then declared from its ``TypeSpec`` instead
- *                     of the materialized tensor type. Used to declare
- *                     ``Sequence`` / ``Map`` valued outputs whose runtime
- *                     representation is a plain ``Tensor``.
- * @throws std::invalid_argument if ``inputs.size()`` does not equal the number
- *         of non-empty entries in ``node.input`` or if ``outputs.size()`` does
- *         not equal the number of non-empty entries in ``node.output``, or if
- *         ``output_types`` is non-empty and its size does not equal
- *         ``outputs.size()``.
- */
-void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
-            const std::vector<Tensor> &outputs, const std::string &name,
-            const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
-            std::vector<TestCase> &registry, const std::string &tag = "",
-            const std::vector<TypeSpec> &output_types = {});
-
-/// Materialized inputs/outputs produced by a lazy case builder.
-struct IoData {
-  std::vector<Tensor> inputs;
-  std::vector<Tensor> outputs;
-  /// Map-typed inputs (e.g. for CastMap, DictVectorizer). Each ``Map::name``
-  /// must match a non-empty entry in the node's ``input`` list. When present,
-  /// ``BuildSingleNodeCase`` declares the corresponding graph input with a
-  /// ``map(key_type, value_type)`` TypeProto and stores the Map in the
-  /// ``DataSet::maps`` collection so the runtime can retrieve it by name.
-  std::vector<Map> maps;
-};
-
-/**
- * Builds a single-node ``ModelProto`` and its one data set from ``node`` and
- * the provided typed inputs/outputs. This is the shared core of both
- * :func:`Expect` overloads, invoked on demand when a lazy case is
- * materialized. Only the inputs and outputs whose name is non-empty in the
- * node are wired into the graph.
- *
- * Map-typed graph inputs are supplied via ``maps``: each ``Map::name`` must
- * match a non-empty entry in ``node.input``, is declared with a
- * ``map(key_type, value_type)`` TypeProto in the graph, and is stored in
- * ``DataSet::maps`` so the runtime can retrieve it by name. The remaining
- * (tensor-typed) inputs come from ``inputs`` in positional order. The sum
- * ``inputs.size() + maps.size()`` must equal the number of non-empty entries
- * in ``node.input``.
- *
- * @throws std::invalid_argument under the same conditions as :func:`Expect`.
- */
-BuiltCase BuildSingleNodeCase(const NodeProto &node, std::vector<Tensor> inputs,
-                              std::vector<Tensor> outputs, const std::string &name,
-                              const std::vector<OpsetId> &opset_imports,
-                              const std::string &producer_name,
-                              const std::vector<TypeSpec> &output_types = {},
-                              std::vector<Map> maps = {});
-
-/**
- * Appends a *lazy* single-node :ref:`TestCase` whose inputs/outputs are
- * generated on demand by ``make_io``. Overload of :func:`Expect` for cases —
- * chiefly the ``BENCHMARK`` cases — whose (potentially very large) inputs and
- * expected outputs are too expensive to materialize at registration time.
- * ``make_io`` (which performs the input generation and kernel evaluation) is
- * invoked only when the case is materialized via ``TestCase::model`` /
- * :func:`TestCase::data_sets` / :func:`TestCase::Materialize`. ``in_counts`` /
- * ``out_counts`` record the declared element count of each input/output so the
- * sizing can be validated without running ``make_io``.
- *
- * @param registry Output registry (appended to).
- * @param node Single-node template; its ``op_type``, ``domain`` and
- *             ``attribute``s are kept. Consumed (moved).
- * @param name Unique test name.
- * @param opset_imports Opset imports for the generated model.
- * @param in_counts Declared element count of each (non-empty) input.
- * @param out_counts Declared element count of each (non-empty) output.
- * @param make_io Callable producing the concrete inputs/outputs on demand.
- * @param producer_name Producer name written into the model.
- * @param tag Optional grouping tag (defaults to the node domain for
- *            non-default operator domains).
- * @param output_types Optional per-output declared type specs (see
- *                     :func:`Expect`).
- */
-void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
-            std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
-            std::vector<int64_t> out_counts, std::function<IoData()> make_io,
-            std::string producer_name = "backend-test", std::string tag = "",
-            std::vector<TypeSpec> output_types = {});
-
-/**
- * Convenience overload of the lazy :func:`Expect` that omits the element-count
- * vectors. Equivalent to calling the six-parameter lazy overload with empty
- * ``in_counts`` / ``out_counts``.  Use for small test cases where pre-declaring
- * element counts adds no value over deriving them from the materialised tensors.
- */
-inline void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
-                   std::vector<OpsetId> opset_imports, std::function<IoData()> make_io,
-                   std::string producer_name = "backend-test", std::string tag = "",
-                   std::vector<TypeSpec> output_types = {}) {
-  Expect(registry, std::move(node), std::move(name), std::move(opset_imports), {}, {},
-         std::move(make_io), std::move(producer_name), std::move(tag), std::move(output_types));
-}
+void AppendDataSet(TestCase &tc, Tensors inputs, Tensors outputs);
 
 /// Function pointer registering one or more :ref:`TestCase` entries into the
 /// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.
@@ -502,69 +374,6 @@ void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string
 /// cases.
 void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
                               const OpRegisterModeMap &entries, TestMode mode);
-
-/// Default element count for a 1-D float benchmark input of a cheap
-/// element-wise operator. Sized (4M floats = 16 MiB) so a single kernel
-/// evaluation processes enough data to be timed reliably (~0.1 s). Operators
-/// with heavier per-element cost (transcendental, matmul, ...) pass a smaller
-/// explicit size to the benchmark helpers below.
-inline constexpr int64_t kBenchmarkElementwiseSize = 1 << 22;
-
-/**
- * Appends a single benchmark :ref:`TestCase` for a unary element-wise float
- * operator. ``kernel`` is any callable mapping the input ``Tensor`` to the
- * output ``Tensor`` (typically the operator's kernel functor); the expected
- * output is computed by invoking it. The generated node carries no attributes,
- * so operators whose behaviour depends on attributes should build their own
- * benchmark case instead.
- */
-template <typename Kernel>
-void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
-                               const std::string &name, const OpsetId &opset,
-                               std::vector<TestCase> &registry,
-                               int64_t size = kBenchmarkElementwiseSize,
-                               uint64_t seed = 987654321ULL, const std::string &input_name = "x",
-                               const std::string &output_name = "y") {
-  NodeProto node;
-  node.set_op_type(op_type);
-  node.add_input(input_name);
-  node.add_output(output_name);
-  Kernel k = kernel;
-  Expect(registry, std::move(node), name, {opset}, {size}, {size}, [k, size, seed]() -> IoData {
-    Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
-    Tensor y = k(x);
-    return IoData{{std::move(x)}, {std::move(y)}};
-  });
-}
-
-/**
- * Appends a single benchmark :ref:`TestCase` for a binary element-wise float
- * operator with two equally-shaped 1-D inputs. ``kernel`` is any callable
- * mapping the two input ``Tensor``s to the output ``Tensor``; the expected
- * output is computed by invoking it. The generated node carries no attributes.
- * The inputs and expected output are produced lazily (see the ``make_io``
- * overload of :func:`Expect`).
- */
-template <typename Kernel>
-void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel,
-                                const std::string &name, const OpsetId &opset,
-                                std::vector<TestCase> &registry,
-                                int64_t size = kBenchmarkElementwiseSize,
-                                uint64_t seed = 987654321ULL) {
-  NodeProto node;
-  node.set_op_type(op_type);
-  node.add_input("x");
-  node.add_input("y");
-  node.add_output("z");
-  Kernel k = kernel;
-  Expect(registry, std::move(node), name, {opset}, {size, size}, {size},
-         [k, size, seed]() -> IoData {
-           Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
-           Tensor y = Tensor::FromFloat("", {size}, Randn<float>({size}, seed + 1));
-           Tensor z = k(x, y);
-           return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-         });
-}
 
 /**
  * Collects all C++-implemented backend test node cases. Each call is

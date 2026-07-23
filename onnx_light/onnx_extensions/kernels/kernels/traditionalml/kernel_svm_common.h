@@ -57,6 +57,26 @@ inline std::vector<double> ToDoubleRowMajor(const Tensor &x, int64_t sample_coun
   return values;
 }
 
+// Same as :cpp:func:`ToDoubleRowMajor` but writes the converted values into an
+// allocator-backed ``double`` :cpp:class:`Tensor` (obtained from
+// :cpp:func:`MakeOutputTensor`) instead of a temporary ``std::vector<double>``.
+template <typename T>
+inline Tensor ToDoubleRowMajorTensor(const Tensor &x, int64_t sample_count, int64_t feature_count,
+                                     RawBufferAllocator *allocator) {
+  EXT_ENFORCE_INVALID(x.data_type == TensorElementType<T>::value,
+                      "SVM kernel input data_type does not match the requested T.");
+  const T *px = x.As<T>();
+  const int64_t count = sample_count * feature_count;
+  Tensor values =
+      MakeOutputTensor(TensorElementType<double>::value, {sample_count, feature_count},
+                       PackedByteSize(TensorElementType<double>::value, count), allocator);
+  double *pv = values.As<double>();
+  for (int64_t i = 0; i < count; ++i) {
+    pv[i] = static_cast<double>(px[i]);
+  }
+  return values;
+}
+
 inline void ValidateFeatureMatrixShape(const Tensor &x, int64_t &sample_count,
                                        int64_t &feature_count) {
   EXT_ENFORCE_INVALID(!x.shape.empty(), "SVM kernels expect input rank 1 or 2.");

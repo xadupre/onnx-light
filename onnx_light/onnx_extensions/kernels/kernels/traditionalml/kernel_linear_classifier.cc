@@ -17,24 +17,34 @@ namespace kernel {
 
 namespace {
 
-// Computes raw decision scores ``S`` of shape ``[sample_count, class_count]``.
-// ``coefficients`` is flat row-major of shape ``[class_count, feature_count]``.
-// ``intercepts`` is either empty or of length ``class_count``.
-std::vector<float> ComputeLinearScores(const std::vector<double> &x_values, int64_t sample_count,
-                                       int64_t feature_count,
-                                       const std::vector<float> &coefficients,
-                                       const std::vector<float> &intercepts, int64_t class_count) {
-  EXT_ENFORCE_INVALID(class_count >= 1, "kernel::LinearClassifier requires at least one class.");
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(coefficients.size()) == class_count * feature_count,
+// Computes raw decision scores directly into the caller-provided ``out`` buffer
+// (shape ``[sample_count, score_class_count]``), which is backed by the
+// runtime allocator through :cpp:func:`MakeOutputTensor`.
+//
+// ``coefficients`` is flat row-major of shape ``[raw_class_count,
+// feature_count]`` and ``intercepts`` is either empty or of length
+// ``raw_class_count``. When ``binary_expand`` is true (``raw_class_count == 1``
+// but two class labels are declared) the single raw score ``z`` is expanded to
+// the canonical pair ``[-z, z]`` following the ONNX spec, so ``out`` has two
+// columns per sample.
+void ComputeLinearScoresInto(const double *x_values, int64_t sample_count, int64_t feature_count,
+                             const std::vector<float> &coefficients,
+                             const std::vector<float> &intercepts, int64_t raw_class_count,
+                             bool binary_expand, float *out) {
+  EXT_ENFORCE_INVALID(raw_class_count >= 1,
+                      "kernel::LinearClassifier requires at least one class.");
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(coefficients.size()) == raw_class_count * feature_count,
                       "kernel::LinearClassifier coefficients size must be "
                       "class_count * feature_count.");
-  EXT_ENFORCE_INVALID(intercepts.empty() || static_cast<int64_t>(intercepts.size()) == class_count,
+  EXT_ENFORCE_INVALID(intercepts.empty() ||
+                          static_cast<int64_t>(intercepts.size()) == raw_class_count,
                       "kernel::LinearClassifier intercepts size must be 0 or equal to "
                       "class_count.");
-  std::vector<float> scores(static_cast<size_t>(sample_count * class_count), 0.0f);
+  const int64_t out_class_count = binary_expand ? 2 : raw_class_count;
   for (int64_t n = 0; n < sample_count; ++n) {
-    const double *x_row = x_values.data() + n * feature_count;
-    for (int64_t c = 0; c < class_count; ++c) {
+    const double *x_row = x_values + n * feature_count;
+    float *out_row = out + n * out_class_count;
+    for (int64_t c = 0; c < raw_class_count; ++c) {
       const float *w = coefficients.data() + c * feature_count;
       double value = 0.0;
       for (int64_t j = 0; j < feature_count; ++j) {
@@ -43,32 +53,14 @@ std::vector<float> ComputeLinearScores(const std::vector<double> &x_values, int6
       if (!intercepts.empty()) {
         value += static_cast<double>(intercepts[static_cast<size_t>(c)]);
       }
-      scores[static_cast<size_t>(n * class_count + c)] = static_cast<float>(value);
+      if (binary_expand) {
+        out_row[0] = -static_cast<float>(value);
+        out_row[1] = static_cast<float>(value);
+      } else {
+        out_row[c] = static_cast<float>(value);
+      }
     }
   }
-  return scores;
-}
-
-// Per the ONNX spec, when ``intercepts`` has length 1 but the operator declares
-// two class labels, the operator behaves as a binary classifier. In that case
-// the single raw score ``z`` is expanded to a pair ``[-z, z]``.
-struct LinearClassifierExpansion {
-  std::vector<float> scores; // shape [N, E_out]
-  int64_t score_class_count; // E_out
-};
-
-LinearClassifierExpansion ExpandBinaryScores(std::vector<float> raw_scores, int64_t sample_count,
-                                             int64_t raw_class_count, int64_t label_count) {
-  if (raw_class_count == 1 && label_count == 2) {
-    std::vector<float> expanded(static_cast<size_t>(sample_count * 2));
-    for (int64_t n = 0; n < sample_count; ++n) {
-      const float z = raw_scores[static_cast<size_t>(n)];
-      expanded[static_cast<size_t>(n * 2)] = -z;
-      expanded[static_cast<size_t>(n * 2 + 1)] = z;
-    }
-    return {std::move(expanded), 2};
-  }
-  return {std::move(raw_scores), raw_class_count};
 }
 
 int64_t ArgMax(const float *scores, int64_t count) {
@@ -98,25 +90,27 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
   const int64_t raw_class_count =
       feature_count == 0 ? 0 : static_cast<int64_t>(coefficients.size()) / feature_count;
-  const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
-  std::vector<float> raw_scores = ComputeLinearScores(x_values, sample_count, feature_count,
-                                                      coefficients, intercepts, raw_class_count);
-  LinearClassifierExpansion expansion =
-      ExpandBinaryScores(std::move(raw_scores), sample_count, raw_class_count,
-                         static_cast<int64_t>(class_labels.size()));
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(class_labels.size()) == expansion.score_class_count,
+  const Tensor x_values = ToDoubleRowMajorTensor<T>(x, sample_count, feature_count, ctx_.allocator);
+  const bool binary_expand = raw_class_count == 1 && class_labels.size() == 2;
+  const int64_t score_class_count = binary_expand ? 2 : raw_class_count;
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(class_labels.size()) == score_class_count,
                       "kernel::LinearClassifier class_labels size must match the number of "
                       "score columns.");
 
+  Tensor z = MakeOutputTensor(
+      TensorElementType<float>::value, {sample_count, score_class_count},
+      PackedByteSize(TensorElementType<float>::value, sample_count * score_class_count),
+      ctx_.allocator);
+  ComputeLinearScoresInto(x_values.As<double>(), sample_count, feature_count, coefficients,
+                          intercepts, raw_class_count, binary_expand, z.As<float>());
+
+  const float *scores = z.As<float>();
   std::vector<int64_t> labels(static_cast<size_t>(sample_count));
   for (int64_t n = 0; n < sample_count; ++n) {
-    const int64_t idx = ArgMax(expansion.scores.data() + n * expansion.score_class_count,
-                               expansion.score_class_count);
+    const int64_t idx = ArgMax(scores + n * score_class_count, score_class_count);
     labels[static_cast<size_t>(n)] = class_labels[static_cast<size_t>(idx)];
   }
   Tensor y = Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
-  Tensor z = Tensor::FromFloat("", {sample_count, expansion.score_class_count}, expansion.scores,
-                               ctx_.allocator);
   return std::make_pair(std::move(y), std::move(z));
 }
 
@@ -135,25 +129,27 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
   const int64_t raw_class_count =
       feature_count == 0 ? 0 : static_cast<int64_t>(coefficients.size()) / feature_count;
-  const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
-  std::vector<float> raw_scores = ComputeLinearScores(x_values, sample_count, feature_count,
-                                                      coefficients, intercepts, raw_class_count);
-  LinearClassifierExpansion expansion =
-      ExpandBinaryScores(std::move(raw_scores), sample_count, raw_class_count,
-                         static_cast<int64_t>(class_labels.size()));
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(class_labels.size()) == expansion.score_class_count,
+  const Tensor x_values = ToDoubleRowMajorTensor<T>(x, sample_count, feature_count, ctx_.allocator);
+  const bool binary_expand = raw_class_count == 1 && class_labels.size() == 2;
+  const int64_t score_class_count = binary_expand ? 2 : raw_class_count;
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(class_labels.size()) == score_class_count,
                       "kernel::LinearClassifier class_labels size must match the number of "
                       "score columns.");
 
+  Tensor z = MakeOutputTensor(
+      TensorElementType<float>::value, {sample_count, score_class_count},
+      PackedByteSize(TensorElementType<float>::value, sample_count * score_class_count),
+      ctx_.allocator);
+  ComputeLinearScoresInto(x_values.As<double>(), sample_count, feature_count, coefficients,
+                          intercepts, raw_class_count, binary_expand, z.As<float>());
+
+  const float *scores = z.As<float>();
   std::vector<std::string> labels(static_cast<size_t>(sample_count));
   for (int64_t n = 0; n < sample_count; ++n) {
-    const int64_t idx = ArgMax(expansion.scores.data() + n * expansion.score_class_count,
-                               expansion.score_class_count);
+    const int64_t idx = ArgMax(scores + n * score_class_count, score_class_count);
     labels[static_cast<size_t>(n)] = class_labels[static_cast<size_t>(idx)];
   }
   Tensor y = Tensor::FromStrings("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, expansion.score_class_count}, expansion.scores,
-                               ctx_.allocator);
   return std::make_pair(std::move(y), std::move(z));
 }
 

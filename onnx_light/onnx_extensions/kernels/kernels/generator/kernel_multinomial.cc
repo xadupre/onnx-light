@@ -172,7 +172,7 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
   // buffer is sized to at least one element so an empty batch (``class_size``
   // == 0) never requests a zero-byte allocation.
   detail::TemporaryTypedBuffer<double> cdf_buf(
-      static_cast<std::size_t>(class_size > 0 ? class_size : 1), rt ? rt->allocator() : nullptr,
+      static_cast<std::size_t>(std::max<int64_t>(class_size, 1)), rt ? rt->allocator() : nullptr,
       "kernel::Multinomial cdf");
   double *cdf = cdf_buf.data();
 

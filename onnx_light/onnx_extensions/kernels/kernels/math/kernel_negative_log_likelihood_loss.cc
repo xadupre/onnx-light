@@ -94,8 +94,7 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
 
   if (reduction == "none") {
     const size_t loss_n_bytes = static_cast<size_t>(n_loss) * sizeof(float);
-    Tensor loss = MakeOutputTensor(DataType::FLOAT, target.shape, loss_n_bytes,
-                                   allocator);
+    Tensor loss = MakeOutputTensor(DataType::FLOAT, target.shape, loss_n_bytes, allocator);
     float *out = loss.AsFloat();
     for (int64_t k = 0; k < n_loss; ++k) {
       out[static_cast<size_t>(k)] = per_sample_loss[static_cast<size_t>(k)];
@@ -121,8 +120,7 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
   }
 
   const size_t loss_n_bytes = sizeof(float);
-  Tensor loss =
-      MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, allocator);
+  Tensor loss = MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, allocator);
   loss.AsFloat()[0] = reduced;
   return loss;
 }

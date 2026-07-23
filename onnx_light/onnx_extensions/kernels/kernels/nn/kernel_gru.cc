@@ -263,7 +263,9 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
     }
 
     // Copy h_curr into Y at time-step t (num_directions=1) and swap into
-    // h_prev for the next iteration.
+    // h_prev for the next iteration. The swap only exchanges the two raw
+    // pointers; both TemporaryTypedBuffer objects stay alive (and their
+    // storage valid) until the end of the function.
     float *y_t = py + t * batch_size * hidden_size;
     for (int64_t i = 0; i < batch_size * hidden_size; ++i) {
       y_t[i] = h_curr[static_cast<size_t>(i)];

@@ -421,8 +421,8 @@ TEST(KernelClass, RMSNormalizationMatchesHandComputed) {
   Tensor y = rms(x, scale);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
 
-  const double mean = (1.0 + 4.0 + 9.0) / 3.0;
-  const double inv_rms = 1.0 / std::sqrt(mean + 1e-5);
+  const double mean_square = (1.0 + 4.0 + 9.0) / 3.0;
+  const double inv_rms = 1.0 / std::sqrt(mean_square + 1e-5);
   EXPECT_NEAR(y.AsFloat()[0], static_cast<float>(1.0 * inv_rms), 1e-6);
   EXPECT_NEAR(y.AsFloat()[1], static_cast<float>(2.0 * inv_rms), 1e-6);
   EXPECT_NEAR(y.AsFloat()[2], static_cast<float>(3.0 * inv_rms), 1e-6);

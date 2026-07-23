@@ -126,7 +126,9 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
 
   // Pre-compute the per-element index into ``scale`` for every position in the
   // normalized block. A scalar ``scale`` (scale_rank == 0) broadcasts to index
-  // 0 everywhere, so the zero-initialized buffer is left untouched.
+  // 0 everywhere, so the zero-initialized buffer is left untouched. The count is
+  // clamped to at least 1 to avoid a zero-size allocation when ``norm_size`` is
+  // 0 (the index buffer is then never read).
   const std::size_t scale_index_count = static_cast<std::size_t>(norm_size > 0 ? norm_size : 1);
   detail::TemporaryTypedBuffer<int64_t> scale_index_buf(scale_index_count, allocator,
                                                         "kernel::RMSNormalization scale_index");

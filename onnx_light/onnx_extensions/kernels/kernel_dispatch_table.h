@@ -44,8 +44,8 @@ namespace onnx_kernels {
  * reliably linked in either. Every entry point that runs a model (Python
  * bindings, C++ unit tests, examples, fuzzers, ...) must therefore call
  * this function explicitly before calling
- * :cpp:func:`core::runtime::RunNode` / :cpp:func:`core::runtime::RunModel`
- * / running a :cpp:class:`core::runtime::RuntimeSession`.
+ * :cpp:func:`core::runtime::RunNode` / running a
+ * :cpp:class:`core::runtime::RuntimeSession`.
  */
 void RegisterKernelFunctions();
 

@@ -4,11 +4,10 @@
 
 """Implementation of :class:`ReferenceEvaluator`.
 
-The evaluator wraps the ``RunModel`` dispatcher and the ``RuntimeSession`` /
-``ExecutionPlan`` execution machinery exposed by
-:mod:`onnx_light.onnx_py._onnxpykernels` (re-exported through the ``runtime``
-submodule). All operator implementations come from the C++
-``KernelDispatchTable``; this Python class only handles input/output
+The evaluator wraps the ``RuntimeSession`` / ``ExecutionPlan`` execution
+machinery exposed by :mod:`onnx_light.onnx_py._onnxpykernels` (re-exported
+through the ``runtime`` submodule). All operator implementations come from
+the C++ ``KernelDispatchTable``; this Python class only handles input/output
 conversion between :class:`numpy.ndarray` and the runtime ``Tensor`` type and
 the bookkeeping required to expose an
 ``onnx.reference.ReferenceEvaluator``-compatible API.
@@ -132,9 +131,10 @@ def _run_via_session(graph_or_function: Any, ctx: Any) -> None:
 
     When ``graph_or_function`` is a ``GraphProto``, every declared
     initializer is seeded into ``ctx`` first (names ``ctx`` already carries
-    are left as-is), mirroring what :func:`_runtime.run_model` does for a
-    full model's graph. ``FunctionProto`` has no initializers, so nothing is
-    seeded in that case.
+    are left as-is). ``FunctionProto`` has no initializers, so nothing is
+    seeded in that case. For a full model, call
+    :func:`_runtime.register_model_functions` first so nodes referring to
+    model-local functions resolve, then call this on ``model.graph``.
     """
     initializers = getattr(graph_or_function, "initializer", None)
     if initializers is not None:
@@ -528,7 +528,8 @@ class ReferenceEvaluator:
                 ctx.set(name, _numpy_to_cpp_tensor(name, value))
 
         if self._model is not None:
-            _runtime.run_model(self._model, ctx)
+            _runtime.register_model_functions(self._model, ctx)
+            _run_via_session(self._model.graph, ctx)
         elif self._function is not None:
             _run_via_session(self._function, ctx)
         else:

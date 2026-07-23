@@ -5,6 +5,7 @@
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/run_nodes.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/backend_test/cases_runtime/local_function/include_local_function_cases.h"
 
@@ -18,10 +19,13 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
+using core::runtime::ExecutionPlan;
 using core::runtime::KernelContext;
-using core::runtime::RunModel;
+using core::runtime::RegisterModelFunctions;
 using core::runtime::RuntimeContext;
+using core::runtime::RuntimeSession;
 using core::runtime::Tensor;
+using core::runtime::TensorFromProto;
 using onnx_backend_test::CollectLocalFunctionTestCases;
 
 namespace {
@@ -43,15 +47,35 @@ const TestCase *Find(const std::vector<TestCase> &cases, const std::string &name
   return nullptr;
 }
 
-// Runs ``tc`` through ``RunModel`` and verifies that every data set's
-// expected outputs are reproduced bit-for-bit by the runtime.
+// Registers `model`'s local functions in `rt`, seeds `model.graph()`'s
+// initializers into `rt`, and runs the graph by building its ExecutionPlan
+// and driving it through a fresh RuntimeSession. This is what the removed
+// `RunModel` used to do internally.
+void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
+  RegisterModelFunctions(model, rt);
+  const GraphProto &graph = model.ref_graph();
+  const auto &inits = graph.initializer();
+  for (size_t i = 0; i < inits.size(); ++i) {
+    const TensorProto &tp = inits[i];
+    const std::string init_name = tp.name();
+    if (!rt.Has(init_name)) {
+      rt.Set(init_name, TensorFromProto(tp), core::runtime::RuntimeEventKind::kInitializer);
+    }
+  }
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  session.Run(rt);
+}
+
+// Runs ``tc`` through ``RunModelViaSession`` and verifies that every data
+// set's expected outputs are reproduced bit-for-bit by the runtime.
 void ExpectModelMatchesDataSets(const TestCase &tc) {
   for (const DataSet &ds : tc.data_sets()) {
     RuntimeContext rt(KernelContext(DefaultOpset(kDefaultOpsetVersion)));
     for (const Tensor &in : ds.inputs) {
       rt.Set(in.name, in);
     }
-    ASSERT_NO_THROW(RunModel(tc.model(), rt)) << "case: " << tc.name;
+    ASSERT_NO_THROW(RunModelViaSession(tc.model(), rt)) << "case: " << tc.name;
     for (const Tensor &expected : ds.outputs) {
       ASSERT_TRUE(rt.Has(expected.name))
           << "case: " << tc.name << " missing output '" << expected.name << "'";
@@ -71,7 +95,7 @@ TEST(LocalFunctionRuntimeCases, CrossDomainModelHasFunctions) {
   const auto cases = Collect("local_function");
   const TestCase *tc = Find(cases, "test_cc_local_function_calls_function_across_domains");
   ASSERT_NE(tc, nullptr);
-  // The model must carry both FunctionProto entries so RunModel can
+  // The model must carry both FunctionProto entries so running it can
   // resolve the cross-domain dispatch.
   ASSERT_EQ(tc->model().ref_functions().size(), 2u);
 }

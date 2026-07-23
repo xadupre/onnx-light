@@ -86,7 +86,7 @@ using ShapeMap = std::unordered_map<std::string, Shape>;
 
 /**
  * Name-keyed map of model-local :cpp:type:`FunctionProto` definitions
- * known to the runtime. Populated by :cpp:func:`RunModel` from
+ * known to the runtime. Populated by :cpp:func:`RegisterModelFunctions` from
  * ``ModelProto::functions()`` so the dispatcher in :cpp:func:`RunNode`
  * can transparently invoke the model-local function call helper
  * (which runs the function body through a :cpp:class:`RuntimeSession`)
@@ -567,9 +567,9 @@ public:
   void ClearExecutionPlans() noexcept;
 
   /// Enables or disables the per-node release of unused intermediates
-  /// performed by :cpp:class:`RuntimeSession` (used by :cpp:func:`RunModel`,
-  /// :cpp:func:`RunSubgraph` and every other node-list entry point). When
-  /// enabled, a
+  /// performed by :cpp:class:`RuntimeSession` (used when running a
+  /// model's graph, by :cpp:func:`RunSubgraph`, and every other
+  /// node-list entry point). When enabled, a
   /// name whose last reference (declared input of a node, or captured
   /// input of a subgraph attribute) appears at node ``i`` is removed
   /// from :cpp:func:`tensors` (and :cpp:func:`sequences`) right after

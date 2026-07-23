@@ -1,8 +1,10 @@
 # Copyright (c) ONNX Project Contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for the Python bindings of the ``RunNode`` / ``RunModel`` dispatcher
-and the ``ExecutionPlan`` / ``RuntimeSession`` execution machinery exposed by
+"""Tests for the Python bindings of the ``RunNode`` dispatcher and the
+``ExecutionPlan`` / ``RuntimeSession`` execution machinery (used to run any
+node list, including a whole model's graph paired with
+``register_model_functions``) exposed by
 :mod:`onnx_light.onnx_py._onnxpykernels`.
 
 The dispatcher is exposed as the ``runtime`` submodule of
@@ -54,6 +56,21 @@ def _unpack_floats(tensor) -> tuple[float, ...]:
     return struct.unpack(f"<{tensor.element_count()}f", tensor.raw_data())
 
 
+def _run_model(model, ctx) -> None:
+    """Runs ``model``'s graph through ``ctx``, mirroring what the removed
+    ``run_model`` binding used to do: registers every model-local function,
+    seeds the graph's initializers (names ``ctx`` already carries are left
+    as-is), then builds the graph's :class:`ExecutionPlan` and drives it
+    through a fresh :class:`RuntimeSession`.
+    """
+    rt.register_model_functions(model, ctx)
+    for init in model.graph.initializer:
+        if not ctx.has(init.name):
+            ctx.set(init.name, rt.tensor_from_proto(init), "initializer")
+    plan = rt.ExecutionPlan(model.graph)
+    rt.RuntimeSession(plan).run(ctx)
+
+
 # Parsed once at module load — every test that needs it copies the model
 # (or addresses individual nodes) from this shared instance.
 _MODEL_SRC = (
@@ -81,7 +98,7 @@ class TestRunNodesBindings(ExtTestCase):
             "tensor_to_proto",
             "tensor_to_numpy",
             "run_node",
-            "run_model",
+            "register_model_functions",
         ]:
             self.assertTrue(hasattr(rt, name), name)
 
@@ -212,7 +229,7 @@ class TestRunNodesBindings(ExtTestCase):
                 }}
                 """)
             ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-            rt.run_model(model, ctx)
+            _run_model(model, ctx)
             y = ctx.get("Y")
             self.assertEqual(_unpack_floats(y), (1.25, -3.5))
 
@@ -235,7 +252,7 @@ class TestRunNodesBindings(ExtTestCase):
         ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
         ctx.clear_events()
-        rt.run_model(model, ctx)
+        _run_model(model, ctx)
 
         events = ctx.events()
         # The graph produces two intermediates (``t`` and ``y``), each
@@ -287,7 +304,7 @@ class TestRunNodesBindings(ExtTestCase):
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
-        rt.run_model(model, ctx)
+        _run_model(model, ctx)
         self.assertEqual(_unpack_floats(ctx.get("y")), (11.0, 22.0, 33.5))
 
     def test_run_graph_matches_run_model(self):
@@ -327,14 +344,14 @@ class TestRunNodesBindings(ExtTestCase):
             rt.run_node(node, ctx)
 
     def test_run_model_without_graph_raises(self):
-        # A model without a graph must be rejected by RunModel.
+        # A model without a graph must be rejected by register_model_functions.
         from onnx_light.onnx import ModelProto
 
         empty = ModelProto()
         empty.ir_version = 10
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         with self.assertRaises((ValueError, RuntimeError)):
-            rt.run_model(empty, ctx)
+            _run_model(empty, ctx)
 
     def test_register_custom_kernel(self):
         # Register a Python custom kernel for a node in an unknown domain
@@ -364,7 +381,7 @@ class TestRunNodesBindings(ExtTestCase):
             c.put(tp.name, rt.tensor_from_proto(tp), "output")
 
         ctx.register_custom_kernel("my.domain", "Triple", triple)
-        rt.run_model(model, ctx)
+        _run_model(model, ctx)
         self.assertEqual(called, ["Triple"])
         self.assertEqual(_unpack_floats(ctx.get("y")), (3.0, 6.0, 9.0))
 
@@ -801,7 +818,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
         ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
         ctx.clear_events()
-        rt.run_model(model, ctx)
+        _run_model(model, ctx)
 
         for ev in ctx.events():
             self.assertEqual(
@@ -835,7 +852,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
 
         ctx.set("s_init", _make_float_tensor("s_init", [0.0]))
         ctx.clear_events()
-        rt.run_model(model, ctx)
+        _run_model(model, ctx)
 
         body_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "body"]
         self.assertGreater(len(body_events), 0, "No event with subgraph_attr_name='body' found")
@@ -856,7 +873,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
         cond_tp.raw_data = struct.pack("B", 1)  # true
         ctx.set("cond", rt.tensor_from_proto(cond_tp))
         ctx.clear_events()
-        rt.run_model(model, ctx)
+        _run_model(model, ctx)
 
         then_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "then_branch"]
         self.assertGreater(
@@ -878,7 +895,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
         cond_tp.raw_data = struct.pack("B", 0)  # false
         ctx.set("cond", rt.tensor_from_proto(cond_tp))
         ctx.clear_events()
-        rt.run_model(model, ctx)
+        _run_model(model, ctx)
 
         else_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "else_branch"]
         self.assertGreater(
@@ -894,7 +911,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
         ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
         ctx.clear_events()
-        rt.run_model(model, ctx)
+        _run_model(model, ctx)
 
         for ev in ctx.events():
             d = ev.as_dict()

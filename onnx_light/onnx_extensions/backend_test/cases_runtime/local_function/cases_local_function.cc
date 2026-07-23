@@ -53,7 +53,7 @@ void AddOpsetImport(ModelProto &model, const std::string &domain, int64_t versio
 //   outer::SquareThenAdd(a, b) -> Add(inner::Square(a), b)
 //
 // The top-level graph applies ``outer::SquareThenAdd(x, y)``. Exercises that
-// the model-local function registry built by ``RunModel`` is consulted by
+// the model-local function registry built by ``RegisterModelFunctions`` is consulted by
 // (domain, name, overload) from inside a callee's body.
 // ---------------------------------------------------------------------------
 void RegisterFunctionCallsFunctionAcrossDomainsCase(std::vector<TestCase> &registry,

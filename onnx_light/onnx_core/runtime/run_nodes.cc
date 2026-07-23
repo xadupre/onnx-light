@@ -989,7 +989,7 @@ namespace detail {
 NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
                                const std::string &op_type) {
   // A node referring to a model-local FunctionProto (registered by
-  // ``RunModel`` from ``ModelProto::functions()``) takes priority over
+  // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
   // override same-named built-ins, matching the ONNX runtime semantics
   // for model-local functions.
@@ -1073,8 +1073,9 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   detail::InvokeResolvedKernel(node, rt, domain, op_type, kernel);
 }
 
-void RunModel(const ModelProto &model, RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(model.has_graph(), "RunModel: the ModelProto does not contain a graph.");
+void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
+  EXT_ENFORCE_INVALID(model.has_graph(),
+                      "RegisterModelFunctions: the ModelProto does not contain a graph.");
   // Register every model-local function so that nodes referring to
   // them by (domain, op_type, overload) are dispatched to
   // :cpp:func:`CallModelLocalFunction` rather than rejected as unsupported
@@ -1085,7 +1086,6 @@ void RunModel(const ModelProto &model, RuntimeContext &rt) {
     const std::string key = FunctionLookupKey(f.domain(), f.name(), f.overload());
     rt.functions()[key] = &f;
   }
-  RunGraphNodesViaSession(model.ref_graph(), rt);
 }
 
 } // namespace runtime

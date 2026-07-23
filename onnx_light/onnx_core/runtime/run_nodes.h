@@ -37,11 +37,11 @@
  * :cpp:func:`RunNode` automatically.
  *
  * Whenever a whole node *list* (as opposed to a single node) needs to be
- * executed — a graph, a function body, or a subgraph — the runtime always
- * builds an :cpp:class:`ExecutionPlan` for it and drives it through a
- * :cpp:class:`RuntimeSession`; :cpp:func:`RunModel` and
- * :cpp:func:`RunSubgraph` do this internally so callers never assemble a
- * node dispatch loop by hand.
+ * executed — a graph, a function body, or a subgraph — callers build an
+ * :cpp:class:`ExecutionPlan` for it and drive it through a
+ * :cpp:class:`RuntimeSession` themselves (:cpp:func:`RunSubgraph` does this
+ * internally for embedded control-flow subgraphs since it also has to
+ * propagate the subgraph's outputs back to the caller).
  *
  * In addition to the static :cpp:func:`KernelDispatchTable`,
  * :cpp:func:`RunNode` also consults
@@ -52,9 +52,11 @@
  * :cpp:class:`RuntimeContext` bound to the function's formal inputs and run
  * through a :cpp:class:`RuntimeSession`; the function's formal outputs are
  * then propagated back to the caller under the names declared by
- * ``node.output``. :cpp:func:`RunModel` populates that registry from
- * ``model.functions()`` before running the model's graph, so nodes
- * referring to local functions are resolved transparently.
+ * ``node.output``. :cpp:func:`RegisterModelFunctions` populates that
+ * registry from a ``ModelProto``'s ``functions()`` field so nodes referring
+ * to local functions are resolved transparently once the caller runs the
+ * model's graph through its own :cpp:class:`ExecutionPlan` /
+ * :cpp:class:`RuntimeSession`.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -105,28 +107,23 @@ namespace runtime {
 void RunNode(const NodeProto &node, RuntimeContext &rt);
 
 /**
- * Runs the graph embedded in a ``ModelProto`` using the provided runtime
- * context.
- *
- * Every ``FunctionProto`` in ``model.functions()`` is registered in
+ * Registers every ``FunctionProto`` in ``model.functions()`` in
  * :cpp:func:`RuntimeContext::functions` so that nodes referring to a
  * model-local function by ``(domain, op_type, overload)`` are dispatched
- * to it rather than the static :cpp:func:`KernelDispatchTable`. The model's
- * graph is then executed by seeding ``rt.tensors()`` with its initializers
- * and driving its cached :cpp:class:`ExecutionPlan`
- * (:cpp:func:`RuntimeContext::GetExecutionPlan`) through a fresh
- * :cpp:class:`RuntimeSession`. The caller is responsible for inserting the
- * model's input tensors into ``rt.tensors()`` beforehand.
+ * to it rather than the static :cpp:func:`KernelDispatchTable`.
  *
- * @param model The model whose ``graph`` field will be evaluated.
- * @param rt    In/out runtime context seeded with the model inputs;
- *              on return it additionally contains every node output and
- *              every graph initializer.
+ * Callers running a ``ModelProto``'s graph must call this once (before
+ * building the graph's :cpp:class:`ExecutionPlan` and driving it through a
+ * :cpp:class:`RuntimeSession`) so that any node referring to a model-local
+ * function resolves correctly; this function itself does not run any
+ * nodes.
  *
- * @throws std::invalid_argument if the model has no graph or any node
- *         cannot be dispatched.
+ * @param model The model whose ``functions()`` are registered.
+ * @param rt    In/out runtime context whose function registry is updated.
+ *
+ * @throws std::invalid_argument if ``model`` has no graph.
  */
-void RunModel(const ModelProto &model, RuntimeContext &rt);
+void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt);
 
 /**
  * Evaluates a subgraph in a fresh child :cpp:class:`RuntimeContext` that

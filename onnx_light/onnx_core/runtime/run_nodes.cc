@@ -972,14 +972,14 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
 
 namespace detail {
 
-// Resolves how ``node`` must be dispatched, returning the ready-to-invoke
-// trampoline that performs the actual computation (without any progress
-// printing or event logging). This is the "kernel initialization" step:
-// the (domain, op_type) resolution against the model-local function
-// registry, the control-flow handlers, the user-registered custom kernels
-// and the static :cpp:func:`KernelDispatchTable` is performed once here so
-// that a caller (e.g. :cpp:class:`RuntimeSession`) can prepare every node's
-// kernel up front and then invoke it repeatedly without redoing the lookup.
+// Resolves how ``node`` must be dispatched, returning the factory that builds
+// the ready-to-invoke kernel instance (without any progress printing or event
+// logging). This is the "kernel initialization" step: the (domain, op_type)
+// resolution against the model-local function registry, the control-flow
+// handlers, the user-registered custom kernels and the static
+// :cpp:func:`KernelDispatchTable` is performed once here so that a caller
+// (e.g. :cpp:class:`RuntimeSession`) can prepare every node's kernel instance
+// up front and then invoke it repeatedly without redoing the lookup.
 //
 // Resolution precedence mirrors the historical inline logic of
 // :cpp:func:`RunNode`: model-local functions override built-ins, then the
@@ -998,21 +998,32 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       const FunctionProto *func = fit->second;
-      return [func](const NodeProto &n, RuntimeContext &r) { CallModelLocalFunction(n, *func, r); };
+      return [func](const NodeProto &, RuntimeContext &) {
+        return std::make_unique<ResolvedKernel>(
+            [func](const NodeProto &n, RuntimeContext &r) { CallModelLocalFunction(n, *func, r); });
+      };
     }
   }
 
   if (domain == kDefaultOnnxDomain && op_type == "If") {
-    return RunIfNode;
+    return [](const NodeProto &, RuntimeContext &) {
+      return std::make_unique<ResolvedKernel>(RunIfNode);
+    };
   }
   if (domain == kDefaultOnnxDomain && op_type == "Loop") {
-    return RunLoopNode;
+    return [](const NodeProto &, RuntimeContext &) {
+      return std::make_unique<ResolvedKernel>(RunLoopNode);
+    };
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
-    return RunScanNode;
+    return [](const NodeProto &, RuntimeContext &) {
+      return std::make_unique<ResolvedKernel>(RunScanNode);
+    };
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
-    return RunSequenceMapNode;
+    return [](const NodeProto &, RuntimeContext &) {
+      return std::make_unique<ResolvedKernel>(RunSequenceMapNode);
+    };
   }
 
   const std::string key = domain + ":" + op_type;
@@ -1021,7 +1032,9 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
   // extend) the runtime with their own implementations.
   auto ckit = rt.custom_kernels().find(key);
   if (ckit != rt.custom_kernels().end()) {
-    return ckit->second;
+    CustomKernelFn fn = ckit->second;
+    return
+        [fn](const NodeProto &, RuntimeContext &) { return std::make_unique<ResolvedKernel>(fn); };
   }
   const auto &table = KernelDispatchTable();
   auto it = table.find(key);
@@ -1030,12 +1043,13 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
   return it->second;
 }
 
-// Invokes an already-resolved kernel for ``node``, wrapping the call with
-// the verbose progress line and (when enabled) the per-node timing event.
+// Invokes an already-built kernel instance for ``node``, wrapping the call
+// with the verbose progress line and (when enabled) the per-node timing
+// event.
 // Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both the
 // resolve-on-demand and the resolve-once execution paths log identically.
 void InvokeResolvedKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
-                          const std::string &op_type, const NodeKernelFn &kernel) {
+                          const std::string &op_type, const ResolvedKernel &kernel) {
   PrintNodeProgress(rt, node, domain, op_type);
 
   // Only capture timing and input names when event logging is active.
@@ -1049,7 +1063,7 @@ void InvokeResolvedKernel(const NodeProto &node, RuntimeContext &rt, const std::
     t0 = std::chrono::steady_clock::now();
   }
 
-  kernel(node, rt);
+  kernel.Invoke(node, rt);
 
   if (logging) {
     const int64_t duration_ns =
@@ -1069,8 +1083,9 @@ void InvokeResolvedKernel(const NodeProto &node, RuntimeContext &rt, const std::
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
-  NodeKernelFn kernel = detail::ResolveNodeKernel(node, rt, domain, op_type);
-  detail::InvokeResolvedKernel(node, rt, domain, op_type, kernel);
+  NodeKernelFn factory = detail::ResolveNodeKernel(node, rt, domain, op_type);
+  std::unique_ptr<ResolvedKernel> resolved = factory(node, rt);
+  detail::InvokeResolvedKernel(node, rt, domain, op_type, *resolved);
 }
 
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {

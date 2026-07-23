@@ -64,12 +64,12 @@ namespace core {
 namespace runtime {
 
 /**
- * Signature of every per-operator trampoline registered in
- * :cpp:func:`core::runtime::KernelDispatchTable`. Implementations read
- * their inputs from ``rt.tensors()`` by name, call the matching kernel
- * (constructed with ``rt.kernel_ctx()``), and insert the produced
- * outputs back into ``rt.tensors()`` under the names declared by
- * ``node.output(i)``.
+ * Signature of every per-operator factory registered in
+ * :cpp:func:`core::runtime::KernelDispatchTable`. Implementations validate
+ * the node, read any construction-time attributes, construct the matching
+ * kernel with ``rt.kernel_ctx()``, and return a reusable
+ * :cpp:class:`ResolvedKernel` whose :cpp:func:`Invoke` performs the actual
+ * per-run tensor reads / writes.
  *
  * The alias and the table itself are declared in
  * ``onnx_core/runtime/kernel_dispatch_table.h`` (transitively included
@@ -97,12 +97,12 @@ namespace runtime {
  *             contain entries for every input referenced by ``node``;
  *             on return it also contains entries for every output
  *             declared by ``node``. ``rt.kernel_ctx()`` is used to
- *             construct the per-operator kernel.
+ *             construct the per-operator kernel instance.
  *
  * @throws std::invalid_argument if ``node.op_type()`` is not
- *         registered in :cpp:func:`KernelDispatchTable`, if a
- *         required input is missing from ``rt.tensors()``, or if the
- *         per-operator trampoline rejects the node.
+ *         registered in :cpp:func:`KernelDispatchTable`, if a required
+ *         input is missing from ``rt.tensors()``, or if the per-operator
+ *         factory / resolved kernel rejects the node.
  */
 void RunNode(const NodeProto &node, RuntimeContext &rt);
 

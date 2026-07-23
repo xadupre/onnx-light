@@ -33,14 +33,15 @@ std::vector<std::string> RuntimeSession::CollectNodeInputs(const NodeProto &node
 }
 
 void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
-  // Resolve the kernel for every node the plan will execute, once and up
-  // front. Node indices come from the plan's kExecuteNode actions so nodes
-  // the plan never runs (if any) are not resolved. Each entry caches the
-  // normalised (domain, op_type) fused into a single key alongside the
-  // resolved trampoline so :cpp:func:`Run` never has to redo the dispatch
-  // lookup.
+  // Resolve and build the kernel instance for every node the plan will
+  // execute, once and up front. Node indices come from the plan's
+  // kExecuteNode actions so nodes the plan never runs (if any) are not
+  // resolved. Each entry caches the normalised (domain, op_type) fused into
+  // a single key alongside the resolved instance so :cpp:func:`Run` never
+  // has to redo the dispatch lookup or reconstruct the concrete kernel.
   const std::vector<const NodeProto *> &nodes = plan_.nodes();
-  kernels_.assign(nodes.size(), PreparedKernel{});
+  kernels_.clear();
+  kernels_.resize(nodes.size());
   for (const ExecuteAction &action : plan_.actions()) {
     if (action.kind() != ExecuteActionKind::kExecuteNode) {
       continue;
@@ -53,7 +54,8 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     const std::string op_type = node.op_type().value();
     PreparedKernel &prepared = kernels_[index];
     prepared.key = domain + ":" + op_type;
-    prepared.kernel = detail::ResolveNodeKernel(node, rt, domain, op_type);
+    NodeKernelFn factory = detail::ResolveNodeKernel(node, rt, domain, op_type);
+    prepared.instance = factory(node, rt);
   }
   // Record the external inputs the scheduled nodes read (names not produced by
   // any node in the plan, including values captured by subgraph attributes) so
@@ -65,7 +67,8 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
 
 void RuntimeSession::Run(RuntimeContext &rt) {
   // Kernels are resolved against ``rt`` on the first run and cached; later
-  // runs reuse them without redoing the per-node dispatch lookup.
+  // runs reuse the same built instances without redoing the per-node
+  // dispatch lookup or re-constructing concrete kernels.
   if (!kernels_initialized_) {
     InitializeKernels(rt);
   }
@@ -91,10 +94,10 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       const size_t index = action.node_index();
       const PreparedKernel &prepared = kernels_[index];
       // Every kExecuteNode index is resolved by InitializeKernels (which
-      // walks the same plan), so a missing kernel here means the plan was
-      // mutated after initialization — surface it as a clear error instead of
-      // invoking an empty std::function.
-      EXT_ENFORCE_INVALID(static_cast<bool>(prepared.kernel),
+      // walks the same plan), so a missing kernel instance here means the
+      // plan was mutated after initialization — surface it as a clear error
+      // instead of dereferencing an empty pointer.
+      EXT_ENFORCE_INVALID(static_cast<bool>(prepared.instance),
                           "RuntimeSession: kernel for node index ", index,
                           " was not initialized before Run().");
       rt.set_current_node_index(static_cast<int64_t>(index));
@@ -104,7 +107,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       const size_t sep = prepared.key.find(':');
       const std::string domain = prepared.key.substr(0, sep);
       const std::string op_type = prepared.key.substr(sep + 1);
-      detail::InvokeResolvedKernel(*nodes[index], rt, domain, op_type, prepared.kernel);
+      detail::InvokeResolvedKernel(*nodes[index], rt, domain, op_type, *prepared.instance);
       break;
     }
     case ExecuteActionKind::kDeleteBuffer:

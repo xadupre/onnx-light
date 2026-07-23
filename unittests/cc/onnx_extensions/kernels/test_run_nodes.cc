@@ -645,7 +645,7 @@ TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
   *nodes.Add() = MakeNode("Mul", {"x", "y"}, {"t"});
   *nodes.Add() = MakeNode("Sub", {"t", "z"}, {"out"});
 
-  core::runtime::ExecutionPlan plan(nodes, {}, rt.allocator());
+  core::runtime::ExecutionPlan plan(nodes, {});
   core::runtime::RuntimeSession session(plan);
   session.Run(rt);
 
@@ -672,7 +672,7 @@ TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {
   nodes.push_back(MakeNode("Neg", {"q"}, {"out"}));    // out = -3
 
   utils::RepeatedProtoField<NodeProto> node_field(nodes);
-  core::runtime::ExecutionPlan plan(node_field, {}, rt.allocator());
+  core::runtime::ExecutionPlan plan(node_field, {});
   core::runtime::RuntimeSession session(plan);
   session.Run(rt);
 
@@ -1521,7 +1521,7 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
   nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
   utils::RepeatedProtoField<NodeProto> node_field(nodes);
-  core::runtime::ExecutionPlan plan(node_field, {}, rt.allocator());
+  core::runtime::ExecutionPlan plan(node_field, {});
   core::runtime::RuntimeSession session(plan);
   session.Run(rt);
 
@@ -3982,7 +3982,7 @@ TEST(RunNodes, ComputeReleasableInputsLastUse) {
   nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
 
   std::unordered_set<std::string> keep{"y"};
-  auto rel = core::annotations::ComputeContext::ComputeReleasableInputs(nodes, keep);
+  auto rel = core::compute::ComputeContext::ComputeReleasableInputs(nodes, keep);
   ASSERT_EQ(rel.size(), 2u);
   EXPECT_EQ(rel[0], (std::vector<std::string>{"x"}));
   EXPECT_EQ(rel[1], (std::vector<std::string>{"t", "z"}));
@@ -3994,7 +3994,7 @@ TEST(RunNodes, ComputeReleasableInputsKeepIsPreserved) {
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
   std::unordered_set<std::string> keep{"x", "t"};
-  auto rel = core::annotations::ComputeContext::ComputeReleasableInputs(nodes, keep);
+  auto rel = core::compute::ComputeContext::ComputeReleasableInputs(nodes, keep);
   ASSERT_EQ(rel.size(), 1u);
   EXPECT_TRUE(rel[0].empty());
 }
@@ -4252,13 +4252,11 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
   // Node 0 (Abs) reuses input "x" in place for its output "t"; node 1 (Neg)
   // releases the intermediate "t" (its last use) and marks "x" as not used
   // after it.
-  (*graph.mutable_node())[0].add_metadata(core::annotations::kInPlaceReuseMetadataKey, "0:0:equal");
-  (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "t");
-  (*graph.mutable_node())[1].add_metadata(core::annotations::kNotUsedAfterMetadataKey, "x");
+  (*graph.mutable_node())[0].add_metadata(core::compute::kInPlaceReuseMetadataKey, "0:0:equal");
+  (*graph.mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "t");
+  (*graph.mutable_node())[1].add_metadata(core::compute::kNotUsedAfterMetadataKey, "x");
 
-  core::runtime::SimpleRawBufferAllocator allocator(8);
-  core::runtime::ExecutionPlan plan(graph, &allocator);
-  EXPECT_EQ(plan.allocator(), &allocator);
+  core::runtime::ExecutionPlan plan(graph);
 
   const std::vector<core::runtime::ExecuteAction> &actions = plan.actions();
   ASSERT_FALSE(actions.empty());
@@ -4282,21 +4280,17 @@ TEST(RunNodes, ExecutionPlanBuildsActions) {
     if (action.kind() == ExecuteActionKind::kAllocateBuffer && action.name() == "t") {
       // "t" is produced in place from input "x": no fresh allocation.
       t_inplace = action.is_inplace();
-      EXPECT_EQ(action.allocator(), nullptr);
       EXPECT_EQ(action.target(), "x");
       EXPECT_EQ(action.inplace().output_index, 0);
       EXPECT_EQ(action.inplace().input_index, 0);
     }
     if (action.kind() == ExecuteActionKind::kAllocateBuffer && action.name() == "y") {
-      // "y" has no reuse opportunity: it is allocated from the allocator.
+      // "y" has no reuse opportunity: it is freshly allocated.
       y_allocated = true;
       EXPECT_FALSE(action.is_inplace());
-      EXPECT_EQ(action.allocator(), &allocator);
     }
     if (action.kind() == ExecuteActionKind::kDeleteBuffer && action.name() == "t") {
       t_deleted = true;
-      // Deletion actions reference the allocator that owns the memory.
-      EXPECT_EQ(action.allocator(), &allocator);
     }
   }
   ASSERT_EQ(execute_indices.size(), 2u);
@@ -4312,7 +4306,7 @@ TEST(RunNodes, ExecuteActionSummary) {
   using core::runtime::ExecuteActionKind;
 
   // Node execution mentions the node index only.
-  ExecuteAction execute(ExecuteActionKind::kExecuteNode, "", nullptr, /*node_index=*/3);
+  ExecuteAction execute(ExecuteActionKind::kExecuteNode, "", /*node_index=*/3);
   EXPECT_EQ(execute.summary(), "ExecuteNode node_index=3");
 
   // Lock / unlock and shape actions mention only the name.
@@ -4322,18 +4316,18 @@ TEST(RunNodes, ExecuteActionSummary) {
   EXPECT_EQ(create_shape.summary(), "CreateShape name='s'");
 
   // A fresh buffer allocation mentions name and size.
-  ExecuteAction alloc(ExecuteActionKind::kAllocateBuffer, "y", nullptr, /*node_index=*/0,
+  ExecuteAction alloc(ExecuteActionKind::kAllocateBuffer, "y", /*node_index=*/0,
                       /*size=*/16);
   EXPECT_EQ(alloc.summary(), "AllocateBuffer name='y' size=16");
 
   // An in-place allocation mentions the reuse decision and reused buffer.
-  ExecuteAction inplace(ExecuteActionKind::kAllocateBuffer, "t", nullptr, /*node_index=*/0,
-                        /*size=*/8, /*target=*/"x", core::annotations::InPlaceReuse{0, 0});
+  ExecuteAction inplace(ExecuteActionKind::kAllocateBuffer, "t", /*node_index=*/0,
+                        /*size=*/8, /*target=*/"x", core::compute::InPlaceReuse{0, 0});
   EXPECT_EQ(inplace.summary(),
             "AllocateBuffer name='t' size=8 inplace(output=0, input=0) reuses='x'");
 
   // A transfer mentions both endpoints.
-  ExecuteAction transfer(ExecuteActionKind::kTransfer, "a", nullptr, /*node_index=*/0,
+  ExecuteAction transfer(ExecuteActionKind::kTransfer, "a", /*node_index=*/0,
                          /*size=*/0, /*target=*/"b");
   EXPECT_EQ(transfer.summary(), "Transfer name='a' -> target='b'");
 
@@ -4361,12 +4355,11 @@ TEST(RunNodes, ExecutionPlanShapeTagActions) {
 
   // "s" is released at node 1 and is value-tagged as a shape; the input "x"
   // reaches its last use at node 1 and is unlocked there.
-  (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "s");
-  (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterShapeTagMetadataKey, "s");
-  (*graph.mutable_node())[1].add_metadata(core::annotations::kNotUsedAfterMetadataKey, "x");
+  (*graph.mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "s");
+  (*graph.mutable_node())[1].add_metadata(core::compute::kReleaseAfterShapeTagMetadataKey, "s");
+  (*graph.mutable_node())[1].add_metadata(core::compute::kNotUsedAfterMetadataKey, "x");
 
-  core::runtime::SimpleRawBufferAllocator allocator(8);
-  core::runtime::ExecutionPlan plan(graph, &allocator);
+  core::runtime::ExecutionPlan plan(graph);
 
   using core::runtime::ExecuteActionKind;
   bool s_shape_created = false;
@@ -4406,12 +4399,11 @@ TEST(RunNodes, ExecutionPlanPeakMemoryActions) {
   graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
   graph.ref_node().push_back(MakeNode("Neg", {"t"}, {"y"}));
 
-  (*graph.mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "t");
+  (*graph.mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "t");
   // Only node 0 needs a scratch buffer of 256 bytes.
-  (*graph.mutable_node())[0].add_metadata(core::annotations::kNodePeakMemoryMetadataKey, "256");
+  (*graph.mutable_node())[0].add_metadata(core::compute::kNodePeakMemoryMetadataKey, "256");
 
-  core::runtime::SimpleRawBufferAllocator allocator(8);
-  core::runtime::ExecutionPlan plan(graph, &allocator);
+  core::runtime::ExecutionPlan plan(graph);
 
   using core::runtime::ExecuteActionKind;
   const std::vector<core::runtime::ExecuteAction> &actions = plan.actions();
@@ -4428,14 +4420,12 @@ TEST(RunNodes, ExecutionPlanPeakMemoryActions) {
       alloc_temp_index = i;
       EXPECT_EQ(action.node_index(), 0u);
       EXPECT_EQ(action.size(), 256u);
-      EXPECT_EQ(action.allocator(), &allocator);
     }
     if (action.kind() == ExecuteActionKind::kDeleteTemporaryBuffer) {
       ++temp_action_count;
       delete_temp_index = i;
       EXPECT_EQ(action.node_index(), 0u);
       EXPECT_EQ(action.size(), 256u);
-      EXPECT_EQ(action.allocator(), &allocator);
     }
     if (action.kind() == ExecuteActionKind::kExecuteNode && action.node_index() == 0u) {
       execute_node0_index = i;

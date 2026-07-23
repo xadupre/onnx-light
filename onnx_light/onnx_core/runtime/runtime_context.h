@@ -72,7 +72,7 @@ using OnnxMapMap = std::unordered_map<std::string, Map>;
 /**
  * Name-keyed map of :cpp:struct:`Shape` values carrying the shape-typed
  * graph edges (values tagged ``"shape"`` by
- * :cpp:class:`annotations::ComputeContext`) produced or consumed while a
+ * :cpp:class:`compute::ComputeContext`) produced or consumed while a
  * graph is executed.
  *
  * Shapes are stored separately from tensors because a shape-tagged value is

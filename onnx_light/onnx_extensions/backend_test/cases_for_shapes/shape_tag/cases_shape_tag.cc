@@ -67,29 +67,29 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode mode) {
   // X is a graph input so CollectGraphSeedTags tags it as "weight";
   // Y inherits "weight" from X through Reshape; S is tagged "shape" by Shape.
   // DumpValueTagsAsJson sorts keys, so the canonical order is S < X < Y.
-  graph->add_metadata(core::annotations::kValueTagsMetadataKey,
+  graph->add_metadata(core::compute::kValueTagsMetadataKey,
                       "{\"S\":\"shape\",\"X\":\"weight\",\"Y\":\"weight\"}");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kNodeTagMetadataKey, "shape");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kValueTagMetadataKey, "shape");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "shape");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "shape");
   // Reshape (node[1]) inherits "weight" from its first input X.
-  (*graph->mutable_node())[1].add_metadata(core::annotations::kNodeTagMetadataKey, "weight");
-  (*graph->mutable_node())[1].add_metadata(core::annotations::kValueTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(core::compute::kValueTagMetadataKey, "weight");
   // S (value_info[0]) also receives onnx_light.value_tag = "shape".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("shape");
   }
   // X (input[0]) receives onnx_light.value_tag = "weight".
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // Y (output[0]) receives onnx_light.value_tag = "weight".
   {
     StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
 
@@ -167,29 +167,29 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry, TestMode mo
   // than "weight", so S is tagged "shape". The Constant node picks up "shape" on
   // the second inference pass. Reshape (node[1]) inherits "weight" from X.
   // DumpValueTagsAsJson sorts keys: S < X < Y.
-  graph->add_metadata(core::annotations::kValueTagsMetadataKey,
+  graph->add_metadata(core::compute::kValueTagsMetadataKey,
                       "{\"S\":\"shape\",\"X\":\"weight\",\"Y\":\"weight\"}");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kNodeTagMetadataKey, "shape");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kValueTagMetadataKey, "shape");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "shape");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "shape");
   // Reshape (node[1]) inherits "weight" from X.
-  (*graph->mutable_node())[1].add_metadata(core::annotations::kNodeTagMetadataKey, "weight");
-  (*graph->mutable_node())[1].add_metadata(core::annotations::kValueTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(core::compute::kValueTagMetadataKey, "weight");
   // S (value_info[0]) receives onnx_light.value_tag = "shape".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("shape");
   }
   // X (input[0]) receives onnx_light.value_tag = "weight".
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // Y (output[0]) receives onnx_light.value_tag = "weight".
   {
     StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
 
@@ -304,65 +304,65 @@ void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &regist
   // Reshape (node[4]) inherits "weight" from X (input 0) → Y = "weight".
   // DumpValueTagsAsJson sorts keys: S1 < S2 < S_full < X < Y < two.
   graph->add_metadata(
-      core::annotations::kValueTagsMetadataKey,
+      core::compute::kValueTagsMetadataKey,
       "{\"S1\":\"shape\",\"S2\":\"shape\",\"S_full\":\"shape\",\"X\":\"weight\",\"Y\":\"weight\","
       "\"two\":\"weight\"}");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kNodeTagMetadataKey,
+  (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey,
                                            "shape"); // Constant → S1
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kValueTagMetadataKey,
+  (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey,
                                            "shape"); // Constant → S1
-  (*graph->mutable_node())[1].add_metadata(core::annotations::kNodeTagMetadataKey,
+  (*graph->mutable_node())[1].add_metadata(core::compute::kNodeTagMetadataKey,
                                            "weight"); // Constant → two
-  (*graph->mutable_node())[1].add_metadata(core::annotations::kValueTagMetadataKey,
+  (*graph->mutable_node())[1].add_metadata(core::compute::kValueTagMetadataKey,
                                            "weight"); // Constant → two
-  (*graph->mutable_node())[2].add_metadata(core::annotations::kNodeTagMetadataKey,
+  (*graph->mutable_node())[2].add_metadata(core::compute::kNodeTagMetadataKey,
                                            "shape"); // Mul
-  (*graph->mutable_node())[2].add_metadata(core::annotations::kValueTagMetadataKey,
+  (*graph->mutable_node())[2].add_metadata(core::compute::kValueTagMetadataKey,
                                            "shape"); // Mul
-  (*graph->mutable_node())[3].add_metadata(core::annotations::kNodeTagMetadataKey,
+  (*graph->mutable_node())[3].add_metadata(core::compute::kNodeTagMetadataKey,
                                            "shape"); // Concat
-  (*graph->mutable_node())[3].add_metadata(core::annotations::kValueTagMetadataKey,
+  (*graph->mutable_node())[3].add_metadata(core::compute::kValueTagMetadataKey,
                                            "shape"); // Concat
   // node[4] (Reshape) inherits "weight" from X.
-  (*graph->mutable_node())[4].add_metadata(core::annotations::kNodeTagMetadataKey,
+  (*graph->mutable_node())[4].add_metadata(core::compute::kNodeTagMetadataKey,
                                            "weight"); // Reshape
-  (*graph->mutable_node())[4].add_metadata(core::annotations::kValueTagMetadataKey,
+  (*graph->mutable_node())[4].add_metadata(core::compute::kValueTagMetadataKey,
                                            "weight"); // Reshape
 
   // S1 (value_info[0]) → "shape".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("shape");
   }
   // two (value_info[1]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(1)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // S2 (value_info[2]) → "shape".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(2)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("shape");
   }
   // S_full (value_info[3]) → "shape".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(3)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("shape");
   }
   // X (input[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // Y (output[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
 
@@ -427,20 +427,19 @@ void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry, TestMod
   // Pre-embed the expected shape-tag metadata so tests can verify that
   // WriteValueAndNodeTagsToMetadata produces identical results.
   // DumpValueTagsAsJson sorts keys, so the canonical order is X < Y.
-  graph->add_metadata(core::annotations::kValueTagsMetadataKey,
-                      "{\"X\":\"weight\",\"Y\":\"shape\"}");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kNodeTagMetadataKey, "shape");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kValueTagMetadataKey, "shape");
+  graph->add_metadata(core::compute::kValueTagsMetadataKey, "{\"X\":\"weight\",\"Y\":\"shape\"}");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "shape");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "shape");
   // X (input[0]) receives onnx_light.value_tag = "weight".
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // Y (output[0]) receives onnx_light.value_tag = "shape".
   {
     StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("shape");
   }
 
@@ -504,26 +503,26 @@ void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry, Test
   // PAST is "weight" (seeded as graph input). KH is "weight" (initializer seed).
   // Concat forward: weight wins → C="weight".
   // DumpValueTagsAsJson sorts keys: C < KH < PAST.
-  graph->add_metadata(core::annotations::kValueTagsMetadataKey,
+  graph->add_metadata(core::compute::kValueTagsMetadataKey,
                       "{\"C\":\"weight\",\"KH\":\"weight\",\"PAST\":\"weight\"}");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kNodeTagMetadataKey, "weight");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kValueTagMetadataKey, "weight");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "weight");
   // PAST (input[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // C (output[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // KH (initializer[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_initializer(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
 
@@ -593,34 +592,34 @@ void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry, TestMode
   // Add backward: Z="weight" → Y gets "weight".
   // Cast backward: Y="weight" → X gets "weight".
   // DumpValueTagsAsJson sorts keys: W < X < Y < Z.
-  graph->add_metadata(core::annotations::kValueTagsMetadataKey,
+  graph->add_metadata(core::compute::kValueTagsMetadataKey,
                       "{\"W\":\"weight\",\"X\":\"weight\",\"Y\":\"weight\",\"Z\":\"weight\"}");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kNodeTagMetadataKey, "weight");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kValueTagMetadataKey, "weight");
-  (*graph->mutable_node())[1].add_metadata(core::annotations::kNodeTagMetadataKey, "weight");
-  (*graph->mutable_node())[1].add_metadata(core::annotations::kValueTagMetadataKey, "weight");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(core::compute::kValueTagMetadataKey, "weight");
   // X (input[0]) → "weight" (via Cast backward).
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // Z (output[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // Y (value_info[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // W (initializer[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_initializer(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
 
@@ -696,40 +695,40 @@ void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry, TestM
   // Reshape backward: Y="weight" → X gets "weight".
   // DumpValueTagsAsJson sorts keys: S < W < X < Y < Z.
   graph->add_metadata(
-      core::annotations::kValueTagsMetadataKey,
+      core::compute::kValueTagsMetadataKey,
       "{\"S\":\"shape\",\"W\":\"weight\",\"X\":\"weight\",\"Y\":\"weight\",\"Z\":\"weight\"}");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kNodeTagMetadataKey, "weight");
-  (*graph->mutable_node())[0].add_metadata(core::annotations::kValueTagMetadataKey, "weight");
-  (*graph->mutable_node())[1].add_metadata(core::annotations::kNodeTagMetadataKey, "weight");
-  (*graph->mutable_node())[1].add_metadata(core::annotations::kValueTagMetadataKey, "weight");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
+  (*graph->mutable_node())[1].add_metadata(core::compute::kValueTagMetadataKey, "weight");
   // X (input[0]) → "weight" (via Reshape backward).
   {
     StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // Z (output[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // Y (value_info[0]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
   // S (initializer[0]) → "shape".
   {
     StringStringEntryProto *entry = graph->mutable_initializer(0)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("shape");
   }
   // W (initializer[1]) → "weight".
   {
     StringStringEntryProto *entry = graph->mutable_initializer(1)->add_metadata_props();
-    entry->set_key(core::annotations::kValueTagMetadataKey);
+    entry->set_key(core::compute::kValueTagMetadataKey);
     entry->set_value("weight");
   }
 

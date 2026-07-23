@@ -169,15 +169,15 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   const auto tag = [](NodeProto &n, const char *node_tag, const std::string &inplace,
                       const std::string &release_after,
                       const std::string &release_after_shape_tag) {
-    n.add_metadata(core::annotations::kNodeTagMetadataKey, node_tag);
+    n.add_metadata(core::compute::kNodeTagMetadataKey, node_tag);
     if (!inplace.empty()) {
-      n.add_metadata(core::annotations::kInPlaceReuseMetadataKey, inplace);
+      n.add_metadata(core::compute::kInPlaceReuseMetadataKey, inplace);
     }
     if (!release_after.empty()) {
-      n.add_metadata(core::annotations::kReleaseAfterMetadataKey, release_after);
+      n.add_metadata(core::compute::kReleaseAfterMetadataKey, release_after);
     }
     if (!release_after_shape_tag.empty()) {
-      n.add_metadata(core::annotations::kReleaseAfterShapeTagMetadataKey, release_after_shape_tag);
+      n.add_metadata(core::compute::kReleaseAfterShapeTagMetadataKey, release_after_shape_tag);
     }
   };
 

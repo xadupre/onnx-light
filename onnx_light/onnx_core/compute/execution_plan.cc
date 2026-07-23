@@ -56,8 +56,8 @@ std::vector<std::string> SplitNames(const std::string &value) {
 /// ``output_index:input_index:kind`` triplets, ``kind`` being ``equal`` or
 /// ``greater``) into a list of :cpp:class:`InPlaceReuse` decisions. Malformed
 /// triplets are skipped.
-std::vector<annotations::InPlaceReuse> ParseInPlaceReuse(const std::string &value) {
-  std::vector<annotations::InPlaceReuse> reuse;
+std::vector<compute::InPlaceReuse> ParseInPlaceReuse(const std::string &value) {
+  std::vector<compute::InPlaceReuse> reuse;
   for (const std::string &triplet : SplitNames(value)) {
     const size_t first = triplet.find(':');
     if (first == std::string::npos) {
@@ -67,12 +67,12 @@ std::vector<annotations::InPlaceReuse> ParseInPlaceReuse(const std::string &valu
     if (second == std::string::npos) {
       continue;
     }
-    annotations::InPlaceReuse r;
+    compute::InPlaceReuse r;
     r.output_index = std::strtoll(triplet.substr(0, first).c_str(), nullptr, 10);
     r.input_index =
         std::strtoll(triplet.substr(first + 1, second - first - 1).c_str(), nullptr, 10);
-    r.kind = triplet.substr(second + 1) == "greater" ? annotations::InPlaceReuseKind::kGreater
-                                                     : annotations::InPlaceReuseKind::kEqual;
+    r.kind = triplet.substr(second + 1) == "greater" ? compute::InPlaceReuseKind::kGreater
+                                                     : compute::InPlaceReuseKind::kEqual;
     reuse.push_back(r);
   }
   return reuse;
@@ -80,7 +80,7 @@ std::vector<annotations::InPlaceReuse> ParseInPlaceReuse(const std::string &valu
 
 /// Parses the ``kNodePeakMemoryMetadataKey`` value (the decimal string
 /// representation of an ``int64_t`` byte count written by
-/// :cpp:func:`annotations::WritePeakMemoryToMetadata`) into a size in bytes.
+/// :cpp:func:`compute::WritePeakMemoryToMetadata`) into a size in bytes.
 /// Returns ``0`` when the metadata is absent, empty or non-positive, i.e. when
 /// the node needs no scratch/temporary buffer.
 size_t ParsePeakMemory(const std::string &value) {
@@ -93,13 +93,9 @@ size_t ParsePeakMemory(const std::string &value) {
 
 } // namespace
 
-ExecutionPlan::ExecutionPlan(RawBufferAllocator *allocator) : allocator_(allocator) {
-  BuildActions();
-}
-
 ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
-                             std::unordered_set<std::string> keep, RawBufferAllocator *allocator)
-    : allocator_(allocator), keep_(std::move(keep)) {
+                             std::unordered_set<std::string> keep)
+    : keep_(std::move(keep)) {
   nodes_.reserve(nodes.size());
   for (size_t i = 0; i < nodes.size(); ++i) {
     nodes_.push_back(&nodes[i]);
@@ -108,8 +104,7 @@ ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
   BuildActions();
 }
 
-ExecutionPlan::ExecutionPlan(const GraphProto &graph, RawBufferAllocator *allocator)
-    : allocator_(allocator) {
+ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
   for (size_t i = 0; i < graph.input().size(); ++i) {
     const std::string name = graph.input()[i].name();
     if (!name.empty()) {
@@ -139,8 +134,7 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph, RawBufferAllocator *alloca
   BuildActions();
 }
 
-ExecutionPlan::ExecutionPlan(const FunctionProto &func, RawBufferAllocator *allocator)
-    : allocator_(allocator) {
+ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
   for (size_t i = 0; i < func.input_size(); ++i) {
     const std::string name = func.input(i);
     if (!name.empty()) {
@@ -174,7 +168,7 @@ void ExecutionPlan::BuildActions() {
   const std::unordered_set<std::string> output_set(outputs_.begin(), outputs_.end());
 
   // The memory-management schedule is metadata-driven. Two independent signals
-  // are read from the node metadata written by :cpp:class:`annotations::
+  // are read from the node metadata written by :cpp:class:`compute::
   // ComputeContext`:
   //
   //   * ``annotated`` (any ``release_after`` entry) selects the source of the
@@ -196,10 +190,10 @@ void ExecutionPlan::BuildActions() {
   bool annotated = false;
   bool strict = false;
   for (const NodeProto *node_ptr : nodes_) {
-    if (!ReadNodeMetadata(*node_ptr, annotations::kReleaseAfterMetadataKey).empty()) {
+    if (!ReadNodeMetadata(*node_ptr, compute::kReleaseAfterMetadataKey).empty()) {
       annotated = true;
     }
-    if (!ReadNodeMetadata(*node_ptr, annotations::kNotUsedAfterMetadataKey).empty()) {
+    if (!ReadNodeMetadata(*node_ptr, compute::kNotUsedAfterMetadataKey).empty()) {
       strict = true;
     }
   }
@@ -242,7 +236,7 @@ void ExecutionPlan::BuildActions() {
   std::unordered_set<std::string> shape_tagged;
   for (const NodeProto *node_ptr : nodes_) {
     for (const std::string &name :
-         SplitNames(ReadNodeMetadata(*node_ptr, annotations::kReleaseAfterShapeTagMetadataKey))) {
+         SplitNames(ReadNodeMetadata(*node_ptr, compute::kReleaseAfterShapeTagMetadataKey))) {
       shape_tagged.insert(name);
     }
   }
@@ -282,8 +276,8 @@ void ExecutionPlan::BuildActions() {
     // Read the in-place reuse decisions attached to this node so that an output
     // covered by a reuse opportunity reuses an input buffer instead of being
     // freshly allocated.
-    const std::vector<annotations::InPlaceReuse> reuse =
-        ParseInPlaceReuse(ReadNodeMetadata(node, annotations::kInPlaceReuseMetadataKey));
+    const std::vector<compute::InPlaceReuse> reuse =
+        ParseInPlaceReuse(ReadNodeMetadata(node, compute::kInPlaceReuseMetadataKey));
 
     // Allocate a result (or create a shape) for each named output.
     for (int o = 0; o < node.output_size(); ++o) {
@@ -297,8 +291,8 @@ void ExecutionPlan::BuildActions() {
         created_shapes.insert(out);
         continue;
       }
-      const annotations::InPlaceReuse *match = nullptr;
-      for (const annotations::InPlaceReuse &r : reuse) {
+      const compute::InPlaceReuse *match = nullptr;
+      for (const compute::InPlaceReuse &r : reuse) {
         if (r.output_index == o) {
           match = &r;
           break;
@@ -312,32 +306,32 @@ void ExecutionPlan::BuildActions() {
             match->input_index < static_cast<int64_t>(node.input_size())) {
           target = node.input(static_cast<int>(match->input_index));
         }
-        actions_.emplace_back(ExecuteActionKind::kAllocateBuffer, out, nullptr, 0, 0,
-                              std::move(target), *match);
+        actions_.emplace_back(ExecuteActionKind::kAllocateBuffer, out, 0, 0, std::move(target),
+                              *match);
       } else {
-        // A result is allocated from the plan's allocator.
-        actions_.emplace_back(ExecuteActionKind::kAllocateBuffer, out, allocator_);
+        // A result is freshly allocated (no in-place reuse for this output).
+        actions_.emplace_back(ExecuteActionKind::kAllocateBuffer, out);
       }
     }
 
     // A temporary/scratch buffer required by the node's kernel to handle a
     // memory peak is allocated right before the node runs and freed right
     // after. The size is read from the peak-memory metadata written by
-    // :cpp:func:`annotations::WritePeakMemoryToMetadata`; nodes without it (or
+    // :cpp:func:`compute::WritePeakMemoryToMetadata`; nodes without it (or
     // with a non-positive estimate) need no scratch buffer.
     const size_t peak_memory =
-        ParsePeakMemory(ReadNodeMetadata(node, annotations::kNodePeakMemoryMetadataKey));
+        ParsePeakMemory(ReadNodeMetadata(node, compute::kNodePeakMemoryMetadataKey));
     if (peak_memory != 0) {
-      actions_.emplace_back(ExecuteActionKind::kAllocateTemporaryBuffer, std::string(), allocator_,
-                            i, peak_memory);
+      actions_.emplace_back(ExecuteActionKind::kAllocateTemporaryBuffer, std::string(), i,
+                            peak_memory);
     }
 
     // A node execution does not target a named result, so its name is empty;
     // the node it runs is identified by ``node_index``.
-    actions_.emplace_back(ExecuteActionKind::kExecuteNode, std::string(), nullptr, i);
+    actions_.emplace_back(ExecuteActionKind::kExecuteNode, std::string(), i);
 
     if (peak_memory != 0) {
-      actions_.emplace_back(ExecuteActionKind::kDeleteTemporaryBuffer, std::string(), allocator_, i,
+      actions_.emplace_back(ExecuteActionKind::kDeleteTemporaryBuffer, std::string(), i,
                             peak_memory);
     }
 
@@ -350,25 +344,25 @@ void ExecutionPlan::BuildActions() {
     // back from :cpp:func:`actions`.
     if (annotated) {
       for (const std::string &name :
-           SplitNames(ReadNodeMetadata(node, annotations::kReleaseAfterMetadataKey))) {
+           SplitNames(ReadNodeMetadata(node, compute::kReleaseAfterMetadataKey))) {
         if (shape_tagged.count(name) != 0) {
           // A shape is destroyed: it must have been created earlier.
           EXT_ENFORCE(!strict || created_shapes.count(name) != 0, "ExecutionPlan: shape '", name,
                       "' is released but was never created (missing shape metadata).");
-          actions_.emplace_back(ExecuteActionKind::kDeleteShape, name, nullptr, i);
+          actions_.emplace_back(ExecuteActionKind::kDeleteShape, name, i);
         } else {
-          actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, allocator_, i);
+          actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, i);
         }
         released.insert(name);
       }
     } else {
       for (const std::string &name : topology_releases[i]) {
-        actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, allocator_, i);
+        actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, i);
         released.insert(name);
       }
     }
     for (const std::string &name :
-         SplitNames(ReadNodeMetadata(node, annotations::kNotUsedAfterMetadataKey))) {
+         SplitNames(ReadNodeMetadata(node, compute::kNotUsedAfterMetadataKey))) {
       if (initializer_set.count(name) != 0) {
         actions_.emplace_back(ExecuteActionKind::kUnlockInitializer, name);
         locked.erase(name);

@@ -60,7 +60,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-namespace annotations {
+namespace compute {
 
 using ::onnx_light::core::shapes::ShapesContext;
 
@@ -103,7 +103,7 @@ void WriteInPlaceReuseToMetadata(
     GraphProto &graph, const ShapesContext &ctx,
     const std::unordered_map<std::string, std::string> &value_tags = {});
 
-} // namespace annotations
+} // namespace compute
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE
 

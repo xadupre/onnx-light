@@ -17,7 +17,6 @@
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/inplace_reuse_types.h"
 #include "onnx_core/compute/peak_memory.h"
-#include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -34,12 +33,12 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-namespace annotations {
+namespace compute {
 
 using ::onnx_light::core::shapes::ShapesContext;
 
 // The symbolic value descriptors live in ``core::symbolic``; bring them
-// into ``core::annotations`` so this file can keep referring to them
+// into ``core::compute`` so this file can keep referring to them
 // unqualified.
 using ::onnx_light::core::symbolic::Device;
 using ::onnx_light::core::symbolic::SymDim;
@@ -504,15 +503,12 @@ public:
   /// stored in ``*this``. It first pushes the information into ``graph`` (see
   /// :cpp:func:`WriteToGraph`) and then builds the plan from the annotated
   /// graph, so the schedule is driven entirely by the analyses held by this
-  /// context. ``allocator`` is referenced by every allocation / deallocation
-  /// action the plan schedules.
-  runtime::ExecutionPlan BuildExecutionPlan(GraphProto &graph,
-                                            runtime::RawBufferAllocator *allocator = nullptr) const;
+  /// context.
+  runtime::ExecutionPlan BuildExecutionPlan(GraphProto &graph) const;
 
   /// Same as :cpp:func:`BuildExecutionPlan(GraphProto&, ...)` applied to
   /// ``model.graph()``.
-  runtime::ExecutionPlan BuildExecutionPlan(ModelProto &model,
-                                            runtime::RawBufferAllocator *allocator = nullptr) const;
+  runtime::ExecutionPlan BuildExecutionPlan(ModelProto &model) const;
 
   // ── Optional decision logging ────────────────────────────────────────
   //
@@ -607,6 +603,6 @@ private:
   bool events_enabled_ = false;
 };
 
-} // namespace annotations
+} // namespace compute
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

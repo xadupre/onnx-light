@@ -20,7 +20,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-namespace annotations {
+namespace compute {
 
 namespace {
 
@@ -839,7 +839,7 @@ ComputeContext::ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes) {
 
 bool ComputeContext::TrySetValueTag(const std::string &name, const std::string &tag) {
   const bool changed =
-      ::ONNX_LIGHT_NAMESPACE::core::annotations::TrySetValueTag(value_tags_, name, tag);
+      ::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag);
   if (changed) {
     custom_value_tags_changed_ = true;
   }
@@ -1366,19 +1366,15 @@ void ComputeContext::WriteToGraph(GraphProto &graph) const {
 
 void ComputeContext::WriteToModel(ModelProto &model) const { WriteToGraph(*model.mutable_graph()); }
 
-runtime::ExecutionPlan
-ComputeContext::BuildExecutionPlan(GraphProto &graph,
-                                   runtime::RawBufferAllocator *allocator) const {
+runtime::ExecutionPlan ComputeContext::BuildExecutionPlan(GraphProto &graph) const {
   WriteToGraph(graph);
-  return runtime::ExecutionPlan(graph, allocator);
+  return runtime::ExecutionPlan(graph);
 }
 
-runtime::ExecutionPlan
-ComputeContext::BuildExecutionPlan(ModelProto &model,
-                                   runtime::RawBufferAllocator *allocator) const {
-  return BuildExecutionPlan(*model.mutable_graph(), allocator);
+runtime::ExecutionPlan ComputeContext::BuildExecutionPlan(ModelProto &model) const {
+  return BuildExecutionPlan(*model.mutable_graph());
 }
 
-} // namespace annotations
+} // namespace compute
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

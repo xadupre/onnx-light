@@ -14,7 +14,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-namespace annotations {
+namespace compute {
 
 namespace {
 
@@ -194,6 +194,6 @@ void WriteValueAndNodeTagsToMetadata(ModelProto &model) {
   }
 }
 
-} // namespace annotations
+} // namespace compute
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

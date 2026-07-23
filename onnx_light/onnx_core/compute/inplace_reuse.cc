@@ -6,7 +6,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-namespace annotations {
+namespace compute {
 
 std::vector<std::vector<InPlaceReuse>>
 ComputeInPlaceReuse(const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite) {
@@ -22,6 +22,6 @@ void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx,
   inplace.WriteToMetadata(graph);
 }
 
-} // namespace annotations
+} // namespace compute
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

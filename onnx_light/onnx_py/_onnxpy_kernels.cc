@@ -367,8 +367,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "Single step of an :class:`ExecutionPlan`: one memory-management or "
       "node-execution operation (lock / unlock an input or initializer, "
       "allocate / delete a named result or temporary buffer, create / delete a "
-      "shape, transfer a named result, or execute a node). Every allocation or "
-      "deallocation references the allocator that owns the memory.")
+      "shape, transfer a named result, or execute a node).")
       .def(nb::init<>())
       .def(nb::init<ExecuteActionKind, std::string>(), nb::arg("kind"), nb::arg("name"),
            "Builds an action of ``kind`` targeting ``name``.")
@@ -392,10 +391,6 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "size", [](const ExecuteAction &a) { return a.size(); },
           "Number of bytes for buffer allocations (``0`` when unknown).")
       .def_prop_ro(
-          "has_allocator", [](const ExecuteAction &a) { return a.allocator() != nullptr; },
-          "Whether the action references a raw buffer allocator (true for "
-          "allocation / deallocation actions backed by an allocator).")
-      .def_prop_ro(
           "is_inplace", [](const ExecuteAction &a) { return a.is_inplace(); },
           "Whether a ``kAllocateBuffer`` action reuses an input buffer in place "
           "instead of allocating fresh memory.")
@@ -415,7 +410,6 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         return std::string("ExecuteAction(kind='") + a.kind_name() + "', name='" + a.name() +
                "', target='" + a.target() + "', node_index=" + std::to_string(a.node_index()) +
                ", size=" + std::to_string(a.size()) +
-               ", has_allocator=" + (a.allocator() != nullptr ? "True" : "False") +
                ", is_inplace=" + (a.is_inplace() ? "True" : "False") + ")";
       });
 

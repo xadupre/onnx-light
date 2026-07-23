@@ -11,7 +11,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-namespace annotations {
+namespace compute {
 
 void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Device device) {
   for (NodeProto &node : *graph.mutable_node()) {
@@ -32,6 +32,6 @@ void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Devi
   }
 }
 
-} // namespace annotations
+} // namespace compute
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

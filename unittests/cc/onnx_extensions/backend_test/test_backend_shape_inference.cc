@@ -913,19 +913,19 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
           << "metadata mismatch on node " << i << " in case " << tc.name;
     }
 
-    std::vector<std::vector<core::annotations::InPlaceReuse>> reuse_with_inputs =
-        core::annotations::ComputeInPlaceReuse(tc.model().ref_graph(), ctx,
-                                               /*allow_input_overwrite=*/true);
+    std::vector<std::vector<core::compute::InPlaceReuse>> reuse_with_inputs =
+        core::compute::ComputeInPlaceReuse(tc.model().ref_graph(), ctx,
+                                           /*allow_input_overwrite=*/true);
     ASSERT_EQ(reuse_with_inputs.size(), 3u);
     ASSERT_EQ(reuse_with_inputs[0].size(), 1u);
     EXPECT_EQ(reuse_with_inputs[0][0],
-              (core::annotations::InPlaceReuse{0, 0, core::annotations::InPlaceReuseKind::kEqual}));
+              (core::compute::InPlaceReuse{0, 0, core::compute::InPlaceReuseKind::kEqual}));
     ASSERT_EQ(reuse_with_inputs[1].size(), 1u);
     EXPECT_EQ(reuse_with_inputs[1][0],
-              (core::annotations::InPlaceReuse{0, 0, core::annotations::InPlaceReuseKind::kEqual}));
+              (core::compute::InPlaceReuse{0, 0, core::compute::InPlaceReuseKind::kEqual}));
     ASSERT_EQ(reuse_with_inputs[2].size(), 1u);
     EXPECT_EQ(reuse_with_inputs[2][0],
-              (core::annotations::InPlaceReuse{0, 0, core::annotations::InPlaceReuseKind::kEqual}));
+              (core::compute::InPlaceReuse{0, 0, core::compute::InPlaceReuseKind::kEqual}));
   }
   ASSERT_TRUE(found) << "test_cc_shape_inference_inplace_reuse case not registered";
 }
@@ -957,7 +957,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesPeakMemoryMetadataOnBackendCa
     core::shapes::ShapesContext ctx;
     ASSERT_NO_THROW(ctx.ComputeShapeModel(model_copy)) << "case: " << tc.name;
     ASSERT_NO_THROW(
-        core::annotations::WritePeakMemoryToMetadata(*graph, ctx, core::symbolic::Device::kCPU))
+        core::compute::WritePeakMemoryToMetadata(*graph, ctx, core::symbolic::Device::kCPU))
         << "case: " << tc.name;
 
     const auto &result_nodes = graph->ref_node();
@@ -1791,8 +1791,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
 
     // Run WriteValueAndNodeTagsToMetadata and verify the result matches the
     // pre-embedded expected values.
-    ASSERT_NO_THROW(core::annotations::WriteValueAndNodeTagsToMetadata(*graph))
-        << "case: " << tc.name;
+    ASSERT_NO_THROW(core::compute::WriteValueAndNodeTagsToMetadata(*graph)) << "case: " << tc.name;
 
     EXPECT_EQ(MetadataOf(*graph), expected_graph_meta)
         << "graph metadata mismatch in case " << tc.name;
@@ -1856,14 +1855,14 @@ TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
     core::shapes::ShapesContext ctx;
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
-    core::annotations::ComputeContext inplace;
+    core::compute::ComputeContext inplace;
     inplace.set_events_enabled(true);
     ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(tc.model().ref_graph(), ctx, false, {}))
         << "case: " << tc.name;
 
     // Exactly one kRelease event must be emitted, for "S" at node 1
     // (the Reshape node, which is S's last consumer).
-    using core::annotations::ComputeEventAction;
+    using core::compute::ComputeEventAction;
     int release_count = 0;
     for (const auto &ev : inplace.Events()) {
       if (ev.action == ComputeEventAction::kRelease) {
@@ -1879,8 +1878,8 @@ TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
     // carries kReleaseAfterMetadataKey for "S".
     const std::vector<MetadataMap> expected_node_meta = {
         {},
-        {{std::string(core::annotations::kReleaseAfterMetadataKey), "S"},
-         {std::string(core::annotations::kNotUsedAfterMetadataKey), "X"}}};
+        {{std::string(core::compute::kReleaseAfterMetadataKey), "S"},
+         {std::string(core::compute::kNotUsedAfterMetadataKey), "X"}}};
     const auto &nodes = tc.model().ref_graph().ref_node();
     ASSERT_EQ(nodes.size(), expected_node_meta.size());
     for (size_t i = 0; i < nodes.size(); ++i) {
@@ -1912,13 +1911,13 @@ TEST(BackendTestCaseShapeInference, ReleaseInitializerNotUsedAfterMetadataForBac
     core::shapes::ShapesContext ctx;
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
-    core::annotations::ComputeContext inplace;
+    core::compute::ComputeContext inplace;
     inplace.set_events_enabled(true);
     ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(tc.model().ref_graph(), ctx, false, {}))
         << "case: " << tc.name;
 
     // Exactly one kRelease event must be emitted, for "T" at node 1 (Relu).
-    using core::annotations::ComputeEventAction;
+    using core::compute::ComputeEventAction;
     int release_count = 0;
     for (const auto &ev : inplace.Events()) {
       if (ev.action == ComputeEventAction::kRelease) {
@@ -1934,8 +1933,8 @@ TEST(BackendTestCaseShapeInference, ReleaseInitializerNotUsedAfterMetadataForBac
     // the graph input "X" and the initializer "W"; node 1 (Relu) carries
     // kReleaseAfterMetadataKey for "T".
     const std::vector<MetadataMap> expected_node_meta = {
-        {{std::string(core::annotations::kNotUsedAfterMetadataKey), "X;W"}},
-        {{std::string(core::annotations::kReleaseAfterMetadataKey), "T"}}};
+        {{std::string(core::compute::kNotUsedAfterMetadataKey), "X;W"}},
+        {{std::string(core::compute::kReleaseAfterMetadataKey), "T"}}};
     const auto &nodes = tc.model().ref_graph().ref_node();
     ASSERT_EQ(nodes.size(), expected_node_meta.size());
     for (size_t i = 0; i < nodes.size(); ++i) {
@@ -2012,8 +2011,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnConstantRes
 
     // Run WriteValueAndNodeTagsToMetadata and verify the result matches the
     // pre-embedded expected values.
-    ASSERT_NO_THROW(core::annotations::WriteValueAndNodeTagsToMetadata(*graph))
-        << "case: " << tc.name;
+    ASSERT_NO_THROW(core::compute::WriteValueAndNodeTagsToMetadata(*graph)) << "case: " << tc.name;
 
     EXPECT_EQ(MetadataOf(*graph), expected_graph_meta)
         << "graph metadata mismatch in case " << tc.name;
@@ -2121,8 +2119,7 @@ TEST(BackendTestCaseShapeInference,
 
     // Run WriteValueAndNodeTagsToMetadata and verify the result matches the
     // pre-embedded expected values.
-    ASSERT_NO_THROW(core::annotations::WriteValueAndNodeTagsToMetadata(*graph))
-        << "case: " << tc.name;
+    ASSERT_NO_THROW(core::compute::WriteValueAndNodeTagsToMetadata(*graph)) << "case: " << tc.name;
 
     EXPECT_EQ(MetadataOf(*graph), expected_graph_meta)
         << "graph metadata mismatch in case " << tc.name;
@@ -2224,8 +2221,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagToOutputWhenOutputIsS
     }
 
     // Run WriteValueAndNodeTagsToMetadata from a blank slate.
-    ASSERT_NO_THROW(core::annotations::WriteValueAndNodeTagsToMetadata(*graph))
-        << "case: " << tc.name;
+    ASSERT_NO_THROW(core::compute::WriteValueAndNodeTagsToMetadata(*graph)) << "case: " << tc.name;
 
     // Verify graph-level metadata.
     EXPECT_EQ(MetadataOf(*graph), expected_graph_meta)
@@ -2290,16 +2286,15 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
     clear_metadata(graph->mutable_output());
     clear_metadata(graph->mutable_initializer());
 
-    ASSERT_NO_THROW(core::annotations::WriteValueAndNodeTagsToMetadata(*graph))
-        << "case: " << tc.name;
+    ASSERT_NO_THROW(core::compute::WriteValueAndNodeTagsToMetadata(*graph)) << "case: " << tc.name;
 
     const GraphProto &original_graph = tc.model().ref_graph();
 
     const auto has_value_tag = [&](const auto &value) {
-      return MetadataOf(value).contains(core::annotations::kValueTagMetadataKey);
+      return MetadataOf(value).contains(core::compute::kValueTagMetadataKey);
     };
     const auto has_node_tag = [&](const auto &node) {
-      return MetadataOf(node).contains(core::annotations::kNodeTagMetadataKey);
+      return MetadataOf(node).contains(core::compute::kNodeTagMetadataKey);
     };
     // Inputs, outputs, and initializers must always carry a value_tag after
     // WriteValueAndNodeTagsToMetadata: this information is always known.
@@ -2329,7 +2324,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInSh
     };
 
     const auto value_tag_of = [&](const auto &value) {
-      return MetadataOf(value).at(core::annotations::kValueTagMetadataKey);
+      return MetadataOf(value).at(core::compute::kValueTagMetadataKey);
     };
     // Inputs, outputs, and initializers must carry a *pre-embedded* (expected)
     // value_tag whose value matches what WriteValueAndNodeTagsToMetadata
@@ -2456,7 +2451,7 @@ TEST(BackendTestCaseShapeInference, BigModelsReleaseInfo) {
     core::shapes::ShapesContext ctx;
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
-    core::annotations::ComputeContext inplace;
+    core::compute::ComputeContext inplace;
     inplace.set_events_enabled(true);
     ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(tc.model().ref_graph(), ctx, false, {}))
         << "case: " << tc.name;
@@ -2489,8 +2484,7 @@ TEST(BackendTestCaseShapeInference, BigModelsShapeTag) {
     clear_meta(graph->mutable_output());
     clear_meta(graph->mutable_initializer());
 
-    ASSERT_NO_THROW(core::annotations::WriteValueAndNodeTagsToMetadata(*graph))
-        << "case: " << tc.name;
+    ASSERT_NO_THROW(core::compute::WriteValueAndNodeTagsToMetadata(*graph)) << "case: " << tc.name;
   }
   EXPECT_TRUE(found) << "no big-model backend cases were collected";
 }
@@ -2500,9 +2494,8 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
   // Per-node metadata keys produced by the value-tag / in-place-reuse passes
   // that a big-model case may embed as a golden expectation.
   const std::array<const char *, 4> checked_node_keys = {
-      core::annotations::kNodeTagMetadataKey, core::annotations::kInPlaceReuseMetadataKey,
-      core::annotations::kReleaseAfterMetadataKey,
-      core::annotations::kReleaseAfterShapeTagMetadataKey};
+      core::compute::kNodeTagMetadataKey, core::compute::kInPlaceReuseMetadataKey,
+      core::compute::kReleaseAfterMetadataKey, core::compute::kReleaseAfterShapeTagMetadataKey};
   const auto checked_subset = [&](const MetadataMap &full) {
     MetadataMap subset;
     for (const char *key : checked_node_keys) {
@@ -2526,8 +2519,8 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
     core::shapes::ShapesContext ctx;
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model())) << "case: " << tc.name;
 
-    ASSERT_NO_THROW(core::annotations::ComputeInPlaceReuse(tc.model().ref_graph(), ctx,
-                                                           /*allow_input_overwrite=*/true))
+    ASSERT_NO_THROW(core::compute::ComputeInPlaceReuse(tc.model().ref_graph(), ctx,
+                                                       /*allow_input_overwrite=*/true))
         << "case: " << tc.name;
 
     // Capture the golden metadata embedded in the case (if any). A case that
@@ -2535,7 +2528,7 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
     // metadata is verified against a fresh recomputation below.
     const GraphProto &expected_graph = tc.model().ref_graph();
     const MetadataMap expected_graph_meta = MetadataOf(expected_graph);
-    bool has_expected = expected_graph_meta.count(core::annotations::kValueTagsMetadataKey) != 0;
+    bool has_expected = expected_graph_meta.count(core::compute::kValueTagsMetadataKey) != 0;
     std::vector<MetadataMap> expected_node_meta;
     for (const auto &node : expected_graph.ref_node()) {
       MetadataMap subset = checked_subset(MetadataOf(node));
@@ -2567,19 +2560,16 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
 
     core::shapes::ShapesContext recompute_ctx;
     ASSERT_NO_THROW(recompute_ctx.ComputeShapeModel(model_copy)) << "case: " << tc.name;
-    const auto value_tags = core::annotations::InferValueAndNodeTags(*graph).first;
-    ASSERT_NO_THROW(core::annotations::WriteValueAndNodeTagsToMetadata(*graph))
-        << "case: " << tc.name;
-    ASSERT_NO_THROW(
-        core::annotations::WriteInPlaceReuseToMetadata(*graph, recompute_ctx, value_tags))
+    const auto value_tags = core::compute::InferValueAndNodeTags(*graph).first;
+    ASSERT_NO_THROW(core::compute::WriteValueAndNodeTagsToMetadata(*graph)) << "case: " << tc.name;
+    ASSERT_NO_THROW(core::compute::WriteInPlaceReuseToMetadata(*graph, recompute_ctx, value_tags))
         << "case: " << tc.name;
 
     const MetadataMap computed_graph_meta = MetadataOf(*graph);
-    const auto expected_value_tags =
-        expected_graph_meta.find(core::annotations::kValueTagsMetadataKey);
+    const auto expected_value_tags = expected_graph_meta.find(core::compute::kValueTagsMetadataKey);
     if (expected_value_tags != expected_graph_meta.end()) {
       const auto computed_value_tags =
-          computed_graph_meta.find(core::annotations::kValueTagsMetadataKey);
+          computed_graph_meta.find(core::compute::kValueTagsMetadataKey);
       ASSERT_NE(computed_value_tags, computed_graph_meta.end())
           << "missing value_tags metadata on case " << tc.name;
       EXPECT_EQ(computed_value_tags->second, expected_value_tags->second)

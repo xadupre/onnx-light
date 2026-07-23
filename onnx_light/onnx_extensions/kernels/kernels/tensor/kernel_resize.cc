@@ -188,8 +188,8 @@ double TransformCoord(int64_t out_coord, int64_t in_dim, int64_t out_dim, double
 // ``extrapolation_value`` rather than clamped.
 void ResizeNearest(const Tensor &input, const float *scales, const onnx_kernels::Shape &out_shape,
                    const std::string &nearest_mode, const std::string &coord_mode,
-                   const std::vector<double> &roi_start, const std::vector<double> &roi_end,
-                   double extrapolation_value, Tensor &output) {
+                   const double *roi_start, const double *roi_end, double extrapolation_value,
+                   Tensor &output) {
   const std::size_t elem_size = ElementSize(input.data_type);
   const std::size_t rank = out_shape.size();
   const bool is_tf_crop = coord_mode == "tf_crop_and_resize";
@@ -333,13 +333,14 @@ void CubicCoeffs(double ratio, double A, double coeffs[4]) {
 // ``scale`` so it spans a wider footprint, low-pass filtering the input. The
 // number of taps (returned value) grows as ``scale`` shrinks; the resulting
 // coefficients are written to ``coeffs`` and normalised to sum to 1.
-int64_t LinearCoeffsAntialias(double ratio, double scale, std::vector<double> &coeffs) {
+// ``coeffs`` must have room for at least ``footprint`` (``2 - 2 * start``)
+// entries; every entry in that range is written before use.
+int64_t LinearCoeffsAntialias(double ratio, double scale, double *coeffs) {
   if (scale > 1.0) {
     scale = 1.0;
   }
   const int64_t start = static_cast<int64_t>(std::floor(-1.0 / scale) + 1.0);
   const int64_t footprint = 2 - 2 * start;
-  coeffs.assign(static_cast<std::size_t>(footprint), 0.0);
   double sum = 0.0;
   for (int64_t i = 0; i < footprint; ++i) {
     const double arg = (static_cast<double>(start + i) - ratio) * scale;
@@ -362,14 +363,15 @@ int64_t LinearCoeffsAntialias(double ratio, double scale, std::vector<double> &c
 // ``onnx/reference/ops/op_resize.py::_cubic_coeffs_antialias``. Like
 // :cpp:func:`LinearCoeffsAntialias`, the cubic kernel is stretched by
 // ``scale`` when downsampling, yielding a variable number of taps.
-int64_t CubicCoeffsAntialias(double ratio, double scale, double A, std::vector<double> &coeffs) {
+// ``coeffs`` must have room for at least ``n`` (``i_end - i_start``) entries;
+// every entry in that range is written before use.
+int64_t CubicCoeffsAntialias(double ratio, double scale, double A, double *coeffs) {
   if (scale > 1.0) {
     scale = 1.0;
   }
   const int64_t i_start = static_cast<int64_t>(std::floor(-2.0 / scale) + 1.0);
   const int64_t i_end = 2 - i_start;
   const int64_t n = i_end - i_start;
-  coeffs.assign(static_cast<std::size_t>(n), 0.0);
   double sum = 0.0;
   for (int64_t i = 0; i < n; ++i) {
     const double x = std::abs(scale * (static_cast<double>(i_start + i) - ratio));
@@ -398,17 +400,19 @@ int64_t CubicCoeffsAntialias(double ratio, double scale, double A, std::vector<d
 // returned indices may be negative or ``>= in_dim``; callers should clamp
 // them before indexing the data array, since ``_get_neighbor`` itself does
 // "edge"-mode padding.
-void NeighborIndices(double x, int64_t n, int64_t in_dim, std::vector<int64_t> &out) {
+// ``out`` receives the ``n`` chosen indices (ascending). ``scratch`` is
+// caller-supplied working storage with room for at least ``in_dim + 2 *
+// ceil(n / 2)`` entries.
+void NeighborIndices(double x, int64_t n, int64_t in_dim, int64_t *out, int64_t *scratch) {
   const int64_t pad_width = (n + 1) / 2; // ceil(n / 2)
   const int64_t limit = in_dim + 2 * pad_width;
   const double shifted = x + static_cast<double>(pad_width);
   // Equivalent to: sorted(range(limit), key=lambda i: (abs(shifted - i), i))[:n]
   // For our use cases, ``n`` is 2 or 4, so a small partial-sort suffices.
-  std::vector<int64_t> idxes(static_cast<std::size_t>(limit));
   for (int64_t i = 0; i < limit; ++i) {
-    idxes[static_cast<std::size_t>(i)] = i;
+    scratch[static_cast<std::size_t>(i)] = i;
   }
-  std::partial_sort(idxes.begin(), idxes.begin() + n, idxes.end(), [shifted](int64_t a, int64_t b) {
+  std::partial_sort(scratch, scratch + n, scratch + limit, [shifted](int64_t a, int64_t b) {
     const double da = std::abs(shifted - static_cast<double>(a));
     const double db = std::abs(shifted - static_cast<double>(b));
     if (da != db) {
@@ -416,11 +420,13 @@ void NeighborIndices(double x, int64_t n, int64_t in_dim, std::vector<int64_t> &
     }
     return a < b;
   });
-  out.assign(idxes.begin(), idxes.begin() + n);
-  std::sort(out.begin(), out.end());
+  for (int64_t i = 0; i < n; ++i) {
+    out[static_cast<std::size_t>(i)] = scratch[static_cast<std::size_t>(i)];
+  }
+  std::sort(out, out + n);
   // Map back to the original (unpadded) index space.
-  for (int64_t &v : out) {
-    v -= pad_width;
+  for (int64_t i = 0; i < n; ++i) {
+    out[static_cast<std::size_t>(i)] -= pad_width;
   }
 }
 
@@ -432,12 +438,11 @@ void NeighborIndices(double x, int64_t n, int64_t in_dim, std::vector<int64_t> &
 // ``is_cubic`` selects which coefficient generator (and tap count) to use.
 // A boolean is passed instead of re-checking ``interp_mode`` here because
 // this function runs in the inner resize loop.
-double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t out_dim,
-                     int64_t out_coord, double scale, const std::string &coord_mode,
-                     double roi_start, double roi_end, bool is_cubic, double cubic_a,
-                     bool exclude_outside, bool antialias, bool use_extrapolation,
-                     double extrapolation_value, std::vector<int64_t> &idx_scratch,
-                     std::vector<double> &coeff_scratch) {
+double Interpolate1D(const double *data, int64_t in_dim, int64_t out_dim, int64_t out_coord,
+                     double scale, const std::string &coord_mode, double roi_start, double roi_end,
+                     bool is_cubic, double cubic_a, bool exclude_outside, bool antialias,
+                     bool use_extrapolation, double extrapolation_value, int64_t *idx_scratch,
+                     double *coeff_scratch, int64_t *neighbor_scratch) {
   const double x_ori =
       TransformCoord(out_coord, in_dim, out_dim, scale, coord_mode, roi_start, roi_end);
   if (use_extrapolation && (x_ori < 0.0 || x_ori > static_cast<double>(in_dim - 1))) {
@@ -471,7 +476,7 @@ double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t ou
     } else {
       n = LinearCoeffsAntialias(ratio, scale, coeff_scratch);
     }
-    coeffs = coeff_scratch.data();
+    coeffs = coeff_scratch;
   } else {
     if (is_cubic) {
       n = 4;
@@ -483,13 +488,15 @@ double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t ou
     coeffs = fixed;
   }
 
-  NeighborIndices(x_ori, n, in_dim, idx_scratch);
+  NeighborIndices(x_ori, n, in_dim, idx_scratch, neighbor_scratch);
 
   if (exclude_outside) {
     // ``exclude_outside`` renormalisation must mutate the coefficients, so
     // ensure they live in the (writable) scratch buffer first.
-    if (coeffs != coeff_scratch.data()) {
-      coeff_scratch.assign(coeffs, coeffs + n);
+    if (coeffs != coeff_scratch) {
+      for (int64_t i = 0; i < n; ++i) {
+        coeff_scratch[static_cast<std::size_t>(i)] = coeffs[i];
+      }
     }
     double sum = 0.0;
     for (int64_t i = 0; i < n; ++i) {
@@ -504,7 +511,7 @@ double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t ou
         coeff_scratch[static_cast<std::size_t>(i)] /= sum;
       }
     }
-    coeffs = coeff_scratch.data();
+    coeffs = coeff_scratch;
   }
 
   double acc = 0.0;
@@ -527,10 +534,10 @@ double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t ou
 // upstream reference's fully-nested 1-D interpolation because the operation
 // is a tensor product of per-axis linear combinations.
 void ResizeSeparable(const Tensor &input, const float *scales, const onnx_kernels::Shape &out_shape,
-                     const std::string &coord_mode, const std::vector<double> &roi_start,
-                     const std::vector<double> &roi_end, const std::string &interp_mode,
-                     double cubic_a, bool exclude_outside, bool antialias,
-                     double extrapolation_value, Tensor &output) {
+                     const std::string &coord_mode, const double *roi_start, const double *roi_end,
+                     const std::string &interp_mode, double cubic_a, bool exclude_outside,
+                     bool antialias, double extrapolation_value, Tensor &output,
+                     RawBufferAllocator *allocator) {
   const std::size_t rank = out_shape.size();
   EXT_ENFORCE_INVALID(input.shape.size() == rank,
                       "kernel::Resize: input rank must equal output rank.");
@@ -540,21 +547,72 @@ void ResizeSeparable(const Tensor &input, const float *scales, const onnx_kernel
   const bool is_cubic = IsCubicMode(interp_mode);
   const bool use_extrapolation = coord_mode == "tf_crop_and_resize";
 
-  // Start from a double-precision copy of the input. We then interpolate
-  // axis-by-axis, replacing the working buffer at each step.
+  // Bound on the working-buffer element count across every axis pass: each
+  // pass only rewrites a single dimension, so ``prod max(in, out)`` is an
+  // upper bound for every intermediate shape. ``max_in_dim`` bounds the
+  // per-axis gathered line and neighbour scratch.
+  int64_t bound_elems = 1;
+  int64_t max_in_dim = 0;
+  for (std::size_t k = 0; k < rank; ++k) {
+    const int64_t in_d = input.shape[k];
+    const int64_t out_d = out_shape[k];
+    bound_elems *= std::max<int64_t>(in_d, out_d);
+    max_in_dim = std::max<int64_t>(max_in_dim, in_d);
+  }
+
+  // Two ping-pong buffers hold the double-precision working data. We start
+  // from a double-precision copy of the input, then interpolate axis-by-axis,
+  // swapping ``cur``/``next`` at each step.
+  detail::TemporaryTypedBuffer<double> cur_buf(static_cast<std::size_t>(bound_elems), allocator,
+                                               "kernel::Resize separable cur");
+  detail::TemporaryTypedBuffer<double> next_buf(static_cast<std::size_t>(bound_elems), allocator,
+                                                "kernel::Resize separable next");
+  double *cur = cur_buf.data();
+  double *next = next_buf.data();
+
   onnx_kernels::Shape cur_shape = input.shape;
   int64_t cur_elems = 1;
   for (int64_t d : cur_shape) {
     cur_elems *= d;
   }
-  std::vector<double> cur(static_cast<std::size_t>(cur_elems));
   for (int64_t i = 0; i < cur_elems; ++i) {
     cur[static_cast<std::size_t>(i)] = LoadFloat(input, i);
   }
 
-  std::vector<int64_t> idx_scratch;
-  std::vector<double> coeff_scratch;
-  std::vector<double> line;
+  // The interpolation kernel uses 2 taps (linear) or 4 taps (cubic); when
+  // anti-aliasing while downsampling, the kernel is stretched so the tap
+  // count grows. ``coeff_cap`` bounds this across every axis so the scratch
+  // buffers can be sized once.
+  std::size_t coeff_cap = 4;
+  if (antialias) {
+    const double kernel_c = is_cubic ? 2.0 : 1.0;
+    for (std::size_t k = 0; k < rank; ++k) {
+      double s = static_cast<double>(scales[k]);
+      if (s > 1.0) {
+        s = 1.0;
+      }
+      if (s <= 0.0) {
+        continue;
+      }
+      const int64_t start = static_cast<int64_t>(std::floor(-kernel_c / s) + 1.0);
+      const int64_t cnt = 2 - 2 * start;
+      if (cnt > 0 && static_cast<std::size_t>(cnt) > coeff_cap) {
+        coeff_cap = static_cast<std::size_t>(cnt);
+      }
+    }
+  }
+  // ``NeighborIndices`` needs ``in_dim + 2 * ceil(n / 2)`` scratch entries.
+  const std::size_t pad_cap = (coeff_cap + 1) / 2;
+  const std::size_t neighbor_cap = static_cast<std::size_t>(max_in_dim) + 2 * pad_cap + 1;
+
+  detail::TemporaryTypedBuffer<int64_t> idx_scratch(coeff_cap, allocator, "kernel::Resize idx");
+  detail::TemporaryTypedBuffer<double> coeff_scratch(coeff_cap, allocator, "kernel::Resize coeff");
+  detail::TemporaryTypedBuffer<int64_t> neighbor_scratch(neighbor_cap, allocator,
+                                                         "kernel::Resize neighbor");
+  detail::TemporaryTypedBuffer<double> line_buf(
+      static_cast<std::size_t>(std::max<int64_t>(max_in_dim, 1)), allocator, "kernel::Resize line");
+  double *line = line_buf.data();
+
   for (std::size_t axis = 0; axis < rank; ++axis) {
     const int64_t in_dim = cur_shape[axis];
     const int64_t out_dim = out_shape[axis];
@@ -573,12 +631,6 @@ void ResizeSeparable(const Tensor &input, const float *scales, const onnx_kernel
     }
     onnx_kernels::Shape new_shape = cur_shape;
     new_shape[axis] = out_dim;
-    int64_t new_elems = 1;
-    for (int64_t d : new_shape) {
-      new_elems *= d;
-    }
-    std::vector<double> next(static_cast<std::size_t>(new_elems));
-    line.assign(static_cast<std::size_t>(in_dim), 0.0);
 
     for (int64_t o = 0; o < outer; ++o) {
       for (int64_t in = 0; in < inner; ++in) {
@@ -589,34 +641,42 @@ void ResizeSeparable(const Tensor &input, const float *scales, const onnx_kernel
               cur[static_cast<std::size_t>((o * in_dim + k) * inner + in)];
         }
         for (int64_t k = 0; k < out_dim; ++k) {
-          const double v = Interpolate1D(
-              line, in_dim, out_dim, k, static_cast<double>(scales[axis]), coord_mode,
-              roi_start[axis], roi_end[axis], is_cubic, cubic_a, exclude_outside, antialias,
-              use_extrapolation, extrapolation_value, idx_scratch, coeff_scratch);
+          const double v =
+              Interpolate1D(line, in_dim, out_dim, k, static_cast<double>(scales[axis]), coord_mode,
+                            roi_start[axis], roi_end[axis], is_cubic, cubic_a, exclude_outside,
+                            antialias, use_extrapolation, extrapolation_value, idx_scratch.data(),
+                            coeff_scratch.data(), neighbor_scratch.data());
           next[static_cast<std::size_t>((o * out_dim + k) * inner + in)] = v;
         }
       }
     }
-    cur = std::move(next);
+    std::swap(cur, next);
     cur_shape = new_shape;
   }
 
   EXT_ENFORCE_INVALID(cur_shape == out_shape,
                       "kernel::Resize: separable resize produced an unexpected shape.");
-  for (std::size_t i = 0; i < cur.size(); ++i) {
-    StoreFloat(output, static_cast<int64_t>(i), cur[i]);
+  int64_t final_elems = 1;
+  for (int64_t d : cur_shape) {
+    final_elems *= d;
+  }
+  for (int64_t i = 0; i < final_elems; ++i) {
+    StoreFloat(output, i, cur[static_cast<std::size_t>(i)]);
   }
 }
 
 // Applies ``keep_aspect_ratio_policy`` to a per-axis ``sizes`` request and
-// returns the effective target output size for each resized axis.
-// ``requested_sizes`` points to ``requested_len`` elements.
-std::vector<int64_t> ApplyKeepAspectRatioPolicy(const int64_t *requested_sizes,
-                                                std::size_t requested_len,
-                                                const onnx_kernels::Shape &in_sizes,
-                                                const std::string &policy) {
+// writes the effective target output size for each resized axis into ``out``
+// (``requested_len`` entries). ``requested_sizes`` points to ``requested_len``
+// elements.
+void ApplyKeepAspectRatioPolicy(const int64_t *requested_sizes, std::size_t requested_len,
+                                const onnx_kernels::Shape &in_sizes, const std::string &policy,
+                                int64_t *out) {
   if (policy == "stretch") {
-    return std::vector<int64_t>(requested_sizes, requested_sizes + requested_len);
+    for (std::size_t i = 0; i < requested_len; ++i) {
+      out[i] = requested_sizes[i];
+    }
+    return;
   }
   EXT_ENFORCE_INVALID(requested_len == in_sizes.size(),
                       "kernel::Resize: 'sizes' length must match the number of resized axes.");
@@ -640,8 +700,7 @@ std::vector<int64_t> ApplyKeepAspectRatioPolicy(const int64_t *requested_sizes,
       EXT_THROW_INVALID("kernel::Resize: unsupported keep_aspect_ratio_policy '", policy, "'.");
     }
   }
-  std::vector<int64_t> out(requested_len);
-  for (std::size_t i = 0; i < out.size(); ++i) {
+  for (std::size_t i = 0; i < requested_len; ++i) {
     // ONNX spec: round(sizes[i] * in_sizes[i] / sizes[i]) ... effectively
     // round(picked * in_sizes[i]) since picked is the chosen common ratio.
     out[i] = static_cast<int64_t>(std::llround(picked * static_cast<double>(in_sizes[i])));
@@ -649,7 +708,6 @@ std::vector<int64_t> ApplyKeepAspectRatioPolicy(const int64_t *requested_sizes,
       out[i] = 1;
     }
   }
-  return out;
 }
 
 void CheckSupportedAttrs(const Resize::Attributes &attrs) {
@@ -665,9 +723,11 @@ void CheckSupportedAttrs(const Resize::Attributes &attrs) {
 // ``[0.0, 1.0]`` range so that the ``"tf_crop_and_resize"`` formula
 // reduces to identity.
 void BuildRoi(const Resize::Attributes &attrs, const onnx_kernels::Shape &axes, std::size_t rank,
-              std::vector<double> &roi_start, std::vector<double> &roi_end) {
-  roi_start.assign(rank, 0.0);
-  roi_end.assign(rank, 1.0);
+              double *roi_start, double *roi_end) {
+  for (std::size_t i = 0; i < rank; ++i) {
+    roi_start[i] = 0.0;
+    roi_end[i] = 1.0;
+  }
   if (attrs.coordinate_transformation_mode != "tf_crop_and_resize") {
     return;
   }
@@ -685,8 +745,8 @@ void BuildRoi(const Resize::Attributes &attrs, const onnx_kernels::Shape &axes, 
 // Dispatches to the nearest or separable (linear/cubic) implementation
 // according to ``attrs.mode``.
 void RunResize(const Tensor &X, const float *scales_data, const onnx_kernels::Shape &out_shape,
-               const std::vector<double> &roi_start, const std::vector<double> &roi_end,
-               const Resize::Attributes &attrs, Tensor &output) {
+               const double *roi_start, const double *roi_end, const Resize::Attributes &attrs,
+               Tensor &output, RawBufferAllocator *allocator) {
   if (IsNearestMode(attrs.mode)) {
     ResizeNearest(X, scales_data, out_shape, attrs.nearest_mode,
                   attrs.coordinate_transformation_mode, roi_start, roi_end,
@@ -696,19 +756,33 @@ void RunResize(const Tensor &X, const float *scales_data, const onnx_kernels::Sh
   ResizeSeparable(X, scales_data, out_shape, attrs.coordinate_transformation_mode, roi_start,
                   roi_end, attrs.mode, static_cast<double>(attrs.cubic_coeff_a),
                   attrs.exclude_outside != 0, attrs.antialias != 0,
-                  static_cast<double>(attrs.extrapolation_value), output);
+                  static_cast<double>(attrs.extrapolation_value), output, allocator);
+}
+
+// Builds the ROI scratch and runs the resize into the preallocated
+// ``output``. ``allocator`` (when non-null) backs every scratch buffer.
+void ComputeResizeFromScales(const Tensor &X, const float *scales_data,
+                             const onnx_kernels::Shape &axes, const Resize::Attributes &attrs,
+                             Tensor &output, RawBufferAllocator *allocator) {
+  const std::size_t rank = X.shape.size();
+  detail::TemporaryTypedBuffer<double> roi_start_buf(rank, allocator, "kernel::Resize roi_start");
+  detail::TemporaryTypedBuffer<double> roi_end_buf(rank, allocator, "kernel::Resize roi_end");
+  BuildRoi(attrs, axes, rank, roi_start_buf.data(), roi_end_buf.data());
+  RunResize(X, scales_data, output.shape, roi_start_buf.data(), roi_end_buf.data(), attrs, output,
+            allocator);
 }
 
 } // namespace
 
 Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
                           RuntimeContext *rt) const {
+  CheckSupportedAttrs(attrs);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   const std::size_t rank = X.shape.size();
   const onnx_kernels::Shape axes = NormaliseAxes(attrs.axes, rank);
-  const Tensor scales_in = ReadResizeScales(scales, axes.size(), rt ? rt->allocator() : nullptr);
+  const Tensor scales_in = ReadResizeScales(scales, axes.size(), allocator);
   // Expand to per-axis (rank-length) scales, defaulting non-resized axes to 1.
-  detail::TemporaryTypedBuffer<float> scales_buf(rank, rt ? rt->allocator() : nullptr,
-                                                 "kernel::Resize scales");
+  detail::TemporaryTypedBuffer<float> scales_buf(rank, allocator, "kernel::Resize scales");
   float *scales_data = scales_buf.data();
   ScatterByAxes<float>(scales_in.As<float>(), axes, rank, 1.0f, scales_data);
   onnx_kernels::Shape out_shape;
@@ -722,9 +796,8 @@ Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attribute
     total_elements *= d;
   }
   const size_t output_n_bytes = PackedByteSize(X.data_type, total_elements);
-  Tensor output =
-      MakeOutputTensor(X.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(X, scales, attrs, output);
+  Tensor output = MakeOutputTensor(X.data_type, out_shape, output_n_bytes, allocator);
+  ComputeResizeFromScales(X, scales_data, axes, attrs, output, allocator);
   return output;
 }
 
@@ -749,18 +822,16 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::Resize: preallocated output shape mismatch.");
 
-  std::vector<double> roi_start;
-  std::vector<double> roi_end;
-  BuildRoi(attrs, axes, rank, roi_start, roi_end);
-  RunResize(X, scales_data, out_shape, roi_start, roi_end, attrs, output);
+  ComputeResizeFromScales(X, scales_data, axes, attrs, output, nullptr);
 }
 
 Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs,
                            RuntimeContext *rt) const {
   CheckSupportedAttrs(attrs);
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   const std::size_t rank = X.shape.size();
   const onnx_kernels::Shape axes = NormaliseAxes(attrs.axes, rank);
-  const Tensor requested = ReadResizeSizes(sizes, axes.size(), rt ? rt->allocator() : nullptr);
+  const Tensor requested = ReadResizeSizes(sizes, axes.size(), allocator);
   // Per-axis input shape restricted to the resized axes, used when computing
   // the effective output sizes under ``keep_aspect_ratio_policy``.
   onnx_kernels::Shape in_axes_shape;
@@ -768,8 +839,11 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   for (std::size_t i = 0; i < axes.size(); ++i) {
     in_axes_shape[i] = X.shape[static_cast<std::size_t>(axes[i])];
   }
-  const std::vector<int64_t> effective = ApplyKeepAspectRatioPolicy(
-      requested.As<int64_t>(), axes.size(), in_axes_shape, attrs.keep_aspect_ratio_policy);
+  detail::TemporaryTypedBuffer<int64_t> effective_buf(axes.size(), allocator,
+                                                      "kernel::Resize effective");
+  int64_t *effective = effective_buf.data();
+  ApplyKeepAspectRatioPolicy(requested.As<int64_t>(), axes.size(), in_axes_shape,
+                             attrs.keep_aspect_ratio_policy, effective);
   // Build the full output shape, leaving non-resized axes untouched.
   onnx_kernels::Shape out_shape = X.shape;
   for (std::size_t i = 0; i < axes.size(); ++i) {
@@ -777,8 +851,7 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   }
   // Derive per-axis scales from the effective output sizes so we can reuse
   // the nearest path.
-  detail::TemporaryTypedBuffer<float> scales_buf(rank, rt ? rt->allocator() : nullptr,
-                                                 "kernel::Resize scales");
+  detail::TemporaryTypedBuffer<float> scales_buf(rank, allocator, "kernel::Resize scales");
   float *scales_data = scales_buf.data();
   for (std::size_t k = 0; k < rank; ++k) {
     scales_data[k] = 1.0f;
@@ -794,12 +867,8 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
     total_elements *= d;
   }
   const size_t output_n_bytes = PackedByteSize(X.data_type, total_elements);
-  Tensor output =
-      MakeOutputTensor(X.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
-  std::vector<double> roi_start;
-  std::vector<double> roi_end;
-  BuildRoi(attrs, axes, rank, roi_start, roi_end);
-  RunResize(X, scales_data, out_shape, roi_start, roi_end, attrs, output);
+  Tensor output = MakeOutputTensor(X.data_type, out_shape, output_n_bytes, allocator);
+  ComputeResizeFromScales(X, scales_data, axes, attrs, output, allocator);
   return output;
 }
 

@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -36,18 +35,17 @@ void ResolveAttributes(size_t n_spatial, Col2Im::Attributes &attrs) {
                       "kernel::Col2Im: 'strides' size must match spatial rank.");
 }
 
-// Reads a 1-D INT64 tensor into a vector of int64s. Throws if the dtype or
-// rank are wrong.
-std::vector<int64_t> ReadInt64Vector(const Tensor &t, const char *name) {
+// Reads a 1-D INT64 tensor into a fixed-capacity shape of int64s. Throws if the
+// dtype or rank are wrong. The result is rank-sized (spatial rank) and therefore
+// fits within ``onnx_kernels::Shape`` without heap allocation.
+onnx_kernels::Shape ReadInt64Vector(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::INT64), "kernel::Col2Im: '",
                       name, "' must be INT64.");
   EXT_ENFORCE_INVALID(t.shape.size() == 1, "kernel::Col2Im: '", name, "' must be a 1-D tensor.");
   const int64_t n = t.shape[0];
-  std::vector<int64_t> out(static_cast<size_t>(n));
   const int64_t *src = t.AsInt64();
-  for (int64_t i = 0; i < n; ++i) {
-    out[static_cast<size_t>(i)] = src[i];
-  }
+  onnx_kernels::Shape out;
+  out.assign(src, src + n);
   return out;
 }
 
@@ -56,7 +54,7 @@ std::vector<int64_t> ReadInt64Vector(const Tensor &t, const char *name) {
 Tensor Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Tensor &block_shape,
                           const Attributes &attrs, RuntimeContext *rt) const {
   const onnx_kernels::Shape image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
-  const std::vector<int64_t> block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
+  const onnx_kernels::Shape block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
   EXT_ENFORCE_INVALID(image_shape_vec.size() == block_shape_vec.size(),
                       "kernel::Col2Im: 'image_shape' and 'block_shape' must have the same length.");
 
@@ -95,7 +93,7 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
   EXT_ENFORCE_INVALID(input.shape.size() == 3, "kernel::Col2Im: 'input' must be rank 3.");
 
   const onnx_kernels::Shape image_shape_vec = ReadInt64Vector(image_shape, "image_shape");
-  const std::vector<int64_t> block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
+  const onnx_kernels::Shape block_shape_vec = ReadInt64Vector(block_shape, "block_shape");
   EXT_ENFORCE_INVALID(image_shape_vec.size() == block_shape_vec.size(),
                       "kernel::Col2Im: 'image_shape' and 'block_shape' must have the same length.");
   const size_t n_spatial = image_shape_vec.size();
@@ -116,7 +114,8 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
                       "kernel::Col2Im: input.shape[1] must be divisible by product(block_shape).");
   const int64_t C = input.shape[1] / block_product;
 
-  std::vector<int64_t> n_blocks(n_spatial);
+  onnx_kernels::Shape n_blocks;
+  n_blocks.assign(n_spatial, 0);
   int64_t L_expected = 1;
   for (size_t i = 0; i < n_spatial; ++i) {
     const int64_t eff_k = (block_shape_vec[i] - 1) * resolved.dilations[i] + 1;
@@ -172,8 +171,10 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
 
   // Iterate over (n, c, block index l, kernel index k) in the same
   // lex order used by the input layout, accumulating into the output.
-  std::vector<int64_t> block_idx(n_spatial, 0);
-  std::vector<int64_t> kernel_idx(n_spatial, 0);
+  onnx_kernels::Shape block_idx;
+  block_idx.assign(n_spatial, 0);
+  onnx_kernels::Shape kernel_idx;
+  kernel_idx.assign(n_spatial, 0);
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c = 0; c < C; ++c) {
       float *out_image = py + (n * C + c) * image_total;

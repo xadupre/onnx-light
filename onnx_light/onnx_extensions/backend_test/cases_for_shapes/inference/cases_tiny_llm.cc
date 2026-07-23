@@ -225,7 +225,7 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMod
   // backward tags mask_float "weight".  Cast backward (Cast propagates from its
   // first input) then tags attention_mask "weight".
   {
-    namespace ann = core::annotations;
+    namespace ann = core::compute;
 
     // Graph-level value-tags JSON (all tagged tensors sorted alphabetically;
     // DumpValueTagsAsJson uses strict ASCII order).
@@ -801,7 +801,7 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry, 
   // "weight" tag when at least one input is "weight" (key_heads/value_heads).
   // The 52 nodes are indexed 0-51 in AddNode insertion order.
   {
-    namespace ann = core::annotations;
+    namespace ann = core::compute;
 
     // Graph-level value-tags JSON (all tagged tensors sorted alphabetically).
     // Notes:

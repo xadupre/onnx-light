@@ -10,7 +10,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-namespace annotations {
+namespace compute {
 
 using ::onnx_light::core::shapes::ShapesContext;
 using ::onnx_light::core::symbolic::Device;
@@ -44,6 +44,6 @@ constexpr const char *kNodePeakMemoryMetadataKey = "onnx_light.peak_memory";
 void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx,
                                Device device = Device::kUndefined);
 
-} // namespace annotations
+} // namespace compute
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

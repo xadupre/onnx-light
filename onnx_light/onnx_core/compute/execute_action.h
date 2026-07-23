@@ -5,7 +5,6 @@
 #pragma once
 
 #include "onnx_core/compute/inplace_reuse_types.h"
-#include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_light_helpers.h"
 
 #include <cstddef>
@@ -105,12 +104,6 @@ inline constexpr const char *ExecuteActionKindName(ExecuteActionKind kind) noexc
  * allocating or deleting a named result (or a temporary buffer), creating
  * or deleting the shape of a named result, transferring a named result to
  * another one, or executing a node.
- *
- * Every allocation or deallocation references the
- * :cpp:class:`RawBufferAllocator` used, so a plan can be replayed against
- * the exact allocator that owns the memory. Non-memory actions (node
- * execution, shape creation/deletion, lock/unlock) carry a ``nullptr``
- * allocator.
  */
 class ExecuteAction {
 public:
@@ -123,9 +116,6 @@ public:
    * @param name       Primary named result / input / initializer the action
    *                   operates on. Empty for actions that do not target a
    *                   name (e.g. a bare node execution).
-   * @param allocator  Allocator referenced by allocation / deallocation
-   *                   actions; ``nullptr`` for actions that do not touch a
-   *                   buffer.
    * @param node_index Index of the node for :cpp:enumerator:`kExecuteNode`;
    *                   ``0`` otherwise.
    * @param size       Number of bytes for buffer allocations; ``0`` when
@@ -139,11 +129,11 @@ public:
    *                   (``output_index < 0``) means the allocation is a fresh
    *                   allocation rather than an in-place reuse.
    */
-  ExecuteAction(ExecuteActionKind kind, std::string name, RawBufferAllocator *allocator = nullptr,
-                size_t node_index = 0, size_t size = 0, std::string target = std::string(),
-                annotations::InPlaceReuse inplace = annotations::InPlaceReuse{})
-      : kind_(kind), name_(std::move(name)), target_(std::move(target)), allocator_(allocator),
-        node_index_(node_index), size_(size), inplace_(inplace) {}
+  ExecuteAction(ExecuteActionKind kind, std::string name, size_t node_index = 0, size_t size = 0,
+                std::string target = std::string(),
+                compute::InPlaceReuse inplace = compute::InPlaceReuse{})
+      : kind_(kind), name_(std::move(name)), target_(std::move(target)), node_index_(node_index),
+        size_(size), inplace_(inplace) {}
 
   /// Returns the kind of the action.
   ExecuteActionKind kind() const noexcept { return kind_; }
@@ -158,10 +148,6 @@ public:
   /// Returns the destination named result of a
   /// :cpp:enumerator:`ExecuteActionKind::kTransfer` action (empty otherwise).
   const std::string &target() const noexcept { return target_; }
-
-  /// Returns the allocator referenced by allocation / deallocation actions,
-  /// or ``nullptr`` when the action does not touch a buffer.
-  RawBufferAllocator *allocator() const noexcept { return allocator_; }
 
   /// Returns the index of the node for
   /// :cpp:enumerator:`ExecuteActionKind::kExecuteNode` (``0`` otherwise).
@@ -179,7 +165,7 @@ public:
   /// Returns the in-place reuse decision backing this action. When
   /// :cpp:func:`is_inplace` is ``false`` the returned value has
   /// ``output_index == -1``.
-  const annotations::InPlaceReuse &inplace() const noexcept { return inplace_; }
+  const compute::InPlaceReuse &inplace() const noexcept { return inplace_; }
 
   /**
    * Returns a concise, human-readable one-line summary of the action.
@@ -231,10 +217,9 @@ private:
   ExecuteActionKind kind_ = ExecuteActionKind::kExecuteNode;
   std::string name_;
   std::string target_;
-  RawBufferAllocator *allocator_ = nullptr;
   size_t node_index_ = 0;
   size_t size_ = 0;
-  annotations::InPlaceReuse inplace_;
+  compute::InPlaceReuse inplace_;
 };
 
 } // namespace runtime

@@ -14,13 +14,15 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "onnx_core/compute/inplace_reuse.h"
+#include "onnx_core/compute/result_lifetime.h"
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-namespace annotations {
+namespace compute {
 
 namespace {
 
@@ -340,10 +342,6 @@ struct LiveAllocation {
   ShapeTag tag;
 };
 
-constexpr int kSqueezeDataInputIndex = 0;
-constexpr int kUnsqueezeDataInputIndex = 0;
-using SimplifiedExpressionCache = std::unordered_map<std::string, expressions::DimType>;
-
 ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags,
                   const std::string &name) {
   auto it = value_tags.find(name);
@@ -355,33 +353,6 @@ ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags
 
 bool IsZeroDim(const expressions::DimType &d) {
   return std::holds_alternative<int64_t>(d) && std::get<int64_t>(d) == 0;
-}
-
-expressions::DimType SimplifyDimType(const expressions::DimType &value,
-                                     SimplifiedExpressionCache *cache = nullptr) {
-  if (std::holds_alternative<int64_t>(value)) {
-    return value;
-  }
-  const std::string &expr = std::get<std::string>(value);
-  if (cache != nullptr) {
-    auto it = cache->find(expr);
-    if (it != cache->end()) {
-      return it->second;
-    }
-  }
-  const expressions::SimplifyResult simplified = expressions::simplify_expression(expr);
-  if (std::holds_alternative<int64_t>(simplified)) {
-    const expressions::DimType simplified_value = std::get<int64_t>(simplified);
-    if (cache != nullptr) {
-      cache->emplace(expr, simplified_value);
-    }
-    return simplified_value;
-  }
-  const expressions::DimType simplified_value = std::get<std::string>(simplified);
-  if (cache != nullptr) {
-    cache->emplace(expr, simplified_value);
-  }
-  return simplified_value;
 }
 
 // Accessors for the scalar / bucket entries of a NodeMemoryProfile. Only used
@@ -492,253 +463,6 @@ NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
   return profile;
 }
 
-// Returns whether two descriptors are byte-for-byte interchangeable: same
-// element type and identical shape (rank and every dimension, concrete or
-// symbolic). Equal descriptors imply equal element counts and therefore
-// equal buffer sizes, which is the precondition for an in-place reuse.
-bool SameStorage(const SymTensor &a, const SymTensor &b) {
-  if (a.Dtype() != b.Dtype()) {
-    return false;
-  }
-  const SymShape &sa = a.Shape();
-  const SymShape &sb = b.Shape();
-  if (sa.Rank() != sb.Rank()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < sa.Rank(); ++i) {
-    if (sa[i] != sb[i]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// Number of bits used by a single element of ``t``. Returns ``0`` for element
-// types whose byte size is not a fixed scalar (strings, sequences, maps,
-// optionals and the undefined type), for which no buffer-size comparison is
-// attempted.
-constexpr int ElementBitWidth(TensorType t) {
-  switch (t) {
-  case TensorType::kBool:
-  case TensorType::kUint8:
-  case TensorType::kInt8:
-  case TensorType::kFloat8e4m3fn:
-  case TensorType::kFloat8e4m3fnuz:
-  case TensorType::kFloat8e5m2:
-  case TensorType::kFloat8e5m2fnuz:
-  case TensorType::kFloat8e8m0:
-    return 8;
-  case TensorType::kUint16:
-  case TensorType::kInt16:
-  case TensorType::kFloat16:
-  case TensorType::kBfloat16:
-    return 16;
-  case TensorType::kUint32:
-  case TensorType::kInt32:
-  case TensorType::kFloat:
-    return 32;
-  case TensorType::kUint64:
-  case TensorType::kInt64:
-  case TensorType::kDouble:
-  case TensorType::kComplex64:
-    return 64;
-  case TensorType::kComplex128:
-    return 128;
-  case TensorType::kFloat4e2m1:
-  case TensorType::kUint4:
-  case TensorType::kInt4:
-    return 4;
-  case TensorType::kUint2:
-  case TensorType::kInt2:
-    return 2;
-  default:
-    return 0;
-  }
-}
-
-// Packed byte size of ``t`` when its shape is fully known and its element type
-// has a fixed bit width, otherwise ``std::nullopt``. Sub-byte element types are
-// packed, matching the ONNX storage convention.
-std::optional<int64_t> ConcreteByteSize(const SymTensor &t) {
-  const int bits = ElementBitWidth(t.Dtype());
-  if (bits == 0) {
-    return std::nullopt;
-  }
-  const SymShape &shape = t.Shape();
-  if (!shape.IsFullyKnown()) {
-    return std::nullopt;
-  }
-  const int64_t num_elements = shape.NumElements();
-  return (num_elements * bits + 7) / 8;
-}
-
-std::optional<expressions::DimType> ByteSizeExpr(const SymTensor &t,
-                                                 SimplifiedExpressionCache *cache = nullptr) {
-  const int bits = ElementBitWidth(t.Dtype());
-  if (bits == 0) {
-    return std::nullopt;
-  }
-  expressions::DimType num_elements = int64_t{1};
-  for (std::size_t i = 0; i < t.Shape().Rank(); ++i) {
-    num_elements = expressions::dim_mul(num_elements, ToDimType(t.Shape()[i]));
-  }
-  if (bits % 8 == 0) {
-    return SimplifyDimType(
-        expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits / 8}}), cache);
-  }
-  // Sub-byte element types pack multiple values per byte, so the buffer size is
-  // ceil(num_elements * bits / 8). ``dim_div`` is floor division, hence the
-  // ``+7`` round-up term before dividing by 8.
-  return SimplifyDimType(
-      expressions::dim_div(
-          expressions::dim_add(
-              expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits}}),
-              expressions::DimType{int64_t{7}}),
-          expressions::DimType{int64_t{8}}),
-      cache);
-}
-
-const std::optional<expressions::DimType> &
-GetCachedByteSizeExpr(const ShapesContext &ctx, const std::string &name,
-                      std::unordered_map<std::string, std::optional<expressions::DimType>> &cache,
-                      SimplifiedExpressionCache *simplification_cache = nullptr) {
-  auto [it, inserted] = cache.try_emplace(name);
-  if (inserted) {
-    it->second = ByteSizeExpr(ctx.Get(name), simplification_cache);
-  }
-  return it->second;
-}
-
-// Classifies a candidate reuse of input ``in`` by output ``out`` by comparing
-// their buffer sizes. ``kEqual`` is returned when the input and output buffers
-// have the same byte size (e.g. a Transpose or same-total-size Reshape),
-// making this the preferred, space-optimal reuse. ``kGreater`` is returned
-// when the input buffer is strictly larger than the output, so the output
-// still fits but leaves part of the buffer unused.  Any other case (input
-// smaller) yields no opportunity.
-//
-// When a concrete byte-size comparison is unavailable for either tensor (e.g.
-// either has symbolic dimensions), ``ByteSizeExpr`` is compared symbolically.
-// Two expressions that simplify to the same canonical string are guaranteed to
-// describe equal byte counts at runtime (e.g. a permutation of the same
-// symbolic dimension names), so ``kEqual`` is returned for them.
-std::optional<InPlaceReuseKind> ClassifyReuse(
-    const ShapesContext &ctx, const std::string &out_name, const SymTensor &out,
-    const std::string &in_name, const SymTensor &in,
-    std::unordered_map<std::string, std::optional<expressions::DimType>> &byte_size_expr_cache,
-    SimplifiedExpressionCache *simplification_cache = nullptr) {
-  if (SameStorage(out, in)) {
-    return InPlaceReuseKind::kEqual;
-  }
-  const std::optional<int64_t> out_bytes = ConcreteByteSize(out);
-  const std::optional<int64_t> in_bytes = ConcreteByteSize(in);
-  if (out_bytes.has_value() && in_bytes.has_value()) {
-    if (*in_bytes == *out_bytes) {
-      return InPlaceReuseKind::kEqual;
-    }
-    if (*in_bytes > *out_bytes) {
-      return InPlaceReuseKind::kGreater;
-    }
-    return std::nullopt;
-  }
-  // Fall back to symbolic comparison when concrete sizes are unavailable for
-  // either tensor.  Two byte-size expressions that simplify to the same
-  // canonical form describe equal buffer sizes regardless of the runtime
-  // values of symbolic dimension variables.
-  const auto &out_expr =
-      GetCachedByteSizeExpr(ctx, out_name, byte_size_expr_cache, simplification_cache);
-  const auto &in_expr =
-      GetCachedByteSizeExpr(ctx, in_name, byte_size_expr_cache, simplification_cache);
-  if (out_expr.has_value() && in_expr.has_value() && *out_expr == *in_expr) {
-    return InPlaceReuseKind::kEqual;
-  }
-  return std::nullopt;
-}
-
-// Recursively collects the values that ``graph`` captures from outside its own
-// scope. Inputs/initializers/intermediates local to ``graph`` are excluded, as
-// are names already produced by ancestor subgraphs tracked in
-// ``ancestor_locals``.
-void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string> &out,
-                                std::unordered_set<std::string> &seen,
-                                const std::unordered_set<std::string> &ancestor_locals) {
-  std::unordered_set<std::string> local;
-  for (int i = 0; i < graph.input().size(); ++i) {
-    local.insert(graph.input()[i].name());
-  }
-  for (int i = 0; i < graph.initializer().size(); ++i) {
-    local.insert(graph.initializer()[i].name());
-  }
-  for (int i = 0; i < graph.node().size(); ++i) {
-    const NodeProto &nd = graph.node()[i];
-    for (int j = 0; j < nd.output().size(); ++j) {
-      const std::string name = nd.output()[j];
-      if (!name.empty()) {
-        local.insert(name);
-      }
-    }
-  }
-
-  std::unordered_set<std::string> visible_locals = ancestor_locals;
-  visible_locals.insert(local.begin(), local.end());
-
-  for (int i = 0; i < graph.node().size(); ++i) {
-    const NodeProto &nd = graph.node()[i];
-    for (int j = 0; j < nd.input().size(); ++j) {
-      const std::string name = nd.input()[j];
-      // Keep only true captures from an outer scope: skip empty names,
-      // values local to this subgraph, and names produced by ancestor
-      // subgraphs. Such names are already available within the enclosing
-      // control-flow body and are not captures of the top-level node itself.
-      if (name.empty() || local.count(name) || ancestor_locals.count(name)) {
-        continue;
-      }
-      if (seen.insert(name).second) {
-        out.push_back(name);
-      }
-    }
-    for (int a = 0; a < nd.attribute().size(); ++a) {
-      const AttributeProto &attr = nd.attribute()[a];
-      if (attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g()) {
-        CollectGraphExternalInputs(attr.g(), out, seen, visible_locals);
-      } else if (attr.type() == AttributeProto::AttributeType::GRAPHS) {
-        for (int k = 0; k < attr.graphs().size(); ++k) {
-          CollectGraphExternalInputs(attr.graphs()[k], out, seen, visible_locals);
-        }
-      }
-    }
-  }
-}
-
-// Collects every unique value a node depends on at runtime: its direct inputs
-// plus any external values captured by nested GRAPH / GRAPHS attributes.
-std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
-  std::vector<std::string> out;
-  std::unordered_set<std::string> seen;
-  for (int i = 0; i < node.input().size(); ++i) {
-    const std::string name = node.input()[i];
-    if (name.empty()) {
-      continue;
-    }
-    if (seen.insert(name).second) {
-      out.push_back(name);
-    }
-  }
-
-  std::unordered_set<std::string> empty_outer;
-  for (int a = 0; a < node.attribute().size(); ++a) {
-    const AttributeProto &attr = node.attribute()[a];
-    if (attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g()) {
-      CollectGraphExternalInputs(attr.g(), out, seen, empty_outer);
-    } else if (attr.type() == AttributeProto::AttributeType::GRAPHS) {
-      for (int k = 0; k < attr.graphs().size(); ++k) {
-        CollectGraphExternalInputs(attr.graphs()[k], out, seen, empty_outer);
-      }
-    }
-  }
-  return out;
-}
-
 template <class NodeRange>
 std::vector<std::vector<std::string>>
 ComputeReleasableInputsImpl(const NodeRange &nodes, const std::unordered_set<std::string> &keep) {
@@ -839,7 +563,7 @@ ComputeContext::ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes) {
 
 bool ComputeContext::TrySetValueTag(const std::string &name, const std::string &tag) {
   const bool changed =
-      ::ONNX_LIGHT_NAMESPACE::core::annotations::TrySetValueTag(value_tags_, name, tag);
+      ::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag);
   if (changed) {
     custom_value_tags_changed_ = true;
   }
@@ -866,206 +590,40 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite,
     const std::unordered_map<std::string, std::string> &value_tags) {
   const int num_nodes = graph.node().size();
-  std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
-  std::vector<std::vector<std::string>> release_after(static_cast<std::size_t>(num_nodes));
-  std::vector<std::vector<std::string>> not_used_after(static_cast<std::size_t>(num_nodes));
   std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes),
                                         MakeEmptyNodeMemoryProfile());
   SimplifiedExpressionCache simplified_dim_cache;
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_size_expr_cache;
 
-  // Names whose buffers must never be overwritten in place: declared graph
-  // inputs, initializers and declared graph outputs are owned by the caller
-  // or must outlive the run. Declared graph inputs are protected unless
-  // ``allow_input_overwrite`` explicitly opts into reusing them, in which case
-  // only initializers and outputs stay protected.
-  std::unordered_set<std::string> keep;
-  std::unordered_set<std::string> graph_inputs;
-  std::unordered_set<std::string> graph_initializers;
-  for (int i = 0; i < graph.input().size(); ++i) {
-    const std::string name = graph.input()[i].name();
-    graph_inputs.insert(name);
-    if (!allow_input_overwrite) {
-      keep.insert(name);
-    }
-  }
-  for (int i = 0; i < graph.initializer().size(); ++i) {
-    const std::string name = graph.initializer()[i].name();
-    graph_initializers.insert(name);
-    keep.insert(name);
-  }
-  for (int i = 0; i < graph.output().size(); ++i) {
-    keep.insert(graph.output()[i].name());
-  }
-
-  // Producer node index for every top-level intermediate, and the index of
-  // the last node that references each name (directly or via a subgraph).
-  // When input overwrite is allowed, declared graph inputs are treated as
-  // available before the first node (producer index ``-1``) so they can be
-  // reused once they reach their last use.
-  std::unordered_map<std::string, int> producer;
-  std::unordered_map<std::string, int> last_use;
-  std::vector<std::vector<std::string>> referenced_per_node(static_cast<std::size_t>(num_nodes));
-  std::unordered_set<std::string> graph_outputs;
-  for (int i = 0; i < graph.output().size(); ++i) {
-    graph_outputs.insert(graph.output()[i].name());
-  }
-  if (allow_input_overwrite) {
-    for (const std::string &name : graph_inputs) {
-      if (!name.empty()) {
-        producer[name] = -1;
-      }
-    }
-  }
-  for (int i = 0; i < num_nodes; ++i) {
-    const NodeProto &node = graph.node()[i];
-    std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
-    referenced = CollectNodeInputs(node);
-    for (const std::string &name : referenced) {
-      last_use[name] = i;
-    }
-    for (int o = 0; o < node.output_size(); ++o) {
-      const std::string name = node.output(o);
-      if (!name.empty() && producer.find(name) == producer.end()) {
-        producer[name] = i;
-      }
-    }
-  }
-
-  for (int i = 0; i < num_nodes; ++i) {
-    const NodeProto &node = graph.node()[i];
-    const std::string op_type = node.op_type();
-    const bool is_squeeze = op_type == "Squeeze";
-    const bool is_unsqueeze = op_type == "Unsqueeze";
-    const std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
-
-    for (const std::string &name : referenced) {
-      auto use_it = last_use.find(name);
-      if (use_it == last_use.end()) {
-        continue;
-      }
-      if (use_it->second != i) {
-        continue;
-      }
-      if (graph_inputs.count(name) || graph_initializers.count(name)) {
-        not_used_after[static_cast<std::size_t>(i)].push_back(name);
-      }
-      if (keep.count(name)) {
-        continue;
-      }
-      auto prod_it = producer.find(name);
-      // Releasable values here are top-level intermediates produced by an
-      // earlier node. ``-1`` marks declared graph inputs when input overwrite
-      // is enabled; they are not considered "results to release" metadata.
-      // Values produced at this same node are not eligible.
-      if (prod_it == producer.end() || prod_it->second < 0 || prod_it->second >= i) {
-        continue;
-      }
-      release_after[static_cast<std::size_t>(i)].push_back(name);
-      if (events_enabled_) {
+  ResultLifetimeInfo lifetime = ComputeResultLifetimeInfo(graph, allow_input_overwrite);
+  const std::unordered_set<std::string> &graph_inputs = lifetime.graph_inputs;
+  const std::unordered_set<std::string> &graph_outputs = lifetime.graph_outputs;
+  const std::unordered_map<std::string, int> &last_use = lifetime.last_use;
+  if (events_enabled_) {
+    for (std::size_t i = 0; i < lifetime.release_after.size(); ++i) {
+      for (const std::string &name : lifetime.release_after[i]) {
         ComputeEvent ev;
         ev.action = ComputeEventAction::kRelease;
-        ev.node_index = i;
+        ev.node_index = static_cast<int>(i);
         ev.name = name;
         events_.push_back(std::move(ev));
       }
     }
+  }
 
-    // Count direct-input occurrences so a value read twice is never aliased.
-    std::unordered_map<std::string, int> input_occurrences;
-    for (int k = 0; k < node.input_size(); ++k) {
-      const std::string name = node.input(k);
-      if (!name.empty()) {
-        ++input_occurrences[name];
+  std::vector<std::vector<InPlaceReuse>> result = ComputeInPlaceReuseMatches(graph, ctx, lifetime);
+  if (events_enabled_) {
+    for (std::size_t i = 0; i < result.size(); ++i) {
+      for (const InPlaceReuse &reuse : result[i]) {
+        ComputeEvent ev;
+        ev.action = ComputeEventAction::kInPlace;
+        ev.node_index = static_cast<int>(i);
+        ev.output_index = static_cast<int>(reuse.output_index);
+        ev.input_index = static_cast<int>(reuse.input_index);
+        ev.kind = reuse.kind;
+        events_.push_back(std::move(ev));
       }
     }
-
-    std::unordered_set<int> used_inputs;
-    std::unordered_set<int> matched_outputs;
-    // Two passes so that same-sized (kEqual) reuse is always preferred over a
-    // strictly larger (kGreater) input before either buffer is claimed.
-    for (const InPlaceReuseKind kind : {InPlaceReuseKind::kEqual, InPlaceReuseKind::kGreater}) {
-      for (int o = 0; o < node.output_size(); ++o) {
-        if (matched_outputs.count(o)) {
-          continue;
-        }
-        const std::string out_name = node.output(o);
-        if (out_name.empty() || !ctx.Has(out_name)) {
-          continue;
-        }
-        const SymTensor &out_tensor = ctx.Get(out_name);
-
-        for (int k = 0; k < node.input_size(); ++k) {
-          if (used_inputs.count(k)) {
-            continue;
-          }
-          const std::string in_name = node.input(k);
-          if (in_name.empty() || in_name == out_name) {
-            continue;
-          }
-          if (input_occurrences[in_name] != 1) {
-            continue;
-          }
-          if (keep.count(in_name)) {
-            continue;
-          }
-          auto prod_it = producer.find(in_name);
-          if (prod_it == producer.end() || prod_it->second >= i) {
-            continue;
-          }
-          auto use_it = last_use.find(in_name);
-          if (use_it == last_use.end() || use_it->second != i) {
-            continue;
-          }
-          if (!ctx.Has(in_name)) {
-            continue;
-          }
-          std::optional<InPlaceReuseKind> match;
-          // Squeeze/Unsqueeze are shape-only view transforms on their data
-          // input: they keep dtype and element count, so the output can always
-          // alias that input when lifetime constraints allow it.
-          // The dtype guard keeps this fast-path defensive for malformed graphs
-          // or partial type information: aliasing is only safe when input/output
-          // element storage matches.
-          // Squeeze/Unsqueeze data tensor is input 0 by ONNX spec.
-          if (((k == kSqueezeDataInputIndex && is_squeeze) ||
-               (k == kUnsqueezeDataInputIndex && is_unsqueeze)) &&
-              out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
-            match = InPlaceReuseKind::kEqual;
-          } else {
-            match = ClassifyReuse(ctx, out_name, out_tensor, in_name, ctx.Get(in_name),
-                                  byte_size_expr_cache, &simplified_dim_cache);
-          }
-          if (!match.has_value() || *match != kind) {
-            continue;
-          }
-          InPlaceReuse reuse;
-          reuse.output_index = o;
-          reuse.input_index = k;
-          reuse.kind = kind;
-          result[static_cast<std::size_t>(i)].push_back(reuse);
-          if (events_enabled_) {
-            ComputeEvent ev;
-            ev.action = ComputeEventAction::kInPlace;
-            ev.node_index = i;
-            ev.output_index = o;
-            ev.input_index = k;
-            ev.kind = kind;
-            events_.push_back(std::move(ev));
-          }
-          used_inputs.insert(k);
-          matched_outputs.insert(o);
-          break;
-        }
-      }
-    }
-    // Keep each node's opportunities ordered by output index regardless of the
-    // pass in which they were discovered.
-    std::sort(result[static_cast<std::size_t>(i)].begin(),
-              result[static_cast<std::size_t>(i)].end(),
-              [](const InPlaceReuse &a, const InPlaceReuse &b) {
-                return a.output_index < b.output_index;
-              });
   }
 
   std::unordered_map<std::string, LiveAllocation> alive;
@@ -1175,7 +733,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
                                             ValueTag(value_tags, out_name)});
     }
 
-    for (const std::string &name : release_after[static_cast<std::size_t>(i)]) {
+    for (const std::string &name : lifetime.release_after[static_cast<std::size_t>(i)]) {
       alive.erase(name);
     }
     for (const std::string &name : inputs_reused_from_graph_input) {
@@ -1187,8 +745,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   }
 
   reuse_ = std::move(result);
-  release_after_ = std::move(release_after);
-  not_used_after_ = std::move(not_used_after);
+  release_after_ = std::move(lifetime.release_after);
+  not_used_after_ = std::move(lifetime.not_used_after);
   memory_ = std::move(memory);
 
   // Populate the shape-tagged subset from value_tags (when provided).
@@ -1366,19 +924,15 @@ void ComputeContext::WriteToGraph(GraphProto &graph) const {
 
 void ComputeContext::WriteToModel(ModelProto &model) const { WriteToGraph(*model.mutable_graph()); }
 
-runtime::ExecutionPlan
-ComputeContext::BuildExecutionPlan(GraphProto &graph,
-                                   runtime::RawBufferAllocator *allocator) const {
+runtime::ExecutionPlan ComputeContext::BuildExecutionPlan(GraphProto &graph) const {
   WriteToGraph(graph);
-  return runtime::ExecutionPlan(graph, allocator);
+  return runtime::ExecutionPlan(graph);
 }
 
-runtime::ExecutionPlan
-ComputeContext::BuildExecutionPlan(ModelProto &model,
-                                   runtime::RawBufferAllocator *allocator) const {
-  return BuildExecutionPlan(*model.mutable_graph(), allocator);
+runtime::ExecutionPlan ComputeContext::BuildExecutionPlan(ModelProto &model) const {
+  return BuildExecutionPlan(*model.mutable_graph());
 }
 
-} // namespace annotations
+} // namespace compute
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

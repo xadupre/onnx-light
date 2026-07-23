@@ -86,8 +86,8 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode mode) {
     // node 1, so it is reported as "not used after". No shape-tag metadata is
     // involved here.
     // NOLINTNEXTLINE: nodes has exactly 2 elements (Shape + Reshape added above).
-    (*graph->mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "S");
-    (*graph->mutable_node())[1].add_metadata(core::annotations::kNotUsedAfterMetadataKey, "X");
+    (*graph->mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "S");
+    (*graph->mutable_node())[1].add_metadata(core::compute::kNotUsedAfterMetadataKey, "X");
 
     // Build the reference DataSet so the case is executable end-to-end.
     const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -129,8 +129,8 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode mode) {
     // order.
     // Node 1 (Relu): T (the intermediate produced by Add) is released here.
     // NOLINTNEXTLINE: nodes has exactly 2 elements (Add + Relu added above).
-    (*graph->mutable_node())[0].add_metadata(core::annotations::kNotUsedAfterMetadataKey, "X;W");
-    (*graph->mutable_node())[1].add_metadata(core::annotations::kReleaseAfterMetadataKey, "T");
+    (*graph->mutable_node())[0].add_metadata(core::compute::kNotUsedAfterMetadataKey, "X;W");
+    (*graph->mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "T");
 
     // Build the reference DataSet so the case is executable end-to-end.
     const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, -5.0f, -6.0f});

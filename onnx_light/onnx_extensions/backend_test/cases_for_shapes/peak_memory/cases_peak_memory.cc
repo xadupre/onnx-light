@@ -48,7 +48,7 @@ void RegisterPeakMemoryCases(std::vector<TestCase> &registry, TestMode mode) {
     AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT,
                     {DimSpec(2), DimSpec(4), DimSpec(8), DimSpec(16)});
 
-    node.add_metadata(core::annotations::kNodePeakMemoryMetadataKey,
+    node.add_metadata(core::compute::kNodePeakMemoryMetadataKey,
                       std::to_string(kStaticAttentionPeakMemoryBytes));
     registry.emplace_back(std::move(tc));
   }

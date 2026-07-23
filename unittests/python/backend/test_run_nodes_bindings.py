@@ -480,7 +480,6 @@ class TestExecutionPlanBindings(ExtTestCase):
         self.assertEqual(action.target, "")
         self.assertEqual(action.node_index, 0)
         self.assertEqual(action.size, 0)
-        self.assertFalse(action.has_allocator)
         self.assertIn("LockInput", repr(action))
 
     def test_execution_plan_actions_shape_tag(self):

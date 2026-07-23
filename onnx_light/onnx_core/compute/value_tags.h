@@ -13,7 +13,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
-namespace annotations {
+namespace compute {
 
 constexpr const char *kValueTagMetadataKey = "onnx_light.value_tag";
 constexpr const char *kValueTagsMetadataKey = "onnx_light.value_tags";
@@ -35,6 +35,6 @@ void WriteValueAndNodeTagsToMetadata(GraphProto &graph);
 void WriteValueAndNodeTagsToMetadata(FunctionProto &function);
 void WriteValueAndNodeTagsToMetadata(ModelProto &model);
 
-} // namespace annotations
+} // namespace compute
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

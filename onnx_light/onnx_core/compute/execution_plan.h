@@ -5,7 +5,6 @@
 #pragma once
 
 #include "onnx_core/compute/execute_action.h"
-#include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx.h"
 
@@ -45,8 +44,8 @@ class RuntimeContext;
  *    (lock / unlock, allocate / delete buffer, create / delete shape,
  *    allocate / delete temporary buffer, execute node) derived from the
  *    in-place / lifetime / peak-memory metadata written to each node by
- *    :cpp:class:`annotations::ComputeContext` and
- *    :cpp:func:`annotations::WritePeakMemoryToMetadata`.
+ *    :cpp:class:`compute::ComputeContext` and
+ *    :cpp:func:`compute::WritePeakMemoryToMetadata`.
  *
  * The memory-management schedule is entirely metadata-driven: the
  * :cpp:class:`ComputeContext` is responsible for annotating each node
@@ -64,27 +63,23 @@ class RuntimeContext;
  */
 class ExecutionPlan {
 public:
-  /// Builds an empty plan. ``allocator`` is referenced by every allocation
-  /// and deallocation action the plan schedules (may be ``nullptr``).
-  explicit ExecutionPlan(RawBufferAllocator *allocator = nullptr);
+  /// Builds an empty plan.
+  ExecutionPlan() = default;
 
   /// Builds the plan for ``graph``. ``keep`` is seeded with the graph's
-  /// declared inputs, initializers and declared outputs. ``allocator`` is
-  /// referenced by every allocation / deallocation action.
-  explicit ExecutionPlan(const GraphProto &graph, RawBufferAllocator *allocator = nullptr);
+  /// declared inputs, initializers and declared outputs.
+  explicit ExecutionPlan(const GraphProto &graph);
 
   /// Builds the plan for ``func``. ``keep`` is seeded with the
-  /// function's declared inputs and outputs. ``allocator`` is referenced by
-  /// every allocation / deallocation action.
-  explicit ExecutionPlan(const FunctionProto &func, RawBufferAllocator *allocator = nullptr);
+  /// function's declared inputs and outputs.
+  explicit ExecutionPlan(const FunctionProto &func);
 
   /// Builds the plan for a free-standing node range. ``keep`` is the
   /// user-supplied set of names that must never be released (typically
   /// the names already populated in the runtime context at run start
-  /// plus any graph / function outputs). ``allocator`` is referenced by
-  /// every allocation / deallocation action.
+  /// plus any graph / function outputs).
   ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
-                std::unordered_set<std::string> keep, RawBufferAllocator *allocator = nullptr);
+                std::unordered_set<std::string> keep);
 
   virtual ~ExecutionPlan() = default;
 
@@ -132,36 +127,32 @@ public:
   /// construction by :cpp:func:`BuildActions`.
   const std::vector<ExecuteAction> &actions() const noexcept { return actions_; }
 
-  /// Returns the allocator referenced by every allocation / deallocation
-  /// action, or ``nullptr`` when no allocator was supplied.
-  RawBufferAllocator *allocator() const noexcept { return allocator_; }
-
 protected:
   /// Populates :cpp:func:`actions` from the seeded members (``inputs_``,
   /// ``initializers_``, ``outputs_``, ``nodes_``) and the in-place / lifetime
   /// annotations carried by each node's ``metadata_props`` (written by
-  /// :cpp:class:`annotations::ComputeContext`):
-  /// :cpp:var:`annotations::kInPlaceReuseMetadataKey`,
-  /// :cpp:var:`annotations::kReleaseAfterMetadataKey`,
-  /// :cpp:var:`annotations::kNotUsedAfterMetadataKey` and
-  /// :cpp:var:`annotations::kReleaseAfterShapeTagMetadataKey`. Inputs and
+  /// :cpp:class:`compute::ComputeContext`):
+  /// :cpp:var:`compute::kInPlaceReuseMetadataKey`,
+  /// :cpp:var:`compute::kReleaseAfterMetadataKey`,
+  /// :cpp:var:`compute::kNotUsedAfterMetadataKey` and
+  /// :cpp:var:`compute::kReleaseAfterShapeTagMetadataKey`. Inputs and
   /// initializers are locked on first use and unlocked on their last use
-  /// (:cpp:var:`annotations::kNotUsedAfterMetadataKey`); each output is either
+  /// (:cpp:var:`compute::kNotUsedAfterMetadataKey`); each output is either
   /// allocated as a result (or reused in place per the in-place annotation) or
   /// created as a shape when value-tagged ``"shape"``, and freed on its last
   /// use. When at least one node carries
-  /// :cpp:var:`annotations::kReleaseAfterMetadataKey`, that metadata drives the
+  /// :cpp:var:`compute::kReleaseAfterMetadataKey`, that metadata drives the
   /// :cpp:enumerator:`ExecuteActionKind::kDeleteBuffer` /
   /// :cpp:enumerator:`ExecuteActionKind::kDeleteShape` schedule; otherwise the
   /// releases are derived from graph topology (each intermediate is freed after
   /// its last use, excluding :cpp:func:`keep` names). When a node
   /// carries a peak-memory estimate
-  /// (:cpp:var:`annotations::kNodePeakMemoryMetadataKey`, written by
-  /// :cpp:func:`annotations::WritePeakMemoryToMetadata`), a temporary buffer of
+  /// (:cpp:var:`compute::kNodePeakMemoryMetadataKey`, written by
+  /// :cpp:func:`compute::WritePeakMemoryToMetadata`), a temporary buffer of
   /// that size is allocated right before the node runs and deleted right after.
   ///
   /// When the node range carries explicit lock-lifetime metadata
-  /// (:cpp:var:`annotations::kNotUsedAfterMetadataKey`), that metadata is
+  /// (:cpp:var:`compute::kNotUsedAfterMetadataKey`), that metadata is
   /// treated as the single source of truth and its completeness is enforced: an
   /// exception is thrown when an intermediate result is never released, when an
   /// input / initializer reaching its last use is never unlocked, or when a
@@ -177,7 +168,6 @@ protected:
   virtual void BuildActions();
 
 private:
-  RawBufferAllocator *allocator_ = nullptr;
   std::unordered_set<std::string> keep_;
   std::unordered_map<const NodeProto *, size_t> node_index_;
   /// Declared inputs (in order) used to schedule lock / unlock actions.

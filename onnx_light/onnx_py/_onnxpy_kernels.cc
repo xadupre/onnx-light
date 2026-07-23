@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 
@@ -502,12 +503,6 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "preserved. Default is ``False`` so that intermediate values stay observable "
           "after the run.")
       .def_prop_rw(
-          "parameters", [](const RuntimeContext &rt) { return rt.parameters(); },
-          [](RuntimeContext &rt, RuntimeParameters p) { rt.set_parameters(p); },
-          "Model-independent execution parameters (e.g. the requested degree of "
-          "parallelism, :attr:`RuntimeParameters.num_threads`). Inherited by subgraph "
-          "and function contexts.")
-      .def_prop_rw(
           "kernel_ctx", [](RuntimeContext &rt) -> KernelContext & { return rt.kernel_ctx(); },
           [](RuntimeContext &rt, KernelContext k) { rt.kernel_ctx() = std::move(k); },
           nb::rv_policy::reference_internal, "Kernel construction context (opset).")
@@ -769,7 +764,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_static(
           "collect_external_inputs",
           [](const std::vector<NodeProto> &nodes) {
-            return RuntimeContext::CollectExternalInputs(nodes);
+            return core::runtime::RuntimeSession::CollectExternalInputs(nodes);
           },
           nb::arg("nodes"),
           "Returns the list of input names referenced by ``nodes`` that are not "

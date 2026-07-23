@@ -5,6 +5,7 @@
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/peak_memory.h"
+#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/runtime_context.h"
 
 #include <cstddef>
@@ -213,7 +214,8 @@ void ExecutionPlan::BuildActions() {
     per_node_inputs.reserve(n);
     std::unordered_map<std::string, size_t> last_use;
     for (size_t i = 0; i < n; ++i) {
-      std::vector<std::string> node_inputs = RuntimeContext::CollectNodeInputs(*nodes_[i]);
+      std::vector<std::string> node_inputs =
+          ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(*nodes_[i]);
       for (const std::string &name : node_inputs) {
         last_use[name] = i;
       }

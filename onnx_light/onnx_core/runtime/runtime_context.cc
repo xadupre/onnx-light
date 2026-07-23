@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_core/graph/graph_manipulations.h"
 
 #include <algorithm>
 #include <chrono>
@@ -286,65 +285,6 @@ void RuntimeContext::AppendRunNodeEvent(const std::string &op_domain, const std:
   events_.push_back(std::move(ev));
 }
 
-std::vector<std::string>
-RuntimeContext::CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes) {
-  return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
-}
-
-std::vector<std::string>
-RuntimeContext::CollectExternalInputs(const std::vector<NodeProto> &nodes) {
-  return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
-}
-
-std::vector<std::string> RuntimeContext::CollectNodeInputs(const NodeProto &node) {
-  return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
-}
-
-namespace {
-
-template <class NodeRange>
-std::vector<std::vector<std::string>>
-ComputeReleasableInputsImpl(const NodeRange &nodes, const std::unordered_set<std::string> &keep) {
-  const size_t n = nodes.size();
-  std::vector<std::vector<std::string>> per_node_inputs;
-  per_node_inputs.reserve(n);
-  std::unordered_map<std::string, size_t> last_use;
-  for (size_t i = 0; i < n; ++i) {
-    std::vector<std::string> inputs = RuntimeContext::CollectNodeInputs(nodes[i]);
-    for (const auto &name : inputs) {
-      last_use[name] = i;
-    }
-    per_node_inputs.push_back(std::move(inputs));
-  }
-  std::vector<std::vector<std::string>> out(n);
-  for (size_t i = 0; i < n; ++i) {
-    for (const auto &name : per_node_inputs[i]) {
-      if (keep.count(name)) {
-        continue;
-      }
-      auto it = last_use.find(name);
-      if (it != last_use.end() && it->second == i) {
-        out[i].push_back(name);
-      }
-    }
-  }
-  return out;
-}
-
-} // namespace
-
-std::vector<std::vector<std::string>>
-RuntimeContext::ComputeReleasableInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
-                                        const std::unordered_set<std::string> &keep) {
-  return ComputeReleasableInputsImpl(nodes, keep);
-}
-
-std::vector<std::vector<std::string>>
-RuntimeContext::ComputeReleasableInputs(const std::vector<NodeProto> &nodes,
-                                        const std::unordered_set<std::string> &keep) {
-  return ComputeReleasableInputsImpl(nodes, keep);
-}
-
 const ExecutionPlan &RuntimeContext::GetExecutionPlan(const GraphProto &graph) {
   const void *key = static_cast<const void *>(&graph);
   auto it = execution_plans_.find(key);
@@ -379,7 +319,6 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.sequences() = sequences_;
   child.set_verbose(verbose_);
   child.set_events_enabled(events_enabled_);
-  child.set_parameters(parameters_);
   child.set_current_subgraph(current_node_index_, attr_name);
   return child;
 }
@@ -389,7 +328,6 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   child.set_allocator(allocator_);
   child.functions() = functions_;
   child.set_verbose(verbose_);
-  child.set_parameters(parameters_);
   return child;
 }
 

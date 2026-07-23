@@ -35,6 +35,7 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     kernel_context
     runtime_parameters
     run_nodes
+    runtime_session
     kernel_dispatch_table
     node_helpers
     temporary_buffer

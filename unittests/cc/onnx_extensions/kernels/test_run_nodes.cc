@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/compute/compute_context.h"
 #include "onnx_core/compute/execute_action.h"
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/peak_memory.h"
@@ -11,6 +12,7 @@
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/run_nodes.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
@@ -3423,13 +3425,13 @@ TEST(RuntimeContextCollectExternalInputs, FlatNodes) {
   nodes.push_back(MakeNode("Sub", {"t", "z"}, {"out"}));
   nodes.push_back(MakeNode("Add", {"out", "x"}, {"final"}));
 
-  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  auto inputs = core::runtime::RuntimeSession::CollectExternalInputs(nodes);
   EXPECT_EQ(inputs, std::vector<std::string>({"x", "y", "z"}));
 }
 
 TEST(RuntimeContextCollectExternalInputs, EmptyNodes) {
   std::vector<NodeProto> nodes;
-  EXPECT_TRUE(RuntimeContext::CollectExternalInputs(nodes).empty());
+  EXPECT_TRUE(core::runtime::RuntimeSession::CollectExternalInputs(nodes).empty());
 }
 
 TEST(RuntimeContextCollectExternalInputs, SkipsEmptyAndProducedNames) {
@@ -3439,7 +3441,7 @@ TEST(RuntimeContextCollectExternalInputs, SkipsEmptyAndProducedNames) {
   nodes.push_back(MakeNode("Resize", {"X", "", "scales"}, {"t"}));
   nodes.push_back(MakeNode("Abs", {"t"}, {"Y"}));
 
-  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  auto inputs = core::runtime::RuntimeSession::CollectExternalInputs(nodes);
   EXPECT_EQ(inputs, std::vector<std::string>({"X", "scales"}));
 }
 
@@ -3469,7 +3471,7 @@ TEST(RuntimeContextCollectExternalInputs, SubgraphCapturesOuterValues) {
   nodes.push_back(MakeNode("Identity", {"x"}, {"produced"}));
   nodes.push_back(if_node);
 
-  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  auto inputs = core::runtime::RuntimeSession::CollectExternalInputs(nodes);
   // "produced" is produced by the outer set and must not be reported.
   // Order is first-seen.
   EXPECT_EQ(inputs, std::vector<std::string>({"x", "cond", "cap1", "cap2"}));
@@ -3495,7 +3497,7 @@ TEST(RuntimeContextCollectExternalInputs, SubgraphLocalNamesShadowOuter) {
   *attr->mutable_g() = body;
 
   std::vector<NodeProto> nodes = {loop};
-  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  auto inputs = core::runtime::RuntimeSession::CollectExternalInputs(nodes);
   EXPECT_EQ(inputs, std::vector<std::string>({"M", "cond", "outer_only"}));
 }
 
@@ -3537,7 +3539,7 @@ TEST(RuntimeContextCollectExternalInputs, NestedSubgraphCaptures) {
   *b2->mutable_g() = outer_else;
 
   std::vector<NodeProto> nodes = {outer_if};
-  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  auto inputs = core::runtime::RuntimeSession::CollectExternalInputs(nodes);
   // outer_cond is read by the outer If node itself.
   // Inside outer_then: inner_if introduces inner_cond, and its branches
   // capture "deep" from above.
@@ -3553,7 +3555,7 @@ TEST(RuntimeContextCollectExternalInputs, DeduplicatesOrdering) {
   nodes.push_back(MakeNode("Mul", {"a", "u"}, {"v"})); // re-references "a"
   nodes.push_back(MakeNode("Sub", {"b", "v"}, {"w"})); // re-references "b"
 
-  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  auto inputs = core::runtime::RuntimeSession::CollectExternalInputs(nodes);
   EXPECT_EQ(inputs, std::vector<std::string>({"a", "b"}));
 }
 
@@ -3888,13 +3890,13 @@ TEST(RunNodes, RunNodeUnknownOpWithoutCustomKernelThrows) {
 
 TEST(RunNodes, CollectNodeInputsPlainNode) {
   NodeProto node = MakeNode("Add", {"x", "y"}, {"z"});
-  auto inputs = RuntimeContext::CollectNodeInputs(node);
+  auto inputs = core::runtime::RuntimeSession::CollectNodeInputs(node);
   EXPECT_EQ(inputs, (std::vector<std::string>{"x", "y"}));
 }
 
 TEST(RunNodes, CollectNodeInputsSkipsEmptyAndDedups) {
   NodeProto node = MakeNode("Add", {"x", "", "x"}, {"z"});
-  auto inputs = RuntimeContext::CollectNodeInputs(node);
+  auto inputs = core::runtime::RuntimeSession::CollectNodeInputs(node);
   EXPECT_EQ(inputs, (std::vector<std::string>{"x"}));
 }
 
@@ -3924,7 +3926,7 @@ TEST(RunNodes, CollectNodeInputsIncludesSubgraphCaptures) {
   add_subgraph(node, "then_branch", "a", "y");
   add_subgraph(node, "else_branch", "b", "y");
 
-  auto inputs = RuntimeContext::CollectNodeInputs(node);
+  auto inputs = core::runtime::RuntimeSession::CollectNodeInputs(node);
   EXPECT_EQ(inputs, (std::vector<std::string>{"cond", "a", "b"}));
 }
 
@@ -3938,7 +3940,7 @@ TEST(RunNodes, ComputeReleasableInputsLastUse) {
   nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
 
   std::unordered_set<std::string> keep{"y"};
-  auto rel = RuntimeContext::ComputeReleasableInputs(nodes, keep);
+  auto rel = core::annotations::ComputeContext::ComputeReleasableInputs(nodes, keep);
   ASSERT_EQ(rel.size(), 2u);
   EXPECT_EQ(rel[0], (std::vector<std::string>{"x"}));
   EXPECT_EQ(rel[1], (std::vector<std::string>{"t", "z"}));
@@ -3950,7 +3952,7 @@ TEST(RunNodes, ComputeReleasableInputsKeepIsPreserved) {
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
   std::unordered_set<std::string> keep{"x", "t"};
-  auto rel = RuntimeContext::ComputeReleasableInputs(nodes, keep);
+  auto rel = core::annotations::ComputeContext::ComputeReleasableInputs(nodes, keep);
   ASSERT_EQ(rel.size(), 1u);
   EXPECT_TRUE(rel[0].empty());
 }
@@ -4043,6 +4045,105 @@ TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
   EXPECT_TRUE(rt.Has("y"));
   // Cached plan still the same instance after both runs.
   EXPECT_EQ(&rt.GetExecutionPlan(graph), &plan1);
+}
+
+TEST(RuntimeSession, InitializesKernelsThenRunsAndReleases) {
+  // A RuntimeSession is constructed with a precomputed ExecutionPlan; its
+  // kernels are resolved on the first Run against the supplied RuntimeContext
+  // and only then is it run. Running it must produce the graph outputs and
+  // release the scheduled intermediates, exactly like the plan-aware RunNodes
+  // overload.
+  using core::runtime::ExecutionPlan;
+  using core::runtime::RuntimeSession;
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_z;
+  vi_z.set_name("z");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_input().push_back(vi_z);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Add", {"t", "z"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_release_intermediates(true);
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
+
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  session.Run(rt);
+
+  // "t" was released, "y" (output) survived with the expected values.
+  EXPECT_FALSE(rt.Has("t"));
+  ASSERT_TRUE(rt.Has("y"));
+  const float *y = rt.Get("y").AsFloat();
+  ASSERT_EQ(rt.Get("y").element_count(), 2);
+  EXPECT_FLOAT_EQ(y[0], 1.0f + 10.0f);
+  EXPECT_FLOAT_EQ(y[1], 2.0f + 20.0f);
+}
+
+TEST(RuntimeSession, IsReusableAcrossMultipleRuns) {
+  // The same session, built once (kernels initialized once), can be run again
+  // with fresh inputs without re-resolving the kernels.
+  using core::runtime::ExecutionPlan;
+  using core::runtime::RuntimeSession;
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Neg", {"t"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_release_intermediates(true);
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  session.Run(rt);
+  EXPECT_FALSE(rt.Has("t"));
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], -1.0f);
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], -2.0f);
+
+  rt.Remove("y");
+  rt.Put("x", Tensor::FromFloat("x", {2}, {-3.0f, 4.0f}));
+  session.Run(rt);
+  EXPECT_FALSE(rt.Has("t"));
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], -3.0f);
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], -4.0f);
+}
+
+TEST(RuntimeSession, RejectsUnsupportedOpDuringKernelInitialization) {
+  // Kernel resolution happens on the first Run (kernel initialization), so an
+  // unsupported operator is rejected the first time the session is run.
+  using core::runtime::ExecutionPlan;
+  using core::runtime::RuntimeSession;
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("ThisOpDoesNotExist", {"x"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_release_intermediates(true);
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  EXPECT_THROW(session.Run(rt), std::invalid_argument);
 }
 
 TEST(RunNodes, ExecutionPlanBuildsActions) {

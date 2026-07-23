@@ -9,7 +9,6 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -56,11 +55,6 @@ void ValidateBounds(const Tensor &x, const Tensor *min, const Tensor *max) {
     EXT_ENFORCE_INVALID(max->element_count() == 1, kClipName,
                         ": max must be a 0-D (scalar) tensor.");
   }
-}
-
-Tensor AllocLike(const Tensor &x) {
-  return Tensor("", x.data_type, x.shape,
-                std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * x.element_size()));
 }
 
 void ValidateOutput(const Tensor &x, const Tensor &output) {
@@ -114,7 +108,8 @@ void Dispatch(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &out
 Tensor Clip::operator()(const Tensor &x, const Tensor *min, const Tensor *max,
                         RuntimeContext *rt) const {
   ValidateBounds(x, min, max);
-  Tensor out = AllocLike(x);
+  const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
+  Tensor out = MakeOutputTensor(x.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
   Dispatch(x, min, max, out);
   return out;
 }

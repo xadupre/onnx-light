@@ -328,8 +328,8 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
 // :class:`Loop` only operates on tensor state.
 void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, const Tensor &m_tensor,
                               const Tensor &cond_tensor, const std::vector<bool> &is_seq_state,
-                              Tensors tensor_state, Sequences sequence_state,
-                              std::size_t k, RuntimeContext &rt) {
+                              Tensors tensor_state, Sequences sequence_state, std::size_t k,
+                              RuntimeContext &rt) {
   const std::size_t n = is_seq_state.size();
 
   int64_t max_trip = std::numeric_limits<int64_t>::max();

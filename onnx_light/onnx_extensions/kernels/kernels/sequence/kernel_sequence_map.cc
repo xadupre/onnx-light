@@ -13,9 +13,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
-Sequences
-SequenceMap::operator()(const Sequence &input_sequence,
-                        const std::vector<Tensors> &body_outputs_per_iter) const {
+Sequences SequenceMap::operator()(const Sequence &input_sequence,
+                                  const std::vector<Tensors> &body_outputs_per_iter) const {
   const std::size_t n = input_sequence.size();
 
   Sequences outputs;

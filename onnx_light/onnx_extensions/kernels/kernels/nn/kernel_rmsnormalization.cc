@@ -7,12 +7,12 @@
 #include "onnx_core/runtime/float16_promote.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -111,31 +111,43 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
     norm_size *= x.shape[static_cast<size_t>(i)];
   }
 
-  // Pre-compute the per-element index into ``scale`` for every position in
-  // the normalized block. This is the broadcast resolution: a normalized
-  // shape coordinate ``(c_0, ..., c_{normalized_rank-1})`` maps to
-  // ``(c_offset, ..., c_{normalized_rank-1})`` in ``scale`` (i.e. the last
-  // ``scale_rank`` coordinates), with any ``scale`` dim equal to 1
-  // contributing 0 to the index.
+  // Resolve the broadcast: a normalized-shape coordinate
+  // ``(c_0, ..., c_{normalized_rank-1})`` maps to the last ``scale_rank``
+  // coordinates in ``scale``, with any ``scale`` dim equal to 1 contributing 0.
   const int64_t normalized_rank = rank - axis;
   const int64_t scale_rank = static_cast<int64_t>(scale.shape.size());
   const int64_t offset = normalized_rank - scale_rank;
 
-  std::vector<int64_t> scale_strides(static_cast<size_t>(scale_rank), 0);
-  if (scale_rank > 0) {
+  // Scratch buffers are drawn from the runtime allocator backing ``output``
+  // (when it is allocator-backed), mirroring kernel::QuantizeLinear; they fall
+  // back to inline storage otherwise. ``TemporaryTypedBuffer`` zero-initializes
+  // its storage.
+  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
+
+  // Pre-compute the per-element index into ``scale`` for every position in the
+  // normalized block. A scalar ``scale`` (scale_rank == 0) broadcasts to index
+  // 0 everywhere, so the zero-initialized buffer is left untouched.
+  const std::size_t scale_index_count = static_cast<std::size_t>(norm_size > 0 ? norm_size : 1);
+  detail::TemporaryTypedBuffer<int64_t> scale_index_buf(scale_index_count, allocator,
+                                                        "kernel::RMSNormalization scale_index");
+  int64_t *scale_index = scale_index_buf.data();
+
+  if (norm_size > 0 && scale_rank > 0) {
+    detail::TemporaryTypedBuffer<int64_t> scale_strides_buf(
+        static_cast<std::size_t>(scale_rank), allocator, "kernel::RMSNormalization scale_strides");
+    int64_t *scale_strides = scale_strides_buf.data();
     int64_t stride = 1;
     for (int64_t i = scale_rank - 1; i >= 0; --i) {
       const int64_t dim = scale.shape[static_cast<size_t>(i)];
       scale_strides[static_cast<size_t>(i)] = dim == 1 ? 0 : stride;
       stride *= dim;
     }
-  }
 
-  std::vector<int64_t> scale_index(static_cast<size_t>(norm_size), 0);
-  if (norm_size > 0 && scale_rank > 0) {
     // Walk through the normalized block coordinates in row-major order
     // and accumulate the scale index using ``scale_strides``.
-    std::vector<int64_t> coord(static_cast<size_t>(normalized_rank), 0);
+    detail::TemporaryTypedBuffer<int64_t> coord_buf(static_cast<std::size_t>(normalized_rank),
+                                                    allocator, "kernel::RMSNormalization coord");
+    int64_t *coord = coord_buf.data();
     for (int64_t flat = 0; flat < norm_size; ++flat) {
       int64_t si = 0;
       for (int64_t i = offset; i < normalized_rank; ++i) {

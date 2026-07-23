@@ -37,6 +37,11 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("ai_onnx_preview", index)
         self.assertIn("ai_rt", index)
 
+    def test_index_title_is_ops(self):
+        self._init()
+        index = Path(self.tmp_dir, "index.rst").read_text(encoding="utf-8")
+        self.assertIn("Ops\n===\n", index)
+
     def test_ml_domain_page_contains_operators(self):
         self._init()
         content = Path(self.tmp_dir, "ai_onnx_ml.rst").read_text(encoding="utf-8")

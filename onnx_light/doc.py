@@ -1237,8 +1237,8 @@ def _index_page_rst(domains: list[str]) -> str:
     lines: list[str] = []
     lines.append(".. _l-onnx-operators:")
     lines.append("")
-    lines.append("Operators")
-    lines.append("=========")
+    lines.append("Ops")
+    lines.append("===")
     lines.append("")
     lines.append(
         "This section lists all ONNX operators grouped by domain.  "

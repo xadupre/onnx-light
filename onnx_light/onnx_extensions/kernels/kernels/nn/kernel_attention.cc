@@ -197,106 +197,16 @@ double MaskValuePadded(const Tensor *mask, int64_t batch_size, int64_t q_num_hea
   return BroadcastedMaskValue(*mask, batch_size, q_num_heads, q_seq_len, mask_kv, b, h, i, j);
 }
 
-} // namespace
-
-Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
-                             RuntimeContext *rt) const {
-  CheckRank4Float(Q, "Q");
-  const int64_t head_size = Q.shape[3];
-  EXT_ENFORCE_INVALID(head_size > 0, "kernel::Attention: 'head_size' must be positive.");
-  const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
-  return (*this)(Q, K, V, scale, rt);
-}
-
-Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                             RuntimeContext *rt) const {
-  Attributes attrs;
-  attrs.has_scale = true;
-  attrs.scale = scale;
-  return (*this)(Q, K, V, attrs).Y;
-}
-
-Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                             const Tensor &attn_mask, RuntimeContext *rt) const {
-  Attributes attrs;
-  attrs.has_scale = true;
-  attrs.scale = scale;
-  const Tensor *const mask_ptr =
-      attn_mask.shape.empty() && attn_mask.size_bytes() == 0 ? nullptr : &attn_mask;
-  return (*this)(Q, K, V, attrs, mask_ptr).Y;
-}
-
-void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                           const Tensor *attn_mask, Tensor &output) const {
-  Attributes attrs;
-  attrs.has_scale = true;
-  attrs.scale = scale;
-  Result r = (*this)(Q, K, V, attrs, attn_mask);
-  EXT_ENFORCE_INVALID(output.data_type == Q.data_type,
-                      "kernel::Attention preallocated output must share Q's element type.");
-  EXT_ENFORCE_INVALID(output.shape == r.Y.shape,
-                      "kernel::Attention preallocated output shape must be (batch_size, "
-                      "q_num_heads, q_seq_len, v_head_size).");
-  EXT_ENFORCE_INVALID(output.size_bytes() == r.Y.size_bytes(),
-                      "kernel::Attention preallocated output buffer has unexpected size in bytes.");
-  std::memcpy(output.mutable_bytes(), r.Y.bytes(), r.Y.size_bytes());
-}
-
-Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
-                                        const Attributes &attrs, const Tensor *attn_mask,
+// Core rank-4 Attention. ``Q4``/``K4``/``V4`` are already in the internal
+// ``(batch, num_heads, seq, head_size)`` layout. Builds ``present_key`` /
+// ``present_value`` (concatenating the optional past tensors), runs the
+// scaled dot-product attention and returns a rank-4 ``Y`` together with the
+// present tensors and the mode-dependent ``qk_matmul_output``.
+Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, const Tensor &V4,
+                                        const Attention::Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
-                                        const Tensor *nonpad_kv_seqlen, RuntimeContext *rt) const {
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
-  // ----- Half-precision fast path ----------------------------------------
-  // FLOAT16 / BFLOAT16 inputs are promoted to FLOAT32 here, the reference
-  // implementation runs in float32, and the result tensors are demoted
-  // back to the original element type. ``attn_mask`` may be FLOAT or BOOL
-  // (or a matching half-precision dtype); BOOL masks are forwarded as-is.
-  if (IsHalfPrecision(Q.data_type)) {
-    EXT_ENFORCE_INVALID(K.data_type == Q.data_type && V.data_type == Q.data_type,
-                        "kernel::Attention: Q, K, V must share the same dtype.");
-    const int32_t target_dtype = Q.data_type;
-    const Tensor Q_f = PromoteToFloat32(Q);
-    const Tensor K_f = PromoteToFloat32(K);
-    const Tensor V_f = PromoteToFloat32(V);
-    Tensor attn_mask_f;
-    const Tensor *attn_mask_ptr = attn_mask;
-    if (attn_mask != nullptr && IsHalfPrecision(attn_mask->data_type)) {
-      attn_mask_f = PromoteToFloat32(*attn_mask);
-      attn_mask_ptr = &attn_mask_f;
-    }
-    Tensor past_key_f;
-    const Tensor *past_key_ptr = past_key;
-    if (past_key != nullptr && IsHalfPrecision(past_key->data_type)) {
-      past_key_f = PromoteToFloat32(*past_key);
-      past_key_ptr = &past_key_f;
-    }
-    Tensor past_value_f;
-    const Tensor *past_value_ptr = past_value;
-    if (past_value != nullptr && IsHalfPrecision(past_value->data_type)) {
-      past_value_f = PromoteToFloat32(*past_value);
-      past_value_ptr = &past_value_f;
-    }
-    Result r_f = (*this)(Q_f, K_f, V_f, attrs, attn_mask_ptr, past_key_ptr, past_value_ptr,
-                         nonpad_kv_seqlen, rt);
-    Result r;
-    r.Y = DemoteFromFloat32(r_f.Y, target_dtype);
-    r.present_key = DemoteFromFloat32(r_f.present_key, target_dtype);
-    r.present_value = DemoteFromFloat32(r_f.present_value, target_dtype);
-    r.qk_matmul_output = DemoteFromFloat32(r_f.qk_matmul_output, target_dtype);
-    return r;
-  }
-
-  // ----- Normalize Q/K/V to rank-4 ---------------------------------------
-  EXT_ENFORCE_INVALID(Q.shape.size() == K.shape.size() && Q.shape.size() == V.shape.size(),
-                      "kernel::Attention: Q, K, V must all share the same rank.");
-  EXT_ENFORCE_INVALID(Q.shape.size() == 3 || Q.shape.size() == 4,
-                      "kernel::Attention: Q, K, V must be rank-3 or rank-4.");
-  const bool rank3 = Q.shape.size() == 3;
-
-  Tensor Q4 = rank3 ? PromoteRank3(Q, attrs.q_num_heads, "Q", allocator) : Q;
-  Tensor K4 = rank3 ? PromoteRank3(K, attrs.kv_num_heads, "K", allocator) : K;
-  Tensor V4 = rank3 ? PromoteRank3(V, attrs.kv_num_heads, "V", allocator) : V;
+                                        const Tensor *nonpad_kv_seqlen,
+                                        RawBufferAllocator *allocator) {
   CheckRank4Float(Q4, "Q");
   CheckRank4Float(K4, "K");
   CheckRank4Float(V4, "V");
@@ -525,12 +435,138 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
     }
   }
 
-  Result r;
-  r.Y = rank3 ? CollapseToRank3(Y, allocator) : std::move(Y);
+  Attention::Result r;
+  r.Y = std::move(Y);
   r.present_key = std::move(present_key);
   r.present_value = std::move(present_value);
   r.qk_matmul_output = std::move(qk_out);
   return r;
+}
+
+// Rank-3 Attention. ``Q``/``K``/``V`` use the fused
+// ``(batch, seq, num_heads * head_size)`` layout. The inputs are promoted to
+// the rank-4 layout, delegated to ``ComputeAttentionRank4`` and the primary
+// output ``Y`` is collapsed back to rank-3. The present/qk auxiliary outputs
+// remain rank-4, matching the upstream operator.
+Attention::Result ComputeAttentionRank3(const Tensor &Q, const Tensor &K, const Tensor &V,
+                                        const Attention::Attributes &attrs, const Tensor *attn_mask,
+                                        const Tensor *past_key, const Tensor *past_value,
+                                        const Tensor *nonpad_kv_seqlen,
+                                        RawBufferAllocator *allocator) {
+  Tensor Q4 = PromoteRank3(Q, attrs.q_num_heads, "Q", allocator);
+  Tensor K4 = PromoteRank3(K, attrs.kv_num_heads, "K", allocator);
+  Tensor V4 = PromoteRank3(V, attrs.kv_num_heads, "V", allocator);
+  Attention::Result r = ComputeAttentionRank4(Q4, K4, V4, attrs, attn_mask, past_key, past_value,
+                                              nonpad_kv_seqlen, allocator);
+  r.Y = CollapseToRank3(r.Y, allocator);
+  return r;
+}
+
+} // namespace
+
+Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
+                             RuntimeContext *rt) const {
+  CheckRank4Float(Q, "Q");
+  const int64_t head_size = Q.shape[3];
+  EXT_ENFORCE_INVALID(head_size > 0, "kernel::Attention: 'head_size' must be positive.");
+  const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
+  return (*this)(Q, K, V, scale, rt);
+}
+
+Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                             RuntimeContext *rt) const {
+  Attributes attrs;
+  attrs.has_scale = true;
+  attrs.scale = scale;
+  return (*this)(Q, K, V, attrs).Y;
+}
+
+Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                             const Tensor &attn_mask, RuntimeContext *rt) const {
+  Attributes attrs;
+  attrs.has_scale = true;
+  attrs.scale = scale;
+  const Tensor *const mask_ptr =
+      attn_mask.shape.empty() && attn_mask.size_bytes() == 0 ? nullptr : &attn_mask;
+  return (*this)(Q, K, V, attrs, mask_ptr).Y;
+}
+
+void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                           const Tensor *attn_mask, Tensor &output) const {
+  Attributes attrs;
+  attrs.has_scale = true;
+  attrs.scale = scale;
+  Result r = (*this)(Q, K, V, attrs, attn_mask);
+  EXT_ENFORCE_INVALID(output.data_type == Q.data_type,
+                      "kernel::Attention preallocated output must share Q's element type.");
+  EXT_ENFORCE_INVALID(output.shape == r.Y.shape,
+                      "kernel::Attention preallocated output shape must be (batch_size, "
+                      "q_num_heads, q_seq_len, v_head_size).");
+  EXT_ENFORCE_INVALID(output.size_bytes() == r.Y.size_bytes(),
+                      "kernel::Attention preallocated output buffer has unexpected size in bytes.");
+  std::memcpy(output.mutable_bytes(), r.Y.bytes(), r.Y.size_bytes());
+}
+
+Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
+                                        const Attributes &attrs, const Tensor *attn_mask,
+                                        const Tensor *past_key, const Tensor *past_value,
+                                        const Tensor *nonpad_kv_seqlen, RuntimeContext *rt) const {
+  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  // ----- Half-precision fast path ----------------------------------------
+  // FLOAT16 / BFLOAT16 inputs are promoted to FLOAT32 here, the reference
+  // implementation runs in float32, and the result tensors are demoted
+  // back to the original element type. ``attn_mask`` may be FLOAT or BOOL
+  // (or a matching half-precision dtype); BOOL masks are forwarded as-is.
+  if (IsHalfPrecision(Q.data_type)) {
+    EXT_ENFORCE_INVALID(K.data_type == Q.data_type && V.data_type == Q.data_type,
+                        "kernel::Attention: Q, K, V must share the same dtype.");
+    const int32_t target_dtype = Q.data_type;
+    const Tensor Q_f = PromoteToFloat32(Q);
+    const Tensor K_f = PromoteToFloat32(K);
+    const Tensor V_f = PromoteToFloat32(V);
+    Tensor attn_mask_f;
+    const Tensor *attn_mask_ptr = attn_mask;
+    if (attn_mask != nullptr && IsHalfPrecision(attn_mask->data_type)) {
+      attn_mask_f = PromoteToFloat32(*attn_mask);
+      attn_mask_ptr = &attn_mask_f;
+    }
+    Tensor past_key_f;
+    const Tensor *past_key_ptr = past_key;
+    if (past_key != nullptr && IsHalfPrecision(past_key->data_type)) {
+      past_key_f = PromoteToFloat32(*past_key);
+      past_key_ptr = &past_key_f;
+    }
+    Tensor past_value_f;
+    const Tensor *past_value_ptr = past_value;
+    if (past_value != nullptr && IsHalfPrecision(past_value->data_type)) {
+      past_value_f = PromoteToFloat32(*past_value);
+      past_value_ptr = &past_value_f;
+    }
+    Result r_f = (*this)(Q_f, K_f, V_f, attrs, attn_mask_ptr, past_key_ptr, past_value_ptr,
+                         nonpad_kv_seqlen, rt);
+    Result r;
+    r.Y = DemoteFromFloat32(r_f.Y, target_dtype);
+    r.present_key = DemoteFromFloat32(r_f.present_key, target_dtype);
+    r.present_value = DemoteFromFloat32(r_f.present_value, target_dtype);
+    r.qk_matmul_output = DemoteFromFloat32(r_f.qk_matmul_output, target_dtype);
+    return r;
+  }
+
+  // ----- Dispatch on rank -----------------------------------------------
+  // Q/K/V may be provided either as rank-4 ``(batch, num_heads, seq,
+  // head_size)`` tensors or as rank-3 ``(batch, seq, num_heads * head_size)``
+  // packed tensors. They must all share the same rank; each case is handled
+  // by its own dedicated implementation.
+  EXT_ENFORCE_INVALID(Q.shape.size() == K.shape.size() && Q.shape.size() == V.shape.size(),
+                      "kernel::Attention: Q, K, V must all share the same rank.");
+  EXT_ENFORCE_INVALID(Q.shape.size() == 3 || Q.shape.size() == 4,
+                      "kernel::Attention: Q, K, V must be rank-3 or rank-4.");
+  if (Q.shape.size() == 3) {
+    return ComputeAttentionRank3(Q, K, V, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen,
+                                 allocator);
+  }
+  return ComputeAttentionRank4(Q, K, V, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen,
+                               allocator);
 }
 
 } // namespace kernel

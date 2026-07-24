@@ -97,9 +97,9 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
           t.shape.size() == 3u && t.shape[1] == 1, "kernel::LSTM: ", role,
           " must have shape [batch_size, num_directions=1, hidden_size] for layout=1.");
       const size_t n_bytes = t.size_bytes();
-      Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
-                                    onnx_kernels::Shape{1, t.shape[0], t.shape[2]}, n_bytes,
-                                    allocator);
+      Tensor out =
+          MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
+                           onnx_kernels::Shape{1, t.shape[0], t.shape[2]}, n_bytes, allocator);
       std::memcpy(out.mutable_bytes(), t.AsFloat(), n_bytes);
       return out;
     };

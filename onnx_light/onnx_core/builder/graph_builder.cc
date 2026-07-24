@@ -92,15 +92,15 @@ void GraphBuilder::SeedShape(const std::string &name, SymTensor tensor) {
 }
 
 const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
-  const std::string key = tensor.name().value();
-  const std::string &name = ReserveName(key);
-  TensorProto &added = initializers_.Set(key, tensor);
+  const std::string tensor_name = tensor.name().value();
+  const std::string &reserved = ReserveName(tensor_name);
+  TensorProto &added = initializers_.Set(tensor_name, tensor);
   SymTensor descriptor;
   if (SymTensorFromTensorProto(added, descriptor)) {
-    SeedShape(name, std::move(descriptor));
+    SeedShape(reserved, std::move(descriptor));
   }
-  // ``name`` references the entry stored in ``names_`` and remains valid.
-  return name;
+  // ``reserved`` references the entry stored in ``names_`` and remains valid.
+  return reserved;
 }
 
 const std::string &GraphBuilder::MakeExternalInitializer(const std::string &name, TensorType dtype,
@@ -129,6 +129,8 @@ const std::string &GraphBuilder::MakeExternalInitializer(const std::string &name
 // ── Inputs / outputs ───────────────────────────────────────────────────
 
 const std::string &GraphBuilder::MakeInput(const ValueInfoProto &value_info) {
+  // Reserve the name first so a duplicate is rejected before ``inputs_`` is
+  // mutated, leaving the builder unchanged on error.
   const std::string &reserved = ReserveName(value_info.name().value());
   inputs_.push_back(value_info);
   SymTensor descriptor;

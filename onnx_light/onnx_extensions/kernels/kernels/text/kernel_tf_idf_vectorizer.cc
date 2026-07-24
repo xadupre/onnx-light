@@ -310,8 +310,7 @@ onnx_kernels::Shape TfIdfVectorizer::ComputeOutputShape(const onnx_kernels::Shap
 Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_length,
                                    int64_t max_gram_length, int64_t max_skip_count,
                                    const std::vector<int64_t> &ngram_counts,
-                                   const std::vector<int64_t> &ngram_indexes,
-                                   const std::vector<int64_t> &pool_int64s,
+                                   const ParamInts &ngram_indexes, const ParamInts &pool_int64s,
                                    const std::vector<std::string> &pool_strings,
                                    const std::vector<float> &weights, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!ngram_indexes.empty(),
@@ -379,8 +378,7 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
 void TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_length,
                                  int64_t max_gram_length, int64_t max_skip_count,
                                  const std::vector<int64_t> &ngram_counts,
-                                 const std::vector<int64_t> &ngram_indexes,
-                                 const std::vector<int64_t> &pool_int64s,
+                                 const ParamInts &ngram_indexes, const ParamInts &pool_int64s,
                                  const std::vector<std::string> &pool_strings,
                                  const std::vector<float> &weights, Tensor &output) const {
   Tensor computed = (*this)(x, mode, min_gram_length, max_gram_length, max_skip_count, ngram_counts,

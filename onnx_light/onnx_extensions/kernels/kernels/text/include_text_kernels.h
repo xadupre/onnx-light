@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
@@ -239,8 +240,7 @@ public:
   /// all-ones for ``IDF`` / ``TFIDF``).
   Tensor operator()(const Tensor &x, Mode mode, int64_t min_gram_length, int64_t max_gram_length,
                     int64_t max_skip_count, const std::vector<int64_t> &ngram_counts,
-                    const std::vector<int64_t> &ngram_indexes,
-                    const std::vector<int64_t> &pool_int64s,
+                    const ParamInts &ngram_indexes, const ParamInts &pool_int64s,
                     const std::vector<std::string> &pool_strings, const std::vector<float> &weights,
                     RuntimeContext *rt = nullptr) const;
 
@@ -249,8 +249,7 @@ public:
   /// pre-sized ``data`` buffer.
   void operator()(const Tensor &x, Mode mode, int64_t min_gram_length, int64_t max_gram_length,
                   int64_t max_skip_count, const std::vector<int64_t> &ngram_counts,
-                  const std::vector<int64_t> &ngram_indexes,
-                  const std::vector<int64_t> &pool_int64s,
+                  const ParamInts &ngram_indexes, const ParamInts &pool_int64s,
                   const std::vector<std::string> &pool_strings, const std::vector<float> &weights,
                   Tensor &output) const;
 

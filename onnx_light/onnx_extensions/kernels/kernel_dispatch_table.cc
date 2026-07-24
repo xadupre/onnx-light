@@ -2424,10 +2424,8 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          const int64_t max_skip_count = GetAttributeIntOrDefault(node, "max_skip_count", 0);
          const std::vector<int64_t> ngram_counts =
              GetAttributeIntsOrDefault(node, "ngram_counts", {});
-         const std::vector<int64_t> ngram_indexes =
-             GetAttributeIntsOrDefault(node, "ngram_indexes", {});
-         const std::vector<int64_t> pool_int64s =
-             GetAttributeIntsOrDefault(node, "pool_int64s", {});
+         const ParamInts ngram_indexes = GetAttributeIntsOrDefault(node, "ngram_indexes", {});
+         const ParamInts pool_int64s = GetAttributeIntsOrDefault(node, "pool_int64s", {});
          const std::vector<std::string> pool_strings =
              GetAttributeStringsOrDefault(node, "pool_strings", {});
          const std::vector<float> weights = GetAttributeFloatsOrDefault(node, "weights", {});

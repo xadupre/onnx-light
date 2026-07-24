@@ -168,9 +168,8 @@ double PixelAtND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
 // branches); on entry only dims < cur_dim are filled.
 template <typename T>
 double LinearInterpND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
-                      const onnx_kernels::Shape &spatial_strides,
-                      const std::vector<double> &x_coords, Padding pad,
-                      const std::vector<double> &lo, const std::vector<double> &hi,
+                      const onnx_kernels::Shape &spatial_strides, const double *x_coords,
+                      Padding pad, const std::vector<double> &lo, const std::vector<double> &hi,
                       int64_t *base_idx, size_t cur_dim) {
   const size_t r = spatial_dims.size();
   const double xc = x_coords[cur_dim];
@@ -195,9 +194,8 @@ double LinearInterpND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
 
 template <typename T>
 double CubicInterpND(const T *x_data, const onnx_kernels::Shape &spatial_dims,
-                     const onnx_kernels::Shape &spatial_strides,
-                     const std::vector<double> &x_coords, Padding pad,
-                     const std::vector<double> &lo, const std::vector<double> &hi,
+                     const onnx_kernels::Shape &spatial_strides, const double *x_coords,
+                     Padding pad, const std::vector<double> &lo, const std::vector<double> &hi,
                      int64_t *base_idx, size_t cur_dim) {
   const size_t r = spatial_dims.size();
   const double xc = x_coords[cur_dim];
@@ -330,7 +328,8 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
   detail::TemporaryTypedBuffer<int64_t> ox_buf(out_spatial_dims.size(), allocator,
                                                "kernel::GridSample");
   int64_t *ox = ox_buf.data();
-  std::vector<double> x_coords(r, 0.0);
+  detail::TemporaryTypedBuffer<double> x_coords_buf(r, allocator, "kernel::GridSample");
+  double *x_coords = x_coords_buf.data();
   detail::TemporaryTypedBuffer<int64_t> work_idx_buf(r, allocator, "kernel::GridSample");
   int64_t *work_idx = work_idx_buf.data();
 

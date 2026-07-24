@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
@@ -179,6 +180,19 @@ void OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor
     std::memcpy(output.mutable_bytes() + (base + k * inner_size) * static_cast<int64_t>(elem_size),
                 on_value, elem_size);
   }
+}
+
+void OneHot::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &indices = GetInput(node, 0, rt.tensors());
+  const Tensor &depth = GetInput(node, 1, rt.tensors());
+  const Tensor &values = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::OneHot::Attributes attrs;
+  attrs.axis = GetAttributeIntOrDefault(node, "axis", -1);
+  onnx_kernels::kernel::OneHot k(rt.kernel_ctx());
+  SetOutput(node, 0, k(indices, depth, values, attrs, &rt), rt);
 }
 
 } // namespace kernel

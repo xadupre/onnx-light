@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include "onnx_light_helpers.h"
@@ -870,6 +871,52 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   Tensor output = MakeOutputTensor(X.data_type, out_shape, output_n_bytes, allocator);
   ComputeResizeFromScales(X, scales_data, axes, attrs, output, allocator);
   return output;
+}
+
+void Resize::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1 || node.input_size() > 4), "RunNode: op '",
+                      node.op_type(), "' expects between 1 and 4 input(s), got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor *roi = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor *scales = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor *sizes = GetOptionalInput(node, 3, rt.tensors());
+  EXT_ENFORCE_INVALID(!((scales == nullptr) == (sizes == nullptr)),
+                      "RunNode: op 'Resize' requires exactly one of 'scales' or 'sizes' to be "
+                      "provided.");
+
+  onnx_kernels::kernel::Resize::Attributes attrs;
+  attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+  attrs.coordinate_transformation_mode = GetAttributeStringOrDefault(
+      node, "coordinate_transformation_mode", attrs.coordinate_transformation_mode);
+  attrs.nearest_mode = GetAttributeStringOrDefault(node, "nearest_mode", attrs.nearest_mode);
+  attrs.axes = GetAttributeShapeOrDefault(node, "axes", attrs.axes);
+  attrs.keep_aspect_ratio_policy =
+      GetAttributeStringOrDefault(node, "keep_aspect_ratio_policy", attrs.keep_aspect_ratio_policy);
+  attrs.cubic_coeff_a = GetAttributeFloatOrDefault(node, "cubic_coeff_a", attrs.cubic_coeff_a);
+  attrs.exclude_outside = GetAttributeIntOrDefault(node, "exclude_outside", attrs.exclude_outside);
+  attrs.antialias = GetAttributeIntOrDefault(node, "antialias", attrs.antialias);
+  attrs.extrapolation_value =
+      GetAttributeFloatOrDefault(node, "extrapolation_value", attrs.extrapolation_value);
+  if (roi != nullptr) {
+    EXT_ENFORCE_INVALID(!(roi->data_type != DataType::FLOAT),
+                        "RunNode: op 'Resize' 'roi' input must be a FLOAT tensor.");
+    EXT_ENFORCE_INVALID(!(roi->shape.size() != 1), "RunNode: op 'Resize' 'roi' input must be 1-D.");
+    const int64_t n = roi->shape[0];
+    attrs.roi.assign(static_cast<std::size_t>(n), 0.0f);
+    if (n > 0) {
+      std::memcpy(attrs.roi.data(), roi->bytes(), static_cast<std::size_t>(n) * sizeof(float));
+    }
+  }
+
+  onnx_kernels::kernel::Resize k(rt.kernel_ctx());
+  if (scales != nullptr) {
+    SetOutput(node, 0, k(x, *scales, attrs, &rt), rt);
+  } else {
+    SetOutput(node, 0, k.ResizeSizes(x, *sizes, attrs), rt);
+  }
 }
 
 } // namespace kernel

@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -184,6 +186,58 @@ ONNX_LIGHT_INSTANTIATE_CAST_MAP(std::string, int64_t);
 ONNX_LIGHT_INSTANTIATE_CAST_MAP(std::string, std::string);
 
 #undef ONNX_LIGHT_INSTANTIATE_CAST_MAP
+
+void CastMap::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const std::string map_input = node.input(0);
+
+  EXT_ENFORCE_INVALID(rt.HasMap(map_input), "RunNode: CastMap map input '", map_input,
+                      "' not found in the runtime context. Map-typed inputs "
+                      "must be stored via PutMap before executing the graph.");
+  const Map &cast_m = rt.GetMap(map_input);
+  const Tensor &x_keys = cast_m.keys;
+  const Tensor &x_values = cast_m.values;
+  EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)),
+                      "RunNode: CastMap keys must be an INT64 tensor.");
+  const std::span<const int64_t> keys = TensorSpan<int64_t>(x_keys);
+  const std::string cast_to = GetAttributeStringOrDefault(node, "cast_to", "TO_FLOAT");
+  const std::string map_form = GetAttributeStringOrDefault(node, "map_form", "DENSE");
+  const int64_t max_map = GetAttributeIntOrDefault(node, "max_map", 0);
+  EXT_ENFORCE_INVALID(!(cast_to != "TO_FLOAT" && cast_to != "TO_INT64" && cast_to != "TO_STRING"),
+                      "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
+                      "'TO_STRING'.");
+  onnx_kernels::kernel::CastMap cast_map(rt.kernel_ctx());
+  Tensor y;
+  switch (x_values.data_type) {
+  case static_cast<int32_t>(DataType::FLOAT): {
+    const std::span<const float> values = TensorSpan<float>(x_values);
+    if (cast_to == "TO_FLOAT") {
+      y = cast_map.operator()<float, float>(keys, values, cast_to, map_form, max_map);
+    } else if (cast_to == "TO_INT64") {
+      y = cast_map.operator()<float, int64_t>(keys, values, cast_to, map_form, max_map);
+    } else {
+      y = cast_map.operator()<float, std::string>(keys, values, cast_to, map_form, max_map);
+    }
+    break;
+  }
+  case static_cast<int32_t>(DataType::STRING): {
+    const std::vector<std::string> &values = x_values.AsStrings();
+    if (cast_to == "TO_FLOAT") {
+      y = cast_map.operator()<std::string, float>(keys, values, cast_to, map_form, max_map);
+    } else if (cast_to == "TO_INT64") {
+      y = cast_map.operator()<std::string, int64_t>(keys, values, cast_to, map_form, max_map);
+    } else {
+      y = cast_map.operator()<std::string, std::string>(keys, values, cast_to, map_form, max_map);
+    }
+    break;
+  }
+  default:
+    EXT_THROW_INVALID("RunNode: CastMap values must be a FLOAT or STRING tensor.");
+  }
+  SetOutput(node, 0, std::move(y), rt);
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

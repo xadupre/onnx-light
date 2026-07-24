@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_extensions/kernels/kernels/quantization/include_quantization_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -265,6 +266,23 @@ void QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const Ten
   EXT_ENFORCE_INVALID(y_s != 0.0f, kName, ": y_scale must be non-zero.");
 
   RunQLinearMatMul(a, a_zp, a_s, b, b_zp, b_s, y_s, y_zp, output);
+}
+
+void QLinearMatMul::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 8);
+  RequireOutputCount(node, 1);
+  const Tensor &a = GetInput(node, 0, rt.tensors());
+  const Tensor &a_scale = GetInput(node, 1, rt.tensors());
+  const Tensor &a_zero_point = GetInput(node, 2, rt.tensors());
+  const Tensor &b = GetInput(node, 3, rt.tensors());
+  const Tensor &b_scale = GetInput(node, 4, rt.tensors());
+  const Tensor &b_zero_point = GetInput(node, 5, rt.tensors());
+  const Tensor &y_scale = GetInput(node, 6, rt.tensors());
+  const Tensor &y_zero_point = GetInput(node, 7, rt.tensors());
+  onnx_kernels::kernel::QLinearMatMul k(rt.kernel_ctx());
+  SetOutput(node, 0, k(a, a_scale, a_zero_point, b, b_scale, b_zero_point, y_scale, y_zero_point),
+            rt);
 }
 
 } // namespace kernel

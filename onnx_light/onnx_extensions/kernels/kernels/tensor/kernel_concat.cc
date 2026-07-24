@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
@@ -111,6 +112,23 @@ void Concat::operator()(const Tensors &inputs, int64_t axis, Tensor &output) con
     }
     row_offset += block_bytes;
   }
+}
+
+void Concat::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  Tensors inputs;
+  inputs.reserve(node.input_size());
+  for (int i = 0; i < node.input_size(); ++i) {
+    inputs.push_back(GetInput(node, i, rt.tensors()));
+  }
+  const AttributeProto *axis_attr = FindAttribute(node, "axis");
+  EXT_ENFORCE_INVALID(axis_attr != nullptr,
+                      "RunNode: op 'Concat' is missing required attribute 'axis'.");
+  const int64_t axis = axis_attr->i();
+  onnx_kernels::kernel::Concat k(rt.kernel_ctx());
+  SetOutput(node, 0, k(inputs, axis, &rt), rt);
 }
 
 } // namespace kernel

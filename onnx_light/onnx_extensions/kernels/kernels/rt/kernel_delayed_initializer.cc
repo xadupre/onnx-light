@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/rt/include_rt_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstring>
 #include <filesystem>
@@ -129,6 +130,29 @@ void DelayedInitializer::LoadBytesInto(const Attributes &attrs, uint8_t *destina
   EXT_ENFORCE_INVALID(stream.gcount() == static_cast<std::streamsize>(byte_count),
                       "kernel::DelayedInitializer read failed for '", attrs.filename,
                       "': expected ", byte_count, " bytes, got ", stream.gcount(), ".");
+}
+
+void DelayedInitializer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 0);
+  RequireOutputCount(node, 1);
+  const AttributeProto *shape_attr = FindAttribute(node, "shape");
+  EXT_ENFORCE_INVALID(shape_attr != nullptr,
+                      "RunNode: op 'DelayedInitializer' is missing 'shape' INTS attribute.");
+  EXT_ENFORCE_INVALID(shape_attr->type() == AttributeProto::AttributeType::INTS,
+                      "RunNode: attribute 'shape' of op 'DelayedInitializer' must be INTS.");
+  onnx_kernels::kernel::DelayedInitializer::Attributes attrs;
+  attrs.shape.reserve(shape_attr->ints().size());
+  for (size_t i = 0; i < shape_attr->ints().size(); ++i) {
+    attrs.shape.push_back(shape_attr->ints()[i]);
+  }
+  attrs.dtype = static_cast<int32_t>(GetRequiredAttributeInt(node, "dtype"));
+  attrs.load_device = GetRequiredAttributeString(node, "load_device");
+  attrs.runtime_device = GetRequiredAttributeString(node, "runtime_device");
+  attrs.filename = GetRequiredAttributeString(node, "filename");
+  attrs.offset = GetRequiredAttributeInt(node, "offset");
+  onnx_kernels::kernel::DelayedInitializer kernel(rt.kernel_ctx(), std::move(attrs));
+  SetOutput(node, 0, kernel(&rt), rt);
 }
 
 } // namespace kernel

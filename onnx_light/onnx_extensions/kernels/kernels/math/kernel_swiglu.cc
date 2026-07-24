@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/elementwise_helpers.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -75,6 +76,16 @@ void SwiGLU::operator()(const Tensor &a, const Tensor &b, float alpha, Tensor &o
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", a.data_type, kSupportedTypesMsg);
   }
+}
+
+void SwiGLU::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
+  const Tensor &a = GetInput(node, 0, rt.tensors());
+  const Tensor &b = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(a, b, alpha, &rt), rt);
 }
 
 } // namespace kernel

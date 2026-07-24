@@ -6,8 +6,10 @@
 
 #include "onnx_core/runtime/float16_promote.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -188,6 +190,16 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
       py[base + i] = px[base + i] * inv_rms * ps[scale_index[static_cast<size_t>(i)]];
     }
   }
+}
+
+void RMSNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::RMSNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scale, GetNormAxis(node), GetEpsilon(node), &rt), rt);
 }
 
 } // namespace kernel

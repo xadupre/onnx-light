@@ -7,6 +7,7 @@
 
 #include "onnx_core/runtime/float16_promote.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
@@ -214,6 +215,15 @@ void MatMul::operator()(const Tensor &a, const Tensor &b, Tensor &output) const 
     EXT_THROW_INVALID(kMatMulName, ": unsupported data type ", a.data_type,
                       kSupportedMatMulTypesMsg);
   }
+}
+
+void MatMul::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
 }
 
 } // namespace kernel

@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -94,6 +95,16 @@ void BitCast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
   // Byte-wise copy keeps the bit pattern intact on little-endian hosts
   // (the only ABI exercised by the backend test library).
   std::memcpy(output.mutable_bytes(), x.bytes(), x.size_bytes());
+}
+
+void BitCast::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
+  EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type(), " requires INT attribute 'to'.");
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, to, &rt), rt);
 }
 
 } // namespace kernel

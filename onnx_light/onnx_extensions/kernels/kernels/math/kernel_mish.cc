@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <stdexcept>
@@ -66,6 +67,14 @@ Tensor Mish::operator()(const Tensor &x, RuntimeContext *rt) const {
 void Mish::operator()(const Tensor &x, Tensor &output) const {
   ValidateOutput(x, output);
   Dispatch(x, output);
+}
+
+void Mish::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
 } // namespace kernel

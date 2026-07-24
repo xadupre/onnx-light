@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -94,6 +96,17 @@ void InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, con
       }
     }
   }
+}
+
+void InstanceNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor &bias = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::InstanceNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scale, bias, GetEpsilon(node), &rt), rt);
 }
 
 } // namespace kernel

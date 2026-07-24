@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/temporary_buffer.h"
 #include "onnx_extensions/kernels/kernels/quantization/include_quantization_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
@@ -629,6 +630,25 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_
   Tensor zero_zero_point =
       MakeOutputTensor(x.data_type, x_scale.shape, zero_zero_point_n_bytes, allocator);
   (*this)(x, x_scale, zero_zero_point, axis, output);
+}
+
+void DequantizeLinear::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 2);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 3),
+                      "RunNode: op 'DequantizeLinear' expects 2 or 3 inputs, got ",
+                      node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x_scale = GetInput(node, 1, rt.tensors());
+  const Tensor *x_zero_point = GetOptionalInput(node, 2, rt.tensors());
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
+  onnx_kernels::kernel::DequantizeLinear k(rt.kernel_ctx());
+  if (x_zero_point != nullptr) {
+    SetOutput(node, 0, k(x, x_scale, *x_zero_point, axis, &rt), rt);
+  } else {
+    SetOutput(node, 0, k(x, x_scale, axis, &rt), rt);
+  }
 }
 
 } // namespace kernel

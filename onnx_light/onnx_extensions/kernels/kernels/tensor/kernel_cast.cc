@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/cast_sub_byte.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -620,6 +621,18 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
   for (int64_t i = 0; i < n; ++i) {
     StoreFromDouble(output, i, LoadAsDouble(x, i));
   }
+}
+
+void Cast::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
+  EXT_ENFORCE_INVALID(!(to < 0), "RunNode: Cast requires INT attribute 'to'.");
+  const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
+  onnx_kernels::kernel::Cast kernel(rt.kernel_ctx());
+  SetOutput(node, 0, kernel(x, to, saturate, &rt), rt);
 }
 
 } // namespace kernel

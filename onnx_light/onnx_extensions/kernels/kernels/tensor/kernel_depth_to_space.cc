@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
@@ -101,6 +102,23 @@ void DepthToSpace::operator()(const Tensor &input, const Attributes &attrs, Tens
       }
     }
   }
+}
+
+void DepthToSpace::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  onnx_kernels::kernel::DepthToSpace::Attributes attrs;
+  const AttributeProto *blocksize_attr = FindAttribute(node, "blocksize");
+  EXT_ENFORCE_INVALID(blocksize_attr != nullptr,
+                      "RunNode: DepthToSpace requires attribute 'blocksize'.");
+  EXT_ENFORCE_INVALID(!(blocksize_attr->type() != AttributeProto::AttributeType::INT),
+                      "RunNode: DepthToSpace attribute 'blocksize' must be INT.");
+  attrs.blocksize = blocksize_attr->i();
+  attrs.mode = GetAttributeStringOrDefault(node, "mode", "DCR");
+  onnx_kernels::kernel::DepthToSpace kernel(rt.kernel_ctx());
+  SetOutput(node, 0, kernel(input, attrs, &rt), rt);
 }
 
 } // namespace kernel

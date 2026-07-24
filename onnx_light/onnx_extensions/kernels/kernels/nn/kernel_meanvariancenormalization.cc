@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -159,6 +160,16 @@ Tensor MeanVarianceNormalization::operator()(const Tensor &x, const Shape &axes,
 void MeanVarianceNormalization::operator()(const Tensor &x, Tensor &output,
                                            const Shape &axes) const {
   DispatchMvn(x, output, axes, nullptr);
+}
+
+void MeanVarianceNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::vector<int64_t> axes = GetAttributeIntsOrDefault(node, "axes", {0, 2, 3});
+  onnx_kernels::kernel::MeanVarianceNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, axes, &rt), rt);
 }
 
 } // namespace kernel

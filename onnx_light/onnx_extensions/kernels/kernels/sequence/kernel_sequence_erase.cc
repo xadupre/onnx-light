@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -48,6 +49,18 @@ Sequence SequenceErase::operator()(const Sequence &input_sequence, const Tensor 
     }
   }
   return Sequence(input_sequence.name, input_sequence.elem_type, std::move(out_values));
+}
+
+void SequenceErase::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
+                      "' expects 1 or 2 inputs, got ", node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  const Tensor *position = GetOptionalInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::SequenceErase k(rt.kernel_ctx());
+  SetOutputSequence(node, 0, k(input_sequence, position), rt);
 }
 
 } // namespace kernel

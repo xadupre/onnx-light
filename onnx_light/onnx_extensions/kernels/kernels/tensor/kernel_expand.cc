@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstring>
@@ -144,6 +145,16 @@ void Expand::operator()(const Tensor &input, const Tensor &shape, Tensor &output
                 input.bytes() + static_cast<std::size_t>(in_idx) * layout.elem_size,
                 layout.elem_size);
   }
+}
+
+void Expand::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &shape = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::Expand k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input, shape, &rt), rt);
 }
 
 } // namespace kernel

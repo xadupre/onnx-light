@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/text/include_text_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cctype>
@@ -150,6 +151,23 @@ void StringNormalizer::operator()(const Tensor &x, CaseChangeAction case_change_
                       "kernel::StringNormalizer preallocated output string_data has unexpected "
                       "size.");
   output.string_data = std::move(computed.string_data);
+}
+
+void StringNormalizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string case_change_action_attr =
+      GetAttributeStringOrDefault(node, "case_change_action", "NONE");
+  const bool is_case_sensitive = GetAttributeIntOrDefault(node, "is_case_sensitive", 0) != 0;
+  const std::vector<std::string> stopwords = GetAttributeStringsOrDefault(node, "stopwords", {});
+  onnx_kernels::kernel::StringNormalizer k(rt.kernel_ctx());
+  SetOutput(
+      node, 0,
+      k(x, onnx_kernels::kernel::StringNormalizer::ParseCaseChangeAction(case_change_action_attr),
+        is_case_sensitive, stopwords),
+      rt);
 }
 
 } // namespace kernel

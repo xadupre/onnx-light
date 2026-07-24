@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstring>
@@ -193,6 +194,20 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
                   updates.bytes() + static_cast<std::size_t>(u_idx) * elem_size, elem_size);
     }
   }
+}
+
+void ScatterElements::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &indices = GetInput(node, 1, rt.tensors());
+  const Tensor &updates = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::ScatterElements::Attributes attrs;
+  attrs.axis = GetAttributeIntOrDefault(node, "axis", 0);
+  attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
+  onnx_kernels::kernel::ScatterElements k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
 }
 
 } // namespace kernel

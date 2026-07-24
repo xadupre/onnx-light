@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
@@ -224,6 +225,66 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
   }
 
   return std::pair<Tensor, Tensor>(std::move(y), std::move(y_h));
+}
+
+void RNN::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '",
+                      node.op_type(), "' expects between 3 and 6 input(s), got ", node.input_size(),
+                      ".");
+  EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '",
+                      node.op_type(), "' expects 1 or 2 output(s), got ", node.output_size(), ".");
+
+  // Unsupported attributes: only the default ``forward`` direction
+  // with the default ``Tanh`` activation and no ``clip`` are
+  // implemented; ``layout=0`` and ``layout=1`` are both supported.
+  const std::string direction = GetAttributeStringOrDefault(node, "direction", "forward");
+  EXT_ENFORCE_INVALID(direction == "forward",
+                      "RunNode: op 'RNN' only supports direction='forward', got '", direction,
+                      "'.");
+  if (const AttributeProto *activations = FindAttribute(node, "activations");
+      activations != nullptr) {
+    const std::vector<std::string> values = GetAttributeStringsOrDefault(node, "activations", {});
+    EXT_ENFORCE_INVALID(!(values.size() != 1 || values[0] != "Tanh"),
+                        "RunNode: op 'RNN' only supports the default activations=['Tanh'].");
+  }
+  EXT_ENFORCE_INVALID(!(FindAttribute(node, "activation_alpha") != nullptr ||
+                        FindAttribute(node, "activation_beta") != nullptr),
+                      "RunNode: op 'RNN' does not support 'activation_alpha'/'activation_beta'.");
+  EXT_ENFORCE_INVALID(FindAttribute(node, "clip") == nullptr,
+                      "RunNode: op 'RNN' does not support the 'clip' attribute.");
+  const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
+
+  // ``sequence_lens`` (input #4) is not supported: it requires
+  // per-batch sequence handling that the FLOAT kernel does not
+  // implement.
+  const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+  EXT_ENFORCE_INVALID(sequence_lens == nullptr,
+                      "RunNode: op 'RNN' does not support the optional 'sequence_lens' input.");
+
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &w = GetInput(node, 1, rt.tensors());
+  const Tensor &r = GetInput(node, 2, rt.tensors());
+  const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
+
+  onnx_kernels::kernel::RNN kernel(rt.kernel_ctx());
+  auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
+                         initial_h != nullptr ? *initial_h : Tensor{}, layout);
+
+  auto set_optional_output = [&node, &rt](int index, Tensor output) {
+    if (index >= node.output_size()) {
+      return;
+    }
+    const std::string &name = node.output(index);
+    if (name.empty()) {
+      return;
+    }
+    output.name = name;
+    rt.Put(name, std::move(output), RuntimeEventKind::kIntermediate);
+  };
+  set_optional_output(0, std::move(y));
+  set_optional_output(1, std::move(y_h));
 }
 
 } // namespace kernel

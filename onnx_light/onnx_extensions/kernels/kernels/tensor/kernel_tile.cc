@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
@@ -120,6 +121,16 @@ void Tile::operator()(const Tensor &input, const Tensor &repeats, Tensor &output
     std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(out_idx) * elem_size,
                 input.bytes() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
   }
+}
+
+void Tile::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &repeats = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::Tile k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input, repeats, &rt), rt);
 }
 
 } // namespace kernel

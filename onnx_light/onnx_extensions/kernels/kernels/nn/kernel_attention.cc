@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/float16_promote.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -566,6 +567,55 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
   }
   return ComputeAttentionRank4(Q, K, V, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen,
                                allocator);
+}
+
+void Attention::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 7), "RunNode: op '",
+                      node.op_type(), "' expects between 3 and 7 input(s), got ", node.input_size(),
+                      ".");
+  EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 4), "RunNode: op '",
+                      node.op_type(), "' expects between 1 and 4 output(s), got ",
+                      node.output_size(), ".");
+  const Tensor &q = GetInput(node, 0, rt.tensors());
+  const Tensor &k = GetInput(node, 1, rt.tensors());
+  const Tensor &v = GetInput(node, 2, rt.tensors());
+  const Tensor *attn_mask = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor *past_key = GetOptionalInput(node, 4, rt.tensors());
+  const Tensor *past_value = GetOptionalInput(node, 5, rt.tensors());
+  const Tensor *nonpad_kv_seqlen = GetOptionalInput(node, 6, rt.tensors());
+
+  onnx_kernels::kernel::Attention::Attributes attrs;
+  if (FindAttribute(node, "scale") != nullptr) {
+    attrs.has_scale = true;
+    attrs.scale = GetAttributeFloatOrDefault(node, "scale", 0.0f);
+  }
+  attrs.is_causal = GetAttributeIntOrDefault(node, "is_causal", 0) != 0;
+  attrs.softcap = GetAttributeFloatOrDefault(node, "softcap", 0.0f);
+  attrs.qk_matmul_output_mode =
+      static_cast<int>(GetAttributeIntOrDefault(node, "qk_matmul_output_mode", 0));
+  attrs.q_num_heads = GetAttributeIntOrDefault(node, "q_num_heads", 0);
+  attrs.kv_num_heads = GetAttributeIntOrDefault(node, "kv_num_heads", 0);
+
+  onnx_kernels::kernel::Attention kernel(rt.kernel_ctx());
+  onnx_kernels::kernel::Attention::Result result =
+      kernel(q, k, v, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen);
+  SetOutput(node, 0, std::move(result.Y), rt);
+
+  auto set_optional_output = [&node, &rt](int index, Tensor output) {
+    if (index >= node.output_size()) {
+      return;
+    }
+    const std::string &name = node.output(index);
+    if (name.empty()) {
+      return;
+    }
+    output.name = name;
+    rt.Put(name, std::move(output), RuntimeEventKind::kIntermediate);
+  };
+  set_optional_output(1, std::move(result.present_key));
+  set_optional_output(2, std::move(result.present_value));
+  set_optional_output(3, std::move(result.qk_matmul_output));
 }
 
 } // namespace kernel

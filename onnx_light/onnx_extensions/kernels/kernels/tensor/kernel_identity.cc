@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -40,6 +41,20 @@ void Identity::operator()(const Tensor &input, Tensor &output) const {
     if (input.size_bytes() != 0) {
       std::memcpy(output.mutable_bytes(), input.bytes(), input.size_bytes());
     }
+  }
+}
+
+void Identity::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const std::string input_name = node.input(0);
+  if (rt.HasSequence(input_name)) {
+    SetOutputSequence(node, 0, rt.GetSequence(input_name), rt);
+  } else {
+    const Tensor &x = GetInput(node, 0, rt.tensors());
+    onnx_kernels::kernel::Identity k(rt.kernel_ctx());
+    SetOutput(node, 0, k(x, &rt), rt);
   }
 }
 

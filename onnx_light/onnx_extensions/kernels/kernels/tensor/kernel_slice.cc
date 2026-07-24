@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
@@ -217,6 +218,21 @@ void Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &e
                 data.bytes() + static_cast<std::size_t>(in_idx) * layout.elem_size,
                 layout.elem_size);
   }
+}
+
+void Slice::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 3);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 5), "RunNode: op '", node.op_type(),
+                      "' expects between 3 and 5 input(s), got ", node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &starts = GetInput(node, 1, rt.tensors());
+  const Tensor &ends = GetInput(node, 2, rt.tensors());
+  const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor *steps = GetOptionalInput(node, 4, rt.tensors());
+  onnx_kernels::kernel::Slice k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, starts, ends, axes, steps, &rt), rt);
 }
 
 } // namespace kernel

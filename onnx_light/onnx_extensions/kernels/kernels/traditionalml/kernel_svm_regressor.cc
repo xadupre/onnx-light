@@ -6,7 +6,9 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/kernel_svm_common.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <vector>
 
@@ -59,6 +61,22 @@ ONNX_LIGHT_INSTANTIATE_SVM_REGRESSOR(int64_t);
 ONNX_LIGHT_INSTANTIATE_SVM_REGRESSOR(int32_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_SVM_REGRESSOR
+
+void SVMRegressor::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const SVMCommonAttrs a = ParseSVMCommonAttrs(node, "SVMRegressor");
+  onnx_kernels::kernel::SVMRegressor svm(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "SVMRegressor", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                      a.kernel_type.c_str(), a.gamma, a.coef0, a.degree);
+  });
+  SetOutput(node, 0, std::move(y), rt);
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

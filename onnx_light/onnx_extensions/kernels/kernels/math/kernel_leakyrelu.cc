@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -61,6 +62,15 @@ Tensor LeakyRelu::operator()(const Tensor &x, float alpha, RuntimeContext *rt) c
 void LeakyRelu::operator()(const Tensor &x, float alpha, Tensor &output) const {
   ValidateOutput(x, output);
   Dispatch(x, alpha, output);
+}
+
+void LeakyRelu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.01f);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, alpha, &rt), rt);
 }
 
 } // namespace kernel

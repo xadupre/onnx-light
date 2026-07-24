@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/elementwise_helpers.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
@@ -143,6 +144,18 @@ void Sum::operator()(const Tensors &inputs, Tensor &output) const {
     EXT_THROW_INVALID(kSumName, ": unsupported data type ", inputs[0].data_type,
                       kSupportedSumTypesMsg);
   }
+}
+
+void Sum::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  Tensors inputs;
+  inputs.reserve(node.input_size());
+  for (int i = 0; i < node.input_size(); ++i) {
+    inputs.push_back(GetInput(node, i, rt.tensors()));
+  }
+  SetOutput(node, 0, (*this)(inputs, &rt), rt);
 }
 
 } // namespace kernel

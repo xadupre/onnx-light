@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -206,6 +207,17 @@ void Range::operator()(const Tensor &start, const Tensor &limit, const Tensor &d
     EXT_THROW_INVALID("unsupported data type ", start.data_type, ", ",
                       "kernel::Range: unsupported input dtype.");
   }
+}
+
+void Range::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &start = GetInput(node, 0, rt.tensors());
+  const Tensor &limit = GetInput(node, 1, rt.tensors());
+  const Tensor &delta = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::Range k(rt.kernel_ctx());
+  SetOutput(node, 0, k(start, limit, delta, &rt), rt);
 }
 
 } // namespace kernel

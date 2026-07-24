@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
@@ -117,6 +118,17 @@ void Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowz
   EXT_ENFORCE_INVALID(output.size_bytes() == data.size_bytes(),
                       "kernel::Reshape: preallocated output byte-size mismatch.");
   std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
+}
+
+void Reshape::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &shape = GetInput(node, 1, rt.tensors());
+  const int64_t allowzero = GetAttributeIntOrDefault(node, "allowzero", 0);
+  onnx_kernels::kernel::Reshape k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, shape, allowzero, &rt), rt);
 }
 
 } // namespace kernel

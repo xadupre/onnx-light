@@ -5,7 +5,10 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 
@@ -48,6 +51,11 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
                       "kernel::RNN: R must have shape [1, hidden_size, hidden_size] (single "
                       "forward direction only).");
 
+  // Scratch and result buffers are drawn from the runtime allocator (when one
+  // is attached) so no storage is acquired outside the runtime context; they
+  // fall back to inline ``std::vector`` storage otherwise.
+  RawBufferAllocator *allocator = rt != nullptr ? rt->allocator() : nullptr;
+
   // ``layout == 1`` permutes batch and time/direction axes on a subset
   // of inputs and outputs; the time-major kernel body below stays as
   // is. ``num_directions`` is always 1 (only ``forward`` is implemented)
@@ -71,8 +79,8 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
         }
       }
     }
-    x_storage = Tensor::FromFloat("", {seq_length, batch_size, input_size}, std::move(x_data),
-                                  ctx_.allocator);
+    x_storage =
+        Tensor::FromFloat("", {seq_length, batch_size, input_size}, std::move(x_data), allocator);
     x_p = &x_storage;
 
     if (!(initial_h_in.shape.empty() && initial_h_in.size_bytes() == 0)) {
@@ -83,7 +91,7 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
           "", {1, initial_h_in.shape[0], initial_h_in.shape[2]},
           std::vector<float>(initial_h_in.AsFloat(),
                              initial_h_in.AsFloat() + (initial_h_in.size_bytes() / sizeof(float))),
-          ctx_.allocator);
+          allocator);
       initial_h_p = &initial_h_storage;
     }
   }
@@ -118,7 +126,12 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
   const float *pr = r.AsFloat();
 
   // Per-hidden bias = Wb + Rb so we add it once per time step.
-  std::vector<float> bias(static_cast<size_t>(hidden_size), 0.0f);
+  const std::size_t hidden_count = static_cast<std::size_t>(hidden_size);
+  detail::TemporaryTypedBuffer<float> bias_buf(hidden_count, allocator, "kernel::RNN bias");
+  float *bias = bias_buf.data();
+  // Allocator-backed buffers are not guaranteed zeroed; the bias is read for
+  // every step even when ``B`` is absent, so zero-fill explicitly.
+  std::fill(bias, bias + hidden_count, 0.0f);
   if (p_b != nullptr) {
     for (int64_t h = 0; h < hidden_size; ++h) {
       bias[static_cast<size_t>(h)] = p_b[h] + p_b[hidden_size + h];
@@ -130,7 +143,6 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
   const onnx_kernels::Shape y_h_shape{1, batch_size, hidden_size};
   const size_t y_n_bytes =
       static_cast<size_t>(seq_length * batch_size * hidden_size) * sizeof(float);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, allocator);
   const size_t y_h_n_bytes = static_cast<size_t>(batch_size * hidden_size) * sizeof(float);
   Tensor y_h =
@@ -138,14 +150,20 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
   float *py = y.AsFloat();
   float *py_h = y_h.AsFloat();
 
-  // Working buffer for H_{t-1} and H_t.
-  std::vector<float> h_prev(static_cast<size_t>(batch_size * hidden_size), 0.0f);
+  // Working buffers for H_{t-1} and H_t.
+  const std::size_t state_count = static_cast<std::size_t>(batch_size * hidden_size);
+  detail::TemporaryTypedBuffer<float> h_prev_buf(state_count, allocator, "kernel::RNN h_prev");
+  detail::TemporaryTypedBuffer<float> h_curr_buf(state_count, allocator, "kernel::RNN h_curr");
+  float *h_prev = h_prev_buf.data();
+  float *h_curr = h_curr_buf.data();
+  // H_0 defaults to zero; allocator-backed storage is not guaranteed zeroed, so
+  // fill before optionally copying in the provided initial state.
+  std::fill(h_prev, h_prev + state_count, 0.0f);
   if (p_initial_h != nullptr) {
     for (int64_t i = 0; i < batch_size * hidden_size; ++i) {
       h_prev[static_cast<size_t>(i)] = p_initial_h[i];
     }
   }
-  std::vector<float> h_curr(static_cast<size_t>(batch_size * hidden_size), 0.0f);
 
   for (int64_t t = 0; t < seq_length; ++t) {
     const float *x_t = px + t * batch_size * input_size;
@@ -153,8 +171,8 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
     // H_{t-1} @ R^T plus the per-unit bias, then apply tanh.
     for (int64_t n = 0; n < batch_size; ++n) {
       const float *x_row = x_t + n * input_size;
-      const float *h_row = h_prev.data() + n * hidden_size;
-      float *out_row = h_curr.data() + n * hidden_size;
+      const float *h_row = h_prev + n * hidden_size;
+      float *out_row = h_curr + n * hidden_size;
       for (int64_t h = 0; h < hidden_size; ++h) {
         const float *w_row = pw + h * input_size;
         const float *r_row = pr + h * hidden_size;
@@ -174,7 +192,7 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
     for (int64_t i = 0; i < batch_size * hidden_size; ++i) {
       y_t[i] = h_curr[static_cast<size_t>(i)];
     }
-    h_prev.swap(h_curr);
+    std::swap(h_prev, h_curr);
   }
 
   // Y_h is the last time step of Y (which is currently in h_prev after the
@@ -198,11 +216,11 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
       }
     }
     y = Tensor::FromFloat("", {batch_size, seq_length, 1, hidden_size}, std::move(y_perm),
-                          ctx_.allocator);
+                          allocator);
     y_h = Tensor::FromFloat(
         "", {batch_size, 1, hidden_size},
         std::vector<float>(y_h.AsFloat(), y_h.AsFloat() + (y_h.size_bytes() / sizeof(float))),
-        ctx_.allocator);
+        allocator);
   }
 
   return std::pair<Tensor, Tensor>(std::move(y), std::move(y_h));

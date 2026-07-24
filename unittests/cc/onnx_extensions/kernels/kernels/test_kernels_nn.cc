@@ -783,7 +783,58 @@ TEST(KernelClass, LSTMUsesAllocatorForScratchBuffers) {
   }
 }
 
-// ---- Attention -----------------------------------------------------------
+TEST(KernelClass, LSTMLayout1AllocatorMatchesFallback) {
+  // ``layout == 1`` permutes the X/Y batch and time axes and reshapes the
+  // initial/final states through allocator-backed scratch tensors; the
+  // allocator run must match the inline-storage baseline bit-for-bit.
+  constexpr int64_t kSeqLength = 2;
+  constexpr int64_t kBatch = 3;
+  constexpr int64_t kInput = 2;
+  constexpr int64_t kHidden = 3;
+  constexpr int64_t kNumGates = 4;
+  constexpr float kWeightScale = 0.1f;
+
+  const KernelContext ctx{DefaultOpset(22)};
+  LSTM lstm{ctx};
+
+  // layout=1 X is [batch, seq, input]; initial states are
+  // [batch, num_directions=1, hidden].
+  std::vector<float> x_data(static_cast<size_t>(kBatch * kSeqLength * kInput));
+  for (size_t i = 0; i < x_data.size(); ++i) {
+    x_data[i] = static_cast<float>(i + 1);
+  }
+  std::vector<float> w_data(static_cast<size_t>(kNumGates * kHidden * kInput), kWeightScale);
+  std::vector<float> r_data(static_cast<size_t>(kNumGates * kHidden * kHidden), kWeightScale);
+  std::vector<float> init_data(static_cast<size_t>(kBatch * kHidden), 0.2f);
+  Tensor x = Tensor::FromFloat("", {kBatch, kSeqLength, kInput}, x_data);
+  Tensor w = Tensor::FromFloat("", {1, kNumGates * kHidden, kInput}, w_data);
+  Tensor r = Tensor::FromFloat("", {1, kNumGates * kHidden, kHidden}, r_data);
+  Tensor initial_h = Tensor::FromFloat("", {kBatch, 1, kHidden}, init_data);
+  Tensor initial_c = Tensor::FromFloat("", {kBatch, 1, kHidden}, init_data);
+
+  // Reference result computed without an allocator (inline std::vector storage).
+  auto [y_ref, y_h_ref] = lstm(x, w, r, Tensor{}, initial_h, initial_c, Tensor{}, /*layout=*/1);
+
+  constexpr size_t kAllocatorSlotCapacity = 32;
+  SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  RuntimeContext rt;
+  rt.set_allocator(&alloc);
+  auto [y, y_h] = lstm(x, w, r, Tensor{}, initial_h, initial_c, Tensor{}, /*layout=*/1, &rt);
+
+  ASSERT_TRUE(y.has_allocation());
+  ASSERT_TRUE(y_h.has_allocation());
+  ASSERT_EQ(y.shape, y_ref.shape);
+  ASSERT_EQ(y_h.shape, y_h_ref.shape);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{kBatch, kSeqLength, 1, kHidden}));
+  ASSERT_EQ(y_h.shape, (std::vector<int64_t>{kBatch, 1, kHidden}));
+  ASSERT_EQ(y.element_count(), y_ref.element_count());
+  for (int64_t i = 0; i < y.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y.AsFloat()[i], y_ref.AsFloat()[i]);
+  }
+  for (int64_t i = 0; i < y_h.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y_h.AsFloat()[i], y_h_ref.AsFloat()[i]);
+  }
+}
 
 namespace {
 

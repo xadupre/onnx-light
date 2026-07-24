@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
 #include <cstdint>
@@ -114,8 +115,9 @@ template <typename ThresholdT>
 inline ClassicNodeMap BuildClassicNodeMap(
     const std::vector<int64_t> &nodes_treeids, const std::vector<int64_t> &nodes_nodeids,
     const std::vector<int64_t> &nodes_featureids, const std::vector<ThresholdT> &nodes_values,
-    const std::vector<std::string> &nodes_modes, const std::vector<int64_t> &nodes_truenodeids,
-    const std::vector<int64_t> &nodes_falsenodeids, const std::vector<int64_t> &nodes_missing) {
+    const ::onnx_light::core::runtime::ParamStrings &nodes_modes,
+    const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
+    const std::vector<int64_t> &nodes_missing) {
   const size_t n_nodes = nodes_treeids.size();
   EXT_ENFORCE_INVALID(nodes_nodeids.size() == n_nodes && nodes_featureids.size() == n_nodes &&
                           nodes_values.size() == n_nodes && nodes_modes.size() == n_nodes &&

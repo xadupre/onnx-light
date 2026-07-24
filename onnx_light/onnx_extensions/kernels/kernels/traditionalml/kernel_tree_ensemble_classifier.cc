@@ -87,7 +87,7 @@ std::vector<int64_t> DistinctTreeIds(const std::vector<int64_t> &nodes_treeids) 
 TreeEnsembleClassifier::TreeEnsembleClassifier(
     const KernelContext &ctx, const std::vector<int64_t> &nodes_treeids,
     const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
-    const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
+    const std::vector<float> &nodes_values, const ParamStrings &nodes_modes,
     const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
     const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &class_treeids,
     const std::vector<int64_t> &class_nodeids, const std::vector<int64_t> &class_ids,
@@ -139,9 +139,10 @@ TreeEnsembleClassifier::operator()(const Tensor &x, const std::vector<int64_t> &
 }
 
 template <typename T>
-std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
-    const Tensor &x, const std::vector<std::string> &classlabels_strings,
-    const std::vector<float> &base_values, const std::string &post_transform) const {
+std::pair<Tensor, Tensor>
+TreeEnsembleClassifier::operator()(const Tensor &x, const ParamStrings &classlabels_strings,
+                                   const std::vector<float> &base_values,
+                                   const std::string &post_transform) const {
   EXT_ENFORCE_INVALID(!classlabels_strings.empty(),
                       "kernel::TreeEnsembleClassifier: classlabels_strings must not be empty.");
 
@@ -174,8 +175,7 @@ std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()(
       const Tensor &, const std::vector<int64_t> &, const std::vector<float> &,                    \
       const std::string &) const;                                                                  \
   template std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()<T>(                        \
-      const Tensor &, const std::vector<std::string> &, const std::vector<float> &,                \
-      const std::string &) const
+      const Tensor &, const ParamStrings &, const std::vector<float> &, const std::string &) const
 
 ONNX_LIGHT_INSTANTIATE_TREE_CLASSIFIER(float);
 ONNX_LIGHT_INSTANTIATE_TREE_CLASSIFIER(double);

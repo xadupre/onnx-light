@@ -73,7 +73,7 @@ Tensor ZipMap::operator()(const Tensor &x, const std::vector<int64_t> &class_lab
   return ComputeZipMapOutput(x, class_labels, ctx_.allocator);
 }
 
-Tensor ZipMap::operator()(const Tensor &x, const std::vector<std::string> &class_labels,
+Tensor ZipMap::operator()(const Tensor &x, const ParamStrings &class_labels,
                           RuntimeContext *rt) const {
   return ComputeZipMapOutput(x, class_labels, ctx_.allocator);
 }
@@ -83,8 +83,7 @@ void ZipMap::operator()(const Tensor &x, const std::vector<int64_t> &class_label
   ComputeZipMapOutput(x, class_labels, output);
 }
 
-void ZipMap::operator()(const Tensor &x, const std::vector<std::string> &class_labels,
-                        Tensor &output) const {
+void ZipMap::operator()(const Tensor &x, const ParamStrings &class_labels, Tensor &output) const {
   ComputeZipMapOutput(x, class_labels, output);
 }
 

@@ -97,8 +97,8 @@ std::pair<Tensor, Tensor>
 SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vectors,
                           const std::vector<float> &coefficients, const std::vector<float> &rho,
                           const std::vector<int64_t> &vectors_per_class,
-                          const std::vector<std::string> &class_labels, const char *kernel_type,
-                          float gamma, float coef0, float degree) const {
+                          const ParamStrings &class_labels, const char *kernel_type, float gamma,
+                          float coef0, float degree) const {
   int64_t sample_count = 0;
   int64_t feature_count = 0;
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
@@ -129,7 +129,7 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
       const char *, float, float, float) const;                                                    \
   template std::pair<Tensor, Tensor> SVMClassifier::operator()<T>(                                 \
       const Tensor &, const std::vector<float> &, const std::vector<float> &,                      \
-      const std::vector<float> &, const std::vector<int64_t> &, const std::vector<std::string> &,  \
+      const std::vector<float> &, const std::vector<int64_t> &, const ParamStrings &,              \
       const char *, float, float, float) const
 
 ONNX_LIGHT_INSTANTIATE_SVM_CLASSIFIER(float);

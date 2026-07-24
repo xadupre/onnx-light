@@ -11,8 +11,8 @@
  *
  * A concrete operator kernel (``kernel::Abs``, ``kernel::Add``, ...) only knows
  * how to compute an output ``Tensor`` from already-materialised input
- * ``Tensor``s. Turning such a kernel into a
- * :cpp:type:`core::runtime::KernelInvokeFn` — the closure the runtime invokes
+ * ``Tensor``s. Turning such a kernel into a runtime-invocable
+ * :cpp:class:`core::runtime::Kernel` — whose :cpp:func:`Run` the runtime calls
  * per node — requires reading the node's inputs from the
  * :cpp:class:`RuntimeContext`, calling the concrete kernel and storing the
  * produced output back. :cpp:class:`UnaryKernel` and :cpp:class:`BinaryKernel`
@@ -28,12 +28,14 @@
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_proto/onnx.h"
 
+#include <memory>
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 
 using ::onnx_light::core::runtime::GetInput;
+using ::onnx_light::core::runtime::Kernel;
 using ::onnx_light::core::runtime::KernelContext;
-using ::onnx_light::core::runtime::KernelInvokeFn;
 using ::onnx_light::core::runtime::NodeKernelFn;
 using ::onnx_light::core::runtime::RequireInputCount;
 using ::onnx_light::core::runtime::RequireOutputCount;
@@ -44,28 +46,28 @@ using ::onnx_light::core::runtime::Tensor;
 /**
  * Wraps a concrete element-wise unary kernel ``KernelT`` (whose call operator
  * has the shape ``Tensor operator()(const Tensor &x, RuntimeContext *rt)``)
- * into a runtime-invocable kernel. The wrapper owns one ``KernelT`` instance
- * constructed from the node's :cpp:class:`KernelContext`; ``operator()`` reads
- * the single input from ``rt`` and writes the produced output back.
+ * into a runtime-invocable :cpp:class:`Kernel`. The wrapper owns one
+ * ``KernelT`` instance constructed from the node's :cpp:class:`KernelContext`;
+ * :cpp:func:`Run` reads the single input from ``rt`` and writes the produced
+ * output back.
  */
-template <class KernelT> class UnaryKernel {
+template <class KernelT> class UnaryKernel : public Kernel {
 public:
-  explicit UnaryKernel(const KernelContext &ctx) : kernel_(ctx) {}
+  UnaryKernel(const NodeProto &node, const KernelContext &ctx) : Kernel(node), kernel_(ctx) {}
 
   /// Reads input 0 from ``rt``, invokes the concrete kernel and stores output 0.
-  void operator()(const NodeProto &node, RuntimeContext &rt) {
-    const Tensor &x = GetInput(node, 0, rt.tensors());
-    SetOutput(node, 0, kernel_(x, &rt), rt);
+  void Run(RuntimeContext &rt) override {
+    const Tensor &x = GetInput(node_, 0, rt.tensors());
+    SetOutput(node_, 0, kernel_(x, &rt), rt);
   }
 
-  /// Returns the dispatch-table factory: it validates the node's I/O counts,
-  /// constructs the wrapper from ``rt.kernel_ctx()`` and returns it as the
-  /// ready-to-invoke closure.
+  /// Returns the dispatch-table factory: it validates the node's I/O counts and
+  /// constructs the wrapper from ``rt.kernel_ctx()``.
   static NodeKernelFn Factory() {
-    return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
       RequireInputCount(node, 1);
       RequireOutputCount(node, 1);
-      return UnaryKernel<KernelT>(rt.kernel_ctx());
+      return std::make_unique<UnaryKernel<KernelT>>(node, rt.kernel_ctx());
     };
   }
 
@@ -76,27 +78,27 @@ private:
 /**
  * Wraps a concrete element-wise binary kernel ``KernelT`` (whose call operator
  * has the shape ``Tensor operator()(const Tensor &x, const Tensor &y,
- * RuntimeContext *rt)``) into a runtime-invocable kernel, analogously to
- * :cpp:class:`UnaryKernel`.
+ * RuntimeContext *rt)``) into a runtime-invocable :cpp:class:`Kernel`,
+ * analogously to :cpp:class:`UnaryKernel`.
  */
-template <class KernelT> class BinaryKernel {
+template <class KernelT> class BinaryKernel : public Kernel {
 public:
-  explicit BinaryKernel(const KernelContext &ctx) : kernel_(ctx) {}
+  BinaryKernel(const NodeProto &node, const KernelContext &ctx) : Kernel(node), kernel_(ctx) {}
 
   /// Reads inputs 0 and 1 from ``rt``, invokes the concrete kernel and stores
   /// output 0.
-  void operator()(const NodeProto &node, RuntimeContext &rt) {
-    const Tensor &x = GetInput(node, 0, rt.tensors());
-    const Tensor &y = GetInput(node, 1, rt.tensors());
-    SetOutput(node, 0, kernel_(x, y, &rt), rt);
+  void Run(RuntimeContext &rt) override {
+    const Tensor &x = GetInput(node_, 0, rt.tensors());
+    const Tensor &y = GetInput(node_, 1, rt.tensors());
+    SetOutput(node_, 0, kernel_(x, y, &rt), rt);
   }
 
   /// Returns the dispatch-table factory (see :cpp:func:`UnaryKernel::Factory`).
   static NodeKernelFn Factory() {
-    return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
       RequireInputCount(node, 2);
       RequireOutputCount(node, 1);
-      return BinaryKernel<KernelT>(rt.kernel_ctx());
+      return std::make_unique<BinaryKernel<KernelT>>(node, rt.kernel_ctx());
     };
   }
 

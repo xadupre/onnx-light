@@ -50,6 +50,34 @@ using namespace ::onnx_light::core::runtime;
 
 namespace {
 
+// Generic runtime kernel that carries a per-node "run" closure. The dispatch
+// helpers below (``Make*Trampoline`` / :cpp:func:`WrapInvokeOnly`) each build
+// one of these during kernel initialization, capturing the already-constructed
+// concrete kernel and any parsed construction-time attributes; :cpp:func:`Run`
+// then performs the per-run tensor reads / kernel call / writes. This keeps the
+// many operator-specific shapes expressed as small closures while still giving
+// every dispatched kernel a virtual :cpp:func:`Kernel::Run` (see
+// :cpp:class:`core::runtime::Kernel`).
+class LambdaKernel : public Kernel {
+public:
+  using RunFn = std::function<void(const NodeProto &node, RuntimeContext &rt)>;
+  LambdaKernel(const NodeProto &node, RunFn run) : Kernel(node), run_(std::move(run)) {}
+  void Run(RuntimeContext &rt) override { run_(node_, rt); }
+
+private:
+  RunFn run_;
+};
+
+// Builds the dispatch factory that constructs a :cpp:class:`LambdaKernel`
+// carrying ``run`` for each node. Used by every operator whose per-run logic is
+// bespoke enough not to fit a reusable wrapper class.
+NodeKernelFn MakeLambdaKernel(LambdaKernel::RunFn run) {
+  return
+      [run = std::move(run)](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<Kernel> {
+        return std::make_unique<LambdaKernel>(node, run);
+      };
+}
+
 const Tensor kEmptyTensor = [] {
   Tensor empty;
   empty.shape.push_back(0);
@@ -61,8 +89,9 @@ const Tensor kEmptyTensor = [] {
 //   * validates the node's input/output count,
 //   * reads any construction-time attributes,
 //   * constructs the concrete kernel once with ``rt.kernel_ctx()``,
-//   * returns a :cpp:type:`KernelInvokeFn` closure that reads the current
-//     inputs from ``rt.tensors()`` and stores the produced outputs back.
+//   * returns a :cpp:class:`Kernel` whose :cpp:func:`Kernel::Run` reads the
+//     current inputs from ``rt.tensors()`` and stores the produced outputs back
+//     (the per-run logic is carried by a :cpp:class:`LambdaKernel`).
 //
 // Centralising the boilerplate keeps the dispatch table compact and
 // makes the per-operator entries below one-liners. The element-wise unary and
@@ -77,54 +106,57 @@ const Tensor kEmptyTensor = [] {
 // where the third input is optional (e.g. ``QuantizeLinear`` /
 // ``DequantizeLinear`` zero-point).
 template <class KernelT> NodeKernelFn MakeBinaryWithOptionalThirdTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireMinInputCount(node, 2);
     EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type(),
                         "' expects 2 or 3 inputs, got ", node.input_size(), ".");
     RequireOutputCount(node, 1);
     KernelT kernel(rt.kernel_ctx());
-    return [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &a = GetInput(node, 0, rt.tensors());
-      const Tensor &b = GetInput(node, 1, rt.tensors());
-      const Tensor *c = GetOptionalInput(node, 2, rt.tensors());
-      if (c != nullptr) {
-        SetOutput(node, 0, kernel(a, b, *c, &rt), rt);
-      } else {
-        SetOutput(node, 0, kernel(a, b, &rt), rt);
-      }
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
+          const Tensor &a = GetInput(node, 0, rt.tensors());
+          const Tensor &b = GetInput(node, 1, rt.tensors());
+          const Tensor *c = GetOptionalInput(node, 2, rt.tensors());
+          if (c != nullptr) {
+            SetOutput(node, 0, kernel(a, b, *c, &rt), rt);
+          } else {
+            SetOutput(node, 0, kernel(a, b, &rt), rt);
+          }
+        });
   };
 }
 
 template <class KernelT> NodeKernelFn MakeTernaryTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireInputCount(node, 3);
     RequireOutputCount(node, 1);
     KernelT kernel(rt.kernel_ctx());
-    return [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &a = GetInput(node, 0, rt.tensors());
-      const Tensor &b = GetInput(node, 1, rt.tensors());
-      const Tensor &c = GetInput(node, 2, rt.tensors());
-      SetOutput(node, 0, kernel(a, b, c, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
+          const Tensor &a = GetInput(node, 0, rt.tensors());
+          const Tensor &b = GetInput(node, 1, rt.tensors());
+          const Tensor &c = GetInput(node, 2, rt.tensors());
+          SetOutput(node, 0, kernel(a, b, c, &rt), rt);
+        });
   };
 }
 
 // Wraps a kernel of the form ``Tensor operator()(const Tensors&)``
 // (the variadic element-wise reducers: ``Sum``, ``Max``, ``Min``, ``Mean``).
 template <class KernelT> NodeKernelFn MakeVariadicTrampoline(int min_inputs = 1) {
-  return [min_inputs](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+  return [min_inputs](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireMinInputCount(node, min_inputs);
     RequireOutputCount(node, 1);
     KernelT kernel(rt.kernel_ctx());
-    return [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
-      Tensors inputs;
-      inputs.reserve(node.input_size());
-      for (int i = 0; i < node.input_size(); ++i) {
-        inputs.push_back(GetInput(node, i, rt.tensors()));
-      }
-      SetOutput(node, 0, kernel(inputs, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
+          Tensors inputs;
+          inputs.reserve(node.input_size());
+          for (int i = 0; i < node.input_size(); ++i) {
+            inputs.push_back(GetInput(node, i, rt.tensors()));
+          }
+          SetOutput(node, 0, kernel(inputs, &rt), rt);
+        });
   };
 }
 
@@ -132,16 +164,18 @@ template <class KernelT> NodeKernelFn MakeVariadicTrampoline(int min_inputs = 1)
 template <class KernelT>
 NodeKernelFn MakeUnaryAlphaTrampoline(const char *attr_name, float default_alpha) {
   const std::string name(attr_name);
-  return [name, default_alpha](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
-    RequireInputCount(node, 1);
-    RequireOutputCount(node, 1);
-    const float alpha = GetAttributeFloatOrDefault(node, name, default_alpha);
-    KernelT kernel(rt.kernel_ctx());
-    return [kernel, alpha](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &x = GetInput(node, 0, rt.tensors());
-      SetOutput(node, 0, kernel(x, alpha, &rt), rt);
-    };
-  };
+  return
+      [name, default_alpha](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
+        RequireInputCount(node, 1);
+        RequireOutputCount(node, 1);
+        const float alpha = GetAttributeFloatOrDefault(node, name, default_alpha);
+        KernelT kernel(rt.kernel_ctx());
+        return std::make_unique<LambdaKernel>(
+            node, [kernel, alpha](const NodeProto &node, RuntimeContext &rt) mutable {
+              const Tensor &x = GetInput(node, 0, rt.tensors());
+              SetOutput(node, 0, kernel(x, alpha, &rt), rt);
+            });
+      };
 }
 
 // Wraps a kernel of the form
@@ -149,32 +183,35 @@ NodeKernelFn MakeUnaryAlphaTrampoline(const char *attr_name, float default_alpha
 template <class KernelT>
 NodeKernelFn MakeBinaryAlphaTrampoline(const char *attr_name, float default_alpha) {
   const std::string name(attr_name);
-  return [name, default_alpha](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
-    RequireInputCount(node, 2);
-    RequireOutputCount(node, 1);
-    const float alpha = GetAttributeFloatOrDefault(node, name, default_alpha);
-    KernelT kernel(rt.kernel_ctx());
-    return [kernel, alpha](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &a = GetInput(node, 0, rt.tensors());
-      const Tensor &b = GetInput(node, 1, rt.tensors());
-      SetOutput(node, 0, kernel(a, b, alpha, &rt), rt);
-    };
-  };
+  return
+      [name, default_alpha](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
+        RequireInputCount(node, 2);
+        RequireOutputCount(node, 1);
+        const float alpha = GetAttributeFloatOrDefault(node, name, default_alpha);
+        KernelT kernel(rt.kernel_ctx());
+        return std::make_unique<LambdaKernel>(
+            node, [kernel, alpha](const NodeProto &node, RuntimeContext &rt) mutable {
+              const Tensor &a = GetInput(node, 0, rt.tensors());
+              const Tensor &b = GetInput(node, 1, rt.tensors());
+              SetOutput(node, 0, kernel(a, b, alpha, &rt), rt);
+            });
+      };
 }
 
 // Wraps a kernel of the form ``Tensor operator()(const Tensor&, int64_t axis)``
 // (``Softmax``, ``LogSoftmax``, ``Hardmax``). Opset 13+ defaults ``axis`` to
 // ``-1``, which matches the kernel reference implementation.
 template <class KernelT> NodeKernelFn MakeAxisTrampoline(int64_t default_axis = -1) {
-  return [default_axis](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+  return [default_axis](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
     const int64_t axis = GetAttributeIntOrDefault(node, "axis", default_axis);
     KernelT kernel(rt.kernel_ctx());
-    return [kernel, axis](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &x = GetInput(node, 0, rt.tensors());
-      SetOutput(node, 0, kernel(x, axis, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel, axis](const NodeProto &node, RuntimeContext &rt) mutable {
+          const Tensor &x = GetInput(node, 0, rt.tensors());
+          SetOutput(node, 0, kernel(x, axis, &rt), rt);
+        });
   };
 }
 
@@ -182,16 +219,17 @@ template <class KernelT> NodeKernelFn MakeAxisTrampoline(int64_t default_axis = 
 // where ``to`` is the required ONNX INT attribute naming the target data type
 // (for example ``Cast`` and ``BitCast``).
 template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
     const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
     EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type(), " requires INT attribute 'to'.");
     KernelT kernel(rt.kernel_ctx());
-    return [kernel, to](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &x = GetInput(node, 0, rt.tensors());
-      SetOutput(node, 0, kernel(x, to, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel, to](const NodeProto &node, RuntimeContext &rt) mutable {
+          const Tensor &x = GetInput(node, 0, rt.tensors());
+          SetOutput(node, 0, kernel(x, to, &rt), rt);
+        });
   };
 }
 
@@ -201,7 +239,7 @@ template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
 // where ``axes`` is either an optional second input (opset 13+/18+ depending
 // on the operator) or an ``axes`` INTS attribute (older opsets).
 template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireMinInputCount(node, 1);
     EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
                         "' expects at most 2 inputs.");
@@ -217,20 +255,22 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
             : Tensor::FromInt64("", {static_cast<int64_t>(axes_attr.size())}, axes_attr);
     KernelT kernel(rt.kernel_ctx());
 
-    return [kernel, keepdims, noop_with_empty_axes, has_axes_attr,
-            axes_attr_tensor](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &data = GetInput(node, 0, rt.tensors());
-      const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
-      if (axes_input != nullptr) {
-        SetOutput(node, 0, kernel(data, *axes_input, keepdims, noop_with_empty_axes, &rt), rt);
-        return;
-      }
-      if (has_axes_attr) {
-        SetOutput(node, 0, kernel(data, axes_attr_tensor, keepdims, noop_with_empty_axes, &rt), rt);
-        return;
-      }
-      SetOutput(node, 0, kernel(data, keepdims, noop_with_empty_axes, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel, keepdims, noop_with_empty_axes, has_axes_attr,
+               axes_attr_tensor](const NodeProto &node, RuntimeContext &rt) mutable {
+          const Tensor &data = GetInput(node, 0, rt.tensors());
+          const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+          if (axes_input != nullptr) {
+            SetOutput(node, 0, kernel(data, *axes_input, keepdims, noop_with_empty_axes, &rt), rt);
+            return;
+          }
+          if (has_axes_attr) {
+            SetOutput(node, 0, kernel(data, axes_attr_tensor, keepdims, noop_with_empty_axes, &rt),
+                      rt);
+            return;
+          }
+          SetOutput(node, 0, kernel(data, keepdims, noop_with_empty_axes, &rt), rt);
+        });
   };
 }
 
@@ -239,55 +279,55 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
 // legacy opset (<13), ``axes`` is provided as an INTS attribute instead.
 template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_name) {
   const std::string name(op_name);
-  return [name](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+  return [name](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireMinInputCount(node, 1);
     EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", name,
                         "' expects at most 2 inputs.");
     RequireOutputCount(node, 1);
     const onnx_kernels::Shape axes_attr = GetAttributeIntsOrDefault(node, "axes", {});
     KernelT kernel(rt.kernel_ctx());
-    return [kernel, axes_attr, name](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &data = GetInput(node, 0, rt.tensors());
-      onnx_kernels::Shape axes;
-      const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
-      if (axes_input != nullptr) {
-        // The schema requires a 1-D INT64 tensor, but the ai.onnx::AffineGrid
-        // function body (and other upstream function bodies) feed a 0-D INT64
-        // scalar here. The upstream reference evaluator accepts scalars too,
-        // so for compatibility we treat a scalar as a 1-element 1-D tensor.
-        EXT_ENFORCE_INVALID(!(axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
-                              axes_input->shape.size() > 1),
-                            "RunNode: ", name, " 'axes' input must be a 1-D INT64 tensor.");
-        const int64_t n = axes_input->element_count();
-        const int64_t *p = axes_input->AsInt64();
-        axes.assign(p, p + n);
-      } else {
-        axes = axes_attr;
-      }
-      SetOutput(node, 0, kernel(data, axes, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel, axes_attr, name](const NodeProto &node, RuntimeContext &rt) mutable {
+          const Tensor &data = GetInput(node, 0, rt.tensors());
+          onnx_kernels::Shape axes;
+          const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+          if (axes_input != nullptr) {
+            // The schema requires a 1-D INT64 tensor, but the ai.onnx::AffineGrid
+            // function body (and other upstream function bodies) feed a 0-D INT64
+            // scalar here. The upstream reference evaluator accepts scalars too,
+            // so for compatibility we treat a scalar as a 1-element 1-D tensor.
+            EXT_ENFORCE_INVALID(!(axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
+                                  axes_input->shape.size() > 1),
+                                "RunNode: ", name, " 'axes' input must be a 1-D INT64 tensor.");
+            const int64_t n = axes_input->element_count();
+            const int64_t *p = axes_input->AsInt64();
+            axes.assign(p, p + n);
+          } else {
+            axes = axes_attr;
+          }
+          SetOutput(node, 0, kernel(data, axes, &rt), rt);
+        });
   };
 }
 
 template <class KernelT> NodeKernelFn MakeArgReduceTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
     const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
     const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
     const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
     KernelT kernel(rt.kernel_ctx());
-    return [kernel, axis, keepdims, select_last_index](const NodeProto &node,
-                                                       RuntimeContext &rt) mutable {
-      const Tensor &data = GetInput(node, 0, rt.tensors());
-      SetOutput(node, 0, kernel(data, axis, keepdims, select_last_index, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel, axis, keepdims, select_last_index](const NodeProto &node,
+                                                          RuntimeContext &rt) mutable {
+          const Tensor &data = GetInput(node, 0, rt.tensors());
+          SetOutput(node, 0, kernel(data, axis, keepdims, select_last_index, &rt), rt);
+        });
   };
 }
 
-NodeKernelFn WrapInvokeOnly(KernelInvokeFn fn) {
-  return [fn = std::move(fn)](const NodeProto &, RuntimeContext &) { return fn; };
-}
+NodeKernelFn WrapInvokeOnly(LambdaKernel::RunFn fn) { return MakeLambdaKernel(std::move(fn)); }
 
 // Shared attributes consumed by SVMRegressor and SVMClassifier.
 struct SVMCommonAttrs {
@@ -404,7 +444,7 @@ NodeKernelFn MakeRandomGenTrampoline(const char *attr_a, float default_a, const 
   const std::string name_a(attr_a);
   const std::string name_b(attr_b);
   return [name_a, default_a, name_b, default_b](const NodeProto &node,
-                                                RuntimeContext &rt) -> KernelInvokeFn {
+                                                RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireInputCount(node, 0);
     RequireOutputCount(node, 1);
     const std::vector<int64_t> shape = GetAttributeIntsOrDefault(node, "shape", {});
@@ -413,9 +453,11 @@ NodeKernelFn MakeRandomGenTrampoline(const char *attr_a, float default_a, const 
     const int64_t seed = GetSeedAttr(node);
     const int32_t dtype = GetDtypeAttr(node);
     KernelT kernel(rt.kernel_ctx());
-    return [kernel, shape, a, b, seed, dtype](const NodeProto &node, RuntimeContext &rt) mutable {
-      SetOutput(node, 0, kernel(shape, a, b, seed, dtype, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node,
+        [kernel, shape, a, b, seed, dtype](const NodeProto &node, RuntimeContext &rt) mutable {
+          SetOutput(node, 0, kernel(shape, a, b, seed, dtype, &rt), rt);
+        });
   };
 }
 
@@ -429,7 +471,7 @@ NodeKernelFn MakeRandomLikeTrampoline(const char *attr_a, float default_a, const
   const std::string name_a(attr_a);
   const std::string name_b(attr_b);
   return [name_a, default_a, name_b, default_b](const NodeProto &node,
-                                                RuntimeContext &rt) -> KernelInvokeFn {
+                                                RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
     const float a = GetAttributeFloatOrDefault(node, name_a, default_a);
@@ -437,10 +479,11 @@ NodeKernelFn MakeRandomLikeTrampoline(const char *attr_a, float default_a, const
     const int64_t seed = GetSeedAttr(node);
     const int32_t dtype = GetDtypeAttr(node);
     KernelT kernel(rt.kernel_ctx());
-    return [kernel, a, b, seed, dtype](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &input = GetInput(node, 0, rt.tensors());
-      SetOutput(node, 0, kernel(input, a, b, seed, dtype, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel, a, b, seed, dtype](const NodeProto &node, RuntimeContext &rt) mutable {
+          const Tensor &input = GetInput(node, 0, rt.tensors());
+          SetOutput(node, 0, kernel(input, a, b, seed, dtype, &rt), rt);
+        });
   };
 }
 
@@ -452,7 +495,7 @@ NodeKernelFn MakeRandomLikeTrampoline(const char *attr_a, float default_a, const
 // always produce FLOAT outputs.
 template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) {
   const std::string name(op_name);
-  return [name](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+  return [name](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
     const int64_t output_datatype =
@@ -461,10 +504,11 @@ template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) 
                         "RunNode: op '", name, "' only supports output_datatype=FLOAT.");
     const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
     KernelT kernel(rt.kernel_ctx());
-    return [kernel, periodic](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &size = GetInput(node, 0, rt.tensors());
-      SetOutput(node, 0, kernel(size, periodic, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel, periodic](const NodeProto &node, RuntimeContext &rt) mutable {
+          const Tensor &size = GetInput(node, 0, rt.tensors());
+          SetOutput(node, 0, kernel(size, periodic, &rt), rt);
+        });
   };
 }
 
@@ -472,17 +516,18 @@ template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) 
 // input tensor and an ``axis`` scalar input plus the boolean ``exclusive``
 // and ``reverse`` int attributes.
 template <class KernelT> NodeKernelFn MakeCumulativeTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
     RequireInputCount(node, 2);
     RequireOutputCount(node, 1);
     const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
     const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
     KernelT kernel(rt.kernel_ctx());
-    return [kernel, exclusive, reverse](const NodeProto &node, RuntimeContext &rt) mutable {
-      const Tensor &x = GetInput(node, 0, rt.tensors());
-      const Tensor &axis = GetInput(node, 1, rt.tensors());
-      SetOutput(node, 0, kernel(x, axis, exclusive, reverse, &rt), rt);
-    };
+    return std::make_unique<LambdaKernel>(
+        node, [kernel, exclusive, reverse](const NodeProto &node, RuntimeContext &rt) mutable {
+          const Tensor &x = GetInput(node, 0, rt.tensors());
+          const Tensor &axis = GetInput(node, 1, rt.tensors());
+          SetOutput(node, 0, kernel(x, axis, exclusive, reverse, &rt), rt);
+        });
   };
 }
 // ---------------------------------------------------------------------------

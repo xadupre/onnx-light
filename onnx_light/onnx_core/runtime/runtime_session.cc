@@ -129,7 +129,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       const size_t sep = prepared.key.find(':');
       const std::string domain = prepared.key.substr(0, sep);
       const std::string op_type = prepared.key.substr(sep + 1);
-      detail::InvokeKernel(*nodes[index], rt, domain, op_type, prepared.instance);
+      detail::InvokeKernel(*nodes[index], rt, domain, op_type, *prepared.instance);
       VerifyOutputAllocators(*nodes[index], rt);
       break;
     }

@@ -151,7 +151,7 @@ private:
   /// recompute or re-store them separately.
   struct PreparedKernel {
     std::string key;
-    KernelInvokeFn instance;
+    std::unique_ptr<Kernel> instance;
   };
 
   /// Resolves and builds the kernel instance for every node the plan executes,

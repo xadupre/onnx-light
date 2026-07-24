@@ -287,6 +287,7 @@ TEST(BackendRunModel, Upsample) { RunBackendCasesFor("Upsample"); }
 TEST(BackendRunModel, BatchNormalization) { RunBackendCasesFor("BatchNormalization"); }
 TEST(BackendRunModel, GroupNormalization) { RunBackendCasesFor("GroupNormalization"); }
 TEST(BackendRunModel, GridSample) { RunBackendCasesFor("GridSample"); }
+TEST(BackendRunModel, Resize) { RunBackendCasesFor("Resize"); }
 TEST(BackendRunModel, RoiAlign) { RunBackendCasesFor("RoiAlign"); }
 TEST(BackendRunModel, MaxRoiPool) { RunBackendCasesFor("MaxRoiPool"); }
 TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNormalization"); }

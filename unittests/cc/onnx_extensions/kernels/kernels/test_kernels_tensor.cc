@@ -433,6 +433,8 @@ TEST(KernelClass, CastClassDoubleToStringMatchesOrtFormat) {
 TEST(KernelClass, CastClassToStringUsesAllocator) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
+  // Capacity counts buffer slots, not bytes; the STRING output uses one
+  // zero-byte allocation because its elements live in ``string_data``.
   SimpleRawBufferAllocator alloc(4);
   RuntimeContext rt{ctx};
   rt.set_allocator(&alloc);

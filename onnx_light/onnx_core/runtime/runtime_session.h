@@ -67,6 +67,20 @@ namespace runtime {
 class RuntimeSession {
 public:
   /**
+   * Builds a session over an :cpp:class:`ExecutionPlan` the session owns,
+   * constructed from ``model``'s graph (:cpp:func:`ModelProto::graph`). Use
+   * this when no precomputed plan is available: the session builds and owns
+   * the plan itself, so a caller can create a runnable session from a model
+   * alone (without first building an :cpp:class:`ExecutionPlan`). Kernel
+   * resolution is still deferred to the first :cpp:func:`Run`.
+   *
+   * @param model Model whose graph drives execution. The model (and the graph
+   *              it owns) must outlive the session, since the built plan holds
+   *              non-owning pointers into the graph's nodes.
+   */
+  explicit RuntimeSession(const ModelProto &model);
+
+  /**
    * Builds a session over ``plan``. Kernel resolution is deferred to the first
    * :cpp:func:`Run` (which supplies the :cpp:class:`RuntimeContext` the
    * kernels are resolved against).
@@ -181,6 +195,11 @@ private:
   /// kernel has run, once :cpp:member:`session_allocator_` has been captured.
   void VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const;
 
+  /// Plan owned by the session, referenced by :cpp:member:`plan_` when the
+  /// session is constructed from a :cpp:class:`ModelProto` (no external plan
+  /// supplied). Built from the model's graph. Left empty (and unused) when a
+  /// plan is passed in through the plan-taking constructor.
+  ExecutionPlan default_plan_;
   const ExecutionPlan &plan_;
   std::vector<PreparedKernel> kernels_;
   std::vector<std::string> required_inputs_;

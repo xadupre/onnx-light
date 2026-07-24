@@ -747,12 +747,20 @@ void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi);
  * The resulting ``Tensor::name`` is set from ``tp.name()``; the shape is
  * taken from ``tp.dims()``.
  *
- * @param tp The source ``TensorProto``.
- * @return   A ``Tensor`` whose data matches the content of ``tp``.
+ * For the typed-field path the byte buffer is acquired from ``allocator``
+ * when it is non-null (the returned tensor is then allocator-backed); when
+ * ``allocator`` is null an inline ``std::vector<uint8_t>`` is used. The
+ * ``raw_data`` path always returns a borrowed (zero-copy) view and ignores
+ * ``allocator``.
+ *
+ * @param tp        The source ``TensorProto``.
+ * @param allocator Optional allocator for the typed-field byte buffer; may
+ *                  be ``nullptr``.
+ * @return          A ``Tensor`` whose data matches the content of ``tp``.
  *
  * @throws std::invalid_argument for unsupported ``data_type`` values.
  */
-Tensor TensorFromProto(const TensorProto &tp);
+Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator = nullptr);
 
 /**
  * Creates an empty output tensor of ``n_bytes`` bytes with the given

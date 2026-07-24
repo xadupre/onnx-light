@@ -568,4 +568,56 @@ TEST(BackendRunModel, SequenceMap) {
   EXPECT_GT(executed, 0u) << "No SequenceMap test cases exercised.";
 }
 
+// SplitToSequence is a sequence-typed op: its output is a
+// :cpp:struct:`Sequence` value held in ``RuntimeContext::sequences``
+// rather than a :cpp:struct:`Tensor` in ``RuntimeContext::tensors``, so the
+// single-node ``RunBackendCasesFor`` helper (which looks the output up by
+// name in the tensor store) does not apply. Each backend case (see
+// ``cases_split_to_sequence.cc``) registers its expected output as the
+// stacked-tensor materialisation of the output sequence, so the actual
+// output sequence is re-stacked through
+// :cpp:class:`kernel::SequenceConstruct` and compared bit-exactly. Running
+// through :cpp:func:`RunModelViaSession` drives the kernel with a real
+// :cpp:class:`RuntimeContext`, exercising the runtime-allocator path for the
+// kernel's split-size buffer.
+TEST(BackendRunModel, SplitToSequence) {
+  const std::vector<TestCase> cases = CollectTestCases("SplitToSequence");
+  ASSERT_FALSE(cases.empty()) << "No backend test cases found for SplitToSequence";
+
+  std::size_t executed = 0;
+  for (const TestCase &tc : cases) {
+    const auto &graph = tc.model().ref_graph();
+    if (graph.ref_node().size() != 1u || graph.ref_node()[0].ref_op_type() != "SplitToSequence") {
+      continue;
+    }
+    SCOPED_TRACE(tc.name);
+    const onnx_kernels::kernel::KernelContext kctx(
+        DefaultOpset(GetDefaultOpsetVersion(tc.model())));
+
+    for (const DataSet &ds : tc.data_sets()) {
+      RuntimeContext rt(kctx);
+      for (const Tensor &t : ds.inputs) {
+        rt.Set(t.name, t);
+      }
+      ASSERT_NO_THROW(RunModelViaSession(tc.model(), rt))
+          << "Running the model threw for case " << tc.name;
+
+      // Each expected output is the stacked-tensor materialisation of the
+      // corresponding output sequence (see ``cases_split_to_sequence.cc``);
+      // re-stack the actual sequence and compare bit-exactly.
+      for (const Tensor &expected : ds.outputs) {
+        ASSERT_TRUE(rt.HasSequence(expected.name))
+            << "Missing output sequence '" << expected.name << "' for case " << tc.name;
+        const auto &out_seq = rt.GetSequence(expected.name);
+        const std::vector<Tensor> values(out_seq.values.begin(), out_seq.values.end());
+        Tensor actual = onnx_kernels::kernel::SequenceConstruct(kctx)(values);
+        actual.name = expected.name;
+        ExpectTensorBitEqual(actual, expected);
+      }
+      ++executed;
+    }
+  }
+  EXPECT_GT(executed, 0u) << "No SplitToSequence test cases exercised.";
+}
+
 } // namespace Test

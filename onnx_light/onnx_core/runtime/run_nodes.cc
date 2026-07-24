@@ -40,14 +40,6 @@ bool ParseBoolScalar(const Tensor &t, const std::string &where) {
   return t.AsBool()[0] != 0;
 }
 
-Tensor MakeInt64Scalar(const std::string &name, int64_t v, RawBufferAllocator *allocator) {
-  return Tensor::FromInt64(name, {}, {v}, allocator);
-}
-
-Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *allocator) {
-  return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)}, allocator);
-}
-
 Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator = nullptr);
 
 /**
@@ -178,6 +170,14 @@ int64_t ResolveAxis(int64_t axis, size_t rank, const std::string &op_name) {
   return a;
 }
 
+Tensor MakeInt64Scalar(const std::string &name, int64_t v, RawBufferAllocator *allocator) {
+  return Tensor::FromInt64(name, {}, {v}, allocator);
+}
+
+Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *allocator) {
+  return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)}, allocator);
+}
+
 Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
                             const std::string &op_name) {
   EXT_ENFORCE_INVALID(!(t.shape.empty()), "RunNode: op '", op_name,
@@ -227,13 +227,35 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
   return out;
 }
 
-Tensors RunSubgraph(const GraphProto &graph, std::vector<std::pair<std::string, Tensor>> bindings,
-                    RuntimeContext &rt, const std::string &attr_name) {
+SubgraphSession::SubgraphSession(RuntimeContext &rt, const GraphProto &graph)
+    : plan_(rt.GetExecutionPlan(graph)), session_(plan_) {
+  const auto &inits = graph.initializer();
+  initializers_.reserve(inits.size());
+  for (size_t i = 0; i < inits.size(); ++i) {
+    const TensorProto &tp = inits[i];
+    initializers_.emplace_back(tp.name(), TensorFromProto(tp));
+  }
+  const auto &outs = graph.output();
+  output_names_.reserve(outs.size());
+  for (size_t i = 0; i < outs.size(); ++i) {
+    const std::string out_name = outs[i].name();
+    EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: a subgraph output has an empty name.");
+    output_names_.push_back(out_name);
+  }
+}
+
+Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> bindings,
+                             RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child = rt.MakeSubgraphContext(attr_name);
+  for (const auto &kv : initializers_) {
+    if (!child.Has(kv.first)) {
+      child.Set(kv.first, kv.second, RuntimeEventKind::kInitializer);
+    }
+  }
   for (auto &kv : bindings) {
     child.Put(kv.first, std::move(kv.second), RuntimeEventKind::kInput);
   }
-  RunGraphNodesViaSession(graph, child);
+  session_.Run(child);
 
   if (rt.events_enabled()) {
     for (auto &ev : child.events()) {
@@ -242,10 +264,8 @@ Tensors RunSubgraph(const GraphProto &graph, std::vector<std::pair<std::string, 
   }
 
   Tensors outputs;
-  outputs.reserve(graph.output().size());
-  for (size_t i = 0; i < graph.output().size(); ++i) {
-    const std::string out_name = graph.output()[i].name();
-    EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: a subgraph output has an empty name.");
+  outputs.reserve(output_names_.size());
+  for (const auto &out_name : output_names_) {
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
@@ -528,55 +548,10 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
     return;
   }
 
-  const std::size_t n = n_inputs;
   Tensors v_initial = std::move(tensor_state);
 
-  auto run_body = [&](int64_t iter, bool cond_in, const Tensors &state) -> Tensors {
-    std::vector<std::pair<std::string, Tensor>> bindings;
-    bindings.reserve(2 + n);
-    bindings.emplace_back(body.input(0).name(),
-                          MakeInt64Scalar(body.input(0).name(), iter, rt.allocator()));
-    bindings.emplace_back(body.input(1).name(),
-                          MakeBoolScalar(body.input(1).name(), cond_in, rt.allocator()));
-    for (size_t i = 0; i < n; ++i) {
-      Tensor t = state[i];
-      t.name = body.input(2 + i).name();
-      bindings.emplace_back(t.name, std::move(t));
-    }
-    return RunSubgraph(body, std::move(bindings), rt, "body");
-  };
-
   Loop loop_kernel(rt.kernel_ctx());
-  Tensors outputs = loop_kernel(rt, m_tensor, cond_tensor, v_initial, k, run_body);
-
-  // When the loop runs zero iterations the kernel produces UNDEFINED-typed
-  // empty scan outputs (it has no template to seed dtype/shape from). Patch
-  // each scan output using the body's declared output value-info so the
-  // downstream pipeline (ReferenceEvaluator, numpy conversion, ...) sees a
-  // well-typed empty tensor of the expected element type and per-iteration
-  // trailing shape.
-  for (size_t i = 0; i < k; ++i) {
-    Tensor &t = outputs[n + i];
-    if (t.data_type != static_cast<int32_t>(DataType::UNDEFINED)) {
-      continue;
-    }
-    const auto &vi = body.output(static_cast<int>(1 + n + i));
-    if (!vi.has_type() || !vi.type().has_tensor_type()) {
-      continue;
-    }
-    const auto &tt = vi.type().tensor_type();
-    t.data_type = static_cast<int32_t>(tt.elem_type());
-    std::vector<int64_t> per_iter_shape;
-    if (tt.has_shape()) {
-      per_iter_shape.reserve(tt.shape().dim().size());
-      for (int d = 0; d < tt.shape().dim().size(); ++d) {
-        const auto &dim = tt.shape().dim()[d];
-        per_iter_shape.push_back(dim.has_dim_value() ? static_cast<int64_t>(dim.dim_value()) : 0);
-      }
-    }
-    t.shape.assign(1, 0);
-    t.shape.insert(t.shape.end(), per_iter_shape.begin(), per_iter_shape.end());
-  }
+  Tensors outputs = loop_kernel(rt, body, m_tensor, cond_tensor, v_initial);
   PropagateOutputsToCaller(node, std::move(outputs), rt);
 }
 
@@ -780,6 +755,10 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
     body_outputs_per_iter[k].reserve(n);
   }
 
+  // Build a single session over the body once and reuse it for every
+  // iteration instead of re-resolving the body's kernels on every call.
+  SubgraphSession body_session(rt, body);
+
   for (std::size_t i = 0; i < n; ++i) {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(1u + num_additional);
@@ -800,7 +779,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
       bindings.emplace_back(param_name, std::move(t));
     }
 
-    Tensors iter_outputs = RunSubgraph(body, std::move(bindings), rt, "body");
+    Tensors iter_outputs = body_session.Run(std::move(bindings), rt, "body");
     EXT_ENFORCE_INVALID(iter_outputs.size() == m, "RunNode: SequenceMap body produced ",
                         iter_outputs.size(), " output(s) at iteration ", i, ", expected ", m, ".");
     for (std::size_t k = 0; k < m; ++k) {

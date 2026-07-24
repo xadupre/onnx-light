@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -2554,14 +2555,20 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          Tensor Y;
          onnx_kernels::kernel::FlexAttention::ScoreModFn score_mod_fn;
          onnx_kernels::kernel::FlexAttention::ProbModFn prob_mod_fn;
+         // Sessions for the score_mod / prob_mod subgraphs are built once and
+         // reused for every row the FlexAttention kernel evaluates them on,
+         // instead of re-resolving the subgraph's kernels on every call.
+         std::unique_ptr<SubgraphSession> score_mod_session;
+         std::unique_ptr<SubgraphSession> prob_mod_session;
          const AttributeProto *score_mod_attr = FindAttribute(node, "score_mod");
          if (score_mod_attr != nullptr) {
            const GraphProto &score_mod_graph = score_mod_attr->ref_g();
            EXT_ENFORCE_INVALID(!(score_mod_graph.input().empty()),
                                "RunNode: 'score_mod' subgraph must declare at least one input.");
            const std::string in_name = score_mod_graph.input()[0].name();
-           score_mod_fn = [&score_mod_graph, in_name, &rt](Tensor &scores) {
-             auto outputs = RunSubgraph(score_mod_graph, {{in_name, scores}}, rt, "score_mod");
+           score_mod_session = std::make_unique<SubgraphSession>(rt, score_mod_graph);
+           score_mod_fn = [in_name, &rt, &session = *score_mod_session](Tensor &scores) {
+             auto outputs = session.Run({{in_name, scores}}, rt, "score_mod");
              if (!outputs.empty()) {
                scores = std::move(outputs[0]);
              }
@@ -2573,8 +2580,9 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
            EXT_ENFORCE_INVALID(!(prob_mod_graph.input().empty()),
                                "RunNode: 'prob_mod' subgraph must declare at least one input.");
            const std::string in_name = prob_mod_graph.input()[0].name();
-           prob_mod_fn = [&prob_mod_graph, in_name, &rt](Tensor &probs) {
-             auto outputs = RunSubgraph(prob_mod_graph, {{in_name, probs}}, rt, "prob_mod");
+           prob_mod_session = std::make_unique<SubgraphSession>(rt, prob_mod_graph);
+           prob_mod_fn = [in_name, &rt, &session = *prob_mod_session](Tensor &probs) {
+             auto outputs = session.Run({{in_name, probs}}, rt, "prob_mod");
              if (!outputs.empty()) {
                probs = std::move(outputs[0]);
              }

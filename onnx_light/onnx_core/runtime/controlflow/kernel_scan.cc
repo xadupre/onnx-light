@@ -136,8 +136,8 @@ Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count, int64_t axis
 Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state,
                             const Tensors &final_state,
                             const std::vector<Tensors> &scan_values_per_iter,
-                            const std::vector<int64_t> &scan_output_axes,
-                            const std::vector<int64_t> &scan_output_directions,
+                            const ParamInts &scan_output_axes,
+                            const ParamInts &scan_output_directions,
                             RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(trip_count >= 0, "kernel::Scan: trip_count must be non-negative.");
   EXT_ENFORCE_INVALID(initial_state.size() == final_state.size(),
@@ -172,8 +172,8 @@ Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state,
 Tensors Scan::operator()(int64_t trip_count, const Tensors &initial_state,
                          const Tensors &final_state,
                          const std::vector<Tensors> &scan_values_per_iter,
-                         const std::vector<int64_t> &scan_output_axes,
-                         const std::vector<int64_t> &scan_output_directions) const {
+                         const ParamInts &scan_output_axes,
+                         const ParamInts &scan_output_directions) const {
   return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
                              scan_output_axes, scan_output_directions, nullptr);
 }
@@ -181,17 +181,17 @@ Tensors Scan::operator()(int64_t trip_count, const Tensors &initial_state,
 Tensors Scan::operator()(RuntimeContext &rt, int64_t trip_count, const Tensors &initial_state,
                          const Tensors &final_state,
                          const std::vector<Tensors> &scan_values_per_iter,
-                         const std::vector<int64_t> &scan_output_axes,
-                         const std::vector<int64_t> &scan_output_directions) const {
+                         const ParamInts &scan_output_axes,
+                         const ParamInts &scan_output_directions) const {
   return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
                              scan_output_axes, scan_output_directions, rt.allocator());
 }
 
 Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tensors &initial_state,
-                         const Tensors &scan_inputs, const std::vector<int64_t> &scan_input_axes_in,
-                         const std::vector<int64_t> &scan_input_directions_in,
-                         const std::vector<int64_t> &scan_output_axes,
-                         const std::vector<int64_t> &scan_output_directions) const {
+                         const Tensors &scan_inputs, const ParamInts &scan_input_axes_in,
+                         const ParamInts &scan_input_directions_in,
+                         const ParamInts &scan_output_axes,
+                         const ParamInts &scan_output_directions) const {
   const std::size_t n = initial_state.size();
   const std::size_t m = scan_inputs.size();
   EXT_ENFORCE_INVALID(m > 0, "kernel::Scan: at least one scan input is required.");
@@ -202,17 +202,17 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tenso
   const std::size_t k = static_cast<std::size_t>(body.output_size()) - n;
 
   // Normalize per-scan-input axes and directions to length M.
-  std::vector<int64_t> scan_input_axes = scan_input_axes_in;
-  std::vector<int64_t> scan_input_directions = scan_input_directions_in;
-  if (scan_input_axes.empty()) {
-    scan_input_axes.assign(m, 0);
-  } else {
+  const ParamInts default_scan_input_axes(m, 0);
+  const auto &scan_input_axes =
+      scan_input_axes_in.empty() ? default_scan_input_axes : scan_input_axes_in;
+  if (!scan_input_axes_in.empty()) {
     EXT_ENFORCE_INVALID(scan_input_axes.size() == m,
                         "kernel::Scan: 'scan_input_axes' must have num_scan_inputs entries.");
   }
-  if (scan_input_directions.empty()) {
-    scan_input_directions.assign(m, 0);
-  } else {
+  const ParamInts default_scan_input_directions(m, 0);
+  const auto &scan_input_directions =
+      scan_input_directions_in.empty() ? default_scan_input_directions : scan_input_directions_in;
+  if (!scan_input_directions_in.empty()) {
     EXT_ENFORCE_INVALID(scan_input_directions.size() == m,
                         "kernel::Scan: 'scan_input_directions' must have num_scan_inputs entries.");
   }
@@ -245,6 +245,11 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tenso
     trip_count = 0;
   }
 
+  // Build a single session over the body once and reuse it for every
+  // iteration (including the zero-trip-count template run below) instead of
+  // re-resolving the body's kernels on every call.
+  SubgraphSession session(rt, body);
+
   // Iterate the body once per scan step, threading the state forward and
   // collecting the per-iteration scan outputs.
   Tensors state = initial_state;
@@ -265,7 +270,7 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tenso
       bindings.emplace_back(slice.name, std::move(slice));
     }
 
-    const Tensors body_outputs = RunSubgraph(body, bindings, rt, "body");
+    const Tensors body_outputs = session.Run(std::move(bindings), rt, "body");
     EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
                         "kernel::Scan: body produced an unexpected number of outputs.");
     state.assign(body_outputs.begin(), body_outputs.begin() + static_cast<std::ptrdiff_t>(n));
@@ -299,13 +304,19 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tenso
       }
       const int64_t elt_count = std::accumulate(slice_shape.begin(), slice_shape.end(), int64_t{1},
                                                 std::multiplies<int64_t>());
-      std::vector<uint8_t> dummy_data(PackedByteSize(scan_inputs[i].data_type, elt_count), 0);
-      Tensor slice("", scan_inputs[i].data_type, std::move(slice_shape), std::move(dummy_data));
+      const std::size_t n_bytes = PackedByteSize(scan_inputs[i].data_type, elt_count);
+      Tensor slice = MakeOutputTensor(static_cast<int32_t>(scan_inputs[i].data_type), slice_shape,
+                                      n_bytes, rt.allocator());
+      if (n_bytes > 0) {
+        // Allocator-backed buffers are not guaranteed zeroed; the dummy
+        // slice must be zero-filled so the body sees deterministic input.
+        std::memset(slice.mutable_bytes(), 0, n_bytes);
+      }
       slice.name = body.input(static_cast<int>(n + i)).name();
       bindings.emplace_back(slice.name, std::move(slice));
     }
 
-    const Tensors body_outputs = RunSubgraph(body, bindings, rt, "body");
+    const Tensors body_outputs = session.Run(std::move(bindings), rt, "body");
     EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
                         "kernel::Scan: body produced an unexpected number of outputs.");
     for (std::size_t i = 0; i < k; ++i) {

@@ -1860,6 +1860,12 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           "Appends an initializer whose data lives in an external file and returns its name.")
       .def(
           "make_input",
+          [](GraphBuilder &self, const ValueInfoProto &value_info) {
+            return self.MakeInput(value_info);
+          },
+          nb::arg("value_info"), "Declares a graph input from a ready-made ValueInfoProto.")
+      .def(
+          "make_input",
           [](GraphBuilder &self, const std::string &name, const SymTensor &type) {
             return self.MakeInput(name, type);
           },
@@ -1885,6 +1891,10 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           nb::arg("name"), nb::arg("dtype"), nb::arg("shape"),
           "Declares a graph input with element type ``dtype`` (a ``TensorProto.DataType`` "
           "integer) and ``shape`` (an iterable of ``int`` or ``str``).")
+      .def(
+          "make_output",
+          [](GraphBuilder &self, const ValueInfoProto &value_info) { self.MakeOutput(value_info); },
+          nb::arg("value_info"), "Declares a graph output from a ready-made ValueInfoProto.")
       .def(
           "make_output",
           [](GraphBuilder &self, const std::string &name, const SymTensor &type) {
@@ -1922,8 +1932,26 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       .def("get_shape", &GraphBuilder::GetShape, nb::arg("name"), nb::rv_policy::reference_internal,
            "Returns the inferred descriptor of ``name``.")
       .def(
-          "graph", [](const GraphBuilder &self) -> const GraphProto & { return self.Graph(); },
-          nb::rv_policy::reference_internal, "Returns the graph accumulated so far.")
+          "build_graph", [](const GraphBuilder &self) { return self.BuildGraph(); },
+          "Assembles the accumulated inputs, initializers, nodes and outputs into a "
+          "GraphProto without running the finalisation analyses.")
+      .def(
+          "make_local_function",
+          [](GraphBuilder &self, const std::string &name, const std::string &domain)
+              -> GraphBuilder & { return self.MakeLocalFunction(name, domain); },
+          nb::arg("name"), nb::arg("domain") = "", nb::rv_policy::reference_internal,
+          "Creates and returns a nested builder for a local function; local functions are "
+          "emitted into the produced ModelProto.")
+      .def(
+          "make_subgraph",
+          [](GraphBuilder &self, const std::string &name) -> GraphBuilder & {
+            return self.MakeSubgraph(name);
+          },
+          nb::arg("name"), nb::rv_policy::reference_internal,
+          "Creates and returns a nested builder for a subgraph (control-flow body).")
+      .def("to_string", &GraphBuilder::ToString,
+           "Returns a comprehensive, human-readable description of the builder content.")
+      .def("__str__", &GraphBuilder::ToString)
       .def_prop_rw(
           "device", [](const GraphBuilder &self) { return self.device(); },
           [](GraphBuilder &self, Device device) { self.set_device(device); },

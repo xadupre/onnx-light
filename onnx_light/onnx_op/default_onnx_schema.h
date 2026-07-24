@@ -11,7 +11,9 @@
  * schemas). It is spelled with the literal ``onnx_light`` namespace so its
  * symbol identity matches callers compiled in ``onnx_light`` translation units,
  * while its definition can call ``onnx_op::GetAllOnnxOpSchemasWithHistory`` from
- * a translation unit that keeps ``ONNX_LIGHT_NAMESPACE`` as a literal token.
+ * a translation unit that keeps ``ONNX_LIGHT_NAMESPACE`` as a literal token. It
+ * returns the namespace-stable :cpp:struct:`core::schema::OpSchemaInfo` digests
+ * produced by :cpp:func:`core::schema::LightOpSchema::op_schema_info`.
  */
 
 #pragma once
@@ -19,16 +21,16 @@
 #include <string>
 #include <vector>
 
-#include "onnx_core/builder/op_schema_info.h"
+#include "onnx_core/light_op_schema/light_op_schema.h"
 
 namespace onnx_light {
 namespace core {
 namespace builder {
 
-/// Returns the versioned schema history of ``op_type`` across every domain,
-/// distilled into :cpp:struct:`OpSchemaInfo` entries. An empty vector means the
-/// operator is unknown to the built-in ONNX schemas.
-std::vector<OpSchemaInfo> DefaultOnnxSchemaLookup(const std::string &op_type);
+/// Returns the versioned schema digests of ``op_type`` across every domain. An
+/// empty vector means the operator is unknown to the built-in ONNX schemas.
+std::vector<::onnx_light::core::schema::OpSchemaInfo>
+DefaultOnnxSchemaLookup(const std::string &op_type);
 
 } // namespace builder
 } // namespace core

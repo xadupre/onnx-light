@@ -50,6 +50,40 @@
 
 #include "onnx_proto/type_helper.h"
 
+// ``OpSchemaInfo`` is deliberately declared in the *literally spelled*
+// ``onnx_light`` namespace (not through the ``ONNX_LIGHT_NAMESPACE`` macro).
+// ``light_op_schema.h`` — and the whole ``onnx_op`` schema library — is
+// compiled both with the macro defined (regular ``onnx_light`` translation
+// units) and with it left as a literal identifier (the ``#undef`` trick used so
+// onnx-light can coexist with the upstream ``onnx`` package). A
+// ``LightOpSchema`` therefore has two distinct C++ identities depending on the
+// macro state and cannot cross that boundary. This small, layout-stable record
+// (only integers and a ``std::string``) has a single identity regardless of the
+// macro, so it is the piece of schema information that consumers such as
+// ``core::builder::GraphBuilder`` can safely receive from the ``onnx_op``
+// library. It is produced by :cpp:func:`LightOpSchema::op_schema_info`, keeping
+// the information part of the light op schema itself.
+namespace onnx_light {
+namespace core {
+namespace schema {
+
+/// Namespace-stable digest of the subset of :cpp:class:`LightOpSchema`
+/// information needed to resolve a node's opset and validate its output count.
+struct OpSchemaInfo {
+  /// Opset version at which the schema was introduced.
+  int since_version = 0;
+  /// Minimum number of outputs the operator produces.
+  int min_output = 0;
+  /// Maximum number of outputs the operator produces.
+  int max_output = 0;
+  /// Operator domain (empty string denotes the default ONNX domain).
+  std::string domain;
+};
+
+} // namespace schema
+} // namespace core
+} // namespace onnx_light
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace schema {
@@ -341,6 +375,17 @@ public:
   LightOpSchema &set_node_determinism(NodeDeterminism v) {
     node_determinism_ = v;
     return *this;
+  }
+
+  /// Returns the namespace-stable :cpp:struct:`OpSchemaInfo` digest of this
+  /// schema (``since_version`` and the output-count bounds together with the
+  /// domain). Unlike ``LightOpSchema`` itself, the returned record has a single
+  /// C++ identity regardless of whether the enclosing translation unit defines
+  /// the ``ONNX_LIGHT_NAMESPACE`` macro, so it can be handed to consumers in the
+  /// ``onnx_core`` library (see :cpp:class:`core::builder::GraphBuilder`).
+  ::onnx_light::core::schema::OpSchemaInfo op_schema_info() const {
+    return ::onnx_light::core::schema::OpSchemaInfo{since_version_, min_output_, max_output_,
+                                                    domain_};
   }
 
 private:

@@ -31,8 +31,8 @@ core::symbolic::SymShape MakeShape(std::initializer_list<int64_t> dims) {
 
 TEST(GraphBuilder, StartsEmpty) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
-  EXPECT_EQ(builder.Graph().node().size(), 0);
-  EXPECT_EQ(builder.Graph().input().size(), 0);
+  EXPECT_EQ(builder.Nodes().size(), 0u);
+  EXPECT_EQ(builder.Inputs().size(), 0u);
   EXPECT_FALSE(builder.HasName("x"));
 }
 
@@ -90,8 +90,8 @@ TEST(GraphBuilder, ExternalInitializerIsRecorded) {
   builder.MakeExternalInitializer("w", core::symbolic::TensorType::kFloat, {4, 4}, "weights.bin", 0,
                                   64);
   EXPECT_TRUE(builder.HasName("w"));
-  ASSERT_EQ(builder.Graph().initializer().size(), 1);
-  const TensorProto &init = builder.Graph().initializer(0);
+  ASSERT_EQ(builder.Initializers().Size(), 1u);
+  const TensorProto &init = builder.Initializers().At("w");
   EXPECT_EQ(init.data_location(), TensorProto::DataLocation::EXTERNAL);
 }
 
@@ -121,6 +121,71 @@ TEST(GraphBuilder, ExplicitOpsetIsPreserved) {
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Add", {"x", "y"});
   EXPECT_EQ(builder.OpsetVersion(""), 17);
+}
+
+TEST(GraphBuilder, InputOutputFromProto) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  ValueInfoProto vi;
+  vi.set_name("x");
+  core::symbolic::SymTensorToValueInfo(
+      core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, MakeShape({2, 3})),
+      vi);
+  builder.MakeInput(vi);
+  EXPECT_TRUE(builder.HasName("x"));
+  ASSERT_EQ(builder.Inputs().size(), 1u);
+  EXPECT_EQ(builder.Inputs()[0].name().value(), "x");
+  EXPECT_TRUE(builder.HasShape("x"));
+
+  ValueInfoProto out;
+  out.set_name("x");
+  builder.MakeOutput(out);
+  ASSERT_EQ(builder.Outputs().size(), 1u);
+  EXPECT_EQ(builder.Outputs()[0].name().value(), "x");
+}
+
+TEST(GraphBuilder, ToStringDescribesContent) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> outputs = builder.MakeNode("Add", {"x", "y"});
+  builder.MakeOutput(outputs[0]);
+
+  const std::string text = builder.ToString();
+  EXPECT_NE(text.find("GraphBuilder(name=g)"), std::string::npos);
+  EXPECT_NE(text.find("inputs (2)"), std::string::npos);
+  EXPECT_NE(text.find("nodes (1)"), std::string::npos);
+  EXPECT_NE(text.find("Add("), std::string::npos);
+}
+
+TEST(GraphBuilder, LocalFunctionIsANestedBuilder) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder &fct = builder.MakeLocalFunction("MyFct", "custom");
+  fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  fct.MakeInput("b", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> outputs = fct.MakeNode("Add", {"a", "b"});
+  fct.MakeOutput(outputs[0]);
+
+  EXPECT_TRUE(builder.HasLocalFunction("MyFct"));
+  EXPECT_EQ(builder.LocalFunction("MyFct").Nodes().size(), 1u);
+  EXPECT_THROW(builder.MakeLocalFunction("MyFct"), core::builder::BuilderError);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("z", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> top = builder.MakeNode("MyFct", {"x", "z"}, {}, "custom");
+  builder.MakeOutput(top[0]);
+
+  const ModelProto model = builder.ToModel();
+  ASSERT_EQ(model.functions().size(), 1);
+  EXPECT_EQ(model.functions(0).name().value(), "MyFct");
+}
+
+TEST(GraphBuilder, SubgraphIsANestedBuilder) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  body.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  EXPECT_TRUE(builder.HasSubgraph("body"));
+  EXPECT_EQ(builder.Subgraph("body").Inputs().size(), 1u);
+  EXPECT_THROW(builder.MakeSubgraph("body"), core::builder::BuilderError);
 }
 
 } // namespace Test

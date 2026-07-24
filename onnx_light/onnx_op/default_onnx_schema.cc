@@ -16,14 +16,14 @@ namespace onnx_light {
 namespace core {
 namespace builder {
 
-std::vector<OpSchemaInfo> DefaultOnnxSchemaLookup(const std::string &op_type) {
-  std::vector<OpSchemaInfo> result;
+std::vector<::onnx_light::core::schema::OpSchemaInfo>
+DefaultOnnxSchemaLookup(const std::string &op_type) {
+  std::vector<::onnx_light::core::schema::OpSchemaInfo> result;
   const std::vector<ONNX_LIGHT_NAMESPACE::core::schema::LightOpSchema> schemas =
       ONNX_LIGHT_NAMESPACE::onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, /*init_doc=*/false);
   result.reserve(schemas.size());
   for (const ONNX_LIGHT_NAMESPACE::core::schema::LightOpSchema &schema : schemas) {
-    result.push_back(OpSchemaInfo{schema.since_version(), schema.min_output(), schema.max_output(),
-                                  schema.domain()});
+    result.push_back(schema.op_schema_info());
   }
   return result;
 }

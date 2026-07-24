@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <sstream>
 #include <utility>
 
 #include "onnx_core/compute/value_tags.h"
@@ -18,6 +19,7 @@ namespace builder {
 
 using ::onnx_light::core::shapes::kUnknownOpsetVersion;
 using ::onnx_light::core::symbolic::SymTensorFromTensorProto;
+using ::onnx_light::core::symbolic::SymTensorFromValueInfo;
 using ::onnx_light::core::symbolic::SymTensorToValueInfo;
 using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
@@ -35,9 +37,11 @@ std::string NormaliseDomain(const std::string &domain) {
 } // namespace
 
 GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup)
-    : name_(std::move(name)), schema_lookup_(std::move(schema_lookup)) {
-  graph_.set_name(name_);
-}
+    : name_(std::move(name)), schema_lookup_(std::move(schema_lookup)) {}
+
+GraphBuilder::~GraphBuilder() = default;
+GraphBuilder::GraphBuilder(GraphBuilder &&) noexcept = default;
+GraphBuilder &GraphBuilder::operator=(GraphBuilder &&) noexcept = default;
 
 // ── Opset management ───────────────────────────────────────────────────
 
@@ -88,10 +92,11 @@ void GraphBuilder::SeedShape(const std::string &name, SymTensor tensor) {
 }
 
 const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
-  const std::string &name = ReserveName(tensor.name());
-  TensorProto *added = graph_.add_initializer(tensor);
+  const std::string key = tensor.name().value();
+  const std::string &name = ReserveName(key);
+  TensorProto &added = initializers_.Set(key, tensor);
   SymTensor descriptor;
-  if (SymTensorFromTensorProto(*added, descriptor)) {
+  if (SymTensorFromTensorProto(added, descriptor)) {
     SeedShape(name, std::move(descriptor));
   }
   // ``name`` references the entry stored in ``names_`` and remains valid.
@@ -123,11 +128,22 @@ const std::string &GraphBuilder::MakeExternalInitializer(const std::string &name
 
 // ── Inputs / outputs ───────────────────────────────────────────────────
 
+const std::string &GraphBuilder::MakeInput(const ValueInfoProto &value_info) {
+  const std::string &reserved = ReserveName(value_info.name().value());
+  inputs_.push_back(value_info);
+  SymTensor descriptor;
+  if (SymTensorFromValueInfo(value_info, descriptor)) {
+    SeedShape(reserved, std::move(descriptor));
+  }
+  return reserved;
+}
+
 const std::string &GraphBuilder::MakeInput(const std::string &name, const SymTensor &type) {
+  ValueInfoProto vi;
+  vi.set_name(name);
+  SymTensorToValueInfo(type, vi);
   const std::string &reserved = ReserveName(name);
-  ValueInfoProto *vi = graph_.add_input();
-  vi->set_name(name);
-  SymTensorToValueInfo(type, *vi);
+  inputs_.push_back(std::move(vi));
   SeedShape(reserved, type);
   return reserved;
 }
@@ -137,10 +153,13 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, TensorType d
   return MakeInput(name, SymTensor(nullptr, dtype, shape));
 }
 
+void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) { outputs_.push_back(value_info); }
+
 void GraphBuilder::MakeOutput(const std::string &name, const SymTensor &type) {
-  ValueInfoProto *vi = graph_.add_output();
-  vi->set_name(name);
-  SymTensorToValueInfo(type, *vi);
+  ValueInfoProto vi;
+  vi.set_name(name);
+  SymTensorToValueInfo(type, vi);
+  outputs_.push_back(std::move(vi));
 }
 
 void GraphBuilder::MakeOutput(const std::string &name, TensorType dtype, const SymShape &shape) {
@@ -148,8 +167,9 @@ void GraphBuilder::MakeOutput(const std::string &name, TensorType dtype, const S
 }
 
 void GraphBuilder::MakeOutput(const std::string &name) {
-  ValueInfoProto *vi = graph_.add_output();
-  vi->set_name(name);
+  ValueInfoProto vi;
+  vi.set_name(name);
+  outputs_.push_back(std::move(vi));
 }
 
 // ── Nodes ──────────────────────────────────────────────────────────────
@@ -249,7 +269,7 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
     }
   }
 
-  // Build the node, attach its attributes and append it to the graph.
+  // Build the node, attach its attributes and append it to the node list.
   NodeProto node;
   node.set_op_type(op_type);
   if (!domain.empty()) {
@@ -267,16 +287,48 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
   for (const AttributeProto &attribute : attributes) {
     node.add_attribute(attribute);
   }
-  NodeProto *stored = graph_.add_node(node);
+  nodes_.push_back(std::move(node));
+  const NodeProto &stored = nodes_.back();
 
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their
   // outputs without an inferred descriptor.
-  if (ShapeFunctionAvailable(*stored)) {
-    compute_.Shapes().ComputeShapeNode(*stored);
+  if (ShapeFunctionAvailable(stored)) {
+    compute_.Shapes().ComputeShapeNode(stored);
   }
 
   return resolved_outputs;
+}
+
+// ── Local functions / subgraphs ─────────────────────────────────────────
+
+GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std::string &domain) {
+  if (local_functions_.Contains(name)) {
+    throw BuilderError("GraphBuilder: a local function named '" + name + "' already exists.");
+  }
+  ReserveName(name);
+  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
+  if (!domain.empty()) {
+    // Register the function domain on both the parent (so nodes that call the
+    // function resolve their opset and the model imports the domain) and the
+    // nested builder (so its emitted FunctionProto imports it too).
+    SetOpsetVersion(domain, 1);
+    child->SetOpsetVersion(domain, 1);
+  }
+  GraphBuilder &ref = *child;
+  local_functions_.Set(name, std::move(child));
+  return ref;
+}
+
+GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name) {
+  if (subgraphs_.Contains(name)) {
+    throw BuilderError("GraphBuilder: a subgraph named '" + name + "' already exists.");
+  }
+  ReserveName(name);
+  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
+  GraphBuilder &ref = *child;
+  subgraphs_.Set(name, std::move(child));
+  return ref;
 }
 
 // ── Queries ────────────────────────────────────────────────────────────
@@ -285,6 +337,123 @@ bool GraphBuilder::HasShape(const std::string &name) const { return compute_.Sha
 
 const SymTensor &GraphBuilder::GetShape(const std::string &name) const {
   return compute_.Shapes().Get(name);
+}
+
+GraphProto GraphBuilder::BuildGraph() const {
+  GraphProto graph;
+  graph.set_name(name_);
+  for (const ValueInfoProto &input : inputs_) {
+    graph.add_input(input);
+  }
+  for (const auto &entry : initializers_) {
+    graph.add_initializer(entry.second);
+  }
+  for (const NodeProto &node : nodes_) {
+    graph.add_node(node);
+  }
+  for (const ValueInfoProto &output : outputs_) {
+    graph.add_output(output);
+  }
+  return graph;
+}
+
+// ── Description ─────────────────────────────────────────────────────────
+
+std::string GraphBuilder::ToString() const {
+  std::ostringstream os;
+  os << "GraphBuilder(name=" << name_ << ")\n";
+
+  os << "  opsets:";
+  if (opsets_.empty()) {
+    os << " <none>";
+  } else {
+    for (const auto &entry : opsets_) {
+      os << " " << entry.first << "=" << entry.second;
+    }
+  }
+  os << "\n";
+
+  os << "  inputs (" << inputs_.size() << "):\n";
+  for (const ValueInfoProto &input : inputs_) {
+    const std::string &value_name = input.name().value();
+    os << "    " << value_name;
+    SymTensor descriptor;
+    if (SymTensorFromValueInfo(input, descriptor)) {
+      os << ": " << descriptor.ToString();
+    }
+    os << "\n";
+  }
+
+  os << "  initializers (" << initializers_.Size() << "):\n";
+  for (const auto &entry : initializers_) {
+    const TensorProto &tensor = entry.second;
+    os << "    " << entry.first << ": dtype=" << static_cast<int>(tensor.data_type())
+       << ", shape=[";
+    for (int i = 0; i < tensor.dims().size(); ++i) {
+      if (i != 0) {
+        os << ",";
+      }
+      os << tensor.dims()[i];
+    }
+    os << "]";
+    if (tensor.data_location() == TensorProto::DataLocation::EXTERNAL) {
+      os << " (external)";
+    }
+    os << "\n";
+  }
+
+  os << "  nodes (" << nodes_.size() << "):\n";
+  for (const NodeProto &node : nodes_) {
+    os << "    ";
+    const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
+    if (!node_domain.empty()) {
+      os << node_domain << ".";
+    }
+    os << node.op_type().value() << "(";
+    for (int i = 0; i < node.input().size(); ++i) {
+      if (i != 0) {
+        os << ", ";
+      }
+      os << node.input(static_cast<std::size_t>(i));
+    }
+    os << ") -> ";
+    for (int i = 0; i < node.output().size(); ++i) {
+      if (i != 0) {
+        os << ", ";
+      }
+      os << node.output(static_cast<std::size_t>(i));
+    }
+    if (!node.name().empty()) {
+      os << "  [name=" << node.name().value() << "]";
+    }
+    os << "\n";
+  }
+
+  os << "  outputs (" << outputs_.size() << "):\n";
+  for (const ValueInfoProto &output : outputs_) {
+    const std::string &value_name = output.name().value();
+    os << "    " << value_name;
+    SymTensor descriptor;
+    if (SymTensorFromValueInfo(output, descriptor)) {
+      os << ": " << descriptor.ToString();
+    }
+    os << "\n";
+  }
+
+  if (local_functions_.Size() != 0) {
+    os << "  local functions (" << local_functions_.Size() << "):\n";
+    for (const auto &entry : local_functions_) {
+      os << "    " << entry.first << "\n";
+    }
+  }
+  if (subgraphs_.Size() != 0) {
+    os << "  subgraphs (" << subgraphs_.Size() << "):\n";
+    for (const auto &entry : subgraphs_) {
+      os << "    " << entry.first << "\n";
+    }
+  }
+
+  return os.str();
 }
 
 // ── Finalization ───────────────────────────────────────────────────────
@@ -302,7 +471,7 @@ void GraphBuilder::Finalize(GraphProto &graph) {
 }
 
 GraphProto GraphBuilder::ToGraph() {
-  GraphProto graph = graph_;
+  GraphProto graph = BuildGraph();
   Finalize(graph);
   return graph;
 }
@@ -315,11 +484,14 @@ ModelProto GraphBuilder::ToModel(int64_t ir_version) {
     model.add_opset(entry.first, entry.second);
   }
   *model.mutable_graph() = ToGraph();
+  for (const auto &entry : local_functions_) {
+    model.add_function(entry.second->ToFunction(entry.second->name()));
+  }
   return model;
 }
 
 FunctionProto GraphBuilder::ToFunction(const std::string &domain) {
-  if (graph_.initializer().size() > 0) {
+  if (initializers_.Size() != 0) {
     throw BuilderError("GraphBuilder: a FunctionProto cannot carry initializers; remove them or "
                        "produce a model / graph instead.");
   }

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
@@ -200,7 +201,7 @@ public:
 ///
 ///   * a *body-aware* overload that takes the Scan ``body`` subgraph, the
 ///     initial state and the per-axis scan inputs, executes the body once
-///     per iteration through :cpp:func:`onnx_kernels::RunSubgraph`, and
+///     per iteration through :cpp:class:`onnx_kernels::SubgraphSession`, and
 ///     returns the operator's full output list. This is the overload used
 ///     when the kernel is invoked from the runtime dispatcher
 ///     (:cpp:func:`onnx_kernels::RunNode`);
@@ -270,16 +271,16 @@ public:
   /// @return ``N + K`` tensors: the final state values followed by the
   ///         stacked scan outputs.
   Tensors operator()(RuntimeContext &rt, const GraphProto &body, const Tensors &initial_state,
-                     const Tensors &scan_inputs, const std::vector<int64_t> &scan_input_axes = {},
-                     const std::vector<int64_t> &scan_input_directions = {},
-                     const std::vector<int64_t> &scan_output_axes = {},
-                     const std::vector<int64_t> &scan_output_directions = {}) const;
+                     const Tensors &scan_inputs, const ParamInts &scan_input_axes = {},
+                     const ParamInts &scan_input_directions = {},
+                     const ParamInts &scan_output_axes = {},
+                     const ParamInts &scan_output_directions = {}) const;
 
   /// Allocator-aware stacking-only overload used by the runtime dispatcher.
   Tensors operator()(RuntimeContext &rt, int64_t trip_count, const Tensors &initial_state,
                      const Tensors &final_state, const std::vector<Tensors> &scan_values_per_iter,
-                     const std::vector<int64_t> &scan_output_axes = {},
-                     const std::vector<int64_t> &scan_output_directions = {}) const;
+                     const ParamInts &scan_output_axes = {},
+                     const ParamInts &scan_output_directions = {}) const;
 
   /// Stacking-only overload.
   ///
@@ -313,8 +314,8 @@ public:
   ///         stacked scan outputs.
   Tensors operator()(int64_t trip_count, const Tensors &initial_state, const Tensors &final_state,
                      const std::vector<Tensors> &scan_values_per_iter,
-                     const std::vector<int64_t> &scan_output_axes = {},
-                     const std::vector<int64_t> &scan_output_directions = {}) const;
+                     const ParamInts &scan_output_axes = {},
+                     const ParamInts &scan_output_directions = {}) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

@@ -227,13 +227,35 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
   return out;
 }
 
-Tensors RunSubgraph(const GraphProto &graph, std::vector<std::pair<std::string, Tensor>> bindings,
-                    RuntimeContext &rt, const std::string &attr_name) {
+SubgraphSession::SubgraphSession(RuntimeContext &rt, const GraphProto &graph)
+    : plan_(rt.GetExecutionPlan(graph)), session_(plan_) {
+  const auto &inits = graph.initializer();
+  initializers_.reserve(inits.size());
+  for (size_t i = 0; i < inits.size(); ++i) {
+    const TensorProto &tp = inits[i];
+    initializers_.emplace_back(tp.name(), TensorFromProto(tp));
+  }
+  const auto &outs = graph.output();
+  output_names_.reserve(outs.size());
+  for (size_t i = 0; i < outs.size(); ++i) {
+    const std::string out_name = outs[i].name();
+    EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: a subgraph output has an empty name.");
+    output_names_.push_back(out_name);
+  }
+}
+
+Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> bindings,
+                             RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child = rt.MakeSubgraphContext(attr_name);
+  for (const auto &kv : initializers_) {
+    if (!child.Has(kv.first)) {
+      child.Set(kv.first, kv.second, RuntimeEventKind::kInitializer);
+    }
+  }
   for (auto &kv : bindings) {
     child.Put(kv.first, std::move(kv.second), RuntimeEventKind::kInput);
   }
-  RunGraphNodesViaSession(graph, child);
+  session_.Run(child);
 
   if (rt.events_enabled()) {
     for (auto &ev : child.events()) {
@@ -242,10 +264,8 @@ Tensors RunSubgraph(const GraphProto &graph, std::vector<std::pair<std::string, 
   }
 
   Tensors outputs;
-  outputs.reserve(graph.output().size());
-  for (size_t i = 0; i < graph.output().size(); ++i) {
-    const std::string out_name = graph.output()[i].name();
-    EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: a subgraph output has an empty name.");
+  outputs.reserve(output_names_.size());
+  for (const auto &out_name : output_names_) {
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
@@ -531,6 +551,10 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
   const std::size_t n = n_inputs;
   Tensors v_initial = std::move(tensor_state);
 
+  // Build a single session over the body once and reuse it for every
+  // iteration instead of re-resolving the body's kernels on every call.
+  SubgraphSession body_session(rt, body);
+
   auto run_body = [&](int64_t iter, bool cond_in, const Tensors &state) -> Tensors {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(2 + n);
@@ -543,7 +567,7 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
       t.name = body.input(2 + i).name();
       bindings.emplace_back(t.name, std::move(t));
     }
-    return RunSubgraph(body, std::move(bindings), rt, "body");
+    return body_session.Run(std::move(bindings), rt, "body");
   };
 
   Loop loop_kernel(rt.kernel_ctx());
@@ -780,6 +804,10 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
     body_outputs_per_iter[k].reserve(n);
   }
 
+  // Build a single session over the body once and reuse it for every
+  // iteration instead of re-resolving the body's kernels on every call.
+  SubgraphSession body_session(rt, body);
+
   for (std::size_t i = 0; i < n; ++i) {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(1u + num_additional);
@@ -800,7 +828,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
       bindings.emplace_back(param_name, std::move(t));
     }
 
-    Tensors iter_outputs = RunSubgraph(body, std::move(bindings), rt, "body");
+    Tensors iter_outputs = body_session.Run(std::move(bindings), rt, "body");
     EXT_ENFORCE_INVALID(iter_outputs.size() == m, "RunNode: SequenceMap body produced ",
                         iter_outputs.size(), " output(s) at iteration ", i, ", expected ", m, ".");
     for (std::size_t k = 0; k < m; ++k) {

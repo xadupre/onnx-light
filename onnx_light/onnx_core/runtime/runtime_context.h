@@ -569,7 +569,7 @@ public:
 
   /// Enables or disables the per-node release of unused intermediates
   /// performed by :cpp:class:`RuntimeSession` (used when running a
-  /// model's graph, by :cpp:func:`RunSubgraph`, and every other
+  /// model's graph, by :cpp:class:`SubgraphSession`, and every other
   /// node-list entry point). When enabled, a
   /// name whose last reference (declared input of a node, or captured
   /// input of a subgraph attribute) appears at node ``i`` is removed

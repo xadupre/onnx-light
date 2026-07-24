@@ -2880,9 +2880,8 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
-         const std::vector<float> coefficients =
-             GetAttributeFloatsOrDefault(node, "coefficients", {});
-         const std::vector<float> intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
+         const ParamFloats coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
+         const ParamFloats intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
          const int64_t targets = GetAttributeIntOrDefault(node, "targets", 1);
          const std::string post_transform =
              GetAttributeStringOrDefault(node, "post_transform", "NONE");
@@ -2946,9 +2945,8 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 2);
          const Tensor &x = GetInput(node, 0, rt.tensors());
-         const std::vector<float> coefficients =
-             GetAttributeFloatsOrDefault(node, "coefficients", {});
-         const std::vector<float> intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
+         const ParamFloats coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
+         const ParamFloats intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
          const std::string post_transform =
              GetAttributeStringOrDefault(node, "post_transform", "NONE");
          const std::vector<int64_t> classlabels_ints =

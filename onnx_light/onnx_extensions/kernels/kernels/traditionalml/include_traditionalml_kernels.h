@@ -295,16 +295,14 @@ public:
   using KernelBase::KernelBase;
 
   template <typename T>
-  std::pair<Tensor, Tensor> operator()(const Tensor &x, const std::vector<float> &coefficients,
-                                       const std::vector<float> &intercepts,
-                                       const std::vector<int64_t> &class_labels,
-                                       const std::string &post_transform) const;
+  std::pair<Tensor, Tensor>
+  operator()(const Tensor &x, const ParamFloats &coefficients, const ParamFloats &intercepts,
+             const std::vector<int64_t> &class_labels, const std::string &post_transform) const;
 
   template <typename T>
-  std::pair<Tensor, Tensor> operator()(const Tensor &x, const std::vector<float> &coefficients,
-                                       const std::vector<float> &intercepts,
-                                       const std::vector<std::string> &class_labels,
-                                       const std::string &post_transform) const;
+  std::pair<Tensor, Tensor>
+  operator()(const Tensor &x, const ParamFloats &coefficients, const ParamFloats &intercepts,
+             const std::vector<std::string> &class_labels, const std::string &post_transform) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -320,9 +318,9 @@ public:
   using KernelBase::KernelBase;
 
   template <typename T>
-  Tensor operator()(const Tensor &x, const std::vector<float> &coefficients,
-                    const std::vector<float> &intercepts, int64_t targets,
-                    const std::string &post_transform, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &x, const ParamFloats &coefficients, const ParamFloats &intercepts,
+                    int64_t targets, const std::string &post_transform,
+                    RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

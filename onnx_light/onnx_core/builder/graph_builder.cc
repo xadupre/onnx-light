@@ -296,6 +296,8 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
 GraphBuilder *
 GraphBuilder::FindNamedBuilder(const std::vector<std::unique_ptr<GraphBuilder>> &builders,
                                const std::string &name) {
+  // Linear scan: local functions and subgraphs are few, so a vector keeps the
+  // declaration order without the overhead of a separate name -> index map.
   for (const auto &builder : builders) {
     if (builder->name() == name) {
       return builder.get();

@@ -288,10 +288,10 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
       // Seed inputs, maps and initializers once. These are the tensors that
       // must survive between the two runs; every other tensor a run produces is
       // cleared afterwards so the second run replays from the identical state.
-      std::unordered_set<std::string> seeded;
+      std::unordered_set<std::string> seeded_names;
       for (const Tensor &t : ds.inputs) {
         rt.Put(t.name, t, core::runtime::RuntimeEventKind::kInput);
-        seeded.insert(t.name);
+        seeded_names.insert(t.name);
       }
       for (const Map &m : ds.maps) {
         rt.PutMap(m.name, m);
@@ -300,10 +300,10 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
         if (!rt.Has(tp.name())) {
           rt.Set(tp.name(), TensorFromProto(tp), core::runtime::RuntimeEventKind::kInitializer);
         }
-        seeded.insert(tp.name());
+        seeded_names.insert(tp.name());
       }
 
-      size_t peaks[2] = {0, 0};
+      size_t memory_peaks[2] = {0, 0};
       for (int run = 0; run < 2; ++run) {
         ASSERT_NO_THROW(session.Run(rt)) << "Run " << (run + 1) << " threw for case " << tc.name;
         for (size_t i = 0; i < outputs.size(); ++i) {
@@ -311,7 +311,7 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
           ASSERT_TRUE(rt.Has(oname)) << "Missing output '" << oname << "' for case " << tc.name;
           ExpectTensorBitEqual(rt.Get(oname), ds.outputs[i]);
         }
-        peaks[run] = alloc.PeakAllocatedSize();
+        memory_peaks[run] = alloc.PeakAllocatedSize();
 
         // Restore the seeded baseline: drop every tensor the run produced —
         // graph outputs, released-late intermediates, and dead node outputs
@@ -319,19 +319,19 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
         // next run rebuilds them would inflate the second run's peak, so the
         // second run of the same session starts from the identical state and
         // reaches the identical peak when there is no leak.
-        std::vector<std::string> produced;
+        std::vector<std::string> produced_names;
         for (const auto &named_tensor : rt.tensors()) {
-          if (seeded.count(named_tensor.first) == 0) {
-            produced.push_back(named_tensor.first);
+          if (seeded_names.count(named_tensor.first) == 0) {
+            produced_names.push_back(named_tensor.first);
           }
         }
-        for (const std::string &name : produced) {
+        for (const std::string &name : produced_names) {
           rt.Remove(name);
         }
       }
 
       if (track_peak) {
-        EXPECT_EQ(peaks[0], peaks[1])
+        EXPECT_EQ(memory_peaks[0], memory_peaks[1])
             << "Memory peak changed on the second run for case " << tc.name;
         ++peak_checked;
       }

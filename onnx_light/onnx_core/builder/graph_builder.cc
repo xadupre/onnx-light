@@ -18,23 +18,11 @@ namespace core {
 namespace builder {
 
 using ::onnx_light::core::shapes::kUnknownOpsetVersion;
+using ::onnx_light::core::shapes::ShapesContext;
 using ::onnx_light::core::symbolic::SymTensorFromTensorProto;
 using ::onnx_light::core::symbolic::SymTensorFromValueInfo;
 using ::onnx_light::core::symbolic::SymTensorToValueInfo;
 using ::onnx_light::core::symbolic::TensorTypeToDataType;
-
-namespace {
-
-// Canonical name of the default ONNX operator domain.
-constexpr const char *kOnnxDomain = "ai.onnx";
-
-// Normalises a domain string so the empty (default) domain compares equal to
-// the canonical ``ai.onnx`` domain used by the operator schemas.
-std::string NormaliseDomain(const std::string &domain) {
-  return domain.empty() ? std::string(kOnnxDomain) : domain;
-}
-
-} // namespace
 
 GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup)
     : name_(std::move(name)), schema_lookup_(std::move(schema_lookup)) {}
@@ -46,14 +34,14 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&) noexcept = default;
 // ── Opset management ───────────────────────────────────────────────────
 
 void GraphBuilder::SetOpsetVersion(const std::string &domain, int version) {
-  const std::string key = NormaliseDomain(domain);
+  const std::string key = ShapesContext::NormaliseDomain(domain);
   opsets_[key] = version;
   user_opsets_.insert(key);
   compute_.Shapes().SetOpsetVersion(key, version);
 }
 
 int GraphBuilder::OpsetVersion(const std::string &domain) const {
-  auto it = opsets_.find(NormaliseDomain(domain));
+  auto it = opsets_.find(ShapesContext::NormaliseDomain(domain));
   return it == opsets_.end() ? kUnknownOpsetVersion : it->second;
 }
 
@@ -178,7 +166,7 @@ void GraphBuilder::MakeOutput(const std::string &name) {
 
 int GraphBuilder::ResolveNodeOpset(const std::string &domain,
                                    const std::vector<const OpSchemaInfo *> &schemas) {
-  const std::string key = NormaliseDomain(domain);
+  const std::string key = ShapesContext::NormaliseDomain(domain);
   auto it = opsets_.find(key);
   if (user_opsets_.find(key) != user_opsets_.end()) {
     return it->second;
@@ -202,7 +190,7 @@ int GraphBuilder::ResolveNodeOpset(const std::string &domain,
 
 bool GraphBuilder::ShapeFunctionAvailable(const NodeProto &node) const {
   const std::string domain = node.domain().empty() ? std::string() : node.domain().value();
-  const std::string key = NormaliseDomain(domain) + ":" + node.op_type().value();
+  const std::string key = ShapesContext::NormaliseDomain(domain) + ":" + node.op_type().value();
   const auto &table = core::shapes::DispatchTable();
   return table.find(key) != table.end();
 }
@@ -225,9 +213,9 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
   std::vector<OpSchemaInfo> history =
       schema_lookup_ ? schema_lookup_(op_type) : std::vector<OpSchemaInfo>();
   std::vector<const OpSchemaInfo *> domain_schemas;
-  const std::string normalised_domain = NormaliseDomain(domain);
+  const std::string normalised_domain = ShapesContext::NormaliseDomain(domain);
   for (const OpSchemaInfo &schema : history) {
-    if (NormaliseDomain(schema.domain) == normalised_domain) {
+    if (ShapesContext::NormaliseDomain(schema.domain) == normalised_domain) {
       domain_schemas.push_back(&schema);
     }
   }

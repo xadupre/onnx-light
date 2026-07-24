@@ -414,6 +414,13 @@ public:
 
   // ── Opset versions ──────────────────────────────────────────────────
 
+  /// Returns ``domain`` with the empty (default) domain normalised to the
+  /// canonical :cpp:var:`kOnnxDomain`, so that ``""`` and ``"ai.onnx"`` compare
+  /// equal. Shared by the opset and custom-inference lookups below.
+  static std::string NormaliseDomain(const std::string &domain) {
+    return domain.empty() ? std::string(kOnnxDomain) : domain;
+  }
+
   /**
    * Records the opset version of ``domain``. An empty ``domain`` is
    * normalised to :cpp:var:`kOnnxDomain`. Replaces any previous entry
@@ -754,10 +761,6 @@ public:
                               std::vector<std::string> inputs);
 
 private:
-  static std::string NormaliseDomain(const std::string &domain) {
-    return domain.empty() ? std::string(kOnnxDomain) : domain;
-  }
-
   /// Appends a :cpp:enumerator:`ShapeEventAction::kAdd` /
   /// :cpp:enumerator:`ShapeEventAction::kReplace` event for ``name``
   /// describing ``tensor`` (the descriptor about to be stored). Only

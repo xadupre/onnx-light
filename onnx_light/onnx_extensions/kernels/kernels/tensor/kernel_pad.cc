@@ -5,11 +5,11 @@
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -70,13 +70,14 @@ onnx_kernels::Shape ResolveAxes(const Tensor *axes_tensor, std::size_t rank) {
   return axes;
 }
 
-// Reads the ``constant_value`` scalar tensor and returns its bytes as a
-// per-element pattern of size ``elem_size``. When ``cv`` is ``nullptr`` (or an
-// empty optional tensor), returns ``elem_size`` zero bytes.
-std::vector<uint8_t> ResolveConstantBytes(const Tensor *cv, int32_t data_type,
-                                          std::size_t elem_size) {
+// Reads the ``constant_value`` scalar tensor and writes its bytes as a
+// per-element pattern of size ``elem_size`` into ``out``. When ``cv`` is
+// ``nullptr`` (or an empty optional tensor), writes ``elem_size`` zero bytes.
+void ResolveConstantBytes(const Tensor *cv, int32_t data_type, std::size_t elem_size,
+                          uint8_t *out) {
   if (cv == nullptr || cv->element_count() == 0) {
-    return std::vector<uint8_t>(elem_size, 0);
+    std::memset(out, 0, elem_size);
+    return;
   }
   EXT_ENFORCE_INVALID(cv->data_type == data_type,
                       "kernel::Pad: 'constant_value' dtype must match 'data' dtype.");
@@ -84,7 +85,7 @@ std::vector<uint8_t> ResolveConstantBytes(const Tensor *cv, int32_t data_type,
                       "kernel::Pad: 'constant_value' must be a scalar tensor.");
   EXT_ENFORCE_INVALID(cv->size_bytes() == elem_size,
                       "kernel::Pad: 'constant_value' has unexpected byte size.");
-  return std::vector<uint8_t>(cv->bytes(), cv->bytes() + cv->size_bytes());
+  std::memcpy(out, cv->bytes(), elem_size);
 }
 
 // Pre-computed row-major strides (in elements).
@@ -149,6 +150,84 @@ int64_t MapCoord(int64_t out_coord, int64_t pad_begin, int64_t input_dim, const 
   EXT_THROW_INVALID("kernel::Pad: unsupported mode '", mode, "'.");
 }
 
+// Validates ``output`` and fills it with the padded result. ``allocator`` (when
+// non-null) supplies scratch storage for the per-element constant pattern;
+// otherwise the buffer falls back to inline storage.
+void PadInto(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
+             const Tensor *axes, const std::string &mode, Tensor &output,
+             RawBufferAllocator *allocator) {
+  const std::size_t rank = data.shape.size();
+  const onnx_kernels::Shape axes_vec = ResolveAxes(axes, rank);
+  const onnx_kernels::Shape pads_vec = ReadInt64Vector(pads, "pads");
+  const std::size_t num_axes = axes_vec.size();
+  EXT_ENFORCE_INVALID(pads_vec.size() == 2 * num_axes,
+                      "kernel::Pad: 'pads' must have length 2 * num_axes.");
+  for (int64_t p : pads_vec) {
+    EXT_ENFORCE_INVALID(
+        p >= 0, "kernel::Pad: negative padding (cropping) is not supported by this kernel.");
+  }
+
+  onnx_kernels::Shape pad_begin;
+  pad_begin.assign(rank, 0);
+  onnx_kernels::Shape pad_end;
+  pad_end.assign(rank, 0);
+  for (std::size_t i = 0; i < num_axes; ++i) {
+    const std::size_t axis = static_cast<std::size_t>(axes_vec[i]);
+    pad_begin[axis] = pads_vec[i];
+    pad_end[axis] = pads_vec[i + num_axes];
+  }
+  onnx_kernels::Shape expected_shape;
+  expected_shape.assign(rank, 0);
+  for (std::size_t i = 0; i < rank; ++i) {
+    expected_shape[i] = data.shape[i] + pad_begin[i] + pad_end[i];
+  }
+  EXT_ENFORCE_INVALID(output.data_type == data.data_type,
+                      "kernel::Pad: preallocated output dtype must match input dtype.");
+  EXT_ENFORCE_INVALID(output.shape == expected_shape,
+                      "kernel::Pad: preallocated output shape must match padded shape.");
+
+  const std::size_t elem_size = ElementSize(data.data_type);
+  EXT_ENFORCE_INVALID(elem_size > 0, "kernel::Pad: data dtype is not supported by this kernel.");
+  detail::TemporaryTypedBuffer<uint8_t> constant_buf(elem_size, allocator,
+                                                     "kernel::Pad constant_value");
+  ResolveConstantBytes(constant_value, data.data_type, elem_size, constant_buf.data());
+  const uint8_t *const constant_bytes = constant_buf.data();
+
+  const onnx_kernels::Shape in_strides = RowMajorStrides(data.shape);
+  const onnx_kernels::Shape out_strides = RowMajorStrides(output.shape);
+
+  int64_t total = 1;
+  for (int64_t d : output.shape) {
+    total *= d;
+  }
+
+  onnx_kernels::Shape out_coord;
+  out_coord.assign(rank, 0);
+  for (int64_t out_idx = 0; out_idx < total; ++out_idx) {
+    int64_t remaining = out_idx;
+    for (std::size_t k = 0; k < rank; ++k) {
+      out_coord[k] = remaining / out_strides[k];
+      remaining -= out_coord[k] * out_strides[k];
+    }
+    bool is_pad = false;
+    int64_t in_idx = 0;
+    for (std::size_t k = 0; k < rank; ++k) {
+      const int64_t mapped = MapCoord(out_coord[k], pad_begin[k], data.shape[k], mode);
+      if (mapped < 0) {
+        is_pad = true;
+        break;
+      }
+      in_idx += mapped * in_strides[k];
+    }
+    uint8_t *const dst = output.mutable_bytes() + static_cast<std::size_t>(out_idx) * elem_size;
+    if (is_pad) {
+      std::memcpy(dst, constant_bytes, elem_size);
+    } else {
+      std::memcpy(dst, data.bytes() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
+    }
+  }
+}
+
 } // namespace
 
 Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
@@ -188,80 +267,13 @@ Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *con
   const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
   Tensor out =
       MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(data, pads, constant_value, axes, mode, out);
+  PadInto(data, pads, constant_value, axes, mode, out, rt ? rt->allocator() : nullptr);
   return out;
 }
 
 void Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
                      const Tensor *axes, const std::string &mode, Tensor &output) const {
-  const std::size_t rank = data.shape.size();
-  const onnx_kernels::Shape axes_vec = ResolveAxes(axes, rank);
-  const onnx_kernels::Shape pads_vec = ReadInt64Vector(pads, "pads");
-  const std::size_t num_axes = axes_vec.size();
-  EXT_ENFORCE_INVALID(pads_vec.size() == 2 * num_axes,
-                      "kernel::Pad: 'pads' must have length 2 * num_axes.");
-  for (int64_t p : pads_vec) {
-    EXT_ENFORCE_INVALID(
-        p >= 0, "kernel::Pad: negative padding (cropping) is not supported by this kernel.");
-  }
-
-  onnx_kernels::Shape pad_begin;
-  pad_begin.assign(rank, 0);
-  onnx_kernels::Shape pad_end;
-  pad_end.assign(rank, 0);
-  for (std::size_t i = 0; i < num_axes; ++i) {
-    const std::size_t axis = static_cast<std::size_t>(axes_vec[i]);
-    pad_begin[axis] = pads_vec[i];
-    pad_end[axis] = pads_vec[i + num_axes];
-  }
-  onnx_kernels::Shape expected_shape;
-  expected_shape.assign(rank, 0);
-  for (std::size_t i = 0; i < rank; ++i) {
-    expected_shape[i] = data.shape[i] + pad_begin[i] + pad_end[i];
-  }
-  EXT_ENFORCE_INVALID(output.data_type == data.data_type,
-                      "kernel::Pad: preallocated output dtype must match input dtype.");
-  EXT_ENFORCE_INVALID(output.shape == expected_shape,
-                      "kernel::Pad: preallocated output shape must match padded shape.");
-
-  const std::size_t elem_size = ElementSize(data.data_type);
-  EXT_ENFORCE_INVALID(elem_size > 0, "kernel::Pad: data dtype is not supported by this kernel.");
-  const std::vector<uint8_t> constant_bytes =
-      ResolveConstantBytes(constant_value, data.data_type, elem_size);
-
-  const onnx_kernels::Shape in_strides = RowMajorStrides(data.shape);
-  const onnx_kernels::Shape out_strides = RowMajorStrides(output.shape);
-
-  int64_t total = 1;
-  for (int64_t d : output.shape) {
-    total *= d;
-  }
-
-  onnx_kernels::Shape out_coord;
-  out_coord.assign(rank, 0);
-  for (int64_t out_idx = 0; out_idx < total; ++out_idx) {
-    int64_t remaining = out_idx;
-    for (std::size_t k = 0; k < rank; ++k) {
-      out_coord[k] = remaining / out_strides[k];
-      remaining -= out_coord[k] * out_strides[k];
-    }
-    bool is_pad = false;
-    int64_t in_idx = 0;
-    for (std::size_t k = 0; k < rank; ++k) {
-      const int64_t mapped = MapCoord(out_coord[k], pad_begin[k], data.shape[k], mode);
-      if (mapped < 0) {
-        is_pad = true;
-        break;
-      }
-      in_idx += mapped * in_strides[k];
-    }
-    uint8_t *const dst = output.mutable_bytes() + static_cast<std::size_t>(out_idx) * elem_size;
-    if (is_pad) {
-      std::memcpy(dst, constant_bytes.data(), elem_size);
-    } else {
-      std::memcpy(dst, data.bytes() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
-    }
-  }
+  PadInto(data, pads, constant_value, axes, mode, output, nullptr);
 }
 
 } // namespace kernel

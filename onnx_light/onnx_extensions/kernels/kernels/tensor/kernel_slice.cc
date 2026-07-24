@@ -5,9 +5,11 @@
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -18,22 +20,30 @@ namespace kernel {
 
 namespace {
 
-std::vector<int64_t> ReadIntInput(const Tensor &t, const std::string &name) {
+using IntBuffer = detail::TemporaryTypedBuffer<int64_t>;
+
+// Reads a 1-D INT32/INT64 tensor into an allocator-backed buffer of int64_t.
+// Scratch storage is drawn from the runtime allocator when one is available,
+// falling back to std::vector otherwise.
+std::unique_ptr<IntBuffer> ReadIntInput(const Tensor &t, const char *name,
+                                        RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(t.shape.size() <= 1, "kernel::Slice: '", name, "' input must be 1-D.");
   const int64_t n = t.shape.empty() ? 0 : t.shape[0];
-  std::vector<int64_t> out(static_cast<std::size_t>(n));
+  const std::size_t count = static_cast<std::size_t>(n);
+  auto out = std::make_unique<IntBuffer>(count, count == 0 ? nullptr : allocator, name);
   if (n == 0) {
     return out;
   }
+  int64_t *dst = out->data();
   if (t.data_type == static_cast<int32_t>(DataType::INT64)) {
-    std::memcpy(out.data(), t.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(dst, t.bytes(), count * sizeof(int64_t));
     return out;
   }
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::INT32), "kernel::Slice: '",
                       name, "' input must be INT32 or INT64.");
   const int32_t *p = reinterpret_cast<const int32_t *>(t.bytes());
   for (int64_t i = 0; i < n; ++i) {
-    out[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);
+    dst[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);
   }
   return out;
 }
@@ -85,29 +95,44 @@ struct SliceLayout {
 };
 
 SliceLayout ComputeSliceLayout(const Tensor &data, const Tensor &starts_t, const Tensor &ends_t,
-                               const Tensor *axes_t, const Tensor *steps_t) {
-  const std::vector<int64_t> starts_in = ReadIntInput(starts_t, "starts");
-  const std::vector<int64_t> ends_in = ReadIntInput(ends_t, "ends");
-  EXT_ENFORCE_INVALID(starts_in.size() == ends_in.size(),
+                               const Tensor *axes_t, const Tensor *steps_t,
+                               RawBufferAllocator *allocator) {
+  const std::unique_ptr<IntBuffer> starts_buf = ReadIntInput(starts_t, "starts", allocator);
+  const std::unique_ptr<IntBuffer> ends_buf = ReadIntInput(ends_t, "ends", allocator);
+  EXT_ENFORCE_INVALID(starts_buf->size == ends_buf->size,
                       "kernel::Slice: starts and ends inputs must have the same length.");
 
-  const std::size_t n = starts_in.size();
-  std::vector<int64_t> axes = axes_t ? ReadIntInput(*axes_t, "axes") : std::vector<int64_t>{};
-  if (!axes_t) {
-    axes.resize(n);
+  const std::size_t n = starts_buf->size;
+  const int64_t *starts_in = starts_buf->data();
+  const int64_t *ends_in = ends_buf->data();
+
+  std::unique_ptr<IntBuffer> axes_buf;
+  if (axes_t) {
+    axes_buf = ReadIntInput(*axes_t, "axes", allocator);
+    EXT_ENFORCE_INVALID(axes_buf->size == n,
+                        "kernel::Slice: axes input must have the same length as starts.");
+  } else {
+    axes_buf = std::make_unique<IntBuffer>(n, n == 0 ? nullptr : allocator, "kernel::Slice axes");
+    int64_t *axes_data = axes_buf->data();
     for (std::size_t i = 0; i < n; ++i) {
-      axes[i] = static_cast<int64_t>(i);
+      axes_data[i] = static_cast<int64_t>(i);
     }
   }
-  EXT_ENFORCE_INVALID(axes.size() == n,
-                      "kernel::Slice: axes input must have the same length as starts.");
+  const int64_t *axes = axes_buf->data();
 
-  std::vector<int64_t> steps = steps_t ? ReadIntInput(*steps_t, "steps") : std::vector<int64_t>{};
-  if (!steps_t) {
-    steps.assign(n, static_cast<int64_t>(1));
+  std::unique_ptr<IntBuffer> steps_buf;
+  if (steps_t) {
+    steps_buf = ReadIntInput(*steps_t, "steps", allocator);
+    EXT_ENFORCE_INVALID(steps_buf->size == n,
+                        "kernel::Slice: steps input must have the same length as starts.");
+  } else {
+    steps_buf = std::make_unique<IntBuffer>(n, n == 0 ? nullptr : allocator, "kernel::Slice steps");
+    int64_t *steps_data = steps_buf->data();
+    for (std::size_t i = 0; i < n; ++i) {
+      steps_data[i] = static_cast<int64_t>(1);
+    }
   }
-  EXT_ENFORCE_INVALID(steps.size() == n,
-                      "kernel::Slice: steps input must have the same length as starts.");
+  const int64_t *steps = steps_buf->data();
 
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   SliceLayout layout;
@@ -154,7 +179,8 @@ SliceLayout ComputeSliceLayout(const Tensor &data, const Tensor &starts_t, const
 
 Tensor Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
                          const Tensor *axes, const Tensor *steps, RuntimeContext *rt) const {
-  const SliceLayout layout = ComputeSliceLayout(data, starts, ends, axes, steps);
+  const SliceLayout layout =
+      ComputeSliceLayout(data, starts, ends, axes, steps, rt ? rt->allocator() : nullptr);
   const size_t out_n_bytes = static_cast<std::size_t>(layout.total_elements) * layout.elem_size;
   Tensor out = MakeOutputTensor(data.data_type, layout.out_shape, out_n_bytes,
                                 rt ? rt->allocator() : nullptr);
@@ -164,7 +190,9 @@ Tensor Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor 
 
 void Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
                        const Tensor *axes, const Tensor *steps, Tensor &output) const {
-  const SliceLayout layout = ComputeSliceLayout(data, starts, ends, axes, steps);
+  const SliceLayout layout =
+      ComputeSliceLayout(data, starts, ends, axes, steps,
+                         output.has_allocation() ? output.allocation_owner() : nullptr);
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::Slice: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == layout.out_shape,

@@ -89,11 +89,13 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
       EXT_ENFORCE_INVALID(initial_h_in.shape.size() == 3u && initial_h_in.shape[1] == 1,
                           "kernel::GRU: initial_h must have shape [batch_size, num_directions=1, "
                           "hidden_size] for layout=1.");
-      initial_h_storage = Tensor::FromFloat(
-          "", {1, initial_h_in.shape[0], initial_h_in.shape[2]},
-          std::vector<float>(initial_h_in.AsFloat(),
-                             initial_h_in.AsFloat() + (initial_h_in.size_bytes() / sizeof(float))),
-          allocator);
+      // The reshape from [batch_size, 1, hidden_size] to
+      // [1, batch_size, hidden_size] is a pure reshape on contiguous
+      // storage (num_directions == 1), so borrow the input buffer
+      // instead of copying it.
+      initial_h_storage = Tensor::Borrow("", static_cast<int32_t>(DataType::FLOAT),
+                                         {1, initial_h_in.shape[0], initial_h_in.shape[2]},
+                                         initial_h_in.bytes(), initial_h_in.size_bytes());
       initial_h_p = &initial_h_storage;
     }
   }

@@ -10,13 +10,6 @@
 #include <variant>
 #include <vector>
 
-#ifdef ONNX_LIGHT_NAMESPACE
-// onnx_lib headers define ONNX_LIGHT_NAMESPACE as a macro alias (onnx_light),
-// while onnx_op headers in this target use the literal ONNX_LIGHT_NAMESPACE namespace.
-// Undefining keeps this test bound to onnx_op symbols while still using onnx_lib APIs explicitly.
-#undef ONNX_LIGHT_NAMESPACE
-#endif
-
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {

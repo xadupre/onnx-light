@@ -6,6 +6,8 @@
 
 #include <string>
 
+#include "onnx_light_helpers.h"
+
 #include "onnx_core/light_op_schema/light_op_schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

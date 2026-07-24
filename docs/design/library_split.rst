@@ -105,7 +105,7 @@ Summary of each library
         ``lib_onnx_manipulations``, ``lib_onnx_shape``, and
         ``lib_onnx_kernels`` can share them without depending on each other.
         It implements *all* the generic mechanisms but registers **no**
-        concrete operator: the actual schemas, kernels, shape-inference and
+        concrete operators. The actual schemas, kernels, shape-inference and
         peak-memory functions are **registered** into those shared dispatch
         tables by the extension libraries through their
         ``Register*Functions()`` entry points (``RegisterKernelFunctions``,

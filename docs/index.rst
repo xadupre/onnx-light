@@ -93,7 +93,7 @@ projects can link only what they need:
   functionalities (runtime value types and execution engine, the
   ``LightOpSchema`` data structures, the symbolic expression engine and
   the kernel / shape-inference dispatch tables) but ships **no** concrete
-  operator: the dispatch tables start empty and are filled by the
+  operators. The dispatch tables start empty and are filled by the
   extension libraries below.
 - ``onnx_light::lib_onnx_op`` – lightweight ``LightOpSchema``
   registrations for ONNX operator domains, with no shape inference.

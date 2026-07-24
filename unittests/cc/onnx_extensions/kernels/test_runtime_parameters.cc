@@ -67,3 +67,12 @@ TEST(runtime_parameters, RuntimeSessionSetParameters) {
   EXPECT_EQ(session.parameters().num_threads, 3);
   EXPECT_EQ(session.parameters().EffectiveNumThreads(), 3);
 }
+
+TEST(runtime_parameters, RuntimeSessionDefaultConstructedEmptyPlan) {
+  // A default-constructed session owns an empty default plan: no required
+  // inputs and no parameters, and Run() is a no-op that leaves the context
+  // untouched.
+  RuntimeSession session;
+  EXPECT_EQ(session.parameters().num_threads, 0);
+  EXPECT_TRUE(session.required_inputs().empty());
+}

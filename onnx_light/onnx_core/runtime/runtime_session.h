@@ -67,13 +67,18 @@ namespace runtime {
 class RuntimeSession {
 public:
   /**
-   * Builds a session over an empty default :cpp:class:`ExecutionPlan` owned by
-   * the session. The plan carries no node, so :cpp:func:`Run` is a no-op; to
-   * execute a graph, construct a session with the plan-taking constructor
-   * instead. This default lets a session be default-constructed (and, e.g.,
-   * exposed to the Python binding without a plan argument).
+   * Builds a session over an :cpp:class:`ExecutionPlan` the session owns,
+   * constructed from ``model``'s graph (:cpp:func:`ModelProto::graph`). Use
+   * this when no precomputed plan is available: the session builds and owns
+   * the plan itself, so a caller can create a runnable session from a model
+   * alone (without first building an :cpp:class:`ExecutionPlan`). Kernel
+   * resolution is still deferred to the first :cpp:func:`Run`.
+   *
+   * @param model Model whose graph drives execution. The model (and the graph
+   *              it owns) must outlive the session, since the built plan holds
+   *              non-owning pointers into the graph's nodes.
    */
-  RuntimeSession();
+  explicit RuntimeSession(const ModelProto &model);
 
   /**
    * Builds a session over ``plan``. Kernel resolution is deferred to the first
@@ -190,9 +195,10 @@ private:
   /// kernel has run, once :cpp:member:`session_allocator_` has been captured.
   void VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const;
 
-  /// Empty default plan owned by the session, referenced by
-  /// :cpp:member:`plan_` when the session is default-constructed (no plan
-  /// supplied). Left empty (and unused) when a plan is passed in.
+  /// Plan owned by the session, referenced by :cpp:member:`plan_` when the
+  /// session is constructed from a :cpp:class:`ModelProto` (no external plan
+  /// supplied). Built from the model's graph. Left empty (and unused) when a
+  /// plan is passed in through the plan-taking constructor.
   ExecutionPlan default_plan_;
   const ExecutionPlan &plan_;
   std::vector<PreparedKernel> kernels_;

@@ -108,17 +108,24 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(int(rt.RuntimeEventAction.kRemove), 2)
         self.assertEqual(int(rt.RuntimeEventAction.kRunNode), 3)
 
-    def test_runtime_session_default_constructed_empty_plan(self):
-        # A session can be constructed without a plan: it owns an empty default
-        # ExecutionPlan, so run() is a no-op that leaves the context untouched.
-        session = rt.RuntimeSession()
-        self.assertEqual(session.required_inputs, [])
-        self.assertEqual(session.parameters.num_threads, 0)
+    def test_runtime_session_from_model_builds_plan(self):
+        # A session can be constructed directly from a ModelProto (no plan
+        # supplied): it builds and owns the plan from ``model.graph``, so run()
+        # executes the graph. Here a single-node Add graph is run against a
+        # context supplying its two external inputs.
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[2] x, float[2] y) => (float[2] z) {\n"
+            "  z = Add(x, y)\n"
+            "}\n"
+        )
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         ctx.set("x", _make_float_tensor("x", [1.0, -2.0]))
+        ctx.set("y", _make_float_tensor("y", [10.0, 20.0]))
+        session = rt.RuntimeSession(model)
         session.run(ctx)
-        self.assertEqual(sorted(ctx.names()), ["x"])
-        self.assertEqual(_unpack_floats(ctx.get("x")), (1.0, -2.0))
+        self.assertEqual(sorted(session.required_inputs), ["x", "y"])
+        self.assertEqual(_unpack_floats(ctx.get("z")), (11.0, 18.0))
 
     def test_default_opset_and_kernel_context(self):
         opset = rt.default_opset(18)

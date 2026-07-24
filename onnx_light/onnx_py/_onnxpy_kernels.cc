@@ -467,9 +467,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       ":class:`RuntimeContext`; subsequent calls reuse those cached instances. When "
       ":attr:`RuntimeContext.release_intermediates` is enabled, :func:`run` also "
       "frees each intermediate whose last reference has been reached.")
-      .def(nb::init<>(), "Builds a session over an empty default :class:`ExecutionPlan` owned by "
-                         "the session. :func:`run` is a no-op; construct a session with a ``plan`` "
-                         "argument to execute a graph.")
+      .def(nb::init<const ModelProto &>(), nb::arg("model"), nb::keep_alive<1, 2>(),
+           "Builds a session over an :class:`ExecutionPlan` the session owns, "
+           "built from ``model.graph``. Use this when no precomputed plan is "
+           "available: ``model`` (and the graph it owns) must outlive the session; "
+           "this binding keeps ``model`` alive for at least as long as the session.")
       .def(nb::init<const ExecutionPlan &>(), nb::arg("plan"), nb::keep_alive<1, 2>(),
            "Builds a session over ``plan``. ``plan`` (and the graph / function it "
            "was built from) must outlive the session; this binding keeps ``plan`` "

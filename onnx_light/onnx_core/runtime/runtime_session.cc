@@ -16,7 +16,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace runtime {
 
-RuntimeSession::RuntimeSession() : plan_(default_plan_) {}
+RuntimeSession::RuntimeSession(const ModelProto &model)
+    : default_plan_(model.graph()), plan_(default_plan_) {}
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan) : plan_(plan) {}
 

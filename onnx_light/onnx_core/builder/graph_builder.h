@@ -327,8 +327,14 @@ public:
 private:
   // Resolves and records the opset version to use for a node of ``domain``,
   // given the domain-filtered schema history ``schemas``.
-  int ResolveNodeOpset(const std::string &domain,
-                       const std::vector<const LightOpSchema *> &schemas);
+  int ResolveNodeOpset(const std::string &domain, const std::vector<LightOpSchema> &schemas);
+
+  // Returns the schema history registered for ``op_type`` in ``normalised_domain``
+  // (empty when none), populating the lookup table on first use. ``schema_lookup_``
+  // is queried at most once per operator; results are grouped by domain so node
+  // validation is a map lookup rather than a linear scan on every call.
+  const std::vector<LightOpSchema> &DomainSchemas(const std::string &op_type,
+                                                  const std::string &normalised_domain);
 
   // Returns ``true`` when a shape function is registered for ``node``.
   bool ShapeFunctionAvailable(const NodeProto &node) const;
@@ -353,6 +359,9 @@ private:
 
   std::string name_;
   SchemaLookupFn schema_lookup_;
+  // Lazily-built lookup table: op_type -> normalised domain -> schema history.
+  std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>
+      schema_table_;
   ComputeContext compute_;
   std::vector<ValueInfoProto> inputs_;
   std::vector<ValueInfoProto> outputs_;

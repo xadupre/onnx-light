@@ -430,6 +430,28 @@ TEST(KernelClass, CastClassDoubleToStringMatchesOrtFormat) {
   EXPECT_EQ(ys[3], "-INF");
 }
 
+TEST(KernelClass, CastClassToStringUsesAllocator) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  // Capacity counts buffer slots, not bytes; the STRING output uses one
+  // zero-byte allocation because its elements live in ``string_data``.
+  SimpleRawBufferAllocator alloc(4);
+  RuntimeContext rt{ctx};
+  rt.set_allocator(&alloc);
+
+  Tensor x = Tensor::FromInt32("", {3}, {1, -2, 30});
+  Tensor y = cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::STRING), &rt);
+
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(y.allocation_owner(), &alloc);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::STRING));
+  const std::vector<std::string> &ys = y.AsStrings();
+  ASSERT_EQ(ys.size(), 3u);
+  EXPECT_EQ(ys[0], "1");
+  EXPECT_EQ(ys[1], "-2");
+  EXPECT_EQ(ys[2], "30");
+}
+
 // ---------------------------------------------------------------------------
 // CastLike kernel tests.
 //

@@ -363,8 +363,12 @@ Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate, RuntimeConte
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
       "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
   if (static_cast<DataType>(to) == DataType::STRING) {
-    Tensor out = Tensor::MakeString(
-        "", x.shape, std::vector<std::string>(static_cast<size_t>(x.element_count())));
+    // ``STRING`` elements live in ``string_data`` rather than the raw byte
+    // buffer, so the allocator-backed buffer carries zero bytes; routing it
+    // through ``MakeOutputTensor`` keeps the returned tensor allocator-backed
+    // for consistency with the numeric path below.
+    Tensor out = MakeOutputTensor(to, x.shape, /*n_bytes=*/0, rt ? rt->allocator() : nullptr);
+    out.string_data.assign(static_cast<size_t>(x.element_count()), std::string());
     (*this)(x, to, saturate, out);
     return out;
   }

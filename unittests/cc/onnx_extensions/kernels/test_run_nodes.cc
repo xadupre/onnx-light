@@ -1555,10 +1555,49 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   EXPECT_EQ(rt.events()[3].node_index, 1);
 }
 
+TEST(RunNodes, RuntimeContextEventLogCapturesAllocatorMemory) {
+  // With an allocator attached and event logging on, every recorded event
+  // carries the allocator's live and peak memory, and the ``run_node`` events
+  // summarise the per-node dispatch (duration + memory) through summary().
+  using core::runtime::RuntimeEventAction;
+  core::runtime::SimpleRawBufferAllocator alloc(/*capacity=*/16);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_allocator(&alloc);
+  rt.set_events_enabled(true);
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
+  rt.ClearEvents();
+
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
+  nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
+  utils::RepeatedProtoField<NodeProto> node_field(nodes);
+  core::runtime::ExecutionPlan plan(node_field, {});
+  core::runtime::RuntimeSession session(plan);
+  session.Run(rt);
+
+  ASSERT_FALSE(rt.events().empty());
+  // The two inputs already consume two allocator buffers, so every event
+  // recorded while running the graph reports a non-zero live footprint whose
+  // peak never falls below the live value.
+  bool saw_run_node = false;
+  for (const auto &ev : rt.events()) {
+    EXPECT_GT(ev.allocated_bytes, 0);
+    EXPECT_GE(ev.peak_bytes, ev.allocated_bytes);
+    const std::string text = ev.summary();
+    EXPECT_NE(text.find("mem="), std::string::npos);
+    EXPECT_NE(text.find("peak="), std::string::npos);
+    if (ev.action == RuntimeEventAction::kRunNode) {
+      saw_run_node = true;
+      EXPECT_NE(text.find("took"), std::string::npos);
+    }
+  }
+  EXPECT_TRUE(saw_run_node);
+}
+
 // ---------------------------------------------------------------------------
 // Shape::product() tests
 // ---------------------------------------------------------------------------
-
 TEST(ShapeProduct, EmptyShapeIsScalarWithProduct1) {
   const core::runtime::Shape s{};
   EXPECT_EQ(s.product(), 1);

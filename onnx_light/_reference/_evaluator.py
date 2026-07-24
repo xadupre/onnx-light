@@ -167,6 +167,22 @@ class ReferenceEvaluator:
         Verbosity level forwarded to the runtime. ``0`` disables progress
         printing; positive values print one line per dispatched node while the
         model is executing.
+    events_enabled:
+        When ``True``, the runtime records a :class:`RuntimeEvent` for every
+        tensor map mutation and node dispatch, retrievable through
+        :meth:`events` after :meth:`run`.
+    release_intermediates:
+        When ``True`` (the default), the runtime frees each intermediate tensor
+        as soon as its last consumer has run.
+    allocator:
+        Optional :class:`SimpleRawBufferAllocator` (or any
+        ``RawBufferAllocator``) attached to the internal
+        :class:`RuntimeContext`. When provided together with
+        ``events_enabled=True``, every recorded :class:`RuntimeEvent` carries
+        the allocator's live (``allocated_bytes``) and peak (``peak_bytes``)
+        memory, so the event log doubles as a per-node memory profile. The
+        allocator must have enough slot ``capacity`` for the number of buffers
+        alive at the same time; the caller retains ownership.
 
     Example
     -------
@@ -192,6 +208,7 @@ class ReferenceEvaluator:
         verbose: int = 0,
         events_enabled: bool = False,
         release_intermediates: bool = True,
+        allocator: Any = None,
     ) -> None:
         proto = self._load_proto(proto)
         if not isinstance(verbose, int):
@@ -292,6 +309,13 @@ class ReferenceEvaluator:
         self._ctx = _runtime.RuntimeContext(self._kernel_ctx)
         self._ctx.verbose = self._verbose
         self._ctx.events_enabled = self._events_enabled
+        # Keep a Python reference to the allocator so it outlives the context
+        # (the binding also keeps it alive) and attach it so the runtime routes
+        # buffer storage through it and records its live / peak memory on every
+        # event.
+        self._allocator = allocator
+        if allocator is not None:
+            self._ctx.set_allocator(allocator)
 
         # Mapping ``"<domain>:<op_type>" -> low-level callback``. A
         # low-level callback has the signature

@@ -91,8 +91,18 @@ Tensor LpPool::operator()(const Tensor &x, const Shape &kernel_shape, const Shap
       "kernel::LpPool: x must have rank == kernel_shape.size() + 2 (N, C, D1, ..., Dk).");
   EXT_ENFORCE_INVALID(p >= 1, "kernel::LpPool: p must be >= 1.");
   const size_t k = kernel_shape.size();
-  Shape eff_strides = strides.empty() ? Shape(std::vector<int64_t>(k, 1)) : strides;
-  Shape eff_dilations = dilations.empty() ? Shape(std::vector<int64_t>(k, 1)) : dilations;
+  Shape eff_strides;
+  if (strides.empty()) {
+    eff_strides.assign(k, 1);
+  } else {
+    eff_strides = strides;
+  }
+  Shape eff_dilations;
+  if (dilations.empty()) {
+    eff_dilations.assign(k, 1);
+  } else {
+    eff_dilations = dilations;
+  }
   EXT_ENFORCE_INVALID(eff_strides.size() == k,
                       "kernel::LpPool: strides must be empty or have one entry per spatial axis.");
   EXT_ENFORCE_INVALID(
@@ -108,7 +118,11 @@ Tensor LpPool::operator()(const Tensor &x, const Shape &kernel_shape, const Shap
   if (use_auto_pad) {
     eff_pads.assign(2 * k, 0);
   } else {
-    eff_pads = pads.empty() ? Shape(std::vector<int64_t>(2 * k, 0)) : pads;
+    if (pads.empty()) {
+      eff_pads.assign(2 * k, 0);
+    } else {
+      eff_pads = pads;
+    }
   }
   EXT_ENFORCE_INVALID(eff_pads.size() == 2 * k,
                       "kernel::LpPool: pads must be empty or have two entries per spatial axis "

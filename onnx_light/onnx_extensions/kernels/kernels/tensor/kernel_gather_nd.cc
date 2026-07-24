@@ -8,7 +8,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -100,7 +99,8 @@ void GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t bat
 
   // Strides through the leading 'q-1' dims of indices to recover batch coords
   // when batch_dims > 0.
-  std::vector<int64_t> idx_outer_strides(static_cast<std::size_t>(q - 1), 1);
+  onnx_kernels::Shape idx_outer_strides;
+  idx_outer_strides.assign(static_cast<std::size_t>(q - 1), 1);
   for (int64_t k = q - 3; k >= 0; --k) {
     idx_outer_strides[static_cast<std::size_t>(k)] =
         idx_outer_strides[static_cast<std::size_t>(k + 1)] *

@@ -51,6 +51,9 @@ namespace {
 
 constexpr int64_t kFallbackDefaultOpsetVersion = 18;
 
+// Returns the version of the default (empty-domain) ai.onnx opset imported by
+// ``model``, falling back to ``kFallbackDefaultOpsetVersion`` when none is
+// declared.
 int64_t GetDefaultOpsetVersion(const ModelProto &model) {
   for (const auto &opset : model.ref_opset_import()) {
     if (opset.ref_domain().empty()) {
@@ -89,6 +92,8 @@ bool AllOutputsAreTensors(const ModelProto &model) {
   return true;
 }
 
+// Asserts that ``actual`` and ``expected`` are bit-for-bit identical: same data
+// type, shape, string data, and raw byte content.
 void ExpectTensorBitEqual(const Tensor &actual, const Tensor &expected) {
   EXPECT_EQ(actual.data_type, expected.data_type);
   EXPECT_EQ(actual.shape, expected.shape);

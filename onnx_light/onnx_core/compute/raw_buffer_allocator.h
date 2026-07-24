@@ -76,7 +76,8 @@ public:
  * Manages a pre-allocated array of ``capacity`` :cpp:struct:`RawBuffer`
  * slots. A free-slot stack gives O(1) :cpp:func:`Allocate`, a pointer-to-index
  * map gives O(1) :cpp:func:`Free`, and running counters give O(1)
- * :cpp:func:`TotalAllocatedSize` and :cpp:func:`allocated_count`.
+ * :cpp:func:`TotalAllocatedSize`, :cpp:func:`PeakAllocatedSize`, and
+ * :cpp:func:`allocated_count`.
  *
  * @note This class is not thread-safe.
  */

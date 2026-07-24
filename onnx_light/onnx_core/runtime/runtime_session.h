@@ -67,6 +67,15 @@ namespace runtime {
 class RuntimeSession {
 public:
   /**
+   * Builds a session over an empty default :cpp:class:`ExecutionPlan` owned by
+   * the session. The plan carries no node, so :cpp:func:`Run` is a no-op until
+   * a real plan is supplied through the other constructor; this default is
+   * provided so a session can be default-constructed (and, e.g., exposed to the
+   * Python binding without a plan argument).
+   */
+  RuntimeSession();
+
+  /**
    * Builds a session over ``plan``. Kernel resolution is deferred to the first
    * :cpp:func:`Run` (which supplies the :cpp:class:`RuntimeContext` the
    * kernels are resolved against).
@@ -181,6 +190,10 @@ private:
   /// kernel has run, once :cpp:member:`session_allocator_` has been captured.
   void VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const;
 
+  /// Empty default plan owned by the session, referenced by
+  /// :cpp:member:`plan_` when the session is default-constructed (no plan
+  /// supplied). Left empty (and unused) when a plan is passed in.
+  ExecutionPlan default_plan_;
   const ExecutionPlan &plan_;
   std::vector<PreparedKernel> kernels_;
   std::vector<std::string> required_inputs_;

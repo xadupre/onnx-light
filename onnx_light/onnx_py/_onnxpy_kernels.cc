@@ -467,6 +467,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       ":class:`RuntimeContext`; subsequent calls reuse those cached instances. When "
       ":attr:`RuntimeContext.release_intermediates` is enabled, :func:`run` also "
       "frees each intermediate whose last reference has been reached.")
+      .def(nb::init<>(), "Builds a session over an empty default :class:`ExecutionPlan` owned by "
+                         "the session. :func:`run` is a no-op until a real plan is supplied.")
       .def(nb::init<const ExecutionPlan &>(), nb::arg("plan"), nb::keep_alive<1, 2>(),
            "Builds a session over ``plan``. ``plan`` (and the graph / function it "
            "was built from) must outlive the session; this binding keeps ``plan`` "

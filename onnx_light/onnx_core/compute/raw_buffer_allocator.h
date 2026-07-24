@@ -23,7 +23,8 @@ namespace runtime {
  * strategies without changing call sites.
  *
  * All concrete allocators must implement :cpp:func:`Allocate`,
- * :cpp:func:`Free`, and :cpp:func:`TotalAllocatedSize`.
+ * :cpp:func:`Free`, :cpp:func:`TotalAllocatedSize`,
+ * :cpp:func:`PeakAllocatedSize`, and :cpp:func:`ResetPeak`.
  */
 class RawBufferAllocator {
 public:
@@ -54,6 +55,19 @@ public:
    * Returns the total number of bytes across all currently allocated buffers.
    */
   virtual size_t TotalAllocatedSize() const = 0;
+
+  /**
+   * Returns the memory peak, i.e. the maximum value ever reached by
+   * :cpp:func:`TotalAllocatedSize` since construction or since the last call to
+   * :cpp:func:`ResetPeak`.
+   */
+  virtual size_t PeakAllocatedSize() const = 0;
+
+  /**
+   * Resets the memory peak to the current value of
+   * :cpp:func:`TotalAllocatedSize`.
+   */
+  virtual void ResetPeak() = 0;
 };
 
 /**
@@ -101,6 +115,9 @@ public:
     buffers_[i].assign(n_bytes, 0);
     index_map_[&buffers_[i]] = i;
     total_allocated_size_ += n_bytes;
+    if (total_allocated_size_ > peak_allocated_size_) {
+      peak_allocated_size_ = total_allocated_size_;
+    }
     ++allocated_count_;
     return &buffers_[i];
   }
@@ -129,6 +146,16 @@ public:
   /// Returns the sum of the sizes of all currently allocated buffers — O(1).
   size_t TotalAllocatedSize() const override { return total_allocated_size_; }
 
+  /**
+   * Returns the memory peak — the maximum value ever reached by
+   * :cpp:func:`TotalAllocatedSize` since construction or the last
+   * :cpp:func:`ResetPeak` — O(1).
+   */
+  size_t PeakAllocatedSize() const override { return peak_allocated_size_; }
+
+  /// Resets the memory peak to the current :cpp:func:`TotalAllocatedSize` — O(1).
+  void ResetPeak() override { peak_allocated_size_ = total_allocated_size_; }
+
   /// Returns the total number of slots managed by this allocator.
   size_t capacity() const noexcept { return buffers_.size(); }
 
@@ -142,6 +169,7 @@ private:
   /// Maps each live slot's address to its index for O(1) Free lookup.
   std::unordered_map<RawBuffer *, size_t> index_map_;
   size_t total_allocated_size_ = 0;
+  size_t peak_allocated_size_ = 0;
   size_t allocated_count_ = 0;
 };
 

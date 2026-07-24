@@ -6,7 +6,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
@@ -138,12 +137,11 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       // Releasing intermediates is opt-in (RuntimeContext::release_intermediates);
       // when it is disabled every intermediate stays observable in ``rt`` after
       // Run() returns, so the scheduled delete actions are skipped entirely.
+      // The removal itself is recorded in the RuntimeContext event log (a
+      // ``kRemove`` RuntimeEvent carrying the allocator's live / peak memory)
+      // when event logging is enabled.
       if (!rt.release_intermediates()) {
         break;
-      }
-      if (rt.verbose() > 1) {
-        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
-                  << std::endl;
       }
       rt.Remove(action.name());
       break;
@@ -151,29 +149,17 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       if (!rt.release_intermediates()) {
         break;
       }
-      if (rt.verbose() > 1) {
-        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
-                  << std::endl;
-      }
       rt.RemoveShape(action.name());
       break;
     case ExecuteActionKind::kDeleteSequence:
       if (!rt.release_intermediates()) {
         break;
       }
-      if (rt.verbose() > 1) {
-        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
-                  << std::endl;
-      }
       rt.RemoveSequence(action.name());
       break;
     case ExecuteActionKind::kDeleteMap:
       if (!rt.release_intermediates()) {
         break;
-      }
-      if (rt.verbose() > 1) {
-        std::cout << "[RuntimeSession] " << action.kind_name() << " name='" << action.name() << "'"
-                  << std::endl;
       }
       rt.RemoveMap(action.name());
       break;

@@ -299,6 +299,48 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(d["node_index"], 0)
         self.assertEqual(d["device"], -1)
 
+    def test_runtime_context_events_capture_allocator_memory(self):
+        # With a SimpleRawBufferAllocator attached, every recorded event carries
+        # the allocator's live (allocated_bytes) and peak (peak_bytes) memory,
+        # and RuntimeEvent.summary() renders a one-line recap including them.
+        model = parser.parse_model(_MODEL_SRC)
+        alloc = rt.SimpleRawBufferAllocator(16)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.set_allocator(alloc)
+        ctx.events_enabled = True
+        ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
+        ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
+        ctx.clear_events()
+        _run_model(model, ctx)
+
+        events = ctx.events()
+        self.assertNotEqual(events, [])
+        # The two 3-float inputs already occupy the allocator, so every event
+        # reports a strictly positive live footprint whose peak never drops
+        # below the live value.
+        for e in events:
+            self.assertGreater(e.allocated_bytes, 0)
+            self.assertGreaterEqual(e.peak_bytes, e.allocated_bytes)
+            text = e.summary()
+            self.assertIn("mem=", text)
+            self.assertIn("peak=", text)
+        # ``as_dict`` mirrors the new fields.
+        d = events[0].as_dict()
+        self.assertEqual(d["allocated_bytes"], events[0].allocated_bytes)
+        self.assertEqual(d["peak_bytes"], events[0].peak_bytes)
+        # The allocator itself exposes the live / peak counters.
+        self.assertGreater(alloc.peak_allocated_size, 0)
+        self.assertGreaterEqual(alloc.capacity, 16)
+
+    def test_runtime_context_without_allocator_reports_zero_memory(self):
+        # Without an allocator the memory fields default to 0 (no tracking).
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+        ctx.set("x", _make_float_tensor("x", [1.0, -2.0]))
+        ev = ctx.events()[0]
+        self.assertEqual(ev.allocated_bytes, 0)
+        self.assertEqual(ev.peak_bytes, 0)
+
     def test_run_model_abs_then_add(self):
         model = parser.parse_model(_MODEL_SRC)
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))

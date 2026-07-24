@@ -19,8 +19,8 @@ namespace {
 
 // Reads the 1-D FLOAT ``scales`` input tensor into an allocator-backed scratch
 // buffer and validates it against the rank of the input. Mirrors the upstream
-// Upsample v7/9/10 contract: the number of elements of ``scales`` must equal
-// the rank of ``X`` and every entry must be >= 1. ``allocator`` (when non-null)
+// Upsample v7/9/10 contract: the number of elements of ``scales`` must equal the
+// rank of ``X`` and every entry must be >= 1. ``allocator`` (when non-null)
 // supplies the scratch storage; otherwise the returned tensor falls back to
 // inline storage.
 Tensor ReadUpsampleScales(const Tensor &scales, std::size_t rank, RawBufferAllocator *allocator) {
@@ -230,9 +230,10 @@ bool IsLinearMode(const std::string &mode) { return mode == "linear" || mode == 
 
 Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
                             RuntimeContext *rt) const {
-  const Tensor scales_vec =
+  const Tensor scales_in =
       ReadUpsampleScales(scales, X.shape.size(), rt ? rt->allocator() : nullptr);
-  const onnx_kernels::Shape out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec.As<float>());
+  const float *scales_vec = scales_in.As<float>();
+  const onnx_kernels::Shape out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec);
   int64_t total_elements = 1;
   for (int64_t d : out_shape) {
     total_elements *= d;
@@ -246,8 +247,9 @@ Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attribu
 
 void Upsample::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
                           Tensor &output) const {
-  const Tensor scales_vec = ReadUpsampleScales(scales, X.shape.size(), nullptr);
-  const onnx_kernels::Shape out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec.As<float>());
+  const Tensor scales_in = ReadUpsampleScales(scales, X.shape.size(), nullptr);
+  const float *scales_vec = scales_in.As<float>();
+  const onnx_kernels::Shape out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec);
 
   EXT_ENFORCE_INVALID(output.data_type == X.data_type,
                       "kernel::Upsample: preallocated output dtype must match input dtype.");
@@ -255,11 +257,11 @@ void Upsample::operator()(const Tensor &X, const Tensor &scales, const Attribute
                       "kernel::Upsample: preallocated output shape mismatch.");
 
   if (IsNearestMode(attrs.mode)) {
-    UpsampleNearest(X, scales_vec.As<float>(), out_shape, output);
+    UpsampleNearest(X, scales_vec, out_shape, output);
     return;
   }
   if (IsLinearMode(attrs.mode)) {
-    UpsampleLinear4D(X, scales_vec.As<float>(), out_shape, output);
+    UpsampleLinear4D(X, scales_vec, out_shape, output);
     return;
   }
   EXT_THROW_INVALID("kernel::Upsample: unsupported mode '", attrs.mode,

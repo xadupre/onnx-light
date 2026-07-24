@@ -40,8 +40,8 @@ onnx_kernels::Shape ReadShapeTensor(const Tensor &t) {
 }
 
 // Normalizes ``axes`` against ``rank``; throws on out-of-range axes.
-std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes, int64_t rank) {
-  std::vector<int64_t> out;
+onnx_kernels::Shape NormalizeAxes(const onnx_kernels::Shape &axes, int64_t rank) {
+  onnx_kernels::Shape out;
   out.reserve(axes.size());
   for (int64_t a : axes) {
     int64_t na = a < 0 ? a + rank : a;
@@ -60,11 +60,11 @@ Tensor CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
   onnx_kernels::Shape out_shape = input_data.shape;
   const onnx_kernels::Shape shape_values = ReadShapeTensor(shape);
 
-  std::vector<int64_t> axes;
+  onnx_kernels::Shape axes;
   if (attrs.axes_present) {
     axes = NormalizeAxes(attrs.axes, static_cast<int64_t>(rank));
   } else {
-    axes.resize(rank);
+    axes.assign(rank, 0);
     for (std::size_t i = 0; i < rank; ++i) {
       axes[i] = static_cast<int64_t>(i);
     }
@@ -102,11 +102,11 @@ void CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
 
   // Resolve axes and per-axis target ``shape``.
   const onnx_kernels::Shape shape_values = ReadShapeTensor(shape);
-  std::vector<int64_t> axes;
+  onnx_kernels::Shape axes;
   if (attrs.axes_present) {
     axes = NormalizeAxes(attrs.axes, static_cast<int64_t>(rank));
   } else {
-    axes.resize(rank);
+    axes.assign(rank, 0);
     for (std::size_t i = 0; i < rank; ++i) {
       axes[i] = static_cast<int64_t>(i);
     }

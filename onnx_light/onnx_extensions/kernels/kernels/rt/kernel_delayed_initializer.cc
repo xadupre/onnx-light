@@ -45,27 +45,20 @@ DelayedInitializer::DelayedInitializer(const KernelContext &ctx, Attributes attr
 }
 
 Tensor DelayedInitializer::operator()(RuntimeContext *rt) const {
-  if (rt != nullptr && rt->allocator() != nullptr) {
-    const size_t byte_count = attrs_.load_device == "cpu"
-                                  ? loaded_bytes_.size_bytes()
-                                  : PackedByteSize(attrs_.dtype, ComputeElementCount(attrs_.shape));
-    Tensor output = MakeOutputTensor(attrs_.dtype, attrs_.shape, byte_count, rt->allocator());
-    if (attrs_.load_device == "cpu") {
-      if (byte_count != 0) {
-        std::memcpy(output.mutable_bytes(), loaded_bytes_.bytes(), loaded_bytes_.size_bytes());
-      }
-    } else {
-      LoadBytesInto(attrs_, output.mutable_bytes(), byte_count);
+  // Prefer the runtime allocator when one is available, otherwise fall back to
+  // the construction-time allocator. When neither is set, MakeOutputTensor and
+  // LoadBytes transparently fall back to inline std::vector storage.
+  RawBufferAllocator *allocator =
+      (rt != nullptr && rt->allocator() != nullptr) ? rt->allocator() : ctx_.allocator;
+  if (attrs_.load_device == "cpu") {
+    const size_t byte_count = loaded_bytes_.size_bytes();
+    Tensor output = MakeOutputTensor(attrs_.dtype, attrs_.shape, byte_count, allocator);
+    if (byte_count != 0) {
+      std::memcpy(output.mutable_bytes(), loaded_bytes_.bytes(), byte_count);
     }
     return output;
   }
-  if (attrs_.load_device == "cpu") {
-    return Tensor("", attrs_.dtype, attrs_.shape,
-                  std::vector<uint8_t>(loaded_bytes_.bytes(),
-                                       loaded_bytes_.bytes() + loaded_bytes_.size_bytes()));
-  }
-  // No runtime allocator available: load from file into inline vector storage.
-  return LoadBytes(attrs_);
+  return LoadBytes(attrs_, allocator);
 }
 
 /// Computes the total number of elements described by a shape.

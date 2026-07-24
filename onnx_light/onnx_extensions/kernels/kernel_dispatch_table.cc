@@ -43,8 +43,8 @@ namespace onnx_kernels {
 // The generic per-node helpers (``RequireInputCount``, ``GetInput``, ...)
 // and runtime types (``Tensor``, ``RuntimeContext``, ...) now live in
 // ``onnx_core::runtime`` (see ``onnx_core/runtime/node_helpers.h``); pull
-// them in unqualified so the trampolines below are unchanged from before
-// the move.
+// them in unqualified so the per-kernel ``Run`` bodies below can use them
+// without qualification.
 using namespace ::onnx_light::core::runtime;
 
 namespace {
@@ -56,18 +56,10 @@ const Tensor kEmptyTensor = [] {
 }();
 
 // ---------------------------------------------------------------------------
-// Trampoline factories. Each helper returns a NodeKernelFn factory that:
-//   * validates the node's input/output count,
-//   * reads any construction-time attributes,
-//   * constructs the concrete kernel once with ``rt.kernel_ctx()``,
-//   * returns a :cpp:class:`Kernel` whose :cpp:func:`Kernel::Run` reads the
-//     current inputs from ``rt.tensors()`` and stores the produced outputs back
-//     (the per-run logic is carried by a :cpp:class:`LambdaKernel`).
-//
-// Centralising the boilerplate keeps the dispatch table compact and
-// makes the per-operator entries below one-liners. The element-wise unary and
-// binary shapes live in reusable classes ``UnaryKernel`` / ``BinaryKernel``
-// specialised shapes stay as free factory helpers here.
+// Shared attribute structs and parsing helpers used by several of the
+// per-kernel ``Run`` definitions further down (each dispatched kernel owns
+// its own :cpp:func:`KernelBase::Run` that reads inputs, invokes the concrete
+// computation and stores outputs back).
 // ---------------------------------------------------------------------------
 
 // Shared attributes consumed by SVMRegressor and SVMClassifier.
@@ -205,82 +197,6 @@ inline void RequireOutputRange(const NodeProto &node, int min_outputs, int max_o
                       "' expects ", min_outputs, " to ", max_outputs, " output(s), got ", n, ".");
 }
 
-void RunBatchNormalization(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 5);
-  RequireOutputRange(node, 1, 3);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scale = GetInput(node, 1, rt.tensors());
-  const Tensor &bias = GetInput(node, 2, rt.tensors());
-  const Tensor &input_mean = GetInput(node, 3, rt.tensors());
-  const Tensor &input_var = GetInput(node, 4, rt.tensors());
-  onnx_kernels::kernel::BatchNormalization k(rt.kernel_ctx());
-  if (GetAttributeIntOrDefault(node, "training_mode", 0) != 0) {
-    const float momentum = GetAttributeFloatOrDefault(node, "momentum", 0.9f);
-    auto [y, running_mean, running_var] =
-        k.TrainingForward(x, scale, bias, input_mean, input_var, GetEpsilon(node), momentum);
-    SetOutput(node, 0, std::move(y), rt.tensors());
-    if (node.output_size() >= 2) {
-      SetOutput(node, 1, std::move(running_mean), rt.tensors());
-    }
-    if (node.output_size() >= 3) {
-      SetOutput(node, 2, std::move(running_var), rt.tensors());
-    }
-    return;
-  }
-  EXT_ENFORCE_INVALID(node.output_size() == 1,
-                      "RunNode: op 'BatchNormalization' only supports a single output "
-                      "(running_mean / running_var require training_mode=1).");
-  SetOutput(node, 0, k(x, scale, bias, input_mean, input_var, GetEpsilon(node), &rt), rt);
-}
-
-void RunGroupNormalization(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 3);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scale = GetInput(node, 1, rt.tensors());
-  const Tensor &bias = GetInput(node, 2, rt.tensors());
-  const int64_t num_groups = GetAttributeIntOrDefault(node, "num_groups", 0);
-  onnx_kernels::kernel::GroupNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, scale, bias, num_groups, GetEpsilon(node), &rt), rt);
-}
-
-void RunInstanceNormalization(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 3);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scale = GetInput(node, 1, rt.tensors());
-  const Tensor &bias = GetInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::InstanceNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, scale, bias, GetEpsilon(node), &rt), rt);
-}
-
-void RunLayerNormalization(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputRange(node, 2, 3);
-  RequireOutputRange(node, 1, 3);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scale = GetInput(node, 1, rt.tensors());
-  const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::LayerNormalization k(rt.kernel_ctx());
-  auto [y, mean, inv_std_dev] =
-      k(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node));
-  SetOutput(node, 0, std::move(y), rt.tensors());
-  if (node.output_size() >= 2) {
-    SetOutput(node, 1, std::move(mean), rt.tensors());
-  }
-  if (node.output_size() >= 3) {
-    SetOutput(node, 2, std::move(inv_std_dev), rt.tensors());
-  }
-}
-
-void RunRMSNormalization(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scale = GetInput(node, 1, rt.tensors());
-  onnx_kernels::kernel::RMSNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, scale, GetNormAxis(node), GetEpsilon(node), &rt), rt);
-}
-
 // Shared spatial pooling attributes consumed by AveragePool / MaxPool
 // (and other pool-style ops). The defaults mirror the ONNX schema.
 struct PoolCommonAttrs {
@@ -314,15 +230,19 @@ template <typename T> std::span<const T> TensorSpan(const Tensor &t) {
   return {t.As<T>(), static_cast<size_t>(count)};
 }
 
+} // namespace
+
 // ---------------------------------------------------------------------------
-// Bespoke per-operator run helpers. Each corresponds to one dispatched
-// kernel whose logic does not fit a reusable elementwise/reduction shape;
-// the matching ``kernel::Op::Run`` below forwards to it. Defined here (in
-// the same anonymous namespace as the helpers above) so unqualified names
-// such as ``Shape`` keep resolving to ``core::runtime`` rather than the
-// like-named ``kernel::`` classes.
+// Per-kernel ``Run`` definitions. Each dispatch-registered kernel overrides
+// :cpp:func:`core::runtime::KernelBase::Run` to read the node's current
+// inputs from ``rt.tensors()``, invoke its own computation and store the
+// produced outputs back. ``node_`` (attached via
+// :cpp:func:`KernelBase::set_node`) is the node the kernel runs for.
 // ---------------------------------------------------------------------------
-void RunOp_DelayedInitializer(const NodeProto &node, RuntimeContext &rt) {
+namespace kernel {
+
+void DelayedInitializer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 0);
   RequireOutputCount(node, 1);
   const AttributeProto *shape_attr = FindAttribute(node, "shape");
@@ -344,7 +264,41 @@ void RunOp_DelayedInitializer(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, kernel(&rt), rt);
 }
 
-void RunOp_AffineGrid(const NodeProto &node, RuntimeContext &rt) {
+void Abs::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Acos::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Acosh::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Add::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void AffineGrid::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &theta = GetInput(node, 0, rt.tensors());
@@ -355,7 +309,71 @@ void RunOp_AffineGrid(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, affine_grid_kernel(theta, size, affine_grid_attrs, &rt), rt);
 }
 
-void RunOp_Attention(const NodeProto &node, RuntimeContext &rt) {
+void And::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void ArgMax::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+  const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
+  const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(data, axis, keepdims, select_last_index, &rt), rt);
+}
+
+void ArgMin::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+  const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
+  const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(data, axis, keepdims, select_last_index, &rt), rt);
+}
+
+void Asin::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Asinh::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Atan::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Atanh::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Attention::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 7), "RunNode: op '",
                       node.op_type(), "' expects between 3 and 7 input(s), got ", node.input_size(),
                       ".");
@@ -403,7 +421,8 @@ void RunOp_Attention(const NodeProto &node, RuntimeContext &rt) {
   set_optional_output(3, std::move(result.qk_matmul_output));
 }
 
-void RunOp_AveragePool(const NodeProto &node, RuntimeContext &rt) {
+void AveragePool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -416,7 +435,8 @@ void RunOp_AveragePool(const NodeProto &node, RuntimeContext &rt) {
             rt.tensors());
 }
 
-void RunOp_BitShift(const NodeProto &node, RuntimeContext &rt) {
+void BitShift::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -435,7 +455,82 @@ void RunOp_BitShift(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, y, dir, &rt), rt);
 }
 
-void RunOp_Bernoulli(const NodeProto &node, RuntimeContext &rt) {
+void BitCast::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
+  EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type(), " requires INT attribute 'to'.");
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, to, &rt), rt);
+}
+
+void BitwiseAnd::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void BitwiseNot::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void BitwiseOr::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void BitwiseXor::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void BatchNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 5);
+  RequireOutputRange(node, 1, 3);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor &bias = GetInput(node, 2, rt.tensors());
+  const Tensor &input_mean = GetInput(node, 3, rt.tensors());
+  const Tensor &input_var = GetInput(node, 4, rt.tensors());
+  onnx_kernels::kernel::BatchNormalization k(rt.kernel_ctx());
+  if (GetAttributeIntOrDefault(node, "training_mode", 0) != 0) {
+    const float momentum = GetAttributeFloatOrDefault(node, "momentum", 0.9f);
+    auto [y, running_mean, running_var] =
+        k.TrainingForward(x, scale, bias, input_mean, input_var, GetEpsilon(node), momentum);
+    SetOutput(node, 0, std::move(y), rt.tensors());
+    if (node.output_size() >= 2) {
+      SetOutput(node, 1, std::move(running_mean), rt.tensors());
+    }
+    if (node.output_size() >= 3) {
+      SetOutput(node, 2, std::move(running_var), rt.tensors());
+    }
+    return;
+  }
+  EXT_ENFORCE_INVALID(node.output_size() == 1,
+                      "RunNode: op 'BatchNormalization' only supports a single output "
+                      "(running_mean / running_var require training_mode=1).");
+  SetOutput(node, 0, k(x, scale, bias, input_mean, input_var, GetEpsilon(node), &rt), rt);
+}
+
+void Bernoulli::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &input = GetInput(node, 0, rt.tensors());
@@ -443,7 +538,21 @@ void RunOp_Bernoulli(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, kernel(input, GetSeedAttr(node), GetDtypeAttr(node), &rt), rt);
 }
 
-void RunOp_CausalConvWithState(const NodeProto &node, RuntimeContext &rt) {
+void BlackmanWindow::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t output_datatype =
+      GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
+  EXT_ENFORCE_INVALID(!(output_datatype != static_cast<int64_t>(DataType::FLOAT)),
+                      "RunNode: op 'BlackmanWindow' only supports output_datatype=FLOAT.");
+  const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
+  const Tensor &size = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
+}
+
+void CausalConvWithState::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 4), "RunNode: op '",
                       node.op_type(), "' expects between 2 and 4 input(s), got ", node.input_size(),
                       ".");
@@ -463,7 +572,8 @@ void RunOp_CausalConvWithState(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 1, std::move(present_state), rt);
 }
 
-void RunOp_Cast(const NodeProto &node, RuntimeContext &rt) {
+void Cast::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -474,7 +584,8 @@ void RunOp_Cast(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, kernel(x, to, saturate, &rt), rt);
 }
 
-void RunOp_CastLike(const NodeProto &node, RuntimeContext &rt) {
+void CastLike::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -484,7 +595,25 @@ void RunOp_CastLike(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, target_type, saturate, &rt), rt);
 }
 
-void RunOp_CenterCropPad(const NodeProto &node, RuntimeContext &rt) {
+void Ceil::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Celu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, alpha, &rt), rt);
+}
+
+void CenterCropPad::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &input_data = GetInput(node, 0, rt.tensors());
@@ -499,7 +628,8 @@ void RunOp_CenterCropPad(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(input_data, shape, attrs, &rt), rt);
 }
 
-void RunOp_Constant(const NodeProto &node, RuntimeContext &rt) {
+void Constant::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireOutputCount(node, 1);
   onnx_kernels::kernel::Constant k(rt.kernel_ctx());
   Tensor y;
@@ -530,7 +660,8 @@ void RunOp_Constant(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, std::move(y), rt.tensors());
 }
 
-void RunOp_ConstantOfShape(const NodeProto &node, RuntimeContext &rt) {
+void ConstantOfShape::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &shape = GetInput(node, 0, rt.tensors());
@@ -542,7 +673,8 @@ void RunOp_ConstantOfShape(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(shape, value, &rt), rt);
 }
 
-void RunOp_Clip(const NodeProto &node, RuntimeContext &rt) {
+void Clip::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -552,7 +684,8 @@ void RunOp_Clip(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, min, max, &rt), rt);
 }
 
-void RunOp_Col2Im(const NodeProto &node, RuntimeContext &rt) {
+void Col2Im::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
   const Tensor &input = GetInput(node, 0, rt.tensors());
@@ -566,7 +699,8 @@ void RunOp_Col2Im(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(input, image_shape, block_shape, attrs, &rt), rt);
 }
 
-void RunOp_Compress(const NodeProto &node, RuntimeContext &rt) {
+void Compress::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &input = GetInput(node, 0, rt.tensors());
@@ -580,7 +714,8 @@ void RunOp_Compress(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(input, condition, axis, &rt), rt);
 }
 
-void RunOp_Concat(const NodeProto &node, RuntimeContext &rt) {
+void Concat::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 1);
   RequireOutputCount(node, 1);
   Tensors inputs;
@@ -596,7 +731,8 @@ void RunOp_Concat(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(inputs, axis, &rt), rt);
 }
 
-void RunOp_Conv(const NodeProto &node, RuntimeContext &rt) {
+void Conv::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 2);
   EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op 'Conv' expects at most 3 inputs, got ",
                       node.input_size(), ".");
@@ -616,7 +752,8 @@ void RunOp_Conv(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
 }
 
-void RunOp_ConvInteger(const NodeProto &node, RuntimeContext &rt) {
+void ConvInteger::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 2);
   EXT_ENFORCE_INVALID(!(node.input_size() > 4),
                       "RunNode: op 'ConvInteger' expects at most 4 inputs, got ", node.input_size(),
@@ -640,7 +777,8 @@ void RunOp_ConvInteger(const NodeProto &node, RuntimeContext &rt) {
             rt.tensors());
 }
 
-void RunOp_ConvTranspose(const NodeProto &node, RuntimeContext &rt) {
+void ConvTranspose::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 2);
   EXT_ENFORCE_INVALID(!(node.input_size() > 3),
                       "RunNode: op 'ConvTranspose' expects at most 3 inputs, got ",
@@ -663,7 +801,46 @@ void RunOp_ConvTranspose(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
 }
 
-void RunOp_DeformConv(const NodeProto &node, RuntimeContext &rt) {
+void Cos::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Cosh::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void CumSum::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
+  const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &axis = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, axis, exclusive, reverse, &rt), rt);
+}
+
+void CumProd::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
+  const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &axis = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, axis, exclusive, reverse, &rt), rt);
+}
+
+void DeformConv::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 3);
   EXT_ENFORCE_INVALID(!(node.input_size() > 5),
                       "RunNode: op 'DeformConv' expects at most 5 inputs, got ", node.input_size(),
@@ -688,7 +865,16 @@ void RunOp_DeformConv(const NodeProto &node, RuntimeContext &rt) {
       rt.tensors());
 }
 
-void RunOp_DepthToSpace(const NodeProto &node, RuntimeContext &rt) {
+void Det::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void DepthToSpace::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &input = GetInput(node, 0, rt.tensors());
@@ -704,7 +890,8 @@ void RunOp_DepthToSpace(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, kernel(input, attrs, &rt), rt);
 }
 
-void RunOp_SpaceToDepth(const NodeProto &node, RuntimeContext &rt) {
+void SpaceToDepth::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &input = GetInput(node, 0, rt.tensors());
@@ -719,7 +906,8 @@ void RunOp_SpaceToDepth(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, kernel(input, attrs, &rt), rt);
 }
 
-void RunOp_DequantizeLinear(const NodeProto &node, RuntimeContext &rt) {
+void DequantizeLinear::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 2);
   EXT_ENFORCE_INVALID(!(node.input_size() > 3),
                       "RunNode: op 'DequantizeLinear' expects 2 or 3 inputs, got ",
@@ -737,7 +925,8 @@ void RunOp_DequantizeLinear(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunOp_DFT(const NodeProto &node, RuntimeContext &rt) {
+void DFT::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 1);
   EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type(),
                       "' expects at most 3 inputs.");
@@ -772,7 +961,17 @@ void RunOp_DFT(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(input, dft_length, axis, onesided, inverse, &rt), rt);
 }
 
-void RunOp_Dropout(const NodeProto &node, RuntimeContext &rt) {
+void Div::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void Dropout::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputRange(node, 1, 3);
   RequireOutputRange(node, 1, 2);
   const Tensor &data = GetInput(node, 0, rt.tensors());
@@ -823,7 +1022,8 @@ void RunOp_Dropout(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunOp_DynamicQuantizeLinear(const NodeProto &node, RuntimeContext &rt) {
+void DynamicQuantizeLinear::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 3);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -834,7 +1034,8 @@ void RunOp_DynamicQuantizeLinear(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 2, std::move(std::get<2>(out)), rt);
 }
 
-void RunOp_Einsum(const NodeProto &node, RuntimeContext &rt) {
+void Einsum::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 1);
   RequireOutputCount(node, 1);
   Tensors inputs;
@@ -847,7 +1048,42 @@ void RunOp_Einsum(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(inputs, equation, &rt), rt);
 }
 
-void RunOp_Expand(const NodeProto &node, RuntimeContext &rt) {
+void Elu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, alpha, &rt), rt);
+}
+
+void Equal::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void Erf::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Exp::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Expand::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &input = GetInput(node, 0, rt.tensors());
@@ -856,7 +1092,8 @@ void RunOp_Expand(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(input, shape, &rt), rt);
 }
 
-void RunOp_EyeLike(const NodeProto &node, RuntimeContext &rt) {
+void EyeLike::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -866,7 +1103,25 @@ void RunOp_EyeLike(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype), &rt), rt);
 }
 
-void RunOp_Gather(const NodeProto &node, RuntimeContext &rt) {
+void Flatten::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, axis, &rt), rt);
+}
+
+void Floor::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Gather::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &data = GetInput(node, 0, rt.tensors());
@@ -876,7 +1131,8 @@ void RunOp_Gather(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(data, indices, axis, &rt), rt);
 }
 
-void RunOp_GatherElements(const NodeProto &node, RuntimeContext &rt) {
+void GatherElements::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &data = GetInput(node, 0, rt.tensors());
@@ -886,7 +1142,8 @@ void RunOp_GatherElements(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(data, indices, axis, &rt), rt);
 }
 
-void RunOp_GatherND(const NodeProto &node, RuntimeContext &rt) {
+void GatherND::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &data = GetInput(node, 0, rt.tensors());
@@ -896,7 +1153,8 @@ void RunOp_GatherND(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(data, indices, batch_dims, &rt), rt);
 }
 
-void RunOp_Gelu(const NodeProto &node, RuntimeContext &rt) {
+void Gelu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -905,7 +1163,8 @@ void RunOp_Gelu(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, approximate, &rt), rt);
 }
 
-void RunOp_Gemm(const NodeProto &node, RuntimeContext &rt) {
+void Gemm::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 3), "RunNode: op '",
                       node.op_type(), "' expects between 2 and 3 input(s), got ", node.input_size(),
                       ".");
@@ -921,7 +1180,8 @@ void RunOp_Gemm(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(a, b, c, alpha, beta, transA, transB, &rt), rt);
 }
 
-void RunOp_GlobalAveragePool(const NodeProto &node, RuntimeContext &rt) {
+void GlobalAveragePool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -929,7 +1189,8 @@ void RunOp_GlobalAveragePool(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, &rt), rt);
 }
 
-void RunOp_GlobalLpPool(const NodeProto &node, RuntimeContext &rt) {
+void GlobalLpPool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -938,7 +1199,8 @@ void RunOp_GlobalLpPool(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, p, &rt), rt);
 }
 
-void RunOp_GlobalMaxPool(const NodeProto &node, RuntimeContext &rt) {
+void GlobalMaxPool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -946,7 +1208,26 @@ void RunOp_GlobalMaxPool(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, &rt), rt);
 }
 
-void RunOp_GridSample(const NodeProto &node, RuntimeContext &rt) {
+void Greater::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void GreaterOrEqual::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void GridSample::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -959,7 +1240,20 @@ void RunOp_GridSample(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, grid, attrs, &rt), rt);
 }
 
-void RunOp_GRU(const NodeProto &node, RuntimeContext &rt) {
+void GroupNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor &bias = GetInput(node, 2, rt.tensors());
+  const int64_t num_groups = GetAttributeIntOrDefault(node, "num_groups", 0);
+  onnx_kernels::kernel::GroupNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scale, bias, num_groups, GetEpsilon(node), &rt), rt);
+}
+
+void GRU::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '",
                       node.op_type(), "' expects between 3 and 6 input(s), got ", node.input_size(),
                       ".");
@@ -1017,7 +1311,8 @@ void RunOp_GRU(const NodeProto &node, RuntimeContext &rt) {
   set_optional_output(1, std::move(y_h));
 }
 
-void RunOp_HardSigmoid(const NodeProto &node, RuntimeContext &rt) {
+void HardSigmoid::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -1027,7 +1322,51 @@ void RunOp_HardSigmoid(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, alpha, beta, &rt), rt);
 }
 
-void RunOp_Identity(const NodeProto &node, RuntimeContext &rt) {
+void HardSwish::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Hardmax::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, axis, &rt), rt);
+}
+
+void HammingWindow::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t output_datatype =
+      GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
+  EXT_ENFORCE_INVALID(!(output_datatype != static_cast<int64_t>(DataType::FLOAT)),
+                      "RunNode: op 'HammingWindow' only supports output_datatype=FLOAT.");
+  const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
+  const Tensor &size = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
+}
+
+void HannWindow::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t output_datatype =
+      GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
+  EXT_ENFORCE_INVALID(!(output_datatype != static_cast<int64_t>(DataType::FLOAT)),
+                      "RunNode: op 'HannWindow' only supports output_datatype=FLOAT.");
+  const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
+  const Tensor &size = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
+}
+
+void Identity::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const std::string input_name = node.input(0);
@@ -1040,7 +1379,8 @@ void RunOp_Identity(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunOp_ImageDecoder(const NodeProto &node, RuntimeContext &rt) {
+void ImageDecoder::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &encoded_stream = GetInput(node, 0, rt.tensors());
@@ -1049,7 +1389,19 @@ void RunOp_ImageDecoder(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, image_decoder_kernel(encoded_stream, pixel_format, &rt), rt);
 }
 
-void RunOp_IsInf(const NodeProto &node, RuntimeContext &rt) {
+void InstanceNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor &bias = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::InstanceNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scale, bias, GetEpsilon(node), &rt), rt);
+}
+
+void IsInf::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -1059,7 +1411,62 @@ void RunOp_IsInf(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, detect_positive, detect_negative, &rt), rt);
 }
 
-void RunOp_LinearAttention(const NodeProto &node, RuntimeContext &rt) {
+void IsNaN::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void LayerNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputRange(node, 2, 3);
+  RequireOutputRange(node, 1, 3);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::LayerNormalization k(rt.kernel_ctx());
+  auto [y, mean, inv_std_dev] =
+      k(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node));
+  SetOutput(node, 0, std::move(y), rt.tensors());
+  if (node.output_size() >= 2) {
+    SetOutput(node, 1, std::move(mean), rt.tensors());
+  }
+  if (node.output_size() >= 3) {
+    SetOutput(node, 2, std::move(inv_std_dev), rt.tensors());
+  }
+}
+
+void LeakyRelu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.01f);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, alpha, &rt), rt);
+}
+
+void Less::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void LessOrEqual::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void LinearAttention::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6),
                       "RunNode: op 'LinearAttention' expects between 3 and 6 "
                       "input(s), got ",
@@ -1099,7 +1506,25 @@ void RunOp_LinearAttention(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunOp_LSTM(const NodeProto &node, RuntimeContext &rt) {
+void Log::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void LogSoftmax::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, axis, &rt), rt);
+}
+
+void LSTM::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 8), "RunNode: op '",
                       node.op_type(), "' expects between 3 and 8 input(s), got ", node.input_size(),
                       ".");
@@ -1180,7 +1605,8 @@ void RunOp_LSTM(const NodeProto &node, RuntimeContext &rt) {
   set_optional_output(1, std::move(y_h));
 }
 
-void RunOp_LRN(const NodeProto &node, RuntimeContext &rt) {
+void LRN::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -1192,7 +1618,8 @@ void RunOp_LRN(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, size, alpha, beta, bias, &rt), rt);
 }
 
-void RunOp_LpNormalization(const NodeProto &node, RuntimeContext &rt) {
+void LpNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -1202,7 +1629,8 @@ void RunOp_LpNormalization(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, axis, p, &rt), rt);
 }
 
-void RunOp_LpPool(const NodeProto &node, RuntimeContext &rt) {
+void LpPool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -1214,7 +1642,17 @@ void RunOp_LpPool(const NodeProto &node, RuntimeContext &rt) {
             rt.tensors());
 }
 
-void RunOp_MatMulInteger(const NodeProto &node, RuntimeContext &rt) {
+void MatMul::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void MatMulInteger::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 2);
   EXT_ENFORCE_INVALID(!(node.input_size() > 4),
                       "RunNode: op 'MatMulInteger' expects at most 4 inputs, got ",
@@ -1230,7 +1668,20 @@ void RunOp_MatMulInteger(const NodeProto &node, RuntimeContext &rt) {
             rt.tensors());
 }
 
-void RunOp_MaxPool(const NodeProto &node, RuntimeContext &rt) {
+void Max::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  Tensors inputs;
+  inputs.reserve(node.input_size());
+  for (int i = 0; i < node.input_size(); ++i) {
+    inputs.push_back(GetInput(node, i, rt.tensors()));
+  }
+  SetOutput(node, 0, (*this)(inputs, &rt), rt);
+}
+
+void MaxPool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2),
                       "RunNode: op 'MaxPool' expects 1 or 2 output(s), got ", node.output_size(),
@@ -1255,26 +1706,28 @@ void RunOp_MaxPool(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunOp_MaxRoiPool(const NodeProto &node, RuntimeContext &rt) {
+void MaxRoiPool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const Tensor &rois = GetInput(node, 1, rt.tensors());
   onnx_kernels::kernel::MaxRoiPool::Attributes attrs;
-  attrs.pooled_shape = GetAttributeShapeOrDefault(node, "pooled_shape", Shape{});
+  attrs.pooled_shape = GetAttributeShapeOrDefault(node, "pooled_shape", onnx_kernels::Shape{});
   attrs.spatial_scale = GetAttributeFloatOrDefault(node, "spatial_scale", 1.0f);
   onnx_kernels::kernel::MaxRoiPool k(rt.kernel_ctx());
   SetOutput(node, 0, k(x, rois, attrs, &rt), rt);
 }
 
-void RunOp_MaxUnpool(const NodeProto &node, RuntimeContext &rt) {
+void MaxUnpool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputRange(node, 2, 3);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const Tensor &indices = GetInput(node, 1, rt.tensors());
-  const Shape kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
-  const Shape strides = GetAttributeIntsOrDefault(node, "strides", {});
-  const Shape pads = GetAttributeIntsOrDefault(node, "pads", {});
+  const onnx_kernels::Shape kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+  const onnx_kernels::Shape strides = GetAttributeIntsOrDefault(node, "strides", {});
+  const onnx_kernels::Shape pads = GetAttributeIntsOrDefault(node, "pads", {});
   onnx_kernels::kernel::MaxUnpool k(rt.kernel_ctx());
   const Tensor *output_shape = GetOptionalInput(node, 2, rt.tensors());
   if (output_shape != nullptr) {
@@ -1284,7 +1737,20 @@ void RunOp_MaxUnpool(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunOp_MeanVarianceNormalization(const NodeProto &node, RuntimeContext &rt) {
+void Mean::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  Tensors inputs;
+  inputs.reserve(node.input_size());
+  for (int i = 0; i < node.input_size(); ++i) {
+    inputs.push_back(GetInput(node, i, rt.tensors()));
+  }
+  SetOutput(node, 0, (*this)(inputs, &rt), rt);
+}
+
+void MeanVarianceNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -1293,7 +1759,8 @@ void RunOp_MeanVarianceNormalization(const NodeProto &node, RuntimeContext &rt) 
   SetOutput(node, 0, k(x, axes, &rt), rt);
 }
 
-void RunOp_MelWeightMatrix(const NodeProto &node, RuntimeContext &rt) {
+void MelWeightMatrix::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 5);
   RequireOutputCount(node, 1);
   const Tensor &num_mel_bins = GetInput(node, 0, rt.tensors());
@@ -1310,7 +1777,28 @@ void RunOp_MelWeightMatrix(const NodeProto &node, RuntimeContext &rt) {
       rt.tensors());
 }
 
-void RunOp_Mod(const NodeProto &node, RuntimeContext &rt) {
+void Min::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  Tensors inputs;
+  inputs.reserve(node.input_size());
+  for (int i = 0; i < node.input_size(); ++i) {
+    inputs.push_back(GetInput(node, i, rt.tensors()));
+  }
+  SetOutput(node, 0, (*this)(inputs, &rt), rt);
+}
+
+void Mish::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Mod::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
@@ -1320,7 +1808,17 @@ void RunOp_Mod(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(x, y, fmod, &rt), rt);
 }
 
-void RunOp_Multinomial(const NodeProto &node, RuntimeContext &rt) {
+void Mul::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void Multinomial::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &input = GetInput(node, 0, rt.tensors());
@@ -1329,7 +1827,16 @@ void RunOp_Multinomial(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, kernel(input, sample_size, GetSeedAttr(node), GetDtypeAttr(node), &rt), rt);
 }
 
-void RunOp_NegativeLogLikelihoodLoss(const NodeProto &node, RuntimeContext &rt) {
+void Neg::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void NegativeLogLikelihoodLoss::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputRange(node, 2, 3);
   RequireOutputCount(node, 1);
   const Tensor &input = GetInput(node, 0, rt.tensors());
@@ -1342,7 +1849,8 @@ void RunOp_NegativeLogLikelihoodLoss(const NodeProto &node, RuntimeContext &rt) 
   SetOutput(node, 0, k(input, target, weight, reduction, has_ignore_index, ignore_index, &rt), rt);
 }
 
-void RunOp_NonMaxSuppression(const NodeProto &node, RuntimeContext &rt) {
+void NonMaxSuppression::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 5), "RunNode: op '",
                       node.op_type(), "' expects between 2 and 5 inputs, got ", node.input_size(),
                       ".");
@@ -1362,7 +1870,24 @@ void RunOp_NonMaxSuppression(const NodeProto &node, RuntimeContext &rt) {
             rt.tensors());
 }
 
-void RunOp_OneHot(const NodeProto &node, RuntimeContext &rt) {
+void NonZero::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void Not::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void OneHot::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
   const Tensor &indices = GetInput(node, 0, rt.tensors());
@@ -1374,7 +1899,17 @@ void RunOp_OneHot(const NodeProto &node, RuntimeContext &rt) {
   SetOutput(node, 0, k(indices, depth, values, attrs, &rt), rt);
 }
 
-void RunOp_Optional(const NodeProto &node, RuntimeContext &rt) {
+void Or::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void Optional::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const std::string input_name = node.input(0);
@@ -1391,7 +1926,8 @@ void RunOp_Optional(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunOp_OptionalGetElement(const NodeProto &node, RuntimeContext &rt) {
+void OptionalGetElement::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const std::string input_name = node.input(0);
@@ -1405,7 +1941,8 @@ void RunOp_OptionalGetElement(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunOp_OptionalHasElement(const NodeProto &node, RuntimeContext &rt) {
+void OptionalHasElement::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   EXT_ENFORCE_INVALID(!(node.input_size() > 1),
                       "RunNode: op 'OptionalHasElement' expects 0 or 1 inputs, got ",
                       node.input_size(), ".");
@@ -1426,7 +1963,8 @@ void RunOp_OptionalHasElement(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunOp_Pad(const NodeProto &node, RuntimeContext &rt) {
+void Pad::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 1);
   EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op 'Pad' expects at most 4 inputs.");
   RequireOutputCount(node, 1);
@@ -1458,7 +1996,26 @@ void RunOp_Pad(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunOp_QLinearConv(const NodeProto &node, RuntimeContext &rt) {
+void Pow::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void PRelu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void QLinearConv::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 8);
   EXT_ENFORCE_INVALID(!(node.input_size() > 9),
                       "RunNode: op 'QLinearConv' expects at most 9 inputs, got ", node.input_size(),
@@ -1488,7 +2045,8 @@ void RunOp_QLinearConv(const NodeProto &node, RuntimeContext &rt) {
             rt);
 }
 
-void RunOp_QLinearMatMul(const NodeProto &node, RuntimeContext &rt) {
+void QLinearMatMul::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireInputCount(node, 8);
   RequireOutputCount(node, 1);
   const Tensor &a = GetInput(node, 0, rt.tensors());
@@ -1504,7 +2062,8 @@ void RunOp_QLinearMatMul(const NodeProto &node, RuntimeContext &rt) {
             rt);
 }
 
-void RunOp_QuantizeLinear(const NodeProto &node, RuntimeContext &rt) {
+void QuantizeLinear::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
   RequireMinInputCount(node, 2);
   EXT_ENFORCE_INVALID(!(node.input_size() > 3),
                       "RunNode: op 'QuantizeLinear' expects 2 or 3 inputs, got ", node.input_size(),
@@ -1528,2165 +2087,6 @@ void RunOp_QuantizeLinear(const NodeProto &node, RuntimeContext &rt) {
     SetOutput(node, 0, k(x, y_scale, &rt), rt);
   }
 }
-
-void RunOp_Range(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 3);
-  RequireOutputCount(node, 1);
-  const Tensor &start = GetInput(node, 0, rt.tensors());
-  const Tensor &limit = GetInput(node, 1, rt.tensors());
-  const Tensor &delta = GetInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::Range k(rt.kernel_ctx());
-  SetOutput(node, 0, k(start, limit, delta, &rt), rt);
-}
-
-void RunOp_RegexFullMatch(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const std::string pattern = GetAttributeStringOrDefault(node, "pattern", "");
-  onnx_kernels::kernel::RegexFullMatch k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, pattern, &rt), rt);
-}
-
-void RunOp_Reshape(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const Tensor &shape = GetInput(node, 1, rt.tensors());
-  const int64_t allowzero = GetAttributeIntOrDefault(node, "allowzero", 0);
-  onnx_kernels::kernel::Reshape k(rt.kernel_ctx());
-  SetOutput(node, 0, k(data, shape, allowzero, &rt), rt);
-}
-
-void RunOp_Resize(const NodeProto &node, RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(!(node.input_size() < 1 || node.input_size() > 4), "RunNode: op '",
-                      node.op_type(), "' expects between 1 and 4 input(s), got ", node.input_size(),
-                      ".");
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor *roi = GetOptionalInput(node, 1, rt.tensors());
-  const Tensor *scales = GetOptionalInput(node, 2, rt.tensors());
-  const Tensor *sizes = GetOptionalInput(node, 3, rt.tensors());
-  EXT_ENFORCE_INVALID(!((scales == nullptr) == (sizes == nullptr)),
-                      "RunNode: op 'Resize' requires exactly one of 'scales' or 'sizes' to be "
-                      "provided.");
-
-  onnx_kernels::kernel::Resize::Attributes attrs;
-  attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
-  attrs.coordinate_transformation_mode = GetAttributeStringOrDefault(
-      node, "coordinate_transformation_mode", attrs.coordinate_transformation_mode);
-  attrs.nearest_mode = GetAttributeStringOrDefault(node, "nearest_mode", attrs.nearest_mode);
-  attrs.axes = GetAttributeShapeOrDefault(node, "axes", attrs.axes);
-  attrs.keep_aspect_ratio_policy =
-      GetAttributeStringOrDefault(node, "keep_aspect_ratio_policy", attrs.keep_aspect_ratio_policy);
-  attrs.cubic_coeff_a = GetAttributeFloatOrDefault(node, "cubic_coeff_a", attrs.cubic_coeff_a);
-  attrs.exclude_outside = GetAttributeIntOrDefault(node, "exclude_outside", attrs.exclude_outside);
-  attrs.antialias = GetAttributeIntOrDefault(node, "antialias", attrs.antialias);
-  attrs.extrapolation_value =
-      GetAttributeFloatOrDefault(node, "extrapolation_value", attrs.extrapolation_value);
-  if (roi != nullptr) {
-    EXT_ENFORCE_INVALID(!(roi->data_type != DataType::FLOAT),
-                        "RunNode: op 'Resize' 'roi' input must be a FLOAT tensor.");
-    EXT_ENFORCE_INVALID(!(roi->shape.size() != 1), "RunNode: op 'Resize' 'roi' input must be 1-D.");
-    const int64_t n = roi->shape[0];
-    attrs.roi.assign(static_cast<std::size_t>(n), 0.0f);
-    if (n > 0) {
-      std::memcpy(attrs.roi.data(), roi->bytes(), static_cast<std::size_t>(n) * sizeof(float));
-    }
-  }
-
-  onnx_kernels::kernel::Resize k(rt.kernel_ctx());
-  if (scales != nullptr) {
-    SetOutput(node, 0, k(x, *scales, attrs, &rt), rt);
-  } else {
-    SetOutput(node, 0, k.ResizeSizes(x, *sizes, attrs), rt);
-  }
-}
-
-void RunOp_ReverseSequence(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor &sequence_lens = GetInput(node, 1, rt.tensors());
-  onnx_kernels::kernel::ReverseSequence::Attributes attrs;
-  attrs.time_axis = GetAttributeIntOrDefault(node, "time_axis", attrs.time_axis);
-  attrs.batch_axis = GetAttributeIntOrDefault(node, "batch_axis", attrs.batch_axis);
-  onnx_kernels::kernel::ReverseSequence k(rt.kernel_ctx());
-  SetOutput(node, 0, k(input, sequence_lens, attrs, &rt), rt);
-}
-
-void RunOp_RoiAlign(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 3);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &rois = GetInput(node, 1, rt.tensors());
-  const Tensor &batch_indices = GetInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::RoiAlign::Attributes attrs;
-  attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
-  attrs.output_height = GetAttributeIntOrDefault(node, "output_height", attrs.output_height);
-  attrs.output_width = GetAttributeIntOrDefault(node, "output_width", attrs.output_width);
-  attrs.sampling_ratio = GetAttributeIntOrDefault(node, "sampling_ratio", attrs.sampling_ratio);
-  attrs.spatial_scale = GetAttributeFloatOrDefault(node, "spatial_scale", attrs.spatial_scale);
-  // Opset 10 has no ``coordinate_transformation_mode`` attribute and
-  // behaves like ``output_half_pixel``; opset 16+ defaults to
-  // ``half_pixel``.
-  const std::string default_ctm =
-      rt.kernel_ctx().opset.version < 16 ? "output_half_pixel" : "half_pixel";
-  attrs.coordinate_transformation_mode =
-      GetAttributeStringOrDefault(node, "coordinate_transformation_mode", default_ctm);
-  onnx_kernels::kernel::RoiAlign k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, rois, batch_indices, attrs, &rt), rt);
-}
-
-void RunOp_RNN(const NodeProto &node, RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '",
-                      node.op_type(), "' expects between 3 and 6 input(s), got ", node.input_size(),
-                      ".");
-  EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '",
-                      node.op_type(), "' expects 1 or 2 output(s), got ", node.output_size(), ".");
-
-  // Unsupported attributes: only the default ``forward`` direction
-  // with the default ``Tanh`` activation and no ``clip`` are
-  // implemented; ``layout=0`` and ``layout=1`` are both supported.
-  const std::string direction = GetAttributeStringOrDefault(node, "direction", "forward");
-  EXT_ENFORCE_INVALID(direction == "forward",
-                      "RunNode: op 'RNN' only supports direction='forward', got '", direction,
-                      "'.");
-  if (const AttributeProto *activations = FindAttribute(node, "activations");
-      activations != nullptr) {
-    const std::vector<std::string> values = GetAttributeStringsOrDefault(node, "activations", {});
-    EXT_ENFORCE_INVALID(!(values.size() != 1 || values[0] != "Tanh"),
-                        "RunNode: op 'RNN' only supports the default activations=['Tanh'].");
-  }
-  EXT_ENFORCE_INVALID(!(FindAttribute(node, "activation_alpha") != nullptr ||
-                        FindAttribute(node, "activation_beta") != nullptr),
-                      "RunNode: op 'RNN' does not support 'activation_alpha'/'activation_beta'.");
-  EXT_ENFORCE_INVALID(FindAttribute(node, "clip") == nullptr,
-                      "RunNode: op 'RNN' does not support the 'clip' attribute.");
-  const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
-
-  // ``sequence_lens`` (input #4) is not supported: it requires
-  // per-batch sequence handling that the FLOAT kernel does not
-  // implement.
-  const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
-  EXT_ENFORCE_INVALID(sequence_lens == nullptr,
-                      "RunNode: op 'RNN' does not support the optional 'sequence_lens' input.");
-
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &w = GetInput(node, 1, rt.tensors());
-  const Tensor &r = GetInput(node, 2, rt.tensors());
-  const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
-  const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
-
-  onnx_kernels::kernel::RNN kernel(rt.kernel_ctx());
-  auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
-                         initial_h != nullptr ? *initial_h : Tensor{}, layout);
-
-  auto set_optional_output = [&node, &rt](int index, Tensor output) {
-    if (index >= node.output_size()) {
-      return;
-    }
-    const std::string &name = node.output(index);
-    if (name.empty()) {
-      return;
-    }
-    output.name = name;
-    rt.Put(name, std::move(output), RuntimeEventKind::kIntermediate);
-  };
-  set_optional_output(0, std::move(y));
-  set_optional_output(1, std::move(y_h));
-}
-
-void RunOp_RotaryEmbedding(const NodeProto &node, RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 4), "RunNode: op '",
-                      node.op_type(), "' expects between 3 and 4 input(s), got ", node.input_size(),
-                      ".");
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &cos_cache = GetInput(node, 1, rt.tensors());
-  const Tensor &sin_cache = GetInput(node, 2, rt.tensors());
-  const Tensor *position_ids = GetOptionalInput(node, 3, rt.tensors());
-
-  onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
-  attrs.interleaved = GetAttributeIntOrDefault(node, "interleaved", 0) != 0;
-  attrs.rotary_embedding_dim = GetAttributeIntOrDefault(node, "rotary_embedding_dim", 0);
-  attrs.num_heads = GetAttributeIntOrDefault(node, "num_heads", 0);
-
-  onnx_kernels::kernel::RotaryEmbedding kernel(rt.kernel_ctx());
-  const Tensor empty;
-  const Tensor &pos = (position_ids != nullptr) ? *position_ids : empty;
-  SetOutput(node, 0, kernel(x, cos_cache, sin_cache, pos, attrs, &rt), rt);
-}
-
-void RunOp_Scatter(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 3);
-  RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const Tensor &indices = GetInput(node, 1, rt.tensors());
-  const Tensor &updates = GetInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::Scatter::Attributes attrs;
-  attrs.axis = GetAttributeIntOrDefault(node, "axis", 0);
-  onnx_kernels::kernel::Scatter k(rt.kernel_ctx());
-  SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
-}
-
-void RunOp_ScatterElements(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 3);
-  RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const Tensor &indices = GetInput(node, 1, rt.tensors());
-  const Tensor &updates = GetInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::ScatterElements::Attributes attrs;
-  attrs.axis = GetAttributeIntOrDefault(node, "axis", 0);
-  attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
-  onnx_kernels::kernel::ScatterElements k(rt.kernel_ctx());
-  SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
-}
-
-void RunOp_ScatterND(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 3);
-  RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const Tensor &indices = GetInput(node, 1, rt.tensors());
-  const Tensor &updates = GetInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::ScatterND::Attributes attrs;
-  attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
-  onnx_kernels::kernel::ScatterND k(rt.kernel_ctx());
-  SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
-}
-
-void RunOp_Selu(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.67326319217681884765625f);
-  const float gamma = GetAttributeFloatOrDefault(node, "gamma", 1.05070102214813232421875f);
-  onnx_kernels::kernel::Selu k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, alpha, gamma, &rt), rt);
-}
-
-void RunOp_ConcatFromSequence(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
-  const AttributeProto *axis_attr = FindAttribute(node, "axis");
-  EXT_ENFORCE_INVALID(axis_attr != nullptr,
-                      "RunNode: op 'ConcatFromSequence' is missing required attribute 'axis'.");
-  const int64_t axis = axis_attr->i();
-  const int64_t new_axis = GetAttributeIntOrDefault(node, "new_axis", 0);
-  onnx_kernels::kernel::ConcatFromSequence k(rt.kernel_ctx());
-  SetOutput(node, 0, k(input_sequence.values, axis, new_axis, &rt), rt);
-}
-
-void RunOp_SequenceAt(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
-  const Tensor &position = GetInput(node, 1, rt.tensors());
-  onnx_kernels::kernel::SequenceAt k(rt.kernel_ctx());
-  SetOutput(node, 0, k(input_sequence, position, &rt), rt);
-}
-
-void RunOp_SequenceConstruct(const NodeProto &node, RuntimeContext &rt) {
-  RequireMinInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  Tensors inputs;
-  inputs.reserve(node.input_size());
-  for (int i = 0; i < node.input_size(); ++i) {
-    inputs.push_back(GetInput(node, i, rt.tensors()));
-  }
-  onnx_kernels::kernel::SequenceConstruct k(rt.kernel_ctx());
-  SetOutputSequence(node, 0, k.AsSequence(inputs), rt);
-}
-
-void RunOp_SequenceEmpty(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 0);
-  RequireOutputCount(node, 1);
-  const int64_t dtype = GetAttributeIntOrDefault(node, "dtype", 0);
-  onnx_kernels::kernel::SequenceEmpty k(rt.kernel_ctx());
-  SetOutputSequence(node, 0, k(static_cast<int32_t>(dtype)), rt);
-}
-
-void RunOp_SequenceErase(const NodeProto &node, RuntimeContext &rt) {
-  RequireMinInputCount(node, 1);
-  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
-                      "' expects 1 or 2 inputs, got ", node.input_size(), ".");
-  RequireOutputCount(node, 1);
-  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
-  const Tensor *position = GetOptionalInput(node, 1, rt.tensors());
-  onnx_kernels::kernel::SequenceErase k(rt.kernel_ctx());
-  SetOutputSequence(node, 0, k(input_sequence, position), rt);
-}
-
-void RunOp_SequenceInsert(const NodeProto &node, RuntimeContext &rt) {
-  RequireMinInputCount(node, 2);
-  EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type(),
-                      "' expects 2 or 3 inputs, got ", node.input_size(), ".");
-  RequireOutputCount(node, 1);
-  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
-  const Tensor &tensor = GetInput(node, 1, rt.tensors());
-  const Tensor *position = GetOptionalInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::SequenceInsert k(rt.kernel_ctx());
-  SetOutputSequence(node, 0, k(input_sequence, tensor, position), rt);
-}
-
-void RunOp_SequenceLength(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
-  onnx_kernels::kernel::SequenceLength k(rt.kernel_ctx());
-  SetOutput(node, 0, k(input_sequence, &rt), rt);
-}
-
-void RunOp_Split(const NodeProto &node, RuntimeContext &rt) {
-  RequireMinInputCount(node, 1);
-  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
-                      "' expects 1 or 2 inputs, got ", node.input_size(), ".");
-  EXT_ENFORCE_INVALID(!(node.output_size() < 1), "RunNode: op '", node.op_type(),
-                      "' expects at least 1 output, got 0.");
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
-
-  // Resolve ``split``: from the optional 2nd input (opset >= 13), from the
-  // legacy ``split`` attribute (opset <= 12), or unspecified.
-  // When the split sizes come from a tensor input, use a zero-copy span
-  // view; otherwise fall back to an attribute-sourced vector.
-  const Tensor *split_input = GetOptionalInput(node, 1, rt.tensors());
-  std::vector<int64_t> split_attr;
-  std::span<const int64_t> split;
-  if (split_input != nullptr) {
-    split = TensorSpan<int64_t>(*split_input);
-  } else {
-    split_attr = GetAttributeIntsOrDefault(node, "split", {});
-    split = split_attr;
-  }
-
-  // ``num_outputs`` (opset >= 18) defaults to the number of outputs of the
-  // node when neither ``split`` nor the attribute is provided.
-  int64_t num_outputs = GetAttributeIntOrDefault(node, "num_outputs", 0);
-  if (split.empty() && num_outputs <= 0) {
-    num_outputs = static_cast<int64_t>(node.output_size());
-  }
-
-  onnx_kernels::kernel::Split k(rt.kernel_ctx());
-  Tensors outputs = k(input, axis, split, num_outputs);
-  EXT_ENFORCE_INVALID(!(static_cast<int>(outputs.size()) != node.output_size()),
-                      "RunNode: op 'Split' produced ", outputs.size(),
-                      " outputs but node declares ", node.output_size(), ".");
-  for (int i = 0; i < node.output_size(); ++i) {
-    SetOutput(node, i, std::move(outputs[static_cast<size_t>(i)]), rt);
-  }
-}
-
-void RunOp_SplitToSequence(const NodeProto &node, RuntimeContext &rt) {
-  RequireMinInputCount(node, 1);
-  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
-                      "' expects 1 or 2 inputs, got ", node.input_size(), ".");
-  RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor *split = GetOptionalInput(node, 1, rt.tensors());
-  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
-  const int64_t keepdims = GetAttributeIntOrDefault(node, "keepdims", 1);
-  onnx_kernels::kernel::SplitToSequence k(rt.kernel_ctx());
-  SetOutputSequence(node, 0, k(input, split, axis, keepdims), rt);
-}
-
-void RunOp_Shape(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  onnx_kernels::kernel::Shape::Attributes shape_attrs;
-  shape_attrs.start = GetAttributeIntOrDefault(node, "start", 0);
-  const AttributeProto *end_attr = FindAttribute(node, "end");
-  if (end_attr != nullptr) {
-    shape_attrs.end = end_attr->i();
-  }
-  onnx_kernels::kernel::Shape shape_kernel(rt.kernel_ctx());
-  SetOutput(node, 0, shape_kernel(data, shape_attrs, &rt), rt);
-}
-
-void RunOp_Shrink(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const float bias = GetAttributeFloatOrDefault(node, "bias", 0.0f);
-  const float lambd = GetAttributeFloatOrDefault(node, "lambd", 0.5f);
-  onnx_kernels::kernel::Shrink k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, bias, lambd, &rt), rt);
-}
-
-void RunOp_Size(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  onnx_kernels::kernel::Size k(rt.kernel_ctx());
-  SetOutput(node, 0, k(data, &rt), rt);
-}
-
-void RunOp_Slice(const NodeProto &node, RuntimeContext &rt) {
-  RequireMinInputCount(node, 3);
-  EXT_ENFORCE_INVALID(!(node.input_size() > 5), "RunNode: op '", node.op_type(),
-                      "' expects between 3 and 5 input(s), got ", node.input_size(), ".");
-  RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const Tensor &starts = GetInput(node, 1, rt.tensors());
-  const Tensor &ends = GetInput(node, 2, rt.tensors());
-  const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
-  const Tensor *steps = GetOptionalInput(node, 4, rt.tensors());
-  onnx_kernels::kernel::Slice k(rt.kernel_ctx());
-  SetOutput(node, 0, k(data, starts, ends, axes, steps, &rt), rt);
-}
-
-void RunOp_SoftmaxCrossEntropyLoss(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputRange(node, 2, 3);
-  RequireOutputRange(node, 1, 2);
-  const Tensor &scores = GetInput(node, 0, rt.tensors());
-  const Tensor &labels = GetInput(node, 1, rt.tensors());
-  const Tensor *weights = GetOptionalInput(node, 2, rt.tensors());
-  const std::string reduction = GetAttributeStringOrDefault(node, "reduction", "mean");
-  const bool has_ignore_index = FindAttribute(node, "ignore_index") != nullptr;
-  const int64_t ignore_index = GetAttributeIntOrDefault(node, "ignore_index", 0);
-  onnx_kernels::kernel::SoftmaxCrossEntropyLoss k(rt.kernel_ctx());
-  auto [loss, log_prob] = k(scores, labels, weights, reduction, has_ignore_index, ignore_index);
-  SetOutput(node, 0, std::move(loss), rt);
-  if (node.output_size() >= 2) {
-    SetOutput(node, 1, std::move(log_prob), rt);
-  }
-}
-
-void RunOp_STFT(const NodeProto &node, RuntimeContext &rt) {
-  RequireMinInputCount(node, 2);
-  EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op '", node.op_type(),
-                      "' expects at most 4 inputs.");
-  RequireOutputCount(node, 1);
-  const Tensor &signal = GetInput(node, 0, rt.tensors());
-  const Tensor &frame_step = GetInput(node, 1, rt.tensors());
-  const Tensor *window = GetOptionalInput(node, 2, rt.tensors());
-  const Tensor *frame_length = GetOptionalInput(node, 3, rt.tensors());
-  const bool onesided = GetAttributeIntOrDefault(node, "onesided", 1) != 0;
-  onnx_kernels::kernel::STFT k(rt.kernel_ctx());
-  SetOutput(node, 0, k(signal, frame_step, window, frame_length, onesided, &rt), rt);
-}
-
-void RunOp_StringNormalizer(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const std::string case_change_action_attr =
-      GetAttributeStringOrDefault(node, "case_change_action", "NONE");
-  const bool is_case_sensitive = GetAttributeIntOrDefault(node, "is_case_sensitive", 0) != 0;
-  const std::vector<std::string> stopwords = GetAttributeStringsOrDefault(node, "stopwords", {});
-  onnx_kernels::kernel::StringNormalizer k(rt.kernel_ctx());
-  SetOutput(
-      node, 0,
-      k(x, onnx_kernels::kernel::StringNormalizer::ParseCaseChangeAction(case_change_action_attr),
-        is_case_sensitive, stopwords),
-      rt);
-}
-
-void RunOp_StringSplit(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 2);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const std::string delimiter = GetAttributeStringOrDefault(node, "delimiter", "");
-  const int64_t maxsplit = GetAttributeIntOrDefault(node, "maxsplit", -1);
-  onnx_kernels::kernel::StringSplit k(rt.kernel_ctx());
-  auto out = k(x, delimiter, maxsplit);
-  SetOutput(node, 0, std::move(out.first), rt);
-  SetOutput(node, 1, std::move(out.second), rt);
-}
-
-void RunOp_TensorScatter(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputRange(node, 2, 3);
-  RequireOutputCount(node, 1);
-  const Tensor &past_cache = GetInput(node, 0, rt.tensors());
-  const Tensor &update = GetInput(node, 1, rt.tensors());
-  const Tensor *write_indices = GetOptionalInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::TensorScatter::Attributes attrs;
-  attrs.axis = GetAttributeIntOrDefault(node, "axis", -2);
-  attrs.mode = GetAttributeStringOrDefault(node, "mode", "linear");
-  onnx_kernels::kernel::TensorScatter kernel(rt.kernel_ctx());
-  SetOutput(node, 0, kernel(past_cache, update, write_indices, attrs, &rt), rt);
-}
-
-void RunOp_TfIdfVectorizer(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const std::string mode_attr = GetRequiredAttributeString(node, "mode");
-  const int64_t min_gram_length = GetAttributeIntOrDefault(node, "min_gram_length", 1);
-  const int64_t max_gram_length = GetAttributeIntOrDefault(node, "max_gram_length", 1);
-  const int64_t max_skip_count = GetAttributeIntOrDefault(node, "max_skip_count", 0);
-  const std::vector<int64_t> ngram_counts = GetAttributeIntsOrDefault(node, "ngram_counts", {});
-  const ParamInts ngram_indexes = GetAttributeIntsOrDefault(node, "ngram_indexes", {});
-  const ParamInts pool_int64s = GetAttributeIntsOrDefault(node, "pool_int64s", {});
-  const std::vector<std::string> pool_strings =
-      GetAttributeStringsOrDefault(node, "pool_strings", {});
-  const std::vector<float> weights = GetAttributeFloatsOrDefault(node, "weights", {});
-  onnx_kernels::kernel::TfIdfVectorizer k(rt.kernel_ctx());
-  SetOutput(node, 0,
-            k(x, onnx_kernels::kernel::TfIdfVectorizer::ParseMode(mode_attr), min_gram_length,
-              max_gram_length, max_skip_count, ngram_counts, ngram_indexes, pool_int64s,
-              pool_strings, weights),
-            rt);
-}
-
-void RunOp_Tile(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor &repeats = GetInput(node, 1, rt.tensors());
-  onnx_kernels::kernel::Tile k(rt.kernel_ctx());
-  SetOutput(node, 0, k(input, repeats, &rt), rt);
-}
-
-void RunOp_TopK(const NodeProto &node, RuntimeContext &rt) {
-  RequireOutputCount(node, 2);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
-  const bool largest = GetAttributeIntOrDefault(node, "largest", 1) != 0;
-  const bool sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
-
-  // ``k``: from input[1] (1-D INT64 tensor of size 1) for opset >= 10,
-  // otherwise from the pre-opset-10 ``k`` INT attribute (required).
-  int64_t k = 0;
-  const int64_t opset_version = rt.kernel_ctx().opset.version;
-  if (opset_version >= 10) {
-    RequireInputCount(node, 2);
-    const Tensor &k_tensor = GetInput(node, 1, rt.tensors());
-    EXT_ENFORCE_INVALID(k_tensor.element_count() == 1,
-                        "RunNode: op 'TopK' input 'K' must be a 1-D tensor with a single element.");
-    EXT_ENFORCE_INVALID(!(k_tensor.data_type != static_cast<int32_t>(DataType::INT64)),
-                        "RunNode: op 'TopK' input 'K' must be INT64.");
-    k = k_tensor.AsInt64()[0];
-  } else {
-    RequireInputCount(node, 1);
-    const AttributeProto *k_attr = FindAttribute(node, "k");
-    EXT_ENFORCE_INVALID(k_attr != nullptr,
-                        "RunNode: op 'TopK' requires the 'k' attribute for opset < 10.");
-    k = k_attr->i();
-  }
-
-  onnx_kernels::kernel::TopK kernel(rt.kernel_ctx());
-  auto out = kernel(x, k, axis, largest, sorted);
-  SetOutput(node, 0, std::move(out.first), rt);
-  SetOutput(node, 1, std::move(out.second), rt);
-}
-
-void RunOp_Transpose(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const onnx_kernels::Shape perm = GetAttributeIntsOrDefault(node, "perm", {});
-  onnx_kernels::kernel::Transpose k(rt.kernel_ctx());
-  SetOutput(node, 0, k(data, perm, &rt), rt);
-}
-
-void RunOp_Trilu(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputRange(node, 1, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor *k = GetOptionalInput(node, 1, rt.tensors());
-  onnx_kernels::kernel::Trilu::Attributes attrs;
-  attrs.upper = GetAttributeIntOrDefault(node, "upper", 1);
-  onnx_kernels::kernel::Trilu kernel(rt.kernel_ctx());
-  SetOutput(node, 0, kernel(input, k, attrs, &rt), rt);
-}
-
-void RunOp_Unique(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputRange(node, 1, 4);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  onnx_kernels::kernel::Unique::Attributes attrs;
-  attrs.sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
-  const AttributeProto *axis_attr = FindAttribute(node, "axis");
-  if (axis_attr != nullptr) {
-    attrs.axis = axis_attr->i();
-  }
-  onnx_kernels::kernel::Unique k(rt.kernel_ctx());
-  auto out = k(x, attrs);
-  SetOutput(node, 0, std::move(out.y), rt);
-  if (node.output_size() >= 2) {
-    SetOutput(node, 1, std::move(out.indices), rt);
-  }
-  if (node.output_size() >= 3) {
-    SetOutput(node, 2, std::move(out.inverse_indices), rt);
-  }
-  if (node.output_size() >= 4) {
-    SetOutput(node, 3, std::move(out.counts), rt);
-  }
-}
-
-void RunOp_Upsample(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scales = GetInput(node, 1, rt.tensors());
-  onnx_kernels::kernel::Upsample::Attributes attrs;
-  attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
-  onnx_kernels::kernel::Upsample k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, scales, attrs, &rt), rt);
-}
-
-void RunOp_FlexAttention(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 3);
-  RequireOutputCount(node, 1);
-  const Tensor &Q = GetInput(node, 0, rt.tensors());
-  const Tensor &K = GetInput(node, 1, rt.tensors());
-  const Tensor &V = GetInput(node, 2, rt.tensors());
-
-  // Resolve the scale once: use the explicit attribute if present, otherwise
-  // fall back to 1/sqrt(head_size) — matching the kernel's own default.
-  const float scale = FindAttribute(node, "scale") != nullptr
-                          ? GetAttributeFloatOrDefault(node, "scale", 1.0f)
-                          : 1.0f / std::sqrt(static_cast<float>(Q.shape[3]));
-
-  onnx_kernels::kernel::FlexAttention flex(rt.kernel_ctx());
-  Tensor Y;
-  onnx_kernels::kernel::FlexAttention::ScoreModFn score_mod_fn;
-  onnx_kernels::kernel::FlexAttention::ProbModFn prob_mod_fn;
-  // Sessions for the score_mod / prob_mod subgraphs are built once and
-  // reused for every row the FlexAttention kernel evaluates them on,
-  // instead of re-resolving the subgraph's kernels on every call.
-  std::unique_ptr<SubgraphSession> score_mod_session;
-  std::unique_ptr<SubgraphSession> prob_mod_session;
-  const AttributeProto *score_mod_attr = FindAttribute(node, "score_mod");
-  if (score_mod_attr != nullptr) {
-    const GraphProto &score_mod_graph = score_mod_attr->ref_g();
-    EXT_ENFORCE_INVALID(!(score_mod_graph.input().empty()),
-                        "RunNode: 'score_mod' subgraph must declare at least one input.");
-    const std::string in_name = score_mod_graph.input()[0].name();
-    score_mod_session = std::make_unique<SubgraphSession>(rt, score_mod_graph);
-    score_mod_fn = [in_name, &rt, &session = *score_mod_session](Tensor &scores) {
-      auto outputs = session.Run({{in_name, scores}}, rt, "score_mod");
-      if (!outputs.empty()) {
-        scores = std::move(outputs[0]);
-      }
-    };
-  }
-  const AttributeProto *prob_mod_attr = FindAttribute(node, "prob_mod");
-  if (prob_mod_attr != nullptr) {
-    const GraphProto &prob_mod_graph = prob_mod_attr->ref_g();
-    EXT_ENFORCE_INVALID(!(prob_mod_graph.input().empty()),
-                        "RunNode: 'prob_mod' subgraph must declare at least one input.");
-    const std::string in_name = prob_mod_graph.input()[0].name();
-    prob_mod_session = std::make_unique<SubgraphSession>(rt, prob_mod_graph);
-    prob_mod_fn = [in_name, &rt, &session = *prob_mod_session](Tensor &probs) {
-      auto outputs = session.Run({{in_name, probs}}, rt, "prob_mod");
-      if (!outputs.empty()) {
-        probs = std::move(outputs[0]);
-      }
-    };
-  }
-  if (score_mod_fn || prob_mod_fn) {
-    Y = flex(Q, K, V, scale, score_mod_fn, prob_mod_fn);
-  } else {
-    Y = flex(Q, K, V, scale);
-  }
-  SetOutput(node, 0, std::move(Y), rt.tensors());
-}
-
-void RunOp_Adagrad(const NodeProto &node, RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(!(node.input_size() < 5 || (node.input_size() - 2) % 3 != 0),
-                      "RunNode: op 'Adagrad' expects 2 + 3*N inputs (got ", node.input_size(),
-                      ").");
-  const int64_t n = (node.input_size() - 2) / 3;
-  EXT_ENFORCE_INVALID(node.output_size() == 2 * n,
-                      "RunNode: op 'Adagrad' expects 2*N outputs (got ", node.output_size(),
-                      " for N=", n, ").");
-  const Tensor &R = GetInput(node, 0, rt.tensors());
-  const Tensor &T = GetInput(node, 1, rt.tensors());
-  Tensors Xs, Gs, Hs;
-  Xs.reserve(n);
-  Gs.reserve(n);
-  Hs.reserve(n);
-  for (int64_t i = 0; i < n; ++i) {
-    Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
-    Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
-    Hs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
-  }
-  const float epsilon = GetAttributeFloatOrDefault(node, "epsilon", 0.0f);
-  const float decay_factor = GetAttributeFloatOrDefault(node, "decay_factor", 0.0f);
-  const float norm_coefficient = GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
-  onnx_kernels::kernel::Adagrad k(rt.kernel_ctx());
-  Tensors outs = k(R, T, Xs, Gs, Hs, epsilon, decay_factor, norm_coefficient);
-  for (int64_t i = 0; i < 2 * n; ++i) {
-    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
-  }
-}
-
-void RunOp_Adam(const NodeProto &node, RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(!(node.input_size() < 6 || (node.input_size() - 2) % 4 != 0),
-                      "RunNode: op 'Adam' expects 2 + 4*N inputs (got ", node.input_size(), ").");
-  const int64_t n = (node.input_size() - 2) / 4;
-  EXT_ENFORCE_INVALID(node.output_size() == 3 * n, "RunNode: op 'Adam' expects 3*N outputs (got ",
-                      node.output_size(), " for N=", n, ").");
-  const Tensor &R = GetInput(node, 0, rt.tensors());
-  const Tensor &T = GetInput(node, 1, rt.tensors());
-  Tensors Xs, Gs, Vs, Hs;
-  Xs.reserve(n);
-  Gs.reserve(n);
-  Vs.reserve(n);
-  Hs.reserve(n);
-  for (int64_t i = 0; i < n; ++i) {
-    Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
-    Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
-    Vs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
-    Hs.push_back(GetInput(node, static_cast<int>(2 + 3 * n + i), rt.tensors()));
-  }
-  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.9f);
-  const float beta = GetAttributeFloatOrDefault(node, "beta", 0.999f);
-  const float epsilon = GetAttributeFloatOrDefault(node, "epsilon", 1e-6f);
-  const float norm_coefficient = GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
-  const float norm_coefficient_post =
-      GetAttributeFloatOrDefault(node, "norm_coefficient_post", 0.0f);
-  onnx_kernels::kernel::Adam k(rt.kernel_ctx());
-  Tensors outs =
-      k(R, T, Xs, Gs, Vs, Hs, alpha, beta, epsilon, norm_coefficient, norm_coefficient_post);
-  for (int64_t i = 0; i < 3 * n; ++i) {
-    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
-  }
-}
-
-void RunOp_Momentum(const NodeProto &node, RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(!(node.input_size() < 5 || (node.input_size() - 2) % 3 != 0),
-                      "RunNode: op 'Momentum' expects 2 + 3*N inputs (got ", node.input_size(),
-                      ").");
-  const int64_t n = (node.input_size() - 2) / 3;
-  EXT_ENFORCE_INVALID(node.output_size() == 2 * n,
-                      "RunNode: op 'Momentum' expects 2*N outputs (got ", node.output_size(),
-                      " for N=", n, ").");
-  const Tensor &R = GetInput(node, 0, rt.tensors());
-  const Tensor &T = GetInput(node, 1, rt.tensors());
-  Tensors Xs, Gs, Vs;
-  Xs.reserve(n);
-  Gs.reserve(n);
-  Vs.reserve(n);
-  for (int64_t i = 0; i < n; ++i) {
-    Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
-    Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
-    Vs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
-  }
-  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.0f);
-  const float beta = GetAttributeFloatOrDefault(node, "beta", 0.0f);
-  const float norm_coefficient = GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
-  const std::string mode_str = GetAttributeStringOrDefault(node, "mode", "standard");
-  onnx_kernels::kernel::Momentum::Mode mode;
-  if (mode_str == "standard") {
-    mode = onnx_kernels::kernel::Momentum::Mode::kStandard;
-  } else if (mode_str == "nesterov") {
-    mode = onnx_kernels::kernel::Momentum::Mode::kNesterov;
-  } else {
-    EXT_THROW_INVALID("RunNode: Momentum 'mode' must be 'standard' or 'nesterov', got '", mode_str,
-                      "'.");
-  }
-  onnx_kernels::kernel::Momentum k(rt.kernel_ctx());
-  Tensors outs = k(R, T, Xs, Gs, Vs, alpha, beta, norm_coefficient, mode);
-  for (int64_t i = 0; i < 2 * n; ++i) {
-    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
-  }
-}
-
-void RunOp_CastMap(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const std::string map_input = node.input(0);
-
-  EXT_ENFORCE_INVALID(rt.HasMap(map_input), "RunNode: CastMap map input '", map_input,
-                      "' not found in the runtime context. Map-typed inputs "
-                      "must be stored via PutMap before executing the graph.");
-  const Map &cast_m = rt.GetMap(map_input);
-  const Tensor &x_keys = cast_m.keys;
-  const Tensor &x_values = cast_m.values;
-  EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)),
-                      "RunNode: CastMap keys must be an INT64 tensor.");
-  const std::span<const int64_t> keys = TensorSpan<int64_t>(x_keys);
-  const std::string cast_to = GetAttributeStringOrDefault(node, "cast_to", "TO_FLOAT");
-  const std::string map_form = GetAttributeStringOrDefault(node, "map_form", "DENSE");
-  const int64_t max_map = GetAttributeIntOrDefault(node, "max_map", 0);
-  EXT_ENFORCE_INVALID(!(cast_to != "TO_FLOAT" && cast_to != "TO_INT64" && cast_to != "TO_STRING"),
-                      "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
-                      "'TO_STRING'.");
-  onnx_kernels::kernel::CastMap cast_map(rt.kernel_ctx());
-  Tensor y;
-  switch (x_values.data_type) {
-  case static_cast<int32_t>(DataType::FLOAT): {
-    const std::span<const float> values = TensorSpan<float>(x_values);
-    if (cast_to == "TO_FLOAT") {
-      y = cast_map.operator()<float, float>(keys, values, cast_to, map_form, max_map);
-    } else if (cast_to == "TO_INT64") {
-      y = cast_map.operator()<float, int64_t>(keys, values, cast_to, map_form, max_map);
-    } else {
-      y = cast_map.operator()<float, std::string>(keys, values, cast_to, map_form, max_map);
-    }
-    break;
-  }
-  case static_cast<int32_t>(DataType::STRING): {
-    const std::vector<std::string> &values = x_values.AsStrings();
-    if (cast_to == "TO_FLOAT") {
-      y = cast_map.operator()<std::string, float>(keys, values, cast_to, map_form, max_map);
-    } else if (cast_to == "TO_INT64") {
-      y = cast_map.operator()<std::string, int64_t>(keys, values, cast_to, map_form, max_map);
-    } else {
-      y = cast_map.operator()<std::string, std::string>(keys, values, cast_to, map_form, max_map);
-    }
-    break;
-  }
-  default:
-    EXT_THROW_INVALID("RunNode: CastMap values must be a FLOAT or STRING tensor.");
-  }
-  SetOutput(node, 0, std::move(y), rt);
-}
-
-void RunOp_DictVectorizer(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const std::string map_input = node.input(0);
-
-  EXT_ENFORCE_INVALID(rt.HasMap(map_input), "RunNode: DictVectorizer map input '", map_input,
-                      "' not found in the runtime context. Map-typed inputs "
-                      "must be stored via PutMap before executing the graph.");
-  const Map &dict_m = rt.GetMap(map_input);
-  const Tensor &x_keys = dict_m.keys;
-  const Tensor &x_values = dict_m.values;
-  const AttributeProto *str_vocab = FindAttribute(node, "string_vocabulary");
-  const AttributeProto *int_vocab = FindAttribute(node, "int64_vocabulary");
-  const bool has_str = str_vocab != nullptr && str_vocab->strings_size() > 0;
-  const bool has_int = int_vocab != nullptr && int_vocab->ints_size() > 0;
-  EXT_ENFORCE_INVALID(has_str != has_int,
-                      "RunNode: DictVectorizer requires exactly one of 'string_vocabulary' or "
-                      "'int64_vocabulary' to be specified and non-empty.");
-  onnx_kernels::kernel::DictVectorizer dict(rt.kernel_ctx());
-  Tensor y;
-  if (has_str) {
-    EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::STRING)),
-                        "RunNode: DictVectorizer keys must be a STRING tensor when "
-                        "'string_vocabulary' is set.");
-    const std::vector<std::string> &keys = x_keys.AsStrings();
-    std::vector<std::string> vocab;
-    vocab.reserve(str_vocab->strings_size());
-    for (size_t i = 0; i < str_vocab->strings_size(); ++i) {
-      vocab.emplace_back(str_vocab->strings(i));
-    }
-    switch (x_values.data_type) {
-    case static_cast<int32_t>(DataType::INT64): {
-      y = dict.operator()<std::string, int64_t>(keys, TensorSpan<int64_t>(x_values), vocab);
-      break;
-    }
-    case static_cast<int32_t>(DataType::FLOAT): {
-      y = dict.operator()<std::string, float>(keys, TensorSpan<float>(x_values), vocab);
-      break;
-    }
-    case static_cast<int32_t>(DataType::DOUBLE): {
-      y = dict.operator()<std::string, double>(keys, TensorSpan<double>(x_values), vocab);
-      break;
-    }
-    default:
-      EXT_THROW_INVALID("RunNode: DictVectorizer values must be INT64, FLOAT, or DOUBLE when "
-                        "'string_vocabulary' is set.");
-    }
-  } else {
-    EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)),
-                        "RunNode: DictVectorizer keys must be an INT64 tensor when "
-                        "'int64_vocabulary' is set.");
-    const std::span<const int64_t> keys = TensorSpan<int64_t>(x_keys);
-    std::vector<int64_t> vocab;
-    vocab.reserve(int_vocab->ints_size());
-    for (size_t i = 0; i < int_vocab->ints_size(); ++i) {
-      vocab.push_back(int_vocab->ints(i));
-    }
-    switch (x_values.data_type) {
-    case static_cast<int32_t>(DataType::FLOAT): {
-      y = dict.operator()<int64_t, float>(keys, TensorSpan<float>(x_values), vocab);
-      break;
-    }
-    case static_cast<int32_t>(DataType::DOUBLE): {
-      y = dict.operator()<int64_t, double>(keys, TensorSpan<double>(x_values), vocab);
-      break;
-    }
-    case static_cast<int32_t>(DataType::STRING): {
-      const std::vector<std::string> &values = x_values.AsStrings();
-      y = dict.operator()<int64_t, std::string>(keys, values, vocab);
-      break;
-    }
-    default:
-      EXT_THROW_INVALID("RunNode: DictVectorizer values must be FLOAT, DOUBLE, or STRING when "
-                        "'int64_vocabulary' is set.");
-    }
-  }
-  SetOutput(node, 0, std::move(y), rt);
-}
-
-void RunOp_SVMRegressor(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const SVMCommonAttrs a = ParseSVMCommonAttrs(node, "SVMRegressor");
-  onnx_kernels::kernel::SVMRegressor svm(rt.kernel_ctx());
-  Tensor y = DispatchSVMByDataType(x, "SVMRegressor", [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    (void)tag;
-    return svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
-                                      a.kernel_type.c_str(), a.gamma, a.coef0, a.degree);
-  });
-  SetOutput(node, 0, std::move(y), rt);
-}
-
-void RunOp_SVMClassifier(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 2);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const SVMCommonAttrs a = ParseSVMCommonAttrs(node, "SVMClassifier");
-  const std::vector<int64_t> vectors_per_class =
-      GetAttributeIntsOrDefault(node, "vectors_per_class", {});
-  const std::vector<int64_t> classlabels_ints =
-      GetAttributeIntsOrDefault(node, "classlabels_ints", {});
-  const ParamStrings classlabels_strings =
-      GetAttributeStringsOrDefault(node, "classlabels_strings", {});
-  const bool use_strings = !classlabels_strings.empty();
-  const bool has_ints = !classlabels_ints.empty();
-  EXT_ENFORCE_INVALID(use_strings != has_ints,
-                      "RunNode: SVMClassifier requires exactly one of 'classlabels_ints' or "
-                      "'classlabels_strings' to be set.");
-  onnx_kernels::kernel::SVMClassifier svm(rt.kernel_ctx());
-  std::pair<Tensor, Tensor> yz = DispatchSVMByDataType(x, "SVMClassifier", [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    (void)tag;
-    return use_strings
-               ? svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
-                                            vectors_per_class, classlabels_strings,
-                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree)
-               : svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
-                                            vectors_per_class, classlabels_ints,
-                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree);
-  });
-  SetOutput(node, 0, std::move(yz.first), rt);
-  SetOutput(node, 1, std::move(yz.second), rt);
-}
-
-void RunOp_LinearRegressor(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const ParamFloats coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
-  const ParamFloats intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
-  const int64_t targets = GetAttributeIntOrDefault(node, "targets", 1);
-  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
-  onnx_kernels::kernel::LinearRegressor reg(rt.kernel_ctx());
-  Tensor y = DispatchSVMByDataType(x, "LinearRegressor", [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    (void)tag;
-    return reg.template operator()<T>(x, coefficients, intercepts, targets, post_transform);
-  });
-  SetOutput(node, 0, std::move(y), rt);
-}
-
-void RunOp_TreeEnsembleRegressor(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const std::vector<int64_t> nodes_treeids = GetAttributeIntsOrDefault(node, "nodes_treeids", {});
-  const std::vector<int64_t> nodes_nodeids = GetAttributeIntsOrDefault(node, "nodes_nodeids", {});
-  const std::vector<int64_t> nodes_featureids =
-      GetAttributeIntsOrDefault(node, "nodes_featureids", {});
-  const std::vector<float> nodes_values = GetAttributeFloatsOrDefault(node, "nodes_values", {});
-  const ParamStrings nodes_modes = GetAttributeStringsOrDefault(node, "nodes_modes", {});
-  const std::vector<int64_t> nodes_truenodeids =
-      GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
-  const std::vector<int64_t> nodes_falsenodeids =
-      GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
-  const std::vector<int64_t> nodes_missing =
-      GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
-  const std::vector<int64_t> target_treeids = GetAttributeIntsOrDefault(node, "target_treeids", {});
-  const std::vector<int64_t> target_nodeids = GetAttributeIntsOrDefault(node, "target_nodeids", {});
-  const std::vector<int64_t> target_ids = GetAttributeIntsOrDefault(node, "target_ids", {});
-  const std::vector<float> target_weights = GetAttributeFloatsOrDefault(node, "target_weights", {});
-  const int64_t n_targets = GetAttributeIntOrDefault(node, "n_targets", 1);
-  const std::string aggregate_function =
-      GetAttributeStringOrDefault(node, "aggregate_function", "SUM");
-  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
-  const std::vector<float> base_values = GetAttributeFloatsOrDefault(node, "base_values", {});
-  onnx_kernels::kernel::TreeEnsembleRegressor reg(
-      rt.kernel_ctx(), nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
-      nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids, target_nodeids,
-      target_ids, target_weights);
-  Tensor y = DispatchTreeEnsembleClassicByDataType(x, "TreeEnsembleRegressor", [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    (void)tag;
-    return reg.template operator()<T>(x, n_targets, aggregate_function, post_transform,
-                                      base_values);
-  });
-  SetOutput(node, 0, std::move(y), rt);
-}
-
-void RunOp_LinearClassifier(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 2);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const ParamFloats coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
-  const ParamFloats intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
-  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
-  const std::vector<int64_t> classlabels_ints =
-      GetAttributeIntsOrDefault(node, "classlabels_ints", {});
-  const ParamStrings classlabels_strings =
-      GetAttributeStringsOrDefault(node, "classlabels_strings", {});
-  const bool use_strings = !classlabels_strings.empty();
-  const bool has_ints = !classlabels_ints.empty();
-  EXT_ENFORCE_INVALID(use_strings != has_ints,
-                      "RunNode: LinearClassifier requires exactly one of 'classlabels_ints' or "
-                      "'classlabels_strings' to be set.");
-  onnx_kernels::kernel::LinearClassifier cls(rt.kernel_ctx());
-  std::pair<Tensor, Tensor> yz = DispatchSVMByDataType(x, "LinearClassifier", [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    (void)tag;
-    return use_strings ? cls.template operator()<T>(x, coefficients, intercepts,
-                                                    classlabels_strings, post_transform)
-                       : cls.template operator()<T>(x, coefficients, intercepts, classlabels_ints,
-                                                    post_transform);
-  });
-  SetOutput(node, 0, std::move(yz.first), rt);
-  SetOutput(node, 1, std::move(yz.second), rt);
-}
-
-void RunOp_TreeEnsembleClassifier(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 2);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const std::vector<int64_t> nodes_treeids = GetAttributeIntsOrDefault(node, "nodes_treeids", {});
-  const std::vector<int64_t> nodes_nodeids = GetAttributeIntsOrDefault(node, "nodes_nodeids", {});
-  const std::vector<int64_t> nodes_featureids =
-      GetAttributeIntsOrDefault(node, "nodes_featureids", {});
-  const std::vector<float> nodes_values = GetAttributeFloatsOrDefault(node, "nodes_values", {});
-  const ParamStrings nodes_modes = GetAttributeStringsOrDefault(node, "nodes_modes", {});
-  const std::vector<int64_t> nodes_truenodeids =
-      GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
-  const std::vector<int64_t> nodes_falsenodeids =
-      GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
-  const std::vector<int64_t> nodes_missing =
-      GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
-  const std::vector<int64_t> class_treeids = GetAttributeIntsOrDefault(node, "class_treeids", {});
-  const std::vector<int64_t> class_nodeids = GetAttributeIntsOrDefault(node, "class_nodeids", {});
-  const std::vector<int64_t> class_ids = GetAttributeIntsOrDefault(node, "class_ids", {});
-  const std::vector<float> class_weights = GetAttributeFloatsOrDefault(node, "class_weights", {});
-  const std::vector<int64_t> classlabels_int64s =
-      GetAttributeIntsOrDefault(node, "classlabels_int64s", {});
-  const ParamStrings classlabels_strings =
-      GetAttributeStringsOrDefault(node, "classlabels_strings", {});
-  const std::vector<float> base_values = GetAttributeFloatsOrDefault(node, "base_values", {});
-  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
-  const bool use_strings = !classlabels_strings.empty();
-  const bool has_ints = !classlabels_int64s.empty();
-  EXT_ENFORCE_INVALID(use_strings != has_ints,
-                      "RunNode: TreeEnsembleClassifier requires exactly one of "
-                      "'classlabels_int64s' or 'classlabels_strings' to be set.");
-  onnx_kernels::kernel::TreeEnsembleClassifier cls(
-      rt.kernel_ctx(), nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
-      nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids, class_nodeids, class_ids,
-      class_weights);
-  std::pair<Tensor, Tensor> yz =
-      DispatchTreeEnsembleClassicByDataType(x, "TreeEnsembleClassifier", [&](auto *tag) {
-        using T = std::remove_pointer_t<decltype(tag)>;
-        (void)tag;
-        return use_strings
-                   ? cls.template operator()<T>(x, classlabels_strings, base_values, post_transform)
-                   : cls.template operator()<T>(x, classlabels_int64s, base_values, post_transform);
-      });
-  SetOutput(node, 0, std::move(yz.first), rt);
-  SetOutput(node, 1, std::move(yz.second), rt);
-}
-
-void RunOp_Binarizer(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const float threshold = GetAttributeFloatOrDefault(node, "threshold", 0.0f);
-  onnx_kernels::kernel::Binarizer binarizer(rt.kernel_ctx());
-  Tensor y = DispatchSVMByDataType(x, "Binarizer", [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    (void)tag;
-    return binarizer.template operator()<T>(x, static_cast<T>(threshold));
-  });
-  SetOutput(node, 0, std::move(y), rt.tensors());
-}
-
-void RunOp_Normalizer(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const std::string norm = GetAttributeStringOrDefault(node, "norm", "MAX");
-  onnx_kernels::kernel::Normalizer normalizer(rt.kernel_ctx());
-  Tensor y = DispatchSVMByDataType(x, "Normalizer", [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    (void)tag;
-    return normalizer.template operator()<T>(x, norm);
-  });
-  SetOutput(node, 0, std::move(y), rt.tensors());
-}
-
-void RunOp_Scaler(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const std::vector<float> offset = GetAttributeFloatsOrDefault(node, "offset", {});
-  const std::vector<float> scale = GetAttributeFloatsOrDefault(node, "scale", {});
-  onnx_kernels::kernel::Scaler scaler(rt.kernel_ctx());
-  Tensor y = DispatchSVMByDataType(x, "Scaler", [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    (void)tag;
-    return scaler.template operator()<T>(x, offset, scale);
-  });
-  SetOutput(node, 0, std::move(y), rt.tensors());
-}
-
-void RunOp_ArrayFeatureExtractor(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  onnx_kernels::kernel::ArrayFeatureExtractor afe(rt.kernel_ctx());
-  Tensor z = DispatchSVMByDataType(x, "ArrayFeatureExtractor", [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    (void)tag;
-    return afe.template operator()<T>(x, y);
-  });
-  SetOutput(node, 0, std::move(z), rt.tensors());
-}
-
-void RunOp_Imputer(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-
-  // Per the ``ai.onnx.ml::Imputer`` schema, exactly one of
-  // ``imputed_value_floats``/``replaced_value_float`` (for floating-point
-  // inputs) or ``imputed_value_int64s``/``replaced_value_int64`` (for
-  // integer inputs) must be defined. The runtime selects the
-  // appropriate pair based on the input element type.
-  const std::vector<float> imputed_value_floats =
-      GetAttributeFloatsOrDefault(node, "imputed_value_floats", {});
-  const std::vector<int64_t> imputed_value_int64s =
-      GetAttributeIntsOrDefault(node, "imputed_value_int64s", {});
-  const float replaced_value_float = GetAttributeFloatOrDefault(node, "replaced_value_float", 0.0f);
-  const int64_t replaced_value_int64 =
-      GetAttributeIntOrDefault(node, "replaced_value_int64", static_cast<int64_t>(0));
-
-  onnx_kernels::kernel::Imputer imputer(rt.kernel_ctx());
-  Tensor y = DispatchSVMByDataType(x, "Imputer", [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    (void)tag;
-    if constexpr (std::is_floating_point_v<T>) {
-      std::vector<T> imputed_values(imputed_value_floats.begin(), imputed_value_floats.end());
-      return imputer.template operator()<T>(x, imputed_values,
-                                            static_cast<T>(replaced_value_float));
-    } else {
-      std::vector<T> imputed_values;
-      imputed_values.reserve(imputed_value_int64s.size());
-      for (int64_t value : imputed_value_int64s) {
-        imputed_values.push_back(static_cast<T>(value));
-      }
-      return imputer.template operator()<T>(x, imputed_values,
-                                            static_cast<T>(replaced_value_int64));
-    }
-  });
-  SetOutput(node, 0, std::move(y), rt.tensors());
-}
-
-void RunOp_CategoryMapper(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-
-  // ``cats_strings`` and ``cats_int64s`` are both required per the
-  // ``ai.onnx.ml::CategoryMapper`` schema and must have the same length.
-  const ParamStrings cats_strings = GetAttributeStringsOrDefault(node, "cats_strings", {});
-  const std::vector<int64_t> cats_int64s = GetAttributeIntsOrDefault(node, "cats_int64s", {});
-  const std::string default_string =
-      GetAttributeStringOrDefault(node, "default_string", std::string("_Unused"));
-  const int64_t default_int64 =
-      GetAttributeIntOrDefault(node, "default_int64", static_cast<int64_t>(-1));
-
-  onnx_kernels::kernel::CategoryMapper category_mapper(rt.kernel_ctx());
-  Tensor y;
-  switch (x.data_type) {
-  case static_cast<int32_t>(DataType::STRING):
-    y = category_mapper.operator()<std::string, int64_t>(x, cats_strings, cats_int64s,
-                                                         default_int64);
-    break;
-  case static_cast<int32_t>(DataType::INT64):
-    y = category_mapper.operator()<int64_t, std::string>(x, cats_strings, cats_int64s,
-                                                         default_string);
-    break;
-  default:
-    EXT_THROW_INVALID("RunNode: CategoryMapper input X must have element type STRING or INT64.");
-  }
-  SetOutput(node, 0, std::move(y), rt.tensors());
-}
-
-void RunOp_LabelEncoder(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-
-  // Identify the key source (exactly one of keys_int64s, keys_floats,
-  // keys_strings, keys_tensor must be present per the ONNX spec).
-  const AttributeProto *keys_int64s = FindAttribute(node, "keys_int64s");
-  const AttributeProto *keys_floats = FindAttribute(node, "keys_floats");
-  const AttributeProto *keys_strings = FindAttribute(node, "keys_strings");
-  const AttributeProto *keys_tensor = FindAttribute(node, "keys_tensor");
-  const int n_keys = (keys_int64s != nullptr) + (keys_floats != nullptr) +
-                     (keys_strings != nullptr) + (keys_tensor != nullptr);
-  EXT_ENFORCE_INVALID(n_keys == 1, "RunNode: LabelEncoder requires exactly one of 'keys_int64s', "
-                                   "'keys_floats', 'keys_strings' or 'keys_tensor' to be set.");
-
-  // Identify the value source.
-  const AttributeProto *values_int64s = FindAttribute(node, "values_int64s");
-  const AttributeProto *values_floats = FindAttribute(node, "values_floats");
-  const AttributeProto *values_strings = FindAttribute(node, "values_strings");
-  const AttributeProto *values_tensor = FindAttribute(node, "values_tensor");
-  const int n_values = (values_int64s != nullptr) + (values_floats != nullptr) +
-                       (values_strings != nullptr) + (values_tensor != nullptr);
-  EXT_ENFORCE_INVALID(n_values == 1,
-                      "RunNode: LabelEncoder requires exactly one of 'values_int64s', "
-                      "'values_floats', 'values_strings' or 'values_tensor' to be set.");
-
-  // Resolve KeyT. The tensor holder keeps the key data alive when the key
-  // source is a tensor attribute; spans reference either the holder or an
-  // attribute-sourced vector.
-  enum class KeyKind { Int64, Float, String };
-  KeyKind key_kind;
-  Tensor keys_tensor_holder; // alive until after label_encoder call
-  std::vector<int64_t> keys_i64_vec;
-  std::vector<float> keys_f32_vec;
-  std::vector<std::string> keys_str;
-  std::span<const int64_t> keys_i64;
-  std::span<const float> keys_f32;
-  if (keys_int64s != nullptr) {
-    key_kind = KeyKind::Int64;
-    for (int64_t v : keys_int64s->ints()) {
-      keys_i64_vec.push_back(v);
-    }
-    keys_i64 = keys_i64_vec;
-  } else if (keys_floats != nullptr) {
-    key_kind = KeyKind::Float;
-    for (float v : keys_floats->floats()) {
-      keys_f32_vec.push_back(v);
-    }
-    keys_f32 = keys_f32_vec;
-  } else if (keys_strings != nullptr) {
-    key_kind = KeyKind::String;
-    for (const auto &v : keys_strings->strings()) {
-      keys_str.push_back(v);
-    }
-  } else {
-    keys_tensor_holder = TensorFromProto(keys_tensor->t());
-    switch (keys_tensor_holder.data_type) {
-    case static_cast<int32_t>(DataType::INT64):
-      key_kind = KeyKind::Int64;
-      keys_i64 = TensorSpan<int64_t>(keys_tensor_holder);
-      break;
-    case static_cast<int32_t>(DataType::FLOAT):
-      key_kind = KeyKind::Float;
-      keys_f32 = TensorSpan<float>(keys_tensor_holder);
-      break;
-    case static_cast<int32_t>(DataType::STRING):
-      key_kind = KeyKind::String;
-      keys_str = keys_tensor_holder.AsStrings();
-      break;
-    default:
-      EXT_THROW_INVALID("RunNode: LabelEncoder 'keys_tensor' must have element type "
-                        "INT64, FLOAT or STRING.");
-    }
-  }
-
-  // Resolve ValueT and look up the (optional) default attribute.
-  // Same pattern: tensor holder keeps value data alive for the span.
-  enum class ValueKind { Int64, Float, Int16 };
-  ValueKind value_kind;
-  Tensor values_tensor_holder; // alive until after label_encoder call
-  std::vector<int64_t> values_i64_vec;
-  std::vector<float> values_f32_vec;
-  std::vector<int16_t> values_i16_vec;
-  std::span<const int64_t> values_i64;
-  std::span<const float> values_f32;
-  std::span<const int16_t> values_i16;
-  if (values_int64s != nullptr) {
-    value_kind = ValueKind::Int64;
-    for (int64_t v : values_int64s->ints()) {
-      values_i64_vec.push_back(v);
-    }
-    values_i64 = values_i64_vec;
-  } else if (values_floats != nullptr) {
-    value_kind = ValueKind::Float;
-    for (float v : values_floats->floats()) {
-      values_f32_vec.push_back(v);
-    }
-    values_f32 = values_f32_vec;
-  } else if (values_strings != nullptr) {
-    EXT_THROW_INVALID("RunNode: LabelEncoder with 'values_strings' is not supported "
-                      "by this kernel registration.");
-  } else {
-    values_tensor_holder = TensorFromProto(values_tensor->t());
-    switch (values_tensor_holder.data_type) {
-    case static_cast<int32_t>(DataType::INT64):
-      value_kind = ValueKind::Int64;
-      values_i64 = TensorSpan<int64_t>(values_tensor_holder);
-      break;
-    case static_cast<int32_t>(DataType::FLOAT):
-      value_kind = ValueKind::Float;
-      values_f32 = TensorSpan<float>(values_tensor_holder);
-      break;
-    case static_cast<int32_t>(DataType::INT16):
-      value_kind = ValueKind::Int16;
-      values_i16 = TensorSpan<int16_t>(values_tensor_holder);
-      break;
-    default:
-      EXT_THROW_INVALID("RunNode: LabelEncoder 'values_tensor' must have element "
-                        "type INT64, FLOAT or INT16.");
-    }
-  }
-
-  int64_t default_i64 = -1;
-  float default_f32 = 0.0f;
-  int16_t default_i16 = -1;
-  const AttributeProto *default_int64 = FindAttribute(node, "default_int64");
-  const AttributeProto *default_float = FindAttribute(node, "default_float");
-  const AttributeProto *default_tensor_attr = FindAttribute(node, "default_tensor");
-  if (default_int64 != nullptr) {
-    default_i64 = default_int64->i();
-  }
-  if (default_float != nullptr) {
-    default_f32 = default_float->f();
-  }
-  if (default_tensor_attr != nullptr) {
-    const Tensor dt = TensorFromProto(default_tensor_attr->t());
-    EXT_ENFORCE_INVALID(dt.element_count() == 1,
-                        "RunNode: LabelEncoder 'default_tensor' must contain exactly one element.");
-    switch (dt.data_type) {
-    case static_cast<int32_t>(DataType::INT64):
-      default_i64 = dt.AsInt64()[0];
-      break;
-    case static_cast<int32_t>(DataType::FLOAT):
-      default_f32 = dt.AsFloat()[0];
-      break;
-    case static_cast<int32_t>(DataType::INT16):
-      default_i16 = dt.AsInt16()[0];
-      break;
-    default:
-      EXT_THROW_INVALID("RunNode: LabelEncoder 'default_tensor' must have element "
-                        "type INT64, FLOAT or INT16.");
-    }
-  }
-
-  onnx_kernels::kernel::LabelEncoder label_encoder(rt.kernel_ctx());
-  Tensor out;
-  if (key_kind == KeyKind::Int64 && value_kind == ValueKind::Int64) {
-    out = label_encoder.operator()<int64_t, int64_t>(x, keys_i64, values_i64, default_i64);
-  } else if (key_kind == KeyKind::Int64 && value_kind == ValueKind::Float) {
-    out = label_encoder.operator()<int64_t, float>(x, keys_i64, values_f32, default_f32);
-  } else if (key_kind == KeyKind::Float && value_kind == ValueKind::Int64) {
-    out = label_encoder.operator()<float, int64_t>(x, keys_f32, values_i64, default_i64);
-  } else if (key_kind == KeyKind::Float && value_kind == ValueKind::Float) {
-    out = label_encoder.operator()<float, float>(x, keys_f32, values_f32, default_f32);
-  } else if (key_kind == KeyKind::String && value_kind == ValueKind::Int64) {
-    out = label_encoder.operator()<std::string, int64_t>(x, keys_str, values_i64, default_i64);
-  } else if (key_kind == KeyKind::String && value_kind == ValueKind::Int16) {
-    out = label_encoder.operator()<std::string, int16_t>(x, keys_str, values_i16, default_i16);
-  } else {
-    EXT_THROW_INVALID("RunNode: LabelEncoder key/value type combination is not supported.");
-  }
-  SetOutput(node, 0, std::move(out), rt.tensors());
-}
-
-void RunOp_OneHotEncoder(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-
-  const AttributeProto *cats_int64s = FindAttribute(node, "cats_int64s");
-  const AttributeProto *cats_strings = FindAttribute(node, "cats_strings");
-  const int n_cats = (cats_int64s != nullptr) + (cats_strings != nullptr);
-  EXT_ENFORCE_INVALID(n_cats == 1, "RunNode: OneHotEncoder requires exactly one of 'cats_int64s' "
-                                   "or 'cats_strings' to be set.");
-
-  // The ``zeros`` attribute defaults to 1 per the ai.onnx.ml schema.
-  const bool zeros = GetAttributeIntOrDefault(node, "zeros", 1) != 0;
-
-  onnx_kernels::kernel::OneHotEncoder one_hot(rt.kernel_ctx());
-  Tensor y;
-  if (cats_int64s != nullptr) {
-    std::vector<int64_t> cats;
-    cats.reserve(cats_int64s->ints().size());
-    for (int64_t v : cats_int64s->ints()) {
-      cats.push_back(v);
-    }
-    y = DispatchSVMByDataType(x, "OneHotEncoder", [&](auto *tag) {
-      using T = std::remove_pointer_t<decltype(tag)>;
-      (void)tag;
-      return one_hot.template operator()<T>(x, cats, zeros);
-    });
-  } else {
-    ParamStrings cats;
-    cats.reserve(cats_strings->strings().size());
-    for (size_t i = 0; i < cats_strings->strings().size(); ++i) {
-      cats.push_back(cats_strings->strings()[i]);
-    }
-    EXT_ENFORCE_INVALID(!(x.data_type != static_cast<int32_t>(DataType::STRING)),
-                        "RunNode: OneHotEncoder with 'cats_strings' requires input X "
-                        "of element type STRING.");
-    y = one_hot(x, cats, zeros);
-  }
-  SetOutput(node, 0, std::move(y), rt.tensors());
-}
-
-void RunOp_FeatureVectorizer(const NodeProto &node, RuntimeContext &rt) {
-  RequireMinInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  Tensors inputs;
-  inputs.reserve(node.input_size());
-  for (int i = 0; i < node.input_size(); ++i) {
-    inputs.push_back(GetInput(node, i, rt.tensors()));
-  }
-  const std::vector<int64_t> inputdimensions =
-      GetAttributeIntsOrDefault(node, "inputdimensions", {});
-  onnx_kernels::kernel::FeatureVectorizer fv(rt.kernel_ctx());
-  SetOutput(node, 0, fv(inputs, inputdimensions), rt.tensors());
-}
-
-void RunOp_TreeEnsemble(const NodeProto &node, RuntimeContext &rt) {
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const std::vector<int64_t> tree_roots = GetAttributeIntsOrDefault(node, "tree_roots", {});
-  const std::vector<int64_t> nodes_featureids =
-      GetAttributeIntsOrDefault(node, "nodes_featureids", {});
-  const std::vector<int64_t> nodes_truenodeids =
-      GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
-  const std::vector<int64_t> nodes_falsenodeids =
-      GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
-  const std::vector<int64_t> nodes_trueleafs =
-      GetAttributeIntsOrDefault(node, "nodes_trueleafs", {});
-  const std::vector<int64_t> nodes_falseleafs =
-      GetAttributeIntsOrDefault(node, "nodes_falseleafs", {});
-  const std::vector<int64_t> nodes_missing =
-      GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
-  const std::vector<int64_t> leaf_targetids = GetAttributeIntsOrDefault(node, "leaf_targetids", {});
-  const int64_t n_targets = GetAttributeIntOrDefault(node, "n_targets", 1);
-  const int64_t aggregate_function = GetAttributeIntOrDefault(node, "aggregate_function", 1);
-  const int64_t post_transform = GetAttributeIntOrDefault(node, "post_transform", 0);
-  const Tensor nodes_splits = GetRequiredAttributeTensor(node, "nodes_splits");
-  const Tensor leaf_weights = GetRequiredAttributeTensor(node, "leaf_weights");
-  const Tensor nodes_modes_t = GetRequiredAttributeTensor(node, "nodes_modes");
-  const Tensor membership_values =
-      GetAttributeTensorOrEmpty(node, "membership_values", x.data_type);
-  EXT_ENFORCE_INVALID(!(nodes_modes_t.data_type != static_cast<int32_t>(DataType::UINT8)),
-                      "RunNode: TreeEnsemble attribute 'nodes_modes' must be a UINT8 tensor.");
-  EXT_ENFORCE_INVALID(
-      !(nodes_splits.data_type != x.data_type || leaf_weights.data_type != x.data_type),
-      "RunNode: TreeEnsemble attributes 'nodes_splits' and 'leaf_weights' must "
-      "have the same element type as input 'X'.");
-  EXT_ENFORCE_INVALID(
-      !(membership_values.element_count() > 0 && membership_values.data_type != x.data_type),
-      "RunNode: TreeEnsemble attribute 'membership_values' must have the same "
-      "element type as input 'X'.");
-  const std::span<const uint8_t> nodes_modes_span = TensorSpan<uint8_t>(nodes_modes_t);
-  // Materialize the tensor-typed attributes as ``double`` so the kernel
-  // owns its tree data (independent of the input element type).
-  const auto tensor_to_double = [](const Tensor &t) -> std::vector<double> {
-    if (t.element_count() == 0) {
-      return {};
-    }
-    switch (t.data_type) {
-    case static_cast<int32_t>(DataType::FLOAT): {
-      const std::span<const float> s = TensorSpan<float>(t);
-      return std::vector<double>(s.begin(), s.end());
-    }
-    case static_cast<int32_t>(DataType::DOUBLE): {
-      const std::span<const double> s = TensorSpan<double>(t);
-      return std::vector<double>(s.begin(), s.end());
-    }
-    default:
-      EXT_THROW_INVALID("RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");
-    }
-  };
-  const std::vector<double> nodes_splits_d = tensor_to_double(nodes_splits);
-  const std::vector<double> leaf_weights_d = tensor_to_double(leaf_weights);
-  const std::vector<double> membership_d = tensor_to_double(membership_values);
-  const std::vector<uint8_t> nodes_modes_vec(nodes_modes_span.begin(), nodes_modes_span.end());
-  onnx_kernels::kernel::TreeEnsemble tree_ens(
-      rt.kernel_ctx(), tree_roots, nodes_featureids, nodes_splits_d, nodes_modes_vec,
-      nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs, nodes_falseleafs, nodes_missing,
-      leaf_targetids, leaf_weights_d, membership_d);
-  Tensor y;
-  switch (x.data_type) {
-  case static_cast<int32_t>(DataType::FLOAT):
-    y = tree_ens.operator()<float>(x, n_targets, aggregate_function, post_transform);
-    break;
-  case static_cast<int32_t>(DataType::DOUBLE):
-    y = tree_ens.operator()<double>(x, n_targets, aggregate_function, post_transform);
-    break;
-  default:
-    EXT_THROW_INVALID("RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");
-  }
-  SetOutput(node, 0, std::move(y), rt);
-}
-
-} // namespace
-
-// ---------------------------------------------------------------------------
-// Per-kernel ``Run`` definitions. Each dispatch-registered kernel overrides
-// :cpp:func:`core::runtime::KernelBase::Run` to read the node's current
-// inputs from ``rt.tensors()``, invoke its own computation and store the
-// produced outputs back. ``node_`` (attached via
-// :cpp:func:`KernelBase::set_node`) is the node the kernel runs for.
-// ---------------------------------------------------------------------------
-namespace kernel {
-
-void DelayedInitializer::Run(RuntimeContext &rt) { RunOp_DelayedInitializer(*node_, rt); }
-
-void Abs::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Acos::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Acosh::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Add::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void AffineGrid::Run(RuntimeContext &rt) { RunOp_AffineGrid(*node_, rt); }
-
-void And::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void ArgMax::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
-  const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
-  const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(data, axis, keepdims, select_last_index, &rt), rt);
-}
-
-void ArgMin::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
-  const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
-  const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(data, axis, keepdims, select_last_index, &rt), rt);
-}
-
-void Asin::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Asinh::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Atan::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Atanh::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Attention::Run(RuntimeContext &rt) { RunOp_Attention(*node_, rt); }
-
-void AveragePool::Run(RuntimeContext &rt) { RunOp_AveragePool(*node_, rt); }
-
-void BitShift::Run(RuntimeContext &rt) { RunOp_BitShift(*node_, rt); }
-
-void BitCast::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
-  EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type(), " requires INT attribute 'to'.");
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, to, &rt), rt);
-}
-
-void BitwiseAnd::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void BitwiseNot::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void BitwiseOr::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void BitwiseXor::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void BatchNormalization::Run(RuntimeContext &rt) { RunBatchNormalization(*node_, rt); }
-
-void Bernoulli::Run(RuntimeContext &rt) { RunOp_Bernoulli(*node_, rt); }
-
-void BlackmanWindow::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const int64_t output_datatype =
-      GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
-  EXT_ENFORCE_INVALID(!(output_datatype != static_cast<int64_t>(DataType::FLOAT)),
-                      "RunNode: op 'BlackmanWindow' only supports output_datatype=FLOAT.");
-  const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
-  const Tensor &size = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
-}
-
-void CausalConvWithState::Run(RuntimeContext &rt) { RunOp_CausalConvWithState(*node_, rt); }
-
-void Cast::Run(RuntimeContext &rt) { RunOp_Cast(*node_, rt); }
-
-void CastLike::Run(RuntimeContext &rt) { RunOp_CastLike(*node_, rt); }
-
-void Ceil::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Celu::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, alpha, &rt), rt);
-}
-
-void CenterCropPad::Run(RuntimeContext &rt) { RunOp_CenterCropPad(*node_, rt); }
-
-void Constant::Run(RuntimeContext &rt) { RunOp_Constant(*node_, rt); }
-
-void ConstantOfShape::Run(RuntimeContext &rt) { RunOp_ConstantOfShape(*node_, rt); }
-
-void Clip::Run(RuntimeContext &rt) { RunOp_Clip(*node_, rt); }
-
-void Col2Im::Run(RuntimeContext &rt) { RunOp_Col2Im(*node_, rt); }
-
-void Compress::Run(RuntimeContext &rt) { RunOp_Compress(*node_, rt); }
-
-void Concat::Run(RuntimeContext &rt) { RunOp_Concat(*node_, rt); }
-
-void Conv::Run(RuntimeContext &rt) { RunOp_Conv(*node_, rt); }
-
-void ConvInteger::Run(RuntimeContext &rt) { RunOp_ConvInteger(*node_, rt); }
-
-void ConvTranspose::Run(RuntimeContext &rt) { RunOp_ConvTranspose(*node_, rt); }
-
-void Cos::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Cosh::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void CumSum::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
-  const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &axis = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, axis, exclusive, reverse, &rt), rt);
-}
-
-void CumProd::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
-  const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &axis = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, axis, exclusive, reverse, &rt), rt);
-}
-
-void DeformConv::Run(RuntimeContext &rt) { RunOp_DeformConv(*node_, rt); }
-
-void Det::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void DepthToSpace::Run(RuntimeContext &rt) { RunOp_DepthToSpace(*node_, rt); }
-
-void SpaceToDepth::Run(RuntimeContext &rt) { RunOp_SpaceToDepth(*node_, rt); }
-
-void DequantizeLinear::Run(RuntimeContext &rt) { RunOp_DequantizeLinear(*node_, rt); }
-
-void DFT::Run(RuntimeContext &rt) { RunOp_DFT(*node_, rt); }
-
-void Div::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void Dropout::Run(RuntimeContext &rt) { RunOp_Dropout(*node_, rt); }
-
-void DynamicQuantizeLinear::Run(RuntimeContext &rt) { RunOp_DynamicQuantizeLinear(*node_, rt); }
-
-void Einsum::Run(RuntimeContext &rt) { RunOp_Einsum(*node_, rt); }
-
-void Elu::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, alpha, &rt), rt);
-}
-
-void Equal::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void Erf::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Exp::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Expand::Run(RuntimeContext &rt) { RunOp_Expand(*node_, rt); }
-
-void EyeLike::Run(RuntimeContext &rt) { RunOp_EyeLike(*node_, rt); }
-
-void Flatten::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, axis, &rt), rt);
-}
-
-void Floor::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Gather::Run(RuntimeContext &rt) { RunOp_Gather(*node_, rt); }
-
-void GatherElements::Run(RuntimeContext &rt) { RunOp_GatherElements(*node_, rt); }
-
-void GatherND::Run(RuntimeContext &rt) { RunOp_GatherND(*node_, rt); }
-
-void Gelu::Run(RuntimeContext &rt) { RunOp_Gelu(*node_, rt); }
-
-void Gemm::Run(RuntimeContext &rt) { RunOp_Gemm(*node_, rt); }
-
-void GlobalAveragePool::Run(RuntimeContext &rt) { RunOp_GlobalAveragePool(*node_, rt); }
-
-void GlobalLpPool::Run(RuntimeContext &rt) { RunOp_GlobalLpPool(*node_, rt); }
-
-void GlobalMaxPool::Run(RuntimeContext &rt) { RunOp_GlobalMaxPool(*node_, rt); }
-
-void Greater::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void GreaterOrEqual::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void GridSample::Run(RuntimeContext &rt) { RunOp_GridSample(*node_, rt); }
-
-void GroupNormalization::Run(RuntimeContext &rt) { RunGroupNormalization(*node_, rt); }
-
-void GRU::Run(RuntimeContext &rt) { RunOp_GRU(*node_, rt); }
-
-void HardSigmoid::Run(RuntimeContext &rt) { RunOp_HardSigmoid(*node_, rt); }
-
-void HardSwish::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Hardmax::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, axis, &rt), rt);
-}
-
-void HammingWindow::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const int64_t output_datatype =
-      GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
-  EXT_ENFORCE_INVALID(!(output_datatype != static_cast<int64_t>(DataType::FLOAT)),
-                      "RunNode: op 'HammingWindow' only supports output_datatype=FLOAT.");
-  const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
-  const Tensor &size = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
-}
-
-void HannWindow::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const int64_t output_datatype =
-      GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
-  EXT_ENFORCE_INVALID(!(output_datatype != static_cast<int64_t>(DataType::FLOAT)),
-                      "RunNode: op 'HannWindow' only supports output_datatype=FLOAT.");
-  const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
-  const Tensor &size = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
-}
-
-void Identity::Run(RuntimeContext &rt) { RunOp_Identity(*node_, rt); }
-
-void ImageDecoder::Run(RuntimeContext &rt) { RunOp_ImageDecoder(*node_, rt); }
-
-void InstanceNormalization::Run(RuntimeContext &rt) { RunInstanceNormalization(*node_, rt); }
-
-void IsInf::Run(RuntimeContext &rt) { RunOp_IsInf(*node_, rt); }
-
-void IsNaN::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void LayerNormalization::Run(RuntimeContext &rt) { RunLayerNormalization(*node_, rt); }
-
-void LeakyRelu::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.01f);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, alpha, &rt), rt);
-}
-
-void Less::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void LessOrEqual::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void LinearAttention::Run(RuntimeContext &rt) { RunOp_LinearAttention(*node_, rt); }
-
-void Log::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void LogSoftmax::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, axis, &rt), rt);
-}
-
-void LSTM::Run(RuntimeContext &rt) { RunOp_LSTM(*node_, rt); }
-
-void LRN::Run(RuntimeContext &rt) { RunOp_LRN(*node_, rt); }
-
-void LpNormalization::Run(RuntimeContext &rt) { RunOp_LpNormalization(*node_, rt); }
-
-void LpPool::Run(RuntimeContext &rt) { RunOp_LpPool(*node_, rt); }
-
-void MatMul::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void MatMulInteger::Run(RuntimeContext &rt) { RunOp_MatMulInteger(*node_, rt); }
-
-void Max::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireMinInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  Tensors inputs;
-  inputs.reserve(node.input_size());
-  for (int i = 0; i < node.input_size(); ++i) {
-    inputs.push_back(GetInput(node, i, rt.tensors()));
-  }
-  SetOutput(node, 0, (*this)(inputs, &rt), rt);
-}
-
-void MaxPool::Run(RuntimeContext &rt) { RunOp_MaxPool(*node_, rt); }
-
-void MaxRoiPool::Run(RuntimeContext &rt) { RunOp_MaxRoiPool(*node_, rt); }
-
-void MaxUnpool::Run(RuntimeContext &rt) { RunOp_MaxUnpool(*node_, rt); }
-
-void Mean::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireMinInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  Tensors inputs;
-  inputs.reserve(node.input_size());
-  for (int i = 0; i < node.input_size(); ++i) {
-    inputs.push_back(GetInput(node, i, rt.tensors()));
-  }
-  SetOutput(node, 0, (*this)(inputs, &rt), rt);
-}
-
-void MeanVarianceNormalization::Run(RuntimeContext &rt) {
-  RunOp_MeanVarianceNormalization(*node_, rt);
-}
-
-void MelWeightMatrix::Run(RuntimeContext &rt) { RunOp_MelWeightMatrix(*node_, rt); }
-
-void Min::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireMinInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  Tensors inputs;
-  inputs.reserve(node.input_size());
-  for (int i = 0; i < node.input_size(); ++i) {
-    inputs.push_back(GetInput(node, i, rt.tensors()));
-  }
-  SetOutput(node, 0, (*this)(inputs, &rt), rt);
-}
-
-void Mish::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Mod::Run(RuntimeContext &rt) { RunOp_Mod(*node_, rt); }
-
-void Mul::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void Multinomial::Run(RuntimeContext &rt) { RunOp_Multinomial(*node_, rt); }
-
-void Neg::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void NegativeLogLikelihoodLoss::Run(RuntimeContext &rt) {
-  RunOp_NegativeLogLikelihoodLoss(*node_, rt);
-}
-
-void NonMaxSuppression::Run(RuntimeContext &rt) { RunOp_NonMaxSuppression(*node_, rt); }
-
-void NonZero::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void Not::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 1);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  SetOutput(node, 0, (*this)(x, &rt), rt);
-}
-
-void OneHot::Run(RuntimeContext &rt) { RunOp_OneHot(*node_, rt); }
-
-void Or::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void Optional::Run(RuntimeContext &rt) { RunOp_Optional(*node_, rt); }
-
-void OptionalGetElement::Run(RuntimeContext &rt) { RunOp_OptionalGetElement(*node_, rt); }
-
-void OptionalHasElement::Run(RuntimeContext &rt) { RunOp_OptionalHasElement(*node_, rt); }
-
-void Pad::Run(RuntimeContext &rt) { RunOp_Pad(*node_, rt); }
-
-void Pow::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void PRelu::Run(RuntimeContext &rt) {
-  const NodeProto &node = *node_;
-  RequireInputCount(node, 2);
-  RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
-  SetOutput(node, 0, (*this)(x, y, &rt), rt);
-}
-
-void QLinearConv::Run(RuntimeContext &rt) { RunOp_QLinearConv(*node_, rt); }
-
-void QLinearMatMul::Run(RuntimeContext &rt) { RunOp_QLinearMatMul(*node_, rt); }
-
-void QuantizeLinear::Run(RuntimeContext &rt) { RunOp_QuantizeLinear(*node_, rt); }
 
 void RandomNormal::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -3736,9 +2136,26 @@ void RandomUniformLike::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(input, a, b, seed, dtype, &rt), rt);
 }
 
-void Range::Run(RuntimeContext &rt) { RunOp_Range(*node_, rt); }
+void Range::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &start = GetInput(node, 0, rt.tensors());
+  const Tensor &limit = GetInput(node, 1, rt.tensors());
+  const Tensor &delta = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::Range k(rt.kernel_ctx());
+  SetOutput(node, 0, k(start, limit, delta, &rt), rt);
+}
 
-void RMSNormalization::Run(RuntimeContext &rt) { RunRMSNormalization(*node_, rt); }
+void RMSNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::RMSNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scale, GetNormAxis(node), GetEpsilon(node), &rt), rt);
+}
 
 void Reciprocal::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4018,7 +2435,15 @@ void ReduceSumSquare::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(data, keepdims, noop_with_empty_axes, &rt), rt);
 }
 
-void RegexFullMatch::Run(RuntimeContext &rt) { RunOp_RegexFullMatch(*node_, rt); }
+void RegexFullMatch::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string pattern = GetAttributeStringOrDefault(node, "pattern", "");
+  onnx_kernels::kernel::RegexFullMatch k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, pattern, &rt), rt);
+}
 
 void Relu::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4028,13 +2453,99 @@ void Relu::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
-void Reshape::Run(RuntimeContext &rt) { RunOp_Reshape(*node_, rt); }
+void Reshape::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &shape = GetInput(node, 1, rt.tensors());
+  const int64_t allowzero = GetAttributeIntOrDefault(node, "allowzero", 0);
+  onnx_kernels::kernel::Reshape k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, shape, allowzero, &rt), rt);
+}
 
-void Resize::Run(RuntimeContext &rt) { RunOp_Resize(*node_, rt); }
+void Resize::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1 || node.input_size() > 4), "RunNode: op '",
+                      node.op_type(), "' expects between 1 and 4 input(s), got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor *roi = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor *scales = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor *sizes = GetOptionalInput(node, 3, rt.tensors());
+  EXT_ENFORCE_INVALID(!((scales == nullptr) == (sizes == nullptr)),
+                      "RunNode: op 'Resize' requires exactly one of 'scales' or 'sizes' to be "
+                      "provided.");
 
-void ReverseSequence::Run(RuntimeContext &rt) { RunOp_ReverseSequence(*node_, rt); }
+  onnx_kernels::kernel::Resize::Attributes attrs;
+  attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+  attrs.coordinate_transformation_mode = GetAttributeStringOrDefault(
+      node, "coordinate_transformation_mode", attrs.coordinate_transformation_mode);
+  attrs.nearest_mode = GetAttributeStringOrDefault(node, "nearest_mode", attrs.nearest_mode);
+  attrs.axes = GetAttributeShapeOrDefault(node, "axes", attrs.axes);
+  attrs.keep_aspect_ratio_policy =
+      GetAttributeStringOrDefault(node, "keep_aspect_ratio_policy", attrs.keep_aspect_ratio_policy);
+  attrs.cubic_coeff_a = GetAttributeFloatOrDefault(node, "cubic_coeff_a", attrs.cubic_coeff_a);
+  attrs.exclude_outside = GetAttributeIntOrDefault(node, "exclude_outside", attrs.exclude_outside);
+  attrs.antialias = GetAttributeIntOrDefault(node, "antialias", attrs.antialias);
+  attrs.extrapolation_value =
+      GetAttributeFloatOrDefault(node, "extrapolation_value", attrs.extrapolation_value);
+  if (roi != nullptr) {
+    EXT_ENFORCE_INVALID(!(roi->data_type != DataType::FLOAT),
+                        "RunNode: op 'Resize' 'roi' input must be a FLOAT tensor.");
+    EXT_ENFORCE_INVALID(!(roi->shape.size() != 1), "RunNode: op 'Resize' 'roi' input must be 1-D.");
+    const int64_t n = roi->shape[0];
+    attrs.roi.assign(static_cast<std::size_t>(n), 0.0f);
+    if (n > 0) {
+      std::memcpy(attrs.roi.data(), roi->bytes(), static_cast<std::size_t>(n) * sizeof(float));
+    }
+  }
 
-void RoiAlign::Run(RuntimeContext &rt) { RunOp_RoiAlign(*node_, rt); }
+  onnx_kernels::kernel::Resize k(rt.kernel_ctx());
+  if (scales != nullptr) {
+    SetOutput(node, 0, k(x, *scales, attrs, &rt), rt);
+  } else {
+    SetOutput(node, 0, k.ResizeSizes(x, *sizes, attrs), rt);
+  }
+}
+
+void ReverseSequence::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &sequence_lens = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::ReverseSequence::Attributes attrs;
+  attrs.time_axis = GetAttributeIntOrDefault(node, "time_axis", attrs.time_axis);
+  attrs.batch_axis = GetAttributeIntOrDefault(node, "batch_axis", attrs.batch_axis);
+  onnx_kernels::kernel::ReverseSequence k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input, sequence_lens, attrs, &rt), rt);
+}
+
+void RoiAlign::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &rois = GetInput(node, 1, rt.tensors());
+  const Tensor &batch_indices = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::RoiAlign::Attributes attrs;
+  attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+  attrs.output_height = GetAttributeIntOrDefault(node, "output_height", attrs.output_height);
+  attrs.output_width = GetAttributeIntOrDefault(node, "output_width", attrs.output_width);
+  attrs.sampling_ratio = GetAttributeIntOrDefault(node, "sampling_ratio", attrs.sampling_ratio);
+  attrs.spatial_scale = GetAttributeFloatOrDefault(node, "spatial_scale", attrs.spatial_scale);
+  // Opset 10 has no ``coordinate_transformation_mode`` attribute and
+  // behaves like ``output_half_pixel``; opset 16+ defaults to
+  // ``half_pixel``.
+  const std::string default_ctm =
+      rt.kernel_ctx().opset.version < 16 ? "output_half_pixel" : "half_pixel";
+  attrs.coordinate_transformation_mode =
+      GetAttributeStringOrDefault(node, "coordinate_transformation_mode", default_ctm);
+  onnx_kernels::kernel::RoiAlign k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, rois, batch_indices, attrs, &rt), rt);
+}
 
 void Round::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4044,39 +2555,299 @@ void Round::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
-void RNN::Run(RuntimeContext &rt) { RunOp_RNN(*node_, rt); }
+void RNN::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '",
+                      node.op_type(), "' expects between 3 and 6 input(s), got ", node.input_size(),
+                      ".");
+  EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '",
+                      node.op_type(), "' expects 1 or 2 output(s), got ", node.output_size(), ".");
 
-void RotaryEmbedding::Run(RuntimeContext &rt) { RunOp_RotaryEmbedding(*node_, rt); }
+  // Unsupported attributes: only the default ``forward`` direction
+  // with the default ``Tanh`` activation and no ``clip`` are
+  // implemented; ``layout=0`` and ``layout=1`` are both supported.
+  const std::string direction = GetAttributeStringOrDefault(node, "direction", "forward");
+  EXT_ENFORCE_INVALID(direction == "forward",
+                      "RunNode: op 'RNN' only supports direction='forward', got '", direction,
+                      "'.");
+  if (const AttributeProto *activations = FindAttribute(node, "activations");
+      activations != nullptr) {
+    const std::vector<std::string> values = GetAttributeStringsOrDefault(node, "activations", {});
+    EXT_ENFORCE_INVALID(!(values.size() != 1 || values[0] != "Tanh"),
+                        "RunNode: op 'RNN' only supports the default activations=['Tanh'].");
+  }
+  EXT_ENFORCE_INVALID(!(FindAttribute(node, "activation_alpha") != nullptr ||
+                        FindAttribute(node, "activation_beta") != nullptr),
+                      "RunNode: op 'RNN' does not support 'activation_alpha'/'activation_beta'.");
+  EXT_ENFORCE_INVALID(FindAttribute(node, "clip") == nullptr,
+                      "RunNode: op 'RNN' does not support the 'clip' attribute.");
+  const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
 
-void Scatter::Run(RuntimeContext &rt) { RunOp_Scatter(*node_, rt); }
+  // ``sequence_lens`` (input #4) is not supported: it requires
+  // per-batch sequence handling that the FLOAT kernel does not
+  // implement.
+  const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+  EXT_ENFORCE_INVALID(sequence_lens == nullptr,
+                      "RunNode: op 'RNN' does not support the optional 'sequence_lens' input.");
 
-void ScatterElements::Run(RuntimeContext &rt) { RunOp_ScatterElements(*node_, rt); }
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &w = GetInput(node, 1, rt.tensors());
+  const Tensor &r = GetInput(node, 2, rt.tensors());
+  const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
 
-void ScatterND::Run(RuntimeContext &rt) { RunOp_ScatterND(*node_, rt); }
+  onnx_kernels::kernel::RNN kernel(rt.kernel_ctx());
+  auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
+                         initial_h != nullptr ? *initial_h : Tensor{}, layout);
 
-void Selu::Run(RuntimeContext &rt) { RunOp_Selu(*node_, rt); }
+  auto set_optional_output = [&node, &rt](int index, Tensor output) {
+    if (index >= node.output_size()) {
+      return;
+    }
+    const std::string &name = node.output(index);
+    if (name.empty()) {
+      return;
+    }
+    output.name = name;
+    rt.Put(name, std::move(output), RuntimeEventKind::kIntermediate);
+  };
+  set_optional_output(0, std::move(y));
+  set_optional_output(1, std::move(y_h));
+}
 
-void ConcatFromSequence::Run(RuntimeContext &rt) { RunOp_ConcatFromSequence(*node_, rt); }
+void RotaryEmbedding::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 4), "RunNode: op '",
+                      node.op_type(), "' expects between 3 and 4 input(s), got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &cos_cache = GetInput(node, 1, rt.tensors());
+  const Tensor &sin_cache = GetInput(node, 2, rt.tensors());
+  const Tensor *position_ids = GetOptionalInput(node, 3, rt.tensors());
 
-void SequenceAt::Run(RuntimeContext &rt) { RunOp_SequenceAt(*node_, rt); }
+  onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
+  attrs.interleaved = GetAttributeIntOrDefault(node, "interleaved", 0) != 0;
+  attrs.rotary_embedding_dim = GetAttributeIntOrDefault(node, "rotary_embedding_dim", 0);
+  attrs.num_heads = GetAttributeIntOrDefault(node, "num_heads", 0);
 
-void SequenceConstruct::Run(RuntimeContext &rt) { RunOp_SequenceConstruct(*node_, rt); }
+  onnx_kernels::kernel::RotaryEmbedding kernel(rt.kernel_ctx());
+  const Tensor empty;
+  const Tensor &pos = (position_ids != nullptr) ? *position_ids : empty;
+  SetOutput(node, 0, kernel(x, cos_cache, sin_cache, pos, attrs, &rt), rt);
+}
 
-void SequenceEmpty::Run(RuntimeContext &rt) { RunOp_SequenceEmpty(*node_, rt); }
+void Scatter::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &indices = GetInput(node, 1, rt.tensors());
+  const Tensor &updates = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::Scatter::Attributes attrs;
+  attrs.axis = GetAttributeIntOrDefault(node, "axis", 0);
+  onnx_kernels::kernel::Scatter k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
+}
 
-void SequenceErase::Run(RuntimeContext &rt) { RunOp_SequenceErase(*node_, rt); }
+void ScatterElements::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &indices = GetInput(node, 1, rt.tensors());
+  const Tensor &updates = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::ScatterElements::Attributes attrs;
+  attrs.axis = GetAttributeIntOrDefault(node, "axis", 0);
+  attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
+  onnx_kernels::kernel::ScatterElements k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
+}
 
-void SequenceInsert::Run(RuntimeContext &rt) { RunOp_SequenceInsert(*node_, rt); }
+void ScatterND::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &indices = GetInput(node, 1, rt.tensors());
+  const Tensor &updates = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::ScatterND::Attributes attrs;
+  attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
+  onnx_kernels::kernel::ScatterND k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
+}
 
-void SequenceLength::Run(RuntimeContext &rt) { RunOp_SequenceLength(*node_, rt); }
+void Selu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.67326319217681884765625f);
+  const float gamma = GetAttributeFloatOrDefault(node, "gamma", 1.05070102214813232421875f);
+  onnx_kernels::kernel::Selu k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, alpha, gamma, &rt), rt);
+}
 
-void Split::Run(RuntimeContext &rt) { RunOp_Split(*node_, rt); }
+void ConcatFromSequence::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  const AttributeProto *axis_attr = FindAttribute(node, "axis");
+  EXT_ENFORCE_INVALID(axis_attr != nullptr,
+                      "RunNode: op 'ConcatFromSequence' is missing required attribute 'axis'.");
+  const int64_t axis = axis_attr->i();
+  const int64_t new_axis = GetAttributeIntOrDefault(node, "new_axis", 0);
+  onnx_kernels::kernel::ConcatFromSequence k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input_sequence.values, axis, new_axis, &rt), rt);
+}
 
-void SplitToSequence::Run(RuntimeContext &rt) { RunOp_SplitToSequence(*node_, rt); }
+void SequenceAt::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  const Tensor &position = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::SequenceAt k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input_sequence, position, &rt), rt);
+}
 
-void Shape::Run(RuntimeContext &rt) { RunOp_Shape(*node_, rt); }
+void SequenceConstruct::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  Tensors inputs;
+  inputs.reserve(node.input_size());
+  for (int i = 0; i < node.input_size(); ++i) {
+    inputs.push_back(GetInput(node, i, rt.tensors()));
+  }
+  onnx_kernels::kernel::SequenceConstruct k(rt.kernel_ctx());
+  SetOutputSequence(node, 0, k.AsSequence(inputs), rt);
+}
 
-void Shrink::Run(RuntimeContext &rt) { RunOp_Shrink(*node_, rt); }
+void SequenceEmpty::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 0);
+  RequireOutputCount(node, 1);
+  const int64_t dtype = GetAttributeIntOrDefault(node, "dtype", 0);
+  onnx_kernels::kernel::SequenceEmpty k(rt.kernel_ctx());
+  SetOutputSequence(node, 0, k(static_cast<int32_t>(dtype)), rt);
+}
+
+void SequenceErase::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
+                      "' expects 1 or 2 inputs, got ", node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  const Tensor *position = GetOptionalInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::SequenceErase k(rt.kernel_ctx());
+  SetOutputSequence(node, 0, k(input_sequence, position), rt);
+}
+
+void SequenceInsert::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 2);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type(),
+                      "' expects 2 or 3 inputs, got ", node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  const Tensor &tensor = GetInput(node, 1, rt.tensors());
+  const Tensor *position = GetOptionalInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::SequenceInsert k(rt.kernel_ctx());
+  SetOutputSequence(node, 0, k(input_sequence, tensor, position), rt);
+}
+
+void SequenceLength::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  onnx_kernels::kernel::SequenceLength k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input_sequence, &rt), rt);
+}
+
+void Split::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
+                      "' expects 1 or 2 inputs, got ", node.input_size(), ".");
+  EXT_ENFORCE_INVALID(!(node.output_size() < 1), "RunNode: op '", node.op_type(),
+                      "' expects at least 1 output, got 0.");
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+
+  // Resolve ``split``: from the optional 2nd input (opset >= 13), from the
+  // legacy ``split`` attribute (opset <= 12), or unspecified.
+  // When the split sizes come from a tensor input, use a zero-copy span
+  // view; otherwise fall back to an attribute-sourced vector.
+  const Tensor *split_input = GetOptionalInput(node, 1, rt.tensors());
+  std::vector<int64_t> split_attr;
+  std::span<const int64_t> split;
+  if (split_input != nullptr) {
+    split = TensorSpan<int64_t>(*split_input);
+  } else {
+    split_attr = GetAttributeIntsOrDefault(node, "split", {});
+    split = split_attr;
+  }
+
+  // ``num_outputs`` (opset >= 18) defaults to the number of outputs of the
+  // node when neither ``split`` nor the attribute is provided.
+  int64_t num_outputs = GetAttributeIntOrDefault(node, "num_outputs", 0);
+  if (split.empty() && num_outputs <= 0) {
+    num_outputs = static_cast<int64_t>(node.output_size());
+  }
+
+  onnx_kernels::kernel::Split k(rt.kernel_ctx());
+  Tensors outputs = k(input, axis, split, num_outputs);
+  EXT_ENFORCE_INVALID(!(static_cast<int>(outputs.size()) != node.output_size()),
+                      "RunNode: op 'Split' produced ", outputs.size(),
+                      " outputs but node declares ", node.output_size(), ".");
+  for (int i = 0; i < node.output_size(); ++i) {
+    SetOutput(node, i, std::move(outputs[static_cast<size_t>(i)]), rt);
+  }
+}
+
+void SplitToSequence::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
+                      "' expects 1 or 2 inputs, got ", node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor *split = GetOptionalInput(node, 1, rt.tensors());
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+  const int64_t keepdims = GetAttributeIntOrDefault(node, "keepdims", 1);
+  onnx_kernels::kernel::SplitToSequence k(rt.kernel_ctx());
+  SetOutputSequence(node, 0, k(input, split, axis, keepdims), rt);
+}
+
+void Shape::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  onnx_kernels::kernel::Shape::Attributes shape_attrs;
+  shape_attrs.start = GetAttributeIntOrDefault(node, "start", 0);
+  const AttributeProto *end_attr = FindAttribute(node, "end");
+  if (end_attr != nullptr) {
+    shape_attrs.end = end_attr->i();
+  }
+  onnx_kernels::kernel::Shape shape_kernel(rt.kernel_ctx());
+  SetOutput(node, 0, shape_kernel(data, shape_attrs, &rt), rt);
+}
+
+void Shrink::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const float bias = GetAttributeFloatOrDefault(node, "bias", 0.0f);
+  const float lambd = GetAttributeFloatOrDefault(node, "lambd", 0.5f);
+  onnx_kernels::kernel::Shrink k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, bias, lambd, &rt), rt);
+}
 
 void Sigmoid::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4110,9 +2881,29 @@ void Sinh::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
-void Size::Run(RuntimeContext &rt) { RunOp_Size(*node_, rt); }
+void Size::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  onnx_kernels::kernel::Size k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, &rt), rt);
+}
 
-void Slice::Run(RuntimeContext &rt) { RunOp_Slice(*node_, rt); }
+void Slice::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 3);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 5), "RunNode: op '", node.op_type(),
+                      "' expects between 3 and 5 input(s), got ", node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &starts = GetInput(node, 1, rt.tensors());
+  const Tensor &ends = GetInput(node, 2, rt.tensors());
+  const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor *steps = GetOptionalInput(node, 4, rt.tensors());
+  onnx_kernels::kernel::Slice k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, starts, ends, axes, steps, &rt), rt);
+}
 
 void Softmax::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4123,7 +2914,23 @@ void Softmax::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(x, axis, &rt), rt);
 }
 
-void SoftmaxCrossEntropyLoss::Run(RuntimeContext &rt) { RunOp_SoftmaxCrossEntropyLoss(*node_, rt); }
+void SoftmaxCrossEntropyLoss::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputRange(node, 2, 3);
+  RequireOutputRange(node, 1, 2);
+  const Tensor &scores = GetInput(node, 0, rt.tensors());
+  const Tensor &labels = GetInput(node, 1, rt.tensors());
+  const Tensor *weights = GetOptionalInput(node, 2, rt.tensors());
+  const std::string reduction = GetAttributeStringOrDefault(node, "reduction", "mean");
+  const bool has_ignore_index = FindAttribute(node, "ignore_index") != nullptr;
+  const int64_t ignore_index = GetAttributeIntOrDefault(node, "ignore_index", 0);
+  onnx_kernels::kernel::SoftmaxCrossEntropyLoss k(rt.kernel_ctx());
+  auto [loss, log_prob] = k(scores, labels, weights, reduction, has_ignore_index, ignore_index);
+  SetOutput(node, 0, std::move(loss), rt);
+  if (node.output_size() >= 2) {
+    SetOutput(node, 1, std::move(log_prob), rt);
+  }
+}
 
 void Softplus::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4171,7 +2978,20 @@ void Squeeze::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(data, axes, &rt), rt);
 }
 
-void STFT::Run(RuntimeContext &rt) { RunOp_STFT(*node_, rt); }
+void STFT::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 2);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op '", node.op_type(),
+                      "' expects at most 4 inputs.");
+  RequireOutputCount(node, 1);
+  const Tensor &signal = GetInput(node, 0, rt.tensors());
+  const Tensor &frame_step = GetInput(node, 1, rt.tensors());
+  const Tensor *window = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor *frame_length = GetOptionalInput(node, 3, rt.tensors());
+  const bool onesided = GetAttributeIntOrDefault(node, "onesided", 1) != 0;
+  onnx_kernels::kernel::STFT k(rt.kernel_ctx());
+  SetOutput(node, 0, k(signal, frame_step, window, frame_length, onesided, &rt), rt);
+}
 
 void StringConcat::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4182,9 +3002,35 @@ void StringConcat::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(x, y, &rt), rt);
 }
 
-void StringNormalizer::Run(RuntimeContext &rt) { RunOp_StringNormalizer(*node_, rt); }
+void StringNormalizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string case_change_action_attr =
+      GetAttributeStringOrDefault(node, "case_change_action", "NONE");
+  const bool is_case_sensitive = GetAttributeIntOrDefault(node, "is_case_sensitive", 0) != 0;
+  const std::vector<std::string> stopwords = GetAttributeStringsOrDefault(node, "stopwords", {});
+  onnx_kernels::kernel::StringNormalizer k(rt.kernel_ctx());
+  SetOutput(
+      node, 0,
+      k(x, onnx_kernels::kernel::StringNormalizer::ParseCaseChangeAction(case_change_action_attr),
+        is_case_sensitive, stopwords),
+      rt);
+}
 
-void StringSplit::Run(RuntimeContext &rt) { RunOp_StringSplit(*node_, rt); }
+void StringSplit::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 2);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string delimiter = GetAttributeStringOrDefault(node, "delimiter", "");
+  const int64_t maxsplit = GetAttributeIntOrDefault(node, "maxsplit", -1);
+  onnx_kernels::kernel::StringSplit k(rt.kernel_ctx());
+  auto out = k(x, delimiter, maxsplit);
+  SetOutput(node, 0, std::move(out.first), rt);
+  SetOutput(node, 1, std::move(out.second), rt);
+}
 
 void Sub::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4242,9 +3088,42 @@ void Tanh::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
-void TensorScatter::Run(RuntimeContext &rt) { RunOp_TensorScatter(*node_, rt); }
+void TensorScatter::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputRange(node, 2, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &past_cache = GetInput(node, 0, rt.tensors());
+  const Tensor &update = GetInput(node, 1, rt.tensors());
+  const Tensor *write_indices = GetOptionalInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::TensorScatter::Attributes attrs;
+  attrs.axis = GetAttributeIntOrDefault(node, "axis", -2);
+  attrs.mode = GetAttributeStringOrDefault(node, "mode", "linear");
+  onnx_kernels::kernel::TensorScatter kernel(rt.kernel_ctx());
+  SetOutput(node, 0, kernel(past_cache, update, write_indices, attrs, &rt), rt);
+}
 
-void TfIdfVectorizer::Run(RuntimeContext &rt) { RunOp_TfIdfVectorizer(*node_, rt); }
+void TfIdfVectorizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string mode_attr = GetRequiredAttributeString(node, "mode");
+  const int64_t min_gram_length = GetAttributeIntOrDefault(node, "min_gram_length", 1);
+  const int64_t max_gram_length = GetAttributeIntOrDefault(node, "max_gram_length", 1);
+  const int64_t max_skip_count = GetAttributeIntOrDefault(node, "max_skip_count", 0);
+  const std::vector<int64_t> ngram_counts = GetAttributeIntsOrDefault(node, "ngram_counts", {});
+  const ParamInts ngram_indexes = GetAttributeIntsOrDefault(node, "ngram_indexes", {});
+  const ParamInts pool_int64s = GetAttributeIntsOrDefault(node, "pool_int64s", {});
+  const std::vector<std::string> pool_strings =
+      GetAttributeStringsOrDefault(node, "pool_strings", {});
+  const std::vector<float> weights = GetAttributeFloatsOrDefault(node, "weights", {});
+  onnx_kernels::kernel::TfIdfVectorizer k(rt.kernel_ctx());
+  SetOutput(node, 0,
+            k(x, onnx_kernels::kernel::TfIdfVectorizer::ParseMode(mode_attr), min_gram_length,
+              max_gram_length, max_skip_count, ngram_counts, ngram_indexes, pool_int64s,
+              pool_strings, weights),
+            rt);
+}
 
 void ThresholdedRelu::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4255,15 +3134,96 @@ void ThresholdedRelu::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(x, alpha, &rt), rt);
 }
 
-void Tile::Run(RuntimeContext &rt) { RunOp_Tile(*node_, rt); }
+void Tile::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &repeats = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::Tile k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input, repeats, &rt), rt);
+}
 
-void TopK::Run(RuntimeContext &rt) { RunOp_TopK(*node_, rt); }
+void TopK::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireOutputCount(node, 2);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
+  const bool largest = GetAttributeIntOrDefault(node, "largest", 1) != 0;
+  const bool sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
 
-void Transpose::Run(RuntimeContext &rt) { RunOp_Transpose(*node_, rt); }
+  // ``k``: from input[1] (1-D INT64 tensor of size 1) for opset >= 10,
+  // otherwise from the pre-opset-10 ``k`` INT attribute (required).
+  int64_t k = 0;
+  const int64_t opset_version = rt.kernel_ctx().opset.version;
+  if (opset_version >= 10) {
+    RequireInputCount(node, 2);
+    const Tensor &k_tensor = GetInput(node, 1, rt.tensors());
+    EXT_ENFORCE_INVALID(k_tensor.element_count() == 1,
+                        "RunNode: op 'TopK' input 'K' must be a 1-D tensor with a single element.");
+    EXT_ENFORCE_INVALID(!(k_tensor.data_type != static_cast<int32_t>(DataType::INT64)),
+                        "RunNode: op 'TopK' input 'K' must be INT64.");
+    k = k_tensor.AsInt64()[0];
+  } else {
+    RequireInputCount(node, 1);
+    const AttributeProto *k_attr = FindAttribute(node, "k");
+    EXT_ENFORCE_INVALID(k_attr != nullptr,
+                        "RunNode: op 'TopK' requires the 'k' attribute for opset < 10.");
+    k = k_attr->i();
+  }
 
-void Trilu::Run(RuntimeContext &rt) { RunOp_Trilu(*node_, rt); }
+  onnx_kernels::kernel::TopK kernel(rt.kernel_ctx());
+  auto out = kernel(x, k, axis, largest, sorted);
+  SetOutput(node, 0, std::move(out.first), rt);
+  SetOutput(node, 1, std::move(out.second), rt);
+}
 
-void Unique::Run(RuntimeContext &rt) { RunOp_Unique(*node_, rt); }
+void Transpose::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const onnx_kernels::Shape perm = GetAttributeIntsOrDefault(node, "perm", {});
+  onnx_kernels::kernel::Transpose k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, perm, &rt), rt);
+}
+
+void Trilu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputRange(node, 1, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor *k = GetOptionalInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::Trilu::Attributes attrs;
+  attrs.upper = GetAttributeIntOrDefault(node, "upper", 1);
+  onnx_kernels::kernel::Trilu kernel(rt.kernel_ctx());
+  SetOutput(node, 0, kernel(input, k, attrs, &rt), rt);
+}
+
+void Unique::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputRange(node, 1, 4);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  onnx_kernels::kernel::Unique::Attributes attrs;
+  attrs.sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
+  const AttributeProto *axis_attr = FindAttribute(node, "axis");
+  if (axis_attr != nullptr) {
+    attrs.axis = axis_attr->i();
+  }
+  onnx_kernels::kernel::Unique k(rt.kernel_ctx());
+  auto out = k(x, attrs);
+  SetOutput(node, 0, std::move(out.y), rt);
+  if (node.output_size() >= 2) {
+    SetOutput(node, 1, std::move(out.indices), rt);
+  }
+  if (node.output_size() >= 3) {
+    SetOutput(node, 2, std::move(out.inverse_indices), rt);
+  }
+  if (node.output_size() >= 4) {
+    SetOutput(node, 3, std::move(out.counts), rt);
+  }
+}
 
 void Unsqueeze::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4288,7 +3248,17 @@ void Unsqueeze::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(data, axes, &rt), rt);
 }
 
-void Upsample::Run(RuntimeContext &rt) { RunOp_Upsample(*node_, rt); }
+void Upsample::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scales = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::Upsample::Attributes attrs;
+  attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+  onnx_kernels::kernel::Upsample k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scales, attrs, &rt), rt);
+}
 
 void Where::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
@@ -4309,49 +3279,929 @@ void Xor::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(x, y, &rt), rt);
 }
 
-void FlexAttention::Run(RuntimeContext &rt) { RunOp_FlexAttention(*node_, rt); }
+void FlexAttention::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &Q = GetInput(node, 0, rt.tensors());
+  const Tensor &K = GetInput(node, 1, rt.tensors());
+  const Tensor &V = GetInput(node, 2, rt.tensors());
 
-void Adagrad::Run(RuntimeContext &rt) { RunOp_Adagrad(*node_, rt); }
+  // Resolve the scale once: use the explicit attribute if present, otherwise
+  // fall back to 1/sqrt(head_size) — matching the kernel's own default.
+  const float scale = FindAttribute(node, "scale") != nullptr
+                          ? GetAttributeFloatOrDefault(node, "scale", 1.0f)
+                          : 1.0f / std::sqrt(static_cast<float>(Q.shape[3]));
 
-void Adam::Run(RuntimeContext &rt) { RunOp_Adam(*node_, rt); }
+  onnx_kernels::kernel::FlexAttention flex(rt.kernel_ctx());
+  Tensor Y;
+  onnx_kernels::kernel::FlexAttention::ScoreModFn score_mod_fn;
+  onnx_kernels::kernel::FlexAttention::ProbModFn prob_mod_fn;
+  // Sessions for the score_mod / prob_mod subgraphs are built once and
+  // reused for every row the FlexAttention kernel evaluates them on,
+  // instead of re-resolving the subgraph's kernels on every call.
+  std::unique_ptr<SubgraphSession> score_mod_session;
+  std::unique_ptr<SubgraphSession> prob_mod_session;
+  const AttributeProto *score_mod_attr = FindAttribute(node, "score_mod");
+  if (score_mod_attr != nullptr) {
+    const GraphProto &score_mod_graph = score_mod_attr->ref_g();
+    EXT_ENFORCE_INVALID(!(score_mod_graph.input().empty()),
+                        "RunNode: 'score_mod' subgraph must declare at least one input.");
+    const std::string in_name = score_mod_graph.input()[0].name();
+    score_mod_session = std::make_unique<SubgraphSession>(rt, score_mod_graph);
+    score_mod_fn = [in_name, &rt, &session = *score_mod_session](Tensor &scores) {
+      auto outputs = session.Run({{in_name, scores}}, rt, "score_mod");
+      if (!outputs.empty()) {
+        scores = std::move(outputs[0]);
+      }
+    };
+  }
+  const AttributeProto *prob_mod_attr = FindAttribute(node, "prob_mod");
+  if (prob_mod_attr != nullptr) {
+    const GraphProto &prob_mod_graph = prob_mod_attr->ref_g();
+    EXT_ENFORCE_INVALID(!(prob_mod_graph.input().empty()),
+                        "RunNode: 'prob_mod' subgraph must declare at least one input.");
+    const std::string in_name = prob_mod_graph.input()[0].name();
+    prob_mod_session = std::make_unique<SubgraphSession>(rt, prob_mod_graph);
+    prob_mod_fn = [in_name, &rt, &session = *prob_mod_session](Tensor &probs) {
+      auto outputs = session.Run({{in_name, probs}}, rt, "prob_mod");
+      if (!outputs.empty()) {
+        probs = std::move(outputs[0]);
+      }
+    };
+  }
+  if (score_mod_fn || prob_mod_fn) {
+    Y = flex(Q, K, V, scale, score_mod_fn, prob_mod_fn);
+  } else {
+    Y = flex(Q, K, V, scale);
+  }
+  SetOutput(node, 0, std::move(Y), rt.tensors());
+}
 
-void Momentum::Run(RuntimeContext &rt) { RunOp_Momentum(*node_, rt); }
+void Adagrad::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 5 || (node.input_size() - 2) % 3 != 0),
+                      "RunNode: op 'Adagrad' expects 2 + 3*N inputs (got ", node.input_size(),
+                      ").");
+  const int64_t n = (node.input_size() - 2) / 3;
+  EXT_ENFORCE_INVALID(node.output_size() == 2 * n,
+                      "RunNode: op 'Adagrad' expects 2*N outputs (got ", node.output_size(),
+                      " for N=", n, ").");
+  const Tensor &R = GetInput(node, 0, rt.tensors());
+  const Tensor &T = GetInput(node, 1, rt.tensors());
+  Tensors Xs, Gs, Hs;
+  Xs.reserve(n);
+  Gs.reserve(n);
+  Hs.reserve(n);
+  for (int64_t i = 0; i < n; ++i) {
+    Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
+    Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
+    Hs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
+  }
+  const float epsilon = GetAttributeFloatOrDefault(node, "epsilon", 0.0f);
+  const float decay_factor = GetAttributeFloatOrDefault(node, "decay_factor", 0.0f);
+  const float norm_coefficient = GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
+  onnx_kernels::kernel::Adagrad k(rt.kernel_ctx());
+  Tensors outs = k(R, T, Xs, Gs, Hs, epsilon, decay_factor, norm_coefficient);
+  for (int64_t i = 0; i < 2 * n; ++i) {
+    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
+  }
+}
 
-void CastMap::Run(RuntimeContext &rt) { RunOp_CastMap(*node_, rt); }
+void Adam::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 6 || (node.input_size() - 2) % 4 != 0),
+                      "RunNode: op 'Adam' expects 2 + 4*N inputs (got ", node.input_size(), ").");
+  const int64_t n = (node.input_size() - 2) / 4;
+  EXT_ENFORCE_INVALID(node.output_size() == 3 * n, "RunNode: op 'Adam' expects 3*N outputs (got ",
+                      node.output_size(), " for N=", n, ").");
+  const Tensor &R = GetInput(node, 0, rt.tensors());
+  const Tensor &T = GetInput(node, 1, rt.tensors());
+  Tensors Xs, Gs, Vs, Hs;
+  Xs.reserve(n);
+  Gs.reserve(n);
+  Vs.reserve(n);
+  Hs.reserve(n);
+  for (int64_t i = 0; i < n; ++i) {
+    Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
+    Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
+    Vs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
+    Hs.push_back(GetInput(node, static_cast<int>(2 + 3 * n + i), rt.tensors()));
+  }
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.9f);
+  const float beta = GetAttributeFloatOrDefault(node, "beta", 0.999f);
+  const float epsilon = GetAttributeFloatOrDefault(node, "epsilon", 1e-6f);
+  const float norm_coefficient = GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
+  const float norm_coefficient_post =
+      GetAttributeFloatOrDefault(node, "norm_coefficient_post", 0.0f);
+  onnx_kernels::kernel::Adam k(rt.kernel_ctx());
+  Tensors outs =
+      k(R, T, Xs, Gs, Vs, Hs, alpha, beta, epsilon, norm_coefficient, norm_coefficient_post);
+  for (int64_t i = 0; i < 3 * n; ++i) {
+    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
+  }
+}
 
-void DictVectorizer::Run(RuntimeContext &rt) { RunOp_DictVectorizer(*node_, rt); }
+void Momentum::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 5 || (node.input_size() - 2) % 3 != 0),
+                      "RunNode: op 'Momentum' expects 2 + 3*N inputs (got ", node.input_size(),
+                      ").");
+  const int64_t n = (node.input_size() - 2) / 3;
+  EXT_ENFORCE_INVALID(node.output_size() == 2 * n,
+                      "RunNode: op 'Momentum' expects 2*N outputs (got ", node.output_size(),
+                      " for N=", n, ").");
+  const Tensor &R = GetInput(node, 0, rt.tensors());
+  const Tensor &T = GetInput(node, 1, rt.tensors());
+  Tensors Xs, Gs, Vs;
+  Xs.reserve(n);
+  Gs.reserve(n);
+  Vs.reserve(n);
+  for (int64_t i = 0; i < n; ++i) {
+    Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
+    Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
+    Vs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
+  }
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.0f);
+  const float beta = GetAttributeFloatOrDefault(node, "beta", 0.0f);
+  const float norm_coefficient = GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
+  const std::string mode_str = GetAttributeStringOrDefault(node, "mode", "standard");
+  onnx_kernels::kernel::Momentum::Mode mode;
+  if (mode_str == "standard") {
+    mode = onnx_kernels::kernel::Momentum::Mode::kStandard;
+  } else if (mode_str == "nesterov") {
+    mode = onnx_kernels::kernel::Momentum::Mode::kNesterov;
+  } else {
+    EXT_THROW_INVALID("RunNode: Momentum 'mode' must be 'standard' or 'nesterov', got '", mode_str,
+                      "'.");
+  }
+  onnx_kernels::kernel::Momentum k(rt.kernel_ctx());
+  Tensors outs = k(R, T, Xs, Gs, Vs, alpha, beta, norm_coefficient, mode);
+  for (int64_t i = 0; i < 2 * n; ++i) {
+    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
+  }
+}
 
-void SVMRegressor::Run(RuntimeContext &rt) { RunOp_SVMRegressor(*node_, rt); }
+void CastMap::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const std::string map_input = node.input(0);
 
-void SVMClassifier::Run(RuntimeContext &rt) { RunOp_SVMClassifier(*node_, rt); }
+  EXT_ENFORCE_INVALID(rt.HasMap(map_input), "RunNode: CastMap map input '", map_input,
+                      "' not found in the runtime context. Map-typed inputs "
+                      "must be stored via PutMap before executing the graph.");
+  const Map &cast_m = rt.GetMap(map_input);
+  const Tensor &x_keys = cast_m.keys;
+  const Tensor &x_values = cast_m.values;
+  EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)),
+                      "RunNode: CastMap keys must be an INT64 tensor.");
+  const std::span<const int64_t> keys = TensorSpan<int64_t>(x_keys);
+  const std::string cast_to = GetAttributeStringOrDefault(node, "cast_to", "TO_FLOAT");
+  const std::string map_form = GetAttributeStringOrDefault(node, "map_form", "DENSE");
+  const int64_t max_map = GetAttributeIntOrDefault(node, "max_map", 0);
+  EXT_ENFORCE_INVALID(!(cast_to != "TO_FLOAT" && cast_to != "TO_INT64" && cast_to != "TO_STRING"),
+                      "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
+                      "'TO_STRING'.");
+  onnx_kernels::kernel::CastMap cast_map(rt.kernel_ctx());
+  Tensor y;
+  switch (x_values.data_type) {
+  case static_cast<int32_t>(DataType::FLOAT): {
+    const std::span<const float> values = TensorSpan<float>(x_values);
+    if (cast_to == "TO_FLOAT") {
+      y = cast_map.operator()<float, float>(keys, values, cast_to, map_form, max_map);
+    } else if (cast_to == "TO_INT64") {
+      y = cast_map.operator()<float, int64_t>(keys, values, cast_to, map_form, max_map);
+    } else {
+      y = cast_map.operator()<float, std::string>(keys, values, cast_to, map_form, max_map);
+    }
+    break;
+  }
+  case static_cast<int32_t>(DataType::STRING): {
+    const std::vector<std::string> &values = x_values.AsStrings();
+    if (cast_to == "TO_FLOAT") {
+      y = cast_map.operator()<std::string, float>(keys, values, cast_to, map_form, max_map);
+    } else if (cast_to == "TO_INT64") {
+      y = cast_map.operator()<std::string, int64_t>(keys, values, cast_to, map_form, max_map);
+    } else {
+      y = cast_map.operator()<std::string, std::string>(keys, values, cast_to, map_form, max_map);
+    }
+    break;
+  }
+  default:
+    EXT_THROW_INVALID("RunNode: CastMap values must be a FLOAT or STRING tensor.");
+  }
+  SetOutput(node, 0, std::move(y), rt);
+}
 
-void LinearRegressor::Run(RuntimeContext &rt) { RunOp_LinearRegressor(*node_, rt); }
+void DictVectorizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const std::string map_input = node.input(0);
 
-void TreeEnsembleRegressor::Run(RuntimeContext &rt) { RunOp_TreeEnsembleRegressor(*node_, rt); }
+  EXT_ENFORCE_INVALID(rt.HasMap(map_input), "RunNode: DictVectorizer map input '", map_input,
+                      "' not found in the runtime context. Map-typed inputs "
+                      "must be stored via PutMap before executing the graph.");
+  const Map &dict_m = rt.GetMap(map_input);
+  const Tensor &x_keys = dict_m.keys;
+  const Tensor &x_values = dict_m.values;
+  const AttributeProto *str_vocab = FindAttribute(node, "string_vocabulary");
+  const AttributeProto *int_vocab = FindAttribute(node, "int64_vocabulary");
+  const bool has_str = str_vocab != nullptr && str_vocab->strings_size() > 0;
+  const bool has_int = int_vocab != nullptr && int_vocab->ints_size() > 0;
+  EXT_ENFORCE_INVALID(has_str != has_int,
+                      "RunNode: DictVectorizer requires exactly one of 'string_vocabulary' or "
+                      "'int64_vocabulary' to be specified and non-empty.");
+  onnx_kernels::kernel::DictVectorizer dict(rt.kernel_ctx());
+  Tensor y;
+  if (has_str) {
+    EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::STRING)),
+                        "RunNode: DictVectorizer keys must be a STRING tensor when "
+                        "'string_vocabulary' is set.");
+    const std::vector<std::string> &keys = x_keys.AsStrings();
+    std::vector<std::string> vocab;
+    vocab.reserve(str_vocab->strings_size());
+    for (size_t i = 0; i < str_vocab->strings_size(); ++i) {
+      vocab.emplace_back(str_vocab->strings(i));
+    }
+    switch (x_values.data_type) {
+    case static_cast<int32_t>(DataType::INT64): {
+      y = dict.operator()<std::string, int64_t>(keys, TensorSpan<int64_t>(x_values), vocab);
+      break;
+    }
+    case static_cast<int32_t>(DataType::FLOAT): {
+      y = dict.operator()<std::string, float>(keys, TensorSpan<float>(x_values), vocab);
+      break;
+    }
+    case static_cast<int32_t>(DataType::DOUBLE): {
+      y = dict.operator()<std::string, double>(keys, TensorSpan<double>(x_values), vocab);
+      break;
+    }
+    default:
+      EXT_THROW_INVALID("RunNode: DictVectorizer values must be INT64, FLOAT, or DOUBLE when "
+                        "'string_vocabulary' is set.");
+    }
+  } else {
+    EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)),
+                        "RunNode: DictVectorizer keys must be an INT64 tensor when "
+                        "'int64_vocabulary' is set.");
+    const std::span<const int64_t> keys = TensorSpan<int64_t>(x_keys);
+    std::vector<int64_t> vocab;
+    vocab.reserve(int_vocab->ints_size());
+    for (size_t i = 0; i < int_vocab->ints_size(); ++i) {
+      vocab.push_back(int_vocab->ints(i));
+    }
+    switch (x_values.data_type) {
+    case static_cast<int32_t>(DataType::FLOAT): {
+      y = dict.operator()<int64_t, float>(keys, TensorSpan<float>(x_values), vocab);
+      break;
+    }
+    case static_cast<int32_t>(DataType::DOUBLE): {
+      y = dict.operator()<int64_t, double>(keys, TensorSpan<double>(x_values), vocab);
+      break;
+    }
+    case static_cast<int32_t>(DataType::STRING): {
+      const std::vector<std::string> &values = x_values.AsStrings();
+      y = dict.operator()<int64_t, std::string>(keys, values, vocab);
+      break;
+    }
+    default:
+      EXT_THROW_INVALID("RunNode: DictVectorizer values must be FLOAT, DOUBLE, or STRING when "
+                        "'int64_vocabulary' is set.");
+    }
+  }
+  SetOutput(node, 0, std::move(y), rt);
+}
 
-void LinearClassifier::Run(RuntimeContext &rt) { RunOp_LinearClassifier(*node_, rt); }
+void SVMRegressor::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const SVMCommonAttrs a = ParseSVMCommonAttrs(node, "SVMRegressor");
+  onnx_kernels::kernel::SVMRegressor svm(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "SVMRegressor", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                      a.kernel_type.c_str(), a.gamma, a.coef0, a.degree);
+  });
+  SetOutput(node, 0, std::move(y), rt);
+}
 
-void TreeEnsembleClassifier::Run(RuntimeContext &rt) { RunOp_TreeEnsembleClassifier(*node_, rt); }
+void SVMClassifier::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 2);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const SVMCommonAttrs a = ParseSVMCommonAttrs(node, "SVMClassifier");
+  const std::vector<int64_t> vectors_per_class =
+      GetAttributeIntsOrDefault(node, "vectors_per_class", {});
+  const std::vector<int64_t> classlabels_ints =
+      GetAttributeIntsOrDefault(node, "classlabels_ints", {});
+  const ParamStrings classlabels_strings =
+      GetAttributeStringsOrDefault(node, "classlabels_strings", {});
+  const bool use_strings = !classlabels_strings.empty();
+  const bool has_ints = !classlabels_ints.empty();
+  EXT_ENFORCE_INVALID(use_strings != has_ints,
+                      "RunNode: SVMClassifier requires exactly one of 'classlabels_ints' or "
+                      "'classlabels_strings' to be set.");
+  onnx_kernels::kernel::SVMClassifier svm(rt.kernel_ctx());
+  std::pair<Tensor, Tensor> yz = DispatchSVMByDataType(x, "SVMClassifier", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return use_strings
+               ? svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                            vectors_per_class, classlabels_strings,
+                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree)
+               : svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                            vectors_per_class, classlabels_ints,
+                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree);
+  });
+  SetOutput(node, 0, std::move(yz.first), rt);
+  SetOutput(node, 1, std::move(yz.second), rt);
+}
 
-void Binarizer::Run(RuntimeContext &rt) { RunOp_Binarizer(*node_, rt); }
+void LinearRegressor::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const ParamFloats coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
+  const ParamFloats intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
+  const int64_t targets = GetAttributeIntOrDefault(node, "targets", 1);
+  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
+  onnx_kernels::kernel::LinearRegressor reg(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "LinearRegressor", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return reg.template operator()<T>(x, coefficients, intercepts, targets, post_transform);
+  });
+  SetOutput(node, 0, std::move(y), rt);
+}
 
-void Normalizer::Run(RuntimeContext &rt) { RunOp_Normalizer(*node_, rt); }
+void TreeEnsembleRegressor::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::vector<int64_t> nodes_treeids = GetAttributeIntsOrDefault(node, "nodes_treeids", {});
+  const std::vector<int64_t> nodes_nodeids = GetAttributeIntsOrDefault(node, "nodes_nodeids", {});
+  const std::vector<int64_t> nodes_featureids =
+      GetAttributeIntsOrDefault(node, "nodes_featureids", {});
+  const std::vector<float> nodes_values = GetAttributeFloatsOrDefault(node, "nodes_values", {});
+  const ParamStrings nodes_modes = GetAttributeStringsOrDefault(node, "nodes_modes", {});
+  const std::vector<int64_t> nodes_truenodeids =
+      GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
+  const std::vector<int64_t> nodes_falsenodeids =
+      GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
+  const std::vector<int64_t> nodes_missing =
+      GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
+  const std::vector<int64_t> target_treeids = GetAttributeIntsOrDefault(node, "target_treeids", {});
+  const std::vector<int64_t> target_nodeids = GetAttributeIntsOrDefault(node, "target_nodeids", {});
+  const std::vector<int64_t> target_ids = GetAttributeIntsOrDefault(node, "target_ids", {});
+  const std::vector<float> target_weights = GetAttributeFloatsOrDefault(node, "target_weights", {});
+  const int64_t n_targets = GetAttributeIntOrDefault(node, "n_targets", 1);
+  const std::string aggregate_function =
+      GetAttributeStringOrDefault(node, "aggregate_function", "SUM");
+  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
+  const std::vector<float> base_values = GetAttributeFloatsOrDefault(node, "base_values", {});
+  onnx_kernels::kernel::TreeEnsembleRegressor reg(
+      rt.kernel_ctx(), nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+      nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids, target_nodeids,
+      target_ids, target_weights);
+  Tensor y = DispatchTreeEnsembleClassicByDataType(x, "TreeEnsembleRegressor", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return reg.template operator()<T>(x, n_targets, aggregate_function, post_transform,
+                                      base_values);
+  });
+  SetOutput(node, 0, std::move(y), rt);
+}
 
-void Scaler::Run(RuntimeContext &rt) { RunOp_Scaler(*node_, rt); }
+void LinearClassifier::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 2);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const ParamFloats coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
+  const ParamFloats intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
+  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
+  const std::vector<int64_t> classlabels_ints =
+      GetAttributeIntsOrDefault(node, "classlabels_ints", {});
+  const ParamStrings classlabels_strings =
+      GetAttributeStringsOrDefault(node, "classlabels_strings", {});
+  const bool use_strings = !classlabels_strings.empty();
+  const bool has_ints = !classlabels_ints.empty();
+  EXT_ENFORCE_INVALID(use_strings != has_ints,
+                      "RunNode: LinearClassifier requires exactly one of 'classlabels_ints' or "
+                      "'classlabels_strings' to be set.");
+  onnx_kernels::kernel::LinearClassifier cls(rt.kernel_ctx());
+  std::pair<Tensor, Tensor> yz = DispatchSVMByDataType(x, "LinearClassifier", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return use_strings ? cls.template operator()<T>(x, coefficients, intercepts,
+                                                    classlabels_strings, post_transform)
+                       : cls.template operator()<T>(x, coefficients, intercepts, classlabels_ints,
+                                                    post_transform);
+  });
+  SetOutput(node, 0, std::move(yz.first), rt);
+  SetOutput(node, 1, std::move(yz.second), rt);
+}
 
-void ArrayFeatureExtractor::Run(RuntimeContext &rt) { RunOp_ArrayFeatureExtractor(*node_, rt); }
+void TreeEnsembleClassifier::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 2);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::vector<int64_t> nodes_treeids = GetAttributeIntsOrDefault(node, "nodes_treeids", {});
+  const std::vector<int64_t> nodes_nodeids = GetAttributeIntsOrDefault(node, "nodes_nodeids", {});
+  const std::vector<int64_t> nodes_featureids =
+      GetAttributeIntsOrDefault(node, "nodes_featureids", {});
+  const std::vector<float> nodes_values = GetAttributeFloatsOrDefault(node, "nodes_values", {});
+  const ParamStrings nodes_modes = GetAttributeStringsOrDefault(node, "nodes_modes", {});
+  const std::vector<int64_t> nodes_truenodeids =
+      GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
+  const std::vector<int64_t> nodes_falsenodeids =
+      GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
+  const std::vector<int64_t> nodes_missing =
+      GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
+  const std::vector<int64_t> class_treeids = GetAttributeIntsOrDefault(node, "class_treeids", {});
+  const std::vector<int64_t> class_nodeids = GetAttributeIntsOrDefault(node, "class_nodeids", {});
+  const std::vector<int64_t> class_ids = GetAttributeIntsOrDefault(node, "class_ids", {});
+  const std::vector<float> class_weights = GetAttributeFloatsOrDefault(node, "class_weights", {});
+  const std::vector<int64_t> classlabels_int64s =
+      GetAttributeIntsOrDefault(node, "classlabels_int64s", {});
+  const ParamStrings classlabels_strings =
+      GetAttributeStringsOrDefault(node, "classlabels_strings", {});
+  const std::vector<float> base_values = GetAttributeFloatsOrDefault(node, "base_values", {});
+  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
+  const bool use_strings = !classlabels_strings.empty();
+  const bool has_ints = !classlabels_int64s.empty();
+  EXT_ENFORCE_INVALID(use_strings != has_ints,
+                      "RunNode: TreeEnsembleClassifier requires exactly one of "
+                      "'classlabels_int64s' or 'classlabels_strings' to be set.");
+  onnx_kernels::kernel::TreeEnsembleClassifier cls(
+      rt.kernel_ctx(), nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+      nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids, class_nodeids, class_ids,
+      class_weights);
+  std::pair<Tensor, Tensor> yz =
+      DispatchTreeEnsembleClassicByDataType(x, "TreeEnsembleClassifier", [&](auto *tag) {
+        using T = std::remove_pointer_t<decltype(tag)>;
+        (void)tag;
+        return use_strings
+                   ? cls.template operator()<T>(x, classlabels_strings, base_values, post_transform)
+                   : cls.template operator()<T>(x, classlabels_int64s, base_values, post_transform);
+      });
+  SetOutput(node, 0, std::move(yz.first), rt);
+  SetOutput(node, 1, std::move(yz.second), rt);
+}
 
-void Imputer::Run(RuntimeContext &rt) { RunOp_Imputer(*node_, rt); }
+void Binarizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const float threshold = GetAttributeFloatOrDefault(node, "threshold", 0.0f);
+  onnx_kernels::kernel::Binarizer binarizer(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "Binarizer", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return binarizer.template operator()<T>(x, static_cast<T>(threshold));
+  });
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
 
-void CategoryMapper::Run(RuntimeContext &rt) { RunOp_CategoryMapper(*node_, rt); }
+void Normalizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string norm = GetAttributeStringOrDefault(node, "norm", "MAX");
+  onnx_kernels::kernel::Normalizer normalizer(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "Normalizer", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return normalizer.template operator()<T>(x, norm);
+  });
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
 
-void LabelEncoder::Run(RuntimeContext &rt) { RunOp_LabelEncoder(*node_, rt); }
+void Scaler::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::vector<float> offset = GetAttributeFloatsOrDefault(node, "offset", {});
+  const std::vector<float> scale = GetAttributeFloatsOrDefault(node, "scale", {});
+  onnx_kernels::kernel::Scaler scaler(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "Scaler", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return scaler.template operator()<T>(x, offset, scale);
+  });
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
 
-void OneHotEncoder::Run(RuntimeContext &rt) { RunOp_OneHotEncoder(*node_, rt); }
+void ArrayFeatureExtractor::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::ArrayFeatureExtractor afe(rt.kernel_ctx());
+  Tensor z = DispatchSVMByDataType(x, "ArrayFeatureExtractor", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return afe.template operator()<T>(x, y);
+  });
+  SetOutput(node, 0, std::move(z), rt.tensors());
+}
 
-void FeatureVectorizer::Run(RuntimeContext &rt) { RunOp_FeatureVectorizer(*node_, rt); }
+void Imputer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
 
-void TreeEnsemble::Run(RuntimeContext &rt) { RunOp_TreeEnsemble(*node_, rt); }
+  // Per the ``ai.onnx.ml::Imputer`` schema, exactly one of
+  // ``imputed_value_floats``/``replaced_value_float`` (for floating-point
+  // inputs) or ``imputed_value_int64s``/``replaced_value_int64`` (for
+  // integer inputs) must be defined. The runtime selects the
+  // appropriate pair based on the input element type.
+  const std::vector<float> imputed_value_floats =
+      GetAttributeFloatsOrDefault(node, "imputed_value_floats", {});
+  const std::vector<int64_t> imputed_value_int64s =
+      GetAttributeIntsOrDefault(node, "imputed_value_int64s", {});
+  const float replaced_value_float = GetAttributeFloatOrDefault(node, "replaced_value_float", 0.0f);
+  const int64_t replaced_value_int64 =
+      GetAttributeIntOrDefault(node, "replaced_value_int64", static_cast<int64_t>(0));
+
+  onnx_kernels::kernel::Imputer imputer(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "Imputer", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    if constexpr (std::is_floating_point_v<T>) {
+      std::vector<T> imputed_values(imputed_value_floats.begin(), imputed_value_floats.end());
+      return imputer.template operator()<T>(x, imputed_values,
+                                            static_cast<T>(replaced_value_float));
+    } else {
+      std::vector<T> imputed_values;
+      imputed_values.reserve(imputed_value_int64s.size());
+      for (int64_t value : imputed_value_int64s) {
+        imputed_values.push_back(static_cast<T>(value));
+      }
+      return imputer.template operator()<T>(x, imputed_values,
+                                            static_cast<T>(replaced_value_int64));
+    }
+  });
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
+
+void CategoryMapper::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+
+  // ``cats_strings`` and ``cats_int64s`` are both required per the
+  // ``ai.onnx.ml::CategoryMapper`` schema and must have the same length.
+  const ParamStrings cats_strings = GetAttributeStringsOrDefault(node, "cats_strings", {});
+  const std::vector<int64_t> cats_int64s = GetAttributeIntsOrDefault(node, "cats_int64s", {});
+  const std::string default_string =
+      GetAttributeStringOrDefault(node, "default_string", std::string("_Unused"));
+  const int64_t default_int64 =
+      GetAttributeIntOrDefault(node, "default_int64", static_cast<int64_t>(-1));
+
+  onnx_kernels::kernel::CategoryMapper category_mapper(rt.kernel_ctx());
+  Tensor y;
+  switch (x.data_type) {
+  case static_cast<int32_t>(DataType::STRING):
+    y = category_mapper.operator()<std::string, int64_t>(x, cats_strings, cats_int64s,
+                                                         default_int64);
+    break;
+  case static_cast<int32_t>(DataType::INT64):
+    y = category_mapper.operator()<int64_t, std::string>(x, cats_strings, cats_int64s,
+                                                         default_string);
+    break;
+  default:
+    EXT_THROW_INVALID("RunNode: CategoryMapper input X must have element type STRING or INT64.");
+  }
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
+
+void LabelEncoder::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+
+  // Identify the key source (exactly one of keys_int64s, keys_floats,
+  // keys_strings, keys_tensor must be present per the ONNX spec).
+  const AttributeProto *keys_int64s = FindAttribute(node, "keys_int64s");
+  const AttributeProto *keys_floats = FindAttribute(node, "keys_floats");
+  const AttributeProto *keys_strings = FindAttribute(node, "keys_strings");
+  const AttributeProto *keys_tensor = FindAttribute(node, "keys_tensor");
+  const int n_keys = (keys_int64s != nullptr) + (keys_floats != nullptr) +
+                     (keys_strings != nullptr) + (keys_tensor != nullptr);
+  EXT_ENFORCE_INVALID(n_keys == 1, "RunNode: LabelEncoder requires exactly one of 'keys_int64s', "
+                                   "'keys_floats', 'keys_strings' or 'keys_tensor' to be set.");
+
+  // Identify the value source.
+  const AttributeProto *values_int64s = FindAttribute(node, "values_int64s");
+  const AttributeProto *values_floats = FindAttribute(node, "values_floats");
+  const AttributeProto *values_strings = FindAttribute(node, "values_strings");
+  const AttributeProto *values_tensor = FindAttribute(node, "values_tensor");
+  const int n_values = (values_int64s != nullptr) + (values_floats != nullptr) +
+                       (values_strings != nullptr) + (values_tensor != nullptr);
+  EXT_ENFORCE_INVALID(n_values == 1,
+                      "RunNode: LabelEncoder requires exactly one of 'values_int64s', "
+                      "'values_floats', 'values_strings' or 'values_tensor' to be set.");
+
+  // Resolve KeyT. The tensor holder keeps the key data alive when the key
+  // source is a tensor attribute; spans reference either the holder or an
+  // attribute-sourced vector.
+  enum class KeyKind { Int64, Float, String };
+  KeyKind key_kind;
+  Tensor keys_tensor_holder; // alive until after label_encoder call
+  std::vector<int64_t> keys_i64_vec;
+  std::vector<float> keys_f32_vec;
+  std::vector<std::string> keys_str;
+  std::span<const int64_t> keys_i64;
+  std::span<const float> keys_f32;
+  if (keys_int64s != nullptr) {
+    key_kind = KeyKind::Int64;
+    for (int64_t v : keys_int64s->ints()) {
+      keys_i64_vec.push_back(v);
+    }
+    keys_i64 = keys_i64_vec;
+  } else if (keys_floats != nullptr) {
+    key_kind = KeyKind::Float;
+    for (float v : keys_floats->floats()) {
+      keys_f32_vec.push_back(v);
+    }
+    keys_f32 = keys_f32_vec;
+  } else if (keys_strings != nullptr) {
+    key_kind = KeyKind::String;
+    for (const auto &v : keys_strings->strings()) {
+      keys_str.push_back(v);
+    }
+  } else {
+    keys_tensor_holder = TensorFromProto(keys_tensor->t());
+    switch (keys_tensor_holder.data_type) {
+    case static_cast<int32_t>(DataType::INT64):
+      key_kind = KeyKind::Int64;
+      keys_i64 = TensorSpan<int64_t>(keys_tensor_holder);
+      break;
+    case static_cast<int32_t>(DataType::FLOAT):
+      key_kind = KeyKind::Float;
+      keys_f32 = TensorSpan<float>(keys_tensor_holder);
+      break;
+    case static_cast<int32_t>(DataType::STRING):
+      key_kind = KeyKind::String;
+      keys_str = keys_tensor_holder.AsStrings();
+      break;
+    default:
+      EXT_THROW_INVALID("RunNode: LabelEncoder 'keys_tensor' must have element type "
+                        "INT64, FLOAT or STRING.");
+    }
+  }
+
+  // Resolve ValueT and look up the (optional) default attribute.
+  // Same pattern: tensor holder keeps value data alive for the span.
+  enum class ValueKind { Int64, Float, Int16 };
+  ValueKind value_kind;
+  Tensor values_tensor_holder; // alive until after label_encoder call
+  std::vector<int64_t> values_i64_vec;
+  std::vector<float> values_f32_vec;
+  std::vector<int16_t> values_i16_vec;
+  std::span<const int64_t> values_i64;
+  std::span<const float> values_f32;
+  std::span<const int16_t> values_i16;
+  if (values_int64s != nullptr) {
+    value_kind = ValueKind::Int64;
+    for (int64_t v : values_int64s->ints()) {
+      values_i64_vec.push_back(v);
+    }
+    values_i64 = values_i64_vec;
+  } else if (values_floats != nullptr) {
+    value_kind = ValueKind::Float;
+    for (float v : values_floats->floats()) {
+      values_f32_vec.push_back(v);
+    }
+    values_f32 = values_f32_vec;
+  } else if (values_strings != nullptr) {
+    EXT_THROW_INVALID("RunNode: LabelEncoder with 'values_strings' is not supported "
+                      "by this kernel registration.");
+  } else {
+    values_tensor_holder = TensorFromProto(values_tensor->t());
+    switch (values_tensor_holder.data_type) {
+    case static_cast<int32_t>(DataType::INT64):
+      value_kind = ValueKind::Int64;
+      values_i64 = TensorSpan<int64_t>(values_tensor_holder);
+      break;
+    case static_cast<int32_t>(DataType::FLOAT):
+      value_kind = ValueKind::Float;
+      values_f32 = TensorSpan<float>(values_tensor_holder);
+      break;
+    case static_cast<int32_t>(DataType::INT16):
+      value_kind = ValueKind::Int16;
+      values_i16 = TensorSpan<int16_t>(values_tensor_holder);
+      break;
+    default:
+      EXT_THROW_INVALID("RunNode: LabelEncoder 'values_tensor' must have element "
+                        "type INT64, FLOAT or INT16.");
+    }
+  }
+
+  int64_t default_i64 = -1;
+  float default_f32 = 0.0f;
+  int16_t default_i16 = -1;
+  const AttributeProto *default_int64 = FindAttribute(node, "default_int64");
+  const AttributeProto *default_float = FindAttribute(node, "default_float");
+  const AttributeProto *default_tensor_attr = FindAttribute(node, "default_tensor");
+  if (default_int64 != nullptr) {
+    default_i64 = default_int64->i();
+  }
+  if (default_float != nullptr) {
+    default_f32 = default_float->f();
+  }
+  if (default_tensor_attr != nullptr) {
+    const Tensor dt = TensorFromProto(default_tensor_attr->t());
+    EXT_ENFORCE_INVALID(dt.element_count() == 1,
+                        "RunNode: LabelEncoder 'default_tensor' must contain exactly one element.");
+    switch (dt.data_type) {
+    case static_cast<int32_t>(DataType::INT64):
+      default_i64 = dt.AsInt64()[0];
+      break;
+    case static_cast<int32_t>(DataType::FLOAT):
+      default_f32 = dt.AsFloat()[0];
+      break;
+    case static_cast<int32_t>(DataType::INT16):
+      default_i16 = dt.AsInt16()[0];
+      break;
+    default:
+      EXT_THROW_INVALID("RunNode: LabelEncoder 'default_tensor' must have element "
+                        "type INT64, FLOAT or INT16.");
+    }
+  }
+
+  onnx_kernels::kernel::LabelEncoder label_encoder(rt.kernel_ctx());
+  Tensor out;
+  if (key_kind == KeyKind::Int64 && value_kind == ValueKind::Int64) {
+    out = label_encoder.operator()<int64_t, int64_t>(x, keys_i64, values_i64, default_i64);
+  } else if (key_kind == KeyKind::Int64 && value_kind == ValueKind::Float) {
+    out = label_encoder.operator()<int64_t, float>(x, keys_i64, values_f32, default_f32);
+  } else if (key_kind == KeyKind::Float && value_kind == ValueKind::Int64) {
+    out = label_encoder.operator()<float, int64_t>(x, keys_f32, values_i64, default_i64);
+  } else if (key_kind == KeyKind::Float && value_kind == ValueKind::Float) {
+    out = label_encoder.operator()<float, float>(x, keys_f32, values_f32, default_f32);
+  } else if (key_kind == KeyKind::String && value_kind == ValueKind::Int64) {
+    out = label_encoder.operator()<std::string, int64_t>(x, keys_str, values_i64, default_i64);
+  } else if (key_kind == KeyKind::String && value_kind == ValueKind::Int16) {
+    out = label_encoder.operator()<std::string, int16_t>(x, keys_str, values_i16, default_i16);
+  } else {
+    EXT_THROW_INVALID("RunNode: LabelEncoder key/value type combination is not supported.");
+  }
+  SetOutput(node, 0, std::move(out), rt.tensors());
+}
+
+void OneHotEncoder::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+
+  const AttributeProto *cats_int64s = FindAttribute(node, "cats_int64s");
+  const AttributeProto *cats_strings = FindAttribute(node, "cats_strings");
+  const int n_cats = (cats_int64s != nullptr) + (cats_strings != nullptr);
+  EXT_ENFORCE_INVALID(n_cats == 1, "RunNode: OneHotEncoder requires exactly one of 'cats_int64s' "
+                                   "or 'cats_strings' to be set.");
+
+  // The ``zeros`` attribute defaults to 1 per the ai.onnx.ml schema.
+  const bool zeros = GetAttributeIntOrDefault(node, "zeros", 1) != 0;
+
+  onnx_kernels::kernel::OneHotEncoder one_hot(rt.kernel_ctx());
+  Tensor y;
+  if (cats_int64s != nullptr) {
+    std::vector<int64_t> cats;
+    cats.reserve(cats_int64s->ints().size());
+    for (int64_t v : cats_int64s->ints()) {
+      cats.push_back(v);
+    }
+    y = DispatchSVMByDataType(x, "OneHotEncoder", [&](auto *tag) {
+      using T = std::remove_pointer_t<decltype(tag)>;
+      (void)tag;
+      return one_hot.template operator()<T>(x, cats, zeros);
+    });
+  } else {
+    ParamStrings cats;
+    cats.reserve(cats_strings->strings().size());
+    for (size_t i = 0; i < cats_strings->strings().size(); ++i) {
+      cats.push_back(cats_strings->strings()[i]);
+    }
+    EXT_ENFORCE_INVALID(!(x.data_type != static_cast<int32_t>(DataType::STRING)),
+                        "RunNode: OneHotEncoder with 'cats_strings' requires input X "
+                        "of element type STRING.");
+    y = one_hot(x, cats, zeros);
+  }
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
+
+void FeatureVectorizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  Tensors inputs;
+  inputs.reserve(node.input_size());
+  for (int i = 0; i < node.input_size(); ++i) {
+    inputs.push_back(GetInput(node, i, rt.tensors()));
+  }
+  const std::vector<int64_t> inputdimensions =
+      GetAttributeIntsOrDefault(node, "inputdimensions", {});
+  onnx_kernels::kernel::FeatureVectorizer fv(rt.kernel_ctx());
+  SetOutput(node, 0, fv(inputs, inputdimensions), rt.tensors());
+}
+
+void TreeEnsemble::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::vector<int64_t> tree_roots = GetAttributeIntsOrDefault(node, "tree_roots", {});
+  const std::vector<int64_t> nodes_featureids =
+      GetAttributeIntsOrDefault(node, "nodes_featureids", {});
+  const std::vector<int64_t> nodes_truenodeids =
+      GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
+  const std::vector<int64_t> nodes_falsenodeids =
+      GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
+  const std::vector<int64_t> nodes_trueleafs =
+      GetAttributeIntsOrDefault(node, "nodes_trueleafs", {});
+  const std::vector<int64_t> nodes_falseleafs =
+      GetAttributeIntsOrDefault(node, "nodes_falseleafs", {});
+  const std::vector<int64_t> nodes_missing =
+      GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
+  const std::vector<int64_t> leaf_targetids = GetAttributeIntsOrDefault(node, "leaf_targetids", {});
+  const int64_t n_targets = GetAttributeIntOrDefault(node, "n_targets", 1);
+  const int64_t aggregate_function = GetAttributeIntOrDefault(node, "aggregate_function", 1);
+  const int64_t post_transform = GetAttributeIntOrDefault(node, "post_transform", 0);
+  const Tensor nodes_splits = GetRequiredAttributeTensor(node, "nodes_splits");
+  const Tensor leaf_weights = GetRequiredAttributeTensor(node, "leaf_weights");
+  const Tensor nodes_modes_t = GetRequiredAttributeTensor(node, "nodes_modes");
+  const Tensor membership_values =
+      GetAttributeTensorOrEmpty(node, "membership_values", x.data_type);
+  EXT_ENFORCE_INVALID(!(nodes_modes_t.data_type != static_cast<int32_t>(DataType::UINT8)),
+                      "RunNode: TreeEnsemble attribute 'nodes_modes' must be a UINT8 tensor.");
+  EXT_ENFORCE_INVALID(
+      !(nodes_splits.data_type != x.data_type || leaf_weights.data_type != x.data_type),
+      "RunNode: TreeEnsemble attributes 'nodes_splits' and 'leaf_weights' must "
+      "have the same element type as input 'X'.");
+  EXT_ENFORCE_INVALID(
+      !(membership_values.element_count() > 0 && membership_values.data_type != x.data_type),
+      "RunNode: TreeEnsemble attribute 'membership_values' must have the same "
+      "element type as input 'X'.");
+  const std::span<const uint8_t> nodes_modes_span = TensorSpan<uint8_t>(nodes_modes_t);
+  // Materialize the tensor-typed attributes as ``double`` so the kernel
+  // owns its tree data (independent of the input element type).
+  const auto tensor_to_double = [](const Tensor &t) -> std::vector<double> {
+    if (t.element_count() == 0) {
+      return {};
+    }
+    switch (t.data_type) {
+    case static_cast<int32_t>(DataType::FLOAT): {
+      const std::span<const float> s = TensorSpan<float>(t);
+      return std::vector<double>(s.begin(), s.end());
+    }
+    case static_cast<int32_t>(DataType::DOUBLE): {
+      const std::span<const double> s = TensorSpan<double>(t);
+      return std::vector<double>(s.begin(), s.end());
+    }
+    default:
+      EXT_THROW_INVALID("RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");
+    }
+  };
+  const std::vector<double> nodes_splits_d = tensor_to_double(nodes_splits);
+  const std::vector<double> leaf_weights_d = tensor_to_double(leaf_weights);
+  const std::vector<double> membership_d = tensor_to_double(membership_values);
+  const std::vector<uint8_t> nodes_modes_vec(nodes_modes_span.begin(), nodes_modes_span.end());
+  onnx_kernels::kernel::TreeEnsemble tree_ens(
+      rt.kernel_ctx(), tree_roots, nodes_featureids, nodes_splits_d, nodes_modes_vec,
+      nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs, nodes_falseleafs, nodes_missing,
+      leaf_targetids, leaf_weights_d, membership_d);
+  Tensor y;
+  switch (x.data_type) {
+  case static_cast<int32_t>(DataType::FLOAT):
+    y = tree_ens.operator()<float>(x, n_targets, aggregate_function, post_transform);
+    break;
+  case static_cast<int32_t>(DataType::DOUBLE):
+    y = tree_ens.operator()<double>(x, n_targets, aggregate_function, post_transform);
+    break;
+  default:
+    EXT_THROW_INVALID("RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");
+  }
+  SetOutput(node, 0, std::move(y), rt);
+}
 
 } // namespace kernel
 

@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/reduction/include_reduction_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -61,7 +62,8 @@ void ValidateFloatOrDouble(const Tensor &t, const char *name) {
 template <typename T>
 void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t rank,
                    const Shape &data_shape, const Shape &is_reduced,
-                   const Shape &output_shape_noreduce, ReduceLogSumOp::Mode mode) {
+                   const Shape &output_shape_noreduce, ReduceLogSumOp::Mode mode,
+                   RawBufferAllocator *allocator) {
   const Shape out_strides = RowMajorStrides(output_shape_noreduce);
 
   int64_t reduced_count = 1;
@@ -110,7 +112,12 @@ void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t
 
   // kLogSumExp: use the max-shift trick.
   const T neg_inf = -std::numeric_limits<T>::infinity();
-  std::vector<T> max_vals(static_cast<size_t>(out_count), neg_inf);
+  detail::TemporaryTypedBuffer<T> max_vals_buf(static_cast<size_t>(out_count), allocator,
+                                               "kernel::ReduceLogSumOp max_vals");
+  T *max_vals = max_vals_buf.data();
+  for (int64_t i = 0; i < out_count; ++i) {
+    max_vals[static_cast<size_t>(i)] = neg_inf;
+  }
   Shape idx;
   idx.assign(static_cast<size_t>(rank), 0);
   for (int64_t i = 0; i < total; ++i) {
@@ -171,16 +178,16 @@ void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t
 }
 
 void LogSumReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
-                  ReduceLogSumOp::Mode mode, Tensor &output) {
+                  ReduceLogSumOp::Mode mode, Tensor &output, RawBufferAllocator *allocator) {
   const int64_t out_count = output.element_count();
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   const int64_t total = data.element_count();
   if (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
     LogSumReduceT<double>(data.AsDouble(), output.AsDouble(), out_count, total, rank, data.shape,
-                          is_reduced, output_shape_noreduce, mode);
+                          is_reduced, output_shape_noreduce, mode, allocator);
   } else {
     LogSumReduceT<float>(data.AsFloat(), output.AsFloat(), out_count, total, rank, data.shape,
-                         is_reduced, output_shape_noreduce, mode);
+                         is_reduced, output_shape_noreduce, mode, allocator);
   }
 }
 
@@ -263,7 +270,7 @@ void ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_wit
     return;
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
-  LogSumReduce(data, is_reduced, out_shape_noreduce, mode_, output);
+  LogSumReduce(data, is_reduced, out_shape_noreduce, mode_, output, ctx_.allocator);
 }
 
 Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
@@ -339,7 +346,7 @@ void ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool kee
     return;
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
-  LogSumReduce(data, is_reduced, out_shape_noreduce, mode_, output);
+  LogSumReduce(data, is_reduced, out_shape_noreduce, mode_, output, ctx_.allocator);
 }
 
 } // namespace kernel

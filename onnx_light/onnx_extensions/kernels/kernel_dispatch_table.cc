@@ -1629,7 +1629,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &rois = GetInput(node, 1, rt.tensors());
          onnx_kernels::kernel::MaxRoiPool::Attributes attrs;
-         attrs.pooled_shape = GetAttributeIntsOrDefault(node, "pooled_shape", {});
+         attrs.pooled_shape = GetAttributeShapeOrDefault(node, "pooled_shape", Shape{});
          attrs.spatial_scale = GetAttributeFloatOrDefault(node, "spatial_scale", 1.0f);
          onnx_kernels::kernel::MaxRoiPool k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, rois, attrs, &rt), rt);

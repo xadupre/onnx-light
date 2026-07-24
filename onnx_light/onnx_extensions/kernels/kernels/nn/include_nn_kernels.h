@@ -537,7 +537,7 @@ public:
   struct Attributes {
     /// ROI pool output shape (height, width). Required; must contain
     /// exactly two positive entries.
-    std::vector<int64_t> pooled_shape;
+    Shape pooled_shape;
     /// Multiplicative spatial scale factor (default 1.0).
     float spatial_scale = 1.0f;
   };

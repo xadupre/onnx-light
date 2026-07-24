@@ -13,10 +13,11 @@
  * :cpp:class:`core::compute::ComputeContext`.
  *
  * The builder does not use a :cpp:class:`GraphProto` as its working container.
- * Inputs, outputs and nodes are kept in plain vectors while initializers and
- * the nested local functions / subgraphs (each of which is itself a
- * :cpp:class:`GraphBuilder`) live in insertion-ordered maps. A proto is only
- * materialised on demand by :cpp:func:`BuildGraph` and the finalizers.
+ * Inputs, outputs, nodes, initializers and the nested local functions /
+ * subgraphs (each of which is itself a :cpp:class:`GraphBuilder`) are kept in
+ * plain vectors, in declaration order; each entry carries its own name so no
+ * side map is needed. A proto is only materialised on demand by
+ * :cpp:func:`BuildGraph` and the finalizers.
  *
  * A builder starts empty. Every value name it hands out (graph inputs,
  * initializers and node outputs) is recorded so a name can never be reused.
@@ -45,7 +46,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "onnx_core/builder/ordered_map.h"
 #include "onnx_core/compute/compute_context.h"
 #include "onnx_core/light_op_schema/light_op_schema.h"
 #include "onnx_core/shapes/shapes_context.h"
@@ -166,8 +166,8 @@ public:
                                              const std::string &location, int64_t offset,
                                              int64_t length);
 
-  /// Read-only access to the insertion-ordered ``name -> initializer`` map.
-  const OrderedMap<TensorProto> &Initializers() const noexcept { return initializers_; }
+  /// Read-only access to the graph initializers, in declaration order.
+  const std::vector<TensorProto> &Initializers() const noexcept { return initializers_; }
 
   // ── Inputs / outputs ─────────────────────────────────────────────────
 
@@ -232,42 +232,54 @@ public:
   // ── Local functions / subgraphs ──────────────────────────────────────
 
   /// Creates and returns a nested builder for a local function named ``name``.
-  /// The nested builder is stored in this builder's insertion-ordered local
-  /// function map; local functions are emitted into the produced
-  /// :cpp:class:`ModelProto`. Throws when ``name`` is already used.
+  /// The nested builder is appended to this builder's local function list;
+  /// local functions are emitted into the produced :cpp:class:`ModelProto`.
+  /// Throws when ``name`` is already used.
   GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain = "");
 
   /// Returns ``true`` when a local function named ``name`` exists.
-  bool HasLocalFunction(const std::string &name) const { return local_functions_.Contains(name); }
+  bool HasLocalFunction(const std::string &name) const {
+    return FindNamedBuilder(local_functions_, name) != nullptr;
+  }
 
   /// Returns the nested local-function builder named ``name``. Throws when it
   /// does not exist.
-  GraphBuilder &LocalFunction(const std::string &name) { return *local_functions_.At(name); }
+  GraphBuilder &LocalFunction(const std::string &name) {
+    return NamedBuilderOrThrow(local_functions_, name, "local function");
+  }
   const GraphBuilder &LocalFunction(const std::string &name) const {
-    return *local_functions_.At(name);
+    return NamedBuilderOrThrow(local_functions_, name, "local function");
   }
 
-  /// Read-only access to the insertion-ordered local function map.
-  const OrderedMap<std::unique_ptr<GraphBuilder>> &LocalFunctions() const noexcept {
+  /// Read-only access to the local function list, in declaration order.
+  const std::vector<std::unique_ptr<GraphBuilder>> &LocalFunctions() const noexcept {
     return local_functions_;
   }
 
   /// Creates and returns a nested builder for a subgraph named ``name`` (used
   /// as the body of a control-flow node such as :onnx:`If`, :onnx:`Loop` or
-  /// :onnx:`Scan`). The nested builder is stored in this builder's
-  /// insertion-ordered subgraph map. Throws when ``name`` is already used.
+  /// :onnx:`Scan`). The nested builder is appended to this builder's subgraph
+  /// list. Throws when ``name`` is already used.
   GraphBuilder &MakeSubgraph(const std::string &name);
 
   /// Returns ``true`` when a subgraph named ``name`` exists.
-  bool HasSubgraph(const std::string &name) const { return subgraphs_.Contains(name); }
+  bool HasSubgraph(const std::string &name) const {
+    return FindNamedBuilder(subgraphs_, name) != nullptr;
+  }
 
   /// Returns the nested subgraph builder named ``name``. Throws when it does
   /// not exist.
-  GraphBuilder &Subgraph(const std::string &name) { return *subgraphs_.At(name); }
-  const GraphBuilder &Subgraph(const std::string &name) const { return *subgraphs_.At(name); }
+  GraphBuilder &Subgraph(const std::string &name) {
+    return NamedBuilderOrThrow(subgraphs_, name, "subgraph");
+  }
+  const GraphBuilder &Subgraph(const std::string &name) const {
+    return NamedBuilderOrThrow(subgraphs_, name, "subgraph");
+  }
 
-  /// Read-only access to the insertion-ordered subgraph map.
-  const OrderedMap<std::unique_ptr<GraphBuilder>> &Subgraphs() const noexcept { return subgraphs_; }
+  /// Read-only access to the subgraph list, in declaration order.
+  const std::vector<std::unique_ptr<GraphBuilder>> &Subgraphs() const noexcept {
+    return subgraphs_;
+  }
 
   // ── Queries ──────────────────────────────────────────────────────────
 
@@ -329,15 +341,25 @@ private:
   // per-node peak memory).
   void Finalize(GraphProto &graph);
 
+  // Returns the nested builder named ``name`` in ``builders`` or nullptr.
+  static GraphBuilder *FindNamedBuilder(const std::vector<std::unique_ptr<GraphBuilder>> &builders,
+                                        const std::string &name);
+
+  // Returns the nested builder named ``name`` in ``builders`` or throws a
+  // BuilderError mentioning ``kind`` (e.g. "subgraph") when it is absent.
+  static GraphBuilder &
+  NamedBuilderOrThrow(const std::vector<std::unique_ptr<GraphBuilder>> &builders,
+                      const std::string &name, const char *kind);
+
   std::string name_;
   SchemaLookupFn schema_lookup_;
   ComputeContext compute_;
   std::vector<ValueInfoProto> inputs_;
   std::vector<ValueInfoProto> outputs_;
   std::vector<NodeProto> nodes_;
-  OrderedMap<TensorProto> initializers_;
-  OrderedMap<std::unique_ptr<GraphBuilder>> local_functions_;
-  OrderedMap<std::unique_ptr<GraphBuilder>> subgraphs_;
+  std::vector<TensorProto> initializers_;
+  std::vector<std::unique_ptr<GraphBuilder>> local_functions_;
+  std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;
   std::unordered_set<std::string> names_;
   std::unordered_map<std::string, int> opsets_;
   std::unordered_set<std::string> user_opsets_;

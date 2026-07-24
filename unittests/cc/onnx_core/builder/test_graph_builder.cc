@@ -92,8 +92,9 @@ TEST(GraphBuilder, ExternalInitializerIsRecorded) {
   builder.MakeExternalInitializer("w", core::symbolic::TensorType::kFloat, {4, 4}, "weights.bin", 0,
                                   64);
   EXPECT_TRUE(builder.HasName("w"));
-  ASSERT_EQ(builder.Initializers().Size(), 1u);
-  const TensorProto &init = builder.Initializers().At("w");
+  ASSERT_EQ(builder.Initializers().size(), 1u);
+  const TensorProto &init = builder.Initializers().front();
+  EXPECT_EQ(init.name().value(), "w");
   EXPECT_EQ(init.data_location(), TensorProto::DataLocation::EXTERNAL);
 }
 

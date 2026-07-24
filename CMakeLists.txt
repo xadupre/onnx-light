@@ -599,7 +599,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # bindings live in distinct extensions.
   nanobind_add_module(_onnxpyoptim STABLE_ABI ${ONNX_PY_OPTIM_SOURCES})
   target_include_directories(_onnxpyoptim PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxpyoptim PRIVATE lib_onnx_shape lib_onnx_op)
+  target_link_libraries(_onnxpyoptim PRIVATE lib_onnx_shape)
 
   # _onnxpykernels: kernel helpers (deterministic pseudo-random helpers backing
   # ``onnx_backend_test``). Links lib_onnx_kernels only and does not depend on

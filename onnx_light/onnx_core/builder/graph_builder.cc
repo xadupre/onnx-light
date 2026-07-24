@@ -82,7 +82,8 @@ void GraphBuilder::SeedShape(const std::string &name, SymTensor tensor) {
 const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
   const std::string tensor_name = tensor.name().value();
   const std::string &reserved = ReserveName(tensor_name);
-  TensorProto &added = initializers_.Set(tensor_name, tensor);
+  initializers_.push_back(tensor);
+  TensorProto &added = initializers_.back();
   SymTensor descriptor;
   if (SymTensorFromTensorProto(added, descriptor)) {
     SeedShape(reserved, std::move(descriptor));
@@ -292,8 +293,29 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
 
 // ── Local functions / subgraphs ─────────────────────────────────────────
 
+GraphBuilder *
+GraphBuilder::FindNamedBuilder(const std::vector<std::unique_ptr<GraphBuilder>> &builders,
+                               const std::string &name) {
+  for (const auto &builder : builders) {
+    if (builder->name() == name) {
+      return builder.get();
+    }
+  }
+  return nullptr;
+}
+
+GraphBuilder &
+GraphBuilder::NamedBuilderOrThrow(const std::vector<std::unique_ptr<GraphBuilder>> &builders,
+                                  const std::string &name, const char *kind) {
+  GraphBuilder *found = FindNamedBuilder(builders, name);
+  if (found == nullptr) {
+    throw BuilderError("GraphBuilder: no " + std::string(kind) + " named '" + name + "'.");
+  }
+  return *found;
+}
+
 GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std::string &domain) {
-  if (local_functions_.Contains(name)) {
+  if (FindNamedBuilder(local_functions_, name) != nullptr) {
     throw BuilderError("GraphBuilder: a local function named '" + name + "' already exists.");
   }
   ReserveName(name);
@@ -306,18 +328,18 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
     child->SetOpsetVersion(domain, 1);
   }
   GraphBuilder &ref = *child;
-  local_functions_.Set(name, std::move(child));
+  local_functions_.push_back(std::move(child));
   return ref;
 }
 
 GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name) {
-  if (subgraphs_.Contains(name)) {
+  if (FindNamedBuilder(subgraphs_, name) != nullptr) {
     throw BuilderError("GraphBuilder: a subgraph named '" + name + "' already exists.");
   }
   ReserveName(name);
   auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
   GraphBuilder &ref = *child;
-  subgraphs_.Set(name, std::move(child));
+  subgraphs_.push_back(std::move(child));
   return ref;
 }
 
@@ -335,8 +357,8 @@ GraphProto GraphBuilder::BuildGraph() const {
   for (const ValueInfoProto &input : inputs_) {
     graph.add_input(input);
   }
-  for (const auto &entry : initializers_) {
-    graph.add_initializer(entry.second);
+  for (const TensorProto &initializer : initializers_) {
+    graph.add_initializer(initializer);
   }
   for (const NodeProto &node : nodes_) {
     graph.add_node(node);
@@ -374,10 +396,9 @@ std::string GraphBuilder::ToString() const {
     os << "\n";
   }
 
-  os << "  initializers (" << initializers_.Size() << "):\n";
-  for (const auto &entry : initializers_) {
-    const TensorProto &tensor = entry.second;
-    os << "    " << entry.first << ": dtype=" << static_cast<int>(tensor.data_type())
+  os << "  initializers (" << initializers_.size() << "):\n";
+  for (const TensorProto &tensor : initializers_) {
+    os << "    " << tensor.name().value() << ": dtype=" << static_cast<int>(tensor.data_type())
        << ", shape=[";
     for (int i = 0; i < tensor.dims().size(); ++i) {
       if (i != 0) {
@@ -430,16 +451,16 @@ std::string GraphBuilder::ToString() const {
     os << "\n";
   }
 
-  if (local_functions_.Size() != 0) {
-    os << "  local functions (" << local_functions_.Size() << "):\n";
-    for (const auto &entry : local_functions_) {
-      os << "    " << entry.first << "\n";
+  if (!local_functions_.empty()) {
+    os << "  local functions (" << local_functions_.size() << "):\n";
+    for (const auto &function : local_functions_) {
+      os << "    " << function->name() << "\n";
     }
   }
-  if (subgraphs_.Size() != 0) {
-    os << "  subgraphs (" << subgraphs_.Size() << "):\n";
-    for (const auto &entry : subgraphs_) {
-      os << "    " << entry.first << "\n";
+  if (!subgraphs_.empty()) {
+    os << "  subgraphs (" << subgraphs_.size() << "):\n";
+    for (const auto &subgraph : subgraphs_) {
+      os << "    " << subgraph->name() << "\n";
     }
   }
 
@@ -474,14 +495,14 @@ ModelProto GraphBuilder::ToModel(int64_t ir_version) {
     model.add_opset(entry.first, entry.second);
   }
   *model.mutable_graph() = ToGraph();
-  for (const auto &entry : local_functions_) {
-    model.add_function(entry.second->ToFunction(entry.second->name()));
+  for (const auto &function : local_functions_) {
+    model.add_function(function->ToFunction(function->name()));
   }
   return model;
 }
 
 FunctionProto GraphBuilder::ToFunction(const std::string &domain) {
-  if (initializers_.Size() != 0) {
+  if (!initializers_.empty()) {
     throw BuilderError("GraphBuilder: a FunctionProto cannot carry initializers; remove them or "
                        "produce a model / graph instead.");
   }

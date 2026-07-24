@@ -28,10 +28,31 @@ The module is exposed as ``onnx_light.onnx_core.graph_builder``.
 
 from __future__ import annotations
 
+from ..onnx_op import GetAllOnnxOpSchemasWithHistory
 from ..onnx_py._onnxpyoptim import builder as _C  # type: ignore[attr-defined]
 
-GraphBuilder = _C.GraphBuilder
 
-__all__ = [
-    "GraphBuilder",
-]
+def _default_schema_lookup(op_type: str) -> list:
+    """Returns the built-in ONNX schema history for ``op_type``.
+
+    The schemas live in the ``onnx_op`` extension, which the ``_onnxpyoptim``
+    extension does not link against; this callable bridges the two so the
+    builder can resolve opsets and validate nodes without that link.
+    """
+    return GetAllOnnxOpSchemasWithHistory(op_type, False)
+
+
+class GraphBuilder(_C.GraphBuilder):
+    """Incrementally builds an ONNX graph, model or function.
+
+    See :mod:`onnx_light.onnx_core.graph_builder` for details. By default the
+    builder validates nodes and resolves opsets using the built-in ONNX
+    operator schemas; pass ``schema_lookup=None`` to disable this, or a custom
+    ``op_type -> list[LightOpSchema]`` callable to use different schemas.
+    """
+
+    def __init__(self, name: str = "graph", schema_lookup=_default_schema_lookup) -> None:
+        super().__init__(name, schema_lookup)
+
+
+__all__ = ["GraphBuilder"]

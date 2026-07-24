@@ -9,11 +9,11 @@
 #include "onnx_core/symbolic/sym_sequence.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
-#include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 #include <algorithm>
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
+#include <nanobind/stl/function.h>
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
@@ -1881,22 +1881,27 @@ void AddOnnxPyBuilder(nb::module_ &m) {
     }
   });
 
-  // Default schema provider backed by the built-in ONNX operator schemas.
-  GraphBuilder::SchemaLookupFn default_schema_lookup = [](const std::string &op_type) {
-    return onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, /*init_doc=*/false);
-  };
-
+  // The built-in ONNX operator schemas live in the ``onnx_op`` library, which
+  // this extension deliberately does not link against. When the caller wants
+  // schema-driven opset resolution and node validation, it injects a schema
+  // provider (see ``onnx_core/graph_builder.py``, which wires the schemas
+  // exposed by the ``_onnxpyprotoop`` extension).
   nb::class_<GraphBuilder>(builder_mod, "GraphBuilder",
                            "Incrementally builds an ONNX graph, model or function.")
       .def(
           "__init__",
-          [default_schema_lookup](GraphBuilder *self, const std::string &name, bool use_schemas) {
-            new (self) GraphBuilder(name, use_schemas ? default_schema_lookup
-                                                      : GraphBuilder::SchemaLookupFn{});
+          [](GraphBuilder *self, const std::string &name, nb::object schema_lookup) {
+            if (schema_lookup.is_none()) {
+              new (self) GraphBuilder(name, GraphBuilder::SchemaLookupFn{});
+              return;
+            }
+            auto fn = nb::cast<GraphBuilder::SchemaLookupFn>(schema_lookup);
+            new (self) GraphBuilder(name, std::move(fn));
           },
-          nb::arg("name") = "graph", nb::arg("use_schemas") = true,
-          "Constructs an empty builder. When ``use_schemas`` is True the built-in ONNX "
-          "operator schemas are used to resolve opsets and validate nodes.")
+          nb::arg("name") = "graph", nb::arg("schema_lookup") = nb::none(),
+          "Constructs an empty builder. ``schema_lookup`` is an optional callable "
+          "``op_type -> list[LightOpSchema]`` used to resolve opsets and validate nodes; "
+          "when omitted no schema-based validation is performed.")
       .def("set_opset_version", &GraphBuilder::SetOpsetVersion, nb::arg("domain"),
            nb::arg("version"),
            "Records the opset version to use for ``domain`` (empty string for the default "

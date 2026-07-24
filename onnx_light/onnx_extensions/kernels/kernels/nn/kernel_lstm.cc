@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -74,7 +75,12 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
     const int64_t batch_size = x_in.shape[0];
     const int64_t seq_length = x_in.shape[1];
     const int64_t input_size = x_in.shape[2];
-    std::vector<float> x_data(static_cast<size_t>(batch_size * seq_length * input_size));
+    const size_t x_n_bytes =
+        static_cast<size_t>(batch_size * seq_length * input_size) * sizeof(float);
+    x_storage = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
+                                 onnx_kernels::Shape{seq_length, batch_size, input_size}, x_n_bytes,
+                                 allocator);
+    float *x_data = x_storage.AsFloat();
     const float *src = x_in.AsFloat();
     for (int64_t n = 0; n < batch_size; ++n) {
       for (int64_t s = 0; s < seq_length; ++s) {
@@ -84,18 +90,18 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
         }
       }
     }
-    x_storage =
-        Tensor::FromFloat("", {seq_length, batch_size, input_size}, std::move(x_data), allocator);
     x_p = &x_storage;
 
     auto reshape_initial_state = [allocator](const Tensor &t, const char *role) {
       EXT_ENFORCE_INVALID(
           t.shape.size() == 3u && t.shape[1] == 1, "kernel::LSTM: ", role,
           " must have shape [batch_size, num_directions=1, hidden_size] for layout=1.");
-      return Tensor::FromFloat(
-          "", {1, t.shape[0], t.shape[2]},
-          std::vector<float>(t.AsFloat(), t.AsFloat() + (t.size_bytes() / sizeof(float))),
-          allocator);
+      const size_t n_bytes = t.size_bytes();
+      Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
+                                    onnx_kernels::Shape{1, t.shape[0], t.shape[2]}, n_bytes,
+                                    allocator);
+      std::memcpy(out.mutable_bytes(), t.AsFloat(), n_bytes);
+      return out;
     };
     if (!(initial_h_in.shape.empty() && initial_h_in.size_bytes() == 0)) {
       initial_h_storage = reshape_initial_state(initial_h_in, "initial_h");
@@ -329,7 +335,10 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
     // Permute Y from [seq, 1, batch, hidden] to [batch, seq, 1, hidden]
     // and reshape Y_h from [1, batch, hidden] to [batch, 1, hidden]
     // (num_directions == 1 makes the Y_h transform a pure reshape).
-    std::vector<float> y_perm(static_cast<size_t>(seq_length * batch_size * hidden_size));
+    Tensor y_perm_t = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
+                                       onnx_kernels::Shape{batch_size, seq_length, 1, hidden_size},
+                                       y_n_bytes, allocator);
+    float *y_perm = y_perm_t.AsFloat();
     const float *y_src = y.AsFloat();
     for (int64_t s = 0; s < seq_length; ++s) {
       for (int64_t n = 0; n < batch_size; ++n) {
@@ -339,12 +348,13 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
         }
       }
     }
-    y = Tensor::FromFloat("", {batch_size, seq_length, 1, hidden_size}, std::move(y_perm),
-                          allocator);
-    y_h = Tensor::FromFloat(
-        "", {batch_size, 1, hidden_size},
-        std::vector<float>(y_h.AsFloat(), y_h.AsFloat() + (y_h.size_bytes() / sizeof(float))),
-        allocator);
+    y = std::move(y_perm_t);
+    const size_t y_h_reshape_bytes = static_cast<size_t>(batch_size * hidden_size) * sizeof(float);
+    Tensor y_h_reshape = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
+                                          onnx_kernels::Shape{batch_size, 1, hidden_size},
+                                          y_h_reshape_bytes, allocator);
+    std::memcpy(y_h_reshape.mutable_bytes(), y_h.AsFloat(), y_h_reshape_bytes);
+    y_h = std::move(y_h_reshape);
   }
 
   return std::pair<Tensor, Tensor>(std::move(y), std::move(y_h));

@@ -68,10 +68,10 @@ class RuntimeSession {
 public:
   /**
    * Builds a session over an empty default :cpp:class:`ExecutionPlan` owned by
-   * the session. The plan carries no node, so :cpp:func:`Run` is a no-op until
-   * a real plan is supplied through the other constructor; this default is
-   * provided so a session can be default-constructed (and, e.g., exposed to the
-   * Python binding without a plan argument).
+   * the session. The plan carries no node, so :cpp:func:`Run` is a no-op; to
+   * execute a graph, construct a session with the plan-taking constructor
+   * instead. This default lets a session be default-constructed (and, e.g.,
+   * exposed to the Python binding without a plan argument).
    */
   RuntimeSession();
 

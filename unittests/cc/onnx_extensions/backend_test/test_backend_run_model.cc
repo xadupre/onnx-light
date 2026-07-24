@@ -242,6 +242,12 @@ TEST(BackendRunModel, Hardmax) { RunBackendCasesFor("Hardmax"); }
 TEST(BackendRunModel, LogSoftmax) { RunBackendCasesFor("LogSoftmax"); }
 TEST(BackendRunModel, Flatten) { RunBackendCasesFor("Flatten"); }
 TEST(BackendRunModel, Softmax) { RunBackendCasesFor("Softmax"); }
+TEST(BackendRunModel, SoftmaxCrossEntropyLoss) {
+  RunBackendCasesFor("SoftmaxCrossEntropyLoss");
+}
+TEST(BackendRunModel, NegativeLogLikelihoodLoss) {
+  RunBackendCasesFor("NegativeLogLikelihoodLoss");
+}
 TEST(BackendRunModel, HardSigmoid) { RunBackendCasesFor("HardSigmoid"); }
 TEST(BackendRunModel, Selu) { RunBackendCasesFor("Selu"); }
 TEST(BackendRunModel, Shrink) { RunBackendCasesFor("Shrink"); }

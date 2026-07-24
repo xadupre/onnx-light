@@ -73,6 +73,28 @@ TEST(GraphBuilder, MakeNodeResolvesOpsetAndInfersShape) {
   EXPECT_EQ(z.Shape().Rank(), 2u);
 }
 
+TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  const std::vector<std::string> shape_out = builder.MakeNode("Shape", {"x"});
+  ASSERT_EQ(shape_out.size(), 1u);
+
+  // The value / node tags ("shape_tag") are kept up to date as nodes are added:
+  // the output of Shape carries the "shape" tag right after MakeNode.
+  const auto &value_tags = builder.Compute().ValueTags();
+  auto it = value_tags.find(shape_out[0]);
+  ASSERT_NE(it, value_tags.end());
+  EXPECT_EQ(it->second, "shape");
+
+  // In-place reuse is also computed incrementally: one entry per node so far.
+  EXPECT_EQ(builder.Compute().Size(), builder.Nodes().size());
+
+  const std::vector<std::string> abs_out = builder.MakeNode("Abs", {"x"});
+  ASSERT_EQ(abs_out.size(), 1u);
+  EXPECT_EQ(builder.Compute().Size(), builder.Nodes().size());
+}
+
 TEST(GraphBuilder, MakeNodeUsesProvidedOutputName) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

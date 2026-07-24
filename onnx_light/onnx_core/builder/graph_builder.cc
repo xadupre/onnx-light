@@ -299,6 +299,11 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
     compute_.Shapes().ComputeShapeNode(stored);
   }
 
+  // Keep the semantic value / node tags ("shape_tag") and the in-place buffer
+  // reuse up to date with the graph built so far. Release-after lifetime is
+  // deferred to the finalizers (see Finalize).
+  RefreshAnnotations();
+
   return resolved_outputs;
 }
 
@@ -481,6 +486,18 @@ std::string GraphBuilder::ToString() const {
 }
 
 // ── Finalization ───────────────────────────────────────────────────────
+
+void GraphBuilder::RefreshAnnotations() {
+  // Value / node tags and in-place reuse both need the whole graph built so
+  // far, so recompute them over the current content. This keeps the builder's
+  // live analysis state (queried through Compute()) consistent as nodes are
+  // added; the finalizers recompute the same information (plus the release-after
+  // lifetime and peak memory) over the complete graph before writing it out.
+  const GraphProto graph = BuildGraph();
+  const auto tags = compute_.ComputeValueAndNodeTags(graph);
+  compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
+                                    tags.first);
+}
 
 void GraphBuilder::Finalize(GraphProto &graph) {
   const auto tags = compute_.ComputeValueAndNodeTags(graph);

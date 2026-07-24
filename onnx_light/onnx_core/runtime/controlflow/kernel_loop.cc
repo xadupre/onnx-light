@@ -315,17 +315,21 @@ Tensors Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond
 
 Tensors Loop::operator()(RuntimeContext &rt, const GraphProto &body, const Tensor &M,
                          const Tensor &cond, const Tensors &v_initial) const {
+  // Build a single session over the body once and reuse it for every
+  // iteration instead of re-resolving the body's kernels on every call; the
+  // body itself is only needed here, not kept around afterwards.
+  SubgraphSession session(rt, body);
+  return (*this)(rt, body, session, M, cond, v_initial);
+}
+
+Tensors Loop::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSession &session,
+                         const Tensor &M, const Tensor &cond, const Tensors &v_initial) const {
   const std::size_t n = v_initial.size();
   EXT_ENFORCE_INVALID(!(body.input_size() < static_cast<int>(2 + n)),
                       "kernel::Loop: body graph does not declare enough inputs.");
   EXT_ENFORCE_INVALID(!(body.output_size() < static_cast<int>(1 + n)),
                       "kernel::Loop: body graph does not declare enough outputs.");
   const std::size_t k = static_cast<std::size_t>(body.output_size()) - 1 - n;
-
-  // Build a single session over the body once and reuse it for every
-  // iteration instead of re-resolving the body's kernels on every call; the
-  // body itself is only needed here, not kept around afterwards.
-  SubgraphSession session(rt, body);
 
   auto run_body = [&](int64_t iter, bool cond_in, const Tensors &state) -> Tensors {
     std::vector<std::pair<std::string, Tensor>> bindings;

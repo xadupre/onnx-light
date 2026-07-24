@@ -43,31 +43,6 @@ bool ParseBoolScalar(const Tensor &t, const std::string &where) {
 Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator = nullptr);
 
 /**
- * Seeds ``rt.tensors()`` with every initializer of ``graph`` (names the
- * caller already provided in ``rt`` are left as-is) and then executes
- * ``graph.node()`` by building (or reusing) the graph's cached
- * :cpp:class:`ExecutionPlan` and driving it through a fresh
- * :cpp:class:`RuntimeSession`. Every node list the runtime executes goes
- * through this same kernel-resolution / release-schedule machinery so no
- * call site drives node dispatch by hand.
- */
-void RunGraphNodesViaSession(const GraphProto &graph, RuntimeContext &rt) {
-  const auto &inits = graph.initializer();
-  for (size_t i = 0; i < inits.size(); ++i) {
-    const TensorProto &tp = inits[i];
-    const std::string init_name = tp.name();
-    // Only insert if the caller has not already provided a value for this
-    // name (i.e. runtime overrides of initializers are respected).
-    if (!rt.Has(init_name)) {
-      rt.Set(init_name, TensorFromProto(tp), RuntimeEventKind::kInitializer);
-    }
-  }
-  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
-  RuntimeSession session(plan);
-  session.Run(rt);
-}
-
-/**
  * Creates a deep copy of a tensor before it leaves a child RuntimeContext.
  *
  * @param tensor Tensor to clone.
@@ -228,7 +203,13 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 }
 
 SubgraphSession::SubgraphSession(RuntimeContext &rt, const GraphProto &graph)
-    : plan_(rt.GetExecutionPlan(graph)), session_(plan_) {
+    : plan_(graph), session_(plan_) {
+  // ``rt`` is intentionally unused: the plan is now built directly from
+  // ``graph`` rather than through ``rt.GetExecutionPlan``, so construction no
+  // longer depends on it (see the class-level doc comment). Kept as a
+  // parameter for API symmetry with ``Run``/``RunChild`` and because most
+  // call sites naturally have an ``rt`` in scope at the construction site.
+  (void)rt;
   const auto &inits = graph.initializer();
   initializers_.reserve(inits.size());
   for (size_t i = 0; i < inits.size(); ++i) {
@@ -244,8 +225,10 @@ SubgraphSession::SubgraphSession(RuntimeContext &rt, const GraphProto &graph)
   }
 }
 
-Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> bindings,
-                             RuntimeContext &rt, const std::string &attr_name) {
+RuntimeContext
+SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
+                          std::vector<std::pair<std::string, Sequence>> sequence_bindings,
+                          RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child = rt.MakeSubgraphContext(attr_name);
   for (const auto &kv : initializers_) {
     if (!child.Has(kv.first)) {
@@ -255,6 +238,9 @@ Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> binding
   for (auto &kv : bindings) {
     child.Put(kv.first, std::move(kv.second), RuntimeEventKind::kInput);
   }
+  for (auto &kv : sequence_bindings) {
+    child.PutSequence(kv.first, std::move(kv.second));
+  }
   session_.Run(child);
 
   if (rt.events_enabled()) {
@@ -262,6 +248,17 @@ Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> binding
       rt.events().push_back(std::move(ev));
     }
   }
+  return child;
+}
+
+RuntimeContext SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
+                                         RuntimeContext &rt, const std::string &attr_name) {
+  return RunChild(std::move(bindings), {}, rt, attr_name);
+}
+
+Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> bindings,
+                             RuntimeContext &rt, const std::string &attr_name) {
+  RuntimeContext child = RunChild(std::move(bindings), rt, attr_name);
 
   Tensors outputs;
   outputs.reserve(output_names_.size());
@@ -291,7 +288,8 @@ void PropagateOutputsToCaller(const NodeProto &node, Tensors &&outputs, RuntimeC
   }
 }
 
-void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
+void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_session,
+               SubgraphSession &else_session) {
   RequireInputCount(node, 1);
 
   const Tensor &cond = GetInput(node, 0, rt.tensors());
@@ -310,15 +308,12 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   const bool taken = cond.bytes()[0] != 0;
   const GraphProto &branch = taken ? then_branch : else_branch;
   const std::string branch_attr = taken ? "then_branch" : "else_branch";
-
-  RuntimeContext child = rt.MakeSubgraphContext(branch_attr);
-  RunGraphNodesViaSession(branch, child);
-
-  if (rt.events_enabled()) {
-    for (auto &ev : child.events()) {
-      rt.events().push_back(std::move(ev));
-    }
-  }
+  // The selected branch's kernels were resolved once (in the NodeKernelFn
+  // factory) and are cached in ``then_session`` / ``else_session``; only the
+  // per-call child context (seeded with the caller's current tensors /
+  // sequences) is rebuilt here.
+  SubgraphSession &session = taken ? then_session : else_session;
+  RuntimeContext child = session.RunChild({}, rt, branch_attr);
 
   for (int i = 0; i < branch.output_size(); ++i) {
     const std::string out_name = branch.output()[i].name();
@@ -349,7 +344,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
 void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, const Tensor &m_tensor,
                               const Tensor &cond_tensor, const std::vector<bool> &is_seq_state,
                               Tensors tensor_state, Sequences sequence_state, std::size_t k,
-                              RuntimeContext &rt) {
+                              RuntimeContext &rt, SubgraphSession &body_session) {
   const std::size_t n = is_seq_state.size();
 
   int64_t max_trip = std::numeric_limits<int64_t>::max();
@@ -365,31 +360,27 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
   std::vector<Tensors> scan_values(k);
   int64_t trip_count = 0;
   for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
-    RuntimeContext child = rt.MakeSubgraphContext("body");
-
     const std::string &iter_name = body.input(0).name();
     const std::string &cond_name = body.input(1).name();
-    child.Put(iter_name, MakeInt64Scalar(iter_name, iter, rt.allocator()),
-              RuntimeEventKind::kInput);
-    child.Put(cond_name, MakeBoolScalar(cond_name, cond_value, rt.allocator()),
-              RuntimeEventKind::kInput);
+    std::vector<std::pair<std::string, Tensor>> tensor_bindings;
+    std::vector<std::pair<std::string, Sequence>> sequence_bindings;
+    tensor_bindings.emplace_back(iter_name, MakeInt64Scalar(iter_name, iter, rt.allocator()));
+    tensor_bindings.emplace_back(cond_name, MakeBoolScalar(cond_name, cond_value, rt.allocator()));
     for (std::size_t i = 0; i < n; ++i) {
       const std::string &bname = body.input(static_cast<int>(2 + i)).name();
       if (is_seq_state[i]) {
-        child.PutSequence(bname, sequence_state[i]);
+        sequence_bindings.emplace_back(bname, sequence_state[i]);
       } else {
         Tensor t = tensor_state[i];
         t.name = bname;
-        child.Put(bname, std::move(t), RuntimeEventKind::kInput);
+        tensor_bindings.emplace_back(bname, std::move(t));
       }
     }
-    RunGraphNodesViaSession(body, child);
-
-    if (rt.events_enabled()) {
-      for (auto &ev : child.events()) {
-        rt.events().push_back(std::move(ev));
-      }
-    }
+    // The body's kernels were resolved once (in the NodeKernelFn factory)
+    // and are cached in ``body_session``; only the per-iteration child
+    // context is rebuilt here.
+    RuntimeContext child =
+        body_session.RunChild(std::move(tensor_bindings), std::move(sequence_bindings), rt, "body");
 
     const std::string &cond_out_name = body.output(0).name();
     auto cond_it = child.tensors().find(cond_out_name);
@@ -496,7 +487,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
   }
 }
 
-void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
+void RunLoopNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &body_session) {
   EXT_ENFORCE_INVALID(!(node.input_size() < 2),
                       "RunNode: op 'Loop' expects at least 2 inputs (M, cond).");
   const GraphProto &body = GetRequiredGraphAttribute(node, "body");
@@ -544,18 +535,19 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
 
   if (any_sequence_state) {
     RunLoopWithSequenceState(node, body, m_tensor, cond_tensor, is_seq_state,
-                             std::move(tensor_state), std::move(sequence_state), k, rt);
+                             std::move(tensor_state), std::move(sequence_state), k, rt,
+                             body_session);
     return;
   }
 
   Tensors v_initial = std::move(tensor_state);
 
   Loop loop_kernel(rt.kernel_ctx());
-  Tensors outputs = loop_kernel(rt, body, m_tensor, cond_tensor, v_initial);
+  Tensors outputs = loop_kernel(rt, body, body_session, m_tensor, cond_tensor, v_initial);
   PropagateOutputsToCaller(node, std::move(outputs), rt);
 }
 
-void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
+void RunScanNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &body_session) {
   const GraphProto &body = GetRequiredGraphAttribute(node, "body");
   const int64_t num_scan_inputs = GetAttributeIntOrDefault(node, "num_scan_inputs", 1);
   EXT_ENFORCE_INVALID(!(num_scan_inputs <= 0),
@@ -635,8 +627,9 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   // shape and forwarding inputs / attributes to the kernel.
   Scan scan_kernel(rt.kernel_ctx());
   if (!is_scan8) {
-    Tensors outputs = scan_kernel(rt, body, initial_state, scan_inputs, scan_input_axes,
-                                  scan_input_directions, scan_output_axes, scan_output_directions);
+    Tensors outputs =
+        scan_kernel(rt, body, body_session, initial_state, scan_inputs, scan_input_axes,
+                    scan_input_directions, scan_output_axes, scan_output_directions);
     PropagateOutputsToCaller(node, std::move(outputs), rt);
     return;
   }
@@ -682,9 +675,10 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
     for (size_t i = 0; i < m; ++i) {
       batch_scan.push_back(SliceTensorAlongAxis(scan_inputs[i], 0, b, "Scan"));
     }
-    Tensors batch_outputs = scan_kernel(rt, body, batch_state, batch_scan, /*scan_input_axes=*/{},
-                                        scan_input_directions, /*scan_output_axes=*/{},
-                                        /*scan_output_directions=*/{});
+    Tensors batch_outputs =
+        scan_kernel(rt, body, body_session, batch_state, batch_scan, /*scan_input_axes=*/{},
+                    scan_input_directions, /*scan_output_axes=*/{},
+                    /*scan_output_directions=*/{});
     EXT_ENFORCE_INVALID(
         batch_outputs.size() == n + k,
         "RunNode: Scan opset 8 inner Scan-9 call produced an unexpected output count.");
@@ -700,7 +694,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   PropagateOutputsToCaller(node, std::move(outputs), rt);
 }
 
-void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
+void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &body_session) {
   // ai.onnx::SequenceMap (since opset 17): applies a sub-graph (``body``)
   // to each element of the first input sequence. Additional inputs are
   // either further sequences (which must have the same length as the
@@ -755,9 +749,9 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
     body_outputs_per_iter[k].reserve(n);
   }
 
-  // Build a single session over the body once and reuse it for every
-  // iteration instead of re-resolving the body's kernels on every call.
-  SubgraphSession body_session(rt, body);
+  // The body's kernels were resolved once (in the NodeKernelFn factory) and
+  // are cached in ``body_session``; reused here for every iteration and
+  // across repeated invocations of this node.
 
   for (std::size_t i = 0; i < n; ++i) {
     std::vector<std::pair<std::string, Tensor>> bindings;
@@ -979,23 +973,52 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
   }
 
   if (domain == kDefaultOnnxDomain && op_type == "If") {
-    return [](const NodeProto &, RuntimeContext &) {
-      return std::make_unique<ResolvedKernel>(RunIfNode);
+    return [](const NodeProto &node, RuntimeContext &rt) {
+      const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
+      const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");
+      // Resolving the branches' kernels is the expensive part of dispatching
+      // an ``If`` node, so build both branch sessions once here (during
+      // kernel initialization) and capture them in the returned kernel so
+      // every subsequent invocation of this node reuses them instead of
+      // re-resolving the selected branch's kernels from scratch.
+      auto then_session = std::make_shared<SubgraphSession>(rt, then_branch);
+      auto else_session = std::make_shared<SubgraphSession>(rt, else_branch);
+      return std::make_unique<ResolvedKernel>(
+          [then_session, else_session](const NodeProto &n, RuntimeContext &r) {
+            RunIfNode(n, r, *then_session, *else_session);
+          });
     };
   }
   if (domain == kDefaultOnnxDomain && op_type == "Loop") {
-    return [](const NodeProto &, RuntimeContext &) {
-      return std::make_unique<ResolvedKernel>(RunLoopNode);
+    return [](const NodeProto &node, RuntimeContext &rt) {
+      const GraphProto &body = GetRequiredGraphAttribute(node, "body");
+      // Built once here so the body's kernels are resolved a single time and
+      // reused across every iteration of every invocation of this node.
+      auto body_session = std::make_shared<SubgraphSession>(rt, body);
+      return std::make_unique<ResolvedKernel>(
+          [body_session](const NodeProto &n, RuntimeContext &r) {
+            RunLoopNode(n, r, *body_session);
+          });
     };
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
-    return [](const NodeProto &, RuntimeContext &) {
-      return std::make_unique<ResolvedKernel>(RunScanNode);
+    return [](const NodeProto &node, RuntimeContext &rt) {
+      const GraphProto &body = GetRequiredGraphAttribute(node, "body");
+      auto body_session = std::make_shared<SubgraphSession>(rt, body);
+      return std::make_unique<ResolvedKernel>(
+          [body_session](const NodeProto &n, RuntimeContext &r) {
+            RunScanNode(n, r, *body_session);
+          });
     };
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
-    return [](const NodeProto &, RuntimeContext &) {
-      return std::make_unique<ResolvedKernel>(RunSequenceMapNode);
+    return [](const NodeProto &node, RuntimeContext &rt) {
+      const GraphProto &body = GetRequiredGraphAttribute(node, "body");
+      auto body_session = std::make_shared<SubgraphSession>(rt, body);
+      return std::make_unique<ResolvedKernel>(
+          [body_session](const NodeProto &n, RuntimeContext &r) {
+            RunSequenceMapNode(n, r, *body_session);
+          });
     };
   }
 

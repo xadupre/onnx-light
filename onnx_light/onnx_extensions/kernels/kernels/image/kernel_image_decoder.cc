@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/image/include_image_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 
@@ -22,7 +23,6 @@
 #if defined(_WIN32)
 #include <windows.h>
 #elif defined(__APPLE__) || defined(__linux__) || defined(__unix__)
-#include "onnx_core/runtime/node_helpers.h"
 #include <dlfcn.h>
 #endif
 

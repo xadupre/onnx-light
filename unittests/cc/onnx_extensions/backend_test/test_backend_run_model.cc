@@ -495,7 +495,7 @@ TEST(BackendRunModel, LinearAttention) {
 TEST(BackendRunModel, FlexAttention) {
   // The dispatch-table kernel handles the base FlexAttention path (Q, K, V ->
   // Y) including the optional ``score_mod`` and ``prob_mod`` modifier
-  // subgraphs (executed via RunSubgraph). Some score_mod cases use ops
+  // subgraphs (executed via SubgraphSession). Some score_mod cases use ops
   // not yet wired through the dispatch table; skip those by case name.
   RunBackendCasesFor(
       "FlexAttention",

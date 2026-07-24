@@ -24,7 +24,7 @@
  * supplied :cpp:class:`RuntimeContext`; subsequent runs reuse the cached
  * kernels. Every entry point that runs a node list — model callers (via
  * :cpp:func:`RegisterModelFunctions` followed by their own
- * :cpp:class:`RuntimeSession`), :cpp:func:`RunSubgraph`, the model-local
+ * :cpp:class:`RuntimeSession`), :cpp:class:`SubgraphSession`, the model-local
  * function call helper, and the ``If`` / ``Loop`` / ``Scan`` control-flow
  * kernels — constructs one of these sessions (over the graph's or
  * function's cached :cpp:class:`ExecutionPlan`) and calls :cpp:func:`Run` a

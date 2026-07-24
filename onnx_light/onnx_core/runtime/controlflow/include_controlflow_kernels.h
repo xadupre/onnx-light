@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
@@ -51,13 +52,16 @@ namespace runtime {
 //     explicit buffer copy.
 //   * The "branch graphs" overload
 //     (``operator()(rt, cond, then_branch, else_branch)``) executes the
-//     selected ``GraphProto`` subgraph through a :cpp:class:`RuntimeSession` using
-//     the caller-provided :cpp:class:`RuntimeContext` and returns the
+//     selected ``GraphProto`` subgraph through a :cpp:class:`onnx_kernels::SubgraphSession`
+//     using the caller-provided :cpp:class:`RuntimeContext` and returns the
 //     subgraph's outputs in declaration order. The caller's tensors,
 //     sequences, and verbosity level are all propagated to the child
 //     context so subgraphs can reference outer-scope values.
-//     This is the form used by :cpp:func:`RunIfNode` when dispatching
-//     ``If`` from a model graph.
+//     This overload is retained for tests that want to exercise branch
+//     selection through the kernel directly; :cpp:func:`RunIfNode` (the
+//     runtime dispatcher entry point) additionally supports sequence-typed
+//     branch outputs, so it drives the selected branch itself rather than
+//     going through this overload.
 //
 // Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
 // query indicating whether the output tensor's data buffer may alias one of
@@ -79,14 +83,18 @@ public:
   ///
   /// Selects the ``then_branch`` :cpp:class:`GraphProto` when the scalar
   /// BOOL ``cond`` is true and ``else_branch`` otherwise, then executes
-  /// the selected subgraph through a :cpp:class:`RuntimeSession` using ``rt`` (a
-  /// child :cpp:class:`RuntimeContext` is created internally so the
-  /// caller's tensor map is left untouched apart from being inherited as
-  /// the outer scope of the subgraph). The child context also inherits
-  /// ``rt.sequences()`` and ``rt.verbose()`` so that outer-scope
-  /// sequence values and diagnostic verbosity are visible inside the
-  /// branch. The returned vector contains the subgraph outputs in the
-  /// order declared by ``branch.output()``.
+  /// the selected subgraph through a :cpp:class:`onnx_kernels::SubgraphSession`
+  /// using ``rt`` (a child :cpp:class:`RuntimeContext` is created
+  /// internally so the caller's tensor map is left untouched apart from
+  /// being inherited as the outer scope of the subgraph). The child
+  /// context also inherits ``rt.sequences()`` and ``rt.verbose()`` so
+  /// that outer-scope sequence values and diagnostic verbosity are
+  /// visible inside the branch. The returned vector contains the
+  /// subgraph outputs in the order declared by ``branch.output()``.
+  /// Unlike ``Loop`` / ``Scan``, ``If`` selects and runs a branch exactly
+  /// once per call, so the session is not reused across repeated
+  /// invocations; only the selected branch's ``GraphProto`` is read (not
+  /// retained) while building it.
   ///
   /// @throws std::invalid_argument if ``cond`` is not a BOOL scalar, if a
   ///         declared subgraph output is missing, if ``then_branch`` and
@@ -191,6 +199,39 @@ public:
                      const Tensors &v_initial, std::size_t num_scan_outputs,
                      const BodyRunner &run_body) const;
 
+  /// Body-aware overload driven directly by the Loop ``body`` subgraph.
+  ///
+  /// Performs the full ONNX ``Loop`` semantics like the ``BodyRunner``
+  /// overload above, but builds and owns the :cpp:class:`SubgraphSession`
+  /// that drives ``body`` itself (mirroring :cpp:class:`Scan`'s body-aware
+  /// overload): the session — and the initializers / output names cached
+  /// from ``body`` at construction — is built once and reused for every
+  /// iteration, so ``body`` itself is only needed for this call, not kept
+  /// around afterwards.
+  ///
+  /// @param rt         Runtime context used to build the body's
+  ///                   :cpp:class:`SubgraphSession` and to evaluate it. The
+  ///                   body is executed in a fresh child context per
+  ///                   iteration so it cannot mutate ``rt.tensors()``.
+  /// @param body       The Loop body subgraph. Its first two formal inputs
+  ///                   are the iteration number (INT64 scalar) and the
+  ///                   incoming condition (BOOL scalar); its next ``N``
+  ///                   formal inputs are bound to the current loop-carried
+  ///                   state. Its first output is the outgoing condition,
+  ///                   its next ``N`` outputs become the next state, and its
+  ///                   remaining ``K`` outputs are the per-iteration scan
+  ///                   outputs.
+  /// @param M          Optional INT64 scalar maximum trip-count (``empty
+  ///                   Tensor`` means ``omitted``).
+  /// @param cond       Optional BOOL scalar initial termination condition
+  ///                   (``empty Tensor`` means ``omitted``, treated as
+  ///                   ``true``).
+  /// @param v_initial  Initial loop-carried dependency values (size ``N``).
+  /// @return ``N + K`` tensors: the final loop-carried dependency values
+  ///         followed by the stacked scan outputs.
+  Tensors operator()(RuntimeContext &rt, const GraphProto &body, const Tensor &M,
+                     const Tensor &cond, const Tensors &v_initial) const;
+
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
@@ -200,7 +241,7 @@ public:
 ///
 ///   * a *body-aware* overload that takes the Scan ``body`` subgraph, the
 ///     initial state and the per-axis scan inputs, executes the body once
-///     per iteration through :cpp:func:`onnx_kernels::RunSubgraph`, and
+///     per iteration through :cpp:class:`onnx_kernels::SubgraphSession`, and
 ///     returns the operator's full output list. This is the overload used
 ///     when the kernel is invoked from the runtime dispatcher
 ///     (:cpp:func:`onnx_kernels::RunNode`);
@@ -270,16 +311,16 @@ public:
   /// @return ``N + K`` tensors: the final state values followed by the
   ///         stacked scan outputs.
   Tensors operator()(RuntimeContext &rt, const GraphProto &body, const Tensors &initial_state,
-                     const Tensors &scan_inputs, const std::vector<int64_t> &scan_input_axes = {},
-                     const std::vector<int64_t> &scan_input_directions = {},
-                     const std::vector<int64_t> &scan_output_axes = {},
-                     const std::vector<int64_t> &scan_output_directions = {}) const;
+                     const Tensors &scan_inputs, const ParamInts &scan_input_axes = {},
+                     const ParamInts &scan_input_directions = {},
+                     const ParamInts &scan_output_axes = {},
+                     const ParamInts &scan_output_directions = {}) const;
 
   /// Allocator-aware stacking-only overload used by the runtime dispatcher.
   Tensors operator()(RuntimeContext &rt, int64_t trip_count, const Tensors &initial_state,
                      const Tensors &final_state, const std::vector<Tensors> &scan_values_per_iter,
-                     const std::vector<int64_t> &scan_output_axes = {},
-                     const std::vector<int64_t> &scan_output_directions = {}) const;
+                     const ParamInts &scan_output_axes = {},
+                     const ParamInts &scan_output_directions = {}) const;
 
   /// Stacking-only overload.
   ///
@@ -313,8 +354,8 @@ public:
   ///         stacked scan outputs.
   Tensors operator()(int64_t trip_count, const Tensors &initial_state, const Tensors &final_state,
                      const std::vector<Tensors> &scan_values_per_iter,
-                     const std::vector<int64_t> &scan_output_axes = {},
-                     const std::vector<int64_t> &scan_output_directions = {}) const;
+                     const ParamInts &scan_output_axes = {},
+                     const ParamInts &scan_output_directions = {}) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

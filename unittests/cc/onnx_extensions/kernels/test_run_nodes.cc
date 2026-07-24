@@ -92,7 +92,7 @@ private:
 // caller already provided) and then runs `graph.node()` by building the
 // graph's ExecutionPlan and driving it through a RuntimeSession. This
 // mirrors the production `RunGraphNodesViaSession` helper used internally
-// by `RunSubgraph` and the control-flow kernels, giving these
+// by `SubgraphSession` and the control-flow kernels, giving these
 // tests the same "build a plan, then run it through a session" flow every
 // call site now uses.
 void RunGraphViaSession(const GraphProto &graph, RuntimeContext &rt) {
@@ -2767,7 +2767,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
 }
 
 // Variant of LoopNodeRunsBodySubgraph with a SimpleRawBufferAllocator. Verifies
-// that subgraph contexts created inside RunSubgraph do not inherit the allocator,
+// that subgraph contexts created inside SubgraphSession::Run do not inherit the allocator,
 // preventing double-free of body-output tensors threaded as loop-carried state
 // across iterations. Iter/cond scalars are now allocated transiently via the
 // parent allocator, but those slots are released before the final loop outputs
@@ -4098,7 +4098,7 @@ TEST(RuntimeSession, InitializesKernelsThenRunsAndReleases) {
   // kernels are resolved on the first Run against the supplied RuntimeContext
   // and only then is it run. Running it must produce the graph outputs and
   // release the scheduled intermediates, exactly like running a model's
-  // graph or `RunSubgraph` (which build and run through a RuntimeSession
+  // graph or `SubgraphSession` (which build and run through a RuntimeSession
   // internally).
   using core::runtime::ExecutionPlan;
   using core::runtime::RuntimeSession;

@@ -6,7 +6,6 @@
 
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_core/runtime/runtime_session.h"
 
 #include <cstring>
 #include <stdexcept>
@@ -70,43 +69,14 @@ Tensors If::operator()(RuntimeContext &rt, const Tensor &cond, const GraphProto 
   const GraphProto &branch = taken ? then_branch : else_branch;
   const std::string branch_name = taken ? "then_branch" : "else_branch";
 
-  // Run the selected subgraph in a fresh child context whose tensor map and
-  // model-local function registry are inherited from the caller's context
-  // so the subgraph can read outer-scope values, while writes produced by
-  // the subgraph remain local and do not pollute ``rt``. Seed the branch's
-  // initializers (if any) and drive its cached ExecutionPlan through a
-  // fresh RuntimeSession, exactly like every other node list the runtime
-  // executes.
-  RuntimeContext child = rt.MakeSubgraphContext(branch_name);
-  const auto &inits = branch.initializer();
-  for (size_t i = 0; i < inits.size(); ++i) {
-    const TensorProto &tp = inits[i];
-    const std::string init_name = tp.name();
-    if (!child.Has(init_name)) {
-      child.Set(init_name, TensorFromProto(tp), RuntimeEventKind::kInitializer);
-    }
-  }
-  const ExecutionPlan &plan = child.GetExecutionPlan(branch);
-  RuntimeSession session(plan);
-  session.Run(child);
-
-  if (rt.events_enabled()) {
-    for (auto &ev : child.events()) {
-      rt.events().push_back(std::move(ev));
-    }
-  }
-
-  Tensors outputs;
-  outputs.reserve(static_cast<size_t>(branch.output_size()));
-  for (size_t i = 0; i < branch.output().size(); ++i) {
-    const std::string out_name = branch.output()[i].name();
-    EXT_ENFORCE_INVALID(!out_name.empty(), "kernel::If: a subgraph output has an empty name.");
-    auto it = child.tensors().find(out_name);
-    EXT_ENFORCE_INVALID(it != child.tensors().end(), "kernel::If: subgraph output '", out_name,
-                        "' was not produced by the selected branch.");
-    outputs.push_back(std::move(it->second));
-  }
-  return outputs;
+  // Build the session over the selected branch only; the branch itself is
+  // only needed here, not kept around afterwards. Unlike Loop / Scan, If
+  // selects and runs a branch exactly once per invocation, so there is no
+  // repeated iteration to amortize the session over, but the same
+  // construct-then-run separation keeps the control-flow kernels
+  // consistent with one another.
+  SubgraphSession session(rt, branch);
+  return session.Run({}, rt, branch_name);
 }
 
 } // namespace runtime

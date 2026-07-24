@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_proto/onnx.h"
 
@@ -39,9 +40,13 @@
  * Whenever a whole node *list* (as opposed to a single node) needs to be
  * executed — a graph, a function body, or a subgraph — callers build an
  * :cpp:class:`ExecutionPlan` for it and drive it through a
- * :cpp:class:`RuntimeSession` themselves (:cpp:func:`RunSubgraph` does this
- * internally for embedded control-flow subgraphs since it also has to
- * propagate the subgraph's outputs back to the caller).
+ * :cpp:class:`RuntimeSession` themselves. For embedded control-flow
+ * subgraphs — ``Loop`` / ``Scan`` / ``SequenceMap`` bodies,
+ * ``FlexAttention``'s ``score_mod`` / ``prob_mod`` — callers instead build
+ * one :cpp:class:`SubgraphSession` up front (which also propagates the
+ * subgraph's outputs back to the caller) and call its
+ * :cpp:func:`SubgraphSession::Run` once per invocation instead of
+ * re-resolving the subgraph's kernels each time.
  *
  * In addition to the static :cpp:func:`KernelDispatchTable`,
  * :cpp:func:`RunNode` also consults
@@ -126,44 +131,86 @@ void RunNode(const NodeProto &node, RuntimeContext &rt);
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt);
 
 /**
- * Evaluates a subgraph in a fresh child :cpp:class:`RuntimeContext` that
- * inherits the caller's tensor map and function registry, additionally
- * seeded with ``bindings`` (typically the formal-input ↔ actual-input
- * tensor pairs for the subgraph). Returns the subgraph's outputs in the
- * order declared by ``graph.output()``.
+ * Reusable driver for a control-flow subgraph (``Loop`` / ``Scan`` /
+ * ``SequenceMap`` body, ``FlexAttention``'s ``score_mod`` / ``prob_mod``)
+ * that separates one-time setup from the repeated per-iteration run, mirroring
+ * how :cpp:class:`RuntimeSession` separates kernel resolution from execution.
  *
- * The subgraph is executed the same way as any other node list: its
- * initializers are seeded into the child context and its cached
- * :cpp:class:`ExecutionPlan` is driven through a fresh
- * :cpp:class:`RuntimeSession`.
+ * **Construction** builds the subgraph's :cpp:class:`ExecutionPlan` (via
+ * ``rt.GetExecutionPlan(graph)``), the :cpp:class:`RuntimeSession` that drives
+ * it, and caches the graph-derived data every run needs — the parsed
+ * initializer tensors and the declared output names — so ``graph`` itself
+ * does not need to be kept around, or passed again, once the session exists.
+ *
+ * **:cpp:func:`Run`** evaluates the subgraph in a fresh child
+ * :cpp:class:`RuntimeContext` that inherits the caller's tensor map and
+ * function registry, seeded with the cached initializers and with
+ * ``bindings`` (typically the formal-input ↔ actual-input tensor pairs for
+ * the subgraph), and returns the subgraph's outputs in the order declared by
+ * the graph the session was built from. Safe to call repeatedly (once per
+ * ``Loop`` / ``Scan`` / ``SequenceMap`` iteration, or once per
+ * ``FlexAttention`` ``score_mod`` / ``prob_mod`` invocation): the subgraph's
+ * kernels are resolved once, on the first call, and reused on every
+ * subsequent one.
  *
  * When the caller's context has event logging enabled
- * (:cpp:func:`RuntimeContext::events_enabled`), child events are appended
- * to the caller's event log after the subgraph finishes. Each propagated
- * event carries :cpp:var:`RuntimeEvent::subgraph_node_index` set to
+ * (:cpp:func:`RuntimeContext::events_enabled`), child events are appended to
+ * the caller's event log after the subgraph finishes. Each propagated event
+ * carries :cpp:var:`RuntimeEvent::subgraph_node_index` set to
  * ``rt.current_node_index()`` (the index of the control-flow node in the
  * parent graph) and :cpp:var:`RuntimeEvent::subgraph_attr_name` set to
- * ``attr_name``, so consumers can distinguish subgraph events from
- * top-level events.
+ * ``attr_name``, so consumers can distinguish subgraph events from top-level
+ * events.
  *
  * Exposed publicly so control-flow kernels (e.g. :cpp:class:`kernel::Scan`)
- * can run their body subgraph without going through
- * :cpp:func:`RunNode` themselves.
- *
- * ``bindings`` is taken by value so callers can move allocator-backed tensors
- * into the subgraph without retaining dangling ownership in the caller.
- *
- * @param attr_name  Attribute name identifying the subgraph within its
- *                   owning control-flow node (e.g. ``"body"``,
- *                   ``"then_branch"``, ``"else_branch"``). Stored in
- *                   :cpp:var:`RuntimeEvent::subgraph_attr_name` of every
- *                   event produced during the subgraph run.
- *
- * @throws std::invalid_argument if a subgraph output has an empty name or
- *         is not produced by the body.
+ * can run their body subgraph without going through :cpp:func:`RunNode`
+ * themselves.
  */
-Tensors RunSubgraph(const GraphProto &graph, std::vector<std::pair<std::string, Tensor>> bindings,
-                    RuntimeContext &rt, const std::string &attr_name = "");
+class SubgraphSession {
+public:
+  /**
+   * Builds the subgraph's :cpp:class:`ExecutionPlan` and
+   * :cpp:class:`RuntimeSession`, and caches ``graph``'s initializers
+   * (already parsed into :cpp:class:`Tensor`) and output names.
+   *
+   * @param rt    Runtime context used to obtain (and cache) ``graph``'s
+   *              :cpp:class:`ExecutionPlan`.
+   * @param graph The subgraph to run repeatedly via :cpp:func:`Run`. Only
+   *              read during construction; not retained afterwards.
+   */
+  SubgraphSession(RuntimeContext &rt, const GraphProto &graph);
+
+  /**
+   * Evaluates the subgraph once in a fresh child :cpp:class:`RuntimeContext`,
+   * seeded with the cached initializers and with ``bindings``. Returns the
+   * subgraph's outputs in the order declared by the graph the session was
+   * built from.
+   *
+   * ``bindings`` is taken by value so callers can move allocator-backed
+   * tensors into the subgraph without retaining dangling ownership in the
+   * caller.
+   *
+   * @param bindings  Formal-input ↔ actual-input tensor pairs for this call.
+   * @param rt        The caller's runtime context; used to propagate events
+   *                   and to record the caller-visible allocator.
+   * @param attr_name Attribute name identifying the subgraph within its
+   *                  owning control-flow node (e.g. ``"body"``,
+   *                  ``"then_branch"``, ``"else_branch"``). Stored in
+   *                  :cpp:var:`RuntimeEvent::subgraph_attr_name` of every
+   *                  event produced during the run.
+   *
+   * @throws std::invalid_argument if a subgraph output has an empty name or
+   *         is not produced by the subgraph.
+   */
+  Tensors Run(std::vector<std::pair<std::string, Tensor>> bindings, RuntimeContext &rt,
+              const std::string &attr_name = "");
+
+private:
+  const ExecutionPlan &plan_;
+  RuntimeSession session_;
+  std::vector<std::pair<std::string, Tensor>> initializers_;
+  std::vector<std::string> output_names_;
+};
 
 /**
  * Resolves a possibly-negative ``axis`` against a tensor of rank
@@ -172,6 +219,22 @@ Tensors RunSubgraph(const GraphProto &graph, std::vector<std::pair<std::string, 
  * when the axis is out of range.
  */
 int64_t ResolveAxis(int64_t axis, std::size_t rank, const std::string &op_name);
+
+/**
+ * Builds a rank-0 (scalar) INT64 tensor named ``name`` holding ``v``. Used to
+ * bind a control-flow subgraph's per-iteration scalar formal inputs (e.g.
+ * ``Loop``'s ``iter_num``). When ``allocator`` is non-null the returned
+ * tensor stores its bytes in an allocator-owned ``RawBuffer``.
+ */
+Tensor MakeInt64Scalar(const std::string &name, int64_t v, RawBufferAllocator *allocator);
+
+/**
+ * Builds a rank-0 (scalar) BOOL tensor named ``name`` holding ``v``. Used to
+ * bind a control-flow subgraph's per-iteration scalar formal inputs (e.g.
+ * ``Loop``'s ``cond_in``). When ``allocator`` is non-null the returned
+ * tensor stores its bytes in an allocator-owned ``RawBuffer``.
+ */
+Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *allocator);
 
 /**
  * Returns the tensor obtained by selecting the ``index``-th slice of

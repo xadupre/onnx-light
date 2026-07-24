@@ -317,6 +317,23 @@ struct RuntimeEvent {
   /// :onnx:`Scan` / :onnx:`SequenceMap`, ``"then_branch"`` or
   /// ``"else_branch"`` for :onnx:`If`. Empty for top-level-graph events.
   std::string subgraph_attr_name;
+  /// Total number of bytes held by every buffer currently alive in the
+  /// :cpp:class:`RuntimeContext`'s allocator at the moment this event was
+  /// recorded (:cpp:func:`RawBufferAllocator::TotalAllocatedSize`), i.e. the
+  /// runtime's live memory footprint right after the action that produced the
+  /// event. ``0`` when no allocator is attached to the context.
+  int64_t allocated_bytes = 0;
+  /// Peak value ever reached by :cpp:var:`allocated_bytes` up to the moment
+  /// this event was recorded (:cpp:func:`RawBufferAllocator::PeakAllocatedSize`).
+  /// ``0`` when no allocator is attached to the context.
+  int64_t peak_bytes = 0;
+
+  /// Returns a concise, human-readable one-line summary of the event: the
+  /// action / kind, the tensor name (or ``op_type(inputs)`` for ``kRunNode``
+  /// events), the associated node index, the wall-clock duration (for
+  /// ``kRunNode`` events) and the allocator's live / peak memory in bytes.
+  /// Suitable for logging or rendering the event log as a table.
+  std::string summary() const;
 };
 
 /**
@@ -680,6 +697,12 @@ public:
   }
 
 private:
+  /// Fills ``ev.allocated_bytes`` / ``ev.peak_bytes`` from the currently
+  /// attached allocator (:cpp:func:`RawBufferAllocator::TotalAllocatedSize`
+  /// and :cpp:func:`RawBufferAllocator::PeakAllocatedSize`). Leaves both at
+  /// ``0`` when no allocator is attached.
+  void StampAllocatorMemory(RuntimeEvent &ev) const noexcept;
+
   TensorMap tensors_;
   KernelContext kernel_ctx_;
   FunctionMap functions_;

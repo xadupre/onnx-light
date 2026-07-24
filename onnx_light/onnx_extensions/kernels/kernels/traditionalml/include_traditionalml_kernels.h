@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/kernels/kernels/traditionalml/kernel_tree_ensemble_common.h"
@@ -631,16 +632,16 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
-  std::vector<int64_t> tree_roots_;
-  std::vector<int64_t> nodes_featureids_;
+  ParamInts tree_roots_;
+  ParamInts nodes_featureids_;
   std::vector<double> nodes_splits_;
   std::vector<uint8_t> nodes_modes_;
-  std::vector<int64_t> nodes_truenodeids_;
-  std::vector<int64_t> nodes_falsenodeids_;
-  std::vector<int64_t> nodes_trueleafs_;
-  std::vector<int64_t> nodes_falseleafs_;
-  std::vector<int64_t> nodes_missing_;
-  std::vector<int64_t> leaf_targetids_;
+  ParamInts nodes_truenodeids_;
+  ParamInts nodes_falsenodeids_;
+  ParamInts nodes_trueleafs_;
+  ParamInts nodes_falseleafs_;
+  ParamInts nodes_missing_;
+  ParamInts leaf_targetids_;
   std::vector<double> leaf_weights_;
   /// Per-node set-membership values for ``BRANCH_MEMBER`` nodes; other nodes
   /// hold an empty vector.

@@ -4,7 +4,7 @@
 
 #include "onnx_core/builder/graph_builder.h"
 
-#include "onnx_op/default_onnx_schema.h"
+#include "onnx_op/operator_sets.h"
 
 #include <gtest/gtest.h>
 
@@ -16,7 +16,9 @@ namespace {
 
 // Schema provider backed by the built-in ONNX operator schemas.
 core::builder::GraphBuilder::SchemaLookupFn SchemaLookup() {
-  return [](const std::string &op_type) { return core::builder::DefaultOnnxSchemaLookup(op_type); };
+  return [](const std::string &op_type) {
+    return onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, /*init_doc=*/false);
+  };
 }
 
 core::symbolic::SymShape MakeShape(std::initializer_list<int64_t> dims) {

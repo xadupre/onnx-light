@@ -165,7 +165,7 @@ void GraphBuilder::MakeOutput(const std::string &name) {
 // ── Nodes ──────────────────────────────────────────────────────────────
 
 int GraphBuilder::ResolveNodeOpset(const std::string &domain,
-                                   const std::vector<const OpSchemaInfo *> &schemas) {
+                                   const std::vector<const LightOpSchema *> &schemas) {
   const std::string key = ShapesContext::NormaliseDomain(domain);
   auto it = opsets_.find(key);
   if (user_opsets_.find(key) != user_opsets_.end()) {
@@ -179,8 +179,8 @@ int GraphBuilder::ResolveNodeOpset(const std::string &domain,
                        "'; no operator schema is available, call set_opset_version() first.");
   }
   int op_latest = std::numeric_limits<int>::min();
-  for (const OpSchemaInfo *schema : schemas) {
-    op_latest = std::max(op_latest, schema->since_version);
+  for (const LightOpSchema *schema : schemas) {
+    op_latest = std::max(op_latest, schema->since_version());
   }
   const int target = it != opsets_.end() ? std::max(it->second, op_latest) : op_latest;
   opsets_[key] = target;
@@ -210,20 +210,20 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
   }
 
   // Resolve the opset version and the matching schema (if any).
-  std::vector<OpSchemaInfo> history =
-      schema_lookup_ ? schema_lookup_(op_type) : std::vector<OpSchemaInfo>();
-  std::vector<const OpSchemaInfo *> domain_schemas;
+  std::vector<LightOpSchema> history =
+      schema_lookup_ ? schema_lookup_(op_type) : std::vector<LightOpSchema>();
+  std::vector<const LightOpSchema *> domain_schemas;
   const std::string normalised_domain = ShapesContext::NormaliseDomain(domain);
-  for (const OpSchemaInfo &schema : history) {
-    if (ShapesContext::NormaliseDomain(schema.domain) == normalised_domain) {
+  for (const LightOpSchema &schema : history) {
+    if (ShapesContext::NormaliseDomain(schema.domain()) == normalised_domain) {
       domain_schemas.push_back(&schema);
     }
   }
   const int opset = ResolveNodeOpset(domain, domain_schemas);
-  const OpSchemaInfo *schema = nullptr;
-  for (const OpSchemaInfo *candidate : domain_schemas) {
-    if (candidate->since_version <= opset &&
-        (schema == nullptr || candidate->since_version > schema->since_version)) {
+  const LightOpSchema *schema = nullptr;
+  for (const LightOpSchema *candidate : domain_schemas) {
+    if (candidate->since_version() <= opset &&
+        (schema == nullptr || candidate->since_version() > schema->since_version())) {
       schema = candidate;
     }
   }
@@ -233,8 +233,8 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
   std::size_t num_outputs = outputs.size();
   if (schema != nullptr) {
     if (!outputs.empty()) {
-      const std::size_t min_output = static_cast<std::size_t>(std::max(0, schema->min_output));
-      const std::size_t max_output = static_cast<std::size_t>(std::max(0, schema->max_output));
+      const std::size_t min_output = static_cast<std::size_t>(std::max(0, schema->min_output()));
+      const std::size_t max_output = static_cast<std::size_t>(std::max(0, schema->max_output()));
       if (outputs.size() < min_output || outputs.size() > max_output) {
         throw BuilderError("GraphBuilder: node '" + op_type + "' was given " +
                            std::to_string(outputs.size()) + " outputs but the schema at opset " +
@@ -242,7 +242,7 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
                            std::to_string(min_output) + " and " + std::to_string(max_output) + ".");
       }
     } else {
-      num_outputs = static_cast<std::size_t>(std::max(1, schema->min_output));
+      num_outputs = static_cast<std::size_t>(std::max(1, schema->min_output()));
     }
   } else if (outputs.empty()) {
     num_outputs = 1;

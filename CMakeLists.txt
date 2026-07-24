@@ -743,13 +743,9 @@ if(ONNX_LIGHT_BUILD_TESTS)
   # included by the majority of those files; a PCH turns that work into a
   # one-shot cost for the whole target.
   #
-  # NOTE: do NOT add project headers (e.g. ``test_case.h``) here. Several
-  # test translation units (unittests/cc/onnx_op/test_onnx_op_*.cc) rely on
-  # a subtle ``#undef ONNX_LIGHT_NAMESPACE`` trick that only compiles when
-  # ``light_op_schema.h`` is the first header to declare
-  # ``namespace ONNX_LIGHT_NAMESPACE { ... }`` *before* the
-  # ``ONNX_LIGHT_NAMESPACE`` macro gets defined. Pulling in project headers
-  # via the PCH would define the macro first and break those tests.
+  # NOTE: only standard-library headers are precompiled here. Project headers
+  # are intentionally left out so the PCH does not force a particular include
+  # order onto individual translation units.
   target_precompile_headers(test_onnx_light PRIVATE
       <gtest/gtest.h>
       <cstdint>

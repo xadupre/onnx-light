@@ -57,7 +57,7 @@ namespace core {
 namespace builder {
 
 using ::onnx_light::core::compute::ComputeContext;
-using ::onnx_light::core::schema::OpSchemaInfo;
+using ::onnx_light::core::schema::LightOpSchema;
 using ::onnx_light::core::shapes::ShapesContext;
 using ::onnx_light::core::symbolic::Device;
 using ::onnx_light::core::symbolic::SymShape;
@@ -94,17 +94,14 @@ public:
 class GraphBuilder {
 public:
   /// Signature of the optional callback used to resolve the versioned schema
-  /// history of an operator. Given an ``op_type`` it returns the namespace-stable
-  /// :cpp:struct:`core::schema::OpSchemaInfo` digest of every schema registered
-  /// for that operator (across every domain); an empty vector means the operator
-  /// is unknown. ``onnx_core`` owns :cpp:class:`core::schema::LightOpSchema` but
-  /// not the built-in operator schemas (those live in the ``onnx_op`` library,
-  /// which depends on ``onnx_core``), so the provider is injected by the caller.
-  /// The digest is used instead of ``LightOpSchema`` because the latter has two
-  /// distinct C++ identities across the ``ONNX_LIGHT_NAMESPACE`` macro boundary
-  /// and cannot cross it (see :cpp:func:`DefaultOnnxSchemaLookup` and the Python
-  /// bindings, which wire the built-in ONNX schemas).
-  using SchemaLookupFn = std::function<std::vector<OpSchemaInfo>(const std::string &op_type)>;
+  /// history of an operator. Given an ``op_type`` it returns every
+  /// :cpp:class:`core::schema::LightOpSchema` registered for that operator
+  /// (across every domain); an empty vector means the operator is unknown.
+  /// ``onnx_core`` owns :cpp:class:`core::schema::LightOpSchema` but not the
+  /// built-in operator schemas (those live in the ``onnx_op`` library, which
+  /// depends on ``onnx_core``), so the provider is injected by the caller (see
+  /// the Python bindings, which wire the built-in ONNX schemas).
+  using SchemaLookupFn = std::function<std::vector<LightOpSchema>(const std::string &op_type)>;
 
   /// Constructs an empty builder.
   ///
@@ -318,7 +315,8 @@ public:
 private:
   // Resolves and records the opset version to use for a node of ``domain``,
   // given the domain-filtered schema history ``schemas``.
-  int ResolveNodeOpset(const std::string &domain, const std::vector<const OpSchemaInfo *> &schemas);
+  int ResolveNodeOpset(const std::string &domain,
+                       const std::vector<const LightOpSchema *> &schemas);
 
   // Returns ``true`` when a shape function is registered for ``node``.
   bool ShapeFunctionAvailable(const NodeProto &node) const;

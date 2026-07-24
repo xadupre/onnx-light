@@ -8,7 +8,7 @@
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
-#include "onnx_op/default_onnx_schema.h"
+#include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 #include <algorithm>
 #include <nanobind/nanobind.h>
@@ -1816,7 +1816,7 @@ void AddOnnxPyBuilder(nb::module_ &m) {
 
   // Default schema provider backed by the built-in ONNX operator schemas.
   GraphBuilder::SchemaLookupFn default_schema_lookup = [](const std::string &op_type) {
-    return core::builder::DefaultOnnxSchemaLookup(op_type);
+    return onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, /*init_doc=*/false);
   };
 
   nb::class_<GraphBuilder>(builder_mod, "GraphBuilder",

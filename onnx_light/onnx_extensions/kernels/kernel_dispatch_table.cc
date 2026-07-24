@@ -1971,7 +1971,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          attrs.coordinate_transformation_mode = GetAttributeStringOrDefault(
              node, "coordinate_transformation_mode", attrs.coordinate_transformation_mode);
          attrs.nearest_mode = GetAttributeStringOrDefault(node, "nearest_mode", attrs.nearest_mode);
-         attrs.axes = GetAttributeIntsOrDefault(node, "axes", attrs.axes);
+         attrs.axes = GetAttributeShapeOrDefault(node, "axes", attrs.axes);
          attrs.keep_aspect_ratio_policy = GetAttributeStringOrDefault(
              node, "keep_aspect_ratio_policy", attrs.keep_aspect_ratio_policy);
          attrs.cubic_coeff_a =

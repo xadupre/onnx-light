@@ -1015,7 +1015,7 @@ public:
     std::string nearest_mode = "round_prefer_floor";
     /// Subset of input axes that ``scales``/``sizes`` apply to. When empty,
     /// every axis is resized (matching the pre-opset-18 behaviour).
-    std::vector<int64_t> axes;
+    onnx_kernels::Shape axes;
     /// How to interpret ``sizes``. ``"stretch"`` honours ``sizes`` exactly;
     /// ``"not_larger"`` / ``"not_smaller"`` rescale by a common factor so
     /// that the resulting output is not larger / smaller than ``sizes`` on

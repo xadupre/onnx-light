@@ -73,7 +73,7 @@ Tensor ReadResizeSizes(const Tensor &sizes, std::size_t expected_length,
 
 // Normalises the user-supplied ``axes`` attribute against ``rank``. When the
 // attribute is empty, returns ``{0, 1, ..., rank-1}``.
-onnx_kernels::Shape NormaliseAxes(const std::vector<int64_t> &axes, std::size_t rank) {
+onnx_kernels::Shape NormaliseAxes(const onnx_kernels::Shape &axes, std::size_t rank) {
   onnx_kernels::Shape out;
   if (axes.empty()) {
     out.reserve(rank);

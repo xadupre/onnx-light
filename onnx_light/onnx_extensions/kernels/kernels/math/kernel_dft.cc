@@ -37,7 +37,7 @@ int64_t ReadDFTLength(const Tensor &len) {
 // trailing dimension is 1 (real) or 2 (complex). Returns (0, 0) for indices
 // that are out of range along ``axis`` (zero-padding for dft_length > N).
 template <typename T>
-void ReadSample(const T *data, const std::vector<int64_t> &strides, int64_t axis_dim, int64_t outer,
+void ReadSample(const T *data, const onnx_kernels::Shape &strides, int64_t axis_dim, int64_t outer,
                 int64_t inner, int64_t outer_idx, int64_t axis_idx, int64_t inner_idx,
                 int64_t last_dim, double &re, double &im) {
   (void)outer;
@@ -56,7 +56,7 @@ void ReadSample(const T *data, const std::vector<int64_t> &strides, int64_t axis
 // Input contains bins 0..in_axis-1 (one-sided). For frequency index n >= in_axis,
 // the value is conj(X[n_dft - n]).
 template <typename T>
-void ReadSampleIRFFT(const T *data, const std::vector<int64_t> &strides, int64_t in_axis,
+void ReadSampleIRFFT(const T *data, const onnx_kernels::Shape &strides, int64_t in_axis,
                      int64_t outer, int64_t inner, int64_t outer_idx, int64_t freq_idx,
                      int64_t inner_idx, int64_t last_dim, int64_t n_dft, double &re, double &im) {
   int64_t idx = freq_idx;
@@ -76,7 +76,7 @@ void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out
                 int64_t inner, int64_t in_last, int64_t out_last, int64_t n_dft, bool inverse,
                 bool onesided) {
   // Strides for INPUT  (outer, axis, inner_with_last). inner_with_last = inner * in_last.
-  const std::vector<int64_t> in_strides = {in_axis * inner * in_last, inner * in_last, in_last};
+  const onnx_kernels::Shape in_strides = {in_axis * inner * in_last, inner * in_last, in_last};
   // Strides for OUTPUT.
   const int64_t out_inner_stride = out_last;
   const int64_t out_axis_stride = inner * out_inner_stride;

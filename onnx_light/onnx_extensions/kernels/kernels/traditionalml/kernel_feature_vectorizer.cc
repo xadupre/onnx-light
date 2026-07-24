@@ -157,7 +157,7 @@ void FeatureVectorizer::operator()(const Tensors &inputs,
   EXT_ENFORCE_INVALID(output.size_bytes() ==
                           static_cast<size_t>(n * total_features) * sizeof(float),
                       "kernel::FeatureVectorizer preallocated output buffer is incorrectly sized.");
-  std::fill(output.data.begin(), output.data.end(), uint8_t{0u});
+  std::fill(output.mutable_bytes(), output.mutable_bytes() + output.size_bytes(), uint8_t{0u});
   Compute(inputs, input_dims, n, total_features, reinterpret_cast<float *>(output.mutable_bytes()));
 }
 

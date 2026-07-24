@@ -109,7 +109,7 @@ void DynamicQuantizeLinear::operator()(const Tensor &x, Tensor &y, Tensor &y_sca
   // Write scalar outputs.
   float *p_scale = reinterpret_cast<float *>(y_scale.mutable_bytes());
   p_scale[0] = scale;
-  y_zero_point.data[0] = zp;
+  y_zero_point.mutable_bytes()[0] = zp;
 
   // Quantize x.
   uint8_t *py = y.mutable_bytes();

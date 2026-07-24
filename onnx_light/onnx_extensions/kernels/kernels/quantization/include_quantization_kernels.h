@@ -78,6 +78,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// the output defaults to UINT8 with a zero point of 0.
 class QuantizeLinear : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Omitted ``y_zero_point``: output is UINT8 with zero point 0.
@@ -118,6 +119,7 @@ public:
 /// along ``axis`` (only FLOAT ``x_scale`` is supported for per-axis).
 class DequantizeLinear : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Omitted ``x_zero_point``: zero point defaults to 0.
@@ -159,6 +161,7 @@ public:
 ///   ``y = saturate(round(x / y_scale) + y_zero_point)``
 class DynamicQuantizeLinear : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returning overload: produces ``{y, y_scale, y_zero_point}``.
@@ -181,6 +184,7 @@ public:
 /// :cpp:class:`MatMul` broadcasting rules.
 class QLinearMatMul : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returning overload. Output element type is taken from ``y_zero_point``.
@@ -206,6 +210,7 @@ public:
 /// :cpp:class:`Conv` shape/padding/dilation rules.
 class QLinearConv : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``QLinearConv`` operator.
   struct Attributes {
     Shape kernel_shape;

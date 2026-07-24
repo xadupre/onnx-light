@@ -54,6 +54,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Element-wise logical AND on BOOL tensors with multidirectional broadcasting.
 class And : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -64,6 +65,7 @@ public:
 /// Element-wise logical OR on BOOL tensors with multidirectional broadcasting.
 class Or : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -74,6 +76,7 @@ public:
 /// Element-wise logical XOR on BOOL tensors with multidirectional broadcasting.
 class Xor : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -86,6 +89,7 @@ public:
 /// ``Not`` reference implementation (``np.logical_not``).
 class Not : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -99,6 +103,7 @@ public:
 /// (``np.isnan``). Supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 inputs.
 class IsNaN : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -117,6 +122,7 @@ public:
 /// the FLOAT input dtype is supported.
 class IsInf : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int64_t detect_positive = 1, int64_t detect_negative = 1,
                     RuntimeContext *rt = nullptr) const;
@@ -135,6 +141,7 @@ public:
 /// reference implementation (``np.greater``).
 class Greater : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -149,6 +156,7 @@ public:
 /// reference implementation (``np.less``).
 class Less : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -163,6 +171,7 @@ public:
 /// ONNX ``GreaterOrEqual`` reference implementation (``np.greater_equal``).
 class GreaterOrEqual : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -177,6 +186,7 @@ public:
 /// ONNX ``LessOrEqual`` reference implementation (``np.less_equal``).
 class LessOrEqual : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -193,6 +203,7 @@ public:
 /// to equal-shape inputs or scalar broadcasting.
 class Equal : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -206,6 +217,7 @@ public:
 /// UINT32, UINT64 or STRING. Output dtype equals ``x``/``y`` dtype.
 class Where : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
                     RuntimeContext *rt = nullptr) const;
@@ -221,6 +233,7 @@ public:
 /// reference implementation (``np.bitwise_and``).
 class BitwiseAnd : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -235,6 +248,7 @@ public:
 /// reference implementation (``np.bitwise_or``).
 class BitwiseOr : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -249,6 +263,7 @@ public:
 /// reference implementation (``np.bitwise_xor``).
 class BitwiseXor : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -262,6 +277,7 @@ public:
 /// reference implementation (``np.bitwise_not``).
 class BitwiseNot : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -277,6 +293,7 @@ public:
 /// ``np.left_shift`` / ``np.right_shift`` reference implementations.
 class BitShift : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Direction of the bitwise shift.
   enum class Direction { kLeft, kRight };
 

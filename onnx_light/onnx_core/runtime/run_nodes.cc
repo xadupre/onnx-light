@@ -944,11 +944,13 @@ namespace {
 
 // Kernel that dispatches a node to a model-local ``FunctionProto`` body,
 // resolved once during kernel initialization (see :cpp:func:`ResolveNodeKernel`).
-class ModelLocalFunctionKernel : public Kernel {
+class ModelLocalFunctionKernel : public KernelBase {
 public:
   ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func)
-      : Kernel(node), func_(func) {}
-  void Run(RuntimeContext &rt) override { CallModelLocalFunction(node_, func_, rt); }
+      : KernelBase(KernelContext{}), func_(func) {
+    set_node(node);
+  }
+  void Run(RuntimeContext &rt) override { CallModelLocalFunction(*node_, func_, rt); }
 
 private:
   const FunctionProto &func_;
@@ -956,56 +958,66 @@ private:
 
 // Control-flow kernels: each owns the subgraph session(s) built once during
 // kernel initialization so every run reuses the already-resolved body kernels.
-class IfKernel : public Kernel {
+class IfKernel : public KernelBase {
 public:
   IfKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> then_session,
            std::shared_ptr<SubgraphSession> else_session)
-      : Kernel(node), then_session_(std::move(then_session)),
-        else_session_(std::move(else_session)) {}
-  void Run(RuntimeContext &rt) override { RunIfNode(node_, rt, *then_session_, *else_session_); }
+      : KernelBase(KernelContext{}), then_session_(std::move(then_session)),
+        else_session_(std::move(else_session)) {
+    set_node(node);
+  }
+  void Run(RuntimeContext &rt) override { RunIfNode(*node_, rt, *then_session_, *else_session_); }
 
 private:
   std::shared_ptr<SubgraphSession> then_session_;
   std::shared_ptr<SubgraphSession> else_session_;
 };
 
-class LoopKernel : public Kernel {
+class LoopKernel : public KernelBase {
 public:
   LoopKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> body_session)
-      : Kernel(node), body_session_(std::move(body_session)) {}
-  void Run(RuntimeContext &rt) override { RunLoopNode(node_, rt, *body_session_); }
+      : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
+    set_node(node);
+  }
+  void Run(RuntimeContext &rt) override { RunLoopNode(*node_, rt, *body_session_); }
 
 private:
   std::shared_ptr<SubgraphSession> body_session_;
 };
 
-class ScanKernel : public Kernel {
+class ScanKernel : public KernelBase {
 public:
   ScanKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> body_session)
-      : Kernel(node), body_session_(std::move(body_session)) {}
-  void Run(RuntimeContext &rt) override { RunScanNode(node_, rt, *body_session_); }
+      : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
+    set_node(node);
+  }
+  void Run(RuntimeContext &rt) override { RunScanNode(*node_, rt, *body_session_); }
 
 private:
   std::shared_ptr<SubgraphSession> body_session_;
 };
 
-class SequenceMapKernel : public Kernel {
+class SequenceMapKernel : public KernelBase {
 public:
   SequenceMapKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> body_session)
-      : Kernel(node), body_session_(std::move(body_session)) {}
-  void Run(RuntimeContext &rt) override { RunSequenceMapNode(node_, rt, *body_session_); }
+      : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
+    set_node(node);
+  }
+  void Run(RuntimeContext &rt) override { RunSequenceMapNode(*node_, rt, *body_session_); }
 
 private:
   std::shared_ptr<SubgraphSession> body_session_;
 };
 
 // Adapts a user-registered :cpp:type:`CustomKernelFn` (which runs the whole
-// node) to the :cpp:class:`Kernel` interface.
-class CustomKernelAdapter : public Kernel {
+// node) to the :cpp:class:`KernelBase` interface.
+class CustomKernelAdapter : public KernelBase {
 public:
   CustomKernelAdapter(const NodeProto &node, CustomKernelFn fn)
-      : Kernel(node), fn_(std::move(fn)) {}
-  void Run(RuntimeContext &rt) override { fn_(node_, rt); }
+      : KernelBase(KernelContext{}), fn_(std::move(fn)) {
+    set_node(node);
+  }
+  void Run(RuntimeContext &rt) override { fn_(*node_, rt); }
 
 private:
   CustomKernelFn fn_;
@@ -1038,14 +1050,14 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       const FunctionProto *func = fit->second;
-      return [func](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<Kernel> {
+      return [func](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<KernelBase> {
         return std::make_unique<ModelLocalFunctionKernel>(node, *func);
       };
     }
   }
 
   if (domain == kDefaultOnnxDomain && op_type == "If") {
-    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
+    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
       const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
       const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");
       // Resolving the branches' kernels is the expensive part of dispatching
@@ -1059,7 +1071,7 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
     };
   }
   if (domain == kDefaultOnnxDomain && op_type == "Loop") {
-    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
+    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
       const GraphProto &body = GetRequiredGraphAttribute(node, "body");
       // Built once here so the body's kernels are resolved a single time and
       // reused across every iteration of every invocation of this node.
@@ -1068,14 +1080,14 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
     };
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
-    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
+    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
       const GraphProto &body = GetRequiredGraphAttribute(node, "body");
       auto body_session = std::make_shared<SubgraphSession>(rt, body);
       return std::make_unique<ScanKernel>(node, std::move(body_session));
     };
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
-    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<Kernel> {
+    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
       const GraphProto &body = GetRequiredGraphAttribute(node, "body");
       auto body_session = std::make_shared<SubgraphSession>(rt, body);
       return std::make_unique<SequenceMapKernel>(node, std::move(body_session));
@@ -1089,7 +1101,7 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
   auto ckit = rt.custom_kernels().find(key);
   if (ckit != rt.custom_kernels().end()) {
     CustomKernelFn fn = ckit->second;
-    return [fn](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<Kernel> {
+    return [fn](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<KernelBase> {
       return std::make_unique<CustomKernelAdapter>(node, fn);
     };
   }
@@ -1106,7 +1118,7 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
 // Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both the
 // resolve-on-demand and the resolve-once execution paths log identically.
 void InvokeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
-                  const std::string &op_type, Kernel &kernel) {
+                  const std::string &op_type, KernelBase &kernel) {
   PrintNodeProgress(rt, node, domain, op_type);
 
   // Only capture timing and input names when event logging is active.
@@ -1141,7 +1153,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
   NodeKernelFn factory = detail::ResolveNodeKernel(node, rt, domain, op_type);
-  std::unique_ptr<Kernel> resolved = factory(node, rt);
+  std::unique_ptr<KernelBase> resolved = factory(node, rt);
   detail::InvokeKernel(node, rt, domain, op_type, *resolved);
 }
 

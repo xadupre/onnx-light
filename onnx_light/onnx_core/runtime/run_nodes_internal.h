@@ -55,7 +55,7 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
  * resolve-on-demand and the resolve-once execution paths log identically.
  */
 void InvokeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
-                  const std::string &op_type, Kernel &kernel);
+                  const std::string &op_type, KernelBase &kernel);
 
 } // namespace detail
 } // namespace runtime

@@ -57,16 +57,18 @@ using onnx_kernels::kernel::KernelContext;
 
 namespace {
 
-// Minimal :cpp:class:`core::runtime::Kernel` used by the synthetic-op tests
+// Minimal :cpp:class:`core::runtime::KernelBase` used by the synthetic-op tests
 // below: it carries a per-run closure so each test can register a
 // ``NodeKernelFn`` factory (construction) that returns a kernel whose
 // :cpp:func:`Run` (execution) is tracked separately.
-class TestLambdaKernel : public core::runtime::Kernel {
+class TestLambdaKernel : public core::runtime::KernelBase {
 public:
   using Fn = std::function<void(const NodeProto &node, RuntimeContext &rt)>;
   TestLambdaKernel(const NodeProto &node, Fn fn)
-      : core::runtime::Kernel(node), fn_(std::move(fn)) {}
-  void Run(RuntimeContext &rt) override { fn_(node_, rt); }
+      : core::runtime::KernelBase(core::runtime::KernelContext{}), fn_(std::move(fn)) {
+    set_node(node);
+  }
+  void Run(RuntimeContext &rt) override { fn_(*node_, rt); }
 
 private:
   Fn fn_;
@@ -4252,7 +4254,7 @@ TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
   const std::string domain = "test.onnxlight.counting_kernel";
   RegisterKernelFn(
       domain, "CountingOp",
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::Kernel> {
+      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         ++construct_count;
         return std::make_unique<TestLambdaKernel>(node,
                                                   [](const NodeProto &node, RuntimeContext &rt) {
@@ -4310,7 +4312,7 @@ TEST(RuntimeSession, ConstructsIfBranchKernelOnceAcrossMultipleRuns) {
   const std::string domain = "test.onnxlight.counting_kernel_if";
   RegisterKernelFn(
       domain, "CountingOp",
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::Kernel> {
+      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         ++construct_count;
         return std::make_unique<TestLambdaKernel>(node,
                                                   [](const NodeProto &node, RuntimeContext &rt) {
@@ -4385,7 +4387,7 @@ TEST(RuntimeSession, ConstructsLoopBodyKernelOnceAcrossMultipleRuns) {
   const std::string domain = "test.onnxlight.counting_kernel_loop";
   RegisterKernelFn(
       domain, "CountingOp",
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::Kernel> {
+      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         ++construct_count;
         return std::make_unique<TestLambdaKernel>(node,
                                                   [](const NodeProto &node, RuntimeContext &rt) {
@@ -4458,7 +4460,7 @@ TEST(RuntimeSession, ConstructsScanBodyKernelOnceAcrossMultipleRuns) {
   const std::string domain = "test.onnxlight.counting_kernel_scan";
   RegisterKernelFn(
       domain, "CountingOp",
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::Kernel> {
+      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         ++construct_count;
         return std::make_unique<TestLambdaKernel>(node,
                                                   [](const NodeProto &node, RuntimeContext &rt) {
@@ -4526,7 +4528,7 @@ TEST(RuntimeSession, ConstructsSequenceMapBodyKernelOnceAcrossMultipleRuns) {
   const std::string domain = "test.onnxlight.counting_kernel_seqmap";
   RegisterKernelFn(
       domain, "CountingOp",
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::Kernel> {
+      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         ++construct_count;
         return std::make_unique<TestLambdaKernel>(node,
                                                   [](const NodeProto &node, RuntimeContext &rt) {

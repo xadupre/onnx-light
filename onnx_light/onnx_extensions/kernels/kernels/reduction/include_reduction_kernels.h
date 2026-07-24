@@ -88,12 +88,14 @@ private:
 /// ``ArgMax`` wrapper around :class:`ArgReduce` configured for the maximum.
 class ArgMax : public ArgReduce {
 public:
+  void Run(RuntimeContext &rt) override;
   explicit ArgMax(const KernelContext &ctx) : ArgReduce(ctx, ArgReduce::Mode::kMax) {}
 };
 
 /// ``ArgMin`` wrapper around :class:`ArgReduce` configured for the minimum.
 class ArgMin : public ArgReduce {
 public:
+  void Run(RuntimeContext &rt) override;
   explicit ArgMin(const KernelContext &ctx) : ArgReduce(ctx, ArgReduce::Mode::kMin) {}
 };
 
@@ -103,6 +105,7 @@ public:
 /// in which case it performs an identity copy.
 class ReduceSum : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// ``axes`` omitted: reduces over all dimensions of ``data`` (the default
@@ -152,12 +155,14 @@ private:
 /// ``ReduceMax`` wrapper around :class:`ReduceMinMax` configured for maximum.
 class ReduceMax : public ReduceMinMax {
 public:
+  void Run(RuntimeContext &rt) override;
   explicit ReduceMax(const KernelContext &ctx) : ReduceMinMax(ctx, ReduceMinMax::Mode::kMax) {}
 };
 
 /// ``ReduceMin`` wrapper around :class:`ReduceMinMax` configured for minimum.
 class ReduceMin : public ReduceMinMax {
 public:
+  void Run(RuntimeContext &rt) override;
   explicit ReduceMin(const KernelContext &ctx) : ReduceMinMax(ctx, ReduceMinMax::Mode::kMin) {}
 };
 
@@ -198,12 +203,14 @@ private:
 /// ``ReduceL1`` wrapper around :class:`ReduceL1L2` configured for the L1 norm.
 class ReduceL1 : public ReduceL1L2 {
 public:
+  void Run(RuntimeContext &rt) override;
   explicit ReduceL1(const KernelContext &ctx) : ReduceL1L2(ctx, ReduceL1L2::Mode::kL1) {}
 };
 
 /// ``ReduceL2`` wrapper around :class:`ReduceL1L2` configured for the L2 norm.
 class ReduceL2 : public ReduceL1L2 {
 public:
+  void Run(RuntimeContext &rt) override;
   explicit ReduceL2(const KernelContext &ctx) : ReduceL1L2(ctx, ReduceL1L2::Mode::kL2) {}
 };
 
@@ -211,6 +218,7 @@ public:
 /// sum of squared values (L2 norm without the final square root).
 class ReduceSumSquare : public ReduceL1L2 {
 public:
+  void Run(RuntimeContext &rt) override;
   explicit ReduceSumSquare(const KernelContext &ctx)
       : ReduceL1L2(ctx, ReduceL1L2::Mode::kSumSquare) {}
 };
@@ -253,6 +261,7 @@ private:
 /// ``log(sum(x, axes))``.
 class ReduceLogSum : public ReduceLogSumOp {
 public:
+  void Run(RuntimeContext &rt) override;
   explicit ReduceLogSum(const KernelContext &ctx)
       : ReduceLogSumOp(ctx, ReduceLogSumOp::Mode::kLogSum) {}
 };
@@ -261,6 +270,7 @@ public:
 /// ``log(sum(exp(x), axes))``.
 class ReduceLogSumExp : public ReduceLogSumOp {
 public:
+  void Run(RuntimeContext &rt) override;
   explicit ReduceLogSumExp(const KernelContext &ctx)
       : ReduceLogSumOp(ctx, ReduceLogSumOp::Mode::kLogSumExp) {}
 };
@@ -278,6 +288,7 @@ public:
 /// 18+). Negative axes follow ONNX semantics.
 class ReduceMean : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,
@@ -305,6 +316,7 @@ public:
 /// 18+). Negative axes follow ONNX semantics.
 class ReduceProd : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,

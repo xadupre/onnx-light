@@ -74,6 +74,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// the begin/end padding is computed from the input shape.
 class AveragePool : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// All attributes explicit. ``strides`` may be empty (treated as all 1),
@@ -98,6 +99,7 @@ public:
 /// reduced to 1 by computing the mean over all elements in that dimension.
 class GlobalAveragePool : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
@@ -112,6 +114,7 @@ public:
 /// reduced to 1 by computing the maximum over all elements in that dimension.
 class GlobalMaxPool : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
@@ -128,6 +131,7 @@ public:
 /// pooling; ``p == 2`` (default) gives the RMS/L2 pooling defined by ONNX.
 class GlobalLpPool : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
@@ -154,6 +158,7 @@ public:
 /// ``2`` (L2 norm).
 class LpPool : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// All attributes explicit. ``strides`` may be empty (treated as all 1),
@@ -181,6 +186,7 @@ public:
 /// statistics and returns the updated running mean / variance.
 class BatchNormalization : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the inference-mode primary output ``Y``. ``epsilon`` defaults
@@ -223,6 +229,7 @@ public:
 /// FLOAT tensors of length ``C``.
 class InstanceNormalization : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the output ``Y``. ``epsilon`` defaults to 1e-5f, the upstream
@@ -251,6 +258,7 @@ public:
 /// are 1-D FLOAT tensors of length ``C``. ``num_groups`` must divide ``C``.
 class GroupNormalization : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the output ``Y``. ``epsilon`` defaults to 1e-5f, the upstream
@@ -283,6 +291,7 @@ public:
 /// with the trailing ``r - axis`` dimensions collapsed to 1.
 class LayerNormalization : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the tuple ``(Y, Mean, InvStdDev)``. ``axis`` defaults to ``-1``
@@ -318,6 +327,7 @@ public:
 /// broadcastable to the normalized shape (i.e. ``X.shape[axis:]``).
 class RMSNormalization : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the output ``Y``. ``axis`` defaults to ``-1`` and ``epsilon``
@@ -340,6 +350,7 @@ public:
 /// The default axes are ``[0, 2, 3]``.
 class MeanVarianceNormalization : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &x, const Shape &axes = {0, 2, 3},
@@ -366,6 +377,7 @@ public:
 /// the input dtype.
 class Flatten : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the 2-D output tensor. ``axis`` follows ONNX semantics.
@@ -389,6 +401,7 @@ public:
 /// ``data``. ``ratio`` must be in ``[0, 1)``.
 class Dropout : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   std::pair<Tensor, Tensor> operator()(const Tensor &data, float ratio = 0.5f,
@@ -419,6 +432,7 @@ public:
 /// ``1.0`` (the ONNX defaults). The output shape matches the input shape.
 class LRN : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns a FLOAT output tensor whose shape matches ``x``.
@@ -442,6 +456,7 @@ public:
 /// input shape.
 class LpNormalization : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns a FLOAT output tensor whose shape matches ``x``.
@@ -469,6 +484,7 @@ public:
 /// the upstream ONNX semantics).
 class MaxPool : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the primary output ``Y`` (tensor of the pooled values; same
@@ -504,6 +520,7 @@ public:
 /// ``pads`` attribute is ignored, matching the ONNX spec).
 class MaxUnpool : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Two-input form: derives the output shape from ``kernel_shape``,
@@ -533,6 +550,7 @@ public:
 /// ``onnx/reference/ops/op_max_roi_pool.py``.
 class MaxRoiPool : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``MaxRoiPool`` operator.
   struct Attributes {
     /// ROI pool output shape (height, width). Required; must contain
@@ -583,6 +601,7 @@ public:
 /// ``[1, batch_size, hidden_size]`` and equals the last time step of ``Y``.
 class RNN : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the pair ``(Y, Y_h)``. ``b`` may be a default-constructed
@@ -634,6 +653,7 @@ public:
 /// ``[batch_size, 1, hidden_size]``.
 class GRU : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the pair ``(Y, Y_h)``. ``b`` may be a default-constructed
@@ -691,6 +711,7 @@ public:
 /// this overload.
 class LSTM : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the pair ``(Y, Y_h)``. ``b``, ``initial_h``, ``initial_c``
@@ -754,6 +775,7 @@ public:
 /// Not modeled: the ``softmax_precision`` attribute.
 class Attention : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Bundles every optional scalar/string attribute of the upstream
@@ -855,6 +877,7 @@ public:
 ///     indicates absence (treated as ones).
 class DeformConv : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``DeformConv`` operator. Defaults match
   /// the upstream schema (since opset 19).
   struct Attributes {
@@ -889,6 +912,7 @@ public:
 /// attributes (``NOTSET``, ``SAME_UPPER``, ``SAME_LOWER``, ``VALID``).
 class Conv : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Conv`` operator.
   struct Attributes {
     Shape kernel_shape;                  ///< Defaults to ``W.shape[2:]``.
@@ -923,6 +947,7 @@ public:
 /// same dtype as ``w``. Empty-shape ``Tensor`` indicates absence.
 class ConvInteger : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ConvInteger`` operator.
   struct Attributes {
     Shape kernel_shape;
@@ -958,6 +983,7 @@ public:
 ///  ((k[i]-1)*dil[i]+1) - pads[start] - pads[end]``.
 class ConvTranspose : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ConvTranspose`` operator.
   struct Attributes {
     Shape kernel_shape;
@@ -1009,6 +1035,7 @@ public:
 /// block contributions are summed (matching PyTorch's ``fold``).
 class Col2Im : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Col2Im`` operator.
   struct Attributes {
     Shape dilations; ///< Defaults to all ones.
@@ -1052,6 +1079,7 @@ public:
 /// instead of the (default) splitting into two contiguous halves.
 class RotaryEmbedding : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``RotaryEmbedding`` operator. All
   /// defaults match the upstream schema.
   struct Attributes {
@@ -1098,6 +1126,7 @@ public:
 ///   along the causal axis.
 class CausalConvWithState : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ``CausalConvWithState`` operator.
   struct Attributes {
     /// Fused activation. Allowed values: ``"none"`` (default), ``"silu"``,
@@ -1135,6 +1164,7 @@ public:
 /// promoted to FLOAT32 for the recurrence and the outputs are demoted back.
 class LinearAttention : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``LinearAttention`` operator.
   struct Attributes {
     std::string update_rule = "gated_delta"; ///< Recurrence type.

@@ -76,6 +76,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// type.
 class FlexAttention : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Callback used to apply the ``score_mod`` modifier subgraph to the

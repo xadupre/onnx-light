@@ -114,6 +114,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// or attribute values throw ``std::invalid_argument``.
 class ImageDecoder : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns the channel count implied by ``pixel_format``: ``1`` for

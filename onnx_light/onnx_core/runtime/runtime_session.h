@@ -78,7 +78,7 @@ public:
    */
   explicit RuntimeSession(const ExecutionPlan &plan);
 
-  // A session caches one owning ``std::unique_ptr<Kernel>`` per node (see
+  // A session caches one owning ``std::unique_ptr<KernelBase>`` per node (see
   // :cpp:member:`kernels_`), so it is move-only. It is always created in place
   // (by value inside :cpp:class:`SubgraphSession`, or via ``std::make_shared``)
   // and never copied; deleting the copy operations keeps that explicit and lets
@@ -159,7 +159,7 @@ private:
   /// recompute or re-store them separately.
   struct PreparedKernel {
     std::string key;
-    std::unique_ptr<Kernel> instance;
+    std::unique_ptr<KernelBase> instance;
   };
 
   /// Resolves and builds the kernel instance for every node the plan executes,

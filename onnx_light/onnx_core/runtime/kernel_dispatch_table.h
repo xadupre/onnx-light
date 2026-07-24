@@ -36,49 +36,17 @@ namespace core {
 namespace runtime {
 
 /**
- * Base class of every resolved, ready-to-run kernel returned by a
- * :cpp:type:`NodeKernelFn` factory.
- *
- * A concrete subclass is built once per node (during kernel resolution /
- * initialization) with everything a run needs already prepared: the node it
- * runs for (:cpp:member:`node_`), the concrete kernel object and any parsed
- * construction-time attributes. Its :cpp:func:`Run` performs the actual
- * per-run work — reads the node's current inputs from ``rt.tensors()``, calls
- * the concrete kernel and writes the outputs back — and may be called
- * repeatedly. Uniform across every kernel shape (unary/binary/ternary/
- * variadic/...) so :cpp:class:`RuntimeSession` can run any resolved kernel
- * identically through :cpp:func:`Run`.
- */
-class Kernel {
-public:
-  explicit Kernel(const NodeProto &node) : node_(node) {}
-  Kernel(const Kernel &) = delete;
-  Kernel &operator=(const Kernel &) = delete;
-  virtual ~Kernel() = default;
-
-  /// Runs the kernel for its node (:cpp:member:`node_`) against the current
-  /// state of ``rt``: reads the node's current inputs, computes and writes the
-  /// outputs back. Safe to call repeatedly.
-  virtual void Run(RuntimeContext &rt) = 0;
-
-protected:
-  /// The node this kernel was built for. The owning graph / execution plan
-  /// outlives the kernel, so the reference stays valid for the kernel's life.
-  const NodeProto &node_;
-};
-
-/**
  * Factory signature registered in :cpp:func:`KernelDispatchTable` for every
  * ``(domain, op_type)``. Called once per node (during kernel resolution /
  * initialization, e.g. by :cpp:func:`RuntimeSession::Run` or by
- * :cpp:func:`RunNode`): validates the node's input/output counts, reads any
- * construction-time attributes, constructs the concrete kernel object, and
- * returns a :cpp:class:`Kernel` wrapping it. Must NOT perform any computation
- * itself — all per-run computation belongs in the returned kernel's
- * :cpp:func:`Kernel::Run`.
+ * :cpp:func:`RunNode`): validates the node's input/output counts, constructs
+ * the concrete kernel object and attaches the node via
+ * :cpp:func:`KernelBase::set_node`, returning a :cpp:class:`KernelBase`. Must
+ * NOT perform any computation itself — all per-run computation belongs in the
+ * returned kernel's :cpp:func:`KernelBase::Run`.
  */
 using NodeKernelFn =
-    std::function<std::unique_ptr<Kernel>(const NodeProto &node, RuntimeContext &rt)>;
+    std::function<std::unique_ptr<KernelBase>(const NodeProto &node, RuntimeContext &rt)>;
 
 /**
  * Signature of the ``SequenceMap`` output-packing callback: given the

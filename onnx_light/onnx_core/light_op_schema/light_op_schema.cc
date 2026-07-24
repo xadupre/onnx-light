@@ -4,7 +4,9 @@
 
 #include "light_op_schema.h"
 
+#include <algorithm>
 #include <sstream>
+#include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
@@ -34,6 +36,73 @@ std::string JoinStringList(const std::vector<std::string> &v) {
   }
   os << "]";
   return os.str();
+}
+
+using onnx_proto::OptSeqTypeOf;
+using onnx_proto::OptTypeOf;
+using onnx_proto::SeqTypeOf;
+
+/// Resolves the concrete TensorType described by @p type for LightOpSchema::Verify's
+/// type-constraint checking. Returns std::nullopt when @p type uses a category that
+/// TensorType cannot represent in this context (map_type, opaque_type, sparse_tensor_type, or a
+/// nested sequence/map inside a Sequence/Optional); callers should skip the check in that case.
+std::optional<TensorType> TensorTypeFromTypeProto(const TypeProto &type) {
+  switch (type.value_case()) {
+  case TypeProto::kTensorType:
+    return symbolic::DataTypeToTensorType(type.tensor_type().elem_type());
+  case TypeProto::kSequenceType: {
+    const TypeProto &elem = type.sequence_type().elem_type();
+    if (!elem.has_tensor_type()) {
+      return std::nullopt;
+    }
+    const TensorType seq =
+        SeqTypeOf(symbolic::DataTypeToTensorType(elem.tensor_type().elem_type()));
+    return seq == TensorType::kUndefined ? std::nullopt : std::optional<TensorType>(seq);
+  }
+  case TypeProto::kOptionalType: {
+    const TypeProto &elem = type.optional_type().elem_type();
+    if (elem.has_tensor_type()) {
+      const TensorType opt =
+          OptTypeOf(symbolic::DataTypeToTensorType(elem.tensor_type().elem_type()));
+      return opt == TensorType::kUndefined ? std::nullopt : std::optional<TensorType>(opt);
+    }
+    if (elem.has_sequence_type()) {
+      const TypeProto &seq_elem = elem.sequence_type().elem_type();
+      if (!seq_elem.has_tensor_type()) {
+        return std::nullopt;
+      }
+      const TensorType opt_seq =
+          OptSeqTypeOf(symbolic::DataTypeToTensorType(seq_elem.tensor_type().elem_type()));
+      return opt_seq == TensorType::kUndefined ? std::nullopt : std::optional<TensorType>(opt_seq);
+    }
+    return std::nullopt;
+  }
+  default:
+    return std::nullopt;
+  }
+}
+
+/// Resolves the concrete TensorType carried by @p value (see SchemaInputValue), or
+/// std::nullopt when it cannot be determined (see TensorTypeFromTypeProto).
+std::optional<TensorType> TensorTypeFromInputValue(const SchemaInputValue &value) {
+  return std::visit(
+      [](const auto &v) -> std::optional<TensorType> {
+        using T = std::decay_t<decltype(v)>;
+        if constexpr (std::is_same_v<T, ValueInfoProto>) {
+          return v.has_type() ? TensorTypeFromTypeProto(v.type()) : std::nullopt;
+        } else if constexpr (std::is_same_v<T, symbolic::SymTensor>) {
+          return v.Dtype() == TensorType::kUndefined ? std::nullopt
+                                                     : std::optional<TensorType>(v.Dtype());
+        } else {
+          static_assert(std::is_same_v<T, symbolic::SymSequence>);
+          if (!v.HasElemDtype()) {
+            return std::nullopt;
+          }
+          const TensorType seq = SeqTypeOf(v.ElemDtype());
+          return seq == TensorType::kUndefined ? std::nullopt : std::optional<TensorType>(seq);
+        }
+      },
+      value);
 }
 
 } // namespace
@@ -297,6 +366,113 @@ CollectSchemasFromBuilders(const std::map<std::string, SchemaBuilder> &builders,
     }
   }
   return init_doc ? result : StripDocs(result);
+}
+
+void LightOpSchema::Verify(const NodeProto &node,
+                           const std::vector<std::optional<SchemaInputValue>> *inputs) const {
+  if (deprecated()) {
+    throw SchemaError(onnx_light_helpers::MakeString(
+        "Operator '", name(), "' has been deprecated since version ", since_version(), "."));
+  }
+
+  if (node.op_type() != name()) {
+    throw SchemaError(onnx_light_helpers::MakeString(
+        "Node '", node.name(), "' has op_type '", node.op_type(), "', expected '", name(), "'."));
+  }
+
+  const std::string node_domain =
+      node.domain().empty() ? std::string(kOnnxDomain) : std::string(node.domain());
+  const std::string schema_domain = domain().empty() ? std::string(kOnnxDomain) : domain();
+  if (node_domain != schema_domain) {
+    throw SchemaError(onnx_light_helpers::MakeString("Node '", node.name(), "' (op_type '",
+                                                     node.op_type(), "') has domain '", node_domain,
+                                                     "', expected '", schema_domain, "'."));
+  }
+
+  const int num_outputs = static_cast<int>(node.output().size());
+  if (num_outputs < min_output() || num_outputs > max_output()) {
+    throw SchemaError(onnx_light_helpers::MakeString(
+        "Node '", node.name(), "' (op_type '", node.op_type(), "') has ", num_outputs,
+        " output(s), expected between ", min_output(), " and ", max_output(), "."));
+  }
+
+  // Attributes: unrecognized names are rejected (except the "__"-prefixed internal-symbol
+  // convention), types must match the declared AttributeParam, and every required attribute
+  // must be present.
+  std::unordered_set<std::string> seen_attr_names;
+  for (const auto &attr : node.attribute()) {
+    const std::string attr_name(attr.name().sv());
+    if (!seen_attr_names.insert(attr_name).second) {
+      throw SchemaError(onnx_light_helpers::MakeString("Node '", node.name(), "' (op_type '",
+                                                       node.op_type(), "') has attribute '",
+                                                       attr_name, "' more than once."));
+    }
+
+    const bool is_internal_symbol =
+        attr_name.size() >= 2 && attr_name[0] == '_' && attr_name[1] == '_';
+    const auto found = std::find_if(attributes().begin(), attributes().end(),
+                                    [&](const AttributeParam &p) { return p.name == attr_name; });
+    if (found == attributes().end()) {
+      if (is_internal_symbol) {
+        continue;
+      }
+      throw SchemaError(
+          onnx_light_helpers::MakeString("Node '", node.name(), "' (op_type '", node.op_type(),
+                                         "') has unrecognized attribute '", attr_name, "'."));
+    }
+
+    const AttributeType expected_type = found->type;
+    const auto actual_type = static_cast<AttributeType>(attr.type());
+    if (actual_type != expected_type) {
+      throw SchemaError(onnx_light_helpers::MakeString(
+          "Node '", node.name(), "' (op_type '", node.op_type(), "') attribute '", attr_name,
+          "' has type ", AttributeType_Name(actual_type), ", expected ",
+          AttributeType_Name(expected_type), "."));
+    }
+  }
+
+  for (const auto &attr_param : attributes()) {
+    if (attr_param.required && !seen_attr_names.count(attr_param.name)) {
+      throw SchemaError(onnx_light_helpers::MakeString(
+          "Node '", node.name(), "' (op_type '", node.op_type(),
+          "') is missing required attribute '", attr_param.name, "'."));
+    }
+  }
+
+  if (inputs == nullptr || this->inputs().empty()) {
+    return;
+  }
+
+  for (std::size_t i = 0; i < inputs->size(); ++i) {
+    const std::optional<SchemaInputValue> &entry = (*inputs)[i];
+    if (!entry.has_value()) {
+      continue;
+    }
+
+    // Beyond the declared formal inputs, reuse the last one (the conventional way ONNX
+    // describes variadic inputs), since LightOpSchema does not track a separate arity option.
+    const FormalParameter &formal =
+        i < this->inputs().size() ? this->inputs()[i] : this->inputs().back();
+    const auto ctype =
+        std::find_if(type_constraints().begin(), type_constraints().end(),
+                     [&](const TypeConstraintParam &c) { return c.type_param_str == formal.type; });
+    if (ctype == type_constraints().end()) {
+      continue; // formal.type does not reference a known type-constraint parameter.
+    }
+
+    const std::optional<TensorType> actual = TensorTypeFromInputValue(*entry);
+    if (!actual.has_value()) {
+      continue; // The concrete type could not be determined; nothing to check.
+    }
+
+    const auto &allowed = ctype->allowed_type_strs;
+    if (std::find(allowed.begin(), allowed.end(), *actual) == allowed.end()) {
+      throw SchemaError(onnx_light_helpers::MakeString(
+          "Node '", node.name(), "' (op_type '", node.op_type(), "') input ", i, " ('", formal.name,
+          "') has type '", schema::ToTypeString(*actual),
+          "', which does not satisfy type constraint '", formal.type, "'."));
+    }
+  }
 }
 
 } // namespace schema

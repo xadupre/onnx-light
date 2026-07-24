@@ -9,10 +9,6 @@
 #include <variant>
 #include <vector>
 
-#ifdef ONNX_LIGHT_NAMESPACE
-#undef ONNX_LIGHT_NAMESPACE
-#endif
-
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {

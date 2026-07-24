@@ -7,6 +7,7 @@
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/type_helper.h"
 
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
@@ -270,6 +271,24 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def("set_node_determinism", &core::schema::LightOpSchema::set_node_determinism,
            nb::arg("value"), nb::rv_policy::reference_internal,
            "Sets the operator's node determinism and returns ``self``.")
+      .def(
+          "verify",
+          [](const core::schema::LightOpSchema &schema, const NodeProto &node,
+             std::optional<std::vector<std::optional<core::schema::SchemaInputValue>>> inputs) {
+            schema.Verify(node, inputs.has_value() ? &*inputs : nullptr);
+          },
+          nb::arg("node"), nb::arg("inputs") = nb::none(),
+          "Verifies that ``node`` follows this operator schema's constraints: "
+          "``op_type``/``domain`` match, the schema is not deprecated, output arity is "
+          "within ``[min_output, max_output]``, and every attribute is recognized, has "
+          "the expected type, and every required attribute is present (attribute names "
+          "starting with ``__`` are exempt, as they carry internal/optimizer-only data). "
+          "``inputs``, when given, is a list aligned with ``node.input``: each entry is "
+          "either a ``ValueInfoProto``, an ``SymTensor``, an ``SymSequence``, or ``None`` "
+          "to skip that input. When present, an input's resolved type is checked against "
+          "the operator's type constraint for that formal parameter (the last formal "
+          "parameter is reused for variadic inputs); inputs whose type cannot be resolved "
+          "are silently skipped. Raises ``SchemaError`` on the first violation found.")
       .def("__repr__", [](const core::schema::LightOpSchema &s) {
         const auto list_repr = [](const auto &items) {
           std::ostringstream os;

@@ -4,8 +4,9 @@
 
 /**
  * @file type_helper.h
- * @brief Declares the ``TensorType`` enumeration and the ``ToTypeString``
- *        converter used across the onnx-light library stack.
+ * @brief Provides the ``TensorType`` enumeration, the ``ToTypeString``
+ *        converter, and the ``SeqTypeOf``/``OptTypeOf``/``OptSeqTypeOf``
+ *        constexpr helpers used across the onnx-light library stack.
  */
 
 #pragma once
@@ -292,6 +293,127 @@ inline constexpr const char *ToTypeString(TensorType type) {
     return "tensor(undefined)";
   }
   throw std::logic_error("Unknown TensorType.");
+}
+
+/// Maps a scalar tensor TensorType to the corresponding sequence TensorType
+/// (e.g. kFloat → kSeqFloat). Returns kUndefined when no sequence variant
+/// exists for the given element type (low-precision / extended float types
+/// that ONNX does not define sequence forms for).
+inline constexpr TensorType SeqTypeOf(TensorType elem) {
+  switch (elem) {
+  case TensorType::kBool:
+    return TensorType::kSeqBool;
+  case TensorType::kString:
+    return TensorType::kSeqString;
+  case TensorType::kUint8:
+    return TensorType::kSeqUint8;
+  case TensorType::kUint16:
+    return TensorType::kSeqUint16;
+  case TensorType::kUint32:
+    return TensorType::kSeqUint32;
+  case TensorType::kUint64:
+    return TensorType::kSeqUint64;
+  case TensorType::kInt8:
+    return TensorType::kSeqInt8;
+  case TensorType::kInt16:
+    return TensorType::kSeqInt16;
+  case TensorType::kInt32:
+    return TensorType::kSeqInt32;
+  case TensorType::kInt64:
+    return TensorType::kSeqInt64;
+  case TensorType::kFloat16:
+    return TensorType::kSeqFloat16;
+  case TensorType::kFloat:
+    return TensorType::kSeqFloat;
+  case TensorType::kDouble:
+    return TensorType::kSeqDouble;
+  case TensorType::kComplex64:
+    return TensorType::kSeqComplex64;
+  case TensorType::kComplex128:
+    return TensorType::kSeqComplex128;
+  default:
+    return TensorType::kUndefined;
+  }
+}
+
+/// Maps a scalar tensor TensorType to the corresponding optional TensorType
+/// (e.g. kFloat → kOptFloat). Returns kUndefined when no optional variant
+/// exists for the given element type.
+inline constexpr TensorType OptTypeOf(TensorType elem) {
+  switch (elem) {
+  case TensorType::kBool:
+    return TensorType::kOptBool;
+  case TensorType::kString:
+    return TensorType::kOptString;
+  case TensorType::kUint8:
+    return TensorType::kOptUint8;
+  case TensorType::kUint16:
+    return TensorType::kOptUint16;
+  case TensorType::kUint32:
+    return TensorType::kOptUint32;
+  case TensorType::kUint64:
+    return TensorType::kOptUint64;
+  case TensorType::kInt8:
+    return TensorType::kOptInt8;
+  case TensorType::kInt16:
+    return TensorType::kOptInt16;
+  case TensorType::kInt32:
+    return TensorType::kOptInt32;
+  case TensorType::kInt64:
+    return TensorType::kOptInt64;
+  case TensorType::kFloat16:
+    return TensorType::kOptFloat16;
+  case TensorType::kFloat:
+    return TensorType::kOptFloat;
+  case TensorType::kDouble:
+    return TensorType::kOptDouble;
+  case TensorType::kComplex64:
+    return TensorType::kOptComplex64;
+  case TensorType::kComplex128:
+    return TensorType::kOptComplex128;
+  default:
+    return TensorType::kUndefined;
+  }
+}
+
+/// Maps a scalar tensor TensorType to the corresponding optional-sequence
+/// TensorType (e.g. kFloat → kOptSeqFloat). Returns kUndefined when no
+/// optional-sequence variant exists for the given element type.
+inline constexpr TensorType OptSeqTypeOf(TensorType elem) {
+  switch (elem) {
+  case TensorType::kBool:
+    return TensorType::kOptSeqBool;
+  case TensorType::kString:
+    return TensorType::kOptSeqString;
+  case TensorType::kUint8:
+    return TensorType::kOptSeqUint8;
+  case TensorType::kUint16:
+    return TensorType::kOptSeqUint16;
+  case TensorType::kUint32:
+    return TensorType::kOptSeqUint32;
+  case TensorType::kUint64:
+    return TensorType::kOptSeqUint64;
+  case TensorType::kInt8:
+    return TensorType::kOptSeqInt8;
+  case TensorType::kInt16:
+    return TensorType::kOptSeqInt16;
+  case TensorType::kInt32:
+    return TensorType::kOptSeqInt32;
+  case TensorType::kInt64:
+    return TensorType::kOptSeqInt64;
+  case TensorType::kFloat16:
+    return TensorType::kOptSeqFloat16;
+  case TensorType::kFloat:
+    return TensorType::kOptSeqFloat;
+  case TensorType::kDouble:
+    return TensorType::kOptSeqDouble;
+  case TensorType::kComplex64:
+    return TensorType::kOptSeqComplex64;
+  case TensorType::kComplex128:
+    return TensorType::kOptSeqComplex128;
+  default:
+    return TensorType::kUndefined;
+  }
 }
 
 } // namespace onnx_proto

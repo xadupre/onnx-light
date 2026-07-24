@@ -6,6 +6,8 @@
 
 #include <string>
 
+#include "onnx_light_helpers.h"
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace tensor {

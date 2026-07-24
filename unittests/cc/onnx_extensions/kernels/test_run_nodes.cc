@@ -1898,8 +1898,10 @@ TEST(RunModel, DelayedInitializerCpuLoadUsesConstructionAllocator) {
     out.write(reinterpret_cast<const char *>(values), sizeof(values));
   }
 
-  // SimpleRawBufferAllocator capacity counts buffer slots, not bytes.
-  constexpr size_t kAllocatorSlotCapacity = 1;
+  // SimpleRawBufferAllocator capacity counts buffer slots, not bytes. One slot
+  // is consumed by loaded_bytes_ at construction, and a second by the output
+  // produced by operator() through the construction-time allocator.
+  constexpr size_t kAllocatorSlotCapacity = 2;
   core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   KernelContext ctx(DefaultOpset(18));
@@ -1918,9 +1920,11 @@ TEST(RunModel, DelayedInitializerCpuLoadUsesConstructionAllocator) {
   // The internal buffer consumed one allocator slot at construction time.
   EXPECT_EQ(alloc.TotalAllocatedSize(), 3 * sizeof(float));
 
-  // Calling operator() without a runtime allocator returns a vector-backed copy.
+  // Calling operator() without a runtime allocator falls back to the
+  // construction-time allocator, so the output is allocator-backed.
   Tensor y = delayed(nullptr);
-  EXPECT_FALSE(y.has_allocation());
+  ASSERT_TRUE(y.has_allocation());
+  EXPECT_EQ(y.allocation_owner(), &alloc);
   ASSERT_EQ(y.shape.size(), 1u);
   EXPECT_EQ(y.shape[0], 3);
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 1.0f);

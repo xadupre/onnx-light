@@ -3,11 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
 
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -309,6 +311,68 @@ Tensors Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond
                          const Tensors &v_initial, std::size_t num_scan_outputs,
                          const BodyRunner &run_body) const {
   return RunLoopBody(M, cond, v_initial, num_scan_outputs, run_body, rt.allocator());
+}
+
+Tensors Loop::operator()(RuntimeContext &rt, const GraphProto &body, const Tensor &M,
+                         const Tensor &cond, const Tensors &v_initial) const {
+  const std::size_t n = v_initial.size();
+  EXT_ENFORCE_INVALID(!(body.input_size() < static_cast<int>(2 + n)),
+                      "kernel::Loop: body graph does not declare enough inputs.");
+  EXT_ENFORCE_INVALID(!(body.output_size() < static_cast<int>(1 + n)),
+                      "kernel::Loop: body graph does not declare enough outputs.");
+  const std::size_t k = static_cast<std::size_t>(body.output_size()) - 1 - n;
+
+  // Build a single session over the body once and reuse it for every
+  // iteration instead of re-resolving the body's kernels on every call; the
+  // body itself is only needed here, not kept around afterwards.
+  SubgraphSession session(rt, body);
+
+  auto run_body = [&](int64_t iter, bool cond_in, const Tensors &state) -> Tensors {
+    std::vector<std::pair<std::string, Tensor>> bindings;
+    bindings.reserve(2 + n);
+    bindings.emplace_back(body.input(0).name(),
+                          MakeInt64Scalar(body.input(0).name(), iter, rt.allocator()));
+    bindings.emplace_back(body.input(1).name(),
+                          MakeBoolScalar(body.input(1).name(), cond_in, rt.allocator()));
+    for (std::size_t i = 0; i < n; ++i) {
+      Tensor t = state[i];
+      t.name = body.input(static_cast<int>(2 + i)).name();
+      bindings.emplace_back(t.name, std::move(t));
+    }
+    return session.Run(std::move(bindings), rt, "body");
+  };
+
+  Tensors outputs = RunLoopBody(M, cond, v_initial, k, run_body, rt.allocator());
+
+  // When the loop runs zero iterations the kernel produces UNDEFINED-typed
+  // empty scan outputs (it has no template to seed dtype/shape from). Patch
+  // each scan output using the body's declared output value-info so the
+  // downstream pipeline (ReferenceEvaluator, numpy conversion, ...) sees a
+  // well-typed empty tensor of the expected element type and per-iteration
+  // trailing shape.
+  for (std::size_t i = 0; i < k; ++i) {
+    Tensor &t = outputs[n + i];
+    if (t.data_type != static_cast<int32_t>(DataType::UNDEFINED)) {
+      continue;
+    }
+    const auto &vi = body.output(static_cast<int>(1 + n + i));
+    if (!vi.has_type() || !vi.type().has_tensor_type()) {
+      continue;
+    }
+    const auto &tt = vi.type().tensor_type();
+    t.data_type = static_cast<int32_t>(tt.elem_type());
+    std::vector<int64_t> per_iter_shape;
+    if (tt.has_shape()) {
+      per_iter_shape.reserve(tt.shape().dim().size());
+      for (int d = 0; d < tt.shape().dim().size(); ++d) {
+        const auto &dim = tt.shape().dim()[d];
+        per_iter_shape.push_back(dim.has_dim_value() ? static_cast<int64_t>(dim.dim_value()) : 0);
+      }
+    }
+    t.shape.assign(1, 0);
+    t.shape.insert(t.shape.end(), per_iter_shape.begin(), per_iter_shape.end());
+  }
+  return outputs;
 }
 
 } // namespace runtime

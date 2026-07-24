@@ -40,14 +40,6 @@ bool ParseBoolScalar(const Tensor &t, const std::string &where) {
   return t.AsBool()[0] != 0;
 }
 
-Tensor MakeInt64Scalar(const std::string &name, int64_t v, RawBufferAllocator *allocator) {
-  return Tensor::FromInt64(name, {}, {v}, allocator);
-}
-
-Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *allocator) {
-  return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)}, allocator);
-}
-
 Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator = nullptr);
 
 /**
@@ -176,6 +168,14 @@ int64_t ResolveAxis(int64_t axis, size_t rank, const std::string &op_name) {
   }
   EXT_ENFORCE_INVALID(!(a < 0 || a >= r), "RunNode: op '", op_name, "' axis is out of range.");
   return a;
+}
+
+Tensor MakeInt64Scalar(const std::string &name, int64_t v, RawBufferAllocator *allocator) {
+  return Tensor::FromInt64(name, {}, {v}, allocator);
+}
+
+Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *allocator) {
+  return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)}, allocator);
 }
 
 Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
@@ -548,59 +548,10 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
     return;
   }
 
-  const std::size_t n = n_inputs;
   Tensors v_initial = std::move(tensor_state);
 
-  // Build a single session over the body once and reuse it for every
-  // iteration instead of re-resolving the body's kernels on every call.
-  SubgraphSession body_session(rt, body);
-
-  auto run_body = [&](int64_t iter, bool cond_in, const Tensors &state) -> Tensors {
-    std::vector<std::pair<std::string, Tensor>> bindings;
-    bindings.reserve(2 + n);
-    bindings.emplace_back(body.input(0).name(),
-                          MakeInt64Scalar(body.input(0).name(), iter, rt.allocator()));
-    bindings.emplace_back(body.input(1).name(),
-                          MakeBoolScalar(body.input(1).name(), cond_in, rt.allocator()));
-    for (size_t i = 0; i < n; ++i) {
-      Tensor t = state[i];
-      t.name = body.input(2 + i).name();
-      bindings.emplace_back(t.name, std::move(t));
-    }
-    return body_session.Run(std::move(bindings), rt, "body");
-  };
-
   Loop loop_kernel(rt.kernel_ctx());
-  Tensors outputs = loop_kernel(rt, m_tensor, cond_tensor, v_initial, k, run_body);
-
-  // When the loop runs zero iterations the kernel produces UNDEFINED-typed
-  // empty scan outputs (it has no template to seed dtype/shape from). Patch
-  // each scan output using the body's declared output value-info so the
-  // downstream pipeline (ReferenceEvaluator, numpy conversion, ...) sees a
-  // well-typed empty tensor of the expected element type and per-iteration
-  // trailing shape.
-  for (size_t i = 0; i < k; ++i) {
-    Tensor &t = outputs[n + i];
-    if (t.data_type != static_cast<int32_t>(DataType::UNDEFINED)) {
-      continue;
-    }
-    const auto &vi = body.output(static_cast<int>(1 + n + i));
-    if (!vi.has_type() || !vi.type().has_tensor_type()) {
-      continue;
-    }
-    const auto &tt = vi.type().tensor_type();
-    t.data_type = static_cast<int32_t>(tt.elem_type());
-    std::vector<int64_t> per_iter_shape;
-    if (tt.has_shape()) {
-      per_iter_shape.reserve(tt.shape().dim().size());
-      for (int d = 0; d < tt.shape().dim().size(); ++d) {
-        const auto &dim = tt.shape().dim()[d];
-        per_iter_shape.push_back(dim.has_dim_value() ? static_cast<int64_t>(dim.dim_value()) : 0);
-      }
-    }
-    t.shape.assign(1, 0);
-    t.shape.insert(t.shape.end(), per_iter_shape.begin(), per_iter_shape.end());
-  }
+  Tensors outputs = loop_kernel(rt, body, m_tensor, cond_tensor, v_initial);
   PropagateOutputsToCaller(node, std::move(outputs), rt);
 }
 

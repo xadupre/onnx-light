@@ -221,6 +221,22 @@ private:
 int64_t ResolveAxis(int64_t axis, std::size_t rank, const std::string &op_name);
 
 /**
+ * Builds a rank-0 (scalar) INT64 tensor named ``name`` holding ``v``. Used to
+ * bind a control-flow subgraph's per-iteration scalar formal inputs (e.g.
+ * ``Loop``'s ``iter_num``). When ``allocator`` is non-null the returned
+ * tensor stores its bytes in an allocator-owned ``RawBuffer``.
+ */
+Tensor MakeInt64Scalar(const std::string &name, int64_t v, RawBufferAllocator *allocator);
+
+/**
+ * Builds a rank-0 (scalar) BOOL tensor named ``name`` holding ``v``. Used to
+ * bind a control-flow subgraph's per-iteration scalar formal inputs (e.g.
+ * ``Loop``'s ``cond_in``). When ``allocator`` is non-null the returned
+ * tensor stores its bytes in an allocator-owned ``RawBuffer``.
+ */
+Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *allocator);
+
+/**
  * Returns the tensor obtained by selecting the ``index``-th slice of
  * ``t`` along axis ``axis`` (the resulting tensor's rank is
  * ``t.shape.size() - 1``). The slice is copied into a fresh buffer; the

@@ -1355,6 +1355,40 @@ TEST(KernelClass, TensorScatterRejectsAxisOnBatchDim) {
   EXPECT_THROW((void)ts(past, update, /*write_indices=*/nullptr, attrs), std::invalid_argument);
 }
 
+// Exercises the ``write_indices`` scratch buffer through the ``KernelContext``
+// allocator (instead of inline ``std::vector`` storage), covering both the
+// provided-indices and the defaulted-to-zero code paths.
+TEST(KernelClass, TensorScatterUsesAllocatorWhenContextHasOne) {
+  SimpleRawBufferAllocator alloc(16);
+  const KernelContext ctx(DefaultOpset(24), &alloc);
+  onnx_kernels::kernel::TensorScatter ts{ctx};
+
+  // With explicit write_indices: values are read into the allocator buffer.
+  Tensor past = Tensor::FromFloat("", {2, 3}, {0, 0, 0, 0, 0, 0});
+  Tensor update = Tensor::FromFloat("", {2, 1}, {7, 9});
+  Tensor write = Tensor::FromInt64("", {2}, {1, 2});
+  onnx_kernels::kernel::TensorScatter::Attributes attrs;
+  attrs.axis = 1;
+  Tensor y = ts(past, update, &write, attrs);
+  const float *py = y.AsFloat();
+  const std::vector<float> expected{0, 7, 0, 0, 0, 9};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+  // The scratch buffer is released before returning, so nothing leaks.
+  EXPECT_EQ(alloc.allocated_count(), 0u);
+
+  // Without write_indices: the allocator buffer must be zero-filled so updates
+  // land in column 0.
+  Tensor y0 = ts(past, update, /*write_indices=*/nullptr, attrs);
+  const float *py0 = y0.AsFloat();
+  const std::vector<float> expected0{7, 0, 0, 9, 0, 0};
+  for (std::size_t i = 0; i < expected0.size(); ++i) {
+    EXPECT_FLOAT_EQ(py0[i], expected0[i]) << "i=" << i;
+  }
+  EXPECT_EQ(alloc.allocated_count(), 0u);
+}
+
 // ---------------------------------------------------------------------------
 // ReverseSequence kernel tests
 // ---------------------------------------------------------------------------

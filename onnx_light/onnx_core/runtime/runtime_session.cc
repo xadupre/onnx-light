@@ -65,12 +65,35 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
   kernels_initialized_ = true;
 }
 
+void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
+  for (int i = 0; i < node.output_size(); ++i) {
+    const std::string &name = node.output(i);
+    if (name.empty() || !rt.Has(name)) {
+      continue;
+    }
+    const Tensor &output = rt.Get(name);
+    if (!output.has_allocation()) {
+      continue;
+    }
+    EXT_ENFORCE_INVALID(output.allocation_owner() == session_allocator_, "RuntimeSession: op '",
+                        node.op_type(), "' produced output '", name,
+                        "' backed by an allocator other than the session's unique allocator.");
+  }
+}
+
 void RuntimeSession::Run(RuntimeContext &rt) {
   // Kernels are resolved against ``rt`` on the first run and cached; later
   // runs reuse the same built instances without redoing the per-node
   // dispatch lookup or re-constructing concrete kernels.
   if (!kernels_initialized_) {
     InitializeKernels(rt);
+  }
+  // Capture the allocator attached to ``rt`` once, on the first Run, as the
+  // session's unique allocator; every output tensor produced from here on is
+  // verified against this same allocator (see VerifyOutputAllocators).
+  if (!session_allocator_captured_) {
+    session_allocator_ = rt.allocator();
+    session_allocator_captured_ = true;
   }
   // Every external input the scheduled nodes read must already be available in
   // ``rt`` (as a tensor, sequence or map) — graph initializers are seeded
@@ -108,6 +131,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       const std::string domain = prepared.key.substr(0, sep);
       const std::string op_type = prepared.key.substr(sep + 1);
       detail::InvokeResolvedKernel(*nodes[index], rt, domain, op_type, *prepared.instance);
+      VerifyOutputAllocators(*nodes[index], rt);
       break;
     }
     case ExecuteActionKind::kDeleteBuffer:

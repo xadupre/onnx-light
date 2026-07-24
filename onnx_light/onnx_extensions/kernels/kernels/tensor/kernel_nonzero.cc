@@ -5,8 +5,9 @@
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
+#include <cstddef>
 #include <cstdint>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -50,16 +51,21 @@ Tensor NonZero::operator()(const Tensor &x, RuntimeContext *rt) const {
   const std::size_t rank = shape.size();
   const int64_t total = x.element_count();
 
-  // Identify non-zero positions in row-major order.
-  std::vector<int64_t> nz_indices;
-  nz_indices.reserve(static_cast<std::size_t>(total));
+  // Identify non-zero positions in row-major order. The scratch storage for the
+  // indices is drawn from the runtime allocator when available (falling back to
+  // inline storage otherwise), sized to the worst case of every element being
+  // non-zero.
+  detail::TemporaryTypedBuffer<int64_t> nz_indices_buf(
+      static_cast<std::size_t>(total > 0 ? total : 1), ctx_.allocator, "kernel::NonZero");
+  int64_t *nz_indices = nz_indices_buf.data();
+  std::size_t nnz_count = 0;
   for (int64_t i = 0; i < total; ++i) {
     if (IsElementNonZero(x.bytes() + static_cast<std::size_t>(i) * elem_size, elem_size)) {
-      nz_indices.push_back(i);
+      nz_indices[nnz_count++] = i;
     }
   }
 
-  const int64_t nnz = static_cast<int64_t>(nz_indices.size());
+  const int64_t nnz = static_cast<int64_t>(nnz_count);
   // Output shape: (rank, nnz). For scalar input (rank == 0), shape is (0, nnz),
   // mirroring the upstream NonZero spec (different from numpy.nonzero).
   const onnx_kernels::Shape out_shape{static_cast<int64_t>(rank), nnz};
@@ -73,7 +79,7 @@ Tensor NonZero::operator()(const Tensor &x, RuntimeContext *rt) const {
   Tensor result = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape,
                                    out_count * sizeof(int64_t), ctx_.allocator);
   int64_t *values = result.AsInt64();
-  for (std::size_t k = 0; k < nz_indices.size(); ++k) {
+  for (std::size_t k = 0; k < nnz_count; ++k) {
     int64_t flat = nz_indices[k];
     for (std::size_t r = rank; r > 0; --r) {
       const int64_t dim = shape[r - 1];

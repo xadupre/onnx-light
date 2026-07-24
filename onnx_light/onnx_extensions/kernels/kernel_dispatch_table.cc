@@ -24,6 +24,7 @@
 #include "onnx_extensions/kernels/kernels/text/include_text_kernels.h"
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_extensions/kernels/kernels/training/include_training_kernels.h"
+#include "onnx_extensions/kernels/wrapper_kernels.h"
 
 #include <algorithm>
 #include <cmath>
@@ -60,39 +61,15 @@ const Tensor kEmptyTensor = [] {
 //   * validates the node's input/output count,
 //   * reads any construction-time attributes,
 //   * constructs the concrete kernel once with ``rt.kernel_ctx()``,
-//   * returns a :cpp:class:`ResolvedKernel` whose ``Invoke`` reads the current
+//   * returns a :cpp:type:`KernelInvokeFn` closure that reads the current
 //     inputs from ``rt.tensors()`` and stores the produced outputs back.
 //
 // Centralising the boilerplate keeps the dispatch table compact and
-// makes the per-operator entries below one-liners.
+// makes the per-operator entries below one-liners. The element-wise unary and
+// binary shapes live in reusable classes ``UnaryKernel`` / ``BinaryKernel``
+// (see ``onnx_extensions/kernels/wrapper_kernels.h``); the remaining
+// specialised shapes stay as free factory helpers here.
 // ---------------------------------------------------------------------------
-
-template <class KernelT> NodeKernelFn MakeUnaryTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
-    RequireInputCount(node, 1);
-    RequireOutputCount(node, 1);
-    KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &x = GetInput(node, 0, rt.tensors());
-          SetOutput(node, 0, kernel(x, &rt), rt);
-        });
-  };
-}
-
-template <class KernelT> NodeKernelFn MakeBinaryTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
-    RequireInputCount(node, 2);
-    RequireOutputCount(node, 1);
-    KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &x = GetInput(node, 0, rt.tensors());
-          const Tensor &y = GetInput(node, 1, rt.tensors());
-          SetOutput(node, 0, kernel(x, y, &rt), rt);
-        });
-  };
-}
 
 // Wraps a kernel of the form
 //   ``Tensor operator()(const Tensor&, const Tensor&)`` /
@@ -100,76 +77,70 @@ template <class KernelT> NodeKernelFn MakeBinaryTrampoline() {
 // where the third input is optional (e.g. ``QuantizeLinear`` /
 // ``DequantizeLinear`` zero-point).
 template <class KernelT> NodeKernelFn MakeBinaryWithOptionalThirdTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
     RequireMinInputCount(node, 2);
     EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type(),
                         "' expects 2 or 3 inputs, got ", node.input_size(), ".");
     RequireOutputCount(node, 1);
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &a = GetInput(node, 0, rt.tensors());
-          const Tensor &b = GetInput(node, 1, rt.tensors());
-          const Tensor *c = GetOptionalInput(node, 2, rt.tensors());
-          if (c != nullptr) {
-            SetOutput(node, 0, kernel(a, b, *c, &rt), rt);
-          } else {
-            SetOutput(node, 0, kernel(a, b, &rt), rt);
-          }
-        });
+    return [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
+      const Tensor &a = GetInput(node, 0, rt.tensors());
+      const Tensor &b = GetInput(node, 1, rt.tensors());
+      const Tensor *c = GetOptionalInput(node, 2, rt.tensors());
+      if (c != nullptr) {
+        SetOutput(node, 0, kernel(a, b, *c, &rt), rt);
+      } else {
+        SetOutput(node, 0, kernel(a, b, &rt), rt);
+      }
+    };
   };
 }
 
 template <class KernelT> NodeKernelFn MakeTernaryTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
     RequireInputCount(node, 3);
     RequireOutputCount(node, 1);
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &a = GetInput(node, 0, rt.tensors());
-          const Tensor &b = GetInput(node, 1, rt.tensors());
-          const Tensor &c = GetInput(node, 2, rt.tensors());
-          SetOutput(node, 0, kernel(a, b, c, &rt), rt);
-        });
+    return [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
+      const Tensor &a = GetInput(node, 0, rt.tensors());
+      const Tensor &b = GetInput(node, 1, rt.tensors());
+      const Tensor &c = GetInput(node, 2, rt.tensors());
+      SetOutput(node, 0, kernel(a, b, c, &rt), rt);
+    };
   };
 }
 
 // Wraps a kernel of the form ``Tensor operator()(const Tensors&)``
 // (the variadic element-wise reducers: ``Sum``, ``Max``, ``Min``, ``Mean``).
 template <class KernelT> NodeKernelFn MakeVariadicTrampoline(int min_inputs = 1) {
-  return
-      [min_inputs](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
-        RequireMinInputCount(node, min_inputs);
-        RequireOutputCount(node, 1);
-        KernelT kernel(rt.kernel_ctx());
-        return std::make_unique<ResolvedKernel>(
-            [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
-              Tensors inputs;
-              inputs.reserve(node.input_size());
-              for (int i = 0; i < node.input_size(); ++i) {
-                inputs.push_back(GetInput(node, i, rt.tensors()));
-              }
-              SetOutput(node, 0, kernel(inputs, &rt), rt);
-            });
-      };
+  return [min_inputs](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+    RequireMinInputCount(node, min_inputs);
+    RequireOutputCount(node, 1);
+    KernelT kernel(rt.kernel_ctx());
+    return [kernel](const NodeProto &node, RuntimeContext &rt) mutable {
+      Tensors inputs;
+      inputs.reserve(node.input_size());
+      for (int i = 0; i < node.input_size(); ++i) {
+        inputs.push_back(GetInput(node, i, rt.tensors()));
+      }
+      SetOutput(node, 0, kernel(inputs, &rt), rt);
+    };
+  };
 }
 
 // Wraps a kernel of the form ``Tensor operator()(const Tensor&, float alpha)``.
 template <class KernelT>
 NodeKernelFn MakeUnaryAlphaTrampoline(const char *attr_name, float default_alpha) {
   const std::string name(attr_name);
-  return [name, default_alpha](const NodeProto &node,
-                               RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [name, default_alpha](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
     const float alpha = GetAttributeFloatOrDefault(node, name, default_alpha);
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel, alpha](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &x = GetInput(node, 0, rt.tensors());
-          SetOutput(node, 0, kernel(x, alpha, &rt), rt);
-        });
+    return [kernel, alpha](const NodeProto &node, RuntimeContext &rt) mutable {
+      const Tensor &x = GetInput(node, 0, rt.tensors());
+      SetOutput(node, 0, kernel(x, alpha, &rt), rt);
+    };
   };
 }
 
@@ -178,18 +149,16 @@ NodeKernelFn MakeUnaryAlphaTrampoline(const char *attr_name, float default_alpha
 template <class KernelT>
 NodeKernelFn MakeBinaryAlphaTrampoline(const char *attr_name, float default_alpha) {
   const std::string name(attr_name);
-  return [name, default_alpha](const NodeProto &node,
-                               RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [name, default_alpha](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
     RequireInputCount(node, 2);
     RequireOutputCount(node, 1);
     const float alpha = GetAttributeFloatOrDefault(node, name, default_alpha);
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel, alpha](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &a = GetInput(node, 0, rt.tensors());
-          const Tensor &b = GetInput(node, 1, rt.tensors());
-          SetOutput(node, 0, kernel(a, b, alpha, &rt), rt);
-        });
+    return [kernel, alpha](const NodeProto &node, RuntimeContext &rt) mutable {
+      const Tensor &a = GetInput(node, 0, rt.tensors());
+      const Tensor &b = GetInput(node, 1, rt.tensors());
+      SetOutput(node, 0, kernel(a, b, alpha, &rt), rt);
+    };
   };
 }
 
@@ -197,35 +166,32 @@ NodeKernelFn MakeBinaryAlphaTrampoline(const char *attr_name, float default_alph
 // (``Softmax``, ``LogSoftmax``, ``Hardmax``). Opset 13+ defaults ``axis`` to
 // ``-1``, which matches the kernel reference implementation.
 template <class KernelT> NodeKernelFn MakeAxisTrampoline(int64_t default_axis = -1) {
-  return
-      [default_axis](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
-        RequireInputCount(node, 1);
-        RequireOutputCount(node, 1);
-        const int64_t axis = GetAttributeIntOrDefault(node, "axis", default_axis);
-        KernelT kernel(rt.kernel_ctx());
-        return std::make_unique<ResolvedKernel>(
-            [kernel, axis](const NodeProto &node, RuntimeContext &rt) mutable {
-              const Tensor &x = GetInput(node, 0, rt.tensors());
-              SetOutput(node, 0, kernel(x, axis, &rt), rt);
-            });
-      };
+  return [default_axis](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
+    RequireInputCount(node, 1);
+    RequireOutputCount(node, 1);
+    const int64_t axis = GetAttributeIntOrDefault(node, "axis", default_axis);
+    KernelT kernel(rt.kernel_ctx());
+    return [kernel, axis](const NodeProto &node, RuntimeContext &rt) mutable {
+      const Tensor &x = GetInput(node, 0, rt.tensors());
+      SetOutput(node, 0, kernel(x, axis, &rt), rt);
+    };
+  };
 }
 
 // Wraps a kernel of the form ``Tensor operator()(const Tensor&, int32_t to)``
 // where ``to`` is the required ONNX INT attribute naming the target data type
 // (for example ``Cast`` and ``BitCast``).
 template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
     const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
     EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type(), " requires INT attribute 'to'.");
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel, to](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &x = GetInput(node, 0, rt.tensors());
-          SetOutput(node, 0, kernel(x, to, &rt), rt);
-        });
+    return [kernel, to](const NodeProto &node, RuntimeContext &rt) mutable {
+      const Tensor &x = GetInput(node, 0, rt.tensors());
+      SetOutput(node, 0, kernel(x, to, &rt), rt);
+    };
   };
 }
 
@@ -235,7 +201,7 @@ template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
 // where ``axes`` is either an optional second input (opset 13+/18+ depending
 // on the operator) or an ``axes`` INTS attribute (older opsets).
 template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
     RequireMinInputCount(node, 1);
     EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
                         "' expects at most 2 inputs.");
@@ -251,9 +217,8 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
             : Tensor::FromInt64("", {static_cast<int64_t>(axes_attr.size())}, axes_attr);
     KernelT kernel(rt.kernel_ctx());
 
-    return std::make_unique<ResolvedKernel>([kernel, keepdims, noop_with_empty_axes, has_axes_attr,
-                                             axes_attr_tensor](const NodeProto &node,
-                                                               RuntimeContext &rt) mutable {
+    return [kernel, keepdims, noop_with_empty_axes, has_axes_attr,
+            axes_attr_tensor](const NodeProto &node, RuntimeContext &rt) mutable {
       const Tensor &data = GetInput(node, 0, rt.tensors());
       const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
       if (axes_input != nullptr) {
@@ -265,7 +230,7 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
         return;
       }
       SetOutput(node, 0, kernel(data, keepdims, noop_with_empty_axes, &rt), rt);
-    });
+    };
   };
 }
 
@@ -274,57 +239,54 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
 // legacy opset (<13), ``axes`` is provided as an INTS attribute instead.
 template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_name) {
   const std::string name(op_name);
-  return [name](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [name](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
     RequireMinInputCount(node, 1);
     EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", name,
                         "' expects at most 2 inputs.");
     RequireOutputCount(node, 1);
     const onnx_kernels::Shape axes_attr = GetAttributeIntsOrDefault(node, "axes", {});
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel, axes_attr, name](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &data = GetInput(node, 0, rt.tensors());
-          onnx_kernels::Shape axes;
-          const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
-          if (axes_input != nullptr) {
-            // The schema requires a 1-D INT64 tensor, but the ai.onnx::AffineGrid
-            // function body (and other upstream function bodies) feed a 0-D INT64
-            // scalar here. The upstream reference evaluator accepts scalars too,
-            // so for compatibility we treat a scalar as a 1-element 1-D tensor.
-            EXT_ENFORCE_INVALID(!(axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
-                                  axes_input->shape.size() > 1),
-                                "RunNode: ", name, " 'axes' input must be a 1-D INT64 tensor.");
-            const int64_t n = axes_input->element_count();
-            const int64_t *p = axes_input->AsInt64();
-            axes.assign(p, p + n);
-          } else {
-            axes = axes_attr;
-          }
-          SetOutput(node, 0, kernel(data, axes, &rt), rt);
-        });
+    return [kernel, axes_attr, name](const NodeProto &node, RuntimeContext &rt) mutable {
+      const Tensor &data = GetInput(node, 0, rt.tensors());
+      onnx_kernels::Shape axes;
+      const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+      if (axes_input != nullptr) {
+        // The schema requires a 1-D INT64 tensor, but the ai.onnx::AffineGrid
+        // function body (and other upstream function bodies) feed a 0-D INT64
+        // scalar here. The upstream reference evaluator accepts scalars too,
+        // so for compatibility we treat a scalar as a 1-element 1-D tensor.
+        EXT_ENFORCE_INVALID(!(axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
+                              axes_input->shape.size() > 1),
+                            "RunNode: ", name, " 'axes' input must be a 1-D INT64 tensor.");
+        const int64_t n = axes_input->element_count();
+        const int64_t *p = axes_input->AsInt64();
+        axes.assign(p, p + n);
+      } else {
+        axes = axes_attr;
+      }
+      SetOutput(node, 0, kernel(data, axes, &rt), rt);
+    };
   };
 }
 
 template <class KernelT> NodeKernelFn MakeArgReduceTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
     const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
     const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
     const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>([kernel, axis, keepdims, select_last_index](
-                                                const NodeProto &node, RuntimeContext &rt) mutable {
+    return [kernel, axis, keepdims, select_last_index](const NodeProto &node,
+                                                       RuntimeContext &rt) mutable {
       const Tensor &data = GetInput(node, 0, rt.tensors());
       SetOutput(node, 0, kernel(data, axis, keepdims, select_last_index, &rt), rt);
-    });
+    };
   };
 }
 
-NodeKernelFn WrapInvokeOnly(ResolvedKernel::InvokeFn fn) {
-  return [fn = std::move(fn)](const NodeProto &, RuntimeContext &) {
-    return std::make_unique<ResolvedKernel>(fn);
-  };
+NodeKernelFn WrapInvokeOnly(KernelInvokeFn fn) {
+  return [fn = std::move(fn)](const NodeProto &, RuntimeContext &) { return fn; };
 }
 
 // Shared attributes consumed by SVMRegressor and SVMClassifier.
@@ -441,8 +403,8 @@ NodeKernelFn MakeRandomGenTrampoline(const char *attr_a, float default_a, const 
                                      float default_b) {
   const std::string name_a(attr_a);
   const std::string name_b(attr_b);
-  return [name_a, default_a, name_b,
-          default_b](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [name_a, default_a, name_b, default_b](const NodeProto &node,
+                                                RuntimeContext &rt) -> KernelInvokeFn {
     RequireInputCount(node, 0);
     RequireOutputCount(node, 1);
     const std::vector<int64_t> shape = GetAttributeIntsOrDefault(node, "shape", {});
@@ -451,10 +413,9 @@ NodeKernelFn MakeRandomGenTrampoline(const char *attr_a, float default_a, const 
     const int64_t seed = GetSeedAttr(node);
     const int32_t dtype = GetDtypeAttr(node);
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel, shape, a, b, seed, dtype](const NodeProto &node, RuntimeContext &rt) mutable {
-          SetOutput(node, 0, kernel(shape, a, b, seed, dtype, &rt), rt);
-        });
+    return [kernel, shape, a, b, seed, dtype](const NodeProto &node, RuntimeContext &rt) mutable {
+      SetOutput(node, 0, kernel(shape, a, b, seed, dtype, &rt), rt);
+    };
   };
 }
 
@@ -467,8 +428,8 @@ NodeKernelFn MakeRandomLikeTrampoline(const char *attr_a, float default_a, const
                                       float default_b) {
   const std::string name_a(attr_a);
   const std::string name_b(attr_b);
-  return [name_a, default_a, name_b,
-          default_b](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [name_a, default_a, name_b, default_b](const NodeProto &node,
+                                                RuntimeContext &rt) -> KernelInvokeFn {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
     const float a = GetAttributeFloatOrDefault(node, name_a, default_a);
@@ -476,11 +437,10 @@ NodeKernelFn MakeRandomLikeTrampoline(const char *attr_a, float default_a, const
     const int64_t seed = GetSeedAttr(node);
     const int32_t dtype = GetDtypeAttr(node);
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel, a, b, seed, dtype](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &input = GetInput(node, 0, rt.tensors());
-          SetOutput(node, 0, kernel(input, a, b, seed, dtype, &rt), rt);
-        });
+    return [kernel, a, b, seed, dtype](const NodeProto &node, RuntimeContext &rt) mutable {
+      const Tensor &input = GetInput(node, 0, rt.tensors());
+      SetOutput(node, 0, kernel(input, a, b, seed, dtype, &rt), rt);
+    };
   };
 }
 
@@ -492,7 +452,7 @@ NodeKernelFn MakeRandomLikeTrampoline(const char *attr_a, float default_a, const
 // always produce FLOAT outputs.
 template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) {
   const std::string name(op_name);
-  return [name](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [name](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
     const int64_t output_datatype =
@@ -501,11 +461,10 @@ template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) 
                         "RunNode: op '", name, "' only supports output_datatype=FLOAT.");
     const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel, periodic](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &size = GetInput(node, 0, rt.tensors());
-          SetOutput(node, 0, kernel(size, periodic, &rt), rt);
-        });
+    return [kernel, periodic](const NodeProto &node, RuntimeContext &rt) mutable {
+      const Tensor &size = GetInput(node, 0, rt.tensors());
+      SetOutput(node, 0, kernel(size, periodic, &rt), rt);
+    };
   };
 }
 
@@ -513,18 +472,17 @@ template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) 
 // input tensor and an ``axis`` scalar input plus the boolean ``exclusive``
 // and ``reverse`` int attributes.
 template <class KernelT> NodeKernelFn MakeCumulativeTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<ResolvedKernel> {
+  return [](const NodeProto &node, RuntimeContext &rt) -> KernelInvokeFn {
     RequireInputCount(node, 2);
     RequireOutputCount(node, 1);
     const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
     const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
     KernelT kernel(rt.kernel_ctx());
-    return std::make_unique<ResolvedKernel>(
-        [kernel, exclusive, reverse](const NodeProto &node, RuntimeContext &rt) mutable {
-          const Tensor &x = GetInput(node, 0, rt.tensors());
-          const Tensor &axis = GetInput(node, 1, rt.tensors());
-          SetOutput(node, 0, kernel(x, axis, exclusive, reverse, &rt), rt);
-        });
+    return [kernel, exclusive, reverse](const NodeProto &node, RuntimeContext &rt) mutable {
+      const Tensor &x = GetInput(node, 0, rt.tensors());
+      const Tensor &axis = GetInput(node, 1, rt.tensors());
+      SetOutput(node, 0, kernel(x, axis, exclusive, reverse, &rt), rt);
+    };
   };
 }
 // ---------------------------------------------------------------------------
@@ -697,10 +655,10 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::DelayedInitializer kernel(rt.kernel_ctx(), std::move(attrs));
          SetOutput(node, 0, kernel(&rt), rt);
        })},
-      {"ai.onnx:Abs", MakeUnaryTrampoline<onnx_kernels::kernel::Abs>()},
-      {"ai.onnx:Acos", MakeUnaryTrampoline<onnx_kernels::kernel::Acos>()},
-      {"ai.onnx:Acosh", MakeUnaryTrampoline<onnx_kernels::kernel::Acosh>()},
-      {"ai.onnx:Add", MakeBinaryTrampoline<onnx_kernels::kernel::Add>()},
+      {"ai.onnx:Abs", UnaryKernel<onnx_kernels::kernel::Abs>::Factory()},
+      {"ai.onnx:Acos", UnaryKernel<onnx_kernels::kernel::Acos>::Factory()},
+      {"ai.onnx:Acosh", UnaryKernel<onnx_kernels::kernel::Acosh>::Factory()},
+      {"ai.onnx:Add", BinaryKernel<onnx_kernels::kernel::Add>::Factory()},
       {"ai.onnx:AffineGrid", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);
          RequireOutputCount(node, 1);
@@ -711,13 +669,13 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::AffineGrid affine_grid_kernel(rt.kernel_ctx());
          SetOutput(node, 0, affine_grid_kernel(theta, size, affine_grid_attrs, &rt), rt);
        })},
-      {"ai.onnx:And", MakeBinaryTrampoline<onnx_kernels::kernel::And>()},
+      {"ai.onnx:And", BinaryKernel<onnx_kernels::kernel::And>::Factory()},
       {"ai.onnx:ArgMax", MakeArgReduceTrampoline<onnx_kernels::kernel::ArgMax>()},
       {"ai.onnx:ArgMin", MakeArgReduceTrampoline<onnx_kernels::kernel::ArgMin>()},
-      {"ai.onnx:Asin", MakeUnaryTrampoline<onnx_kernels::kernel::Asin>()},
-      {"ai.onnx:Asinh", MakeUnaryTrampoline<onnx_kernels::kernel::Asinh>()},
-      {"ai.onnx:Atan", MakeUnaryTrampoline<onnx_kernels::kernel::Atan>()},
-      {"ai.onnx:Atanh", MakeUnaryTrampoline<onnx_kernels::kernel::Atanh>()},
+      {"ai.onnx:Asin", UnaryKernel<onnx_kernels::kernel::Asin>::Factory()},
+      {"ai.onnx:Asinh", UnaryKernel<onnx_kernels::kernel::Asinh>::Factory()},
+      {"ai.onnx:Atan", UnaryKernel<onnx_kernels::kernel::Atan>::Factory()},
+      {"ai.onnx:Atanh", UnaryKernel<onnx_kernels::kernel::Atanh>::Factory()},
       {"ai.onnx:Attention", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 7), "RunNode: op '",
                              node.op_type(), "' expects between 3 and 7 input(s), got ",
@@ -796,10 +754,10 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          SetOutput(node, 0, k(x, y, dir, &rt), rt);
        })},
       {"ai.onnx:BitCast", MakeUnaryToTrampoline<onnx_kernels::kernel::BitCast>()},
-      {"ai.onnx:BitwiseAnd", MakeBinaryTrampoline<onnx_kernels::kernel::BitwiseAnd>()},
-      {"ai.onnx:BitwiseNot", MakeUnaryTrampoline<onnx_kernels::kernel::BitwiseNot>()},
-      {"ai.onnx:BitwiseOr", MakeBinaryTrampoline<onnx_kernels::kernel::BitwiseOr>()},
-      {"ai.onnx:BitwiseXor", MakeBinaryTrampoline<onnx_kernels::kernel::BitwiseXor>()},
+      {"ai.onnx:BitwiseAnd", BinaryKernel<onnx_kernels::kernel::BitwiseAnd>::Factory()},
+      {"ai.onnx:BitwiseNot", UnaryKernel<onnx_kernels::kernel::BitwiseNot>::Factory()},
+      {"ai.onnx:BitwiseOr", BinaryKernel<onnx_kernels::kernel::BitwiseOr>::Factory()},
+      {"ai.onnx:BitwiseXor", BinaryKernel<onnx_kernels::kernel::BitwiseXor>::Factory()},
       {"ai.onnx:BatchNormalization", WrapInvokeOnly(RunBatchNormalization)},
       {"ai.onnx:Bernoulli", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -849,7 +807,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::CastLike k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, target_type, saturate, &rt), rt);
        })},
-      {"ai.onnx:Ceil", MakeUnaryTrampoline<onnx_kernels::kernel::Ceil>()},
+      {"ai.onnx:Ceil", UnaryKernel<onnx_kernels::kernel::Ceil>::Factory()},
       {"ai.onnx:Celu", MakeUnaryAlphaTrampoline<onnx_kernels::kernel::Celu>("alpha", 1.0f)},
       {"ai.onnx:CenterCropPad", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);
@@ -1023,8 +981,8 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::ConvTranspose k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
        })},
-      {"ai.onnx:Cos", MakeUnaryTrampoline<onnx_kernels::kernel::Cos>()},
-      {"ai.onnx:Cosh", MakeUnaryTrampoline<onnx_kernels::kernel::Cosh>()},
+      {"ai.onnx:Cos", UnaryKernel<onnx_kernels::kernel::Cos>::Factory()},
+      {"ai.onnx:Cosh", UnaryKernel<onnx_kernels::kernel::Cosh>::Factory()},
       {"ai.onnx:CumSum", MakeCumulativeTrampoline<onnx_kernels::kernel::CumSum>()},
       {"ai.onnx:CumProd", MakeCumulativeTrampoline<onnx_kernels::kernel::CumProd>()},
       {"ai.onnx:DeformConv", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
@@ -1051,7 +1009,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
                      attrs),
                    rt.tensors());
        })},
-      {"ai.onnx:Det", MakeUnaryTrampoline<onnx_kernels::kernel::Det>()},
+      {"ai.onnx:Det", UnaryKernel<onnx_kernels::kernel::Det>::Factory()},
       {"ai.onnx:DepthToSpace", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
@@ -1132,7 +1090,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::DFT k(rt.kernel_ctx());
          SetOutput(node, 0, k(input, dft_length, axis, onesided, inverse, &rt), rt);
        })},
-      {"ai.onnx:Div", MakeBinaryTrampoline<onnx_kernels::kernel::Div>()},
+      {"ai.onnx:Div", BinaryKernel<onnx_kernels::kernel::Div>::Factory()},
       {"ai.onnx:Dropout", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputRange(node, 1, 3);
          RequireOutputRange(node, 1, 2);
@@ -1208,9 +1166,9 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          SetOutput(node, 0, k(inputs, equation, &rt), rt);
        })},
       {"ai.onnx:Elu", MakeUnaryAlphaTrampoline<onnx_kernels::kernel::Elu>("alpha", 1.0f)},
-      {"ai.onnx:Equal", MakeBinaryTrampoline<onnx_kernels::kernel::Equal>()},
-      {"ai.onnx:Erf", MakeUnaryTrampoline<onnx_kernels::kernel::Erf>()},
-      {"ai.onnx:Exp", MakeUnaryTrampoline<onnx_kernels::kernel::Exp>()},
+      {"ai.onnx:Equal", BinaryKernel<onnx_kernels::kernel::Equal>::Factory()},
+      {"ai.onnx:Erf", UnaryKernel<onnx_kernels::kernel::Erf>::Factory()},
+      {"ai.onnx:Exp", UnaryKernel<onnx_kernels::kernel::Exp>::Factory()},
       {"ai.onnx:Expand", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);
          RequireOutputCount(node, 1);
@@ -1229,7 +1187,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype), &rt), rt);
        })},
       {"ai.onnx:Flatten", MakeAxisTrampoline<onnx_kernels::kernel::Flatten>(1)},
-      {"ai.onnx:Floor", MakeUnaryTrampoline<onnx_kernels::kernel::Floor>()},
+      {"ai.onnx:Floor", UnaryKernel<onnx_kernels::kernel::Floor>::Factory()},
       {"ai.onnx:Gather", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);
          RequireOutputCount(node, 1);
@@ -1302,8 +1260,8 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::GlobalMaxPool k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, &rt), rt);
        })},
-      {"ai.onnx:Greater", MakeBinaryTrampoline<onnx_kernels::kernel::Greater>()},
-      {"ai.onnx:GreaterOrEqual", MakeBinaryTrampoline<onnx_kernels::kernel::GreaterOrEqual>()},
+      {"ai.onnx:Greater", BinaryKernel<onnx_kernels::kernel::Greater>::Factory()},
+      {"ai.onnx:GreaterOrEqual", BinaryKernel<onnx_kernels::kernel::GreaterOrEqual>::Factory()},
       {"ai.onnx:GridSample", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);
          RequireOutputCount(node, 1);
@@ -1388,7 +1346,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::HardSigmoid k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, alpha, beta, &rt), rt);
        })},
-      {"ai.onnx:HardSwish", MakeUnaryTrampoline<onnx_kernels::kernel::HardSwish>()},
+      {"ai.onnx:HardSwish", UnaryKernel<onnx_kernels::kernel::HardSwish>::Factory()},
       {"ai.onnx:Hardmax", MakeAxisTrampoline<onnx_kernels::kernel::Hardmax>()},
       {"ai.onnx:HammingWindow",
        MakeWindowTrampoline<onnx_kernels::kernel::HammingWindow>("HammingWindow")},
@@ -1423,12 +1381,12 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::IsInf k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, detect_positive, detect_negative, &rt), rt);
        })},
-      {"ai.onnx:IsNaN", MakeUnaryTrampoline<onnx_kernels::kernel::IsNaN>()},
+      {"ai.onnx:IsNaN", UnaryKernel<onnx_kernels::kernel::IsNaN>::Factory()},
       {"ai.onnx:LayerNormalization", WrapInvokeOnly(RunLayerNormalization)},
       {"ai.onnx:LeakyRelu",
        MakeUnaryAlphaTrampoline<onnx_kernels::kernel::LeakyRelu>("alpha", 0.01f)},
-      {"ai.onnx:Less", MakeBinaryTrampoline<onnx_kernels::kernel::Less>()},
-      {"ai.onnx:LessOrEqual", MakeBinaryTrampoline<onnx_kernels::kernel::LessOrEqual>()},
+      {"ai.onnx:Less", BinaryKernel<onnx_kernels::kernel::Less>::Factory()},
+      {"ai.onnx:LessOrEqual", BinaryKernel<onnx_kernels::kernel::LessOrEqual>::Factory()},
       {"ai.onnx:LinearAttention", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6),
                              "RunNode: op 'LinearAttention' expects between 3 and 6 "
@@ -1468,7 +1426,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
            }
          }
        })},
-      {"ai.onnx:Log", MakeUnaryTrampoline<onnx_kernels::kernel::Log>()},
+      {"ai.onnx:Log", UnaryKernel<onnx_kernels::kernel::Log>::Factory()},
       {"ai.onnx:LogSoftmax", MakeAxisTrampoline<onnx_kernels::kernel::LogSoftmax>()},
       {"ai.onnx:LSTM", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 8), "RunNode: op '",
@@ -1583,7 +1541,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
                    k(x, a.kernel_shape, a.strides, a.pads, p, a.ceil_mode, a.dilations, a.auto_pad),
                    rt.tensors());
        })},
-      {"ai.onnx:MatMul", MakeBinaryTrampoline<onnx_kernels::kernel::MatMul>()},
+      {"ai.onnx:MatMul", BinaryKernel<onnx_kernels::kernel::MatMul>::Factory()},
       {"ai.onnx:MatMulInteger", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
          EXT_ENFORCE_INVALID(!(node.input_size() > 4),
@@ -1678,7 +1636,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
                    rt.tensors());
        })},
       {"ai.onnx:Min", MakeVariadicTrampoline<onnx_kernels::kernel::Min>()},
-      {"ai.onnx:Mish", MakeUnaryTrampoline<onnx_kernels::kernel::Mish>()},
+      {"ai.onnx:Mish", UnaryKernel<onnx_kernels::kernel::Mish>::Factory()},
       {"ai.onnx:Mod", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);
          RequireOutputCount(node, 1);
@@ -1688,7 +1646,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::Mod k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, y, fmod, &rt), rt);
        })},
-      {"ai.onnx:Mul", MakeBinaryTrampoline<onnx_kernels::kernel::Mul>()},
+      {"ai.onnx:Mul", BinaryKernel<onnx_kernels::kernel::Mul>::Factory()},
       {"ai.onnx:Multinomial", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
@@ -1698,7 +1656,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          SetOutput(node, 0, kernel(input, sample_size, GetSeedAttr(node), GetDtypeAttr(node), &rt),
                    rt);
        })},
-      {"ai.onnx:Neg", MakeUnaryTrampoline<onnx_kernels::kernel::Neg>()},
+      {"ai.onnx:Neg", UnaryKernel<onnx_kernels::kernel::Neg>::Factory()},
       {"ai.onnx:NegativeLogLikelihoodLoss",
        WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputRange(node, 2, 3);
@@ -1733,8 +1691,8 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
              k(boxes, scores, max_output_boxes_per_class, iou_threshold, score_threshold, attrs),
              rt.tensors());
        })},
-      {"ai.onnx:NonZero", MakeUnaryTrampoline<onnx_kernels::kernel::NonZero>()},
-      {"ai.onnx:Not", MakeUnaryTrampoline<onnx_kernels::kernel::Not>()},
+      {"ai.onnx:NonZero", UnaryKernel<onnx_kernels::kernel::NonZero>::Factory()},
+      {"ai.onnx:Not", UnaryKernel<onnx_kernels::kernel::Not>::Factory()},
       {"ai.onnx:OneHot", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 3);
          RequireOutputCount(node, 1);
@@ -1746,7 +1704,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::OneHot k(rt.kernel_ctx());
          SetOutput(node, 0, k(indices, depth, values, attrs, &rt), rt);
        })},
-      {"ai.onnx:Or", MakeBinaryTrampoline<onnx_kernels::kernel::Or>()},
+      {"ai.onnx:Or", BinaryKernel<onnx_kernels::kernel::Or>::Factory()},
       // ai.onnx Optional / OptionalGetElement / OptionalHasElement
       // (since opset 15; opset 18 widens the supported input types).
       // The runtime models Optional<Tensor> / Optional<Sequence> as a
@@ -1834,8 +1792,8 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
                      k(data, pads, /*constant_value=*/nullptr, /*axes=*/nullptr, mode, &rt), rt);
          }
        })},
-      {"ai.onnx:Pow", MakeBinaryTrampoline<onnx_kernels::kernel::Pow>()},
-      {"ai.onnx:PRelu", MakeBinaryTrampoline<onnx_kernels::kernel::PRelu>()},
+      {"ai.onnx:Pow", BinaryKernel<onnx_kernels::kernel::Pow>::Factory()},
+      {"ai.onnx:PRelu", BinaryKernel<onnx_kernels::kernel::PRelu>::Factory()},
       {"ai.onnx:QLinearConv", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 8);
          EXT_ENFORCE_INVALID(!(node.input_size() > 9),
@@ -1924,7 +1882,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          SetOutput(node, 0, k(start, limit, delta, &rt), rt);
        })},
       {"ai.onnx:RMSNormalization", WrapInvokeOnly(RunRMSNormalization)},
-      {"ai.onnx:Reciprocal", MakeUnaryTrampoline<onnx_kernels::kernel::Reciprocal>()},
+      {"ai.onnx:Reciprocal", UnaryKernel<onnx_kernels::kernel::Reciprocal>::Factory()},
       {"ai.onnx:ReduceL1", MakeReduceTrampoline<onnx_kernels::kernel::ReduceL1>()},
       {"ai.onnx:ReduceL2", MakeReduceTrampoline<onnx_kernels::kernel::ReduceL2>()},
       {"ai.onnx:ReduceLogSum", MakeReduceTrampoline<onnx_kernels::kernel::ReduceLogSum>()},
@@ -1943,7 +1901,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::RegexFullMatch k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, pattern, &rt), rt);
        })},
-      {"ai.onnx:Relu", MakeUnaryTrampoline<onnx_kernels::kernel::Relu>()},
+      {"ai.onnx:Relu", UnaryKernel<onnx_kernels::kernel::Relu>::Factory()},
       {"ai.onnx:Reshape", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);
          RequireOutputCount(node, 1);
@@ -2037,7 +1995,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::RoiAlign k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, rois, batch_indices, attrs, &rt), rt);
        })},
-      {"ai.onnx:Round", MakeUnaryTrampoline<onnx_kernels::kernel::Round>()},
+      {"ai.onnx:Round", UnaryKernel<onnx_kernels::kernel::Round>::Factory()},
       {"ai.onnx:RNN", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '",
                              node.op_type(), "' expects between 3 and 6 input(s), got ",
@@ -2308,10 +2266,10 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::Shrink k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, bias, lambd, &rt), rt);
        })},
-      {"ai.onnx:Sigmoid", MakeUnaryTrampoline<onnx_kernels::kernel::Sigmoid>()},
-      {"ai.onnx:Sign", MakeUnaryTrampoline<onnx_kernels::kernel::Sign>()},
-      {"ai.onnx:Sin", MakeUnaryTrampoline<onnx_kernels::kernel::Sin>()},
-      {"ai.onnx:Sinh", MakeUnaryTrampoline<onnx_kernels::kernel::Sinh>()},
+      {"ai.onnx:Sigmoid", UnaryKernel<onnx_kernels::kernel::Sigmoid>::Factory()},
+      {"ai.onnx:Sign", UnaryKernel<onnx_kernels::kernel::Sign>::Factory()},
+      {"ai.onnx:Sin", UnaryKernel<onnx_kernels::kernel::Sin>::Factory()},
+      {"ai.onnx:Sinh", UnaryKernel<onnx_kernels::kernel::Sinh>::Factory()},
       {"ai.onnx:Size", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
@@ -2351,9 +2309,9 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
            SetOutput(node, 1, std::move(log_prob), rt);
          }
        })},
-      {"ai.onnx:Softplus", MakeUnaryTrampoline<onnx_kernels::kernel::Softplus>()},
-      {"ai.onnx:Softsign", MakeUnaryTrampoline<onnx_kernels::kernel::Softsign>()},
-      {"ai.onnx:Sqrt", MakeUnaryTrampoline<onnx_kernels::kernel::Sqrt>()},
+      {"ai.onnx:Softplus", UnaryKernel<onnx_kernels::kernel::Softplus>::Factory()},
+      {"ai.onnx:Softsign", UnaryKernel<onnx_kernels::kernel::Softsign>::Factory()},
+      {"ai.onnx:Sqrt", UnaryKernel<onnx_kernels::kernel::Sqrt>::Factory()},
       {"ai.onnx:Squeeze", MakeSqueezeLikeTrampoline<onnx_kernels::kernel::Squeeze>("Squeeze")},
       {"ai.onnx:STFT", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
@@ -2368,7 +2326,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          onnx_kernels::kernel::STFT k(rt.kernel_ctx());
          SetOutput(node, 0, k(signal, frame_step, window, frame_length, onesided, &rt), rt);
        })},
-      {"ai.onnx:StringConcat", MakeBinaryTrampoline<onnx_kernels::kernel::StringConcat>()},
+      {"ai.onnx:StringConcat", BinaryKernel<onnx_kernels::kernel::StringConcat>::Factory()},
       {"ai.onnx:StringNormalizer", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
@@ -2397,12 +2355,12 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          SetOutput(node, 0, std::move(out.first), rt);
          SetOutput(node, 1, std::move(out.second), rt);
        })},
-      {"ai.onnx:Sub", MakeBinaryTrampoline<onnx_kernels::kernel::Sub>()},
+      {"ai.onnx:Sub", BinaryKernel<onnx_kernels::kernel::Sub>::Factory()},
       {"ai.onnx:Sum", MakeVariadicTrampoline<onnx_kernels::kernel::Sum>()},
       {"ai.onnx:Swish", MakeUnaryAlphaTrampoline<onnx_kernels::kernel::Swish>("alpha", 1.0f)},
       {"ai.onnx:SwiGLU", MakeBinaryAlphaTrampoline<onnx_kernels::kernel::SwiGLU>("alpha", 1.0f)},
-      {"ai.onnx:Tan", MakeUnaryTrampoline<onnx_kernels::kernel::Tan>()},
-      {"ai.onnx:Tanh", MakeUnaryTrampoline<onnx_kernels::kernel::Tanh>()},
+      {"ai.onnx:Tan", UnaryKernel<onnx_kernels::kernel::Tan>::Factory()},
+      {"ai.onnx:Tanh", UnaryKernel<onnx_kernels::kernel::Tanh>::Factory()},
       {"ai.onnx:TensorScatter", WrapInvokeOnly([](const NodeProto &node, RuntimeContext &rt) {
          RequireInputRange(node, 2, 3);
          RequireOutputCount(node, 1);
@@ -2534,7 +2492,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          SetOutput(node, 0, k(x, scales, attrs, &rt), rt);
        })},
       {"ai.onnx:Where", MakeTernaryTrampoline<onnx_kernels::kernel::Where>()},
-      {"ai.onnx:Xor", MakeBinaryTrampoline<onnx_kernels::kernel::Xor>()},
+      {"ai.onnx:Xor", BinaryKernel<onnx_kernels::kernel::Xor>::Factory()},
 
       // ai.onnx.preview
       {"ai.onnx.preview:FlexAttention",

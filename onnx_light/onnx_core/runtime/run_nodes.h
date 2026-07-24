@@ -73,8 +73,8 @@ namespace runtime {
  * :cpp:func:`core::runtime::KernelDispatchTable`. Implementations validate
  * the node, read any construction-time attributes, construct the matching
  * kernel with ``rt.kernel_ctx()``, and return a reusable
- * :cpp:class:`ResolvedKernel` whose :cpp:func:`Invoke` performs the actual
- * per-run tensor reads / writes.
+ * :cpp:type:`KernelInvokeFn` closure that performs the actual per-run tensor
+ * reads / writes.
  *
  * The alias and the table itself are declared in
  * ``onnx_core/runtime/kernel_dispatch_table.h`` (transitively included

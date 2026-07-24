@@ -150,25 +150,8 @@ private:
   /// :cpp:func:`KernelDispatchTable`) so :cpp:func:`Run` never has to
   /// recompute or re-store them separately.
   struct PreparedKernel {
-    PreparedKernel() = default;
-    PreparedKernel(const PreparedKernel &other)
-        : key(other.key),
-          instance(other.instance != nullptr ? std::make_unique<ResolvedKernel>(*other.instance)
-                                             : nullptr) {}
-    PreparedKernel &operator=(const PreparedKernel &other) {
-      if (this == &other) {
-        return *this;
-      }
-      key = other.key;
-      instance =
-          other.instance != nullptr ? std::make_unique<ResolvedKernel>(*other.instance) : nullptr;
-      return *this;
-    }
-    PreparedKernel(PreparedKernel &&) noexcept = default;
-    PreparedKernel &operator=(PreparedKernel &&) noexcept = default;
-
     std::string key;
-    std::unique_ptr<ResolvedKernel> instance;
+    KernelInvokeFn instance;
   };
 
   /// Resolves and builds the kernel instance for every node the plan executes,

@@ -78,6 +78,14 @@ public:
    */
   explicit RuntimeSession(const ExecutionPlan &plan);
 
+  // A session caches one owning ``std::unique_ptr<Kernel>`` per node (see
+  // :cpp:member:`kernels_`), so it is move-only. It is always created in place
+  // (by value inside :cpp:class:`SubgraphSession`, or via ``std::make_shared``)
+  // and never copied; deleting the copy operations keeps that explicit and lets
+  // the Python binding treat it as a non-copyable type.
+  RuntimeSession(const RuntimeSession &) = delete;
+  RuntimeSession &operator=(const RuntimeSession &) = delete;
+
   /**
    * Executes the plan once against ``rt``: on the first call it resolves and
    * caches the kernel for every scheduled node (rejecting unsupported

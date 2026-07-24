@@ -51,6 +51,10 @@ public:
 
   size_t TotalAllocatedSize() const override { return allocator_.TotalAllocatedSize(); }
 
+  size_t PeakAllocatedSize() const override { return allocator_.PeakAllocatedSize(); }
+
+  void ResetPeak() override { allocator_.ResetPeak(); }
+
   size_t get_current_allocations() const noexcept { return current_allocations_; }
   size_t get_max_concurrent_allocations() const noexcept { return max_concurrent_allocations_; }
 

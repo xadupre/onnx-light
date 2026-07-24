@@ -78,6 +78,10 @@ public:
 
   size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
 
+  size_t PeakAllocatedSize() const override { return pool_.PeakAllocatedSize(); }
+
+  void ResetPeak() override { pool_.ResetPeak(); }
+
   size_t allocated_count() const noexcept { return pool_.allocated_count(); }
   size_t allocate_calls() const noexcept { return allocate_calls_; }
   size_t free_calls() const noexcept { return free_calls_; }

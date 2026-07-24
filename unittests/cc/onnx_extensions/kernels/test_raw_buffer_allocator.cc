@@ -105,6 +105,81 @@ TEST(SimpleRawBufferAllocator, ZeroCapacity) {
 }
 
 // ---------------------------------------------------------------------------
+// Memory peak tests
+// ---------------------------------------------------------------------------
+
+TEST(SimpleRawBufferAllocator, InitialPeakIsZero) {
+  SimpleRawBufferAllocator alloc(3);
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 0u);
+}
+
+TEST(SimpleRawBufferAllocator, PeakTracksMaximumTotalAllocatedSize) {
+  SimpleRawBufferAllocator alloc(3);
+  RawBuffer *a = alloc.Allocate(10);
+  RawBuffer *b = alloc.Allocate(20);
+  // Peak reaches 30 while both buffers are alive.
+  EXPECT_EQ(alloc.TotalAllocatedSize(), 30u);
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 30u);
+
+  // Freeing lowers the total but the peak is retained.
+  alloc.Free(a);
+  EXPECT_EQ(alloc.TotalAllocatedSize(), 20u);
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 30u);
+
+  alloc.Free(b);
+  EXPECT_EQ(alloc.TotalAllocatedSize(), 0u);
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 30u);
+}
+
+TEST(SimpleRawBufferAllocator, PeakGrowsAfterReallocation) {
+  SimpleRawBufferAllocator alloc(2);
+  RawBuffer *a = alloc.Allocate(16);
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 16u);
+  alloc.Free(a);
+  // A larger single allocation raises the peak above the previous value.
+  RawBuffer *b = alloc.Allocate(40);
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 40u);
+  alloc.Free(b);
+}
+
+TEST(SimpleRawBufferAllocator, ResetPeakSetsPeakToCurrentTotal) {
+  SimpleRawBufferAllocator alloc(3);
+  RawBuffer *a = alloc.Allocate(10);
+  alloc.Allocate(20);
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 30u);
+
+  alloc.Free(a);
+  EXPECT_EQ(alloc.TotalAllocatedSize(), 20u);
+  // Reset lowers the peak to the current total.
+  alloc.ResetPeak();
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 20u);
+
+  // Subsequent allocations grow the peak again from the reset baseline.
+  alloc.Allocate(5);
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 25u);
+}
+
+TEST(SimpleRawBufferAllocator, ResetPeakOnEmptyAllocatorIsZero) {
+  SimpleRawBufferAllocator alloc(2);
+  alloc.Free(alloc.Allocate(64));
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 64u);
+  alloc.ResetPeak();
+  EXPECT_EQ(alloc.PeakAllocatedSize(), 0u);
+}
+
+TEST(RawBufferAllocatorPolymorphism, PeakAccessibleViaBasePointer) {
+  SimpleRawBufferAllocator concrete(3);
+  RawBufferAllocator *alloc = &concrete;
+
+  RawBuffer *buf = alloc->Allocate(64);
+  EXPECT_EQ(alloc->PeakAllocatedSize(), 64u);
+  alloc->Free(buf);
+  EXPECT_EQ(alloc->PeakAllocatedSize(), 64u);
+  alloc->ResetPeak();
+  EXPECT_EQ(alloc->PeakAllocatedSize(), 0u);
+}
+
+// ---------------------------------------------------------------------------
 // RuntimeContext allocator accessor tests
 // ---------------------------------------------------------------------------
 

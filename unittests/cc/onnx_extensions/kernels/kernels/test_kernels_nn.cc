@@ -362,6 +362,8 @@ TEST(KernelClass, BatchNormalizationInferenceUsesAllocatorForScratchBuffers) {
     }
     void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
     size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t PeakAllocatedSize() const override { return pool_.PeakAllocatedSize(); }
+    void ResetPeak() override { pool_.ResetPeak(); }
     size_t allocated_count() const noexcept { return pool_.allocated_count(); }
     size_t peak() const noexcept { return peak_; }
 
@@ -454,6 +456,8 @@ TEST(KernelClass, MeanVarianceNormalizationUsesAllocatorForScratchBuffers) {
     }
     void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
     size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t PeakAllocatedSize() const override { return pool_.PeakAllocatedSize(); }
+    void ResetPeak() override { pool_.ResetPeak(); }
     size_t allocated_count() const noexcept { return pool_.allocated_count(); }
     size_t peak() const noexcept { return peak_; }
 
@@ -507,6 +511,8 @@ TEST(KernelClass, GRUUsesAllocatorForScratchBuffersAndMatchesFallback) {
     }
     void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
     size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t PeakAllocatedSize() const override { return pool_.PeakAllocatedSize(); }
+    void ResetPeak() override { pool_.ResetPeak(); }
     size_t allocated_count() const noexcept { return pool_.allocated_count(); }
     size_t peak() const noexcept { return peak_; }
 
@@ -680,6 +686,8 @@ TEST(KernelClass, RMSNormalizationUsesAllocatorForScratchBuffers) {
     }
     void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
     size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t PeakAllocatedSize() const override { return pool_.PeakAllocatedSize(); }
+    void ResetPeak() override { pool_.ResetPeak(); }
     size_t allocated_count() const noexcept { return pool_.allocated_count(); }
     size_t peak() const noexcept { return peak_; }
 
@@ -727,6 +735,8 @@ TEST(KernelClass, LSTMUsesAllocatorForScratchBuffers) {
     }
     void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
     size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t PeakAllocatedSize() const override { return pool_.PeakAllocatedSize(); }
+    void ResetPeak() override { pool_.ResetPeak(); }
     size_t allocated_count() const noexcept { return pool_.allocated_count(); }
     size_t peak() const noexcept { return peak_; }
 
@@ -880,6 +890,8 @@ TEST(KernelClass, AttentionUsesAllocatorForScratchBuffers) {
     }
     void Free(core::runtime::RawBuffer *buf) override { pool_.Free(buf); }
     size_t TotalAllocatedSize() const override { return pool_.TotalAllocatedSize(); }
+    size_t PeakAllocatedSize() const override { return pool_.PeakAllocatedSize(); }
+    void ResetPeak() override { pool_.ResetPeak(); }
     size_t allocated_count() const noexcept { return pool_.allocated_count(); }
     size_t peak() const noexcept { return peak_; }
 

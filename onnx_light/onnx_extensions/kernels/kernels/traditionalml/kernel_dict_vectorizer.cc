@@ -90,7 +90,7 @@ void DictVectorizer::operator()(std::span<const K> input_keys, std::span<const V
                         "kernel::DictVectorizer preallocated output shape must be [vocab_size].");
     EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(c) * sizeof(V),
                         "kernel::DictVectorizer preallocated output buffer is incorrectly sized.");
-    std::fill(output.data.begin(), output.data.end(), uint8_t{0u});
+    std::fill(output.mutable_bytes(), output.mutable_bytes() + output.size_bytes(), uint8_t{0u});
     Fill<K, V>(input_keys, input_values, vocabulary, reinterpret_cast<V *>(output.mutable_bytes()));
   }
 }

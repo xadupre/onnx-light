@@ -161,7 +161,7 @@ void CastMap::operator()(std::span<const int64_t> input_keys, std::span<const V>
                         "kernel::CastMap preallocated output shape must be [N].");
     EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(n) * sizeof(OutT),
                         "kernel::CastMap preallocated output buffer is incorrectly sized.");
-    std::fill(output.data.begin(), output.data.end(), uint8_t{0u});
+    std::fill(output.mutable_bytes(), output.mutable_bytes() + output.size_bytes(), uint8_t{0u});
     FillNumericOutput<V, OutT>(input_keys, input_values, map_form,
                                reinterpret_cast<OutT *>(output.mutable_bytes()));
   }

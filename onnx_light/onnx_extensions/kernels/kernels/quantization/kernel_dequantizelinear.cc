@@ -432,7 +432,7 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   case static_cast<int32_t>(DataType::FLOAT8E5M2):
   case static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ): {
     const Float8Decoder decode = Float8DecoderFor(x.data_type);
-    const float zp = decode(x_zero_point.data[0]);
+    const float zp = decode(x_zero_point.bytes()[0]);
     DequantizeFloat8Loop(x, scale, zp, decode, output);
     break;
   }

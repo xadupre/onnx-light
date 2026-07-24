@@ -289,7 +289,8 @@ EinsumPlan BuildPlan(const Tensors &inputs, const std::string &raw_equation) {
   for (char c : plan.output_labels) {
     plan.output_shape.push_back(label_size_map[c]);
   }
-  std::vector<int64_t> out_stride(plan.output_shape.size(), 1);
+  Shape out_stride;
+  out_stride.assign(plan.output_shape.size(), 1);
   for (std::size_t d = plan.output_shape.size(); d-- > 0;) {
     if (d + 1 < plan.output_shape.size()) {
       out_stride[d] = out_stride[d + 1] * plan.output_shape[d + 1];

@@ -18,7 +18,7 @@ namespace kernel {
 namespace {
 
 template <typename InT, typename OutT>
-void ValidateInputs(const Tensor &x, const std::vector<std::string> &cats_strings,
+void ValidateInputs(const Tensor &x, const ParamStrings &cats_strings,
                     const std::vector<int64_t> &cats_int64s) {
   EXT_ENFORCE_INVALID(
       cats_strings.size() == cats_int64s.size(),
@@ -45,7 +45,7 @@ void ValidateInputs(const Tensor &x, const std::vector<std::string> &cats_string
 
 // Computes y[i] from x[i] by linear search over the parallel keys/values arrays.
 template <typename InT, typename OutT, typename FillOut>
-void LookupAndFill(const Tensor &x, const std::vector<std::string> &cats_strings,
+void LookupAndFill(const Tensor &x, const ParamStrings &cats_strings,
                    const std::vector<int64_t> &cats_int64s, OutT default_value, FillOut fill_out) {
   const int64_t n = x.element_count();
   const size_t k = cats_strings.size();
@@ -79,7 +79,7 @@ void LookupAndFill(const Tensor &x, const std::vector<std::string> &cats_strings
 } // namespace
 
 template <typename InT, typename OutT>
-Tensor CategoryMapper::operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
+Tensor CategoryMapper::operator()(const Tensor &x, const ParamStrings &cats_strings,
                                   const std::vector<int64_t> &cats_int64s, OutT default_value,
                                   RuntimeContext *rt) const {
   ValidateInputs<InT, OutT>(x, cats_strings, cats_int64s);
@@ -101,7 +101,7 @@ Tensor CategoryMapper::operator()(const Tensor &x, const std::vector<std::string
 }
 
 template <typename InT, typename OutT>
-void CategoryMapper::operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
+void CategoryMapper::operator()(const Tensor &x, const ParamStrings &cats_strings,
                                 const std::vector<int64_t> &cats_int64s, OutT default_value,
                                 Tensor &output) const {
   ValidateInputs<InT, OutT>(x, cats_strings, cats_int64s);
@@ -133,20 +133,18 @@ void CategoryMapper::operator()(const Tensor &x, const std::vector<std::string> 
 // Explicit instantiations for the two element-type combinations defined by the
 // ``ai.onnx.ml::CategoryMapper`` schema.
 template Tensor CategoryMapper::operator()<std::string, int64_t>(const Tensor &,
-                                                                 const std::vector<std::string> &,
+                                                                 const ParamStrings &,
                                                                  const std::vector<int64_t> &,
                                                                  int64_t, RuntimeContext *) const;
-template void CategoryMapper::operator()<std::string, int64_t>(const Tensor &,
-                                                               const std::vector<std::string> &,
+template void CategoryMapper::operator()<std::string, int64_t>(const Tensor &, const ParamStrings &,
                                                                const std::vector<int64_t> &,
                                                                int64_t, Tensor &) const;
 template Tensor CategoryMapper::operator()<int64_t, std::string>(const Tensor &,
-                                                                 const std::vector<std::string> &,
+                                                                 const ParamStrings &,
                                                                  const std::vector<int64_t> &,
                                                                  std::string,
                                                                  RuntimeContext *) const;
-template void CategoryMapper::operator()<int64_t, std::string>(const Tensor &,
-                                                               const std::vector<std::string> &,
+template void CategoryMapper::operator()<int64_t, std::string>(const Tensor &, const ParamStrings &,
                                                                const std::vector<int64_t> &,
                                                                std::string, Tensor &) const;
 

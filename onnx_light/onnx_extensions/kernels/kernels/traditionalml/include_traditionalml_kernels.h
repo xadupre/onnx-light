@@ -113,12 +113,12 @@ public:
   using KernelBase::KernelBase;
 
   template <typename InT, typename OutT>
-  Tensor operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
+  Tensor operator()(const Tensor &x, const ParamStrings &cats_strings,
                     const std::vector<int64_t> &cats_int64s, OutT default_value,
                     RuntimeContext *rt = nullptr) const;
 
   template <typename InT, typename OutT>
-  void operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
+  void operator()(const Tensor &x, const ParamStrings &cats_strings,
                   const std::vector<int64_t> &cats_int64s, OutT default_value,
                   Tensor &output) const;
 
@@ -267,15 +267,14 @@ public:
   Tensor operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
                     RuntimeContext *rt = nullptr) const;
 
-  Tensor operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
+  Tensor operator()(const Tensor &x, const ParamStrings &cats, bool zeros,
                     RuntimeContext *rt = nullptr) const;
 
   template <typename T>
   void operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
                   Tensor &output) const;
 
-  void operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
-                  Tensor &output) const;
+  void operator()(const Tensor &x, const ParamStrings &cats, bool zeros, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -302,7 +301,7 @@ public:
   template <typename T>
   std::pair<Tensor, Tensor>
   operator()(const Tensor &x, const ParamFloats &coefficients, const ParamFloats &intercepts,
-             const std::vector<std::string> &class_labels, const std::string &post_transform) const;
+             const ParamStrings &class_labels, const std::string &post_transform) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -348,9 +347,8 @@ public:
   std::pair<Tensor, Tensor>
   operator()(const Tensor &x, const std::vector<float> &support_vectors,
              const std::vector<float> &coefficients, const std::vector<float> &rho,
-             const std::vector<int64_t> &vectors_per_class,
-             const std::vector<std::string> &class_labels, const char *kernel_type, float gamma,
-             float coef0, float degree) const;
+             const std::vector<int64_t> &vectors_per_class, const ParamStrings &class_labels,
+             const char *kernel_type, float gamma, float coef0, float degree) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -464,12 +462,11 @@ public:
 
   Tensor operator()(const Tensor &x, const std::vector<int64_t> &class_labels,
                     RuntimeContext *rt = nullptr) const;
-  Tensor operator()(const Tensor &x, const std::vector<std::string> &class_labels,
+  Tensor operator()(const Tensor &x, const ParamStrings &class_labels,
                     RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const std::vector<int64_t> &class_labels, Tensor &output) const;
-  void operator()(const Tensor &x, const std::vector<std::string> &class_labels,
-                  Tensor &output) const;
+  void operator()(const Tensor &x, const ParamStrings &class_labels, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -505,7 +502,7 @@ public:
   TreeEnsembleRegressor(
       const KernelContext &ctx, const std::vector<int64_t> &nodes_treeids,
       const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
-      const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
+      const std::vector<float> &nodes_values, const ParamStrings &nodes_modes,
       const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
       const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &target_treeids,
       const std::vector<int64_t> &target_nodeids, const std::vector<int64_t> &target_ids,
@@ -549,7 +546,7 @@ public:
   TreeEnsembleClassifier(
       const KernelContext &ctx, const std::vector<int64_t> &nodes_treeids,
       const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
-      const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
+      const std::vector<float> &nodes_values, const ParamStrings &nodes_modes,
       const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
       const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &class_treeids,
       const std::vector<int64_t> &class_nodeids, const std::vector<int64_t> &class_ids,
@@ -561,9 +558,9 @@ public:
              const std::vector<float> &base_values, const std::string &post_transform) const;
 
   template <typename T>
-  std::pair<Tensor, Tensor>
-  operator()(const Tensor &x, const std::vector<std::string> &classlabels_strings,
-             const std::vector<float> &base_values, const std::string &post_transform) const;
+  std::pair<Tensor, Tensor> operator()(const Tensor &x, const ParamStrings &classlabels_strings,
+                                       const std::vector<float> &base_values,
+                                       const std::string &post_transform) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 

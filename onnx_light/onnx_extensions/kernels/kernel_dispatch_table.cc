@@ -2862,7 +2862,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
              GetAttributeIntsOrDefault(node, "vectors_per_class", {});
          const std::vector<int64_t> classlabels_ints =
              GetAttributeIntsOrDefault(node, "classlabels_ints", {});
-         const std::vector<std::string> classlabels_strings =
+         const ParamStrings classlabels_strings =
              GetAttributeStringsOrDefault(node, "classlabels_strings", {});
          const bool use_strings = !classlabels_strings.empty();
          const bool has_ints = !classlabels_ints.empty();
@@ -2914,8 +2914,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
              GetAttributeIntsOrDefault(node, "nodes_featureids", {});
          const std::vector<float> nodes_values =
              GetAttributeFloatsOrDefault(node, "nodes_values", {});
-         const std::vector<std::string> nodes_modes =
-             GetAttributeStringsOrDefault(node, "nodes_modes", {});
+         const ParamStrings nodes_modes = GetAttributeStringsOrDefault(node, "nodes_modes", {});
          const std::vector<int64_t> nodes_truenodeids =
              GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
          const std::vector<int64_t> nodes_falsenodeids =
@@ -2959,7 +2958,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
              GetAttributeStringOrDefault(node, "post_transform", "NONE");
          const std::vector<int64_t> classlabels_ints =
              GetAttributeIntsOrDefault(node, "classlabels_ints", {});
-         const std::vector<std::string> classlabels_strings =
+         const ParamStrings classlabels_strings =
              GetAttributeStringsOrDefault(node, "classlabels_strings", {});
          const bool use_strings = !classlabels_strings.empty();
          const bool has_ints = !classlabels_ints.empty();
@@ -2993,8 +2992,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
              GetAttributeIntsOrDefault(node, "nodes_featureids", {});
          const std::vector<float> nodes_values =
              GetAttributeFloatsOrDefault(node, "nodes_values", {});
-         const std::vector<std::string> nodes_modes =
-             GetAttributeStringsOrDefault(node, "nodes_modes", {});
+         const ParamStrings nodes_modes = GetAttributeStringsOrDefault(node, "nodes_modes", {});
          const std::vector<int64_t> nodes_truenodeids =
              GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
          const std::vector<int64_t> nodes_falsenodeids =
@@ -3010,7 +3008,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
              GetAttributeFloatsOrDefault(node, "class_weights", {});
          const std::vector<int64_t> classlabels_int64s =
              GetAttributeIntsOrDefault(node, "classlabels_int64s", {});
-         const std::vector<std::string> classlabels_strings =
+         const ParamStrings classlabels_strings =
              GetAttributeStringsOrDefault(node, "classlabels_strings", {});
          const std::vector<float> base_values =
              GetAttributeFloatsOrDefault(node, "base_values", {});
@@ -3138,8 +3136,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
 
          // ``cats_strings`` and ``cats_int64s`` are both required per the
          // ``ai.onnx.ml::CategoryMapper`` schema and must have the same length.
-         const std::vector<std::string> cats_strings =
-             GetAttributeStringsOrDefault(node, "cats_strings", {});
+         const ParamStrings cats_strings = GetAttributeStringsOrDefault(node, "cats_strings", {});
          const std::vector<int64_t> cats_int64s =
              GetAttributeIntsOrDefault(node, "cats_int64s", {});
          const std::string default_string =
@@ -3371,7 +3368,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
              return one_hot.template operator()<T>(x, cats, zeros);
            });
          } else {
-           std::vector<std::string> cats;
+           ParamStrings cats;
            cats.reserve(cats_strings->strings().size());
            for (size_t i = 0; i < cats_strings->strings().size(); ++i) {
              cats.push_back(cats_strings->strings()[i]);

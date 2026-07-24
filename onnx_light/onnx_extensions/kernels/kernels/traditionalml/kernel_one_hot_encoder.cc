@@ -27,7 +27,7 @@ template <typename T> void ValidateNumericInput(const Tensor &x, const std::vect
                       "kernel::OneHotEncoder requires at least one category in cats_int64s.");
 }
 
-void ValidateStringInput(const Tensor &x, const std::vector<std::string> &cats) {
+void ValidateStringInput(const Tensor &x, const ParamStrings &cats) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::OneHotEncoder expects a STRING input for string categories.");
   EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == x.element_count(),
@@ -64,8 +64,7 @@ void FillOneHotNumeric(const Tensor &x, const std::vector<int64_t> &cats, bool z
   }
 }
 
-void FillOneHotString(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
-                      float *out) {
+void FillOneHotString(const Tensor &x, const ParamStrings &cats, bool zeros, float *out) {
   const int64_t n = x.element_count();
   const int64_t k = static_cast<int64_t>(cats.size());
   const std::vector<std::string> &px = x.AsStrings();
@@ -113,7 +112,7 @@ Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &ca
   return out;
 }
 
-Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
+Tensor OneHotEncoder::operator()(const Tensor &x, const ParamStrings &cats, bool zeros,
                                  RuntimeContext *rt) const {
   ValidateStringInput(x, cats);
   const onnx_kernels::Shape out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
@@ -134,7 +133,7 @@ void OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats
   FillOneHotNumeric<T>(x, cats, zeros, output.AsFloat());
 }
 
-void OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
+void OneHotEncoder::operator()(const Tensor &x, const ParamStrings &cats, bool zeros,
                                Tensor &output) const {
   ValidateStringInput(x, cats);
   const onnx_kernels::Shape expected_shape =

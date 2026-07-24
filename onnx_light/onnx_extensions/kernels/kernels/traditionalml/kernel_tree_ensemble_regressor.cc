@@ -20,7 +20,7 @@ namespace kernel {
 TreeEnsembleRegressor::TreeEnsembleRegressor(
     const KernelContext &ctx, const std::vector<int64_t> &nodes_treeids,
     const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
-    const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
+    const std::vector<float> &nodes_values, const ParamStrings &nodes_modes,
     const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
     const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &target_treeids,
     const std::vector<int64_t> &target_nodeids, const std::vector<int64_t> &target_ids,

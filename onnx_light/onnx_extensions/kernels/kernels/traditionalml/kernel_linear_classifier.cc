@@ -28,9 +28,8 @@ namespace {
 // the canonical pair ``[-z, z]`` following the ONNX spec, so ``out`` has two
 // columns per sample.
 void ComputeLinearScoresInto(const double *x_values, int64_t sample_count, int64_t feature_count,
-                             const std::vector<float> &coefficients,
-                             const std::vector<float> &intercepts, int64_t raw_class_count,
-                             bool binary_expand, float *out) {
+                             const ParamFloats &coefficients, const ParamFloats &intercepts,
+                             int64_t raw_class_count, bool binary_expand, float *out) {
   EXT_ENFORCE_INVALID(raw_class_count >= 1,
                       "kernel::LinearClassifier requires at least one class.");
   EXT_ENFORCE_INVALID(static_cast<int64_t>(coefficients.size()) == raw_class_count * feature_count,
@@ -77,8 +76,8 @@ int64_t ArgMax(const float *scores, int64_t count) {
 
 template <typename T>
 std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
-                                                       const std::vector<float> &coefficients,
-                                                       const std::vector<float> &intercepts,
+                                                       const ParamFloats &coefficients,
+                                                       const ParamFloats &intercepts,
                                                        const std::vector<int64_t> &class_labels,
                                                        const std::string &post_transform) const {
   EXT_ENFORCE_INVALID(post_transform == "NONE",
@@ -116,8 +115,8 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
 
 template <typename T>
 std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
-                                                       const std::vector<float> &coefficients,
-                                                       const std::vector<float> &intercepts,
+                                                       const ParamFloats &coefficients,
+                                                       const ParamFloats &intercepts,
                                                        const std::vector<std::string> &class_labels,
                                                        const std::string &post_transform) const {
   EXT_ENFORCE_INVALID(post_transform == "NONE",
@@ -155,11 +154,11 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
 
 #define ONNX_LIGHT_INSTANTIATE_LINEAR_CLASSIFIER(T)                                                \
   template std::pair<Tensor, Tensor> LinearClassifier::operator()<T>(                              \
-      const Tensor &, const std::vector<float> &, const std::vector<float> &,                      \
-      const std::vector<int64_t> &, const std::string &) const;                                    \
+      const Tensor &, const ParamFloats &, const ParamFloats &, const std::vector<int64_t> &,      \
+      const std::string &) const;                                                                  \
   template std::pair<Tensor, Tensor> LinearClassifier::operator()<T>(                              \
-      const Tensor &, const std::vector<float> &, const std::vector<float> &,                      \
-      const std::vector<std::string> &, const std::string &) const
+      const Tensor &, const ParamFloats &, const ParamFloats &, const std::vector<std::string> &,  \
+      const std::string &) const
 
 ONNX_LIGHT_INSTANTIATE_LINEAR_CLASSIFIER(float);
 ONNX_LIGHT_INSTANTIATE_LINEAR_CLASSIFIER(double);

@@ -90,12 +90,21 @@ public:
    * plan would have released instead stays observable in ``rt`` after
    * ``Run`` returns. Safe to call repeatedly on the same session.
    *
+   * The allocator attached to ``rt`` (:cpp:func:`RuntimeContext::allocator`)
+   * is captured once, on the first call, as the session's unique allocator.
+   * After each scheduled node executes, every tensor it produced that is
+   * allocator-backed (:cpp:func:`Tensor::has_allocation`) is verified to be
+   * owned by that same allocator, catching kernels that allocate their output
+   * from the wrong allocator (or from none at all).
+   *
    * @param rt In/out runtime context used both to resolve the kernels
    *           (function registry / custom kernels) and to exchange tensors.
    *
    * @throws std::invalid_argument if the plan references an out-of-range node
-   *         index, if any executed node cannot be dispatched, or if ``rt`` does
-   *         not define one of the plan's required external inputs.
+   *         index, if any executed node cannot be dispatched, if ``rt`` does
+   *         not define one of the plan's required external inputs, or if a
+   *         node produces an output tensor backed by an allocator other than
+   *         the session's.
    */
   void Run(RuntimeContext &rt);
 
@@ -167,11 +176,21 @@ private:
   /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt);
 
+  /// Verifies that every tensor output of ``node`` that is allocator-backed
+  /// is owned by :cpp:member:`session_allocator_`. Called after a node's
+  /// kernel has run, once :cpp:member:`session_allocator_` has been captured.
+  void VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const;
+
   const ExecutionPlan &plan_;
   std::vector<PreparedKernel> kernels_;
   std::vector<std::string> required_inputs_;
   bool kernels_initialized_ = false;
   RuntimeParameters parameters_;
+  /// Allocator observed on ``rt`` the first time :cpp:func:`Run` executes;
+  /// every output tensor produced by a scheduled node is verified to be
+  /// backed by this same allocator (see :cpp:func:`Run`).
+  RawBufferAllocator *session_allocator_ = nullptr;
+  bool session_allocator_captured_ = false;
 };
 
 } // namespace runtime

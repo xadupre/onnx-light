@@ -95,6 +95,10 @@ TEST(SchemaRegistrationTest, RegisterAllByDefaultAndManipulateSchema) {
 }
 
 TEST(SchemaRegistrationTest, RegisterAndDeregisterAllOpsetSchemaVersion) {
+  // Force the one-time lazy static registration to complete before the initial
+  // deregister; otherwise the first Schema() lookup below would trigger it and
+  // repopulate the registry mid-test (fails when this test runs in isolation).
+  RegisterAllOnnxOperatorSchemas();
   DeregisterOnnxOperatorSetSchema();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 
@@ -131,6 +135,10 @@ TEST(SchemaRegistrationTest, RegisterAndDeregisterAllOpsetSchemaVersion) {
 }
 
 TEST(SchemaRegistrationTest, RegisterSpecifiedOpsetSchemaVersion) {
+  // Force the one-time lazy static registration to complete before the initial
+  // deregister; otherwise the first Schema() lookup below would trigger it and
+  // repopulate the registry mid-test (fails when this test runs in isolation).
+  RegisterAllOnnxOperatorSchemas();
   DeregisterOnnxOperatorSetSchema();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 
@@ -159,6 +167,10 @@ TEST(SchemaRegistrationTest, RegisterSpecifiedOpsetSchemaVersion) {
 }
 
 TEST(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_UpgradeVersion) {
+  // Force the one-time lazy static registration to complete before the initial
+  // deregister; otherwise the first Schema() lookup below would trigger it and
+  // repopulate the registry mid-test (fails when this test runs in isolation).
+  RegisterAllOnnxOperatorSchemas();
   DeregisterOnnxOperatorSetSchema();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 
@@ -191,6 +203,10 @@ TEST(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_UpgradeVersion)
 }
 
 TEST(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_DowngradeVersion) {
+  // Force the one-time lazy static registration to complete before the initial
+  // deregister; otherwise the first Schema() lookup below would trigger it and
+  // repopulate the registry mid-test (fails when this test runs in isolation).
+  RegisterAllOnnxOperatorSchemas();
   DeregisterOnnxOperatorSetSchema();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 

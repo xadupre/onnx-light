@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -89,9 +90,14 @@ std::pair<Tensor, Tensor> SoftmaxCrossEntropyLoss::operator()(
   const float *log_prob_ptr = log_prob.AsFloat();
   const float *weights_ptr = weights != nullptr ? weights->AsFloat() : nullptr;
 
-  // Per-sample loss and weight, prior to reduction.
-  std::vector<float> per_sample_loss(static_cast<size_t>(n_loss), 0.0f);
-  std::vector<float> per_sample_weight(static_cast<size_t>(n_loss), 0.0f);
+  // Per-sample loss and weight, prior to reduction. Backed by the runtime
+  // allocator when available, falling back to inline storage otherwise.
+  detail::TemporaryTypedBuffer<float> per_sample_loss_buf(
+      static_cast<size_t>(n_loss), allocator, "kernel::SoftmaxCrossEntropyLoss per_sample_loss");
+  detail::TemporaryTypedBuffer<float> per_sample_weight_buf(
+      static_cast<size_t>(n_loss), allocator, "kernel::SoftmaxCrossEntropyLoss per_sample_weight");
+  float *per_sample_loss = per_sample_loss_buf.data();
+  float *per_sample_weight = per_sample_weight_buf.data();
 
   for (int64_t o = 0; o < n_batch; ++o) {
     for (int64_t i = 0; i < n_inner; ++i) {

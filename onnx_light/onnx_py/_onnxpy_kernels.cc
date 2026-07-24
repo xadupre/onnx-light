@@ -5,6 +5,7 @@
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/compute/execute_action.h"
 #include "onnx_core/compute/execution_plan.h"
+#include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -31,10 +32,12 @@ using core::runtime::ExecutionPlan;
 using core::runtime::KernelContext;
 using core::runtime::Map;
 using core::runtime::OpsetId;
+using core::runtime::RawBufferAllocator;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
 using core::runtime::Sequence;
+using core::runtime::SimpleRawBufferAllocator;
 using core::runtime::Tensor;
 using core::runtime::Tensors;
 
@@ -250,6 +253,14 @@ void AddOnnxPyRuntime(nb::module_ &m) {
               "Attribute name of the subgraph within the owning control-flow node "
               "(``\"body\"``, ``\"then_branch\"``, ``\"else_branch\"``, etc.). "
               "Empty for top-level-graph events.")
+      .def_ro("allocated_bytes", &core::runtime::RuntimeEvent::allocated_bytes,
+              "Total number of bytes held by every live buffer in the "
+              ":class:`RuntimeContext`'s allocator right after the action that "
+              "produced this event (the runtime's live memory footprint). ``0`` "
+              "when no allocator is attached to the context.")
+      .def_ro("peak_bytes", &core::runtime::RuntimeEvent::peak_bytes,
+              "Peak value ever reached by :attr:`allocated_bytes` up to the moment "
+              "this event was recorded. ``0`` when no allocator is attached.")
       .def_prop_ro(
           "values",
           [](const core::runtime::RuntimeEvent &ev) {
@@ -297,6 +308,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             d["device"] = ev.device;
             d["subgraph_node_index"] = ev.subgraph_node_index;
             d["subgraph_attr_name"] = ev.subgraph_attr_name;
+            d["allocated_bytes"] = ev.allocated_bytes;
+            d["peak_bytes"] = ev.peak_bytes;
             const int32_t n = ev.value_count;
             if (static_cast<core::runtime::DataType>(ev.data_type) ==
                 core::runtime::DataType::STRING) {
@@ -318,6 +331,12 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           },
           "Returns the event fields as a plain Python ``dict`` (trivially "
           "renderable as a table, serialisable, etc.).")
+      .def("summary", &core::runtime::RuntimeEvent::summary,
+           "Returns a concise, human-readable one-line summary of the event: the "
+           "action / kind, the tensor name (or ``op_type(inputs)`` for ``run_node`` "
+           "events), the node index, the dispatch duration (for ``run_node`` events) "
+           "and the allocator's live (``allocated_bytes``) and peak (``peak_bytes``) "
+           "memory.")
       .def("__repr__", [](const core::runtime::RuntimeEvent &ev) {
         return std::string("RuntimeEvent(action='") +
                core::runtime::RuntimeEventActionName(ev.action) + "', kind='" +
@@ -327,7 +346,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                ", node_index=" + std::to_string(ev.node_index) +
                ", device=" + std::to_string(ev.device) +
                ", subgraph_node_index=" + std::to_string(ev.subgraph_node_index) +
-               ", subgraph_attr_name='" + ev.subgraph_attr_name + "')";
+               ", subgraph_attr_name='" + ev.subgraph_attr_name +
+               "', allocated_bytes=" + std::to_string(ev.allocated_bytes) +
+               ", peak_bytes=" + std::to_string(ev.peak_bytes) + ")";
       });
 
   // ExecuteActionKind — kind of a single ExecuteAction.
@@ -467,6 +488,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       ":class:`RuntimeContext`; subsequent calls reuse those cached instances. When "
       ":attr:`RuntimeContext.release_intermediates` is enabled, :func:`run` also "
       "frees each intermediate whose last reference has been reached.")
+      .def(nb::init<const ModelProto &>(), nb::arg("model"), nb::keep_alive<1, 2>(),
+           "Builds a session over an :class:`ExecutionPlan` the session owns, "
+           "built from ``model.graph``. Use this when no precomputed plan is "
+           "available: ``model`` (and the graph it owns) must outlive the session; "
+           "this binding keeps ``model`` alive for at least as long as the session.")
       .def(nb::init<const ExecutionPlan &>(), nb::arg("plan"), nb::keep_alive<1, 2>(),
            "Builds a session over ``plan``. ``plan`` (and the graph / function it "
            "was built from) must outlive the session; this binding keeps ``plan`` "
@@ -501,6 +527,30 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def("is_parallel", &RuntimeParameters::is_parallel,
            "Returns ``True`` when the graph should run with more than one thread, i.e. "
            "when :meth:`effective_num_threads` is greater than ``1``.");
+
+  // SimpleRawBufferAllocator — fixed-capacity pool allocator exposing live and
+  // peak memory so RuntimeEvent.allocated_bytes / peak_bytes become non-zero.
+  nb::class_<SimpleRawBufferAllocator>(
+      rt_mod, "SimpleRawBufferAllocator",
+      "Fixed-capacity pool allocator for the runtime's raw buffers. Attach one "
+      "to a :class:`RuntimeContext` via :meth:`RuntimeContext.set_allocator` so "
+      "the runtime routes tensor storage through it; every recorded "
+      ":class:`RuntimeEvent` then carries the allocator's live "
+      "(:attr:`RuntimeEvent.allocated_bytes`) and peak "
+      "(:attr:`RuntimeEvent.peak_bytes`) memory. ``capacity`` is the maximum "
+      "number of buffers that may be alive at the same time.")
+      .def(nb::init<size_t>(), nb::arg("capacity"))
+      .def_prop_ro("total_allocated_size", &SimpleRawBufferAllocator::TotalAllocatedSize,
+                   "Total number of bytes across all currently live buffers.")
+      .def_prop_ro("peak_allocated_size", &SimpleRawBufferAllocator::PeakAllocatedSize,
+                   "Maximum value ever reached by :attr:`total_allocated_size` since "
+                   "construction or the last :meth:`reset_peak`.")
+      .def_prop_ro("allocated_count", &SimpleRawBufferAllocator::allocated_count,
+                   "Number of buffer slots currently in use.")
+      .def_prop_ro("capacity", &SimpleRawBufferAllocator::capacity,
+                   "Maximum number of buffers that may be alive at the same time.")
+      .def("reset_peak", &SimpleRawBufferAllocator::ResetPeak,
+           "Resets the memory peak to the current :attr:`total_allocated_size`.");
 
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.
   nb::class_<RuntimeContext>(
@@ -538,6 +588,19 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "kernel_ctx", [](RuntimeContext &rt) -> KernelContext & { return rt.kernel_ctx(); },
           [](RuntimeContext &rt, KernelContext k) { rt.kernel_ctx() = std::move(k); },
           nb::rv_policy::reference_internal, "Kernel construction context (opset).")
+      .def(
+          "set_allocator",
+          [](RuntimeContext &rt, SimpleRawBufferAllocator *allocator) {
+            rt.set_allocator(allocator);
+          },
+          nb::arg("allocator").none(), nb::keep_alive<1, 2>(),
+          "Attaches (or, with ``None``, detaches) a "
+          ":class:`SimpleRawBufferAllocator` used by the runtime to acquire and "
+          "release raw buffers. The allocator must outlive this context; the "
+          "binding keeps it alive for at least as long as the context. Once "
+          "attached, every recorded :class:`RuntimeEvent` carries the allocator's "
+          "live (:attr:`RuntimeEvent.allocated_bytes`) and peak "
+          "(:attr:`RuntimeEvent.peak_bytes`) memory.")
       .def("has", &RuntimeContext::Has, nb::arg("name"),
            "Returns ``True`` if a tensor named ``name`` is currently held.")
       .def("remove", &RuntimeContext::Remove, nb::arg("name"),

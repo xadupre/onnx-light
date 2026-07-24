@@ -743,9 +743,12 @@ if(ONNX_LIGHT_BUILD_TESTS)
   # included by the majority of those files; a PCH turns that work into a
   # one-shot cost for the whole target.
   #
-  # NOTE: only standard-library headers are precompiled here. Project headers
-  # are intentionally left out so the PCH does not force a particular include
-  # order onto individual translation units.
+  # NOTE: do NOT add project headers (e.g. ``test_case.h``) here. Adding a
+  # project header to the PCH forces every translation unit in this target
+  # to rebuild whenever that header changes, defeating the purpose of a
+  # shared PCH; keep it limited to stable, rarely-changing standard headers.
+  # Keeping only standard-library headers also avoids forcing a particular
+  # include order onto individual translation units.
   target_precompile_headers(test_onnx_light PRIVATE
       <gtest/gtest.h>
       <cstdint>

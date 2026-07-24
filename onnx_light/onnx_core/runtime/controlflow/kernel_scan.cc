@@ -192,6 +192,20 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tenso
                          const ParamInts &scan_input_directions_in,
                          const ParamInts &scan_output_axes,
                          const ParamInts &scan_output_directions) const {
+  // Build a single session over the body once and reuse it for every
+  // iteration (including the zero-trip-count template run below) instead of
+  // re-resolving the body's kernels on every call.
+  SubgraphSession session(rt, body);
+  return (*this)(rt, body, session, initial_state, scan_inputs, scan_input_axes_in,
+                 scan_input_directions_in, scan_output_axes, scan_output_directions);
+}
+
+Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSession &session,
+                         const Tensors &initial_state, const Tensors &scan_inputs,
+                         const ParamInts &scan_input_axes_in,
+                         const ParamInts &scan_input_directions_in,
+                         const ParamInts &scan_output_axes,
+                         const ParamInts &scan_output_directions) const {
   const std::size_t n = initial_state.size();
   const std::size_t m = scan_inputs.size();
   EXT_ENFORCE_INVALID(m > 0, "kernel::Scan: at least one scan input is required.");
@@ -244,11 +258,6 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tenso
   if (trip_count < 0) {
     trip_count = 0;
   }
-
-  // Build a single session over the body once and reuse it for every
-  // iteration (including the zero-trip-count template run below) instead of
-  // re-resolving the body's kernels on every call.
-  SubgraphSession session(rt, body);
 
   // Iterate the body once per scan step, threading the state forward and
   // collecting the per-iteration scan outputs.

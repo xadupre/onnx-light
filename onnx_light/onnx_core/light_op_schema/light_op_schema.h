@@ -42,6 +42,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -54,6 +55,9 @@
 // the helpers header defines the macro when no translation unit has done so yet
 // while still honouring an explicit ``-DONNX_LIGHT_NAMESPACE=...`` override.
 #include "onnx_light_helpers.h"
+#include "onnx_core/symbolic/sym_sequence.h"
+#include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_proto/onnx.h"
 #include "onnx_proto/type_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -214,12 +218,27 @@ inline constexpr const char *ToTypeString(TensorType type) {
   return onnx_proto::ToTypeString(type);
 }
 
-/// Thrown when a LightOpSchema is constructed with invalid arguments.
+/// Thrown when a LightOpSchema is constructed with invalid arguments, or when
+/// ::ONNX_LIGHT_NAMESPACE::core::schema::LightOpSchema::Verify rejects a node.
 class SchemaError final : public std::runtime_error {
 public:
   /// Constructs a SchemaError with the given diagnostic message.
   explicit SchemaError(const std::string &message) : std::runtime_error(message) {}
 };
+
+/**
+ * One concrete value supplied for a node input when calling
+ * ::ONNX_LIGHT_NAMESPACE::core::schema::LightOpSchema::Verify, used to check the input
+ * against the schema's type constraints. Exactly one alternative describes a given input:
+ *
+ * - ``ValueInfoProto`` &mdash; type/shape as it would appear in a ``GraphProto`` value_info
+ *   entry. Tensor, sequence, and optional value_info types are all supported.
+ * - ``core::symbolic::SymTensor`` &mdash; a single tensor descriptor, as used by the
+ *   ``onnx_shapes``/``onnx_optim`` optimisation stack.
+ * - ``core::symbolic::SymSequence`` &mdash; a tensor-sequence descriptor, as used by the
+ *   same optimisation stack (e.g. the output of ``SequenceConstruct``).
+ */
+using SchemaInputValue = std::variant<ValueInfoProto, symbolic::SymTensor, symbolic::SymSequence>;
 
 /**
  * Lightweight, read-only description of an ONNX operator schema at one
@@ -348,6 +367,41 @@ public:
     node_determinism_ = v;
     return *this;
   }
+
+  /**
+   * Verifies that @p node is a valid instantiation of this operator schema, throwing
+   * ::ONNX_LIGHT_NAMESPACE::core::schema::SchemaError on the first violation found.
+   *
+   * The checks performed are, in order:
+   *   - @p node is not deprecated (`deprecated()` is false).
+   *   - `node.op_type()` matches `name()`, and `node.domain()` matches `domain()` (an empty
+   *     node domain is treated as ::ONNX_LIGHT_NAMESPACE::core::schema::kOnnxDomain).
+   *   - `node.output_size()` lies within [`min_output()`, `max_output()`].
+   *   - Every attribute in `node.attribute()` is recognized (declared in `attributes()`, or its
+   *     name starts with `"__"`, an internal-symbol convention that is always accepted), has a
+   *     `type()` matching the declared ::ONNX_LIGHT_NAMESPACE::core::schema::AttributeType, and
+   *     every required attribute (`AttributeParam::required`) is present.
+   *   - When @p inputs is non-null, each populated (non-``std::nullopt``) entry is resolved to a
+   *     ::ONNX_LIGHT_NAMESPACE::onnx_proto::TensorType and, if the corresponding formal input's
+   *     `type` names one of `type_constraints()`, checked for membership in that constraint's
+   *     `allowed_type_strs`. Entries beyond `inputs().size()` are checked against the last formal
+   *     input (variadic convention), and entries whose concrete type cannot be determined (e.g. a
+   *     ``ValueInfoProto`` with a `map_type` or `opaque_type`) are silently skipped, since
+   *     LightOpSchema does not model every ONNX type category.
+   *
+   * Input arity itself is intentionally not bounded here: unlike outputs, LightOpSchema does not
+   * track per-parameter Optional/Variadic metadata for inputs, so @p node may declare fewer or
+   * more inputs than `inputs().size()` without being rejected.
+   *
+   * @param node Node to verify against this schema. `node.op_type()`/`node.domain()` are expected
+   *        to already match this schema (see above); callers are responsible for having selected
+   *        the schema version matching the node's opset import.
+   * @param inputs Optional, one entry per node input, describing its concrete type for
+   *        type-constraint checking. When null (the default), no input type checking is
+   *        performed.
+   */
+  void Verify(const NodeProto &node,
+              const std::vector<std::optional<SchemaInputValue>> *inputs = nullptr) const;
 
 private:
   std::string name_;

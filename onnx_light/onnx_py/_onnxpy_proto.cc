@@ -4,6 +4,7 @@
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
 #include "onnx_lib/onnx-data.pb.h"
+#include "onnx_verify.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -11,10 +12,12 @@
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
+#include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
 #include <optional>
 #include <type_traits>
@@ -2853,6 +2856,92 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "Returns the name of the field set in the oneof ``oneof_name``, or None if no field is "
           "set, following the protobuf API.");
   PYADD_PROTO_SERIALIZATION(OptionalProto);
+
+  // -----------------------------------------------------------------------
+  // Submodule `verify`: schema-free structural validation (onnx_verify.h).
+  // -----------------------------------------------------------------------
+  auto verify_mod = m.def_submodule(
+      "verify", "Schema-free structural validation of onnx_proto messages (onnx_verify.h). "
+                "Unlike onnx_light.checker.check_model, these functions do not require an "
+                "operator-schema registry: they only validate internal consistency of the "
+                "protobuf structure itself (required fields set, unique names, SSA form, "
+                "topological node ordering, tensor payload/dtype consistency, ...). They raise "
+                "ValueError on the first violation found.");
+
+  verify_mod.def(
+      "verify_value_info",
+      [](const ValueInfoProto &value_info, bool is_main_graph) {
+        VerifyValueInfo(value_info, is_main_graph);
+      },
+      nb::arg("value_info"), nb::arg("is_main_graph") = true,
+      "Validates a ValueInfoProto. ``is_main_graph=False`` relaxes the 'type' field "
+      "requirement, as allowed for subgraph inputs/outputs. Raises ValueError on failure.");
+
+  verify_mod.def(
+      "verify_tensor", [](const TensorProto &tensor) { VerifyTensor(tensor); }, nb::arg("tensor"),
+      "Validates a TensorProto: data_type is set and the populated payload field matches "
+      "the declared data_type and shape. Raises ValueError on failure.");
+
+  verify_mod.def(
+      "verify_sparse_tensor",
+      [](const SparseTensorProto &sparse_tensor) { VerifySparseTensor(sparse_tensor); },
+      nb::arg("sparse_tensor"),
+      "Validates a SparseTensorProto: 'values' and 'indices' are individually valid tensors "
+      "and 'indices' uses the required INT64 data type. Raises ValueError on failure.");
+
+  verify_mod.def(
+      "verify_attribute",
+      [](const AttributeProto &attribute, bool in_function_body,
+         const std::unordered_set<std::string> &scope) {
+        VerifyAttribute(attribute, in_function_body, scope);
+      },
+      nb::arg("attribute"), nb::arg("in_function_body") = false,
+      nb::arg("scope") = std::unordered_set<std::string>{},
+      "Validates an AttributeProto: exactly one value field is set and matches the "
+      "declared 'type'. ``scope`` lists names visible to a nested subgraph attribute "
+      "(GRAPH/GRAPHS), if any. Raises ValueError on failure.");
+
+  verify_mod.def(
+      "verify_node",
+      [](const NodeProto &node, bool in_function_body,
+         const std::unordered_set<std::string> &scope) {
+        VerifyNode(node, in_function_body, scope);
+      },
+      nb::arg("node"), nb::arg("in_function_body") = false,
+      nb::arg("scope") = std::unordered_set<std::string>{},
+      "Validates a NodeProto: 'op_type' is set, the node has at least one input or "
+      "output, and attribute names are unique and individually valid. Raises ValueError "
+      "on failure.");
+
+  verify_mod.def(
+      "verify_graph",
+      [](const GraphProto &graph, bool is_main_graph, bool in_function_body,
+         std::optional<std::unordered_set<std::string>> outer_scope) {
+        VerifyGraph(graph, is_main_graph, in_function_body,
+                    outer_scope.has_value() ? &*outer_scope : nullptr);
+      },
+      nb::arg("graph"), nb::arg("is_main_graph") = true, nb::arg("in_function_body") = false,
+      nb::arg("outer_scope") = nb::none(),
+      "Validates a GraphProto: unique input/initializer/output names, SSA form, "
+      "topologically sorted nodes, and that every declared output is produced. "
+      "``outer_scope`` lists names visible from an enclosing graph, used when validating "
+      "a control-flow body subgraph. Raises ValueError on failure.");
+
+  verify_mod.def(
+      "verify_function", [](const FunctionProto &function) { VerifyFunction(function); },
+      nb::arg("function"),
+      "Validates a FunctionProto: 'name' is set, inputs are uniquely named, nodes are "
+      "topologically sorted, and every declared output is produced. Raises ValueError on "
+      "failure.");
+
+  verify_mod.def(
+      "verify_model", [](const ModelProto &model) { VerifyModel(model); }, nb::arg("model"),
+      "Validates an in-memory ModelProto without an operator-schema registry: 'graph' is "
+      "present, at least one opset is imported with unique domains, the main graph is "
+      "structurally valid, and model-local functions are individually valid and uniquely "
+      "identified by (domain, name, overload). This only checks IR-level structure; it "
+      "does not check operator input/output arity or run shape inference (use "
+      "onnx_light.checker.check_model for that). Raises ValueError on failure.");
 
   // Registers every repeated field container as a virtual subclass of
   // collections.abc.Sequence so that ``isinstance(repeated_field, Sequence)``

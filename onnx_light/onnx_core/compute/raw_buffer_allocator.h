@@ -7,7 +7,6 @@
 #include "onnx_core/runtime/simple_tensor.h"
 
 #include <cstddef>
-#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -92,14 +91,7 @@ public:
    * @param capacity  Maximum number of :cpp:struct:`RawBuffer` instances that
    *                  can be alive at the same time.
    */
-  explicit SimpleRawBufferAllocator(size_t capacity) : buffers_(capacity) {
-    free_slots_.reserve(capacity);
-    index_map_.reserve(capacity);
-    // Push indices in reverse so slot 0 is popped first.
-    for (size_t i = capacity; i-- > 0;) {
-      free_slots_.push_back(i);
-    }
-  }
+  explicit SimpleRawBufferAllocator(size_t capacity);
 
   /**
    * Pops a free slot from the stack, resizes it to ``n_bytes``, records the
@@ -107,21 +99,7 @@ public:
    *
    * @throws std::bad_alloc if all slots are already in use.
    */
-  RawBuffer *Allocate(size_t n_bytes) override {
-    if (free_slots_.empty()) {
-      throw std::bad_alloc();
-    }
-    const size_t i = free_slots_.back();
-    free_slots_.pop_back();
-    buffers_[i].assign(n_bytes, 0);
-    index_map_[&buffers_[i]] = i;
-    total_allocated_size_ += n_bytes;
-    if (total_allocated_size_ > peak_allocated_size_) {
-      peak_allocated_size_ = total_allocated_size_;
-    }
-    ++allocated_count_;
-    return &buffers_[i];
-  }
+  RawBuffer *Allocate(size_t n_bytes) override;
 
   /**
    * Looks up the slot index in the pointer map (O(1)), clears the slot,
@@ -130,38 +108,26 @@ public:
    * @throws std::invalid_argument if ``buf`` does not belong to this
    *         allocator.
    */
-  void Free(RawBuffer *buf) override {
-    const auto it = index_map_.find(buf);
-    if (it == index_map_.end()) {
-      throw std::invalid_argument(
-          "SimpleRawBufferAllocator::Free: buffer does not belong to this allocator.");
-    }
-    const size_t i = it->second;
-    total_allocated_size_ -= buffers_[i].size();
-    --allocated_count_;
-    buffers_[i] = RawBuffer{};
-    index_map_.erase(it);
-    free_slots_.push_back(i);
-  }
+  void Free(RawBuffer *buf) override;
 
   /// Returns the sum of the sizes of all currently allocated buffers — O(1).
-  size_t TotalAllocatedSize() const override { return total_allocated_size_; }
+  size_t TotalAllocatedSize() const override;
 
   /**
    * Returns the memory peak — the maximum value ever reached by
    * :cpp:func:`TotalAllocatedSize` since construction or the last
    * :cpp:func:`ResetPeak` — O(1).
    */
-  size_t PeakAllocatedSize() const override { return peak_allocated_size_; }
+  size_t PeakAllocatedSize() const override;
 
   /// Resets the memory peak to the current :cpp:func:`TotalAllocatedSize` — O(1).
-  void ResetPeak() override { peak_allocated_size_ = total_allocated_size_; }
+  void ResetPeak() override;
 
   /// Returns the total number of slots managed by this allocator.
-  size_t capacity() const noexcept { return buffers_.size(); }
+  size_t capacity() const noexcept;
 
   /// Returns the number of slots currently in use — O(1).
-  size_t allocated_count() const noexcept { return allocated_count_; }
+  size_t allocated_count() const noexcept;
 
 private:
   std::vector<RawBuffer> buffers_;

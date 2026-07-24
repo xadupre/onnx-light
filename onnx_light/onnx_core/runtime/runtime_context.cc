@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_set>
 
@@ -203,6 +204,42 @@ RuntimeEvent MakeRemoveEvent(RuntimeEventKind kind, const std::string &name,
 
 } // namespace
 
+std::string RuntimeEvent::summary() const {
+  std::ostringstream oss;
+  oss << "[" << RuntimeEventActionName(action) << "/" << RuntimeEventKindName(kind) << "] ";
+  if (action == RuntimeEventAction::kRunNode) {
+    if (!op_domain.empty()) {
+      oss << op_domain << "::";
+    }
+    oss << op_type << "(";
+    for (size_t i = 0; i < inputs.size(); ++i) {
+      if (i > 0) {
+        oss << ", ";
+      }
+      oss << inputs[i];
+    }
+    oss << ")";
+  } else {
+    oss << "'" << name << "'";
+  }
+  if (node_index >= 0) {
+    oss << " node#" << node_index;
+  }
+  if (action == RuntimeEventAction::kRunNode) {
+    oss << " took " << duration_ns << "ns";
+  }
+  oss << " mem=" << allocated_bytes << "B peak=" << peak_bytes << "B";
+  return oss.str();
+}
+
+void RuntimeContext::StampAllocatorMemory(RuntimeEvent &ev) const noexcept {
+  if (allocator_ == nullptr) {
+    return;
+  }
+  ev.allocated_bytes = static_cast<int64_t>(allocator_->TotalAllocatedSize());
+  ev.peak_bytes = static_cast<int64_t>(allocator_->PeakAllocatedSize());
+}
+
 RuntimeContext::~RuntimeContext() {
   for (auto &it : tensors_) {
     ReleaseTensorAllocation(it.second);
@@ -213,9 +250,11 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
   EnsureAllocatorBacked(tensor, allocator_);
   if (events_enabled_) {
-    events_.push_back(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor,
-                                            current_node_index_, current_subgraph_node_index_,
-                                            current_subgraph_attr_name_));
+    RuntimeEvent ev =
+        MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor, current_node_index_,
+                              current_subgraph_node_index_, current_subgraph_attr_name_);
+    StampAllocatorMemory(ev);
+    events_.push_back(std::move(ev));
   }
   tensors_[name] = std::move(tensor);
 }
@@ -225,9 +264,11 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
   if (events_enabled_) {
     const RuntimeEventAction action =
         Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
-    events_.push_back(MakeAddOrReplaceEvent(action, kind, name, tensor, current_node_index_,
-                                            current_subgraph_node_index_,
-                                            current_subgraph_attr_name_));
+    RuntimeEvent ev =
+        MakeAddOrReplaceEvent(action, kind, name, tensor, current_node_index_,
+                              current_subgraph_node_index_, current_subgraph_attr_name_);
+    StampAllocatorMemory(ev);
+    events_.push_back(std::move(ev));
   }
   auto it = tensors_.find(name);
   if (it != tensors_.end()) {
@@ -244,8 +285,10 @@ bool RuntimeContext::Remove(const std::string &name) {
   ReleaseTensorAllocation(it->second);
   tensors_.erase(it);
   if (events_enabled_) {
-    events_.push_back(MakeRemoveEvent(RuntimeEventKind::kUnknown, name,
-                                      current_subgraph_node_index_, current_subgraph_attr_name_));
+    RuntimeEvent ev = MakeRemoveEvent(RuntimeEventKind::kUnknown, name,
+                                      current_subgraph_node_index_, current_subgraph_attr_name_);
+    StampAllocatorMemory(ev);
+    events_.push_back(std::move(ev));
   }
   return true;
 }
@@ -282,6 +325,7 @@ void RuntimeContext::AppendRunNodeEvent(const std::string &op_domain, const std:
   ev.duration_ns = duration_ns;
   ev.subgraph_node_index = current_subgraph_node_index_;
   ev.subgraph_attr_name = current_subgraph_attr_name_;
+  StampAllocatorMemory(ev);
   events_.push_back(std::move(ev));
 }
 

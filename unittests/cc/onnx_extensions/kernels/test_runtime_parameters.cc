@@ -2,18 +2,28 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/compute/execution_plan.h"
+#include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_parameters.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
 
 #include <thread>
+#include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::DefaultOpset;
 using core::runtime::ExecutionPlan;
+using core::runtime::KernelContext;
+using core::runtime::RuntimeContext;
 using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
+using core::runtime::Tensor;
 
 namespace {
 
@@ -66,4 +76,34 @@ TEST(runtime_parameters, RuntimeSessionSetParameters) {
   session.set_parameters(RuntimeParameters(3));
   EXPECT_EQ(session.parameters().num_threads, 3);
   EXPECT_EQ(session.parameters().EffectiveNumThreads(), 3);
+}
+
+TEST(runtime_parameters, RuntimeSessionFromModelBuildsPlan) {
+  // Constructing a session from a ModelProto (no external plan supplied) builds
+  // and owns the plan from the model's graph, so the session can execute the
+  // graph directly. Here a single-node Add graph is run against a context that
+  // supplies its two external inputs.
+  ModelProto model;
+  GraphProto &graph = model.ref_graph();
+  NodeProto *node = graph.add_node();
+  node->set_op_type("Add");
+  node->add_input("x");
+  node->add_input("y");
+  node->add_output("z");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
+
+  RuntimeSession session(model);
+  session.Run(rt);
+
+  EXPECT_EQ(session.required_inputs(), std::vector<std::string>({"x", "y"}));
+  ASSERT_NE(rt.tensors().find("z"), rt.tensors().end());
+  const Tensor &z = rt.tensors()["z"];
+  ASSERT_EQ(z.element_count(), 3);
+  const float *got = z.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 11.0f);
+  EXPECT_FLOAT_EQ(got[1], 22.0f);
+  EXPECT_FLOAT_EQ(got[2], 33.0f);
 }

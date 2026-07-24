@@ -6,6 +6,7 @@
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/shapes/shapes_context.h"
+#include "onnx_core/symbolic/sym_sequence.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_op/operator_sets.h"
@@ -379,6 +380,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   using ::onnx_light::core::symbolic::DataTypeToTensorType;
   using ::onnx_light::core::symbolic::Device;
   using ::onnx_light::core::symbolic::SymDim;
+  using ::onnx_light::core::symbolic::SymSequence;
   using ::onnx_light::core::symbolic::SymShape;
   using ::onnx_light::core::symbolic::SymTensor;
   using ::onnx_light::core::symbolic::TensorTypeToDataType;
@@ -572,6 +574,71 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "Compares this descriptor against a ``ValueInfoProto`` by converting the "
           "value-info tensor type/shape into an ``SymTensor`` and checking "
           "descriptor equality.");
+
+  // -----------------------------------------------------------------------
+  // SymSequence
+  // -----------------------------------------------------------------------
+  nb::class_<SymSequence>(
+      shape_mod, "SymSequence",
+      "Lightweight (non-owning) descriptor for an ONNX tensor-sequence value: a "
+      "common element type shared by every tensor in the sequence, an optional "
+      "per-element ``SymShape`` list, and a (possibly symbolic) sequence length.")
+      .def(nb::init<>())
+      .def(
+          "__init__",
+          [iterable_to_shape](SymSequence *self, int elem_dtype, nb::handle elem_shapes) {
+            TensorType t = DataTypeToTensorType(static_cast<TensorProto::DataType>(elem_dtype));
+            std::vector<SymShape> shapes;
+            nb::iterator it = nb::iter(elem_shapes);
+            nb::iterator end = nb::iterator::sentinel();
+            for (; it != end; ++it)
+              shapes.push_back(iterable_to_shape(*it));
+            new (self) SymSequence(t, std::move(shapes));
+          },
+          nb::arg("elem_dtype"), nb::arg("elem_shapes"),
+          "Constructs a ``SymSequence`` from a ``TensorProto.DataType`` integer and an "
+          "iterable of per-element shapes (each an iterable of ``int`` or ``str`` "
+          "dimensions). The sequence length is set to the number of supplied shapes.")
+      .def(
+          "__init__",
+          [](SymSequence *self, int elem_dtype, nb::handle length) {
+            TensorType t = DataTypeToTensorType(static_cast<TensorProto::DataType>(elem_dtype));
+            SymDim dim = nb::isinstance<nb::int_>(length) ? SymDim(nb::cast<int64_t>(length))
+                                                          : SymDim(nb::cast<std::string>(length));
+            new (self) SymSequence(t, std::move(dim));
+          },
+          nb::arg("elem_dtype"), nb::arg("length"),
+          "Constructs a ``SymSequence`` from a ``TensorProto.DataType`` integer and a "
+          "(possibly symbolic) length (``int`` or ``str``). No per-element shape is "
+          "recorded.")
+      .def_prop_ro(
+          "elem_dtype",
+          [](const SymSequence &s) -> int {
+            return static_cast<int>(TensorTypeToDataType(s.ElemDtype()));
+          },
+          "Element type shared by every tensor in the sequence, as a "
+          "``TensorProto.DataType`` integer.")
+      .def_prop_ro(
+          "elem_shapes",
+          [shape_to_list](const SymSequence &s) -> nb::list {
+            nb::list out;
+            for (const auto &shape : s.ElemShapes())
+              out.append(shape_to_list(shape));
+            return out;
+          },
+          "Per-element shapes, as a list of shape lists. Empty when "
+          "``has_elem_shapes`` is ``False``.")
+      .def_prop_ro(
+          "length",
+          [dim_to_object](const SymSequence &s) -> nb::object { return dim_to_object(s.Length()); },
+          "Sequence length (an ``int`` when concrete, a ``str`` symbolic expression "
+          "otherwise).")
+      .def("has_elem_dtype", &SymSequence::HasElemDtype,
+           "True when an element dtype has been recorded for this sequence.")
+      .def("has_elem_shapes", &SymSequence::HasElemShapes,
+           "True when per-element shapes have been recorded for this sequence.")
+      .def(nb::self == nb::self)
+      .def(nb::self != nb::self);
 
   // -----------------------------------------------------------------------
   // ShapeEventAction — enum classifying a ShapeEvent record.

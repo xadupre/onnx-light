@@ -4216,13 +4216,13 @@ TEST(RuntimeSession, IsReusableAcrossMultipleRuns) {
 
 TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
   // Registers a synthetic op whose NodeKernelFn factory (kernel construction)
-  // and ResolvedKernel::Invoke (per-run execution) each bump their own
+  // and the KernelInvokeFn closure (per-run execution) each bump their own
   // counter, so this test can assert directly: the factory — i.e. kernel
   // construction — runs exactly once per node no matter how many times the
   // session is run, while the invoke path runs once per node per Run() call.
+  using core::runtime::KernelInvokeFn;
   using core::runtime::NodeKernelFn;
   using core::runtime::RegisterKernelFn;
-  using core::runtime::ResolvedKernel;
 
   static int construct_count = 0;
   static int invoke_count = 0;
@@ -4230,15 +4230,13 @@ TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel";
-  RegisterKernelFn(domain, "CountingOp",
-                   [](const NodeProto &, RuntimeContext &) -> std::unique_ptr<ResolvedKernel> {
-                     ++construct_count;
-                     return std::make_unique<ResolvedKernel>(
-                         [](const NodeProto &node, RuntimeContext &rt) {
-                           ++invoke_count;
-                           rt.Set(node.output(0), rt.Get(node.input(0)));
-                         });
-                   });
+  RegisterKernelFn(domain, "CountingOp", [](const NodeProto &, RuntimeContext &) -> KernelInvokeFn {
+    ++construct_count;
+    return [](const NodeProto &node, RuntimeContext &rt) {
+      ++invoke_count;
+      rt.Set(node.output(0), rt.Get(node.input(0)));
+    };
+  });
 
   GraphProto graph;
   ValueInfoProto vi_x;
@@ -4278,9 +4276,9 @@ TEST(RuntimeSession, ConstructsIfBranchKernelOnceAcrossMultipleRuns) {
   // for a node nested inside an ``If`` branch: the branch's kernel must be
   // constructed once and reused across repeated Run() calls of the *outer*
   // session, not re-resolved every time the ``If`` node executes.
+  using core::runtime::KernelInvokeFn;
   using core::runtime::NodeKernelFn;
   using core::runtime::RegisterKernelFn;
-  using core::runtime::ResolvedKernel;
 
   static int construct_count = 0;
   static int invoke_count = 0;
@@ -4288,15 +4286,13 @@ TEST(RuntimeSession, ConstructsIfBranchKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_if";
-  RegisterKernelFn(domain, "CountingOp",
-                   [](const NodeProto &, RuntimeContext &) -> std::unique_ptr<ResolvedKernel> {
-                     ++construct_count;
-                     return std::make_unique<ResolvedKernel>(
-                         [](const NodeProto &node, RuntimeContext &rt) {
-                           ++invoke_count;
-                           rt.Set(node.output(0), rt.Get(node.input(0)));
-                         });
-                   });
+  RegisterKernelFn(domain, "CountingOp", [](const NodeProto &, RuntimeContext &) -> KernelInvokeFn {
+    ++construct_count;
+    return [](const NodeProto &node, RuntimeContext &rt) {
+      ++invoke_count;
+      rt.Set(node.output(0), rt.Get(node.input(0)));
+    };
+  });
 
   GraphProto then_branch;
   ValueInfoProto then_y;
@@ -4353,9 +4349,9 @@ TEST(RuntimeSession, ConstructsLoopBodyKernelOnceAcrossMultipleRuns) {
   // node nested inside a ``Loop`` body: the body's kernel must be constructed
   // once and reused both across iterations of a single Loop execution and
   // across repeated Run() calls of the *outer* session.
+  using core::runtime::KernelInvokeFn;
   using core::runtime::NodeKernelFn;
   using core::runtime::RegisterKernelFn;
-  using core::runtime::ResolvedKernel;
 
   static int construct_count = 0;
   static int invoke_count = 0;
@@ -4363,15 +4359,13 @@ TEST(RuntimeSession, ConstructsLoopBodyKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_loop";
-  RegisterKernelFn(domain, "CountingOp",
-                   [](const NodeProto &, RuntimeContext &) -> std::unique_ptr<ResolvedKernel> {
-                     ++construct_count;
-                     return std::make_unique<ResolvedKernel>(
-                         [](const NodeProto &node, RuntimeContext &rt) {
-                           ++invoke_count;
-                           rt.Set(node.output(0), rt.Get(node.input(0)));
-                         });
-                   });
+  RegisterKernelFn(domain, "CountingOp", [](const NodeProto &, RuntimeContext &) -> KernelInvokeFn {
+    ++construct_count;
+    return [](const NodeProto &node, RuntimeContext &rt) {
+      ++invoke_count;
+      rt.Set(node.output(0), rt.Get(node.input(0)));
+    };
+  });
 
   GraphProto body;
   body.set_name("loop_body");
@@ -4426,9 +4420,9 @@ TEST(RuntimeSession, ConstructsLoopBodyKernelOnceAcrossMultipleRuns) {
 TEST(RuntimeSession, ConstructsScanBodyKernelOnceAcrossMultipleRuns) {
   // Same guarantee as ConstructsLoopBodyKernelOnceAcrossMultipleRuns but for a
   // node nested inside a ``Scan`` body.
+  using core::runtime::KernelInvokeFn;
   using core::runtime::NodeKernelFn;
   using core::runtime::RegisterKernelFn;
-  using core::runtime::ResolvedKernel;
 
   static int construct_count = 0;
   static int invoke_count = 0;
@@ -4436,15 +4430,13 @@ TEST(RuntimeSession, ConstructsScanBodyKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_scan";
-  RegisterKernelFn(domain, "CountingOp",
-                   [](const NodeProto &, RuntimeContext &) -> std::unique_ptr<ResolvedKernel> {
-                     ++construct_count;
-                     return std::make_unique<ResolvedKernel>(
-                         [](const NodeProto &node, RuntimeContext &rt) {
-                           ++invoke_count;
-                           rt.Set(node.output(0), rt.Get(node.input(0)));
-                         });
-                   });
+  RegisterKernelFn(domain, "CountingOp", [](const NodeProto &, RuntimeContext &) -> KernelInvokeFn {
+    ++construct_count;
+    return [](const NodeProto &node, RuntimeContext &rt) {
+      ++invoke_count;
+      rt.Set(node.output(0), rt.Get(node.input(0)));
+    };
+  });
 
   GraphProto body;
   body.set_name("scan_body");
@@ -4494,9 +4486,9 @@ TEST(RuntimeSession, ConstructsScanBodyKernelOnceAcrossMultipleRuns) {
 TEST(RuntimeSession, ConstructsSequenceMapBodyKernelOnceAcrossMultipleRuns) {
   // Same guarantee as ConstructsLoopBodyKernelOnceAcrossMultipleRuns but for a
   // node nested inside a ``SequenceMap`` body.
+  using core::runtime::KernelInvokeFn;
   using core::runtime::NodeKernelFn;
   using core::runtime::RegisterKernelFn;
-  using core::runtime::ResolvedKernel;
 
   static int construct_count = 0;
   static int invoke_count = 0;
@@ -4504,15 +4496,13 @@ TEST(RuntimeSession, ConstructsSequenceMapBodyKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_seqmap";
-  RegisterKernelFn(domain, "CountingOp",
-                   [](const NodeProto &, RuntimeContext &) -> std::unique_ptr<ResolvedKernel> {
-                     ++construct_count;
-                     return std::make_unique<ResolvedKernel>(
-                         [](const NodeProto &node, RuntimeContext &rt) {
-                           ++invoke_count;
-                           rt.Set(node.output(0), rt.Get(node.input(0)));
-                         });
-                   });
+  RegisterKernelFn(domain, "CountingOp", [](const NodeProto &, RuntimeContext &) -> KernelInvokeFn {
+    ++construct_count;
+    return [](const NodeProto &node, RuntimeContext &rt) {
+      ++invoke_count;
+      rt.Set(node.output(0), rt.Get(node.input(0)));
+    };
+  });
 
   GraphProto body;
   body.set_name("seq_map_body");

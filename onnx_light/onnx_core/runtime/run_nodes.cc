@@ -1039,7 +1039,7 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
 // event.
 // Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both the
 // resolve-on-demand and the resolve-once execution paths log identically.
-void InvokeResolvedKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
+void InvokeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
                           const std::string &op_type, const KernelInvokeFn &kernel) {
   PrintNodeProgress(rt, node, domain, op_type);
 
@@ -1076,7 +1076,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string &op_type = node.op_type().value();
   NodeKernelFn factory = detail::ResolveNodeKernel(node, rt, domain, op_type);
   KernelInvokeFn resolved = factory(node, rt);
-  detail::InvokeResolvedKernel(node, rt, domain, op_type, resolved);
+  detail::InvokeKernel(node, rt, domain, op_type, resolved);
 }
 
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {

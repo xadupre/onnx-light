@@ -54,7 +54,7 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
  * Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both the
  * resolve-on-demand and the resolve-once execution paths log identically.
  */
-void InvokeResolvedKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
+void InvokeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
                           const std::string &op_type, const KernelInvokeFn &kernel);
 
 } // namespace detail

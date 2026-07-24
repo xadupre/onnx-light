@@ -52,7 +52,7 @@ onnx_kernels::Shape ComputeStrides(const onnx_kernels::Shape &shape) {
 
 } // namespace
 
-Tensor Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm,
+Tensor Transpose::operator()(const Tensor &data, const onnx_kernels::Shape &perm,
                              RuntimeContext *rt) const {
   const onnx_kernels::Shape resolved_perm = ResolvePermOrDefault(perm, data.shape.size());
   onnx_kernels::Shape out_shape;
@@ -68,7 +68,7 @@ Tensor Transpose::operator()(const Tensor &data, const std::vector<int64_t> &per
   return output;
 }
 
-void Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm,
+void Transpose::operator()(const Tensor &data, const onnx_kernels::Shape &perm,
                            Tensor &output) const {
   const onnx_kernels::Shape resolved_perm = ResolvePermOrDefault(perm, data.shape.size());
   onnx_kernels::Shape out_shape;

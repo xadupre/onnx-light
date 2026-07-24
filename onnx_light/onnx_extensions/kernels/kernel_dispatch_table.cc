@@ -2485,7 +2485,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
          const Tensor &data = GetInput(node, 0, rt.tensors());
-         const std::vector<int64_t> perm = GetAttributeIntsOrDefault(node, "perm", {});
+         const onnx_kernels::Shape perm = GetAttributeIntsOrDefault(node, "perm", {});
          onnx_kernels::kernel::Transpose k(rt.kernel_ctx());
          SetOutput(node, 0, k(data, perm, &rt), rt);
        })},

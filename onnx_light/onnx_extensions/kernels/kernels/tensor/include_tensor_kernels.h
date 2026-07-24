@@ -405,9 +405,9 @@ public:
 class Transpose : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &data, const std::vector<int64_t> &perm,
+  Tensor operator()(const Tensor &data, const onnx_kernels::Shape &perm,
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &data, const std::vector<int64_t> &perm, Tensor &output) const;
+  void operator()(const Tensor &data, const onnx_kernels::Shape &perm, Tensor &output) const;
 
   /// Output shape differs from input shape in general.
   static constexpr bool CanRunInPlace() noexcept { return false; }

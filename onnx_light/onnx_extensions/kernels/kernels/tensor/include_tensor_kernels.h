@@ -915,7 +915,7 @@ public:
   /// optional; an empty vector here means "all axes" (i.e. ``shape`` has
   /// length equal to ``rank(input_data)``).
   struct Attributes {
-    std::vector<int64_t> axes;
+    onnx_kernels::Shape axes;
     bool axes_present = false;
   };
 

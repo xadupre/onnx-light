@@ -22,6 +22,12 @@ class GraphProto;
 namespace core {
 namespace runtime {
 
+// Forward declaration; full definition lives in run_nodes.h. Kept as a
+// forward declaration here (rather than including run_nodes.h) since only
+// a reference to an already-built instance is needed by the ``SubgraphSession``-
+// aware overloads below.
+class SubgraphSession;
+
 // ---------------------------------------------------------------------------
 // Reference implementations of the ``controlflow`` backend test kernels.
 //
@@ -232,6 +238,19 @@ public:
   Tensors operator()(RuntimeContext &rt, const GraphProto &body, const Tensor &M,
                      const Tensor &cond, const Tensors &v_initial) const;
 
+  /// Body-aware overload driven by an externally-owned :cpp:class:`SubgraphSession`.
+  ///
+  /// Identical to the ``body``-only overload above except that ``session``
+  /// (already built over ``body``, typically once per node by the runtime
+  /// dispatcher and cached across every invocation of that node) is reused
+  /// as-is instead of being constructed locally, so the body's kernels are
+  /// resolved once per node rather than once per call.
+  ///
+  /// @param session    Already-built :cpp:class:`SubgraphSession` over
+  ///                   ``body``. Its lifetime is owned by the caller.
+  Tensors operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSession &session,
+                     const Tensor &M, const Tensor &cond, const Tensors &v_initial) const;
+
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
@@ -312,6 +331,24 @@ public:
   ///         stacked scan outputs.
   Tensors operator()(RuntimeContext &rt, const GraphProto &body, const Tensors &initial_state,
                      const Tensors &scan_inputs, const ParamInts &scan_input_axes = {},
+                     const ParamInts &scan_input_directions = {},
+                     const ParamInts &scan_output_axes = {},
+                     const ParamInts &scan_output_directions = {}) const;
+
+  /// Body-aware overload driven by an externally-owned :cpp:class:`SubgraphSession`.
+  ///
+  /// Identical to the ``body``-only overload above except that ``session``
+  /// (already built over ``body``, typically once per node by the runtime
+  /// dispatcher and cached across every invocation of that node, including
+  /// every per-batch call in the Scan-8 legacy path) is reused as-is instead
+  /// of being constructed locally, so the body's kernels are resolved once
+  /// per node rather than once per call.
+  ///
+  /// @param session Already-built :cpp:class:`SubgraphSession` over ``body``.
+  ///                Its lifetime is owned by the caller.
+  Tensors operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSession &session,
+                     const Tensors &initial_state, const Tensors &scan_inputs,
+                     const ParamInts &scan_input_axes = {},
                      const ParamInts &scan_input_directions = {},
                      const ParamInts &scan_output_axes = {},
                      const ParamInts &scan_output_directions = {}) const;

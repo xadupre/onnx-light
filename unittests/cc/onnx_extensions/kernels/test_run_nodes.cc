@@ -4175,6 +4175,345 @@ TEST(RuntimeSession, IsReusableAcrossMultipleRuns) {
   EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], -4.0f);
 }
 
+TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
+  // Registers a synthetic op whose NodeKernelFn factory (kernel construction)
+  // and ResolvedKernel::Invoke (per-run execution) each bump their own
+  // counter, so this test can assert directly: the factory — i.e. kernel
+  // construction — runs exactly once per node no matter how many times the
+  // session is run, while the invoke path runs once per node per Run() call.
+  using core::runtime::NodeKernelFn;
+  using core::runtime::RegisterKernelFn;
+  using core::runtime::ResolvedKernel;
+
+  static int construct_count = 0;
+  static int invoke_count = 0;
+  construct_count = 0;
+  invoke_count = 0;
+
+  const std::string domain = "test.onnxlight.counting_kernel";
+  RegisterKernelFn(domain, "CountingOp",
+                   [](const NodeProto &, RuntimeContext &) -> std::unique_ptr<ResolvedKernel> {
+                     ++construct_count;
+                     return std::make_unique<ResolvedKernel>(
+                         [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("CountingOp", {"x"}, {"y"}, domain));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+
+  rt.Set("x", Tensor::FromFloat("x", {2}, {1.0f, 2.0f}));
+  session.Run(rt);
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 1);
+
+  rt.Remove("y");
+  rt.Put("x", Tensor::FromFloat("x", {2}, {3.0f, 4.0f}));
+  session.Run(rt);
+  // The kernel is still constructed only once even on this second Run(), but
+  // it is invoked again.
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 2);
+
+  rt.Remove("y");
+  rt.Put("x", Tensor::FromFloat("x", {2}, {5.0f, 6.0f}));
+  session.Run(rt);
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 3);
+}
+
+TEST(RuntimeSession, ConstructsIfBranchKernelOnceAcrossMultipleRuns) {
+  // Same guarantee as ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns but
+  // for a node nested inside an ``If`` branch: the branch's kernel must be
+  // constructed once and reused across repeated Run() calls of the *outer*
+  // session, not re-resolved every time the ``If`` node executes.
+  using core::runtime::NodeKernelFn;
+  using core::runtime::RegisterKernelFn;
+  using core::runtime::ResolvedKernel;
+
+  static int construct_count = 0;
+  static int invoke_count = 0;
+  construct_count = 0;
+  invoke_count = 0;
+
+  const std::string domain = "test.onnxlight.counting_kernel_if";
+  RegisterKernelFn(domain, "CountingOp",
+                   [](const NodeProto &, RuntimeContext &) -> std::unique_ptr<ResolvedKernel> {
+                     ++construct_count;
+                     return std::make_unique<ResolvedKernel>(
+                         [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
+
+  GraphProto then_branch;
+  ValueInfoProto then_y;
+  then_y.set_name("y");
+  then_branch.ref_output().push_back(then_y);
+  then_branch.ref_node().push_back(MakeNode("CountingOp", {"x"}, {"y"}, domain));
+
+  GraphProto else_branch;
+  ValueInfoProto else_y;
+  else_y.set_name("y");
+  else_branch.ref_output().push_back(else_y);
+  else_branch.ref_node().push_back(MakeNode("Identity", {"x"}, {"y"}));
+
+  NodeProto if_node = MakeNode("If", {"cond"}, {"y"});
+  AttributeProto *then_attr = if_node.add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *then_attr->add_g() = then_branch;
+  AttributeProto *else_attr = if_node.add_attribute();
+  else_attr->set_name("else_branch");
+  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *else_attr->add_g() = else_branch;
+
+  GraphProto graph;
+  ValueInfoProto vi_cond;
+  vi_cond.set_name("cond");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_cond);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(if_node);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2}, {1.0f, 2.0f}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {true}));
+
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+
+  session.Run(rt);
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 1);
+
+  rt.Remove("y");
+  session.Run(rt);
+  // The If branch's kernel must still be constructed only once even though
+  // the outer session (and hence the If node) has run a second time.
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 2);
+}
+
+TEST(RuntimeSession, ConstructsLoopBodyKernelOnceAcrossMultipleRuns) {
+  // Same guarantee as ConstructsIfBranchKernelOnceAcrossMultipleRuns but for a
+  // node nested inside a ``Loop`` body: the body's kernel must be constructed
+  // once and reused both across iterations of a single Loop execution and
+  // across repeated Run() calls of the *outer* session.
+  using core::runtime::NodeKernelFn;
+  using core::runtime::RegisterKernelFn;
+  using core::runtime::ResolvedKernel;
+
+  static int construct_count = 0;
+  static int invoke_count = 0;
+  construct_count = 0;
+  invoke_count = 0;
+
+  const std::string domain = "test.onnxlight.counting_kernel_loop";
+  RegisterKernelFn(domain, "CountingOp",
+                   [](const NodeProto &, RuntimeContext &) -> std::unique_ptr<ResolvedKernel> {
+                     ++construct_count;
+                     return std::make_unique<ResolvedKernel>(
+                         [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
+
+  GraphProto body;
+  body.set_name("loop_body");
+  body.add_input()->set_name("iter");
+  body.add_input()->set_name("cond_in");
+  body.add_input()->set_name("s_in");
+  body.ref_node().push_back(MakeNode("CountingOp", {"s_in"}, {"s_out"}, domain));
+  body.add_output()->set_name("cond_in");
+  body.add_output()->set_name("s_out");
+
+  NodeProto loop_node = MakeNode("Loop", {"M", "cond", "s_init"}, {"s_final"});
+  AttributeProto *body_attr = loop_node.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = body;
+
+  GraphProto graph;
+  ValueInfoProto vi_m, vi_cond, vi_s_init, vi_s_final;
+  vi_m.set_name("M");
+  vi_cond.set_name("cond");
+  vi_s_init.set_name("s_init");
+  vi_s_final.set_name("s_final");
+  graph.ref_input().push_back(vi_m);
+  graph.ref_input().push_back(vi_cond);
+  graph.ref_input().push_back(vi_s_init);
+  graph.ref_output().push_back(vi_s_final);
+  graph.ref_node().push_back(loop_node);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {true}));
+  rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+
+  session.Run(rt);
+  // Constructed once for the whole first Run() (all 3 iterations reuse it),
+  // but invoked once per iteration.
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 3);
+
+  rt.Remove("s_final");
+  rt.Put("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+  session.Run(rt);
+  // Still constructed only once even though the outer session (and hence the
+  // Loop node) has run a second time.
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 6);
+}
+
+TEST(RuntimeSession, ConstructsScanBodyKernelOnceAcrossMultipleRuns) {
+  // Same guarantee as ConstructsLoopBodyKernelOnceAcrossMultipleRuns but for a
+  // node nested inside a ``Scan`` body.
+  using core::runtime::NodeKernelFn;
+  using core::runtime::RegisterKernelFn;
+  using core::runtime::ResolvedKernel;
+
+  static int construct_count = 0;
+  static int invoke_count = 0;
+  construct_count = 0;
+  invoke_count = 0;
+
+  const std::string domain = "test.onnxlight.counting_kernel_scan";
+  RegisterKernelFn(domain, "CountingOp",
+                   [](const NodeProto &, RuntimeContext &) -> std::unique_ptr<ResolvedKernel> {
+                     ++construct_count;
+                     return std::make_unique<ResolvedKernel>(
+                         [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
+
+  GraphProto body;
+  body.set_name("scan_body");
+  body.add_input()->set_name("s_in");
+  body.add_input()->set_name("x_in");
+  body.ref_node().push_back(MakeNode("CountingOp", {"s_in"}, {"s_out"}, domain));
+  body.add_output()->set_name("s_out");
+
+  NodeProto scan_node = MakeNode("Scan", {"s_init", "x"}, {"s_final"});
+  AttributeProto *body_attr = scan_node.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = body;
+  AttributeProto *num_scan_inputs_attr = scan_node.add_attribute();
+  num_scan_inputs_attr->set_name("num_scan_inputs");
+  num_scan_inputs_attr->set_type(AttributeProto::AttributeType::INT);
+  num_scan_inputs_attr->set_i(1);
+
+  GraphProto graph;
+  ValueInfoProto vi_s_init, vi_x, vi_s_final;
+  vi_s_init.set_name("s_init");
+  vi_x.set_name("x");
+  vi_s_final.set_name("s_final");
+  graph.ref_input().push_back(vi_s_init);
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_s_final);
+  graph.ref_node().push_back(scan_node);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+
+  session.Run(rt);
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 3);
+
+  rt.Remove("s_final");
+  rt.Put("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+  session.Run(rt);
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 6);
+}
+
+TEST(RuntimeSession, ConstructsSequenceMapBodyKernelOnceAcrossMultipleRuns) {
+  // Same guarantee as ConstructsLoopBodyKernelOnceAcrossMultipleRuns but for a
+  // node nested inside a ``SequenceMap`` body.
+  using core::runtime::NodeKernelFn;
+  using core::runtime::RegisterKernelFn;
+  using core::runtime::ResolvedKernel;
+
+  static int construct_count = 0;
+  static int invoke_count = 0;
+  construct_count = 0;
+  invoke_count = 0;
+
+  const std::string domain = "test.onnxlight.counting_kernel_seqmap";
+  RegisterKernelFn(domain, "CountingOp",
+                   [](const NodeProto &, RuntimeContext &) -> std::unique_ptr<ResolvedKernel> {
+                     ++construct_count;
+                     return std::make_unique<ResolvedKernel>(
+                         [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
+
+  GraphProto body;
+  body.set_name("seq_map_body");
+  body.add_input()->set_name("x_in");
+  body.ref_node().push_back(MakeNode("CountingOp", {"x_in"}, {"y_out"}, domain));
+  body.add_output()->set_name("y_out");
+
+  NodeProto seq_map_node = MakeNode("SequenceMap", {"xs"}, {"ys"});
+  AttributeProto *body_attr = seq_map_node.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = body;
+
+  GraphProto graph;
+  ValueInfoProto vi_xs, vi_ys;
+  vi_xs.set_name("xs");
+  vi_ys.set_name("ys");
+  graph.ref_input().push_back(vi_xs);
+  graph.ref_output().push_back(vi_ys);
+  graph.ref_node().push_back(seq_map_node);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.PutSequence("xs",
+                 Sequence("xs", static_cast<int32_t>(DataType::FLOAT),
+                          {Tensor::FromFloat("x0", {}, {1.0f}), Tensor::FromFloat("x1", {}, {2.0f}),
+                           Tensor::FromFloat("x2", {}, {3.0f})}));
+
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+
+  session.Run(rt);
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 3);
+
+  rt.Remove("ys");
+  session.Run(rt);
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 6);
+}
+
 TEST(RuntimeSession, RejectsUnsupportedOpDuringKernelInitialization) {
   // Kernel resolution happens on the first Run (kernel initialization), so an
   // unsupported operator is rejected the first time the session is run.

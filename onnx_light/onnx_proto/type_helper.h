@@ -4,7 +4,7 @@
 
 /**
  * @file type_helper.h
- * @brief Declares the ``TensorType`` enumeration, the ``ToTypeString``
+ * @brief Provides the ``TensorType`` enumeration, the ``ToTypeString``
  *        converter, and the ``SeqTypeOf``/``OptTypeOf``/``OptSeqTypeOf``
  *        constexpr helpers used across the onnx-light library stack.
  */

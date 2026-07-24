@@ -599,7 +599,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # bindings live in distinct extensions.
   nanobind_add_module(_onnxpyoptim STABLE_ABI ${ONNX_PY_OPTIM_SOURCES})
   target_include_directories(_onnxpyoptim PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxpyoptim PRIVATE lib_onnx_shape)
+  target_link_libraries(_onnxpyoptim PRIVATE lib_onnx_shape lib_onnx_op)
 
   # _onnxpykernels: kernel helpers (deterministic pseudo-random helpers backing
   # ``onnx_backend_test``). Links lib_onnx_kernels only and does not depend on
@@ -676,6 +676,7 @@ endif()
 if(ONNX_LIGHT_BUILD_TESTS)
 
   file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_CORE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_core/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_lib/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_SHAPE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/shapes/test_*.cc")
@@ -687,6 +688,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
   set(ONNX_CPP_TEST_SOURCES
       ${ONNX_CPP_PROTO_TEST_SOURCES}
+      ${ONNX_CPP_CORE_TEST_SOURCES}
       ${ONNX_CPP_LIB_TEST_SOURCES}
       ${ONNX_CPP_OP_TEST_SOURCES}
       ${ONNX_CPP_SHAPE_TEST_SOURCES}

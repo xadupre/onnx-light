@@ -1,3 +1,4 @@
+#include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/compute/value_tags.h"
@@ -7,6 +8,8 @@
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
+#include "onnx_op/default_onnx_schema.h"
+#include "onnx_proto/onnx_helper.h"
 #include <algorithm>
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
@@ -49,12 +52,14 @@ constexpr const char *InPlaceReuseKindEnumName(core::compute::InPlaceReuseKind k
 
 void AddOnnxPyExpressions(nb::module_ &m);
 void AddOnnxPyShapeInference(nb::module_ &m);
+void AddOnnxPyBuilder(nb::module_ &m);
 
 NB_MODULE(_onnxpyoptim, m) {
   m.doc() = "onnx optim bindings from python: symbolic dimension expressions and "
             "shape inference helpers (operating on the same proto format).";
   AddOnnxPyExpressions(m);
   AddOnnxPyShapeInference(m);
+  AddOnnxPyBuilder(m);
 }
 
 void AddOnnxPyExpressions(nb::module_ &m) {
@@ -1712,4 +1717,238 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         }
       },
       nb::arg("nodes"), "Writes inferred node tags for a node list.");
+}
+
+namespace {
+
+// Builds a standalone AttributeProto from a Python value. Supports scalars
+// (int, float, str, bytes), homogeneous lists of those, and the proto types
+// AttributeProto (passed through), TensorProto and GraphProto.
+AttributeProto PyValueToAttribute(const std::string &name, nb::handle value) {
+  if (nb::isinstance<AttributeProto>(value)) {
+    AttributeProto attribute = nb::cast<const AttributeProto &>(value);
+    attribute.set_name(name);
+    return attribute;
+  }
+  if (nb::isinstance<TensorProto>(value)) {
+    AttributeProto attribute;
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::AttributeType::TENSOR);
+    *attribute.mutable_t() = nb::cast<const TensorProto &>(value);
+    return attribute;
+  }
+  if (nb::isinstance<GraphProto>(value)) {
+    AttributeProto attribute;
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::AttributeType::GRAPH);
+    *attribute.mutable_g() = nb::cast<const GraphProto &>(value);
+    return attribute;
+  }
+  NodeProto scratch;
+  const char *key = name.c_str();
+  if (nb::isinstance<nb::bool_>(value)) {
+    ::onnx_light::AddAttribute(scratch, key, static_cast<int64_t>(nb::cast<bool>(value)));
+  } else if (nb::isinstance<nb::int_>(value)) {
+    ::onnx_light::AddAttribute(scratch, key, nb::cast<int64_t>(value));
+  } else if (nb::isinstance<nb::float_>(value)) {
+    ::onnx_light::AddAttribute(scratch, key, nb::cast<float>(value));
+  } else if (nb::isinstance<nb::str>(value) || nb::isinstance<nb::bytes>(value)) {
+    ::onnx_light::AddAttribute(scratch, key, nb::cast<std::string>(value));
+  } else if (nb::isinstance<nb::list>(value) || nb::isinstance<nb::tuple>(value)) {
+    nb::list items = nb::list(value);
+    if (items.size() == 0) {
+      ::onnx_light::AddAttribute(scratch, key, std::vector<int64_t>{});
+    } else if (nb::isinstance<nb::float_>(items[0]) && !nb::isinstance<nb::bool_>(items[0])) {
+      ::onnx_light::AddAttribute(scratch, key, nb::cast<std::vector<float>>(items));
+    } else if (nb::isinstance<nb::str>(items[0]) || nb::isinstance<nb::bytes>(items[0])) {
+      ::onnx_light::AddAttribute(scratch, key, nb::cast<std::vector<std::string>>(items));
+    } else {
+      ::onnx_light::AddAttribute(scratch, key, nb::cast<std::vector<int64_t>>(items));
+    }
+  } else {
+    throw core::builder::BuilderError("GraphBuilder: unsupported attribute type for '" + name +
+                                      "'.");
+  }
+  return scratch.attribute(0);
+}
+
+// Converts the ``attributes`` argument of ``make_node`` into a vector of
+// AttributeProto. ``attributes`` may be ``None``, a mapping ``name -> value``
+// or a list of ready-made AttributeProto objects.
+std::vector<AttributeProto> PyAttributesToVector(nb::handle attributes) {
+  std::vector<AttributeProto> result;
+  if (attributes.is_none()) {
+    return result;
+  }
+  if (nb::isinstance<nb::dict>(attributes)) {
+    for (auto item : nb::cast<nb::dict>(attributes)) {
+      result.push_back(PyValueToAttribute(nb::cast<std::string>(item.first), item.second));
+    }
+    return result;
+  }
+  for (nb::handle item : nb::borrow<nb::iterable>(attributes)) {
+    result.push_back(nb::cast<AttributeProto>(item));
+  }
+  return result;
+}
+
+} // namespace
+
+void AddOnnxPyBuilder(nb::module_ &m) {
+  using core::builder::BuilderError;
+  using core::builder::GraphBuilder;
+  using ::onnx_light::core::symbolic::Device;
+  using ::onnx_light::core::symbolic::SymTensor;
+
+  auto builder_mod = m.def_submodule("builder");
+  builder_mod.doc() =
+      "Incremental ONNX graph builder: accumulates inputs, initializers, nodes and "
+      "outputs while keeping shapes, in-place reuse, value tags and peak memory up to "
+      "date, then finalises into a model, graph or function.";
+
+  nb::register_exception_translator([](const std::exception_ptr &p, void *) {
+    try {
+      std::rethrow_exception(p);
+    } catch (const BuilderError &e) {
+      PyErr_SetString(PyExc_ValueError, e.what());
+    }
+  });
+
+  // Default schema provider backed by the built-in ONNX operator schemas.
+  GraphBuilder::SchemaLookupFn default_schema_lookup = [](const std::string &op_type) {
+    return core::builder::DefaultOnnxSchemaLookup(op_type);
+  };
+
+  nb::class_<GraphBuilder>(builder_mod, "GraphBuilder",
+                           "Incrementally builds an ONNX graph, model or function.")
+      .def(
+          "__init__",
+          [default_schema_lookup](GraphBuilder *self, const std::string &name, bool use_schemas) {
+            new (self) GraphBuilder(name, use_schemas ? default_schema_lookup
+                                                      : GraphBuilder::SchemaLookupFn{});
+          },
+          nb::arg("name") = "graph", nb::arg("use_schemas") = true,
+          "Constructs an empty builder. When ``use_schemas`` is True the built-in ONNX "
+          "operator schemas are used to resolve opsets and validate nodes.")
+      .def("set_opset_version", &GraphBuilder::SetOpsetVersion, nb::arg("domain"),
+           nb::arg("version"),
+           "Records the opset version to use for ``domain`` (empty string for the default "
+           "ONNX domain).")
+      .def("opset_version", &GraphBuilder::OpsetVersion, nb::arg("domain") = "",
+           "Returns the opset version recorded for ``domain``.")
+      .def("opset_versions", &GraphBuilder::OpsetVersions,
+           "Returns the recorded ``domain -> opset version`` mapping.")
+      .def("has_name", &GraphBuilder::HasName, nb::arg("name"),
+           "Returns True when ``name`` has already been handed out.")
+      .def("unique_name", &GraphBuilder::UniqueName, nb::arg("prefix") = "n",
+           "Returns and records a fresh, unused name starting with ``prefix``.")
+      .def("make_initializer", &GraphBuilder::MakeInitializer, nb::arg("tensor"),
+           "Appends ``tensor`` (which may carry external data) as an initializer and "
+           "returns its name.")
+      .def(
+          "make_external_initializer",
+          [](GraphBuilder &self, const std::string &name, int dtype,
+             const std::vector<int64_t> &dims, const std::string &location, int64_t offset,
+             int64_t length) {
+            using ::onnx_light::core::symbolic::DataTypeToTensorType;
+            return self.MakeExternalInitializer(
+                name, DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype)), dims,
+                location, offset, length);
+          },
+          nb::arg("name"), nb::arg("dtype"), nb::arg("dims"), nb::arg("location"),
+          nb::arg("offset") = 0, nb::arg("length") = 0,
+          "Appends an initializer whose data lives in an external file and returns its name.")
+      .def(
+          "make_input",
+          [](GraphBuilder &self, const std::string &name, const SymTensor &type) {
+            return self.MakeInput(name, type);
+          },
+          nb::arg("name"), nb::arg("type"), "Declares a graph input described by ``type``.")
+      .def(
+          "make_input",
+          [](GraphBuilder &self, const std::string &name, int dtype,
+             const std::vector<nb::object> &shape) {
+            using ::onnx_light::core::symbolic::DataTypeToTensorType;
+            using ::onnx_light::core::symbolic::SymDim;
+            using ::onnx_light::core::symbolic::SymShape;
+            SymShape sym;
+            for (const nb::object &d : shape) {
+              if (nb::isinstance<nb::int_>(d)) {
+                sym.PushBack(SymDim(nb::cast<int64_t>(d)));
+              } else {
+                sym.PushBack(SymDim(nb::cast<std::string>(d)));
+              }
+            }
+            return self.MakeInput(
+                name, DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype)), sym);
+          },
+          nb::arg("name"), nb::arg("dtype"), nb::arg("shape"),
+          "Declares a graph input with element type ``dtype`` (a ``TensorProto.DataType`` "
+          "integer) and ``shape`` (an iterable of ``int`` or ``str``).")
+      .def(
+          "make_output",
+          [](GraphBuilder &self, const std::string &name, const SymTensor &type) {
+            self.MakeOutput(name, type);
+          },
+          nb::arg("name"), nb::arg("type"),
+          "Declares ``name`` as a graph output described by ``type``.")
+      .def(
+          "make_output", [](GraphBuilder &self, const std::string &name) { self.MakeOutput(name); },
+          nb::arg("name"),
+          "Declares ``name`` as a graph output; its type is filled in at finalisation.")
+      .def(
+          "make_node",
+          [](GraphBuilder &self, const std::string &op_type, const std::vector<std::string> &inputs,
+             nb::object outputs, const std::string &domain, const std::string &name,
+             nb::object attributes) {
+            std::vector<std::string> resolved_outputs;
+            if (!outputs.is_none()) {
+              if (nb::isinstance<nb::str>(outputs)) {
+                resolved_outputs.push_back(nb::cast<std::string>(outputs));
+              } else {
+                resolved_outputs = nb::cast<std::vector<std::string>>(outputs);
+              }
+            }
+            return self.MakeNode(op_type, inputs, resolved_outputs, domain, name,
+                                 PyAttributesToVector(attributes));
+          },
+          nb::arg("op_type"), nb::arg("inputs"), nb::arg("outputs") = nb::none(),
+          nb::arg("domain") = "", nb::arg("name") = "", nb::arg("attributes") = nb::none(),
+          "Appends a node and returns its (possibly generated) output names. ``attributes`` "
+          "may be a mapping ``name -> value`` (scalars, lists, TensorProto, GraphProto) or a "
+          "list of AttributeProto objects.")
+      .def("has_shape", &GraphBuilder::HasShape, nb::arg("name"),
+           "Returns True when the shape of ``name`` has been inferred.")
+      .def("get_shape", &GraphBuilder::GetShape, nb::arg("name"), nb::rv_policy::reference_internal,
+           "Returns the inferred descriptor of ``name``.")
+      .def(
+          "graph", [](const GraphBuilder &self) -> const GraphProto & { return self.Graph(); },
+          nb::rv_policy::reference_internal, "Returns the graph accumulated so far.")
+      .def_prop_rw(
+          "device", [](const GraphBuilder &self) { return self.device(); },
+          [](GraphBuilder &self, Device device) { self.set_device(device); },
+          "Logical device used for the peak-memory analysis at finalisation.")
+      .def("to_graph", &GraphBuilder::ToGraph, "Returns the finalised GraphProto.")
+      .def("to_model", &GraphBuilder::ToModel, nb::arg("ir_version") = 0,
+           "Returns the finalised graph wrapped in a ModelProto.")
+      .def("to_function", &GraphBuilder::ToFunction, nb::arg("domain") = "",
+           "Returns the finalised nodes wrapped in a FunctionProto.")
+      .def(
+          "to_onnx",
+          [](GraphBuilder &self, const std::string &kind, int64_t ir_version,
+             const std::string &domain) -> nb::object {
+            if (kind == "model") {
+              return nb::cast(self.ToModel(ir_version));
+            }
+            if (kind == "graph") {
+              return nb::cast(self.ToGraph());
+            }
+            if (kind == "function") {
+              return nb::cast(self.ToFunction(domain));
+            }
+            throw BuilderError("GraphBuilder: unknown kind '" + kind +
+                               "'; expected 'model', 'graph' or 'function'.");
+          },
+          nb::arg("kind") = "model", nb::arg("ir_version") = 0, nb::arg("domain") = "",
+          "Finalises the builder into a ``model`` (default), ``graph`` or ``function``.");
 }

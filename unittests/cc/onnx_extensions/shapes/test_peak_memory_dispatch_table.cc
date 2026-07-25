@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -29,7 +30,7 @@ TEST(CoreShapesPeakMemory, RegisteredFunctionIsDispatched) {
   core::shapes::Device seen_device = core::shapes::Device::kUndefined;
   std::size_t seen_num_inputs = 0;
   core::shapes::RegisterComputePeakMemoryFn(
-      "ai.onnx", "PeakMemoryRegisteredOp",
+      "ai.onnx", "PeakMemoryRegisteredOp", core::shapes::Device::kCPU,
       [&](core::shapes::Device device,
           const std::vector<core::shapes::SymShape> &input_shapes) -> int64_t {
         seen_device = device;
@@ -52,7 +53,7 @@ TEST(CoreShapesPeakMemory, RegisteredFunctionIsDispatched) {
 // and lookup with "" and "ai.onnx" refer to the same entry.
 TEST(CoreShapesPeakMemory, EmptyDomainNormalisedToOnnxDomain) {
   core::shapes::RegisterComputePeakMemoryFn(
-      "", "PeakMemoryEmptyDomainOp",
+      "", "PeakMemoryEmptyDomainOp", core::shapes::Device::kCPU,
       [](core::shapes::Device, const std::vector<core::shapes::SymShape> &) -> int64_t {
         return 123;
       });
@@ -64,6 +65,32 @@ TEST(CoreShapesPeakMemory, EmptyDomainNormalisedToOnnxDomain) {
   EXPECT_EQ(core::shapes::ComputePeakMemory("", "PeakMemoryEmptyDomainOp",
                                             core::shapes::Device::kCPU, input_shapes),
             123);
+}
+
+// The device is part of a peak-memory function's identifier: a function
+// registered for a GPU device is keyed separately from the CPU/default entry
+// and is only resolved when ComputePeakMemory is called with that device.
+TEST(CoreShapesPeakMemory, DeviceIsPartOfIdentifier) {
+  const core::shapes::Device gpu = core::symbolic::MakeGPUDevice(0);
+  core::shapes::RegisterComputePeakMemoryFn(
+      "ai.onnx", "PeakMemoryDeviceOp", gpu,
+      [](core::shapes::Device, const std::vector<core::shapes::SymShape> &) -> int64_t {
+        return 777;
+      });
+
+  const std::vector<core::shapes::SymShape> input_shapes;
+  // Resolved for the device it was registered with.
+  EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "PeakMemoryDeviceOp", gpu, input_shapes),
+            777);
+  // The default host device has no entry, so it reports 0.
+  EXPECT_EQ(core::shapes::ComputePeakMemory("ai.onnx", "PeakMemoryDeviceOp",
+                                            core::shapes::Device::kCPU, input_shapes),
+            0);
+
+  const auto &table = core::shapes::PeakMemoryDispatchTable();
+  EXPECT_EQ(table.find("ai.onnx:PeakMemoryDeviceOp"), table.end());
+  EXPECT_NE(table.find("ai.onnx:PeakMemoryDeviceOp:" + std::to_string(static_cast<int32_t>(gpu))),
+            table.end());
 }
 
 } // namespace Test

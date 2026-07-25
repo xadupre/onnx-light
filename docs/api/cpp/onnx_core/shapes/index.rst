@@ -23,7 +23,7 @@ Peak-memory estimation
 
 A second, parallel registry estimates each operator's peak *computation*
 memory rather than its output shapes. Mirroring the shape dispatch table, it
-maps an ``(domain, op_type)`` pair to a
+maps an ``(domain, op_type, device)`` identifier to a
 :cpp:type:`core::shapes::ComputePeakMemoryFn` — a function that takes the
 :cpp:enum:`Device` the operator runs on followed by the
 :cpp:class:`SymShape` of each input and returns the estimated scratch memory

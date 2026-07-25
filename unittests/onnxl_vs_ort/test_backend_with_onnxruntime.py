@@ -29,67 +29,63 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     return outputs
 
 
+# Highest default-domain (``ai.onnx``) opset version each ONNX Runtime release can
+# actually *load*. The registered operator schemas advertise the next,
+# still-under-development opset before the runtime is able to load a model
+# targeting it (e.g. ONNX Runtime 1.28 bundles ONNX 1.22, whose schemas report
+# ``since_version`` 27, yet ``InferenceSession`` rejects opset 27 with "Current
+# official support for domain ai.onnx is till opset 26"). A static mapping keeps
+# the exclusion list accurate without loading every backend test model.
+#
+# Values follow the ONNX Runtime <-> ONNX opset compatibility table
+# (https://onnxruntime.ai/docs/reference/compatibility.html) and, for the newest
+# releases, the ONNX version each runtime bundles (cmake/deps.txt).
+_ORT_VERSION_TO_MAX_OPSET = {
+    (1, 17): 20,
+    (1, 18): 21,
+    (1, 19): 21,
+    (1, 20): 21,
+    (1, 21): 22,
+    (1, 22): 22,
+    (1, 23): 23,
+    (1, 24): 24,
+    (1, 25): 26,
+    (1, 26): 26,
+    (1, 27): 26,
+    (1, 28): 26,
+}
+
+
 def ort_max_supported_opset() -> int:
     """
     Returns the highest default-domain opset version ONNX Runtime can load.
 
-    The registered operator schemas (``get_all_operator_schema``) advertise the
-    next, still under-development opset (e.g. ONNX Runtime 1.28 reports schema
-    ``since_version`` 27) before the runtime is able to *load* a model targeting
-    it -- ``InferenceSession`` then fails with "Current official support for
-    domain ai.onnx is till opset 26". Relying on the schema ceiling therefore
-    lets opset-gated cases run against a runtime that cannot load them.
+    Looks up the installed ``onnxruntime`` ``(major, minor)`` version in
+    ``_ORT_VERSION_TO_MAX_OPSET``. This mirrors the official ONNX Runtime <-> ONNX
+    opset compatibility table and, unlike the registered operator schemas
+    (``get_all_operator_schema``), reflects the opset the runtime can actually
+    load rather than the next still-under-development opset it merely registers
+    schemas for.
 
-    Instead, probe the actual ceiling by building a trivial model at each
-    candidate opset (highest first) and returning the first one ``InferenceSession``
-    accepts. This lets the exclusion list adapt to the installed ONNX Runtime
-    instead of hard-coding an opset ceiling.
+    For a version newer than the last tabulated entry, the ceiling of the highest
+    known version is used (never runs cases the runtime may not load); for an
+    older-than-tabulated version, the lowest known ceiling is used.
 
     Returns:
         The highest default-domain opset version ONNX Runtime can load.
     """
     import onnxruntime
-    from onnxruntime.capi import onnxruntime_pybind11_state
-    from onnxruntime.capi._pybind_state import get_all_operator_schema
 
-    from onnx_light.onnx import TensorProto
-    from onnx_light.onnx.helper import (
-        make_graph,
-        make_model,
-        make_node,
-        make_opsetid,
-        make_tensor_value_info,
-    )
+    major, minor = (int(part) for part in onnxruntime.__version__.split(".")[:2])
+    key = (major, minor)
+    if key in _ORT_VERSION_TO_MAX_OPSET:
+        return _ORT_VERSION_TO_MAX_OPSET[key]
 
-    schema_max = max(
-        schema.since_version for schema in get_all_operator_schema() if schema.domain == ""
-    )
-
-    def _loads(opset: int) -> bool:
-        value_info = make_tensor_value_info("x", TensorProto.FLOAT, [1])
-        graph = make_graph(
-            [make_node("Identity", ["x"], ["y"])],
-            "probe",
-            [value_info],
-            [make_tensor_value_info("y", TensorProto.FLOAT, [1])],
-        )
-        model = make_model(graph, opset_imports=[make_opsetid("", opset)])
-        try:
-            _ = onnxruntime.InferenceSession(
-                model.SerializeToString(), providers=["CPUExecutionProvider"]
-            )
-        except (
-            onnxruntime_pybind11_state.Fail,
-            onnxruntime_pybind11_state.InvalidGraph,
-            onnxruntime_pybind11_state.InvalidArgument,
-        ):
-            return False
-        return True
-
-    for opset in range(schema_max, 0, -1):
-        if _loads(opset):
-            return opset
-    return schema_max
+    known = sorted(_ORT_VERSION_TO_MAX_OPSET)
+    if key < known[0]:
+        return _ORT_VERSION_TO_MAX_OPSET[known[0]]
+    lower = max(version for version in known if version <= key)
+    return _ORT_VERSION_TO_MAX_OPSET[lower]
 
 
 # Opset version at which the cases below were introduced. They are only excluded

@@ -19,6 +19,14 @@ inline const std::string &NormaliseDispatchDomain(const NodeProto &node) {
   return node.domain().value();
 }
 
+/// Returns ``domain`` with the empty (default) domain normalised to the
+/// canonical ``ai.onnx`` (:cpp:var:`kDefaultOnnxDomain`), so that ``""`` and
+/// ``"ai.onnx"`` compare equal. Shared by the opset, dispatch and builder
+/// lookups.
+inline std::string NormaliseDomain(const std::string &domain) {
+  return domain.empty() ? kDefaultOnnxDomain : domain;
+}
+
 /**
  * The function populates external data for every tensor.
  * The function does not remove anything from the model.

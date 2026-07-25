@@ -12,6 +12,7 @@
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_alias.h"
+#include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
@@ -34,14 +35,14 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&) noexcept = default;
 // ── Opset management ───────────────────────────────────────────────────
 
 void GraphBuilder::SetOpsetVersion(const std::string &domain, int version) {
-  const std::string key = ShapesContext::NormaliseDomain(domain);
+  const std::string key = NormaliseDomain(domain);
   opsets_[key] = version;
   user_opsets_.insert(key);
   compute_.Shapes().SetOpsetVersion(key, version);
 }
 
 int GraphBuilder::OpsetVersion(const std::string &domain) const {
-  auto it = opsets_.find(ShapesContext::NormaliseDomain(domain));
+  auto it = opsets_.find(NormaliseDomain(domain));
   return it == opsets_.end() ? kUnknownOpsetVersion : it->second;
 }
 
@@ -167,7 +168,7 @@ void GraphBuilder::MakeOutput(const std::string &name) {
 
 int GraphBuilder::ResolveNodeOpset(const std::string &domain,
                                    const std::vector<LightOpSchema> &schemas) {
-  const std::string key = ShapesContext::NormaliseDomain(domain);
+  const std::string key = NormaliseDomain(domain);
   auto it = opsets_.find(key);
   if (user_opsets_.find(key) != user_opsets_.end()) {
     return it->second;
@@ -197,7 +198,7 @@ GraphBuilder::DomainSchemas(const std::string &op_type, const std::string &norma
     std::unordered_map<std::string, std::vector<LightOpSchema>> by_domain;
     if (schema_lookup_) {
       for (LightOpSchema &schema : schema_lookup_(op_type)) {
-        by_domain[ShapesContext::NormaliseDomain(schema.domain())].push_back(std::move(schema));
+        by_domain[NormaliseDomain(schema.domain())].push_back(std::move(schema));
       }
     }
     table_it = schema_table_.emplace(op_type, std::move(by_domain)).first;
@@ -208,7 +209,7 @@ GraphBuilder::DomainSchemas(const std::string &op_type, const std::string &norma
 
 bool GraphBuilder::ShapeFunctionAvailable(const NodeProto &node) const {
   const std::string domain = node.domain().empty() ? std::string() : node.domain().value();
-  const std::string key = ShapesContext::NormaliseDomain(domain) + ":" + node.op_type().value();
+  const std::string key = NormaliseDomain(domain) + ":" + node.op_type().value();
   const auto &table = core::shapes::DispatchTable();
   return table.find(key) != table.end();
 }
@@ -229,7 +230,7 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
 
   // Resolve the opset version and the matching schema (if any) via the cached
   // per-operator, per-domain lookup table.
-  const std::string normalised_domain = ShapesContext::NormaliseDomain(domain);
+  const std::string normalised_domain = NormaliseDomain(domain);
   const std::vector<LightOpSchema> &domain_schemas = DomainSchemas(op_type, normalised_domain);
   const int opset = ResolveNodeOpset(domain, domain_schemas);
   const LightOpSchema *schema = nullptr;

@@ -309,26 +309,6 @@ Tensor &RuntimeContext::Get(const std::string &name) {
   return it->second;
 }
 
-void RuntimeContext::AppendRunNodeEvent(const std::string &op_domain, const std::string &op_type,
-                                        std::vector<std::string> inputs, int64_t start_time_ns,
-                                        int64_t duration_ns) {
-  RuntimeEvent ev;
-  ev.action = RuntimeEventAction::kRunNode;
-  ev.kind = RuntimeEventKind::kUnknown;
-  ev.timestamp_ns = start_time_ns;
-  ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
-  ev.value_count = 0;
-  ev.node_index = current_node_index_;
-  ev.op_domain = op_domain;
-  ev.op_type = op_type;
-  ev.inputs = std::move(inputs);
-  ev.duration_ns = duration_ns;
-  ev.subgraph_node_index = current_subgraph_node_index_;
-  ev.subgraph_attr_name = current_subgraph_attr_name_;
-  StampAllocatorMemory(ev);
-  events_.push_back(std::move(ev));
-}
-
 const ExecutionPlan &RuntimeContext::GetExecutionPlan(const GraphProto &graph) {
   const void *key = static_cast<const void *>(&graph);
   auto it = execution_plans_.find(key);

@@ -1112,17 +1112,18 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
   return it->second;
 }
 
+} // namespace detail
+
 // Invokes an already-built kernel instance for ``node``, wrapping the call
 // with the verbose progress line and (when enabled) the per-node timing
-// event.
-// Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both the
-// resolve-on-demand and the resolve-once execution paths log identically.
-void InvokeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
-                  const std::string &op_type, KernelBase &kernel) {
-  PrintNodeProgress(rt, node, domain, op_type);
+// event. Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both
+// the resolve-on-demand and the resolve-once execution paths log identically.
+void RuntimeContext::InvokeKernel(const NodeProto &node, const std::string &domain,
+                                  const std::string &op_type, KernelBase &kernel) {
+  PrintNodeProgress(*this, node, domain, op_type);
 
   // Only capture timing and input names when event logging is active.
-  const bool logging = rt.events_enabled();
+  const bool logging = events_enabled();
   int64_t start_time_ns = 0;
   std::chrono::steady_clock::time_point t0;
   if (logging) {
@@ -1132,29 +1133,42 @@ void InvokeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &
     t0 = std::chrono::steady_clock::now();
   }
 
-  kernel.Run(rt);
+  kernel.Run(*this);
 
   if (logging) {
     const int64_t duration_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0)
             .count();
-    std::vector<std::string> inputs;
-    inputs.reserve(static_cast<size_t>(node.input_size()));
+    // Record the dispatch as a kRunNode RuntimeEvent so callers can profile
+    // per-node execution from the event log alongside the tensor
+    // add/replace/remove records.
+    RuntimeEvent ev;
+    ev.action = RuntimeEventAction::kRunNode;
+    ev.kind = RuntimeEventKind::kUnknown;
+    ev.timestamp_ns = start_time_ns;
+    ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
+    ev.value_count = 0;
+    ev.node_index = current_node_index_;
+    ev.op_domain = domain;
+    ev.op_type = op_type;
+    ev.inputs.reserve(static_cast<size_t>(node.input_size()));
     for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
-      inputs.push_back(node.input(i));
+      ev.inputs.push_back(node.input(i));
     }
-    rt.AppendRunNodeEvent(domain, op_type, std::move(inputs), start_time_ns, duration_ns);
+    ev.duration_ns = duration_ns;
+    ev.subgraph_node_index = current_subgraph_node_index_;
+    ev.subgraph_attr_name = current_subgraph_attr_name_;
+    StampAllocatorMemory(ev);
+    events_.push_back(std::move(ev));
   }
 }
-
-} // namespace detail
 
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
   NodeKernelFn factory = detail::ResolveNodeKernel(node, rt, domain, op_type);
   std::unique_ptr<KernelBase> resolved = factory(node, rt);
-  detail::InvokeKernel(node, rt, domain, op_type, *resolved);
+  rt.InvokeKernel(node, domain, op_type, *resolved);
 }
 
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {

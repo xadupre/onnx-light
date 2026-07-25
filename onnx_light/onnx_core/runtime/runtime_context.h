@@ -551,17 +551,19 @@ public:
     current_node_index_ = -1;
   }
 
-  /// Appends a :cpp:class:`RuntimeEvent` with action
-  /// :cpp:enumerator:`RuntimeEventAction::kRunNode` summarising the
-  /// dispatch of a single ``NodeProto``. ``timestamp_ns`` is set to the
-  /// wall-clock time at which the dispatch started and ``duration_ns``
-  /// to its measured wall-clock duration in nanoseconds. Inserted by
-  /// :cpp:func:`RunNode` for every kernel call so callers can profile
-  /// per-node execution from the event log alongside the tensor
-  /// add/replace/remove records.
-  void AppendRunNodeEvent(const std::string &op_domain, const std::string &op_type,
-                          std::vector<std::string> inputs, int64_t start_time_ns,
-                          int64_t duration_ns);
+  /// Invokes an already-built ``kernel`` instance for ``node``, wrapping
+  /// the call with the verbose progress line and (when event logging is
+  /// enabled) the per-node timing record. Shared by :cpp:func:`RunNode`
+  /// and :cpp:class:`RuntimeSession` so both the resolve-on-demand and the
+  /// resolve-once execution paths log identically. The per-node timing is
+  /// appended to the event log as a :cpp:class:`RuntimeEvent` with action
+  /// :cpp:enumerator:`RuntimeEventAction::kRunNode`: ``timestamp_ns`` is
+  /// set to the wall-clock time at which the dispatch started and
+  /// ``duration_ns`` to its measured wall-clock duration in nanoseconds,
+  /// so callers can profile per-node execution from the event log
+  /// alongside the tensor add/replace/remove records.
+  void InvokeKernel(const NodeProto &node, const std::string &domain, const std::string &op_type,
+                    KernelBase &kernel);
 
   /// Returns the cached :cpp:class:`ExecutionPlan` for ``graph``,
   /// building it on first use. The plan precomputes, for every node in

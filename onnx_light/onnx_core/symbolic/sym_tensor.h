@@ -47,6 +47,12 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
+namespace shapes {
+// Forward declaration: SymShape::FitsConcreteShape records the concrete
+// values it binds to symbolic dimensions in a ShapesContext (defined in
+// onnx_core/shapes/shapes_context.h, part of the same lib_onnx_core).
+class ShapesContext;
+} // namespace shapes
 namespace symbolic {
 
 /// Reuse the TensorType enumeration defined by ``onnx_core`` so that
@@ -312,16 +318,17 @@ public:
   /// pointed to by ``shape``. Compatibility requires that ``rank`` equals
   /// :cpp:func:`Rank`, and, dimension by dimension: a concrete integer
   /// dimension must match exactly; a symbolic dimension is resolved against
-  /// ``bindings`` (a dictionary mapping the symbolic expression to the
-  /// integer value it first resolved to), so an inconsistent reuse of the
-  /// same expression makes the shape incompatible; and a fully-unknown
-  /// dimension (an empty expression) imposes no constraint. Newly resolved
-  /// symbolic expressions are inserted into ``bindings``.
+  /// ``bindings`` (a :cpp:class:`core::shapes::ShapesContext` binding each
+  /// symbolic expression to the integer value it first resolved to), so an
+  /// inconsistent reuse of the same expression makes the shape incompatible;
+  /// and a fully-unknown dimension (an empty expression) imposes no
+  /// constraint. Newly resolved symbolic expressions are bound in
+  /// ``bindings``.
   ///
   /// Returns:
   ///   ``true`` when the concrete shape fits, ``false`` otherwise.
   bool FitsConcreteShape(std::size_t rank, const int64_t *shape,
-                         std::unordered_map<std::string, int64_t> &bindings) const;
+                         core::shapes::ShapesContext &bindings) const;
 
   /// Equality compares the dimensions element-wise.
   bool operator==(const SymShape &other) const noexcept { return dims_ == other.dims_; }

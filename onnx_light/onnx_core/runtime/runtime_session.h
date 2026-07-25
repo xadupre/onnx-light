@@ -35,6 +35,12 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
+namespace shapes {
+// Forward declaration: VerifyDeclaredShape threads a ShapesContext (defined
+// in onnx_core/shapes/shapes_context.h) through SymShape::FitsConcreteShape
+// to bind symbolic dimensions to their concrete values during a run.
+class ShapesContext;
+} // namespace shapes
 namespace runtime {
 
 /**
@@ -215,13 +221,14 @@ private:
   /// shape of the tensor stored under ``name`` in ``rt`` (if any) matches the
   /// declared :cpp:class:`core::symbolic::SymShape` recorded in
   /// :cpp:member:`declared_shapes_`. Concrete dimensions must match exactly;
-  /// symbolic dimensions are resolved against ``bindings`` (mapping a symbolic
-  /// expression to the concrete value it first resolved to during the current
+  /// symbolic dimensions are resolved against ``bindings`` (a
+  /// :cpp:class:`core::shapes::ShapesContext` binding each symbolic expression
+  /// to the concrete value it first resolved to during the current
   /// :cpp:func:`Run`), so an inconsistent reuse of the same symbol is rejected.
   /// Names without a recorded declaration, or not currently present as a
   /// tensor, are ignored.
   void VerifyDeclaredShape(const std::string &name, const RuntimeContext &rt,
-                           std::unordered_map<std::string, int64_t> &bindings) const;
+                           core::shapes::ShapesContext &bindings) const;
 
   /// Plan owned by the session, referenced by :cpp:member:`plan_` when the
   /// session is constructed from a :cpp:class:`ModelProto` (no external plan

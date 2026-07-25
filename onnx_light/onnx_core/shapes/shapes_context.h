@@ -312,6 +312,7 @@ public:
     constraints_.clear();
     subgraph_contexts_.clear();
     topk_k_dims_.clear();
+    dim_values_.clear();
   }
 
   /// Returns (and records) the symbolic dimension name to use for the TopK
@@ -333,6 +334,33 @@ public:
 
   /// Read-only access to the underlying map (useful for iteration).
   const std::unordered_map<std::string, SymTensor> &Tensors() const noexcept { return tensors_; }
+
+  // ── Resolved symbolic-dimension values ──────────────────────────────
+  //
+  // While validating concrete tensor shapes against declared (possibly
+  // symbolic) shapes, each symbolic dimension expression (``dim_param``)
+  // is bound to the concrete value it first resolves to; every later
+  // occurrence of the same expression must agree with that binding. These
+  // accessors expose the expression → value store consumed and populated
+  // by :cpp:func:`core::symbolic::SymShape::FitsConcreteShape`.
+
+  /// Returns ``true`` when the symbolic dimension expression ``expr`` has
+  /// been bound to a concrete value.
+  bool HasDimValue(const std::string &expr) const {
+    return dim_values_.find(expr) != dim_values_.end();
+  }
+
+  /// Returns the concrete value bound to the symbolic dimension expression
+  /// ``expr``. Throws ``std::out_of_range`` if no such binding exists.
+  int64_t DimValue(const std::string &expr) const { return dim_values_.at(expr); }
+
+  /// Binds the symbolic dimension expression ``expr`` to the concrete
+  /// value ``value``, replacing any previous binding for ``expr``.
+  void SetDimValue(const std::string &expr, int64_t value) { dim_values_[expr] = value; }
+
+  /// Read-only access to the underlying expression → value map (useful
+  /// for iteration).
+  const std::unordered_map<std::string, int64_t> &DimValues() const noexcept { return dim_values_; }
 
   // ── Sequence descriptors ────────────────────────────────────────────
 
@@ -780,6 +808,10 @@ private:
   std::unordered_map<std::string, SymTensor> tensors_;
   std::unordered_map<std::string, SymSequence> sequences_;
   std::unordered_map<std::string, int> opsets_;
+  /// Concrete values bound to symbolic dimension expressions while
+  /// validating concrete shapes against declared symbolic shapes (see
+  /// :cpp:func:`HasDimValue` / :cpp:func:`SetDimValue`).
+  std::unordered_map<std::string, int64_t> dim_values_;
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
   CustomShapeInferenceMap custom_shape_inference_;
   std::unordered_set<Constraint, PairStringHash> constraints_;

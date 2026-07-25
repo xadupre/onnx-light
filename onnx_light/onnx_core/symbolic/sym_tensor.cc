@@ -17,6 +17,7 @@
 
 #include "onnx_core/symbolic/sym_tensor.h"
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <algorithm>
@@ -183,7 +184,7 @@ int64_t SymShape::NumElements() const {
  * expression) is unconstrained.
  */
 bool SymShape::FitsConcreteShape(std::size_t rank, const int64_t *shape,
-                                 std::unordered_map<std::string, int64_t> &bindings) const {
+                                 core::shapes::ShapesContext &bindings) const {
   if (rank != dims_.size()) {
     return false;
   }
@@ -200,11 +201,12 @@ bool SymShape::FitsConcreteShape(std::size_t rank, const int64_t *shape,
     if (expr.empty()) {
       continue;
     }
-    auto it = bindings.find(expr);
-    if (it == bindings.end()) {
-      bindings.emplace(expr, concrete);
-    } else if (it->second != concrete) {
-      return false;
+    if (bindings.HasDimValue(expr)) {
+      if (bindings.DimValue(expr) != concrete) {
+        return false;
+      }
+    } else {
+      bindings.SetDimValue(expr, concrete);
     }
   }
   return true;

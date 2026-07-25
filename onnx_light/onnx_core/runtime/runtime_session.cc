@@ -9,6 +9,7 @@
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -124,7 +125,7 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
 }
 
 void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeContext &rt,
-                                         std::unordered_map<std::string, int64_t> &bindings) const {
+                                         core::shapes::ShapesContext &bindings) const {
   auto it = declared_shapes_.find(name);
   if (it == declared_shapes_.end() || !rt.Has(name)) {
     return;
@@ -173,13 +174,13 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   }
   const std::vector<const NodeProto *> &nodes = plan_.nodes();
   // When shape validation is enabled, resolve the declared (possibly symbolic)
-  // shapes against the concrete tensors. ``shape_bindings`` maps each symbolic
+  // shapes against the concrete tensors. ``shape_bindings`` binds each symbolic
   // ``dim_param`` to the first concrete value it resolves to during this run so
   // that every later occurrence of the same symbol is checked for consistency.
   // The graph inputs / initializers already present are validated up front;
   // each node's outputs are validated right after it runs.
   const bool check_shapes = check_shapes_ && !declared_shapes_.empty();
-  std::unordered_map<std::string, int64_t> shape_bindings;
+  core::shapes::ShapesContext shape_bindings;
   if (check_shapes) {
     for (const std::string &name : required_inputs_) {
       VerifyDeclaredShape(name, rt, shape_bindings);

@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -82,6 +83,29 @@ void Unsqueeze::operator()(const Tensor &data, const onnx_kernels::Shape &axes,
   EXT_ENFORCE_INVALID(output.size_bytes() == data.size_bytes(),
                       "kernel::Unsqueeze: preallocated output byte-size mismatch.");
   std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
+}
+
+void Unsqueeze::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 2),
+                      "RunNode: op 'Unsqueeze' expects at most 2 inputs.");
+  RequireOutputCount(node, 1);
+  const onnx_kernels::Shape axes_attr = GetAttributeIntsOrDefault(node, "axes", {});
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  onnx_kernels::Shape axes;
+  const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+  if (axes_input != nullptr) {
+    EXT_ENFORCE_INVALID(!(axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
+                          axes_input->shape.size() > 1),
+                        "RunNode: Unsqueeze 'axes' input must be a 1-D INT64 tensor.");
+    const int64_t n = axes_input->element_count();
+    const int64_t *p = axes_input->AsInt64();
+    axes.assign(p, p + n);
+  } else {
+    axes = axes_attr;
+  }
+  SetOutput(node, 0, (*this)(data, axes, &rt), rt);
 }
 
 } // namespace kernel

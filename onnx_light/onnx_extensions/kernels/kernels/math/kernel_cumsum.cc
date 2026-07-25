@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
@@ -232,6 +233,28 @@ void CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bo
   const int64_t a = ResolveAxis(kCumProdName, ReadAxisScalar(kCumProdName, axis), rank);
   ValidateOutput(kCumProdName, x, output);
   DispatchCumulative(kCumProdName, x, a, exclusive, reverse, output, ProdOp{});
+}
+
+void CumSum::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
+  const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &axis = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, axis, exclusive, reverse, &rt), rt);
+}
+
+void CumProd::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
+  const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &axis = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, axis, exclusive, reverse, &rt), rt);
 }
 
 } // namespace kernel

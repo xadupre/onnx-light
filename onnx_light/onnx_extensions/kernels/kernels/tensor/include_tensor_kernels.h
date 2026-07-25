@@ -57,6 +57,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// the back of the input rank.
 class Concat : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, int64_t axis, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensors &inputs, int64_t axis, Tensor &output) const;
@@ -82,6 +83,7 @@ public:
 /// supported conversions.
 class Cast : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int32_t to, RuntimeContext *rt = nullptr) const;
   Tensor operator()(const Tensor &x, int32_t to, bool saturate, RuntimeContext *rt = nullptr) const;
@@ -102,6 +104,7 @@ public:
 /// targeted by the backend test library.
 class BitCast : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int32_t to, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, int32_t to, Tensor &output) const;
@@ -135,6 +138,7 @@ public:
 /// implementation).
 class AffineGrid : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``AffineGrid`` operator.
   struct Attributes {
     int64_t align_corners = 0;
@@ -179,6 +183,7 @@ public:
 /// element types of ``X`` and ``grid``.
 class GridSample : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``GridSample`` operator.
   struct Attributes {
     std::string mode = "linear";
@@ -208,6 +213,7 @@ public:
 /// supports the same element-type matrix.
 class CastLike : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &target_type, RuntimeContext *rt = nullptr) const;
   Tensor operator()(const Tensor &x, const Tensor &target_type, bool saturate,
@@ -235,6 +241,7 @@ public:
 /// to throw ``std::invalid_argument``.
 class Expand : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, const Tensor &shape, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, const Tensor &shape, Tensor &output) const;
@@ -253,6 +260,7 @@ public:
 /// ``0`` copies the corresponding input dim unless ``allowzero`` is set.
 class Reshape : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &shape, int64_t allowzero = 0,
                     RuntimeContext *rt = nullptr) const;
@@ -268,6 +276,7 @@ public:
 /// and clamping behavior aligned with ONNX shape-inference rules.
 class Slice : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
                     const Tensor *axes = nullptr, const Tensor *steps = nullptr,
@@ -298,6 +307,7 @@ public:
 /// throw ``std::invalid_argument``.
 class Pad : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value = nullptr,
                     const Tensor *axes = nullptr, const std::string &mode = "constant",
@@ -322,6 +332,7 @@ public:
 /// throw ``std::invalid_argument``.
 class Tile : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, const Tensor &repeats, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, const Tensor &repeats, Tensor &output) const;
@@ -345,6 +356,7 @@ public:
 /// ``std::invalid_argument``.
 class Split : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Computes the split. Exactly one of ``split`` (non-empty) or
   /// ``num_outputs`` (> 0) must be provided.
@@ -374,6 +386,7 @@ public:
 /// are removed.
 class Squeeze : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const onnx_kernels::Shape &axes,
                     RuntimeContext *rt = nullptr) const;
@@ -387,6 +400,7 @@ public:
 /// (ONNX ``Unsqueeze`` operator).
 class Unsqueeze : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const onnx_kernels::Shape &axes,
                     RuntimeContext *rt = nullptr) const;
@@ -404,6 +418,7 @@ public:
 /// supported by :cpp:func:`ElementSize`.
 class Transpose : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const onnx_kernels::Shape &perm,
                     RuntimeContext *rt = nullptr) const;
@@ -426,6 +441,7 @@ public:
 /// ``std::invalid_argument``.
 class NonZero : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
 
@@ -458,6 +474,7 @@ public:
 /// all numeric and ``BOOL`` element types for ``values`` / the output.
 class OneHot : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``OneHot`` operator.
   struct Attributes {
     int64_t axis = -1;
@@ -490,6 +507,7 @@ public:
 /// accepts an input of any element type.
 class Shape : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Shape`` operator.
   struct Attributes {
     int64_t start = 0;
@@ -518,6 +536,7 @@ public:
 /// accepts an input of any element type.
 class Size : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &data, RuntimeContext *rt = nullptr) const;
@@ -537,6 +556,7 @@ public:
 /// element type supported by ``Tensor``.
 class Identity : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &input, Tensor &output) const;
@@ -554,6 +574,7 @@ public:
 /// the gathered axis. The output dtype always matches ``data``.
 class Gather : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &indices, int64_t axis = 0,
                     RuntimeContext *rt = nullptr) const;
@@ -572,6 +593,7 @@ public:
 /// INT64; negative values count from the back of the gathered axis.
 class GatherElements : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &indices, int64_t axis = 0,
                     RuntimeContext *rt = nullptr) const;
@@ -591,6 +613,7 @@ public:
 /// corresponding ``data`` axis.
 class GatherND : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims = 0,
                     RuntimeContext *rt = nullptr) const;
@@ -626,6 +649,7 @@ public:
 /// Output dtype and shape always match ``past_cache``.
 class TensorScatter : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``TensorScatter`` operator.
   struct Attributes {
     int64_t axis = -2;
@@ -658,6 +682,7 @@ public:
 /// ``data`` is updated with ``f(out_elem, updates_elem)``.
 class ScatterElements : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ScatterElements`` operator.
   struct Attributes {
     int64_t axis = 0;
@@ -685,6 +710,7 @@ public:
 /// axis.
 class Scatter : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Scatter`` operator.
   struct Attributes {
     int64_t axis = 0;
@@ -714,6 +740,7 @@ public:
 /// ``f(out_slice, updates_slice)``.
 class ScatterND : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ScatterND`` operator.
   struct Attributes {
     std::string reduction = "none";
@@ -744,6 +771,7 @@ public:
 /// value and is therefore unknown at shape-inference time.
 class Compress : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// ``axis`` is an ``std::optional<int64_t>``: pass ``std::nullopt`` to
   /// compress the flattened input, or the axis index to compress along.
@@ -780,6 +808,7 @@ public:
 /// for ``STRING`` to the empty string).
 class Trilu : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Trilu`` operator.
   struct Attributes {
     int64_t upper = 1;
@@ -819,6 +848,7 @@ public:
 /// Output shape and dtype always match ``input``.
 class ReverseSequence : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ReverseSequence`` operator.
   struct Attributes {
     int64_t time_axis = 0;
@@ -853,6 +883,7 @@ public:
 /// supported by :cpp:func:`ElementSize`.
 class DepthToSpace : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``DepthToSpace`` operator.
   struct Attributes {
     int64_t blocksize = 0;
@@ -880,6 +911,7 @@ public:
 /// supported by :cpp:func:`ElementSize`.
 class SpaceToDepth : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``SpaceToDepth`` operator.
   struct Attributes {
     int64_t blocksize = 0;
@@ -911,6 +943,7 @@ public:
 /// total padding is odd).
 class CenterCropPad : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``CenterCropPad`` operator. ``axes`` is
   /// optional; an empty vector here means "all axes" (i.e. ``shape`` has
   /// length equal to ``rank(input_data)``).
@@ -953,6 +986,7 @@ public:
 /// mode requires a floating-point input (``FLOAT16``/``FLOAT``/``DOUBLE``).
 class Upsample : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Upsample`` operator.
   struct Attributes {
     std::string mode = "nearest";
@@ -1008,6 +1042,7 @@ public:
 /// floating-point input (``FLOAT`` or ``DOUBLE``).
 class Resize : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Resize`` operator.
   struct Attributes {
     std::string mode = "nearest";
@@ -1087,6 +1122,7 @@ public:
 /// BOOL) and STRING.
 class Unique : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Unique`` operator.
   struct Attributes {
     /// Whether to sort unique elements in ascending order. Defaults to

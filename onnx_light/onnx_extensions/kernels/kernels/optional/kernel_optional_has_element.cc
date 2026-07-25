@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/optional/include_optional_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -45,6 +46,28 @@ Tensor OptionalHasElement::operator()(const Sequence &input, RuntimeContext *rt)
 Tensor OptionalHasElement::operator()(RuntimeContext *rt) const {
   // Opset 18: an omitted input is reported as empty.
   return MakeScalarBool(false, rt);
+}
+
+void OptionalHasElement::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() > 1),
+                      "RunNode: op 'OptionalHasElement' expects 0 or 1 inputs, got ",
+                      node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  onnx_kernels::kernel::OptionalHasElement k(rt.kernel_ctx());
+  if (node.input_size() == 0 || node.input(0).empty()) {
+    // Opset 18 omitted-input flavour: scalar ``false``.
+    SetOutput(node, 0, k(&rt), rt);
+    return;
+  }
+  const std::string input_name = node.input(0);
+  if (rt.HasSequence(input_name)) {
+    const Sequence &input_seq = GetInputSequence(node, 0, rt);
+    SetOutput(node, 0, k(input_seq, &rt), rt);
+  } else {
+    const Tensor &input = GetInput(node, 0, rt.tensors());
+    SetOutput(node, 0, k(input, &rt), rt);
+  }
 }
 
 } // namespace kernel

@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -148,6 +149,34 @@ Tensor GlobalLpPool::operator()(const Tensor &x, int64_t p, RuntimeContext *rt) 
     }
   }
   return out;
+}
+
+void GlobalAveragePool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  onnx_kernels::kernel::GlobalAveragePool k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, &rt), rt);
+}
+
+void GlobalLpPool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
+  onnx_kernels::kernel::GlobalLpPool k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, p, &rt), rt);
+}
+
+void GlobalMaxPool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  onnx_kernels::kernel::GlobalMaxPool k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, &rt), rt);
 }
 
 } // namespace kernel

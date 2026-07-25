@@ -27,6 +27,11 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Reference implementation of the light-only ``ai.rt::DelayedInitializer`` op.
 class DelayedInitializer : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
+  /// Inherits the context-only constructor so the dispatch factory can
+  /// build the kernel; ``Run`` parses the ONNX attributes and constructs the
+  /// fully-initialized instance it delegates to.
+  using KernelBase::KernelBase;
   struct Attributes {
     onnx_kernels::Shape shape;
     int32_t dtype = 0;

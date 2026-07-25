@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/text/include_text_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -74,6 +75,15 @@ void StringConcat::operator()(const Tensor &x, const Tensor &y, Tensor &output) 
     const std::string &b = y.string_data[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
     output.string_data[static_cast<size_t>(i)] = a + b;
   }
+}
+
+void StringConcat::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
 }
 
 } // namespace kernel

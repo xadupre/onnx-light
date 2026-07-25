@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -35,6 +36,16 @@ Tensor SequenceAt::operator()(const Sequence &input_sequence, const Tensor &posi
   EXT_ENFORCE_INVALID(idx >= 0 && idx < n, "kernel::SequenceAt: position ", std::to_string(idx),
                       " is out of range for sequence of length ", std::to_string(n), ".");
   return input_sequence.values[static_cast<std::size_t>(idx)];
+}
+
+void SequenceAt::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  const Tensor &position = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::SequenceAt k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input_sequence, position, &rt), rt);
 }
 
 } // namespace kernel

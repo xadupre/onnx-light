@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -159,6 +160,21 @@ void FeatureVectorizer::operator()(const Tensors &inputs,
                       "kernel::FeatureVectorizer preallocated output buffer is incorrectly sized.");
   std::fill(output.mutable_bytes(), output.mutable_bytes() + output.size_bytes(), uint8_t{0u});
   Compute(inputs, input_dims, n, total_features, reinterpret_cast<float *>(output.mutable_bytes()));
+}
+
+void FeatureVectorizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  Tensors inputs;
+  inputs.reserve(node.input_size());
+  for (int i = 0; i < node.input_size(); ++i) {
+    inputs.push_back(GetInput(node, i, rt.tensors()));
+  }
+  const std::vector<int64_t> inputdimensions =
+      GetAttributeIntsOrDefault(node, "inputdimensions", {});
+  onnx_kernels::kernel::FeatureVectorizer fv(rt.kernel_ctx());
+  SetOutput(node, 0, fv(inputs, inputdimensions), rt.tensors());
 }
 
 } // namespace kernel

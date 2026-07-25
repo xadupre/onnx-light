@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstring>
 #include <stdexcept>
 
@@ -37,6 +39,38 @@ void Constant::operator()(const Tensor &value, Tensor &output) const {
   if (value.size_bytes() > 0) {
     std::memcpy(output.mutable_bytes(), value.bytes(), value.size_bytes());
   }
+}
+
+void Constant::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireOutputCount(node, 1);
+  onnx_kernels::kernel::Constant k(rt.kernel_ctx());
+  Tensor y;
+  if (FindAttribute(node, "value") != nullptr) {
+    y = k(GetRequiredAttributeTensor(node, "value"));
+  } else if (FindAttribute(node, "value_float") != nullptr) {
+    const float v = GetAttributeFloatOrDefault(node, "value_float", 0.0f);
+    y = Tensor::FromFloat("", /*shape=*/{}, {v});
+  } else if (FindAttribute(node, "value_floats") != nullptr) {
+    const std::vector<float> vs = GetAttributeFloatsOrDefault(node, "value_floats", {});
+    y = Tensor::FromFloat("", {static_cast<int64_t>(vs.size())}, vs);
+  } else if (FindAttribute(node, "value_int") != nullptr) {
+    const int64_t v = GetAttributeIntOrDefault(node, "value_int", 0);
+    y = Tensor::FromInt64("", /*shape=*/{}, {v});
+  } else if (FindAttribute(node, "value_ints") != nullptr) {
+    const std::vector<int64_t> vs = GetAttributeIntsOrDefault(node, "value_ints", {});
+    y = Tensor::FromInt64("", {static_cast<int64_t>(vs.size())}, vs);
+  } else if (FindAttribute(node, "value_string") != nullptr) {
+    const std::string v = GetAttributeStringOrDefault(node, "value_string", "");
+    y = Tensor::FromStrings("", /*shape=*/{}, {v});
+  } else if (FindAttribute(node, "value_strings") != nullptr) {
+    const std::vector<std::string> vs = GetAttributeStringsOrDefault(node, "value_strings", {});
+    y = Tensor::FromStrings("", {static_cast<int64_t>(vs.size())}, vs);
+  } else {
+    EXT_THROW_INVALID("RunNode: op 'Constant' requires one of: value, value_float, "
+                      "value_floats, value_int, value_ints, value_string, value_strings.");
+  }
+  SetOutput(node, 0, std::move(y), rt.tensors());
 }
 
 } // namespace kernel

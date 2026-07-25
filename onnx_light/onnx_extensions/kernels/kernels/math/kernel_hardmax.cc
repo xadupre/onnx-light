@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <limits>
 
@@ -78,6 +79,15 @@ void Hardmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const {
       py[static_cast<size_t>(one_offset)] = 1.0f;
     }
   }
+}
+
+void Hardmax::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, axis, &rt), rt);
 }
 
 } // namespace kernel

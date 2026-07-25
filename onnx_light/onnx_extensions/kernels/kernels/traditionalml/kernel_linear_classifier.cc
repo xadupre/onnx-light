@@ -6,6 +6,8 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/kernel_svm_common.h"
 
+#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -165,6 +167,36 @@ ONNX_LIGHT_INSTANTIATE_LINEAR_CLASSIFIER(int64_t);
 ONNX_LIGHT_INSTANTIATE_LINEAR_CLASSIFIER(int32_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_LINEAR_CLASSIFIER
+
+void LinearClassifier::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 2);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const ParamFloats coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
+  const ParamFloats intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
+  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
+  const std::vector<int64_t> classlabels_ints =
+      GetAttributeIntsOrDefault(node, "classlabels_ints", {});
+  const ParamStrings classlabels_strings =
+      GetAttributeStringsOrDefault(node, "classlabels_strings", {});
+  const bool use_strings = !classlabels_strings.empty();
+  const bool has_ints = !classlabels_ints.empty();
+  EXT_ENFORCE_INVALID(use_strings != has_ints,
+                      "RunNode: LinearClassifier requires exactly one of 'classlabels_ints' or "
+                      "'classlabels_strings' to be set.");
+  onnx_kernels::kernel::LinearClassifier cls(rt.kernel_ctx());
+  std::pair<Tensor, Tensor> yz = DispatchSVMByDataType(x, "LinearClassifier", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return use_strings ? cls.template operator()<T>(x, coefficients, intercepts,
+                                                    classlabels_strings, post_transform)
+                       : cls.template operator()<T>(x, coefficients, intercepts, classlabels_ints,
+                                                    post_transform);
+  });
+  SetOutput(node, 0, std::move(yz.first), rt);
+  SetOutput(node, 1, std::move(yz.second), rt);
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

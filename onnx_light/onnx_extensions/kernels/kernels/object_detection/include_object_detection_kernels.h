@@ -70,6 +70,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Reference RoiAlign kernel restricted to FLOAT inputs/outputs.
 class RoiAlign : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``RoiAlign`` operator. Defaults match
   /// the opset-16 schema; ``coordinate_transformation_mode`` should be set
   /// to ``"output_half_pixel"`` to reproduce the legacy opset-10 behaviour.
@@ -114,6 +115,7 @@ public:
 /// ``score_threshold = -inf`` (no score filtering).
 class NonMaxSuppression : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``NonMaxSuppression`` operator. The
   /// default matches the schema (``center_point_box = 0`` — the
   /// ``[y1, x1, y2, x2]`` corner format).

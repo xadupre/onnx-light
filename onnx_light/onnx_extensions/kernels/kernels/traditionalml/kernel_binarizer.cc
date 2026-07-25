@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <stdexcept>
 
@@ -62,6 +64,21 @@ ONNX_LIGHT_INSTANTIATE_BINARIZER(int64_t);
 ONNX_LIGHT_INSTANTIATE_BINARIZER(int32_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_BINARIZER
+
+void Binarizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const float threshold = GetAttributeFloatOrDefault(node, "threshold", 0.0f);
+  onnx_kernels::kernel::Binarizer binarizer(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "Binarizer", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return binarizer.template operator()<T>(x, static_cast<T>(threshold));
+  });
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

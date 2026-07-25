@@ -8,6 +8,8 @@
 
 #include "onnx_core/runtime/simple_tensor.h"
 
+#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -138,6 +140,39 @@ ONNX_LIGHT_INSTANTIATE_SVM_CLASSIFIER(int64_t);
 ONNX_LIGHT_INSTANTIATE_SVM_CLASSIFIER(int32_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_SVM_CLASSIFIER
+
+void SVMClassifier::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 2);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const SVMCommonAttrs a = ParseSVMCommonAttrs(node, "SVMClassifier");
+  const std::vector<int64_t> vectors_per_class =
+      GetAttributeIntsOrDefault(node, "vectors_per_class", {});
+  const std::vector<int64_t> classlabels_ints =
+      GetAttributeIntsOrDefault(node, "classlabels_ints", {});
+  const ParamStrings classlabels_strings =
+      GetAttributeStringsOrDefault(node, "classlabels_strings", {});
+  const bool use_strings = !classlabels_strings.empty();
+  const bool has_ints = !classlabels_ints.empty();
+  EXT_ENFORCE_INVALID(use_strings != has_ints,
+                      "RunNode: SVMClassifier requires exactly one of 'classlabels_ints' or "
+                      "'classlabels_strings' to be set.");
+  onnx_kernels::kernel::SVMClassifier svm(rt.kernel_ctx());
+  std::pair<Tensor, Tensor> yz = DispatchSVMByDataType(x, "SVMClassifier", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return use_strings
+               ? svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                            vectors_per_class, classlabels_strings,
+                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree)
+               : svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                            vectors_per_class, classlabels_ints,
+                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree);
+  });
+  SetOutput(node, 0, std::move(yz.first), rt);
+  SetOutput(node, 1, std::move(yz.second), rt);
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

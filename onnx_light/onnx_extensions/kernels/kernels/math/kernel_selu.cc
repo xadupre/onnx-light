@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -62,6 +63,17 @@ Tensor Selu::operator()(const Tensor &x, float alpha, float gamma, RuntimeContex
 void Selu::operator()(const Tensor &x, float alpha, float gamma, Tensor &output) const {
   ValidateOutput(x, output);
   Dispatch(x, alpha, gamma, output);
+}
+
+void Selu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.67326319217681884765625f);
+  const float gamma = GetAttributeFloatOrDefault(node, "gamma", 1.05070102214813232421875f);
+  onnx_kernels::kernel::Selu k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, alpha, gamma, &rt), rt);
 }
 
 } // namespace kernel

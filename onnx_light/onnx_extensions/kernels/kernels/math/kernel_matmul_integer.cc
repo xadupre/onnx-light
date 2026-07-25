@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 #include "onnx_extensions/kernels/kernels/math/matmul_shape_utils.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <cstdint>
@@ -230,6 +231,23 @@ Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor 
 void MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
                                const Tensor &b_zero_point, Tensor &output) const {
   ComputeMatMulInteger(a, b, a_zero_point, b_zero_point, output, nullptr);
+}
+
+void MatMulInteger::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 2);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 4),
+                      "RunNode: op 'MatMulInteger' expects at most 4 inputs, got ",
+                      node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Tensor &a = GetInput(node, 0, rt.tensors());
+  const Tensor &b = GetInput(node, 1, rt.tensors());
+  const Tensor *a_zp = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor *b_zp = GetOptionalInput(node, 3, rt.tensors());
+  onnx_kernels::kernel::MatMulInteger k(rt.kernel_ctx());
+  SetOutput(node, 0,
+            k(a, b, a_zp != nullptr ? *a_zp : Tensor{}, b_zp != nullptr ? *b_zp : Tensor{}),
+            rt.tensors());
 }
 
 } // namespace kernel

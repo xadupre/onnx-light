@@ -67,6 +67,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Only FLOAT tensors are supported.
 class Adam : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Computes one Adam iteration for ``N == Xs.size()`` optimized tensors
@@ -117,6 +118,7 @@ public:
 /// are supported.
 class Adagrad : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Computes one Adagrad iteration for ``N == Xs.size()`` optimized
@@ -167,6 +169,7 @@ public:
 /// tensors are supported.
 class Momentum : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Update mode for the Momentum kernel.

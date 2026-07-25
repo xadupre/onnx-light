@@ -4,8 +4,10 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -157,6 +159,24 @@ std::pair<Tensor, Tensor> SoftmaxCrossEntropyLoss::operator()(
   Tensor loss = MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, allocator);
   loss.AsFloat()[0] = reduced;
   return std::make_pair(std::move(loss), std::move(log_prob));
+}
+
+void SoftmaxCrossEntropyLoss::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputRange(node, 2, 3);
+  RequireOutputRange(node, 1, 2);
+  const Tensor &scores = GetInput(node, 0, rt.tensors());
+  const Tensor &labels = GetInput(node, 1, rt.tensors());
+  const Tensor *weights = GetOptionalInput(node, 2, rt.tensors());
+  const std::string reduction = GetAttributeStringOrDefault(node, "reduction", "mean");
+  const bool has_ignore_index = FindAttribute(node, "ignore_index") != nullptr;
+  const int64_t ignore_index = GetAttributeIntOrDefault(node, "ignore_index", 0);
+  onnx_kernels::kernel::SoftmaxCrossEntropyLoss k(rt.kernel_ctx());
+  auto [loss, log_prob] = k(scores, labels, weights, reduction, has_ignore_index, ignore_index);
+  SetOutput(node, 0, std::move(loss), rt);
+  if (node.output_size() >= 2) {
+    SetOutput(node, 1, std::move(log_prob), rt);
+  }
 }
 
 } // namespace kernel

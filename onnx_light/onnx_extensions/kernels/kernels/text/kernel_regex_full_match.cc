@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/text/include_text_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <regex>
@@ -67,6 +68,16 @@ void RegexFullMatch::operator()(const Tensor &x, const std::string &pattern, Ten
   for (int64_t i = 0; i < n; ++i) {
     dst[i] = std::regex_match(x.string_data[static_cast<size_t>(i)], re) ? uint8_t{1} : uint8_t{0};
   }
+}
+
+void RegexFullMatch::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string pattern = GetAttributeStringOrDefault(node, "pattern", "");
+  onnx_kernels::kernel::RegexFullMatch k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, pattern, &rt), rt);
 }
 
 } // namespace kernel

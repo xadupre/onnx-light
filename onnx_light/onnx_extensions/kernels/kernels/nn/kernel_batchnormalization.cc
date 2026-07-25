@@ -4,8 +4,10 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -214,6 +216,35 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
   }
 
   return {std::move(y), std::move(running_mean), std::move(running_var)};
+}
+
+void BatchNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 5);
+  RequireOutputRange(node, 1, 3);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor &bias = GetInput(node, 2, rt.tensors());
+  const Tensor &input_mean = GetInput(node, 3, rt.tensors());
+  const Tensor &input_var = GetInput(node, 4, rt.tensors());
+  onnx_kernels::kernel::BatchNormalization k(rt.kernel_ctx());
+  if (GetAttributeIntOrDefault(node, "training_mode", 0) != 0) {
+    const float momentum = GetAttributeFloatOrDefault(node, "momentum", 0.9f);
+    auto [y, running_mean, running_var] =
+        k.TrainingForward(x, scale, bias, input_mean, input_var, GetEpsilon(node), momentum);
+    SetOutput(node, 0, std::move(y), rt.tensors());
+    if (node.output_size() >= 2) {
+      SetOutput(node, 1, std::move(running_mean), rt.tensors());
+    }
+    if (node.output_size() >= 3) {
+      SetOutput(node, 2, std::move(running_var), rt.tensors());
+    }
+    return;
+  }
+  EXT_ENFORCE_INVALID(node.output_size() == 1,
+                      "RunNode: op 'BatchNormalization' only supports a single output "
+                      "(running_mean / running_var require training_mode=1).");
+  SetOutput(node, 0, k(x, scale, bias, input_mean, input_var, GetEpsilon(node), &rt), rt);
 }
 
 } // namespace kernel

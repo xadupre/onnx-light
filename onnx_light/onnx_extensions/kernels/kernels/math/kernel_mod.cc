@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/elementwise_helpers.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -228,6 +229,17 @@ void Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &out
   default:
     EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type, kSupportedModTypesMsg);
   }
+}
+
+void Mod::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  const int64_t fmod = GetAttributeIntOrDefault(node, "fmod", 0);
+  onnx_kernels::kernel::Mod k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, y, fmod, &rt), rt);
 }
 
 } // namespace kernel

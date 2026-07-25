@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <span>
 #include <stdexcept>
@@ -110,6 +112,86 @@ ONNX_LIGHT_INSTANTIATE_DICT_VECTORIZER(std::string, float);
 ONNX_LIGHT_INSTANTIATE_DICT_VECTORIZER(std::string, double);
 
 #undef ONNX_LIGHT_INSTANTIATE_DICT_VECTORIZER
+
+void DictVectorizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const std::string map_input = node.input(0);
+
+  EXT_ENFORCE_INVALID(rt.HasMap(map_input), "RunNode: DictVectorizer map input '", map_input,
+                      "' not found in the runtime context. Map-typed inputs "
+                      "must be stored via PutMap before executing the graph.");
+  const Map &dict_m = rt.GetMap(map_input);
+  const Tensor &x_keys = dict_m.keys;
+  const Tensor &x_values = dict_m.values;
+  const AttributeProto *str_vocab = FindAttribute(node, "string_vocabulary");
+  const AttributeProto *int_vocab = FindAttribute(node, "int64_vocabulary");
+  const bool has_str = str_vocab != nullptr && str_vocab->strings_size() > 0;
+  const bool has_int = int_vocab != nullptr && int_vocab->ints_size() > 0;
+  EXT_ENFORCE_INVALID(has_str != has_int,
+                      "RunNode: DictVectorizer requires exactly one of 'string_vocabulary' or "
+                      "'int64_vocabulary' to be specified and non-empty.");
+  onnx_kernels::kernel::DictVectorizer dict(rt.kernel_ctx());
+  Tensor y;
+  if (has_str) {
+    EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::STRING)),
+                        "RunNode: DictVectorizer keys must be a STRING tensor when "
+                        "'string_vocabulary' is set.");
+    const std::vector<std::string> &keys = x_keys.AsStrings();
+    std::vector<std::string> vocab;
+    vocab.reserve(str_vocab->strings_size());
+    for (size_t i = 0; i < str_vocab->strings_size(); ++i) {
+      vocab.emplace_back(str_vocab->strings(i));
+    }
+    switch (x_values.data_type) {
+    case static_cast<int32_t>(DataType::INT64): {
+      y = dict.operator()<std::string, int64_t>(keys, TensorSpan<int64_t>(x_values), vocab);
+      break;
+    }
+    case static_cast<int32_t>(DataType::FLOAT): {
+      y = dict.operator()<std::string, float>(keys, TensorSpan<float>(x_values), vocab);
+      break;
+    }
+    case static_cast<int32_t>(DataType::DOUBLE): {
+      y = dict.operator()<std::string, double>(keys, TensorSpan<double>(x_values), vocab);
+      break;
+    }
+    default:
+      EXT_THROW_INVALID("RunNode: DictVectorizer values must be INT64, FLOAT, or DOUBLE when "
+                        "'string_vocabulary' is set.");
+    }
+  } else {
+    EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)),
+                        "RunNode: DictVectorizer keys must be an INT64 tensor when "
+                        "'int64_vocabulary' is set.");
+    const std::span<const int64_t> keys = TensorSpan<int64_t>(x_keys);
+    std::vector<int64_t> vocab;
+    vocab.reserve(int_vocab->ints_size());
+    for (size_t i = 0; i < int_vocab->ints_size(); ++i) {
+      vocab.push_back(int_vocab->ints(i));
+    }
+    switch (x_values.data_type) {
+    case static_cast<int32_t>(DataType::FLOAT): {
+      y = dict.operator()<int64_t, float>(keys, TensorSpan<float>(x_values), vocab);
+      break;
+    }
+    case static_cast<int32_t>(DataType::DOUBLE): {
+      y = dict.operator()<int64_t, double>(keys, TensorSpan<double>(x_values), vocab);
+      break;
+    }
+    case static_cast<int32_t>(DataType::STRING): {
+      const std::vector<std::string> &values = x_values.AsStrings();
+      y = dict.operator()<int64_t, std::string>(keys, values, vocab);
+      break;
+    }
+    default:
+      EXT_THROW_INVALID("RunNode: DictVectorizer values must be FLOAT, DOUBLE, or STRING when "
+                        "'int64_vocabulary' is set.");
+    }
+  }
+  SetOutput(node, 0, std::move(y), rt);
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

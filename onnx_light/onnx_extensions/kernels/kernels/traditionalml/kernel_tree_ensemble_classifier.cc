@@ -7,6 +7,8 @@
 #include "onnx_extensions/kernels/kernels/traditionalml/kernel_svm_common.h"
 #include "onnx_extensions/kernels/kernels/traditionalml/kernel_tree_ensemble_common.h"
 
+#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -183,6 +185,54 @@ ONNX_LIGHT_INSTANTIATE_TREE_CLASSIFIER(int64_t);
 ONNX_LIGHT_INSTANTIATE_TREE_CLASSIFIER(int32_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_TREE_CLASSIFIER
+
+void TreeEnsembleClassifier::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 2);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::vector<int64_t> nodes_treeids = GetAttributeIntsOrDefault(node, "nodes_treeids", {});
+  const std::vector<int64_t> nodes_nodeids = GetAttributeIntsOrDefault(node, "nodes_nodeids", {});
+  const std::vector<int64_t> nodes_featureids =
+      GetAttributeIntsOrDefault(node, "nodes_featureids", {});
+  const std::vector<float> nodes_values = GetAttributeFloatsOrDefault(node, "nodes_values", {});
+  const ParamStrings nodes_modes = GetAttributeStringsOrDefault(node, "nodes_modes", {});
+  const std::vector<int64_t> nodes_truenodeids =
+      GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
+  const std::vector<int64_t> nodes_falsenodeids =
+      GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
+  const std::vector<int64_t> nodes_missing =
+      GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
+  const std::vector<int64_t> class_treeids = GetAttributeIntsOrDefault(node, "class_treeids", {});
+  const std::vector<int64_t> class_nodeids = GetAttributeIntsOrDefault(node, "class_nodeids", {});
+  const std::vector<int64_t> class_ids = GetAttributeIntsOrDefault(node, "class_ids", {});
+  const std::vector<float> class_weights = GetAttributeFloatsOrDefault(node, "class_weights", {});
+  const std::vector<int64_t> classlabels_int64s =
+      GetAttributeIntsOrDefault(node, "classlabels_int64s", {});
+  const ParamStrings classlabels_strings =
+      GetAttributeStringsOrDefault(node, "classlabels_strings", {});
+  const std::vector<float> base_values = GetAttributeFloatsOrDefault(node, "base_values", {});
+  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
+  const bool use_strings = !classlabels_strings.empty();
+  const bool has_ints = !classlabels_int64s.empty();
+  EXT_ENFORCE_INVALID(use_strings != has_ints,
+                      "RunNode: TreeEnsembleClassifier requires exactly one of "
+                      "'classlabels_int64s' or 'classlabels_strings' to be set.");
+  onnx_kernels::kernel::TreeEnsembleClassifier cls(
+      rt.kernel_ctx(), nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+      nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids, class_nodeids, class_ids,
+      class_weights);
+  std::pair<Tensor, Tensor> yz =
+      DispatchTreeEnsembleClassicByDataType(x, "TreeEnsembleClassifier", [&](auto *tag) {
+        using T = std::remove_pointer_t<decltype(tag)>;
+        (void)tag;
+        return use_strings
+                   ? cls.template operator()<T>(x, classlabels_strings, base_values, post_transform)
+                   : cls.template operator()<T>(x, classlabels_int64s, base_values, post_transform);
+      });
+  SetOutput(node, 0, std::move(yz.first), rt);
+  SetOutput(node, 1, std::move(yz.second), rt);
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

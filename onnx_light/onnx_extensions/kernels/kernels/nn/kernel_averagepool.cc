@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_extensions/kernels/kernels/nn/pool_attrs.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -349,6 +351,20 @@ void AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const S
       }
     }
   }
+}
+
+void AveragePool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
+  const bool count_include_pad = GetAttributeIntOrDefault(node, "count_include_pad", 0) != 0;
+  onnx_kernels::kernel::AveragePool k(rt.kernel_ctx());
+  SetOutput(node, 0,
+            k(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, count_include_pad, a.dilations,
+              a.auto_pad),
+            rt.tensors());
 }
 
 } // namespace kernel

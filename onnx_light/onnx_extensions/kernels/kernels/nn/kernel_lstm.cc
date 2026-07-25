@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
@@ -358,6 +359,88 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
   }
 
   return std::pair<Tensor, Tensor>(std::move(y), std::move(y_h));
+}
+
+void LSTM::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 8), "RunNode: op '",
+                      node.op_type(), "' expects between 3 and 8 input(s), got ", node.input_size(),
+                      ".");
+  EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 3), "RunNode: op '",
+                      node.op_type(), "' expects between 1 and 3 output(s), got ",
+                      node.output_size(), ".");
+
+  // Unsupported attributes: only the default ``forward`` direction
+  // with the default ``Sigmoid``/``Tanh``/``Tanh`` activations, no
+  // ``clip``, ``input_forget == 0``, and ``layout == 0`` are
+  // implemented.
+  const std::string direction = GetAttributeStringOrDefault(node, "direction", "forward");
+  EXT_ENFORCE_INVALID(direction == "forward",
+                      "RunNode: op 'LSTM' only supports direction='forward', got '", direction,
+                      "'.");
+  EXT_ENFORCE_INVALID(FindAttribute(node, "activations") == nullptr,
+                      "RunNode: op 'LSTM' does not support the 'activations' attribute.");
+  EXT_ENFORCE_INVALID(!(FindAttribute(node, "activation_alpha") != nullptr ||
+                        FindAttribute(node, "activation_beta") != nullptr),
+                      "RunNode: op 'LSTM' does not support 'activation_alpha'/'activation_beta'.");
+  EXT_ENFORCE_INVALID(FindAttribute(node, "clip") == nullptr,
+                      "RunNode: op 'LSTM' does not support the 'clip' attribute.");
+  EXT_ENFORCE_INVALID(GetAttributeIntOrDefault(node, "input_forget", 0) == 0,
+                      "RunNode: op 'LSTM' only supports input_forget=0.");
+  const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
+
+  // The current kernel only produces (Y, Y_h); the optional third
+  // output ``Y_c`` (final cell state) is not implemented.
+  EXT_ENFORCE_INVALID(!(node.output_size() >= 3 && !node.output(2).empty()),
+                      "RunNode: op 'LSTM' does not support the optional third output 'Y_c'.");
+
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &w = GetInput(node, 1, rt.tensors());
+  const Tensor &r = GetInput(node, 2, rt.tensors());
+  const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
+  const Tensor *initial_c = GetOptionalInput(node, 6, rt.tensors());
+  const Tensor *p = GetOptionalInput(node, 7, rt.tensors());
+
+  // ``sequence_lens`` (input #4) requires per-batch sequence
+  // handling that the FLOAT kernel does not implement; accept it
+  // only when it degenerates to a no-op (every batch row uses the
+  // full ``seq_length`` so masking would not change the output).
+  // ``seq_length`` is read from ``X`` at axis 0 for ``layout=0``
+  // and axis 1 for ``layout=1``.
+  const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+  if (sequence_lens != nullptr) {
+    EXT_ENFORCE_INVALID(!(sequence_lens->data_type != static_cast<int32_t>(DataType::INT32)),
+                        "RunNode: op 'LSTM' expects 'sequence_lens' to be INT32.");
+    const size_t seq_axis = layout == 1 ? 1u : 0u;
+    const int64_t seq_length = x.shape.size() > seq_axis ? x.shape[seq_axis] : 0;
+    const int64_t n = sequence_lens->element_count();
+    const int32_t *seq_data = sequence_lens->AsInt32();
+    for (int64_t i = 0; i < n; ++i) {
+      EXT_ENFORCE_INVALID(!(static_cast<int64_t>(seq_data[i]) != seq_length),
+                          "RunNode: op 'LSTM' does not support the optional 'sequence_lens' "
+                          "input unless every entry equals the full seq_length.");
+    }
+  }
+
+  onnx_kernels::kernel::LSTM kernel(rt.kernel_ctx());
+  auto [y, y_h] =
+      kernel(x, w, r, b != nullptr ? *b : Tensor{}, initial_h != nullptr ? *initial_h : Tensor{},
+             initial_c != nullptr ? *initial_c : Tensor{}, p != nullptr ? *p : Tensor{}, layout);
+
+  auto set_optional_output = [&node, &rt](int index, Tensor output) {
+    if (index >= node.output_size()) {
+      return;
+    }
+    const std::string &name = node.output(index);
+    if (name.empty()) {
+      return;
+    }
+    output.name = name;
+    rt.Put(name, std::move(output), RuntimeEventKind::kIntermediate);
+  };
+  set_optional_output(0, std::move(y));
+  set_optional_output(1, std::move(y_h));
 }
 
 } // namespace kernel

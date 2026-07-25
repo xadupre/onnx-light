@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -147,6 +148,38 @@ template Tensor CategoryMapper::operator()<int64_t, std::string>(const Tensor &,
 template void CategoryMapper::operator()<int64_t, std::string>(const Tensor &, const ParamStrings &,
                                                                const std::vector<int64_t> &,
                                                                std::string, Tensor &) const;
+
+void CategoryMapper::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+
+  // ``cats_strings`` and ``cats_int64s`` are both required per the
+  // ``ai.onnx.ml::CategoryMapper`` schema and must have the same length.
+  const ParamStrings cats_strings = GetAttributeStringsOrDefault(node, "cats_strings", {});
+  const std::vector<int64_t> cats_int64s = GetAttributeIntsOrDefault(node, "cats_int64s", {});
+  const std::string default_string =
+      GetAttributeStringOrDefault(node, "default_string", std::string("_Unused"));
+  const int64_t default_int64 =
+      GetAttributeIntOrDefault(node, "default_int64", static_cast<int64_t>(-1));
+
+  onnx_kernels::kernel::CategoryMapper category_mapper(rt.kernel_ctx());
+  Tensor y;
+  switch (x.data_type) {
+  case static_cast<int32_t>(DataType::STRING):
+    y = category_mapper.operator()<std::string, int64_t>(x, cats_strings, cats_int64s,
+                                                         default_int64);
+    break;
+  case static_cast<int32_t>(DataType::INT64):
+    y = category_mapper.operator()<int64_t, std::string>(x, cats_strings, cats_int64s,
+                                                         default_string);
+    break;
+  default:
+    EXT_THROW_INVALID("RunNode: CategoryMapper input X must have element type STRING or INT64.");
+  }
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

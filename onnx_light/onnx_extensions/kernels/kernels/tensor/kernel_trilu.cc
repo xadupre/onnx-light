@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -107,6 +109,18 @@ void Trilu::operator()(const Tensor &input, const Tensor *k, const Trilu::Attrib
       }
     }
   }
+}
+
+void Trilu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputRange(node, 1, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor *k = GetOptionalInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::Trilu::Attributes attrs;
+  attrs.upper = GetAttributeIntOrDefault(node, "upper", 1);
+  onnx_kernels::kernel::Trilu kernel(rt.kernel_ctx());
+  SetOutput(node, 0, kernel(input, k, attrs, &rt), rt);
 }
 
 } // namespace kernel

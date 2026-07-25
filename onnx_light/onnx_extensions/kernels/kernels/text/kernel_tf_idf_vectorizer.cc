@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/text/include_text_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_light_helpers.h"
 #include <algorithm>
@@ -391,6 +392,29 @@ void TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_le
   EXT_ENFORCE_INVALID(output.size_bytes() == computed.size_bytes(),
                       "kernel::TfIdfVectorizer preallocated output buffer has unexpected size.");
   output.data = std::move(computed.data);
+}
+
+void TfIdfVectorizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string mode_attr = GetRequiredAttributeString(node, "mode");
+  const int64_t min_gram_length = GetAttributeIntOrDefault(node, "min_gram_length", 1);
+  const int64_t max_gram_length = GetAttributeIntOrDefault(node, "max_gram_length", 1);
+  const int64_t max_skip_count = GetAttributeIntOrDefault(node, "max_skip_count", 0);
+  const std::vector<int64_t> ngram_counts = GetAttributeIntsOrDefault(node, "ngram_counts", {});
+  const ParamInts ngram_indexes = GetAttributeIntsOrDefault(node, "ngram_indexes", {});
+  const ParamInts pool_int64s = GetAttributeIntsOrDefault(node, "pool_int64s", {});
+  const std::vector<std::string> pool_strings =
+      GetAttributeStringsOrDefault(node, "pool_strings", {});
+  const std::vector<float> weights = GetAttributeFloatsOrDefault(node, "weights", {});
+  onnx_kernels::kernel::TfIdfVectorizer k(rt.kernel_ctx());
+  SetOutput(node, 0,
+            k(x, onnx_kernels::kernel::TfIdfVectorizer::ParseMode(mode_attr), min_gram_length,
+              max_gram_length, max_skip_count, ngram_counts, ngram_indexes, pool_int64s,
+              pool_strings, weights),
+            rt);
 }
 
 } // namespace kernel

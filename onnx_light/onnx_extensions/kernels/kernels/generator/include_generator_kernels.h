@@ -63,6 +63,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Returns the ``value`` attribute of the ``Constant`` op without copying.
 class Constant : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &value, RuntimeContext *rt = nullptr) const;
   Tensor operator()(Tensor &&value, RuntimeContext *rt = nullptr) const;
@@ -86,6 +87,7 @@ public:
 /// ``BOOL``. Other dtypes throw ``std::invalid_argument``.
 class ConstantOfShape : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// ``shape`` must be a 1-D INT64 tensor whose entries describe the
   /// shape of the output. ``value`` is the (single-element) fill value
@@ -105,6 +107,7 @@ public:
 /// output shape copied from the 2-D ``input`` tensor.
 class EyeLike : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, int64_t k = 0, int32_t dtype = 0,
                     RuntimeContext *rt = nullptr) const;
@@ -134,6 +137,7 @@ public:
 /// 0/1 value has a natural representation).
 class Bernoulli : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Draws Bernoulli samples for every element of ``input``. ``seed`` is
   /// the value of the ``seed`` attribute when present (truncated to
@@ -172,6 +176,7 @@ public:
 /// other value of ``dtype`` triggers ``std::invalid_argument``.
 class RandomNormal : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Produces a ``shape``-shaped tensor of normal samples. ``mean`` and
   /// ``scale`` come from the operator attributes (defaults ``0.0`` /
@@ -199,6 +204,7 @@ public:
 /// of ``dtype`` triggers ``std::invalid_argument``.
 class RandomUniform : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Produces a ``shape``-shaped tensor of uniform samples in
   /// ``[low, high)``. ``low`` defaults to ``0.0`` and ``high`` to
@@ -223,6 +229,7 @@ public:
 /// otherwise the value overrides the output dtype.
 class RandomNormalLike : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, double mean = 0.0, double scale = 1.0,
                     int64_t seed = kNoSeed, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
@@ -239,6 +246,7 @@ public:
 /// ``input``.
 class RandomUniformLike : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, double low = 0.0, double high = 1.0,
                     int64_t seed = kNoSeed, int32_t dtype = 0, RuntimeContext *rt = nullptr) const;
@@ -266,6 +274,7 @@ public:
 /// Supported output dtypes are ``INT32`` (default) and ``INT64``.
 class Multinomial : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Draws ``sample_size`` samples per batch row of ``input``. ``seed`` is
   /// the value of the ``seed`` attribute when present (truncated to
@@ -305,6 +314,7 @@ public:
 /// returns an empty 1-D tensor of length 0.
 class Range : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
                     RuntimeContext *rt = nullptr) const;

@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 
@@ -38,6 +39,17 @@ void HardSigmoid::operator()(const Tensor &x, float alpha, float beta, Tensor &o
     const float v = alpha * px[idx] + beta;
     py[idx] = std::max(0.0f, std::min(1.0f, v));
   }
+}
+
+void HardSigmoid::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.2f);
+  const float beta = GetAttributeFloatOrDefault(node, "beta", 0.5f);
+  onnx_kernels::kernel::HardSigmoid k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, alpha, beta, &rt), rt);
 }
 
 } // namespace kernel

@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -109,6 +111,46 @@ ONNX_LIGHT_INSTANTIATE_IMPUTER(int64_t);
 ONNX_LIGHT_INSTANTIATE_IMPUTER(int32_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_IMPUTER
+
+void Imputer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+
+  // Per the ``ai.onnx.ml::Imputer`` schema, exactly one of
+  // ``imputed_value_floats``/``replaced_value_float`` (for floating-point
+  // inputs) or ``imputed_value_int64s``/``replaced_value_int64`` (for
+  // integer inputs) must be defined. The runtime selects the
+  // appropriate pair based on the input element type.
+  const std::vector<float> imputed_value_floats =
+      GetAttributeFloatsOrDefault(node, "imputed_value_floats", {});
+  const std::vector<int64_t> imputed_value_int64s =
+      GetAttributeIntsOrDefault(node, "imputed_value_int64s", {});
+  const float replaced_value_float = GetAttributeFloatOrDefault(node, "replaced_value_float", 0.0f);
+  const int64_t replaced_value_int64 =
+      GetAttributeIntOrDefault(node, "replaced_value_int64", static_cast<int64_t>(0));
+
+  onnx_kernels::kernel::Imputer imputer(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "Imputer", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    if constexpr (std::is_floating_point_v<T>) {
+      std::vector<T> imputed_values(imputed_value_floats.begin(), imputed_value_floats.end());
+      return imputer.template operator()<T>(x, imputed_values,
+                                            static_cast<T>(replaced_value_float));
+    } else {
+      std::vector<T> imputed_values;
+      imputed_values.reserve(imputed_value_int64s.size());
+      for (int64_t value : imputed_value_int64s) {
+        imputed_values.push_back(static_cast<T>(value));
+      }
+      return imputer.template operator()<T>(x, imputed_values,
+                                            static_cast<T>(replaced_value_int64));
+    }
+  });
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

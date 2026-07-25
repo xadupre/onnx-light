@@ -4,8 +4,10 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <algorithm>
 #include <cstring>
 #include <stdexcept>
@@ -196,6 +198,20 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
       }
     }
   }
+}
+
+void TensorScatter::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputRange(node, 2, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &past_cache = GetInput(node, 0, rt.tensors());
+  const Tensor &update = GetInput(node, 1, rt.tensors());
+  const Tensor *write_indices = GetOptionalInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::TensorScatter::Attributes attrs;
+  attrs.axis = GetAttributeIntOrDefault(node, "axis", -2);
+  attrs.mode = GetAttributeStringOrDefault(node, "mode", "linear");
+  onnx_kernels::kernel::TensorScatter kernel(rt.kernel_ctx());
+  SetOutput(node, 0, kernel(past_cache, update, write_indices, attrs, &rt), rt);
 }
 
 } // namespace kernel

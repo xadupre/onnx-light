@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include <cstdint>
 #include <string>
 
@@ -47,6 +48,19 @@ Sequence SequenceInsert::operator()(const Sequence &input_sequence, const Tensor
   Tensors out_values = input_sequence.values;
   out_values.insert(out_values.begin() + idx, tensor);
   return Sequence(input_sequence.name, elem_type, std::move(out_values));
+}
+
+void SequenceInsert::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 2);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type(),
+                      "' expects 2 or 3 inputs, got ", node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  const Tensor &tensor = GetInput(node, 1, rt.tensors());
+  const Tensor *position = GetOptionalInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::SequenceInsert k(rt.kernel_ctx());
+  SetOutputSequence(node, 0, k(input_sequence, tensor, position), rt);
 }
 
 } // namespace kernel

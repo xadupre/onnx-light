@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -68,6 +69,17 @@ Tensor Shrink::operator()(const Tensor &x, float bias, float lambd, RuntimeConte
 void Shrink::operator()(const Tensor &x, float bias, float lambd, Tensor &output) const {
   ValidateOutput(x, output);
   Dispatch(x, bias, lambd, output);
+}
+
+void Shrink::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const float bias = GetAttributeFloatOrDefault(node, "bias", 0.0f);
+  const float lambd = GetAttributeFloatOrDefault(node, "lambd", 0.5f);
+  onnx_kernels::kernel::Shrink k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, bias, lambd, &rt), rt);
 }
 
 } // namespace kernel

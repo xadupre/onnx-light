@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -218,6 +219,42 @@ void DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t axis
   if (!produced.data.empty()) {
     std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
+}
+
+void DFT::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type(),
+                      "' expects at most 3 inputs.");
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor *dft_length = GetOptionalInput(node, 1, rt.tensors());
+  const bool inverse = GetAttributeIntOrDefault(node, "inverse", 0) != 0;
+  const bool onesided = GetAttributeIntOrDefault(node, "onesided", 0) != 0;
+  int64_t axis = 1;
+  const int64_t opset_version = rt.kernel_ctx().opset.version;
+  if (opset_version >= 20) {
+    const Tensor *axis_tensor = GetOptionalInput(node, 2, rt.tensors());
+    if (axis_tensor != nullptr) {
+      EXT_ENFORCE_INVALID(!(axis_tensor->element_count() != 1),
+                          "RunNode: DFT 'axis' input must be a scalar tensor (or a 1-D "
+                          "tensor with a single element).");
+      switch (axis_tensor->data_type) {
+      case DataType::INT64:
+        axis = axis_tensor->AsInt64()[0];
+        break;
+      case DataType::INT32:
+        axis = static_cast<int64_t>(axis_tensor->AsInt32()[0]);
+        break;
+      default:
+        EXT_THROW_INVALID("RunNode: DFT 'axis' input must be INT32 or INT64.");
+      }
+    }
+  } else {
+    axis = GetAttributeIntOrDefault(node, "axis", 1);
+  }
+  onnx_kernels::kernel::DFT k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input, dft_length, axis, onesided, inverse, &rt), rt);
 }
 
 } // namespace kernel

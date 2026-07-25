@@ -1,3 +1,4 @@
+import platform
 import re
 import unittest
 import numpy as np
@@ -282,6 +283,15 @@ _ORT_MAX_OPSET = ort_max_supported_opset()
 for _opset, _patterns in ORT_OPSET_GATED_EXCLUDE_REGEX.items():
     if _ORT_MAX_OPSET < _opset:
         ORT_EXCLUDE_REGEX.extend(_patterns)
+
+# On Apple silicon (arm64), ONNX Runtime saturates out-of-range float -> UINT16
+# casts to 0 (the AArch64 ``fcvtzu`` instruction saturates), whereas onnx-light
+# and ORT on x86-64 produce the well-defined modular result (e.g. ``-1.5`` casts
+# to ``65535``). Converting an out-of-range floating-point value to an unsigned
+# integer is undefined behaviour in C/C++ and ONNX leaves it unspecified, so
+# exclude these float-family -> UINT16 parity checks on macOS only.
+if platform.system() == "Darwin":
+    ORT_EXCLUDE_REGEX.append(r"^test_cc_cast(like)?_(FLOAT|FLOAT16|BFLOAT16)_to_UINT16$")
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)
 

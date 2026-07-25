@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <stdexcept>
 
@@ -111,6 +113,21 @@ ONNX_LIGHT_INSTANTIATE_ARRAY_FEATURE_EXTRACTOR(int64_t);
 ONNX_LIGHT_INSTANTIATE_ARRAY_FEATURE_EXTRACTOR(int32_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_ARRAY_FEATURE_EXTRACTOR
+
+void ArrayFeatureExtractor::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::ArrayFeatureExtractor afe(rt.kernel_ctx());
+  Tensor z = DispatchSVMByDataType(x, "ArrayFeatureExtractor", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return afe.template operator()<T>(x, y);
+  });
+  SetOutput(node, 0, std::move(z), rt.tensors());
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

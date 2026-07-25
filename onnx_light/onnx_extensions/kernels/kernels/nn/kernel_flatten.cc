@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
@@ -57,6 +58,15 @@ void Flatten::operator()(const Tensor &input, int64_t axis, Tensor &output) cons
   if (input.size_bytes() > 0) {
     std::memcpy(output.mutable_bytes(), input.bytes(), input.size_bytes());
   }
+}
+
+void Flatten::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, axis, &rt), rt);
 }
 
 } // namespace kernel

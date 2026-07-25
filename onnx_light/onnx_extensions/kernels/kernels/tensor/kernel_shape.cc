@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -80,6 +81,21 @@ void Shape::operator()(const Tensor &data, const Attributes &attrs, Tensor &outp
   if (!values.empty()) {
     std::copy(values.begin(), values.end(), reinterpret_cast<int64_t *>(output.mutable_bytes()));
   }
+}
+
+void Shape::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  onnx_kernels::kernel::Shape::Attributes shape_attrs;
+  shape_attrs.start = GetAttributeIntOrDefault(node, "start", 0);
+  const AttributeProto *end_attr = FindAttribute(node, "end");
+  if (end_attr != nullptr) {
+    shape_attrs.end = end_attr->i();
+  }
+  onnx_kernels::kernel::Shape shape_kernel(rt.kernel_ctx());
+  SetOutput(node, 0, shape_kernel(data, shape_attrs, &rt), rt);
 }
 
 } // namespace kernel

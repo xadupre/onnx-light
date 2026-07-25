@@ -6,6 +6,8 @@
 
 #include "onnx_core/runtime/float16_promote.h"
 
+#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <cmath>
@@ -366,6 +368,65 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
     ComputeFlexAttentionTyped<float>(Q, K, V, scale, score_mod, prob_mod, output,
                                      rt ? rt->allocator() : nullptr);
   }
+}
+
+void FlexAttention::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &Q = GetInput(node, 0, rt.tensors());
+  const Tensor &K = GetInput(node, 1, rt.tensors());
+  const Tensor &V = GetInput(node, 2, rt.tensors());
+
+  // Resolve the scale once: use the explicit attribute if present, otherwise
+  // fall back to 1/sqrt(head_size) — matching the kernel's own default.
+  const float scale = FindAttribute(node, "scale") != nullptr
+                          ? GetAttributeFloatOrDefault(node, "scale", 1.0f)
+                          : 1.0f / std::sqrt(static_cast<float>(Q.shape[3]));
+
+  onnx_kernels::kernel::FlexAttention flex(rt.kernel_ctx());
+  Tensor Y;
+  onnx_kernels::kernel::FlexAttention::ScoreModFn score_mod_fn;
+  onnx_kernels::kernel::FlexAttention::ProbModFn prob_mod_fn;
+  // Sessions for the score_mod / prob_mod subgraphs are built once and
+  // reused for every row the FlexAttention kernel evaluates them on,
+  // instead of re-resolving the subgraph's kernels on every call.
+  std::unique_ptr<SubgraphSession> score_mod_session;
+  std::unique_ptr<SubgraphSession> prob_mod_session;
+  const AttributeProto *score_mod_attr = FindAttribute(node, "score_mod");
+  if (score_mod_attr != nullptr) {
+    const GraphProto &score_mod_graph = score_mod_attr->ref_g();
+    EXT_ENFORCE_INVALID(!(score_mod_graph.input().empty()),
+                        "RunNode: 'score_mod' subgraph must declare at least one input.");
+    const std::string in_name = score_mod_graph.input()[0].name();
+    score_mod_session = std::make_unique<SubgraphSession>(rt, score_mod_graph);
+    score_mod_fn = [in_name, &rt, &session = *score_mod_session](Tensor &scores) {
+      auto outputs = session.Run({{in_name, scores}}, rt, "score_mod");
+      if (!outputs.empty()) {
+        scores = std::move(outputs[0]);
+      }
+    };
+  }
+  const AttributeProto *prob_mod_attr = FindAttribute(node, "prob_mod");
+  if (prob_mod_attr != nullptr) {
+    const GraphProto &prob_mod_graph = prob_mod_attr->ref_g();
+    EXT_ENFORCE_INVALID(!(prob_mod_graph.input().empty()),
+                        "RunNode: 'prob_mod' subgraph must declare at least one input.");
+    const std::string in_name = prob_mod_graph.input()[0].name();
+    prob_mod_session = std::make_unique<SubgraphSession>(rt, prob_mod_graph);
+    prob_mod_fn = [in_name, &rt, &session = *prob_mod_session](Tensor &probs) {
+      auto outputs = session.Run({{in_name, probs}}, rt, "prob_mod");
+      if (!outputs.empty()) {
+        probs = std::move(outputs[0]);
+      }
+    };
+  }
+  if (score_mod_fn || prob_mod_fn) {
+    Y = flex(Q, K, V, scale, score_mod_fn, prob_mod_fn);
+  } else {
+    Y = flex(Q, K, V, scale);
+  }
+  SetOutput(node, 0, std::move(Y), rt.tensors());
 }
 
 } // namespace kernel

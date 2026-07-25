@@ -74,6 +74,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// preallocated output's dtype/shape/byte size do not match the input's.
 class Binarizer : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename T>
@@ -110,6 +111,7 @@ public:
 /// output.
 class CategoryMapper : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename InT, typename OutT>
@@ -147,6 +149,7 @@ public:
 /// preallocated output's dtype/shape/byte size do not match the input's.
 class Imputer : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename T>
@@ -169,6 +172,7 @@ public:
 /// the input shape with the last dimension replaced by ``numel(indices)``.
 class ArrayFeatureExtractor : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename T>
@@ -205,6 +209,7 @@ public:
 /// type/shape do not match the resolved value type and the input shape.
 class LabelEncoder : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Primary overload accepting zero-copy span views of the keys and values
@@ -261,6 +266,7 @@ public:
 /// output's dtype/shape/byte size do not match the expected one-hot output.
 class OneHotEncoder : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename T>
@@ -291,6 +297,7 @@ public:
 /// ``[-z, z]`` convention).
 class LinearClassifier : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename T>
@@ -314,6 +321,7 @@ public:
 /// assumed). Only ``post_transform == "NONE"`` is supported.
 class LinearRegressor : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename T>
@@ -333,6 +341,7 @@ public:
 ///   * ``Z``: one raw decision score per sample
 class SVMClassifier : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename T>
@@ -357,6 +366,7 @@ public:
 /// operator (since opset 1).
 class SVMRegressor : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename T>
@@ -392,6 +402,7 @@ public:
 /// float output.
 class Scaler : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename T>
@@ -433,6 +444,7 @@ public:
 /// float output.
 class Normalizer : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   template <typename T>
@@ -482,6 +494,11 @@ public:
 /// "AVERAGE", "MIN", and "MAX", and ``post_transform`` value "NONE".
 class TreeEnsembleRegressor : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
+  /// Inherits the context-only constructor so the dispatch factory can
+  /// build the kernel; ``Run`` parses the ONNX attributes and constructs the
+  /// fully-initialized instance it delegates to.
+  using KernelBase::KernelBase;
   /// Builds the classic node and leaf maps from the parallel ``nodes_*`` and
   /// ``target_*`` attribute arrays so the tree structure is constructed once,
   /// ahead of any call to ``operator()``.
@@ -540,6 +557,11 @@ private:
 /// Supports integer and string class labels.
 class TreeEnsembleClassifier : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
+  /// Inherits the context-only constructor so the dispatch factory can
+  /// build the kernel; ``Run`` parses the ONNX attributes and constructs the
+  /// fully-initialized instance it delegates to.
+  using KernelBase::KernelBase;
   /// Builds the classic node and leaf maps from the parallel ``nodes_*`` and
   /// ``class_*`` attribute arrays so the tree structure is constructed once,
   /// ahead of any call to ``operator()``.
@@ -579,6 +601,11 @@ private:
 /// Only ``post_transform`` 0 (NONE) and 1 (SOFTMAX) are supported.
 class TreeEnsemble : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
+  /// Inherits the context-only constructor so the dispatch factory can
+  /// build the kernel; ``Run`` parses the ONNX attributes and constructs the
+  /// fully-initialized instance it delegates to.
+  using KernelBase::KernelBase;
   /// Stores the tree structure and precomputes the per-node membership sets so
   /// the tree is constructed once, ahead of any call to ``operator()``.
   ///
@@ -665,6 +692,7 @@ private:
 /// ``input_values`` must have the same length.
 class DictVectorizer : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Primary overload accepting zero-copy span views of the input keys and
@@ -729,6 +757,7 @@ public:
 /// when the in-place output's dtype/shape do not match the expected output.
 class CastMap : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Primary overload accepting zero-copy span views of the input keys and
@@ -795,6 +824,7 @@ public:
 /// type ``DataType`` dispatches to the right template specialization.
 class FeatureVectorizer : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Concatenates the input tensors (each cast to ``float``) along the

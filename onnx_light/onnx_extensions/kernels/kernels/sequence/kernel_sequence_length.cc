@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <limits>
@@ -18,6 +19,15 @@ Tensor SequenceLength::operator()(const Sequence &input_sequence, RuntimeContext
                           static_cast<std::size_t>(std::numeric_limits<int64_t>::max()),
                       "kernel::SequenceLength: input sequence length exceeds int64_t range.");
   return Tensor::FromInt64("", {}, {static_cast<int64_t>(input_sequence.size())}, ctx_.allocator);
+}
+
+void SequenceLength::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  onnx_kernels::kernel::SequenceLength k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input_sequence, &rt), rt);
 }
 
 } // namespace kernel

@@ -68,6 +68,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// the concatenation of the per-input byte buffers.
 class SequenceConstruct : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
@@ -102,6 +103,7 @@ public:
 /// ``new_axis == 1``).
 class ConcatFromSequence : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returning overload. ``axis`` follows the ONNX convention and may
@@ -124,6 +126,7 @@ public:
 /// ``SequenceLength`` (since opset 11 in the ai.onnx domain).
 class SequenceLength : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Computes ``Tensor<int64, {}>{ len(input_sequence) }``.
@@ -140,6 +143,7 @@ public:
 /// ``DataType::FLOAT`` to match the ONNX schema default.
 class SequenceEmpty : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns an empty :cpp:struct:`Sequence` whose ``elem_type`` is the
@@ -161,6 +165,7 @@ public:
 /// is ``[-n, n - 1]`` where ``n`` is the sequence length.
 class SequenceErase : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Erases the element at ``position`` (default: last element).
@@ -177,6 +182,7 @@ public:
 /// where ``n`` is the sequence length.
 class SequenceAt : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returns a copy of the tensor at ``position``.
@@ -240,6 +246,7 @@ public:
 /// ``n`` is the sequence length.
 class SequenceInsert : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Inserts ``tensor`` at ``position`` (default: append to back).
@@ -268,6 +275,7 @@ public:
 /// ``std::invalid_argument``.
 class SplitToSequence : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Computes the split. ``split`` may be ``nullptr`` (omitted), a

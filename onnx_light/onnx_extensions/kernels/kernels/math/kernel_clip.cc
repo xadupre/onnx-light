@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <limits>
@@ -118,6 +119,17 @@ void Clip::operator()(const Tensor &x, const Tensor *min, const Tensor *max, Ten
   ValidateBounds(x, min, max);
   ValidateOutput(x, output);
   Dispatch(x, min, max, output);
+}
+
+void Clip::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor *min = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor *max = GetOptionalInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::Clip k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, min, max, &rt), rt);
 }
 
 } // namespace kernel

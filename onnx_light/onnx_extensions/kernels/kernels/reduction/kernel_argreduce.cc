@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -128,6 +129,28 @@ void ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims, bool
       py[o * inner + i] = best_idx;
     }
   }
+}
+
+void ArgMax::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+  const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
+  const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(data, axis, keepdims, select_last_index, &rt), rt);
+}
+
+void ArgMin::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+  const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
+  const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(data, axis, keepdims, select_last_index, &rt), rt);
 }
 
 } // namespace kernel

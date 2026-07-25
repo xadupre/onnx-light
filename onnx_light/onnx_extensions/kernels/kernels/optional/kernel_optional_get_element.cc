@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/optional/include_optional_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -36,7 +37,7 @@ void OptionalGetElement::operator()(const Tensor &input, Tensor &output) const {
   // Passthrough: the "present" optional is unwrapped to an exact copy of
   // the input. ``std::memmove``-style safety is required so the in-place
   // overload may alias ``input`` and ``output``.
-  if (!output.data.empty() && output.mutable_bytes() != input.bytes()) {
+  if (output.size_bytes() != 0 && output.mutable_bytes() != input.bytes()) {
     std::memcpy(output.mutable_bytes(), input.bytes(), input.size_bytes());
   }
 }
@@ -47,6 +48,21 @@ Sequence OptionalGetElement::operator()(const Sequence &input) const {
       "kernel::OptionalGetElement: input sequence elem_type must be a defined DataType.");
   // Passthrough: return a copy of the input sequence.
   return Sequence(input.name, input.elem_type, input.values);
+}
+
+void OptionalGetElement::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const std::string input_name = node.input(0);
+  onnx_kernels::kernel::OptionalGetElement k(rt.kernel_ctx());
+  if (rt.HasSequence(input_name)) {
+    const Sequence &input_seq = GetInputSequence(node, 0, rt);
+    SetOutputSequence(node, 0, k(input_seq), rt);
+  } else {
+    const Tensor &input = GetInput(node, 0, rt.tensors());
+    SetOutput(node, 0, k(input, &rt), rt);
+  }
 }
 
 } // namespace kernel

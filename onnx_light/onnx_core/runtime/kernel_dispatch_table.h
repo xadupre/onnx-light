@@ -36,40 +36,17 @@ namespace core {
 namespace runtime {
 
 /**
- * A resolved, ready-to-invoke kernel instance returned by a
- * :cpp:type:`NodeKernelFn` factory. Wraps the per-node closure that reads
- * the node's current inputs from ``rt.tensors()``, calls the already
- * constructed concrete kernel, and writes the outputs back — everything a
- * :cpp:type:`NodeKernelFn` factory call does NOT do at construction time.
- * Uniform across every kernel shape (unary/binary/ternary/variadic/...) so
- * :cpp:class:`RuntimeSession` can invoke any resolved kernel identically.
- */
-class ResolvedKernel {
-public:
-  using InvokeFn = std::function<void(const NodeProto &node, RuntimeContext &rt)>;
-
-  explicit ResolvedKernel(InvokeFn invoke) : invoke_(std::move(invoke)) {}
-
-  /// Runs the wrapped kernel for ``node`` against the current state of ``rt``
-  /// (reads current inputs, writes outputs). Safe to call repeatedly.
-  void Invoke(const NodeProto &node, RuntimeContext &rt) const { invoke_(node, rt); }
-
-private:
-  InvokeFn invoke_;
-};
-
-/**
  * Factory signature registered in :cpp:func:`KernelDispatchTable` for every
  * ``(domain, op_type)``. Called once per node (during kernel resolution /
  * initialization, e.g. by :cpp:func:`RuntimeSession::Run` or by
- * :cpp:func:`RunNode`): validates the node's input/output counts, reads any
- * construction-time attributes, constructs the concrete kernel object, and
- * returns a :cpp:class:`ResolvedKernel` wrapping it. Must NOT perform any
- * computation itself — all per-run computation belongs in the returned
- * :cpp:class:`ResolvedKernel`'s :cpp:func:`Invoke`.
+ * :cpp:func:`RunNode`): validates the node's input/output counts, constructs
+ * the concrete kernel object and attaches the node via
+ * :cpp:func:`KernelBase::set_node`, returning a :cpp:class:`KernelBase`. Must
+ * NOT perform any computation itself — all per-run computation belongs in the
+ * returned kernel's :cpp:func:`KernelBase::Run`.
  */
 using NodeKernelFn =
-    std::function<std::unique_ptr<ResolvedKernel>(const NodeProto &node, RuntimeContext &rt)>;
+    std::function<std::unique_ptr<KernelBase>(const NodeProto &node, RuntimeContext &rt)>;
 
 /**
  * Signature of the ``SequenceMap`` output-packing callback: given the

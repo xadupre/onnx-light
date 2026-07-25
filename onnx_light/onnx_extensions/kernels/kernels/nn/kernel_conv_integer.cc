@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -288,6 +289,31 @@ void ConvInteger::operator()(const Tensor &x, const Tensor &w, const Tensor &x_z
       }
     }
   }
+}
+
+void ConvInteger::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 2);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 4),
+                      "RunNode: op 'ConvInteger' expects at most 4 inputs, got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &w = GetInput(node, 1, rt.tensors());
+  const Tensor *x_zp = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor *w_zp = GetOptionalInput(node, 3, rt.tensors());
+  onnx_kernels::kernel::ConvInteger::Attributes attrs;
+  attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+  attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+  attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+  attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+  attrs.group = GetAttributeIntOrDefault(node, "group", 1);
+  attrs.auto_pad = onnx_kernels::kernel::AutoPadFromString(
+      GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
+  onnx_kernels::kernel::ConvInteger k(rt.kernel_ctx());
+  SetOutput(node, 0,
+            k(x, w, x_zp != nullptr ? *x_zp : Tensor{}, w_zp != nullptr ? *w_zp : Tensor{}, attrs),
+            rt.tensors());
 }
 
 } // namespace kernel

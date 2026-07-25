@@ -6,7 +6,9 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/kernel_svm_common.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -61,6 +63,24 @@ ONNX_LIGHT_INSTANTIATE_LINEAR_REGRESSOR(int64_t);
 ONNX_LIGHT_INSTANTIATE_LINEAR_REGRESSOR(int32_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_LINEAR_REGRESSOR
+
+void LinearRegressor::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const ParamFloats coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
+  const ParamFloats intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
+  const int64_t targets = GetAttributeIntOrDefault(node, "targets", 1);
+  const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");
+  onnx_kernels::kernel::LinearRegressor reg(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "LinearRegressor", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return reg.template operator()<T>(x, coefficients, intercepts, targets, post_transform);
+  });
+  SetOutput(node, 0, std::move(y), rt);
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

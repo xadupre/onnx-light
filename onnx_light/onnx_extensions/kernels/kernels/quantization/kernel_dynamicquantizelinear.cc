@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/quantization/include_quantization_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -109,7 +110,7 @@ void DynamicQuantizeLinear::operator()(const Tensor &x, Tensor &y, Tensor &y_sca
   // Write scalar outputs.
   float *p_scale = reinterpret_cast<float *>(y_scale.mutable_bytes());
   p_scale[0] = scale;
-  y_zero_point.data[0] = zp;
+  y_zero_point.mutable_bytes()[0] = zp;
 
   // Quantize x.
   uint8_t *py = y.mutable_bytes();
@@ -123,6 +124,18 @@ void DynamicQuantizeLinear::operator()(const Tensor &x, Tensor &y, Tensor &y_sca
     v = SaturateUint8(v);
     py[i] = static_cast<uint8_t>(v);
   }
+}
+
+void DynamicQuantizeLinear::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 3);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  onnx_kernels::kernel::DynamicQuantizeLinear k(rt.kernel_ctx());
+  auto out = k(x);
+  SetOutput(node, 0, std::move(std::get<0>(out)), rt);
+  SetOutput(node, 1, std::move(std::get<1>(out)), rt);
+  SetOutput(node, 2, std::move(std::get<2>(out)), rt);
 }
 
 } // namespace kernel

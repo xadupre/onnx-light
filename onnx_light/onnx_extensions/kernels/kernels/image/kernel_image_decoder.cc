@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/image/include_image_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 
@@ -2264,6 +2265,16 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
   EXT_ENFORCE_INVALID(output.shape[0] == 0 && output.shape[1] == 0,
                       "kernel::ImageDecoder preallocated output must be (0, 0, C) for the "
                       "empty-matrix fallback used by the lightweight reference kernel.");
+}
+
+void ImageDecoder::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &encoded_stream = GetInput(node, 0, rt.tensors());
+  const std::string pixel_format = GetAttributeStringOrDefault(node, "pixel_format", "RGB");
+  onnx_kernels::kernel::ImageDecoder image_decoder_kernel(rt.kernel_ctx());
+  SetOutput(node, 0, image_decoder_kernel(encoded_stream, pixel_format, &rt), rt);
 }
 
 } // namespace kernel

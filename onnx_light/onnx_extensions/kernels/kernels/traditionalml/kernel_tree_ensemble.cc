@@ -7,7 +7,9 @@
 #include "onnx_extensions/kernels/kernels/traditionalml/kernel_svm_common.h"
 #include "onnx_extensions/kernels/kernels/traditionalml/kernel_tree_ensemble_common.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -233,6 +235,85 @@ ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(float);
 ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(double);
 
 #undef ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE
+
+void TreeEnsemble::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::vector<int64_t> tree_roots = GetAttributeIntsOrDefault(node, "tree_roots", {});
+  const std::vector<int64_t> nodes_featureids =
+      GetAttributeIntsOrDefault(node, "nodes_featureids", {});
+  const std::vector<int64_t> nodes_truenodeids =
+      GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
+  const std::vector<int64_t> nodes_falsenodeids =
+      GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
+  const std::vector<int64_t> nodes_trueleafs =
+      GetAttributeIntsOrDefault(node, "nodes_trueleafs", {});
+  const std::vector<int64_t> nodes_falseleafs =
+      GetAttributeIntsOrDefault(node, "nodes_falseleafs", {});
+  const std::vector<int64_t> nodes_missing =
+      GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
+  const std::vector<int64_t> leaf_targetids = GetAttributeIntsOrDefault(node, "leaf_targetids", {});
+  const int64_t n_targets = GetAttributeIntOrDefault(node, "n_targets", 1);
+  const int64_t aggregate_function = GetAttributeIntOrDefault(node, "aggregate_function", 1);
+  const int64_t post_transform = GetAttributeIntOrDefault(node, "post_transform", 0);
+  const Tensor nodes_splits = GetRequiredAttributeTensor(node, "nodes_splits");
+  const Tensor leaf_weights = GetRequiredAttributeTensor(node, "leaf_weights");
+  const Tensor nodes_modes_t = GetRequiredAttributeTensor(node, "nodes_modes");
+  const Tensor membership_values =
+      GetAttributeTensorOrEmpty(node, "membership_values", x.data_type);
+  EXT_ENFORCE_INVALID(!(nodes_modes_t.data_type != static_cast<int32_t>(DataType::UINT8)),
+                      "RunNode: TreeEnsemble attribute 'nodes_modes' must be a UINT8 tensor.");
+  EXT_ENFORCE_INVALID(
+      !(nodes_splits.data_type != x.data_type || leaf_weights.data_type != x.data_type),
+      "RunNode: TreeEnsemble attributes 'nodes_splits' and 'leaf_weights' must "
+      "have the same element type as input 'X'.");
+  EXT_ENFORCE_INVALID(
+      !(membership_values.element_count() > 0 && membership_values.data_type != x.data_type),
+      "RunNode: TreeEnsemble attribute 'membership_values' must have the same "
+      "element type as input 'X'.");
+  const std::span<const uint8_t> nodes_modes_span = TensorSpan<uint8_t>(nodes_modes_t);
+  // Materialize the tensor-typed attributes as ``double`` so the kernel
+  // owns its tree data (independent of the input element type).
+  const auto tensor_to_double = [](const Tensor &t) -> std::vector<double> {
+    if (t.element_count() == 0) {
+      return {};
+    }
+    switch (t.data_type) {
+    case static_cast<int32_t>(DataType::FLOAT): {
+      const std::span<const float> s = TensorSpan<float>(t);
+      return std::vector<double>(s.begin(), s.end());
+    }
+    case static_cast<int32_t>(DataType::DOUBLE): {
+      const std::span<const double> s = TensorSpan<double>(t);
+      return std::vector<double>(s.begin(), s.end());
+    }
+    default:
+      EXT_THROW_INVALID("RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");
+    }
+  };
+  const std::vector<double> nodes_splits_d = tensor_to_double(nodes_splits);
+  const std::vector<double> leaf_weights_d = tensor_to_double(leaf_weights);
+  const std::vector<double> membership_d = tensor_to_double(membership_values);
+  const std::vector<uint8_t> nodes_modes_vec(nodes_modes_span.begin(), nodes_modes_span.end());
+  onnx_kernels::kernel::TreeEnsemble tree_ens(
+      rt.kernel_ctx(), tree_roots, nodes_featureids, nodes_splits_d, nodes_modes_vec,
+      nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs, nodes_falseleafs, nodes_missing,
+      leaf_targetids, leaf_weights_d, membership_d);
+  Tensor y;
+  switch (x.data_type) {
+  case static_cast<int32_t>(DataType::FLOAT):
+    y = tree_ens.operator()<float>(x, n_targets, aggregate_function, post_transform);
+    break;
+  case static_cast<int32_t>(DataType::DOUBLE):
+    y = tree_ens.operator()<double>(x, n_targets, aggregate_function, post_transform);
+    break;
+  default:
+    EXT_THROW_INVALID("RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");
+  }
+  SetOutput(node, 0, std::move(y), rt);
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

@@ -4,8 +4,10 @@
 
 #include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -213,6 +215,16 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
     EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported input dtype ",
                         std::to_string(input.data_type), ".");
   }
+}
+
+void Multinomial::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const int64_t sample_size = GetAttributeIntOrDefault(node, "sample_size", 1);
+  onnx_kernels::kernel::Multinomial kernel(rt.kernel_ctx());
+  SetOutput(node, 0, kernel(input, sample_size, GetSeedAttr(node), GetDtypeAttr(node), &rt), rt);
 }
 
 } // namespace kernel

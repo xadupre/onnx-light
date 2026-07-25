@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -181,6 +182,27 @@ void CausalConvWithState::operator()(const Tensor &input, const Tensor &weight, 
       }
     }
   }
+}
+
+void CausalConvWithState::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 4), "RunNode: op '",
+                      node.op_type(), "' expects between 2 and 4 input(s), got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 2);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &weight = GetInput(node, 1, rt.tensors());
+  const Tensor *bias = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor *past_state = GetOptionalInput(node, 3, rt.tensors());
+
+  onnx_kernels::kernel::CausalConvWithState::Attributes attrs;
+  attrs.activation = GetAttributeStringOrDefault(node, "activation", "none");
+
+  onnx_kernels::kernel::CausalConvWithState kernel(rt.kernel_ctx());
+  auto [output, present_state] = kernel(input, weight, bias != nullptr ? *bias : Tensor{},
+                                        past_state != nullptr ? *past_state : Tensor{}, attrs);
+  SetOutput(node, 0, std::move(output), rt);
+  SetOutput(node, 1, std::move(present_state), rt);
 }
 
 } // namespace kernel

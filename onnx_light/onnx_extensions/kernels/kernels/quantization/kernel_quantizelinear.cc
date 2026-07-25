@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/cast_sub_byte.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -844,6 +845,32 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_t 
   default:
     EXT_THROW_INVALID("unsupported data type ", output.data_type, ", ",
                       "kernel::QuantizeLinear (symmetric blocked): unsupported output dtype.");
+  }
+}
+
+void QuantizeLinear::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 2);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 3),
+                      "RunNode: op 'QuantizeLinear' expects 2 or 3 inputs, got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y_scale = GetInput(node, 1, rt.tensors());
+  const Tensor *y_zero_point = GetOptionalInput(node, 2, rt.tensors());
+  int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
+  const int64_t rank = static_cast<int64_t>(x.shape.size());
+  if (axis < 0) {
+    axis += rank;
+  }
+  const int64_t output_dtype = GetAttributeIntOrDefault(node, "output_dtype", 0);
+  onnx_kernels::kernel::QuantizeLinear k(rt.kernel_ctx());
+  if (y_zero_point != nullptr) {
+    SetOutput(node, 0, k(x, y_scale, *y_zero_point, axis, &rt), rt);
+  } else if (output_dtype != 0) {
+    SetOutput(node, 0, k(x, y_scale, axis, static_cast<int32_t>(output_dtype), &rt), rt);
+  } else {
+    SetOutput(node, 0, k(x, y_scale, &rt), rt);
   }
 }
 

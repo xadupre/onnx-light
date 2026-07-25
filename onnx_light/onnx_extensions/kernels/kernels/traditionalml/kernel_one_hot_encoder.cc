@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include "onnx_light_helpers.h"
 #include <cstdint>
 #include <cstring>
@@ -155,6 +157,48 @@ ONNX_LIGHT_INSTANTIATE_ONE_HOT_ENCODER(float);
 ONNX_LIGHT_INSTANTIATE_ONE_HOT_ENCODER(double);
 
 #undef ONNX_LIGHT_INSTANTIATE_ONE_HOT_ENCODER
+
+void OneHotEncoder::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+
+  const AttributeProto *cats_int64s = FindAttribute(node, "cats_int64s");
+  const AttributeProto *cats_strings = FindAttribute(node, "cats_strings");
+  const int n_cats = (cats_int64s != nullptr) + (cats_strings != nullptr);
+  EXT_ENFORCE_INVALID(n_cats == 1, "RunNode: OneHotEncoder requires exactly one of 'cats_int64s' "
+                                   "or 'cats_strings' to be set.");
+
+  // The ``zeros`` attribute defaults to 1 per the ai.onnx.ml schema.
+  const bool zeros = GetAttributeIntOrDefault(node, "zeros", 1) != 0;
+
+  onnx_kernels::kernel::OneHotEncoder one_hot(rt.kernel_ctx());
+  Tensor y;
+  if (cats_int64s != nullptr) {
+    std::vector<int64_t> cats;
+    cats.reserve(cats_int64s->ints().size());
+    for (int64_t v : cats_int64s->ints()) {
+      cats.push_back(v);
+    }
+    y = DispatchSVMByDataType(x, "OneHotEncoder", [&](auto *tag) {
+      using T = std::remove_pointer_t<decltype(tag)>;
+      (void)tag;
+      return one_hot.template operator()<T>(x, cats, zeros);
+    });
+  } else {
+    ParamStrings cats;
+    cats.reserve(cats_strings->strings().size());
+    for (size_t i = 0; i < cats_strings->strings().size(); ++i) {
+      cats.push_back(cats_strings->strings()[i]);
+    }
+    EXT_ENFORCE_INVALID(!(x.data_type != static_cast<int32_t>(DataType::STRING)),
+                        "RunNode: OneHotEncoder with 'cats_strings' requires input X "
+                        "of element type STRING.");
+    y = one_hot(x, cats, zeros);
+  }
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

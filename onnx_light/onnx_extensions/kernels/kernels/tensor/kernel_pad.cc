@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <cstdint>
@@ -274,6 +275,39 @@ Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *con
 void Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
                      const Tensor *axes, const std::string &mode, Tensor &output) const {
   PadInto(data, pads, constant_value, axes, mode, output, nullptr);
+}
+
+void Pad::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op 'Pad' expects at most 4 inputs.");
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const std::string mode = GetAttributeStringOrDefault(node, "mode", "constant");
+  onnx_kernels::kernel::Pad k(rt.kernel_ctx());
+
+  // Opset 11+: ``pads`` is the second input.
+  if (node.input_size() >= 2) {
+    const Tensor &pads = GetInput(node, 1, rt.tensors());
+    const Tensor *constant_value = GetOptionalInput(node, 2, rt.tensors());
+    const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
+    SetOutput(node, 0, k(data, pads, constant_value, axes, mode, &rt), rt);
+    return;
+  }
+
+  // Legacy opset (<11): ``pads`` is an INTS attribute and ``value`` is a
+  // FLOAT attribute (default 0).
+  const std::vector<int64_t> pads_attr = GetAttributeIntsOrDefault(node, "pads", {});
+  const Tensor pads = Tensor::FromInt64("", {static_cast<int64_t>(pads_attr.size())}, pads_attr);
+  const float value = GetAttributeFloatOrDefault(node, "value", 0.0f);
+  if (data.data_type == static_cast<int32_t>(DataType::FLOAT)) {
+    const Tensor cv = Tensor::FromFloat("", /*shape=*/{}, {value});
+    SetOutput(node, 0, k(data, pads, &cv, /*axes=*/nullptr, mode, &rt), rt);
+  } else {
+    // For non-float dtypes the legacy form's float ``value`` attribute is
+    // ill-defined; fall back to a zero-initialized constant.
+    SetOutput(node, 0, k(data, pads, /*constant_value=*/nullptr, /*axes=*/nullptr, mode, &rt), rt);
+  }
 }
 
 } // namespace kernel

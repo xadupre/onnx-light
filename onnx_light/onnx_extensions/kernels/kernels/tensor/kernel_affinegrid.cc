@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
@@ -201,6 +202,18 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
       }
     }
   }
+}
+
+void AffineGrid::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &theta = GetInput(node, 0, rt.tensors());
+  const Tensor &size = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::AffineGrid::Attributes affine_grid_attrs;
+  affine_grid_attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", 0);
+  onnx_kernels::kernel::AffineGrid affine_grid_kernel(rt.kernel_ctx());
+  SetOutput(node, 0, affine_grid_kernel(theta, size, affine_grid_attrs, &rt), rt);
 }
 
 } // namespace kernel

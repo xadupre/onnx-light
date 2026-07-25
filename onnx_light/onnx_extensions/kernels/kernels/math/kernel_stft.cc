@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -167,6 +168,21 @@ void STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tens
   if (!produced.data.empty()) {
     std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
+}
+
+void STFT::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 2);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op '", node.op_type(),
+                      "' expects at most 4 inputs.");
+  RequireOutputCount(node, 1);
+  const Tensor &signal = GetInput(node, 0, rt.tensors());
+  const Tensor &frame_step = GetInput(node, 1, rt.tensors());
+  const Tensor *window = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor *frame_length = GetOptionalInput(node, 3, rt.tensors());
+  const bool onesided = GetAttributeIntOrDefault(node, "onesided", 1) != 0;
+  onnx_kernels::kernel::STFT k(rt.kernel_ctx());
+  SetOutput(node, 0, k(signal, frame_step, window, frame_length, onesided, &rt), rt);
 }
 
 } // namespace kernel

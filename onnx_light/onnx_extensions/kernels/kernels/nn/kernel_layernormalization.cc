@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -225,6 +227,25 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
         }
       }
     }
+  }
+}
+
+void LayerNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputRange(node, 2, 3);
+  RequireOutputRange(node, 1, 3);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::LayerNormalization k(rt.kernel_ctx());
+  auto [y, mean, inv_std_dev] =
+      k(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node));
+  SetOutput(node, 0, std::move(y), rt.tensors());
+  if (node.output_size() >= 2) {
+    SetOutput(node, 1, std::move(mean), rt.tensors());
+  }
+  if (node.output_size() >= 3) {
+    SetOutput(node, 2, std::move(inv_std_dev), rt.tensors());
   }
 }
 

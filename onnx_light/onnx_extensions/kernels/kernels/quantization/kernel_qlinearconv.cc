@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/quantization/include_quantization_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -335,6 +336,37 @@ void QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tenso
       }
     }
   }
+}
+
+void QLinearConv::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 8);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 9),
+                      "RunNode: op 'QLinearConv' expects at most 9 inputs, got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x_scale = GetInput(node, 1, rt.tensors());
+  const Tensor &x_zero_point = GetInput(node, 2, rt.tensors());
+  const Tensor &w = GetInput(node, 3, rt.tensors());
+  const Tensor &w_scale = GetInput(node, 4, rt.tensors());
+  const Tensor &w_zero_point = GetInput(node, 5, rt.tensors());
+  const Tensor &y_scale = GetInput(node, 6, rt.tensors());
+  const Tensor &y_zero_point = GetInput(node, 7, rt.tensors());
+  const Tensor *b = GetOptionalInput(node, 8, rt.tensors());
+  onnx_kernels::kernel::QLinearConv::Attributes attrs;
+  attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+  attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+  attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+  attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+  attrs.group = GetAttributeIntOrDefault(node, "group", 1);
+  attrs.auto_pad = onnx_kernels::kernel::AutoPadFromString(
+      GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
+  onnx_kernels::kernel::QLinearConv k(rt.kernel_ctx());
+  SetOutput(node, 0,
+            k(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point,
+              b != nullptr ? *b : Tensor{}, attrs),
+            rt);
 }
 
 } // namespace kernel

@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/float16_promote.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -290,6 +291,27 @@ void Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const A
       }
     }
   }
+}
+
+void Conv::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 2);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op 'Conv' expects at most 3 inputs, got ",
+                      node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &w = GetInput(node, 1, rt.tensors());
+  const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::Conv::Attributes attrs;
+  attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+  attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+  attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+  attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+  attrs.group = GetAttributeIntOrDefault(node, "group", 1);
+  attrs.auto_pad = onnx_kernels::kernel::AutoPadFromString(
+      GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
+  onnx_kernels::kernel::Conv k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
 }
 
 } // namespace kernel

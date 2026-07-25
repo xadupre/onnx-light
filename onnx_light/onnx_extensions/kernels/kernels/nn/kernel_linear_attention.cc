@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/float16_promote.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
@@ -344,6 +345,47 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
   result.output = std::move(output_tensor);
   result.present_state = std::move(state_tensor);
   return result;
+}
+
+void LinearAttention::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6),
+                      "RunNode: op 'LinearAttention' expects between 3 and 6 "
+                      "input(s), got ",
+                      node.input_size(), ".");
+  EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2),
+                      "RunNode: op 'LinearAttention' expects 1 or 2 output(s), "
+                      "got ",
+                      node.output_size(), ".");
+  const Tensor &query = GetInput(node, 0, rt.tensors());
+  const Tensor &key = GetInput(node, 1, rt.tensors());
+  const Tensor &value = GetInput(node, 2, rt.tensors());
+  const Tensor *past_state = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor *decay = GetOptionalInput(node, 4, rt.tensors());
+  const Tensor *beta = GetOptionalInput(node, 5, rt.tensors());
+
+  onnx_kernels::kernel::LinearAttention::Attributes attrs;
+  attrs.update_rule = GetAttributeStringOrDefault(node, "update_rule", "gated_delta");
+  if (FindAttribute(node, "scale") != nullptr) {
+    attrs.has_scale = true;
+    attrs.scale = GetAttributeFloatOrDefault(node, "scale", 0.0f);
+  }
+  attrs.q_num_heads = GetAttributeIntOrDefault(node, "q_num_heads", 0);
+  attrs.kv_num_heads = GetAttributeIntOrDefault(node, "kv_num_heads", 0);
+  attrs.chunk_size = GetAttributeIntOrDefault(node, "chunk_size", 64);
+
+  onnx_kernels::kernel::LinearAttention k(rt.kernel_ctx());
+  onnx_kernels::kernel::LinearAttention::Result result =
+      k(query, key, value, attrs, past_state, decay, beta);
+  SetOutput(node, 0, std::move(result.output), rt.tensors());
+
+  if (node.output_size() >= 2) {
+    const std::string present_name = node.output(1);
+    if (!present_name.empty()) {
+      result.present_state.name = present_name;
+      rt.tensors()[present_name] = std::move(result.present_state);
+    }
+  }
 }
 
 } // namespace kernel

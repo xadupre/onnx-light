@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
@@ -32,6 +33,17 @@ void CastLike::operator()(const Tensor &x, const Tensor &target_type, bool satur
                           Tensor &output) const {
   const Cast cast_kernel{ctx_};
   cast_kernel(x, target_type.data_type, saturate, output);
+}
+
+void CastLike::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &target_type = GetInput(node, 1, rt.tensors());
+  const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
+  onnx_kernels::kernel::CastLike k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, target_type, saturate, &rt), rt);
 }
 
 } // namespace kernel

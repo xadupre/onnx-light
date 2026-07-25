@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -108,6 +110,19 @@ void ConstantOfShape::operator()(const Tensor &shape, const Tensor &value, Tenso
   if (!produced.data.empty()) {
     std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
+}
+
+void ConstantOfShape::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &shape = GetInput(node, 0, rt.tensors());
+  Tensor value;
+  if (FindAttribute(node, "value") != nullptr) {
+    value = GetRequiredAttributeTensor(node, "value");
+  }
+  onnx_kernels::kernel::ConstantOfShape k(rt.kernel_ctx());
+  SetOutput(node, 0, k(shape, value, &rt), rt);
 }
 
 } // namespace kernel

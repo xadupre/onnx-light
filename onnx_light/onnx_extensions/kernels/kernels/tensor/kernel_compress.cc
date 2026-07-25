@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstddef>
 #include <cstdint>
@@ -141,6 +142,21 @@ void Compress::operator()(const Tensor &input, const Tensor &condition, std::opt
   if (!produced.data.empty()) {
     std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
+}
+
+void Compress::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &condition = GetInput(node, 1, rt.tensors());
+  const AttributeProto *axis_attr = FindAttribute(node, "axis");
+  std::optional<int64_t> axis;
+  if (axis_attr != nullptr) {
+    axis = axis_attr->i();
+  }
+  onnx_kernels::kernel::Compress k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input, condition, axis, &rt), rt);
 }
 
 } // namespace kernel

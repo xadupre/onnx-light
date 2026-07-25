@@ -7,6 +7,7 @@
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_light_helpers.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -73,7 +74,7 @@ Tensor EqualStringAlloc(const Tensor &x, const Tensor &y, RawBufferAllocator *al
   for (int64_t i = 0; i < bi.element_count; ++i) {
     const std::string &a = x.string_data[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
     const std::string &b = y.string_data[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
-    out.data[static_cast<size_t>(i)] = a == b ? 1 : 0;
+    out.mutable_bytes()[static_cast<size_t>(i)] = a == b ? 1 : 0;
   }
   return out;
 }
@@ -90,7 +91,7 @@ void EqualStringInPlace(const Tensor &x, const Tensor &y, Tensor &output) {
   for (int64_t i = 0; i < bi.element_count; ++i) {
     const std::string &a = x.string_data[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
     const std::string &b = y.string_data[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
-    output.data[static_cast<size_t>(i)] = a == b ? 1 : 0;
+    output.mutable_bytes()[static_cast<size_t>(i)] = a == b ? 1 : 0;
   }
 }
 } // namespace
@@ -179,6 +180,15 @@ void Equal::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
                       ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
                       "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
   }
+}
+
+void Equal::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
 }
 
 } // namespace kernel

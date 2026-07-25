@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
@@ -445,6 +446,20 @@ void GridSample::operator()(const Tensor &X, const Tensor &grid, const Attribute
   } else {
     RunTyped<double>(X, grid, interp, pad, align_corners, output.data, expected_shape, allocator);
   }
+}
+
+void GridSample::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &grid = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::GridSample::Attributes attrs;
+  attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+  attrs.padding_mode = GetAttributeStringOrDefault(node, "padding_mode", attrs.padding_mode);
+  attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", attrs.align_corners);
+  onnx_kernels::kernel::GridSample k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, grid, attrs, &rt), rt);
 }
 
 } // namespace kernel

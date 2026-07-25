@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_light_helpers.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -309,6 +310,16 @@ void Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y
                       ", only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, "
                       "INT64, UINT8, UINT16, UINT32, UINT64 and STRING x/y inputs.");
   }
+}
+
+void Where::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &a = GetInput(node, 0, rt.tensors());
+  const Tensor &b = GetInput(node, 1, rt.tensors());
+  const Tensor &c = GetInput(node, 2, rt.tensors());
+  SetOutput(node, 0, (*this)(a, b, c, &rt), rt);
 }
 
 } // namespace kernel

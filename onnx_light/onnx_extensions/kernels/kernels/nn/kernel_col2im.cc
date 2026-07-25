@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -223,6 +224,21 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
       }
     }
   }
+}
+
+void Col2Im::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &image_shape = GetInput(node, 1, rt.tensors());
+  const Tensor &block_shape = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::Col2Im::Attributes attrs;
+  attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+  attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+  attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+  onnx_kernels::kernel::Col2Im k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input, image_shape, block_shape, attrs, &rt), rt);
 }
 
 } // namespace kernel

@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/object_detection/include_object_detection_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
@@ -233,6 +234,27 @@ Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
     std::memcpy(output.mutable_bytes(), selected, selected_n_bytes);
   }
   return output;
+}
+
+void NonMaxSuppression::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 5), "RunNode: op '",
+                      node.op_type(), "' expects between 2 and 5 inputs, got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 1);
+  const Tensor &boxes = GetInput(node, 0, rt.tensors());
+  const Tensor &scores = GetInput(node, 1, rt.tensors());
+  const Tensor *max_output_boxes_per_class = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor *iou_threshold = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor *score_threshold = GetOptionalInput(node, 4, rt.tensors());
+  // For ONNX NonMaxSuppression (opset 10+), this runtime path uses the
+  // single schema attribute center_point_box (default 0).
+  onnx_kernels::kernel::NonMaxSuppression::Attributes attrs;
+  attrs.center_point_box = GetAttributeIntOrDefault(node, "center_point_box", 0);
+  onnx_kernels::kernel::NonMaxSuppression k(rt.kernel_ctx());
+  SetOutput(node, 0,
+            k(boxes, scores, max_output_boxes_per_class, iou_threshold, score_threshold, attrs),
+            rt.tensors());
 }
 
 } // namespace kernel

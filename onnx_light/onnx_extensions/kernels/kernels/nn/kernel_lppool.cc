@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernels/nn/pool_attrs.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -241,6 +243,19 @@ Tensor LpPool::operator()(const Tensor &x, const Shape &kernel_shape, const Shap
     }
   }
   return out;
+}
+
+void LpPool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
+  const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
+  onnx_kernels::kernel::LpPool k(rt.kernel_ctx());
+  SetOutput(node, 0,
+            k(x, a.kernel_shape, a.strides, a.pads, p, a.ceil_mode, a.dilations, a.auto_pad),
+            rt.tensors());
 }
 
 } // namespace kernel

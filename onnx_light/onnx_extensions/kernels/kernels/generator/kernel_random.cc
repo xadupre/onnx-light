@@ -10,8 +10,10 @@
 #include <string>
 #include <utility>
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -179,6 +181,54 @@ void RandomUniformLike::operator()(const Tensor &input, double low, double high,
   const int32_t out_dtype = ResolveOutputDtype(dtype, input.data_type, "RandomUniformLike");
   WriteUniformInto(output, input.shape, low, high, NormalizeSeed(seed), out_dtype,
                    "RandomUniformLike");
+}
+
+void RandomNormal::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 0);
+  RequireOutputCount(node, 1);
+  const std::vector<int64_t> shape = GetAttributeIntsOrDefault(node, "shape", {});
+  const float a = GetAttributeFloatOrDefault(node, "mean", 0.0f);
+  const float b = GetAttributeFloatOrDefault(node, "scale", 1.0f);
+  const int64_t seed = GetSeedAttr(node);
+  const int32_t dtype = GetDtypeAttr(node);
+  SetOutput(node, 0, (*this)(shape, a, b, seed, dtype, &rt), rt);
+}
+
+void RandomNormalLike::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const float a = GetAttributeFloatOrDefault(node, "mean", 0.0f);
+  const float b = GetAttributeFloatOrDefault(node, "scale", 1.0f);
+  const int64_t seed = GetSeedAttr(node);
+  const int32_t dtype = GetDtypeAttr(node);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(input, a, b, seed, dtype, &rt), rt);
+}
+
+void RandomUniform::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 0);
+  RequireOutputCount(node, 1);
+  const std::vector<int64_t> shape = GetAttributeIntsOrDefault(node, "shape", {});
+  const float a = GetAttributeFloatOrDefault(node, "low", 0.0f);
+  const float b = GetAttributeFloatOrDefault(node, "high", 1.0f);
+  const int64_t seed = GetSeedAttr(node);
+  const int32_t dtype = GetDtypeAttr(node);
+  SetOutput(node, 0, (*this)(shape, a, b, seed, dtype, &rt), rt);
+}
+
+void RandomUniformLike::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const float a = GetAttributeFloatOrDefault(node, "low", 0.0f);
+  const float b = GetAttributeFloatOrDefault(node, "high", 1.0f);
+  const int64_t seed = GetSeedAttr(node);
+  const int32_t dtype = GetDtypeAttr(node);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(input, a, b, seed, dtype, &rt), rt);
 }
 
 } // namespace kernel

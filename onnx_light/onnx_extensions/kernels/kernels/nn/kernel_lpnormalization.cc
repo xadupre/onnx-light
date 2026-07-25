@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -66,6 +67,17 @@ Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p,
     }
   }
   return out;
+}
+
+void LpNormalization::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
+  const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
+  onnx_kernels::kernel::LpNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, axis, p, &rt), rt);
 }
 
 } // namespace kernel

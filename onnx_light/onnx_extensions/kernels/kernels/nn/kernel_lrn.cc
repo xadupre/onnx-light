@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -62,6 +63,19 @@ Tensor LRN::operator()(const Tensor &x, int64_t size, float alpha, float beta, f
     }
   }
   return out;
+}
+
+void LRN::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const int64_t size = GetRequiredAttributeInt(node, "size");
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.0001f);
+  const float beta = GetAttributeFloatOrDefault(node, "beta", 0.75f);
+  const float bias = GetAttributeFloatOrDefault(node, "bias", 1.0f);
+  onnx_kernels::kernel::LRN k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, size, alpha, beta, bias, &rt), rt);
 }
 
 } // namespace kernel

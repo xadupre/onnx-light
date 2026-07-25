@@ -55,7 +55,12 @@ can link only what it needs:
 - `onnx_light::lib_onnx_proto` – protobuf-compatible message types,
   parser / serializer, external data, optional encrypted save / load
   (AES-256-CBC or ChaCha20-Poly1305).
-- `onnx_light::lib_onnx_lib` – current ONNX C++ API
+- `onnx_light::lib_onnx_core` – implements *all* the generic
+  functionalities (runtime value types and execution engine, the
+  `LightOpSchema` data structures, the symbolic expression engine and the
+  kernel / shape-inference dispatch tables) but ships **no** concrete
+  operators. The dispatch tables start empty and are filled by the
+  extension libraries below.
 - `onnx_light::lib_onnx_op` – lightweight `LightOpSchema` registrations for
   ONNX operator domains, with no shape inference.
 - `onnx_light::lib_onnx_lib` – full ONNX-compatible schemas (with history),
@@ -65,6 +70,13 @@ can link only what it needs:
 - `onnx_light::lib_onnx_kernels` – C++ kernels used to generate the beckend
 - `onnx_light::lib_onnx_backend_test` – C++ backend test infrastructure and
   reference operator kernels.
+
+`onnx_core` only implements the mechanisms: the actual operator schemas,
+kernels, shape-inference and peak-memory functions are **registered** into
+the shared dispatch tables owned by `onnx_core` by the extension libraries
+(`onnx_op`, `onnx_shapes`, `onnx_kernels`, ...) through their
+`Register*Functions()` entry points. This keeps the extensions
+independent from each other while sharing the same core engine.
 
 ## Kernels and Backend Tests
 

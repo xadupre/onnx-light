@@ -22,9 +22,9 @@ the `GitHub Releases page
 <https://github.com/xadupre/onnx-light/releases>`_.  The archives contain:
 
 * all public C++ headers under ``include/onnx_light/``,
-* static libraries under ``lib/`` (``lib_onnx_proto``, ``lib_onnx_lib``,
-  ``lib_onnx_op``, ``lib_onnx_shape``, ``lib_onnx_kernels`` and
-  ``lib_onnx_backend_test``), and
+* static libraries under ``lib/`` (``lib_onnx_proto``, ``lib_onnx_core``,
+  ``lib_onnx_lib``, ``lib_onnx_op``, ``lib_onnx_shape``, ``lib_onnx_kernels``
+  and ``lib_onnx_backend_test``), and
 * CMake package files under ``lib/cmake/onnx_light/`` so that
   ``find_package(onnx_light)`` works out of the box.
 
@@ -88,6 +88,7 @@ After extraction the directory looks like this::
     │       └── ...
     └── lib/
         ├── liblib_onnx_proto.a
+        ├── liblib_onnx_core.a
         ├── liblib_onnx_lib.a
         ├── liblib_onnx_op.a
         ├── liblib_onnx_shape.a
@@ -180,6 +181,12 @@ short.
     * - ``onnx_light::lib_onnx_proto``
       - Proto parsing / serialization only (``ModelProto``, ``GraphProto``,
         ``TensorProto``, …).  Lightest option.
+    * - ``onnx_light::lib_onnx_core``
+      - Intermediate layer between ``lib_onnx_proto`` and the higher-level
+        libraries: owns the ``TensorType`` enumeration and ``ToTypeString``
+        converter and provides the graph-node helpers (``CollectExternalInputs``,
+        ``CollectNodeInputs``, ``CollectRemainingInputs``).  Transitively links
+        ``lib_onnx_proto``.
     * - ``onnx_light::lib_onnx_manipulations``
       - ModelProto/GraphProto manipulation helpers independent from operator
         schemas: textual proto parser/printer, attribute and tensor-proto

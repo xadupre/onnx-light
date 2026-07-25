@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -143,6 +145,21 @@ ONNX_LIGHT_INSTANTIATE_NORMALIZER(int64_t);
 ONNX_LIGHT_INSTANTIATE_NORMALIZER(int32_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_NORMALIZER
+
+void Normalizer::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string norm = GetAttributeStringOrDefault(node, "norm", "MAX");
+  onnx_kernels::kernel::Normalizer normalizer(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "Normalizer", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return normalizer.template operator()<T>(x, norm);
+  });
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

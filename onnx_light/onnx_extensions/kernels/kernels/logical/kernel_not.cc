@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -34,6 +35,14 @@ void Not::operator()(const Tensor &x, Tensor &output) const {
   for (int64_t i = 0; i < n; ++i) {
     py[static_cast<size_t>(i)] = static_cast<uint8_t>(px[i] == 0 ? 1 : 0);
   }
+}
+
+void Not::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
 } // namespace kernel

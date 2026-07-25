@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -71,6 +72,17 @@ void IsInf::operator()(const Tensor &x, int64_t detect_positive, int64_t detect_
       py[static_cast<size_t>(i)] = r;
     }
   }
+}
+
+void IsInf::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const int64_t detect_positive = GetAttributeIntOrDefault(node, "detect_positive", 1);
+  const int64_t detect_negative = GetAttributeIntOrDefault(node, "detect_negative", 1);
+  onnx_kernels::kernel::IsInf k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, detect_positive, detect_negative, &rt), rt);
 }
 
 } // namespace kernel

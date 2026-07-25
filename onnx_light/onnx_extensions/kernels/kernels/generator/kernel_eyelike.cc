@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/runtime_context.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include <array>
 #include <bit>
 #include <cstddef>
@@ -135,6 +136,17 @@ Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
   Tensor output = MakeOutputTensor(out_dtype, input.shape, n_bytes, rt ? rt->allocator() : nullptr);
   (*this)(input, k, out_dtype, output);
   return output;
+}
+
+void EyeLike::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const int64_t k = GetAttributeIntOrDefault(node, "k", 0);
+  const int64_t dtype = GetAttributeIntOrDefault(node, "dtype", 0);
+  onnx_kernels::kernel::EyeLike kernel(rt.kernel_ctx());
+  SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype), &rt), rt);
 }
 
 } // namespace kernel

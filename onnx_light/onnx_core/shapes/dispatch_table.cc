@@ -25,17 +25,13 @@ std::string DispatchKey(const std::string &domain, const std::string &op_type) {
 }
 
 // Returns the device-qualified dispatch key. The identifier of a peak-memory
-// function is ``(domain, op_type, device)``; the default host devices
+// function is ``(domain, op_type, device)``;
+// :cpp:func:`symbolic::DeviceKeySuffix` keeps the default host devices
 // (:cpp:enumerator:`Device::kCPU` and :cpp:enumerator:`Device::kUndefined`)
-// keep the plain ``"<domain>:<op_type>"`` form so existing keys are
-// unchanged, while any other device appends ``":<device>"`` (the integer
-// value of the :cpp:enum:`Device` enumerator) to disambiguate.
+// in the plain ``"<domain>:<op_type>"`` form so existing keys are unchanged,
+// and appends ``":<device>"`` for any other device to disambiguate.
 std::string DispatchKey(const std::string &domain, const std::string &op_type, Device device) {
-  std::string key = DispatchKey(domain, op_type);
-  if (device != Device::kUndefined && device != Device::kCPU) {
-    key += ":" + std::to_string(static_cast<int32_t>(device));
-  }
-  return key;
+  return DispatchKey(domain, op_type) + symbolic::DeviceKeySuffix(device);
 }
 
 // Returns the mutable dispatch table singleton. Only

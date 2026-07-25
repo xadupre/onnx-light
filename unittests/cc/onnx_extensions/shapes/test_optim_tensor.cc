@@ -4,11 +4,12 @@
 
 #include "onnx_core/symbolic/sym_tensor.h"
 
-#include <gtest/gtest.h>
-
 #include <array>
+#include <cstdint>
+#include <gtest/gtest.h>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -354,6 +355,18 @@ TEST(OnnxOptimDevice, DeviceName) {
   EXPECT_EQ(core::symbolic::DeviceName(core::symbolic::Device::kGPU0), "GPU0");
   EXPECT_EQ(core::symbolic::DeviceName(core::symbolic::MakeGPUDevice(42)), "GPU42");
   EXPECT_EQ(core::symbolic::DeviceName(core::symbolic::Device::kGPU8191), "GPU8191");
+}
+
+TEST(OnnxOptimDevice, DeviceKeySuffix) {
+  // The default host devices contribute no suffix so dispatch keys keep their
+  // plain "<domain>:<op_type>" form.
+  EXPECT_EQ(core::symbolic::DeviceKeySuffix(core::symbolic::Device::kUndefined), "");
+  EXPECT_EQ(core::symbolic::DeviceKeySuffix(core::symbolic::Device::kCPU), "");
+  // Any other device appends ":<device>" (the integer enumerator value).
+  EXPECT_EQ(core::symbolic::DeviceKeySuffix(core::symbolic::Device::kGPU0),
+            ":" + std::to_string(static_cast<int32_t>(core::symbolic::Device::kGPU0)));
+  EXPECT_EQ(core::symbolic::DeviceKeySuffix(core::symbolic::MakeGPUDevice(42)),
+            ":" + std::to_string(static_cast<int32_t>(core::symbolic::MakeGPUDevice(42))));
 }
 
 TEST(OnnxOptimTensor, DeviceDefaultsToUndefined) {

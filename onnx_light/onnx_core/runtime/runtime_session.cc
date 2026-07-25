@@ -15,10 +15,11 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace runtime {
 
-RuntimeSession::RuntimeSession(const ModelProto &model)
-    : default_plan_(model.graph()), plan_(default_plan_) {}
+RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
+    : default_plan_(model.graph()), plan_(default_plan_), verbose_(verbose) {}
 
-RuntimeSession::RuntimeSession(const ExecutionPlan &plan) : plan_(plan) {}
+RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
+    : plan_(plan), verbose_(verbose) {}
 
 std::vector<std::string>
 RuntimeSession::CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes) {
@@ -89,6 +90,12 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // dispatch lookup or re-constructing concrete kernels.
   if (!kernels_initialized_) {
     InitializeKernels(rt);
+  }
+  // When a non-zero verbosity was requested at construction (or via
+  // set_verbose), enable it on ``rt`` so RunNode prints execution progress to
+  // stdout. Zero leaves the context's own verbosity untouched.
+  if (verbose_ != 0) {
+    rt.set_verbose(verbose_);
   }
   // Capture the allocator attached to ``rt`` once, on the first Run, as the
   // session's unique allocator; every output tensor produced from here on is

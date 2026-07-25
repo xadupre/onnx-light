@@ -90,6 +90,9 @@ html_favicon = "_static/logo.svg"
 html_theme_options = {
     "github_url": "https://github.com/xadupre/onnx-light",
     "logo": {"image_light": "_static/logo.svg", "image_dark": "_static/logo.svg"},
+    # Show every top-level navigation link on the same level instead of
+    # collapsing the extra ones into a "More" dropdown.
+    "header_links_before_dropdown": 10,
 }
 # pydata-sphinx-theme renders content tables inside scrollable containers.
 copybutton_selector = "div.highlight pre, div.pst-scrollable-table-container > table"

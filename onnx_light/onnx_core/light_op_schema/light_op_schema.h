@@ -54,9 +54,9 @@
 // shared with the rest of the ``onnx_core`` / ``onnx_op`` libraries. Including
 // the helpers header defines the macro when no translation unit has done so yet
 // while still honouring an explicit ``-DONNX_LIGHT_NAMESPACE=...`` override.
-#include "onnx_light_helpers.h"
 #include "onnx_core/symbolic/sym_sequence.h"
 #include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_light_helpers.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/type_helper.h"
 

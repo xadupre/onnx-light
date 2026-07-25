@@ -394,60 +394,56 @@ const TaggedMemory &NodeMemoryProfileBucket(const NodeMemoryProfile &profile,
   return std::get<TaggedMemory>(it->second);
 }
 
-void SimplifyTaggedMemory(TaggedMemory &bucket, SimplifiedExpressionCache *cache = nullptr) {
-  for (auto &entry : bucket) {
-    entry.second = SimplifyDimType(entry.second, cache);
+// Accumulates a sum of DimType terms while collapsing string-identical byte-size
+// expressions into integer coefficients (and folding integer constants). A node
+// memory profile sums the byte sizes of every live allocation, and many of those
+// allocations share the exact same symbolic expression (e.g. identically shaped
+// weights). expressions::simplify_expression is super-linear in the number of
+// additive terms, so simplifying the fully expanded sum once per node dominates
+// the cost of profiling large graphs. Because simplify_expression is canonical,
+// pre-merging identical terms into "coeff*(term)" before simplifying yields a
+// byte-identical result while feeding the simplifier only as many terms as there
+// are *distinct* byte-size expressions.
+class DimSum {
+public:
+  void Add(const expressions::DimType &term) {
+    if (std::holds_alternative<int64_t>(term)) {
+      constant_ += std::get<int64_t>(term);
+    } else {
+      coefficients_[std::get<std::string>(term)] += 1;
+    }
   }
-}
 
-void SimplifyNodeMemoryProfile(NodeMemoryProfile &profile,
-                               SimplifiedExpressionCache *cache = nullptr) {
-  NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
-      SimplifyDimType(NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey), cache);
-  NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) =
-      SimplifyDimType(NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey), cache);
-  NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) =
-      SimplifyDimType(NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey), cache);
-  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), cache);
-  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey), cache);
-  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey), cache);
-  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), cache);
-}
-
-void AddTaggedBytes(TaggedMemory &dst, const ShapeTag &tag, const expressions::DimType &bytes,
-                    SimplifiedExpressionCache *cache = nullptr) {
-  const expressions::DimType simplified_bytes = SimplifyDimType(bytes, cache);
-  if (IsZeroDim(simplified_bytes)) {
-    return;
+  expressions::DimType Build(SimplifiedExpressionCache *cache) const {
+    if (coefficients_.empty()) {
+      return expressions::DimType{constant_};
+    }
+    std::string expr;
+    if (constant_ != 0) {
+      expr = std::to_string(constant_);
+    }
+    for (const auto &kv : coefficients_) {
+      if (!expr.empty()) {
+        expr += "+";
+      }
+      if (kv.second == 1) {
+        expr += "(" + kv.first + ")";
+      } else {
+        expr += std::to_string(kv.second) + "*(" + kv.first + ")";
+      }
+    }
+    return SimplifyDimType(expressions::DimType{expr}, cache);
   }
-  auto it = dst.find(tag);
-  if (it == dst.end()) {
-    dst.emplace(tag, simplified_bytes);
-    return;
-  }
-  it->second = SimplifyDimType(expressions::dim_add(it->second, simplified_bytes), cache);
-}
 
-void AddLiveAllocation(NodeMemoryProfile &profile, const LiveAllocation &alloc,
-                       SimplifiedExpressionCache *cache = nullptr) {
-  const expressions::DimType simplified_bytes = SimplifyDimType(alloc.bytes, cache);
-  expressions::DimType &already_allocated =
-      NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey);
-  already_allocated =
-      SimplifyDimType(expressions::dim_add(already_allocated, simplified_bytes), cache);
-  switch (alloc.source) {
-  case MemoryValueSource::kInput:
-    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), alloc.tag,
-                   simplified_bytes, cache);
-    break;
-  case MemoryValueSource::kInitializer:
-    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey), alloc.tag,
-                   simplified_bytes, cache);
-    break;
-  case MemoryValueSource::kIntermediate:
-    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey), alloc.tag,
-                   simplified_bytes, cache);
-    break;
+private:
+  int64_t constant_ = 0;
+  std::map<std::string, int64_t> coefficients_;
+};
+
+void FillTaggedMemory(TaggedMemory &dst, const std::map<ShapeTag, DimSum> &sums,
+                      SimplifiedExpressionCache *cache) {
+  for (const auto &kv : sums) {
+    dst[kv.first] = kv.second.Build(cache);
   }
 }
 
@@ -656,8 +652,32 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 
   for (int i = 0; i < num_nodes; ++i) {
     NodeMemoryProfile &profile = memory[static_cast<std::size_t>(i)];
+
+    // Aggregate the byte sizes of every live allocation, grouping identical
+    // expressions via DimSum so the symbolic simplifier only sees the distinct
+    // terms. This is byte-identical to summing and simplifying each allocation
+    // individually but avoids re-simplifying an ever-growing sum for every node.
+    DimSum already_sum;
+    std::map<ShapeTag, DimSum> inputs_bucket;
+    std::map<ShapeTag, DimSum> initializers_bucket;
+    std::map<ShapeTag, DimSum> intermediates_bucket;
     for (const auto &kv : alive) {
-      AddLiveAllocation(profile, kv.second, &simplified_dim_cache);
+      const LiveAllocation &alloc = kv.second;
+      already_sum.Add(alloc.bytes);
+      if (IsZeroDim(alloc.bytes)) {
+        continue;
+      }
+      switch (alloc.source) {
+      case MemoryValueSource::kInput:
+        inputs_bucket[alloc.tag].Add(alloc.bytes);
+        break;
+      case MemoryValueSource::kInitializer:
+        initializers_bucket[alloc.tag].Add(alloc.bytes);
+        break;
+      case MemoryValueSource::kIntermediate:
+        intermediates_bucket[alloc.tag].Add(alloc.bytes);
+        break;
+      }
     }
 
     const NodeProto &node = graph.node()[i];
@@ -666,6 +686,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       reuse_by_output[static_cast<int>(reuse.output_index)] = static_cast<int>(reuse.input_index);
     }
 
+    DimSum output_sum;
+    std::map<ShapeTag, DimSum> outputs_bucket;
     for (int o = 0; o < node.output_size(); ++o) {
       if (reuse_by_output.find(o) != reuse_by_output.end()) {
         continue;
@@ -679,20 +701,28 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       if (!out_bytes.has_value()) {
         continue;
       }
-      expressions::DimType &output_allocation =
-          NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey);
-      output_allocation =
-          SimplifyDimType(expressions::dim_add(output_allocation,
-                                               SimplifyDimType(*out_bytes, &simplified_dim_cache)),
-                          &simplified_dim_cache);
-      AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey),
-                     ValueTag(value_tags, out_name), *out_bytes, &simplified_dim_cache);
+      const expressions::DimType out_simplified =
+          SimplifyDimType(*out_bytes, &simplified_dim_cache);
+      output_sum.Add(out_simplified);
+      if (!IsZeroDim(out_simplified)) {
+        outputs_bucket[ValueTag(value_tags, out_name)].Add(out_simplified);
+      }
     }
+
+    const expressions::DimType already_allocated = already_sum.Build(&simplified_dim_cache);
+    const expressions::DimType output_allocation = output_sum.Build(&simplified_dim_cache);
+    NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = already_allocated;
+    NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) = output_allocation;
     NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = SimplifyDimType(
-        expressions::dim_add(NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey),
-                             NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey)),
-        &simplified_dim_cache);
-    SimplifyNodeMemoryProfile(profile, &simplified_dim_cache);
+        expressions::dim_add(already_allocated, output_allocation), &simplified_dim_cache);
+    FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), inputs_bucket,
+                     &simplified_dim_cache);
+    FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey),
+                     initializers_bucket, &simplified_dim_cache);
+    FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey),
+                     intermediates_bucket, &simplified_dim_cache);
+    FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
+                     &simplified_dim_cache);
 
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;

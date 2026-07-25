@@ -437,6 +437,8 @@ public:
 
 private:
   int64_t constant_ = 0;
+  // Maps each distinct symbolic byte-size expression to how many times it occurs
+  // in the sum (its integer coefficient).
   std::map<std::string, int64_t> coefficients_;
 };
 

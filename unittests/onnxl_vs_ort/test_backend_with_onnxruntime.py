@@ -31,21 +31,43 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 
 def ort_max_supported_opset() -> int:
     """
-    Returns the highest default-domain opset version ONNX Runtime supports.
+    Returns the highest default-domain opset version ONNX Runtime can load.
 
-    Reads the registered operator schemas from ONNX Runtime and takes the
-    maximum ``since_version`` over the default ONNX domain (``""``). This lets
-    the exclusion list adapt to the installed ONNX Runtime instead of
-    hard-coding an opset ceiling.
+    ONNX Runtime registers *under-development* schemas for the next opset
+    before it officially supports loading models stamped with that opset, so
+    the maximum ``since_version`` reported by ``get_all_operator_schema`` can be
+    ahead of what ONNX Runtime will actually load (it rejects such models with
+    a ``ValidateOpsetForDomain`` failure). This probes the real ceiling by
+    trying to create an inference session for a trivial ``Identity`` model at
+    increasing default-domain opsets and returning the highest one that loads.
 
     Returns:
-        The highest default-domain opset version ONNX Runtime supports.
+        The highest default-domain opset version ONNX Runtime can load.
     """
+    import onnxruntime as ort
+    from onnx_light.onnx import TensorProto, helper
+
     from onnxruntime.capi._pybind_state import get_all_operator_schema
 
-    return max(
+    schema_max = max(
         schema.since_version for schema in get_all_operator_schema() if schema.domain == ""
     )
+
+    graph = helper.make_graph(
+        [helper.make_node("Identity", ["X"], ["Y"])],
+        "probe",
+        [helper.make_tensor_value_info("X", TensorProto.FLOAT, [1])],
+        [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [1])],
+    )
+    highest = 0
+    for opset in range(1, schema_max + 1):
+        model = helper.make_model(graph, opset_imports=[helper.make_operatorsetid("", opset)])
+        try:
+            ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+        except ort.capi.onnxruntime_pybind11_state.Fail:
+            break
+        highest = opset
+    return highest
 
 
 # Opset version at which the cases below were introduced. They are only excluded

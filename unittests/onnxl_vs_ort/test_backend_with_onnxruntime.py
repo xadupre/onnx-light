@@ -31,21 +31,65 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 
 def ort_max_supported_opset() -> int:
     """
-    Returns the highest default-domain opset version ONNX Runtime supports.
+    Returns the highest default-domain opset version ONNX Runtime can load.
 
-    Reads the registered operator schemas from ONNX Runtime and takes the
-    maximum ``since_version`` over the default ONNX domain (``""``). This lets
-    the exclusion list adapt to the installed ONNX Runtime instead of
-    hard-coding an opset ceiling.
+    The registered operator schemas (``get_all_operator_schema``) advertise the
+    next, still under-development opset (e.g. ONNX Runtime 1.28 reports schema
+    ``since_version`` 27) before the runtime is able to *load* a model targeting
+    it -- ``InferenceSession`` then fails with "Current official support for
+    domain ai.onnx is till opset 26". Relying on the schema ceiling therefore
+    lets opset-gated cases run against a runtime that cannot load them.
+
+    Instead, probe the actual ceiling by building a trivial model at each
+    candidate opset (highest first) and returning the first one ``InferenceSession``
+    accepts. This lets the exclusion list adapt to the installed ONNX Runtime
+    instead of hard-coding an opset ceiling.
 
     Returns:
-        The highest default-domain opset version ONNX Runtime supports.
+        The highest default-domain opset version ONNX Runtime can load.
     """
+    import onnxruntime
+    from onnxruntime.capi import onnxruntime_pybind11_state
     from onnxruntime.capi._pybind_state import get_all_operator_schema
 
-    return max(
+    from onnx_light.onnx import TensorProto
+    from onnx_light.onnx.helper import (
+        make_graph,
+        make_model,
+        make_node,
+        make_opsetid,
+        make_tensor_value_info,
+    )
+
+    schema_max = max(
         schema.since_version for schema in get_all_operator_schema() if schema.domain == ""
     )
+
+    def _loads(opset: int) -> bool:
+        value_info = make_tensor_value_info("x", TensorProto.FLOAT, [1])
+        graph = make_graph(
+            [make_node("Identity", ["x"], ["y"])],
+            "probe",
+            [value_info],
+            [make_tensor_value_info("y", TensorProto.FLOAT, [1])],
+        )
+        model = make_model(graph, opset_imports=[make_opsetid("", opset)])
+        try:
+            onnxruntime.InferenceSession(
+                model.SerializeToString(), providers=["CPUExecutionProvider"]
+            )
+        except (
+            onnxruntime_pybind11_state.Fail,
+            onnxruntime_pybind11_state.InvalidGraph,
+            onnxruntime_pybind11_state.InvalidArgument,
+        ):
+            return False
+        return True
+
+    for opset in range(schema_max, 0, -1):
+        if _loads(opset):
+            return opset
+    return schema_max
 
 
 # Opset version at which the cases below were introduced. They are only excluded

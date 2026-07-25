@@ -1,3 +1,4 @@
+import re
 import unittest
 import numpy as np
 from onnx_light.ext_test_case import import_or_skip, InferenceSessionAllTypes
@@ -74,8 +75,6 @@ def ort_max_supported_opset() -> int:
     Returns:
         The highest default-domain opset version ONNX Runtime can load.
     """
-    import re
-
     import onnxruntime
 
     parts = re.findall(r"\d+", onnxruntime.__version__)

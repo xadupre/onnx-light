@@ -75,7 +75,7 @@ def ort_max_supported_opset() -> int:
         )
         model = make_model(graph, opset_imports=[make_opsetid("", opset)])
         try:
-            onnxruntime.InferenceSession(
+            _ = onnxruntime.InferenceSession(
                 model.SerializeToString(), providers=["CPUExecutionProvider"]
             )
         except (

@@ -52,6 +52,13 @@ std::string DeviceName(Device d) {
   return "Unknown";
 }
 
+std::string DeviceKeySuffix(Device d) {
+  if (d == Device::kUndefined || d == Device::kCPU) {
+    return std::string();
+  }
+  return ":" + std::to_string(static_cast<int32_t>(d));
+}
+
 Device DeviceFromName(const std::string &name) {
   if (name == "CPU") {
     return Device::kCPU;

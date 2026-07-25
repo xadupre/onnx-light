@@ -22,6 +22,17 @@ std::string DispatchKey(const std::string &domain, const std::string &op_type) {
   return (domain.empty() ? std::string(kDefaultOnnxDomain) : domain) + ":" + op_type;
 }
 
+// Returns the device-qualified dispatch key. The identifier of a kernel is
+// ``(domain, op_type, device)``; :cpp:func:`symbolic::DeviceKeySuffix` keeps
+// the default host devices (:cpp:enumerator:`symbolic::Device::kCPU` and
+// :cpp:enumerator:`symbolic::Device::kUndefined`) in the plain
+// ``"<domain>:<op_type>"`` form so existing keys are unchanged, and appends
+// ``":<device>"`` for any other device to disambiguate.
+std::string DispatchKey(const std::string &domain, const std::string &op_type,
+                        symbolic::Device device) {
+  return DispatchKey(domain, op_type) + symbolic::DeviceKeySuffix(device);
+}
+
 // Returns the mutable dispatch table singleton. Only
 // :cpp:func:`RegisterKernelFn` writes to it; :cpp:func:`KernelDispatchTable`
 // exposes a read-only view for lookups.
@@ -42,8 +53,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
   return MutableKernelDispatchTable();
 }
 
-void RegisterKernelFn(const std::string &domain, const std::string &op_type, NodeKernelFn fn) {
-  MutableKernelDispatchTable()[DispatchKey(domain, op_type)] = std::move(fn);
+void RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                      symbolic::Device device, NodeKernelFn fn) {
+  MutableKernelDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
 }
 
 const SequenceMapPackFn &GetSequenceMapPackFn() { return MutableSequenceMapPackFn(); }

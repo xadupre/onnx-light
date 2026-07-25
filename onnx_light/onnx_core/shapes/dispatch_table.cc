@@ -24,6 +24,16 @@ std::string DispatchKey(const std::string &domain, const std::string &op_type) {
   return (domain.empty() ? std::string(kOnnxDomain) : domain) + ":" + op_type;
 }
 
+// Returns the device-qualified dispatch key. The identifier of a peak-memory
+// function is ``(domain, op_type, device)``;
+// :cpp:func:`symbolic::DeviceKeySuffix` keeps the default host devices
+// (:cpp:enumerator:`Device::kCPU` and :cpp:enumerator:`Device::kUndefined`)
+// in the plain ``"<domain>:<op_type>"`` form so existing keys are unchanged,
+// and appends ``":<device>"`` for any other device to disambiguate.
+std::string DispatchKey(const std::string &domain, const std::string &op_type, Device device) {
+  return DispatchKey(domain, op_type) + symbolic::DeviceKeySuffix(device);
+}
+
 // Returns the mutable dispatch table singleton. Only
 // :cpp:func:`RegisterComputeShapeFn` writes to it; :cpp:func:`DispatchTable`
 // exposes a read-only view for lookups.
@@ -56,14 +66,14 @@ const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTa
 }
 
 void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
-                                 ComputePeakMemoryFn fn) {
-  MutablePeakMemoryDispatchTable()[DispatchKey(domain, op_type)] = std::move(fn);
+                                 Device device, ComputePeakMemoryFn fn) {
+  MutablePeakMemoryDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
 }
 
 int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type, Device device,
                           const std::vector<SymShape> &input_shapes) {
   const auto &table = MutablePeakMemoryDispatchTable();
-  auto it = table.find(DispatchKey(domain, op_type));
+  auto it = table.find(DispatchKey(domain, op_type, device));
   if (it == table.end()) {
     return 0;
   }

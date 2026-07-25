@@ -13,6 +13,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 /**
@@ -71,20 +72,27 @@ using SequenceMapPackFn =
 const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable();
 
 /**
- * Registers (or replaces) the kernel factory for (@p domain, @p op_type)
- * in the shared :cpp:func:`KernelDispatchTable`.
+ * Registers (or replaces) the kernel factory for the identifier
+ * (@p domain, @p op_type, @p device) in the shared
+ * :cpp:func:`KernelDispatchTable`.
  *
  * Use an empty string for @p domain to denote the default ONNX domain
- * (normalised to :cpp:var:`kDefaultOnnxDomain`). Intended to be called
- * once per operator during static initialization by kernel libraries
- * that must not be linked into ``onnx_core`` (e.g. ``onnx_kernels``);
- * see ``onnx_kernels::RegisterKernelFunctions``.
+ * (normalised to :cpp:var:`kDefaultOnnxDomain`). @p device is part of the
+ * identifier so that a distinct kernel can be registered per device;
+ * :cpp:enumerator:`symbolic::Device::kCPU` (and
+ * :cpp:enumerator:`symbolic::Device::kUndefined`) denote the default host
+ * entry. Intended to be called once per operator during static
+ * initialization by kernel libraries that must not be linked into
+ * ``onnx_core`` (e.g. ``onnx_kernels``); see
+ * ``onnx_kernels::RegisterKernelFunctions``.
  *
  * @param domain  The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
  * @param op_type The ONNX operator type name (e.g. ``"Abs"``).
+ * @param device  The device the kernel runs on (e.g. :cpp:enumerator:`symbolic::Device::kCPU`).
  * @param fn      The factory implementing kernel construction for this operator.
  */
-void RegisterKernelFn(const std::string &domain, const std::string &op_type, NodeKernelFn fn);
+void RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                      symbolic::Device device, NodeKernelFn fn);
 
 /**
  * Returns the currently registered ``SequenceMap`` output-packing

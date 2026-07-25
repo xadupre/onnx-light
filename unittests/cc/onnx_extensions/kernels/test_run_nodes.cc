@@ -4253,7 +4253,7 @@ TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
 
   const std::string domain = "test.onnxlight.counting_kernel";
   RegisterKernelFn(
-      domain, "CountingOp",
+      domain, "CountingOp", core::symbolic::Device::kCPU,
       [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         ++construct_count;
         return std::make_unique<TestLambdaKernel>(node,
@@ -4311,7 +4311,7 @@ TEST(RuntimeSession, ConstructsIfBranchKernelOnceAcrossMultipleRuns) {
 
   const std::string domain = "test.onnxlight.counting_kernel_if";
   RegisterKernelFn(
-      domain, "CountingOp",
+      domain, "CountingOp", core::symbolic::Device::kCPU,
       [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         ++construct_count;
         return std::make_unique<TestLambdaKernel>(node,
@@ -4386,7 +4386,7 @@ TEST(RuntimeSession, ConstructsLoopBodyKernelOnceAcrossMultipleRuns) {
 
   const std::string domain = "test.onnxlight.counting_kernel_loop";
   RegisterKernelFn(
-      domain, "CountingOp",
+      domain, "CountingOp", core::symbolic::Device::kCPU,
       [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         ++construct_count;
         return std::make_unique<TestLambdaKernel>(node,
@@ -4459,7 +4459,7 @@ TEST(RuntimeSession, ConstructsScanBodyKernelOnceAcrossMultipleRuns) {
 
   const std::string domain = "test.onnxlight.counting_kernel_scan";
   RegisterKernelFn(
-      domain, "CountingOp",
+      domain, "CountingOp", core::symbolic::Device::kCPU,
       [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         ++construct_count;
         return std::make_unique<TestLambdaKernel>(node,
@@ -4527,7 +4527,7 @@ TEST(RuntimeSession, ConstructsSequenceMapBodyKernelOnceAcrossMultipleRuns) {
 
   const std::string domain = "test.onnxlight.counting_kernel_seqmap";
   RegisterKernelFn(
-      domain, "CountingOp",
+      domain, "CountingOp", core::symbolic::Device::kCPU,
       [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         ++construct_count;
         return std::make_unique<TestLambdaKernel>(node,

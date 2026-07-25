@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -20,6 +21,22 @@ namespace {
 // domain to :cpp:var:`kDefaultOnnxDomain`.
 std::string DispatchKey(const std::string &domain, const std::string &op_type) {
   return (domain.empty() ? std::string(kDefaultOnnxDomain) : domain) + ":" + op_type;
+}
+
+// Returns the device-qualified dispatch key. The identifier of a kernel is
+// ``(domain, op_type, device)``; the default host devices
+// (:cpp:enumerator:`symbolic::Device::kCPU` and
+// :cpp:enumerator:`symbolic::Device::kUndefined`) keep the plain
+// ``"<domain>:<op_type>"`` form so existing keys are unchanged, while any
+// other device appends ``":<device>"`` (the integer value of the
+// :cpp:enum:`symbolic::Device` enumerator) to disambiguate.
+std::string DispatchKey(const std::string &domain, const std::string &op_type,
+                        symbolic::Device device) {
+  std::string key = DispatchKey(domain, op_type);
+  if (device != symbolic::Device::kUndefined && device != symbolic::Device::kCPU) {
+    key += ":" + std::to_string(static_cast<int32_t>(device));
+  }
+  return key;
 }
 
 // Returns the mutable dispatch table singleton. Only
@@ -42,8 +59,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
   return MutableKernelDispatchTable();
 }
 
-void RegisterKernelFn(const std::string &domain, const std::string &op_type, NodeKernelFn fn) {
-  MutableKernelDispatchTable()[DispatchKey(domain, op_type)] = std::move(fn);
+void RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                      symbolic::Device device, NodeKernelFn fn) {
+  MutableKernelDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
 }
 
 const SequenceMapPackFn &GetSequenceMapPackFn() { return MutableSequenceMapPackFn(); }

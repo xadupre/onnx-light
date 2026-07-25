@@ -92,21 +92,25 @@ using ComputePeakMemoryFn = std::function<int64_t(Device, const std::vector<SymS
 const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTable();
 
 /**
- * Registers (or replaces) the peak-memory function for
- * (@p domain, @p op_type) in the shared :cpp:func:`PeakMemoryDispatchTable`.
+ * Registers (or replaces) the peak-memory function for the identifier
+ * (@p domain, @p op_type, @p device) in the shared
+ * :cpp:func:`PeakMemoryDispatchTable`.
  *
  * Use an empty string for @p domain to denote the default ONNX domain
- * (normalised to :cpp:var:`kOnnxDomain`). Mirrors
- * :cpp:func:`RegisterComputeShapeFn` so that libraries that must not be
- * linked into ``onnx_core`` can contribute their per-operator memory
- * estimators.
+ * (normalised to :cpp:var:`kOnnxDomain`). @p device is part of the
+ * identifier so that a distinct estimator can be registered per device;
+ * :cpp:enumerator:`Device::kCPU` (and :cpp:enumerator:`Device::kUndefined`)
+ * denote the default host entry. Mirrors :cpp:func:`RegisterComputeShapeFn`
+ * so that libraries that must not be linked into ``onnx_core`` can
+ * contribute their per-operator memory estimators.
  *
  * @param domain  The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
  * @param op_type The ONNX operator type name (e.g. ``"Abs"``).
+ * @param device  The device the estimator applies to (e.g. :cpp:enumerator:`Device::kCPU`).
  * @param fn      The peak-memory function implementing the estimation rule.
  */
 void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &op_type,
-                                 ComputePeakMemoryFn fn);
+                                 Device device, ComputePeakMemoryFn fn);
 
 /**
  * Returns the estimated peak memory (in bytes) for (@p domain, @p op_type)

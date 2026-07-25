@@ -16,9 +16,52 @@ namespace core {
 namespace runtime {
 
 RuntimeSession::RuntimeSession(const ModelProto &model)
-    : default_plan_(model.graph()), plan_(default_plan_) {}
+    : default_plan_(model.graph()), plan_(default_plan_) {
+  SetDeclaredShapes(model.graph());
+}
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan) : plan_(plan) {}
+
+void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
+  // Records the declared shape of every tensor-typed value the graph exposes
+  // (inputs, outputs and value_info). A value contributes an entry only when
+  // its type carries a shape; a missing shape means the rank is unknown and
+  // nothing can be validated for it.
+  auto record = [this](const ValueInfoProto &vi) {
+    if (vi.name().empty() || !vi.has_type() || !vi.type().has_tensor_type()) {
+      return;
+    }
+    const TypeProto::Tensor &tt = vi.type().tensor_type();
+    if (!tt.has_shape()) {
+      return;
+    }
+    const TensorShapeProto &shape = tt.shape();
+    std::vector<DeclaredDim> dims;
+    dims.reserve(static_cast<size_t>(shape.dim().size()));
+    for (int i = 0; i < shape.dim().size(); ++i) {
+      const TensorShapeProto::Dimension &d = shape.dim()[i];
+      DeclaredDim dim;
+      if (d.has_dim_value()) {
+        dim.has_value = true;
+        dim.value = static_cast<int64_t>(d.dim_value());
+      } else if (d.has_dim_param()) {
+        dim.has_param = true;
+        dim.param = d.dim_param().value();
+      }
+      dims.push_back(std::move(dim));
+    }
+    declared_shapes_[vi.name().value()] = std::move(dims);
+  };
+  for (int i = 0; i < graph.input().size(); ++i) {
+    record(graph.input()[i]);
+  }
+  for (int i = 0; i < graph.output().size(); ++i) {
+    record(graph.output()[i]);
+  }
+  for (int i = 0; i < graph.value_info().size(); ++i) {
+    record(graph.value_info()[i]);
+  }
+}
 
 std::vector<std::string>
 RuntimeSession::CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes) {
@@ -83,6 +126,38 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
   }
 }
 
+void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeContext &rt,
+                                         std::unordered_map<std::string, int64_t> &bindings) const {
+  auto it = declared_shapes_.find(name);
+  if (it == declared_shapes_.end() || !rt.Has(name)) {
+    return;
+  }
+  const std::vector<DeclaredDim> &declared = it->second;
+  const Tensor &tensor = rt.Get(name);
+  EXT_ENFORCE_INVALID(tensor.shape.size() == declared.size(), "RuntimeSession: tensor '", name,
+                      "' has concrete rank ", tensor.shape.size(),
+                      " but its declared (symbolic) shape has rank ", declared.size(), ".");
+  for (size_t i = 0; i < declared.size(); ++i) {
+    const DeclaredDim &dim = declared[i];
+    const int64_t concrete = tensor.shape[i];
+    if (dim.has_value) {
+      EXT_ENFORCE_INVALID(concrete == dim.value, "RuntimeSession: tensor '", name, "' dimension ",
+                          i, " is ", concrete, " but the declared shape requires ", dim.value, ".");
+    } else if (dim.has_param) {
+      auto bound = bindings.find(dim.param);
+      if (bound == bindings.end()) {
+        bindings.emplace(dim.param, concrete);
+      } else {
+        EXT_ENFORCE_INVALID(bound->second == concrete, "RuntimeSession: tensor '", name,
+                            "' dimension ", i, " is ", concrete, " but the symbolic dimension '",
+                            dim.param, "' was already resolved to ", bound->second, ".");
+      }
+    }
+    // A dimension with neither a value nor a param is fully unknown and
+    // imposes no constraint on the concrete dimension.
+  }
+}
+
 void RuntimeSession::Run(RuntimeContext &rt) {
   // Kernels are resolved against ``rt`` on the first run and cached; later
   // runs reuse the same built instances without redoing the per-node
@@ -108,6 +183,19 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                         "' is not defined in the RuntimeContext before Run().");
   }
   const std::vector<const NodeProto *> &nodes = plan_.nodes();
+  // When shape validation is enabled, resolve the declared (possibly symbolic)
+  // shapes against the concrete tensors. ``shape_bindings`` maps each symbolic
+  // ``dim_param`` to the first concrete value it resolves to during this run so
+  // that every later occurrence of the same symbol is checked for consistency.
+  // The graph inputs / initializers already present are validated up front;
+  // each node's outputs are validated right after it runs.
+  const bool check_shapes = check_shapes_ && !declared_shapes_.empty();
+  std::unordered_map<std::string, int64_t> shape_bindings;
+  if (check_shapes) {
+    for (const std::string &name : required_inputs_) {
+      VerifyDeclaredShape(name, rt, shape_bindings);
+    }
+  }
   // Replay the plan's ordered action list. Each kExecuteNode action invokes
   // the kernel prepared during initialization; each kDeleteBuffer /
   // kDeleteShape action frees the intermediate the plan scheduled for release.
@@ -134,6 +222,12 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       const std::string op_type = prepared.key.substr(sep + 1);
       detail::InvokeKernel(*nodes[index], rt, domain, op_type, *prepared.instance);
       VerifyOutputAllocators(*nodes[index], rt);
+      if (check_shapes) {
+        const NodeProto &executed = *nodes[index];
+        for (int i = 0; i < executed.output_size(); ++i) {
+          VerifyDeclaredShape(executed.output(i), rt, shape_bindings);
+        }
+      }
       break;
     }
     case ExecuteActionKind::kDeleteBuffer:

@@ -176,7 +176,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     // Actions this session performs no explicit work for: the kernels manage
     // their own buffers, so locks/unlocks, (temporary-)buffer allocations,
     // transfers and shape creation require nothing here beyond the verbose log
-    // emitted above.
+    // emitted at the start of the loop.
     case ExecuteActionKind::kLockInitializer:
     case ExecuteActionKind::kUnlockInitializer:
     case ExecuteActionKind::kLockInput:

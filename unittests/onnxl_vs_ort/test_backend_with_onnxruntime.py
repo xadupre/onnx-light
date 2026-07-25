@@ -29,23 +29,69 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     return outputs
 
 
-def ort_max_supported_opset() -> int:
+def _ort_loads_default_opset(opset: int) -> bool:
     """
-    Returns the highest default-domain opset version ONNX Runtime supports.
+    Returns whether ONNX Runtime can load a trivial model stamped at ``opset``.
 
-    Reads the registered operator schemas from ONNX Runtime and takes the
-    maximum ``since_version`` over the default ONNX domain (``""``). This lets
-    the exclusion list adapt to the installed ONNX Runtime instead of
-    hard-coding an opset ceiling.
+    ONNX Runtime registers schemas for the next, still-under-development opset
+    (so ``get_all_operator_schema`` reports it) before it will actually load a
+    model stamped with that opset. ``ValidateOpsetForDomain`` rejects such a
+    model at session-creation time, so the only reliable probe is to build a
+    minimal single-node model at ``opset`` and try to create a session from it.
+
+    Args:
+        opset: The default-domain (``ai.onnx``) opset version to probe.
 
     Returns:
-        The highest default-domain opset version ONNX Runtime supports.
+        ``True`` if a trivial model at ``opset`` loads, ``False`` otherwise.
+    """
+    import onnxruntime as ort
+    from onnx_light.onnx import TensorProto
+    from onnx_light.onnx.helper import (
+        make_graph,
+        make_model,
+        make_node,
+        make_opsetid,
+        make_tensor_value_info,
+    )
+
+    value = make_tensor_value_info("X", TensorProto.FLOAT, [1])
+    graph = make_graph(
+        [make_node("Identity", ["X"], ["Y"])],
+        "probe",
+        [value],
+        [make_tensor_value_info("Y", TensorProto.FLOAT, [1])],
+    )
+    model = make_model(graph, opset_imports=[make_opsetid("", opset)])
+    try:
+        ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+    except ort.capi.onnxruntime_pybind11_state.Fail:
+        return False
+    return True
+
+
+def ort_max_supported_opset() -> int:
+    """
+    Returns the highest default-domain opset version ONNX Runtime can load.
+
+    Reads the registered operator schemas from ONNX Runtime to get an upper
+    bound, then probes downward with a trivial model because ONNX Runtime
+    advertises schemas for the next under-development opset before it will load
+    a model stamped with it. This lets the exclusion list adapt to the installed
+    ONNX Runtime instead of hard-coding an opset ceiling.
+
+    Returns:
+        The highest default-domain opset version ONNX Runtime can load.
     """
     from onnxruntime.capi._pybind_state import get_all_operator_schema
 
-    return max(
+    schema_max = max(
         schema.since_version for schema in get_all_operator_schema() if schema.domain == ""
     )
+    opset = schema_max
+    while opset > 1 and not _ort_loads_default_opset(opset):
+        opset -= 1
+    return opset
 
 
 # Opset version at which the cases below were introduced. They are only excluded

@@ -244,7 +244,7 @@ jobs:
         if: runner.os == 'macOS'
         env:
           SCCACHE_GHA_ENABLED: "true"
-        run: pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
+        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: Install ONNX weekly
         run: pip install --upgrade onnx-weekly
@@ -258,7 +258,7 @@ jobs:
 
       - name: Run C++ unit tests (macOS)
         if: runner.os == 'macOS'
-        run: ctest --test-dir build --output-on-failure -C Debug --timeout 120
+        run: ctest --test-dir build --output-on-failure -C Release --timeout 120
 
       - name: Run tests
         env:

@@ -28,7 +28,7 @@ namespace {
 
 // ── Helpers shared by ComputeValueAndNodeTags overloads ─────────────────────
 
-std::string ReadMetadataValueFromProps(const std::vector<StringStringEntryProto> &props,
+std::string ReadMetadataValueFromProps(const utils::RepeatedField<StringStringEntryProto> &props,
                                        const char *key) {
   for (const auto &entry : props) {
     if (entry.key() == key) {
@@ -39,7 +39,7 @@ std::string ReadMetadataValueFromProps(const std::vector<StringStringEntryProto>
 }
 
 template <typename T> std::string ReadMetadataValue(const T &obj, const char *key) {
-  return ReadMetadataValueFromProps(obj.metadata_props().values(), key);
+  return ReadMetadataValueFromProps(obj.metadata_props(), key);
 }
 
 std::string NormalizeValueTag(std::string_view tag) {

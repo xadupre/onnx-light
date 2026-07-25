@@ -6,6 +6,7 @@ onnx_light.onnx_core
 
     expressions
     gradient
+    graph_builder
     shape_inference
 
 .. automodule:: onnx_light.onnx_core

@@ -31,10 +31,8 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -685,70 +683,6 @@ TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
   EXPECT_FLOAT_EQ(out[0], 1.0f * 3.0f - 0.5f);
   EXPECT_FLOAT_EQ(out[1], 2.0f * 4.0f - 0.25f);
   EXPECT_EQ(rt.tensors()["out"].name, "out");
-}
-
-TEST(RunNodes, RunNodesVerboseLogsEveryAction) {
-  // With verbose logging on, RuntimeSession::Run must emit one
-  // ``[RuntimeSession]`` line per scheduled ExecuteAction — including the
-  // node executions and the delete actions that release the intermediate
-  // ``t`` — so no scheduled event is silently ignored.
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_release_intermediates(true);
-  rt.set_verbose(1);
-  rt.tensors()["x"] = Tensor::FromFloat("x", {2}, {1.0f, 2.0f});
-  rt.tensors()["y"] = Tensor::FromFloat("y", {2}, {3.0f, 4.0f});
-  rt.tensors()["z"] = Tensor::FromFloat("z", {2}, {0.5f, 0.25f});
-
-  utils::RepeatedProtoField<NodeProto> nodes;
-  *nodes.Add() = MakeNode("Mul", {"x", "y"}, {"t"});
-  *nodes.Add() = MakeNode("Sub", {"t", "z"}, {"out"});
-
-  core::runtime::ExecutionPlan plan(nodes, {});
-  core::runtime::RuntimeSession session(plan);
-
-  // Capture everything Run() writes to std::cout.
-  std::ostringstream captured;
-  std::streambuf *old_buf = std::cout.rdbuf(captured.rdbuf());
-  session.Run(rt);
-  std::cout.rdbuf(old_buf);
-
-  const std::string log = captured.str();
-  // Every logged action is prefixed with ``[RuntimeSession]``.
-  EXPECT_NE(log.find("[RuntimeSession]"), std::string::npos);
-  // Both node executions are logged.
-  EXPECT_NE(log.find("ExecuteNode"), std::string::npos);
-  // The delete action releasing the intermediate ``t`` is logged too, proving
-  // memory-management actions are surfaced rather than silently skipped.
-  EXPECT_NE(log.find("DeleteBuffer name='t'"), std::string::npos);
-
-  // The graph still computes the correct result while logging.
-  const float *out = rt.tensors()["out"].AsFloat();
-  ASSERT_EQ(rt.tensors()["out"].element_count(), 2);
-  EXPECT_FLOAT_EQ(out[0], 1.0f * 3.0f - 0.5f);
-  EXPECT_FLOAT_EQ(out[1], 2.0f * 4.0f - 0.25f);
-}
-
-TEST(RunNodes, RunNodesQuietByDefaultProducesNoLog) {
-  // With verbose off (the default), Run() must not print any action log.
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_release_intermediates(true);
-  rt.tensors()["x"] = Tensor::FromFloat("x", {2}, {1.0f, 2.0f});
-  rt.tensors()["y"] = Tensor::FromFloat("y", {2}, {3.0f, 4.0f});
-  rt.tensors()["z"] = Tensor::FromFloat("z", {2}, {0.5f, 0.25f});
-
-  utils::RepeatedProtoField<NodeProto> nodes;
-  *nodes.Add() = MakeNode("Mul", {"x", "y"}, {"t"});
-  *nodes.Add() = MakeNode("Sub", {"t", "z"}, {"out"});
-
-  core::runtime::ExecutionPlan plan(nodes, {});
-  core::runtime::RuntimeSession session(plan);
-
-  std::ostringstream captured;
-  std::streambuf *old_buf = std::cout.rdbuf(captured.rdbuf());
-  session.Run(rt);
-  std::cout.rdbuf(old_buf);
-
-  EXPECT_EQ(captured.str().find("[RuntimeSession]"), std::string::npos);
 }
 
 TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {

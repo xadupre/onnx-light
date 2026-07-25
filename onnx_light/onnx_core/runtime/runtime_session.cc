@@ -6,7 +6,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
@@ -115,12 +114,8 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // Every other action (lock / unlock / allocate / transfer / temporary-buffer
   // bookkeeping) is informational for this session — the kernels manage their
   // own allocations — but is still matched by an explicit case so no scheduled
-  // event is silently ignored, and every action is logged when verbose logging
-  // is enabled.
+  // event is silently ignored.
   for (const ExecuteAction &action : plan_.actions()) {
-    if (rt.verbose() > 0) {
-      std::cout << "[RuntimeSession] " << action.summary() << std::endl;
-    }
     switch (action.kind()) {
     case ExecuteActionKind::kExecuteNode: {
       const size_t index = action.node_index();
@@ -175,8 +170,8 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       break;
     // Actions this session performs no explicit work for: the kernels manage
     // their own buffers, so locks/unlocks, (temporary-)buffer allocations,
-    // transfers and shape creation require nothing here beyond the verbose log
-    // emitted at the start of the loop.
+    // transfers and shape creation require nothing here — they are matched by
+    // an explicit case only so no scheduled event is silently ignored.
     case ExecuteActionKind::kLockInitializer:
     case ExecuteActionKind::kUnlockInitializer:
     case ExecuteActionKind::kLockInput:

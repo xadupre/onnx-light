@@ -74,9 +74,12 @@ def ort_max_supported_opset() -> int:
     Returns:
         The highest default-domain opset version ONNX Runtime can load.
     """
+    import re
+
     import onnxruntime
 
-    major, minor = (int(part) for part in onnxruntime.__version__.split(".")[:2])
+    parts = re.findall(r"\d+", onnxruntime.__version__)
+    major, minor = int(parts[0]), int(parts[1])
     key = (major, minor)
     if key in _ORT_VERSION_TO_MAX_OPSET:
         return _ORT_VERSION_TO_MAX_OPSET[key]

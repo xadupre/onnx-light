@@ -107,3 +107,65 @@ TEST(runtime_parameters, RuntimeSessionFromModelBuildsPlan) {
   EXPECT_FLOAT_EQ(got[1], 22.0f);
   EXPECT_FLOAT_EQ(got[2], 33.0f);
 }
+
+TEST(runtime_parameters, RuntimeSessionDefaultsToNoVerbose) {
+  ExecutionPlan plan;
+  RuntimeSession session(plan);
+  EXPECT_EQ(session.verbose(), 0);
+}
+
+TEST(runtime_parameters, RuntimeSessionSetVerbose) {
+  ExecutionPlan plan;
+  RuntimeSession session(plan);
+  session.set_verbose(2);
+  EXPECT_EQ(session.verbose(), 2);
+}
+
+TEST(runtime_parameters, RuntimeSessionConstructorVerbose) {
+  ExecutionPlan plan;
+  RuntimeSession session(plan, 3);
+  EXPECT_EQ(session.verbose(), 3);
+}
+
+TEST(runtime_parameters, RuntimeSessionRunEnablesVerboseOnContext) {
+  // A non-zero verbosity given at construction is applied to the RuntimeContext
+  // on Run so the graph prints execution progress. A single-node Add graph is
+  // enough to exercise the propagation.
+  ModelProto model;
+  GraphProto &graph = model.ref_graph();
+  NodeProto *node = graph.add_node();
+  node->set_op_type("Add");
+  node->add_input("x");
+  node->add_input("y");
+  node->add_output("z");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
+  EXPECT_EQ(rt.verbose(), 0);
+
+  RuntimeSession session(model, 5);
+  session.Run(rt);
+  EXPECT_EQ(rt.verbose(), 5);
+}
+
+TEST(runtime_parameters, RuntimeSessionRunLeavesContextVerboseWhenZero) {
+  // A zero verbosity (the default) leaves the context's own verbosity untouched
+  // so callers can drive verbosity through the RuntimeContext directly.
+  ModelProto model;
+  GraphProto &graph = model.ref_graph();
+  NodeProto *node = graph.add_node();
+  node->set_op_type("Add");
+  node->add_input("x");
+  node->add_input("y");
+  node->add_output("z");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
+  rt.set_verbose(4);
+
+  RuntimeSession session(model);
+  session.Run(rt);
+  EXPECT_EQ(rt.verbose(), 4);
+}

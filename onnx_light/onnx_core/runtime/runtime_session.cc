@@ -118,8 +118,10 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // Replay the plan's ordered action list. Each kExecuteNode action invokes
   // the kernel prepared during initialization; each kDeleteBuffer /
   // kDeleteShape action frees the intermediate the plan scheduled for release.
-  // Remaining (lock / allocate / …) actions are informational and skipped
-  // here, since the kernels manage their own allocations.
+  // Every other action (lock / unlock / allocate / transfer / temporary-buffer
+  // bookkeeping) is informational for this session — the kernels manage their
+  // own allocations — but is still matched by an explicit case so no scheduled
+  // event is silently ignored.
   for (const ExecuteAction &action : plan_.actions()) {
     switch (action.kind()) {
     case ExecuteActionKind::kExecuteNode: {
@@ -173,7 +175,19 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       }
       rt.RemoveMap(action.name());
       break;
-    default:
+    // Actions this session performs no explicit work for: the kernels manage
+    // their own buffers, so locks/unlocks, (temporary-)buffer allocations,
+    // transfers and shape creation require nothing here — they are matched by
+    // an explicit case only so no scheduled event is silently ignored.
+    case ExecuteActionKind::kLockInitializer:
+    case ExecuteActionKind::kUnlockInitializer:
+    case ExecuteActionKind::kLockInput:
+    case ExecuteActionKind::kUnlockInput:
+    case ExecuteActionKind::kAllocateBuffer:
+    case ExecuteActionKind::kTransfer:
+    case ExecuteActionKind::kCreateShape:
+    case ExecuteActionKind::kAllocateTemporaryBuffer:
+    case ExecuteActionKind::kDeleteTemporaryBuffer:
       break;
     }
   }

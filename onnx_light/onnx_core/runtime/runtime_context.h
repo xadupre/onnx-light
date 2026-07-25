@@ -562,8 +562,7 @@ public:
   /// ``duration_ns`` to its measured wall-clock duration in nanoseconds,
   /// so callers can profile per-node execution from the event log
   /// alongside the tensor add/replace/remove records.
-  void InvokeKernel(const NodeProto &node, const std::string &domain, const std::string &op_type,
-                    KernelBase &kernel);
+  void InvokeKernel(const NodeProto &node, KernelBase &kernel);
 
   /// Returns the cached :cpp:class:`ExecutionPlan` for ``graph``,
   /// building it on first use. The plan precomputes, for every node in

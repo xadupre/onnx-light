@@ -126,13 +126,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                           "RuntimeSession: kernel for node index ", index,
                           " was not initialized before Run().");
       rt.set_current_node_index(static_cast<int64_t>(index));
-      // Split the fused "<domain>:<op_type>" key back into its two parts;
-      // the domain itself never contains ':', so the first occurrence is
-      // always the separator.
-      const size_t sep = prepared.key.find(':');
-      const std::string domain = prepared.key.substr(0, sep);
-      const std::string op_type = prepared.key.substr(sep + 1);
-      rt.InvokeKernel(*nodes[index], domain, op_type, *prepared.instance);
+      rt.InvokeKernel(*nodes[index], *prepared.instance);
       VerifyOutputAllocators(*nodes[index], rt);
       break;
     }

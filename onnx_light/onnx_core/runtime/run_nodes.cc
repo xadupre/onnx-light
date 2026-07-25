@@ -1118,8 +1118,9 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
 // with the verbose progress line and (when enabled) the per-node timing
 // event. Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both
 // the resolve-on-demand and the resolve-once execution paths log identically.
-void RuntimeContext::InvokeKernel(const NodeProto &node, const std::string &domain,
-                                  const std::string &op_type, KernelBase &kernel) {
+void RuntimeContext::InvokeKernel(const NodeProto &node, KernelBase &kernel) {
+  const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
+  const std::string &op_type = node.op_type().value();
   PrintNodeProgress(*this, node, domain, op_type);
 
   // Only capture timing and input names when event logging is active.
@@ -1168,7 +1169,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string &op_type = node.op_type().value();
   NodeKernelFn factory = detail::ResolveNodeKernel(node, rt, domain, op_type);
   std::unique_ptr<KernelBase> resolved = factory(node, rt);
-  rt.InvokeKernel(node, domain, op_type, *resolved);
+  rt.InvokeKernel(node, *resolved);
 }
 
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {

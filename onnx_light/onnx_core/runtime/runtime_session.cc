@@ -16,12 +16,13 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace runtime {
 
-RuntimeSession::RuntimeSession(const ModelProto &model)
-    : default_plan_(model.graph()), plan_(default_plan_) {
+RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
+    : default_plan_(model.graph()), plan_(default_plan_), verbose_(verbose) {
   SetDeclaredShapes(model.graph());
 }
 
-RuntimeSession::RuntimeSession(const ExecutionPlan &plan) : plan_(plan) {}
+RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
+    : plan_(plan), verbose_(verbose) {}
 
 void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
   // Records the declared shape of every tensor-typed value the graph exposes
@@ -155,6 +156,12 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   if (!kernels_initialized_) {
     InitializeKernels(rt);
   }
+  // When a non-zero verbosity was requested at construction (or via
+  // set_verbose), enable it on ``rt`` so RunNode prints execution progress to
+  // stdout. Zero leaves the context's own verbosity untouched.
+  if (verbose_ != 0) {
+    rt.set_verbose(verbose_);
+  }
   // Capture the allocator attached to ``rt`` once, on the first Run, as the
   // session's unique allocator; every output tensor produced from here on is
   // verified against this same allocator (see VerifyOutputAllocators).
@@ -189,8 +196,10 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // Replay the plan's ordered action list. Each kExecuteNode action invokes
   // the kernel prepared during initialization; each kDeleteBuffer /
   // kDeleteShape action frees the intermediate the plan scheduled for release.
-  // Remaining (lock / allocate / …) actions are informational and skipped
-  // here, since the kernels manage their own allocations.
+  // Every other action (lock / unlock / allocate / transfer / temporary-buffer
+  // bookkeeping) is informational for this session — the kernels manage their
+  // own allocations — but is still matched by an explicit case so no scheduled
+  // event is silently ignored.
   for (const ExecuteAction &action : plan_.actions()) {
     switch (action.kind()) {
     case ExecuteActionKind::kExecuteNode: {
@@ -250,7 +259,19 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       }
       rt.RemoveMap(action.name());
       break;
-    default:
+    // Actions this session performs no explicit work for: the kernels manage
+    // their own buffers, so locks/unlocks, (temporary-)buffer allocations,
+    // transfers and shape creation require nothing here — they are matched by
+    // an explicit case only so no scheduled event is silently ignored.
+    case ExecuteActionKind::kLockInitializer:
+    case ExecuteActionKind::kUnlockInitializer:
+    case ExecuteActionKind::kLockInput:
+    case ExecuteActionKind::kUnlockInput:
+    case ExecuteActionKind::kAllocateBuffer:
+    case ExecuteActionKind::kTransfer:
+    case ExecuteActionKind::kCreateShape:
+    case ExecuteActionKind::kAllocateTemporaryBuffer:
+    case ExecuteActionKind::kDeleteTemporaryBuffer:
       break;
     }
   }

@@ -85,8 +85,13 @@ public:
    * @param model Model whose graph drives execution. The model (and the graph
    *              it owns) must outlive the session, since the built plan holds
    *              non-owning pointers into the graph's nodes.
+   * @param verbose Verbosity level applied to the :cpp:class:`RuntimeContext`
+   *              on each :cpp:func:`Run`. When non-zero, :cpp:func:`Run`
+   *              calls :cpp:func:`RuntimeContext::set_verbose` so the graph
+   *              prints execution progress to ``stdout``; ``0`` (the default)
+   *              leaves the context's verbosity untouched.
    */
-  explicit RuntimeSession(const ModelProto &model);
+  explicit RuntimeSession(const ModelProto &model, int verbose = 0);
 
   /**
    * Builds a session over ``plan``. Kernel resolution is deferred to the first
@@ -97,8 +102,13 @@ public:
    *             (:cpp:func:`ExecutionPlan::nodes`) drives execution. The plan
    *             (and the graph / function it was built from) must outlive the
    *             session.
+   * @param verbose Verbosity level applied to the :cpp:class:`RuntimeContext`
+   *             on each :cpp:func:`Run`. When non-zero, :cpp:func:`Run` calls
+   *             :cpp:func:`RuntimeContext::set_verbose` so the graph prints
+   *             execution progress to ``stdout``; ``0`` (the default) leaves
+   *             the context's verbosity untouched.
    */
-  explicit RuntimeSession(const ExecutionPlan &plan);
+  explicit RuntimeSession(const ExecutionPlan &plan, int verbose = 0);
 
   // A session caches one owning ``std::unique_ptr<KernelBase>`` per node (see
   // :cpp:member:`kernels_`), so it is move-only. It is always created in place
@@ -143,6 +153,13 @@ public:
   /// nodes this session runs.
   void set_parameters(RuntimeParameters parameters) noexcept { parameters_ = parameters; }
   const RuntimeParameters &parameters() const noexcept { return parameters_; }
+
+  /// Verbosity level applied to the :cpp:class:`RuntimeContext` on each
+  /// :cpp:func:`Run`. When non-zero, :cpp:func:`Run` enables it on ``rt`` via
+  /// :cpp:func:`RuntimeContext::set_verbose`; ``0`` leaves the context
+  /// untouched.
+  void set_verbose(int verbose) noexcept { verbose_ = verbose; }
+  int verbose() const noexcept { return verbose_; }
 
   /// Returns the external input names the scheduled nodes read (the inputs that
   /// must be present in the :cpp:class:`RuntimeContext` before :cpp:func:`Run`).
@@ -247,6 +264,9 @@ private:
   /// the declarations in :cpp:member:`declared_shapes_`.
   bool check_shapes_ = false;
   RuntimeParameters parameters_;
+  /// Verbosity level applied to ``rt`` at the start of each :cpp:func:`Run`
+  /// when non-zero (see :cpp:func:`set_verbose`).
+  int verbose_ = 0;
   /// Allocator observed on ``rt`` the first time :cpp:func:`Run` executes;
   /// every output tensor produced by a scheduled node is verified to be
   /// backed by this same allocator (see :cpp:func:`Run`).

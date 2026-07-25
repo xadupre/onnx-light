@@ -9,6 +9,10 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <memory>
+#include <string>
+
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
@@ -40,6 +44,22 @@ TEST(OnnxKernelsDispatchTable, RegisterKernelFunctionsPopulatesCoreDispatchTable
   EXPECT_GT(table.size(), 200u);
   EXPECT_NE(table.find("ai.onnx:Add"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:Binarizer"), table.end());
+}
+
+// The device is part of a kernel's identifier: a factory registered for a GPU
+// device is keyed separately from the CPU/default entry so both can coexist.
+TEST(OnnxKernelsDispatchTable, DeviceIsPartOfIdentifier) {
+  const core::symbolic::Device gpu = core::symbolic::MakeGPUDevice(0);
+  core::runtime::RegisterKernelFn(
+      "test.onnxlight.device_kernel", "DeviceOp", gpu,
+      [](const NodeProto &, core::runtime::RuntimeContext &)
+          -> std::unique_ptr<core::runtime::KernelBase> { return nullptr; });
+
+  const auto &table = core::runtime::KernelDispatchTable();
+  EXPECT_EQ(table.find("test.onnxlight.device_kernel:DeviceOp"), table.end());
+  EXPECT_NE(table.find("test.onnxlight.device_kernel:DeviceOp:" +
+                       std::to_string(static_cast<int32_t>(gpu))),
+            table.end());
 }
 
 } // namespace Test

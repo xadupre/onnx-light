@@ -488,15 +488,21 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       ":class:`RuntimeContext`; subsequent calls reuse those cached instances. When "
       ":attr:`RuntimeContext.release_intermediates` is enabled, :func:`run` also "
       "frees each intermediate whose last reference has been reached.")
-      .def(nb::init<const ModelProto &>(), nb::arg("model"), nb::keep_alive<1, 2>(),
+      .def(nb::init<const ModelProto &, int>(), nb::arg("model"), nb::arg("verbose") = 0,
+           nb::keep_alive<1, 2>(),
            "Builds a session over an :class:`ExecutionPlan` the session owns, "
            "built from ``model.graph``. Use this when no precomputed plan is "
            "available: ``model`` (and the graph it owns) must outlive the session; "
-           "this binding keeps ``model`` alive for at least as long as the session.")
-      .def(nb::init<const ExecutionPlan &>(), nb::arg("plan"), nb::keep_alive<1, 2>(),
+           "this binding keeps ``model`` alive for at least as long as the session. "
+           "When ``verbose`` is non-zero, :func:`run` enables it on the "
+           ":class:`RuntimeContext` so the graph prints execution progress to stdout.")
+      .def(nb::init<const ExecutionPlan &, int>(), nb::arg("plan"), nb::arg("verbose") = 0,
+           nb::keep_alive<1, 2>(),
            "Builds a session over ``plan``. ``plan`` (and the graph / function it "
            "was built from) must outlive the session; this binding keeps ``plan`` "
-           "alive for at least as long as the session.")
+           "alive for at least as long as the session. When ``verbose`` is non-zero, "
+           ":func:`run` enables it on the :class:`RuntimeContext` so the graph prints "
+           "execution progress to stdout.")
       .def("run", &RuntimeSession::Run, nb::arg("rt"),
            "Executes the plan once against ``rt``, resolving, building, and caching "
            "kernel instances on the first call. Safe to call repeatedly on the same session.")
@@ -517,6 +523,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "Records the declared (possibly symbolic) shapes carried by ``graph``'s "
            "inputs, outputs and ``value_info`` so that, when :attr:`check_shapes` is "
            "enabled, :func:`run` can validate concrete tensor shapes against them.")
+      .def_prop_rw("verbose", &RuntimeSession::verbose, &RuntimeSession::set_verbose,
+                   "Verbosity level applied to the :class:`RuntimeContext` on each "
+                   ":func:`run`. When non-zero, :func:`run` enables it on ``rt`` so the "
+                   "graph prints execution progress to stdout; ``0`` leaves the context "
+                   "untouched.")
       .def_prop_ro("required_inputs", &RuntimeSession::required_inputs,
                    "Returns the external input names the scheduled nodes read. Populated "
                    "during kernel initialization; empty until the first :func:`run`.");

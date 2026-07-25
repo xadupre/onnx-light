@@ -442,6 +442,15 @@ constexpr int GPUIndex(Device d) noexcept {
 /// value.
 std::string DeviceName(Device d);
 
+/// Returns the suffix that encodes ``d`` into a dispatch-table key
+/// identifier. The default host devices (:cpp:enumerator:`Device::kCPU` and
+/// :cpp:enumerator:`Device::kUndefined`) return the empty string so that a
+/// key keeps its plain ``"<domain>:<op_type>"`` form; any other device
+/// returns ``":<device>"`` (a leading ``':'`` followed by the integer value
+/// of the enumerator) to disambiguate. Shared by the kernel and peak-memory
+/// dispatch tables so both key device-specific entries identically.
+std::string DeviceKeySuffix(Device d);
+
 /**
  * Parses a device name back into a :cpp:enum:`Device` enumerator.
  *

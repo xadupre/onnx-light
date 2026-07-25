@@ -1378,8 +1378,9 @@ void RegisterPeakMemoryFunctions() {
     for (const auto &entry : shapes::BuiltinPeakMemoryFunctions()) {
       const std::string &key = entry.first;
       const std::size_t sep = key.find(':');
-      ::onnx_light::core::shapes::RegisterComputePeakMemoryFn(key.substr(0, sep),
-                                                              key.substr(sep + 1), entry.second);
+      ::onnx_light::core::shapes::RegisterComputePeakMemoryFn(
+          key.substr(0, sep), key.substr(sep + 1), ::onnx_light::core::shapes::Device::kCPU,
+          entry.second);
     }
     return true;
   }();

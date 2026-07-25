@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -303,6 +304,24 @@ public:
   /// rank-0 (empty) shape, matching the standard scalar-element-count
   /// semantic. Throws ``std::runtime_error`` if any dimension is symbolic.
   int64_t NumElements() const;
+
+  /// Returns ``true`` when the concrete shape described by ``rank`` /
+  /// ``shape`` is compatible with this (possibly symbolic) shape.
+  ///
+  /// The concrete shape is a contiguous array of ``rank`` dimensions
+  /// pointed to by ``shape``. Compatibility requires that ``rank`` equals
+  /// :cpp:func:`Rank`, and, dimension by dimension: a concrete integer
+  /// dimension must match exactly; a symbolic dimension is resolved against
+  /// ``bindings`` (a dictionary mapping the symbolic expression to the
+  /// integer value it first resolved to), so an inconsistent reuse of the
+  /// same expression makes the shape incompatible; and a fully-unknown
+  /// dimension (an empty expression) imposes no constraint. Newly resolved
+  /// symbolic expressions are inserted into ``bindings``.
+  ///
+  /// Returns:
+  ///   ``true`` when the concrete shape fits, ``false`` otherwise.
+  bool FitsConcreteShape(std::size_t rank, const int64_t *shape,
+                         std::unordered_map<std::string, int64_t> &bindings) const;
 
   /// Equality compares the dimensions element-wise.
   bool operator==(const SymShape &other) const noexcept { return dims_ == other.dims_; }

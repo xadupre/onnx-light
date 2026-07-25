@@ -36,19 +36,16 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
       return;
     }
     const TensorShapeProto &shape = tt.shape();
-    std::vector<DeclaredDim> dims;
-    dims.reserve(static_cast<size_t>(shape.dim().size()));
+    core::symbolic::SymShape dims;
     for (int i = 0; i < shape.dim().size(); ++i) {
       const TensorShapeProto::Dimension &d = shape.dim()[i];
-      DeclaredDim dim;
       if (d.has_dim_value()) {
-        dim.has_value = true;
-        dim.value = static_cast<int64_t>(d.dim_value());
+        dims.PushBack(core::symbolic::SymDim(static_cast<int64_t>(d.dim_value())));
       } else if (d.has_dim_param()) {
-        dim.has_param = true;
-        dim.param = d.dim_param().value();
+        dims.PushBack(core::symbolic::SymDim(d.dim_param().value()));
+      } else {
+        dims.PushBack(core::symbolic::SymDim(std::string()));
       }
-      dims.push_back(std::move(dim));
     }
     declared_shapes_[vi.name().value()] = std::move(dims);
   };
@@ -132,30 +129,22 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
   if (it == declared_shapes_.end() || !rt.Has(name)) {
     return;
   }
-  const std::vector<DeclaredDim> &declared = it->second;
+  const core::symbolic::SymShape &declared = it->second;
   const Tensor &tensor = rt.Get(name);
-  EXT_ENFORCE_INVALID(tensor.shape.size() == declared.size(), "RuntimeSession: tensor '", name,
-                      "' has concrete rank ", tensor.shape.size(),
-                      " but its declared (symbolic) shape has rank ", declared.size(), ".");
-  for (size_t i = 0; i < declared.size(); ++i) {
-    const DeclaredDim &dim = declared[i];
-    const int64_t concrete = tensor.shape[i];
-    if (dim.has_value) {
-      EXT_ENFORCE_INVALID(concrete == dim.value, "RuntimeSession: tensor '", name, "' dimension ",
-                          i, " is ", concrete, " but the declared shape requires ", dim.value, ".");
-    } else if (dim.has_param) {
-      auto bound = bindings.find(dim.param);
-      if (bound == bindings.end()) {
-        bindings.emplace(dim.param, concrete);
-      } else {
-        EXT_ENFORCE_INVALID(bound->second == concrete, "RuntimeSession: tensor '", name,
-                            "' dimension ", i, " is ", concrete, " but the symbolic dimension '",
-                            dim.param, "' was already resolved to ", bound->second, ".");
-      }
-    }
-    // A dimension with neither a value nor a param is fully unknown and
-    // imposes no constraint on the concrete dimension.
+  if (declared.FitsConcreteShape(tensor.shape.size(), tensor.shape.begin(), bindings)) {
+    return;
   }
+  std::string concrete = "[";
+  for (size_t i = 0; i < tensor.shape.size(); ++i) {
+    if (i > 0) {
+      concrete.push_back(',');
+    }
+    concrete += std::to_string(tensor.shape[i]);
+  }
+  concrete.push_back(']');
+  EXT_ENFORCE_INVALID(false, "RuntimeSession: tensor '", name, "' has concrete shape ", concrete,
+                      " which is incompatible with its declared (possibly symbolic) shape ",
+                      declared.ToString(), ".");
 }
 
 void RuntimeSession::Run(RuntimeContext &rt) {

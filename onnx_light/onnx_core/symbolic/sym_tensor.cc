@@ -173,6 +173,44 @@ int64_t SymShape::NumElements() const {
 }
 
 /**
+ * Checks whether a concrete shape (``rank`` dimensions stored contiguously
+ * at ``shape``) is compatible with this possibly-symbolic shape, resolving
+ * symbolic dimensions against ``bindings``.
+ *
+ * A concrete integer dimension must match exactly; a symbolic dimension is
+ * bound to its concrete value the first time it is seen and must agree with
+ * that binding on every later occurrence; a fully-unknown dimension (empty
+ * expression) is unconstrained.
+ */
+bool SymShape::FitsConcreteShape(std::size_t rank, const int64_t *shape,
+                                 std::unordered_map<std::string, int64_t> &bindings) const {
+  if (rank != dims_.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < dims_.size(); ++i) {
+    const SymDim &dim = dims_[i];
+    const int64_t concrete = shape[i];
+    if (dim.IsInt()) {
+      if (dim.AsInt() != concrete) {
+        return false;
+      }
+      continue;
+    }
+    const std::string &expr = dim.AsExpr();
+    if (expr.empty()) {
+      continue;
+    }
+    auto it = bindings.find(expr);
+    if (it == bindings.end()) {
+      bindings.emplace(expr, concrete);
+    } else if (it->second != concrete) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Returns the string representation of an ``SymDim``: either the
  * decimal form of the integer value or the symbolic expression string.
  */

@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_parameters.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 #include <memory>
@@ -222,12 +223,13 @@ private:
 
   /// Verifies, when :cpp:func:`check_shapes` is enabled, that the concrete
   /// shape of the tensor stored under ``name`` in ``rt`` (if any) matches the
-  /// declared shape recorded in :cpp:member:`declared_shapes_`. Concrete
-  /// dimensions must match exactly; symbolic dimensions are resolved against
-  /// ``bindings`` (mapping ``dim_param`` name to the concrete value it first
-  /// resolved to during the current :cpp:func:`Run`), so an inconsistent reuse
-  /// of the same symbol is rejected. Names without a recorded declaration, or
-  /// not currently present as a tensor, are ignored.
+  /// declared :cpp:class:`core::symbolic::SymShape` recorded in
+  /// :cpp:member:`declared_shapes_`. Concrete dimensions must match exactly;
+  /// symbolic dimensions are resolved against ``bindings`` (mapping a symbolic
+  /// expression to the concrete value it first resolved to during the current
+  /// :cpp:func:`Run`), so an inconsistent reuse of the same symbol is rejected.
+  /// Names without a recorded declaration, or not currently present as a
+  /// tensor, are ignored.
   void VerifyDeclaredShape(const std::string &name, const RuntimeContext &rt,
                            std::unordered_map<std::string, int64_t> &bindings) const;
 
@@ -242,7 +244,7 @@ private:
   /// Declared (possibly symbolic) shapes keyed by tensor name, populated by
   /// :cpp:func:`SetDeclaredShapes` and consulted by :cpp:func:`Run` when
   /// :cpp:member:`check_shapes_` is enabled.
-  std::unordered_map<std::string, std::vector<DeclaredDim>> declared_shapes_;
+  std::unordered_map<std::string, core::symbolic::SymShape> declared_shapes_;
   bool kernels_initialized_ = false;
   /// When ``true``, :cpp:func:`Run` validates concrete tensor shapes against
   /// the declarations in :cpp:member:`declared_shapes_`.
